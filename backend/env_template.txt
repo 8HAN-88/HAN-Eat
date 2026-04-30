@@ -1,0 +1,101 @@
+# ============================================
+# BACKEND .ENV ФАЙЛ - ШАБЛОН
+# Скопируйте этот файл в backend\.env и заполните значения
+# ============================================
+
+# ============================================
+# ОБЯЗАТЕЛЬНЫЕ ПЕРЕМЕННЫЕ (без них не запустится!)
+# ============================================
+
+# JWT Secret Key - сгенерируйте случайную строку минимум 32 символа
+# 🔗 Онлайн генератор: https://www.lastpass.com/features/password-generator
+# 🔗 Или через PowerShell: python -c "import secrets; print(secrets.token_urlsafe(32))"
+SECRET_KEY=ЗАМЕНИТЕ_НА_СЛУЧАЙНУЮ_СТРОКУ_32_СИМВОЛА_МИНИМУМ
+
+# PostgreSQL Database URL
+# Формат: postgresql://username:password@host:port/database
+DATABASE_URL=postgresql://postgres:password@localhost:5432/haneat
+
+# Redis URL (если Redis/Memurai не установлен — поставьте REDIS_ENABLED=false)
+REDIS_URL=redis://localhost:6379/0
+REDIS_ENABLED=true
+
+# ============================================
+# НАСТРОЙКИ ПРИЛОЖЕНИЯ
+# ============================================
+
+APP_ENV=development
+DEBUG=true
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080,http://localhost:5000
+
+# ============================================
+# OPENAI API KEY (для модерации контента при ENABLE_PRE_MODERATION=true)
+# 🔗 Получить ключ: https://platform.openai.com/api-keys
+# 🔗 Регистрация: https://platform.openai.com/signup
+# 💡 Можно скопировать из RecipeApp/.env если там уже есть
+OPENAI_API_KEY=sk-proj-ЗАМЕНИТЕ_НА_ВАШ_OPENAI_API_KEY
+
+# Премодерация при публикации: false = старт продукта (публикуем сразу, модерация только по жалобам)
+ENABLE_PRE_MODERATION=false
+
+# ============================================
+# ЮKASSA (для подписок в России) - РЕКОМЕНДУЕТСЯ
+# ============================================
+# 🔗 Личный кабинет: https://yookassa.ru/my
+# 🔗 Регистрация: https://yookassa.ru/join
+# 🔗 Документация: https://yookassa.ru/developers/api
+# 
+# После регистрации:
+# 1. Перейдите в Настройки → API
+# 2. Скопируйте Shop ID и Secret Key
+# 3. Настройте webhook URL: https://your-backend-url.com/api/v1/payments/webhook/yookassa
+# 
+# Поддерживает: СБП, банковские карты, электронные кошельки
+YOOKASSA_ENABLED=true
+# 🔗 Получить Shop ID: https://yookassa.ru/my → Настройки → API
+YOOKASSA_SHOP_ID=ЗАМЕНИТЕ_НА_ВАШ_YOOKASSA_SHOP_ID
+# 🔗 Получить Secret Key: https://yookassa.ru/my → Настройки → API
+YOOKASSA_SECRET_KEY=ЗАМЕНИТЕ_НА_ВАШ_YOOKASSA_SECRET_KEY
+
+# ============================================
+# STRIPE (для подписок в других странах) - ОПЦИОНАЛЬНО
+# ============================================
+# 🔗 Dashboard: https://dashboard.stripe.com
+# 🔗 Регистрация: https://dashboard.stripe.com/register
+# 🔗 API Keys: https://dashboard.stripe.com/apikeys
+# 🔗 Products: https://dashboard.stripe.com/products
+# 🔗 Webhooks: https://dashboard.stripe.com/webhooks
+# 
+# Пока отключено - можно включить позже для других стран
+STRIPE_ENABLED=false
+STRIPE_SECRET_KEY=sk_test_ЗАМЕНИТЕ_НА_ВАШ_STRIPE_SECRET_KEY
+STRIPE_PUBLISHABLE_KEY=pk_test_ЗАМЕНИТЕ_НА_ВАШ_STRIPE_PUBLISHABLE_KEY
+STRIPE_WEBHOOK_SECRET=whsec_ЗАМЕНИТЕ_НА_ВАШ_STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_ID_MONTHLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_МЕСЯЧНОЙ_ПОДПИСКИ
+STRIPE_PRICE_ID_YEARLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_ГОДОВОЙ_ПОДПИСКИ
+FRONTEND_URL=http://localhost:8080
+
+# ============================================
+# FIREBASE (для push уведомлений) - ОПЦИОНАЛЬНО
+# 🔗 Console: https://console.firebase.google.com
+# 🔗 Регистрация: https://console.firebase.google.com
+FIREBASE_ENABLED=false
+FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json
+FIREBASE_PROJECT_ID=ЗАМЕНИТЕ_НА_ВАШ_FIREBASE_PROJECT_ID
+
+# ============================================
+# S3/Object Storage - ОПЦИОНАЛЬНО
+# 🔗 AWS S3: https://aws.amazon.com/s3/
+# 🔗 IAM: https://console.aws.amazon.com/iam
+S3_BUCKET=haneat-media
+S3_REGION=us-east-1
+S3_ENDPOINT_URL=https://s3.amazonaws.com
+S3_ACCESS_KEY=ЗАМЕНИТЕ_НА_ВАШ_S3_ACCESS_KEY
+S3_SECRET_KEY=ЗАМЕНИТЕ_НА_ВАШ_S3_SECRET_KEY
+CDN_URL=https://cdn.haneat.com
+
+# ============================================
+# ОЧЕРЕДИ - ОПЦИОНАЛЬНО
+RABBITMQ_URL=amqp://localhost:5672
+REDIS_STREAMS_ENABLED=false
+

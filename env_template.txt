@@ -1,0 +1,16 @@
+# ============================================
+# FRONTEND .ENV ФАЙЛ - ШАБЛОН (Flutter)
+# Скопируйте этот файл в .env и заполните значения
+# ============================================
+
+# ============================================
+# SPOONACULAR API KEY (для поиска рецептов)
+# 🔗 Получить ключ: https://spoonacular.com/food-api/console
+# 🔗 Регистрация: https://spoonacular.com/food-api/console
+# 💡 Можно скопировать из RecipeApp/.env если там уже есть
+SPOONACULAR_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_SPOONACULAR_API_KEY
+
+# ============================================
+# BACKEND API URL (опционально)
+# API_BASE_URL=http://localhost:8000
+

@@ -1,0 +1,365 @@
+openapi: 3.0.0
+info:
+  title: H.A.N. Eat API
+  version: 1.0.0
+  description: API для социальной платформы с рецептами и сообществами
+
+servers:
+  - url: https://api.haneat.com/api/v1
+    description: Production
+  - url: http://localhost:5000/api/v1
+    description: Development
+
+tags:
+  - name: Auth
+    description: Аутентификация
+  - name: Users
+    description: Пользователи и профили
+  - name: Posts
+    description: Публикации
+  - name: Communities
+    description: Сообщества
+  - name: Media
+    description: Загрузка медиа
+  - name: Moderation
+    description: Модерация
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Регистрация
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+                username:
+                  type: string
+      responses:
+        '201':
+          description: Успешная регистрация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Вход
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Текущий пользователь
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Информация о пользователе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/{user_id}:
+    get:
+      tags: [Users]
+      summary: Профиль пользователя
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /posts:
+    post:
+      tags: [Posts]
+      summary: Создать пост
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostRequest'
+      responses:
+        '201':
+          description: Пост создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+
+  /posts/{post_id}:
+    get:
+      tags: [Posts]
+      summary: Получить пост
+      parameters:
+        - name: post_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Пост
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDetail'
+
+  /feed:
+    get:
+      tags: [Posts]
+      summary: Лента
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, reels, recipes, photos]
+      responses:
+        '200':
+          description: Лента постов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        username:
+          type: string
+        avatar_url:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        is_private:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            stats:
+              type: object
+              properties:
+                posts_count:
+                  type: integer
+                reels_count:
+                  type: integer
+                followers_count:
+                  type: integer
+                following_count:
+                  type: integer
+
+    CreatePostRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [photo, recipe, reel, text]
+        title:
+          type: string
+        description:
+          type: string
+        ingredients:
+          type: array
+          items:
+            type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeStep'
+        media:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaItem'
+        publish_to:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+          enum: [public, followers, private]
+
+    RecipeStep:
+      type: object
+      properties:
+        number:
+          type: integer
+        text:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+
+    MediaItem:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [image, video]
+        url:
+          type: string
+        upload_id:
+          type: string
+
+    Post:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        status:
+          type: string
+          enum: [pending, published, rejected]
+        created_at:
+          type: string
+          format: date-time
+
+    PostDetail:
+      allOf:
+        - $ref: '#/components/schemas/Post'
+        - type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            title:
+              type: string
+            description:
+              type: string
+            metrics:
+              $ref: '#/components/schemas/PostMetrics'
+
+    PostMetrics:
+      type: object
+      properties:
+        likes:
+          type: integer
+        comments:
+          type: integer
+        views:
+          type: integer
+        saves:
+          type: integer
+
+    FeedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeedItem'
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+
+    FeedItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+        title:
+          type: string
+        excerpt:
+          type: string
+        thumbnail_url:
+          type: string
+        metrics:
+          $ref: '#/components/schemas/PostMetrics'
+        created_at:
+          type: string
+          format: date-time
+

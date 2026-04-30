@@ -1,0 +1,58 @@
+# FastAPI и сервер
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Redis
+redis==5.0.1
+hiredis==2.2.3
+
+# Auth & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+
+# Validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# S3/Object Storage
+boto3==1.29.7
+
+# HTTP Client
+httpx>=0.25.2,<0.29.0
+aiohttp==3.9.1
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Image Processing
+Pillow==10.1.0
+
+# OpenAI (для модерации)
+openai==1.3.7
+
+# Firebase Admin SDK (для FCM и APNs)
+firebase-admin>=6.2.0
+
+# Stripe (для платежей - для западных стран, пока отключено)
+stripe>=7.8.0
+
+# ЮKassa (для платежей в России - СБП, карты)
+yookassa>=3.0.0
+
+# Translation (более стабильная альтернатива googletrans)
+deep-translator>=1.11.4
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+

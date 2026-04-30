@@ -1,0 +1,64 @@
+# Оптимизация для ускорения загрузки
+
+## Проблема:
+- Для каждого рецепта делается отдельный запрос к /information
+- Это занимает много времени (6 рецептов = 6 запросов по 20 сек = до 120 сек)
+
+## Решение:
+1. Использовать параллельные запросы (ThreadPoolExecutor)
+2. Использовать данные из random endpoint (они уже полные!)
+3. Уменьшить timeout с 20 до 8 секунд
+4. Делать запросы только для калорий, остальное уже есть
+
+## Изменения в get_recommendations:
+
+Заменить последовательный цикл на параллельную обработку:
+
+```python
+# Функция для параллельного получения калорий
+def fetch_calories(rid: int) -> dict:
+    """Получает только калории для рецепта"""
+    try:
+        det_url = f"https://api.spoonacular.com/recipes/{rid}/information"
+        dresp = requests.get(
+            det_url, 
+            params={
+                "apiKey": SPOONACULAR_API_KEY,
+                "includeNutrition": "true"
+            }, 
+            timeout=8  # Уменьшили timeout
+        )
+        if dresp.status_code == 200:
+            info = dresp.json()
+            nutrition_data = info.get("nutrition", {})
+            calories = None
+            if nutrition_data:
+                nutrients = nutrition_data.get("nutrients", [])
+                if isinstance(nutrients, list):
+                    for n in nutrients:
+                        if n.get("name", "").lower() == "calories":
+                            calories = int(n.get("amount", 0))
+                            break
+            return {"calories": calories, "nutrition": nutrition_data}
+    except Exception as e:
+        print(f"⚠️ Error fetching calories for {rid}: {e}")
+    return {"calories": None, "nutrition": None}
+
+# Параллельная обработка
+with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    future_to_recipe = {
+        executor.submit(fetch_calories, rec.get("id")): rec 
+        for rec in recipes
+    }
+    
+    for future in concurrent.futures.as_completed(future_to_recipe):
+        rec = future_to_recipe[future]
+        # Используем данные из random endpoint
+        # Получаем калории из future.result()
+        # Формируем item
+```
+
+## Ожидаемый результат:
+- Вместо 6 последовательных запросов (120 сек) - 6 параллельных (8-10 сек)
+- Ускорение в 10-15 раз!
+

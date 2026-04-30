@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "834367201092",
+    "project_id": "han-eat",
+    "storage_bucket": "han-eat.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834367201092:android:f13234698206e38acf0111",
+        "android_client_info": {
+          "package_name": "com.example.han_eat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC99fIetu5nEz71-iLgheuA5U0aJJRO1Ww"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

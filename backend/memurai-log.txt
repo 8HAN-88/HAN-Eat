@@ -1,0 +1,113 @@
+[4600] 13 Feb 22:55:38.496 # --- Memurai is starting ---
+[4600] 13 Feb 22:55:38.506 # License file: D:\memurai-license-dev.txt
+[4600] 13 Feb 22:55:38.666 # Memurai licensed to Memurai DEV Team with license ID 74652472-17e8-4c9d-8706-dc246aa85af2
+[4600] 13 Feb 22:55:38.698 # Memurai Developer version=4.2.2, API=7.4.7, instance-name=, pid=4600, just started
+[4600] 13 Feb 22:55:38.723 # Production use is NOT allowed under this license.
+[4600] 13 Feb 22:55:38.748 # This Memurai license enforces automatic shutdown after 10 days. For more details see: https://www.memurai.com/faq
+[4600] 13 Feb 22:55:38.782 * Configuration loaded
+[4600] 13 Feb 22:55:38.836 * monotonic clock: Windows QueryPerformanceCounter
+[4600] 13 Feb 22:55:38.928 * Running mode=standalone, port=6379.
+[4600] 13 Feb 22:55:38.931 # Memurai license key:
+143,94,109,70,144,71,152,224,24,80,105,124,156,58,158,81,110,184,178,229,81,100,146,73,59,140,175,141,186,212,220,255,251,244,123,69,69,174,56,232,83,71,194,45,247,183,136,160,200,178,62,144,221,35,226,143,159,252,80,45,15,30,153,63,210,94,121,252,93,248,62,139,238,101,59,108,57,154,70,223,236,195,212,5,67,237,68,93,167,0,233,83,30,220,118,176,49,48,68,126,108,208,39,202,68,168,108,155,133,227,160,93,161,237,109,60,34,177,246,66,113,100,134,236,150,77,44,41,23,174,4,94,144,123,130,228,239,190,84,132,133,226,78,42,8,206,168,169,205,206,247,183,7,183,194,147,186,252,212,115,69,118,255,38,28,177,149,160,143,7,128,150,139,44,151,220,229,69,197,77,235,68,5,146,22,179,115,52,40,52,120,179,102,61,71,169,133,239,89,103,129,141,60,211,98,78,209,218,234,37,85,126,22,39,92,59,89,2,228,194,197,65,163,21,98,105,145,239,191,202,37,150,226,63,86,160,138,77,185,173,74,168,112,35,83,17,92,226,37,121,91,238,73,228,96,49,228,88,164,18,133,83,154,0,92,195,161,43,26,127,234[...]
+[4600] 13 Feb 22:55:38.992 # Memurai QID = 1C3A5A44E7C1B9CA;392F4BD51B6CCC47;BB3B9AC8D85B1CC2;28A87897347E284E
+[4600] 13 Feb 22:55:39.025 * Server initialized
+[4600] 13 Feb 22:55:39.045 * Ready to accept connections tcp
+[4600] 17 Feb 11:03:51.612 * 1 changes in 3600 seconds. Saving...
+[4600] 17 Feb 11:04:04.990 * Background saving started by pid 3212
+[3212] 17 Feb 11:04:12.969 * DB saved on disk
+[4600] 17 Feb 11:04:13.442 * Background saving terminated with success
+[4600] 18 Feb 20:16:42.096 * 1 changes in 3600 seconds. Saving...
+[4600] 18 Feb 20:16:42.978 * Background saving started by pid 12324
+[12324] 18 Feb 20:16:44.681 * DB saved on disk
+[4600] 18 Feb 20:16:44.721 * Background saving terminated with success
+[4600] 18 Feb 20:23:06.612 * 100 changes in 300 seconds. Saving...
+[4600] 18 Feb 20:23:06.680 * Background saving started by pid 7736
+[7736] 18 Feb 20:23:06.873 * DB saved on disk
+[4600] 18 Feb 20:23:06.894 * Background saving terminated with success
+[4600] 18 Feb 21:23:07.011 * 1 changes in 3600 seconds. Saving...
+[4600] 18 Feb 21:23:07.134 * Background saving started by pid 360
+[360] 18 Feb 21:23:07.704 * DB saved on disk
+[4600] 18 Feb 21:23:07.792 * Background saving terminated with success
+[4600] 18 Feb 22:01:36.717 * 100 changes in 300 seconds. Saving...
+[4600] 18 Feb 22:01:36.720 * Background saving started by pid 15712
+[15712] 18 Feb 22:01:36.968 * DB saved on disk
+[4600] 18 Feb 22:01:37.042 * Background saving terminated with success
+[4600] 18 Feb 23:01:38.038 * 1 changes in 3600 seconds. Saving...
+[4600] 18 Feb 23:01:38.042 * Background saving started by pid 1328
+[1328] 18 Feb 23:01:38.196 * DB saved on disk
+[4600] 18 Feb 23:01:38.254 * Background saving terminated with success
+[4600] 18 Feb 23:06:39.091 * 100 changes in 300 seconds. Saving...
+[4600] 18 Feb 23:06:39.094 * Background saving started by pid 14496
+[14496] 18 Feb 23:06:39.245 * DB saved on disk
+[4600] 18 Feb 23:06:39.309 * Background saving terminated with success
+[4600] 19 Feb 21:43:59.516 * 1 changes in 3600 seconds. Saving...
+[4600] 19 Feb 21:44:05.874 * Background saving started by pid 12488
+[12488] 19 Feb 21:44:08.904 * DB saved on disk
+[4600] 19 Feb 21:44:09.589 * Background saving terminated with success
+[4600] 19 Feb 22:32:06.392 * 100 changes in 300 seconds. Saving...
+[4600] 19 Feb 22:32:06.465 * Background saving started by pid 14556
+[14556] 19 Feb 22:32:07.002 * DB saved on disk
+[4600] 19 Feb 22:32:07.126 * Background saving terminated with success
+[4600] 20 Feb 18:03:51.542 * 1 changes in 3600 seconds. Saving...
+[4600] 20 Feb 18:03:58.008 * Background saving started by pid 19344
+[19344] 20 Feb 18:04:00.092 * DB saved on disk
+[4600] 20 Feb 18:04:00.486 * Background saving terminated with success
+[4600] 20 Feb 20:35:49.219 * 1 changes in 3600 seconds. Saving...
+[4600] 20 Feb 20:35:49.494 * Background saving started by pid 2416
+[2416] 20 Feb 20:35:52.670 * DB saved on disk
+[4600] 20 Feb 20:35:52.769 * Background saving terminated with success
+[4600] 20 Feb 20:40:53.036 * 100 changes in 300 seconds. Saving...
+[4600] 20 Feb 20:40:53.104 * Background saving started by pid 13936
+[13936] 20 Feb 20:40:53.265 * DB saved on disk
+[4600] 20 Feb 20:40:53.314 * Background saving terminated with success
+[4600] 20 Feb 22:58:38.240 * 1 changes in 3600 seconds. Saving...
+[4600] 20 Feb 22:58:38.308 * Background saving started by pid 19520
+[19520] 20 Feb 22:58:38.666 * DB saved on disk
+[4600] 20 Feb 22:58:38.741 * Background saving terminated with success
+[4600] 20 Feb 23:03:39.084 * 100 changes in 300 seconds. Saving...
+[4600] 20 Feb 23:03:39.087 * Background saving started by pid 7528
+[7528] 20 Feb 23:03:39.235 * DB saved on disk
+[4600] 20 Feb 23:03:39.308 * Background saving terminated with success
+[4600] 21 Feb 00:03:40.012 * 1 changes in 3600 seconds. Saving...
+[4600] 21 Feb 00:03:40.016 * Background saving started by pid 12616
+[12616] 21 Feb 00:03:40.194 * DB saved on disk
+[4600] 21 Feb 00:03:40.228 * Background saving terminated with success
+[4600] 21 Feb 22:59:05.071 * 1 changes in 3600 seconds. Saving...
+[4600] 21 Feb 22:59:05.412 * Background saving started by pid 23092
+[23092] 21 Feb 22:59:06.399 * DB saved on disk
+[4600] 21 Feb 22:59:06.427 * Background saving terminated with success
+[4600] 21 Feb 23:16:37.741 * 100 changes in 300 seconds. Saving...
+[4600] 21 Feb 23:16:37.744 * Background saving started by pid 16584
+[16584] 21 Feb 23:16:37.912 * DB saved on disk
+[4600] 21 Feb 23:16:37.959 * Background saving terminated with success
+[4600] 23 Feb 18:28:45.580 * 1 changes in 3600 seconds. Saving...
+[4600] 23 Feb 18:28:58.494 * Background saving started by pid 4512
+[4512] 23 Feb 18:29:10.002 * DB saved on disk
+[4600] 23 Feb 18:29:10.120 * Background saving terminated with success
+[4600] 23 Feb 18:39:54.916 * 100 changes in 300 seconds. Saving...
+[4600] 23 Feb 18:39:55.321 * Background saving started by pid 3832
+[3832] 23 Feb 18:39:57.453 * DB saved on disk
+[4600] 23 Feb 18:39:57.524 * Background saving terminated with success
+[4600] 23 Feb 19:39:58.050 * 1 changes in 3600 seconds. Saving...
+[4600] 23 Feb 19:39:58.149 * Background saving started by pid 18568
+[18568] 23 Feb 19:39:58.498 * DB saved on disk
+[4600] 23 Feb 19:39:58.596 * Background saving terminated with success
+[4600] 23 Feb 20:55:31.978 * 1 changes in 3600 seconds. Saving...
+[4600] 23 Feb 20:55:31.996 * Background saving started by pid 19112
+[19112] 23 Feb 20:55:32.182 * DB saved on disk
+[4600] 23 Feb 20:55:32.229 * Background saving terminated with success
+[4600] 23 Feb 21:00:33.057 * 100 changes in 300 seconds. Saving...
+[4600] 23 Feb 21:00:33.078 * Background saving started by pid 17944
+[17944] 23 Feb 21:00:33.245 * DB saved on disk
+[4600] 23 Feb 21:00:33.310 * Background saving terminated with success
+[4600] 23 Feb 22:00:34.093 * 1 changes in 3600 seconds. Saving...
+[4600] 23 Feb 22:00:34.135 * Background saving started by pid 9128
+[9128] 23 Feb 22:00:34.263 * DB saved on disk
+[4600] 23 Feb 22:00:34.371 * Background saving terminated with success
+[4600] 23 Feb 22:52:17.383 * 100 changes in 300 seconds. Saving...
+[4600] 23 Feb 22:52:17.546 * Background saving started by pid 18552
+[18552] 23 Feb 22:52:18.143 * DB saved on disk
+[4600] 23 Feb 22:52:18.310 * Background saving terminated with success
+[4600] 23 Feb 22:55:51.025 # Memurai Developer Edition automatic shutdown...
+[4600] 23 Feb 22:55:51.043 # For more details see: https://www.memurai.com/faq
+[4600] 23 Feb 22:55:51.055 # Memurai will now exit (_without_ saving), bye bye...

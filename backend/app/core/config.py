@@ -1,0 +1,131 @@
+"""
+Конфигурация приложения
+"""
+from pydantic_settings import BaseSettings
+from pydantic import field_validator, model_validator
+from typing import List, Optional, Union, Any
+
+
+class Settings(BaseSettings):
+    # App
+    APP_NAME: str = "H.A.N. Eat API"
+    APP_ENV: str = "development"
+    DEBUG: bool = True
+    
+    # Database
+    DATABASE_URL: str = "postgresql://user:password@localhost:5432/haneat"
+    
+    # Database Connection Pool (для 100k пользователей)
+    DB_POOL_SIZE: int = 20  # Базовый размер пула
+    DB_MAX_OVERFLOW: int = 40  # Дополнительные соединения при нагрузке
+    DB_POOL_RECYCLE: int = 3600  # Переподключение каждый час
+    DB_POOL_TIMEOUT: int = 30  # Таймаут ожидания соединения
+    
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_ENABLED: bool = True  # False = работать без Redis (медленнее, без кеша)
+    REDIS_MAX_CONNECTIONS: int = 50  # Максимум соединений к Redis
+    
+    # JWT
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # S3
+    S3_BUCKET: str = "haneat-media"
+    S3_REGION: str = "us-east-1"
+    S3_ENDPOINT_URL: str = "https://s3.amazonaws.com"
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    
+    # CDN
+    CDN_URL: str = "https://cdn.haneat.com"
+    
+    # OpenAI
+    OPENAI_API_KEY: str = ""
+    
+    # Модерация: премодерация при публикации (False = старт продукта: публикуем сразу, модерация только по жалобам)
+    ENABLE_PRE_MODERATION: bool = False
+    
+    # Spoonacular API (для рецептов)
+    SPOONACULAR_API_KEY: str = ""
+    
+    # Firebase (для FCM и APNs)
+    FIREBASE_ENABLED: bool = False
+    FIREBASE_CREDENTIALS_PATH: str = ""  # Путь к JSON файлу с credentials Firebase
+    FIREBASE_PROJECT_ID: str = ""
+    
+    # Stripe (для платежей - для западных стран, пока отключено)
+    STRIPE_ENABLED: bool = False
+    STRIPE_SECRET_KEY: str = ""  # Stripe Secret Key
+    STRIPE_PUBLISHABLE_KEY: str = ""  # Stripe Publishable Key (для frontend)
+    STRIPE_WEBHOOK_SECRET: str = ""  # Stripe Webhook Secret для проверки подписи
+    STRIPE_PRICE_ID_MONTHLY: str = ""  # Price ID для месячной подписки
+    STRIPE_PRICE_ID_YEARLY: str = ""  # Price ID для годовой подписки
+    
+    # ЮKassa (для платежей в России, Беларуси, Казахстане - СБП, карты)
+    YOOKASSA_ENABLED: bool = False
+    YOOKASSA_SHOP_ID: str = ""  # Shop ID из личного кабинета ЮKassa
+    YOOKASSA_SECRET_KEY: str = ""  # Secret Key из личного кабинета ЮKassa
+    
+    FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
+    
+    # Queue
+    RABBITMQ_URL: str = "amqp://localhost:5672"
+    REDIS_STREAMS_ENABLED: bool = False
+    
+    # CORS
+    # Для Flutter web нужно разрешить конкретные origins
+    # В development разрешаем localhost на любых портах
+    # Может быть задан как строка через запятую в .env или как список
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+    ]
+    
+    @model_validator(mode='before')
+    @classmethod
+    def parse_env_values(cls, data: Any) -> Any:
+        """Обрабатывает значения из .env до парсинга JSON"""
+        if isinstance(data, dict):
+            # Обрабатываем ALLOWED_ORIGINS
+            if 'ALLOWED_ORIGINS' in data and isinstance(data['ALLOWED_ORIGINS'], str):
+                origins_str = data['ALLOWED_ORIGINS'].strip()
+                if origins_str:
+                    data['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins_str.split(',') if origin.strip()]
+                else:
+                    data['ALLOWED_ORIGINS'] = []
+            # Обрабатываем другие List поля
+            for field in ['ALLOWED_IMAGE_TYPES', 'ALLOWED_VIDEO_TYPES']:
+                if field in data and isinstance(data[field], str):
+                    types_str = data[field].strip()
+                    if types_str:
+                        data[field] = [item.strip() for item in types_str.split(',') if item.strip()]
+                    else:
+                        data[field] = []
+        return data
+    
+    # Rate Limiting (для 100k пользователей)
+    RATE_LIMIT_PER_MINUTE: int = 120  # Увеличено для production
+    RATE_LIMIT_PER_HOUR: int = 5000
+    RATE_LIMIT_BURST: int = 20  # Кратковременные всплески
+    
+    # Media
+    MAX_IMAGE_SIZE_MB: int = 10
+    MAX_VIDEO_SIZE_MB: int = 100
+    ALLOWED_IMAGE_TYPES: List[str] = ["jpeg", "jpg", "png", "webp"]
+    ALLOWED_VIDEO_TYPES: List[str] = ["mp4", "mov", "avi"]
+    
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8-sig"  # UTF-8 с BOM или без, автоматически определяет
+        case_sensitive = True
+        extra = "ignore"  # Игнорировать дополнительные поля из .env
+
+
+settings = Settings()
+
