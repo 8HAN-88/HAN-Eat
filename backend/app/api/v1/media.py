@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.redis_client import redis_client
 from app.api.dependencies import get_current_user_required
 from app.models.user import User
 from app.services.media_service import MediaService
@@ -15,9 +17,37 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Временное хранилище для связи upload_id с file_key (для mock загрузки)
-# В production это не нужно, так как файлы загружаются напрямую в S3
+# Временное хранилище для связи upload_id с file_key (для mock загрузки без S3).
+# Дублируем в Redis (если доступен), иначе после перезапуска uvicorn клиент получает 404 на PUT /mock/{id}.
 _upload_id_to_file_key: Dict[str, str] = {}
+_MOCK_UPLOAD_REDIS_PREFIX = "upload:mock:"
+_MOCK_UPLOAD_TTL_SEC = 7200
+
+
+def _remember_mock_upload(upload_id: str, file_key: str) -> None:
+    _upload_id_to_file_key[upload_id] = file_key
+    try:
+        redis_client.setex(
+            f"{_MOCK_UPLOAD_REDIS_PREFIX}{upload_id}",
+            _MOCK_UPLOAD_TTL_SEC,
+            file_key,
+        )
+    except Exception as e:
+        logger.debug("mock upload: redis cache skipped: %s", e)
+
+
+def _lookup_mock_file_key(upload_id: str) -> Optional[str]:
+    fk = _upload_id_to_file_key.get(upload_id)
+    if fk:
+        return fk
+    try:
+        fk = redis_client.get(f"{_MOCK_UPLOAD_REDIS_PREFIX}{upload_id}")
+        if fk:
+            _upload_id_to_file_key[upload_id] = fk
+            return fk
+    except Exception as e:
+        logger.debug("mock upload: redis lookup failed: %s", e)
+    return None
 
 
 class InitUploadRequest(BaseModel):
@@ -53,7 +83,7 @@ async def init_upload(
         )
         # Сохраняем связь upload_id -> file_key для mock загрузки
         if not media_service.s3_client:
-            _upload_id_to_file_key[result["upload_id"]] = result["file_key"]
+            _remember_mock_upload(result["upload_id"], result["file_key"])
         return result
     except ValueError as e:
         raise HTTPException(
@@ -186,7 +216,8 @@ async def complete_upload(
                         medium_path_full = os.path.join(os.getcwd(), medium_key)
                         os.makedirs(os.path.dirname(medium_path_full), exist_ok=True)
                         shutil.copy2(processed_files["medium"], medium_path_full)
-                        image_processing.medium_url = f"http://localhost:5000/api/v1/uploads/file/{medium_key}"
+                        _pub = settings.API_PUBLIC_BASE_URL.rstrip("/")
+                        image_processing.medium_url = f"{_pub}/api/v1/uploads/file/{medium_key}"
                         result["url"] = image_processing.medium_url
                         db.commit()
                     
@@ -292,14 +323,17 @@ async def mock_upload(
     import os
     
     try:
-        # Получаем file_key из временного хранилища
-        if upload_id not in _upload_id_to_file_key:
+        # Получаем file_key (память + Redis, чтобы пережить перезапуск API)
+        file_key = _lookup_mock_file_key(upload_id)
+        if not file_key:
+            logger.warning(
+                "mock PUT: unknown upload_id=%s (возможен перезапуск сервера без Redis — снова вызовите /init)",
+                upload_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Upload ID not found. Please call /init first."
+                detail="Upload ID not found. Call /uploads/init again (server may have restarted).",
             )
-        
-        file_key = _upload_id_to_file_key[upload_id]
         
         # Получаем тело запроса как байты
         file_data = await request.body()
@@ -322,10 +356,11 @@ async def mock_upload(
         
         # Возвращаем успешный ответ с локальным URL
         # URL будет доступен через эндпоинт /api/v1/uploads/file/{file_key}
+        _pub = settings.API_PUBLIC_BASE_URL.rstrip("/")
         return {
             "status": "uploaded",
             "file_key": file_key,
-            "url": f"http://localhost:5000/api/v1/uploads/file/{file_key}"
+            "url": f"{_pub}/api/v1/uploads/file/{file_key}"
         }
     except Exception as e:
         raise HTTPException(

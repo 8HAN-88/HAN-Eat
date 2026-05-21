@@ -82,6 +82,43 @@ class PushService:
         except Exception as e:
             logger.error(f"Failed to initialize Firebase: {e}")
             self.enabled = False
+
+    @staticmethod
+    def _build_fcm_data(
+        notification: Notification,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, str]:
+        """Единая схема data для FCM (совпадает с Flutter navigateFromPushData)."""
+        notification_data: Dict[str, str] = {
+            "type": notification.type or "",
+            "entity_type": notification.entity_type or "",
+            "entity_id": str(notification.entity_id) if notification.entity_id else "",
+            "actor_id": str(notification.actor_id) if notification.actor_id else "",
+        }
+        if notification.entity_type == "post" and notification.entity_id:
+            notification_data["post_id"] = str(notification.entity_id)
+        if notification.type in (
+            "subscription_expiring",
+            "subscription_expired",
+            "subscription_refund_requested",
+            "subscription_refund_approved",
+            "subscription_refund_rejected",
+        ):
+            notification_data["route"] = "subscription"
+
+        payload = notification.data if isinstance(notification.data, dict) else {}
+        if payload.get("channel_id") is not None:
+            notification_data["channel_id"] = str(payload["channel_id"])
+        if payload.get("post_id") is not None:
+            notification_data["post_id"] = str(payload["post_id"])
+        if payload.get("post_type") is not None:
+            notification_data["post_type"] = str(payload["post_type"])
+        if payload.get("route"):
+            notification_data["route"] = str(payload["route"])
+
+        if extra:
+            notification_data.update({k: str(v) for k, v in extra.items()})
+        return notification_data
     
     def send_push_notification(
         self,
@@ -113,17 +150,7 @@ class PushService:
             return False
         
         try:
-            # Подготавливаем данные уведомления
-            notification_data = {
-                "type": notification.type,
-                "entity_type": notification.entity_type or "",
-                "entity_id": str(notification.entity_id) if notification.entity_id else "",
-                "actor_id": str(notification.actor_id) if notification.actor_id else "",
-            }
-            
-            # Добавляем дополнительные данные
-            if data:
-                notification_data.update({k: str(v) for k, v in data.items()})
+            notification_data = self._build_fcm_data(notification, data)
             
             # Определяем платформу для настройки уведомления
             platform = user.device_platform or "android"  # По умолчанию Android
@@ -160,7 +187,7 @@ class PushService:
                         title=notification.title,
                         body=notification.body or notification.title,
                         sound="default",
-                        channel_id="default",  # Канал уведомлений Android
+                        channel_id="han_push",
                         click_action="FLUTTER_NOTIFICATION_CLICK",  # Для Flutter
                     ),
                 ),
@@ -217,15 +244,7 @@ class PushService:
                     continue
                 
                 # Подготавливаем данные
-                notification_data = {
-                    "type": notification.type,
-                    "entity_type": notification.entity_type or "",
-                    "entity_id": str(notification.entity_id) if notification.entity_id else "",
-                    "actor_id": str(notification.actor_id) if notification.actor_id else "",
-                }
-                
-                if data:
-                    notification_data.update({k: str(v) for k, v in data.items()})
+                notification_data = self._build_fcm_data(notification, data)
                 
                 platform = user.device_platform or "android"
                 
@@ -257,7 +276,7 @@ class PushService:
                             title=notification.title,
                             body=notification.body or notification.title,
                             sound="default",
-                            channel_id="default",
+                            channel_id="han_push",
                             click_action="FLUTTER_NOTIFICATION_CLICK",
                         ),
                     ),

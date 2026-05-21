@@ -13,6 +13,33 @@ from app.schemas.post import CreatePostRequest, PostResponse, UpdatePostRequest
 router = APIRouter()
 
 
+def _apply_viewer_post_flags(
+    db: Session,
+    post_id: int,
+    response: PostResponse,
+    current_user: Optional[User],
+) -> PostResponse:
+    """Персональные is_liked / is_saved для текущего пользователя."""
+    from app.models.like import Like
+    from app.models.saved_post import SavedPost
+
+    if current_user is None:
+        return response.model_copy(update={"is_liked": False, "is_saved": False})
+    liked = (
+        db.query(Like)
+        .filter(Like.user_id == current_user.id, Like.post_id == post_id)
+        .first()
+        is not None
+    )
+    saved = (
+        db.query(SavedPost)
+        .filter(SavedPost.user_id == current_user.id, SavedPost.post_id == post_id)
+        .first()
+        is not None
+    )
+    return response.model_copy(update={"is_liked": liked, "is_saved": saved})
+
+
 @router.post("/{post_id}/view", status_code=status.HTTP_201_CREATED)
 async def mark_post_as_viewed(
     post_id: int,
@@ -149,42 +176,37 @@ async def create_post(
         # Обновляем счетчик постов канала
         channel.posts_count = (channel.posts_count or 0) + 1
     
-    # Премодерация: только если включена (старт продукта = публикуем сразу, модерация по жалобам)
-    from app.services.moderation_service import ModerationService
-    from app.models.moderation_queue import ModerationQueue
-    from app.core.config import settings
+    from app.services.anti_spam_service import AntiSpamService
+    from app.services.moderation_apply import run_post_moderation
     from datetime import datetime
-    
-    needs_moderation = False
-    if getattr(settings, "ENABLE_PRE_MODERATION", False):
-        moderation_service = ModerationService()
-        needs_moderation = moderation_service.should_moderate(
-            text=request.description or "",
-            title=request.title,
+
+    ok, spam_msg = AntiSpamService(db).check_can_create_post(current_user)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=spam_msg or "Rate limit exceeded",
         )
-    
-    if needs_moderation:
-        post.status = "pending"
-    else:
-        post.status = "published"
-        post.published_at = datetime.utcnow()
-    
+
     db.add(post)
     db.flush()
-    
-    if needs_moderation:
-        moderation_item = ModerationQueue(
-            content_type="post",
-            content_id=post.id,
-            user_id=current_user.id,
-            status="pending",
-            reason="auto_flagged",
-        )
-        db.add(moderation_item)
-    
+
+    from app.services.moderation_apply import raise_if_post_rejected
+
+    from app.services.post_publish_service import (
+        defer_post_if_scheduled,
+        require_creator_for_schedule,
+    )
+
+    require_creator_for_schedule(db, current_user, request.scheduled_publish_at)
+
+    scores = run_post_moderation(db, post, current_user)
+    raise_if_post_rejected(db, post, scores)
+
+    defer_post_if_scheduled(post, request.scheduled_publish_at)
+
     db.commit()
     db.refresh(post)
-    
+
     # Загружаем пользователя для включения в ответ (eager loading)
     from sqlalchemy.orm import joinedload
     post_with_user = db.query(Post).options(joinedload(Post.user)).filter(Post.id == post.id).first()
@@ -258,7 +280,8 @@ async def get_post(
                     author_id=post_data.get("user_id"),
                 )
                 db.commit()
-            return PostResponse(**post_data)
+            pr = PostResponse(**post_data)
+            return _apply_viewer_post_flags(db, post_id, pr, current_user)
     except HTTPException:
         raise
     except Exception:
@@ -314,5 +337,6 @@ async def get_post(
         # Не критично, если кэширование не сработало
         pass
     
-    return PostResponse.model_validate(post)
+    pr = PostResponse.model_validate(post)
+    return _apply_viewer_post_flags(db, post_id, pr, current_user)
 

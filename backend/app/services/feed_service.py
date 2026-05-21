@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, exists
 from app.models.post import Post
 from app.models.user import User
 
@@ -20,6 +20,20 @@ class FeedService:
     """
     Сервис для работы с лентой постов
     """
+
+    @staticmethod
+    def _recommendation_post_filters():
+        """WARNING/shadow/ban: не показывать в ленте и рекомендациях."""
+        blocked_author = exists().where(
+            and_(
+                User.id == Post.user_id,
+                or_(User.shadow_moderation == True, User.banned_at.isnot(None)),
+            )
+        )
+        return (
+            Post.hidden_from_recommendations == False,
+            ~blocked_author,
+        )
     
     def __init__(self, db: Session, redis_client):
         self.db = db
@@ -42,10 +56,23 @@ class FeedService:
             limit: Количество постов
             feed_type: Тип ленты (all, reels, recipes, photos)
         """
+        dismissed_ids = self._get_recent_dismissed_post_ids(user_id)
+
+        from app.services.subscription_service import SubscriptionService
+        from app.core.entitlements import subscription_entitlements
+
+        tier, tier_active = SubscriptionService(self.db).effective_tier(user_id)
+        hide_promoted = tier_active and subscription_entitlements(tier).get(
+            "ad_free", False
+        )
+
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
-        cache_key = f"feed:{user_id}:{feed_type}:following_only={following_only}"
+        cache_key = (
+            f"feed:{user_id}:{feed_type}:following_only={following_only}"
+            f":hide_promo={hide_promoted}"
+        )
         cached_data = None
-        
+
         if not cursor:
             cached = self.redis.get(cache_key)
             if cached:
@@ -60,26 +87,63 @@ class FeedService:
                                 items = feed_data.get("items", [])
                                 # Не отдавать пустой кэш — всегда перезапрашивать, чтобы новые посты появились
                                 if items:
+                                    if dismissed_ids:
+                                        feed_data = {
+                                            **feed_data,
+                                            "items": [
+                                                it
+                                                for it in items
+                                                if it.get("id") not in dismissed_ids
+                                            ],
+                                        }
                                     logger.debug(f"Returning cached feed for user {user_id}, following_only={following_only}")
                                     return feed_data
                 except Exception as e:
                     logger.warning(f"Failed to deserialize cached feed: {e}")
-        
+
         # Получаем посты
         logger.debug(f"Fetching posts for user {user_id}, feed_type={feed_type}, following_only={following_only}")
         posts = self._fetch_posts(user_id, feed_type, following_only=following_only)
         logger.debug(f"Found {len(posts)} posts for user {user_id}, following_only={following_only}")
-        
+
         # Ранжируем
         ranked_posts = self._rank_posts(posts, user_id)
-        
-        # Обогащаем посты метаданными
-        enriched_posts = self._enrich_posts(ranked_posts[:limit], user_id)
-        
+        if dismissed_ids:
+            ranked_posts = [p for p in ranked_posts if p.id not in dismissed_ids]
+
+        if hide_promoted:
+            ranked_posts = [
+                p for p in ranked_posts if not getattr(p, "is_promoted", False)
+            ]
+
+        start_index = 0
+        cursor_last_id = self._parse_feed_cursor(cursor)
+        if cursor_last_id is not None:
+            found = False
+            for idx, p in enumerate(ranked_posts):
+                if p.id == cursor_last_id:
+                    start_index = idx + 1
+                    found = True
+                    break
+            if not found:
+                # Устаревший курсор (пост убран из выдачи / dismiss): не дублировать первую страницу.
+                logger.debug(
+                    "Feed cursor post_id=%s not in ranked list for user %s; returning empty page",
+                    cursor_last_id,
+                    user_id,
+                )
+                start_index = len(ranked_posts)
+
+        window = ranked_posts[start_index : start_index + limit]
+        enriched_posts = self._enrich_posts(window, user_id)
+
+        has_more = len(ranked_posts) > start_index + limit
+        # Курсор — последний отданный пост: клиент передаёт его id, мы начинаем со следующего индекса.
+        last_in_window = window[-1] if window else None
         feed_result = {
             "items": enriched_posts,
-            "next_cursor": self._generate_cursor(ranked_posts[limit] if len(ranked_posts) > limit else None),
-            "has_more": len(ranked_posts) > limit
+            "next_cursor": self._generate_cursor(last_in_window) if has_more else None,
+            "has_more": has_more,
         }
         
         # Кэшируем результат (только первую страницу и только непустой)
@@ -166,7 +230,8 @@ class FeedService:
             ).filter(
                 or_(*conditions),
                 Post.status == "published",
-                Post.deleted_at.is_(None)
+                Post.deleted_at.is_(None),
+                *FeedService._recommendation_post_filters(),
             )
             
             if feed_type != "all":
@@ -185,7 +250,8 @@ class FeedService:
                     Post.id.in_(reposted_post_ids),
                     Post.status == "published",
                     Post.visibility.in_(["public", "followers"]),
-                    Post.deleted_at.is_(None)
+                    Post.deleted_at.is_(None),
+                    *FeedService._recommendation_post_filters(),
                 )
                 
                 if feed_type != "all":
@@ -242,7 +308,8 @@ class FeedService:
         ).filter(
             or_(*conditions),
             Post.status == "published",
-            Post.deleted_at.is_(None)
+            Post.deleted_at.is_(None),
+            *FeedService._recommendation_post_filters(),
         )
         
         if feed_type != "all":
@@ -261,7 +328,8 @@ class FeedService:
                 Post.id.in_(reposted_post_ids),
                 Post.status == "published",
                 Post.visibility.in_(["public", "followers"]),
-                Post.deleted_at.is_(None)
+                Post.deleted_at.is_(None),
+                *FeedService._recommendation_post_filters(),
             )
             
             if feed_type != "all":
@@ -471,8 +539,10 @@ class FeedService:
         subscription_service = SubscriptionService(self.db)
         if subscription_service.is_user_plus(post.user_id):
             boost *= 1.3  # 30% boost для постов от Plus авторов
-        
-        # TODO: добавить поле is_promoted в модель
+
+        if getattr(post, "is_promoted", False):
+            boost *= 1.25
+
         if post.channel_id:
             # Проверяем, является ли пользователь участником канала
             is_member = self._is_channel_member(user.id, post.channel_id)
@@ -495,10 +565,12 @@ class FeedService:
             elif view_engagement > 0.3:  # Средний просмотр
                 additional_signals *= 0.7  # Умеренно снижаем
         
-        # Штраф за пропущенные посты
-        if self._has_user_skipped_post(user.id, post.id):
+        # Штраф: явное «скрыть из ленты» сильнее, чем быстрый скролл
+        if self._has_user_dismissed_post(user.id, post.id):
+            additional_signals *= 0.2
+        elif self._has_user_skipped_post(user.id, post.id):
             additional_signals *= 0.5  # 50% штраф за пропущенные посты
-        
+
         # Буст для постов от подписок (если это подписка)
         is_following_author = self._is_following(user.id, post.user_id)
         if is_following_author:
@@ -584,7 +656,41 @@ class FeedService:
         
         # Если просмотр был меньше 0.5 секунды, считаем пропуском
         return duration < 0.5
-    
+
+    def _has_user_dismissed_post(self, user_id: int, post_id: int) -> bool:
+        """Пользователь явно скрыл пост (POST /feed/dismiss)."""
+        from app.models.analytics_event import AnalyticsEvent
+
+        return (
+            self.db.query(AnalyticsEvent)
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.entity_id == post_id,
+                AnalyticsEvent.event_type == "dismiss",
+            )
+            .first()
+            is not None
+        )
+
+    def _get_recent_dismissed_post_ids(self, user_id: int, days: int = 14) -> set:
+        """Посты, которые пользователь явно скрыл из ленты за последние `days` дней."""
+        from app.models.analytics_event import AnalyticsEvent
+
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self.db.query(AnalyticsEvent.entity_id)
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.event_type == "dismiss",
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.created_at >= cutoff,
+            )
+            .distinct()
+            .all()
+        )
+        return {int(r[0]) for r in rows if r[0] is not None}
+
     def _get_user_viewing_patterns(self, user_id: int) -> Dict[str, Any]:
         """Получить паттерны просмотров пользователя"""
         from app.models.analytics_event import AnalyticsEvent
@@ -1019,7 +1125,8 @@ class FeedService:
         query = self.db.query(Post).filter(
             or_(*conditions),
             Post.status == "published",
-            Post.deleted_at.is_(None)
+            Post.deleted_at.is_(None),
+            *FeedService._recommendation_post_filters(),
         )
         
         if feed_type != "all":
@@ -1028,6 +1135,28 @@ class FeedService:
         posts = query.order_by(Post.published_at.desc()).limit(limit).all()
         return posts
     
+    def _parse_feed_cursor(self, cursor: Optional[str]) -> Optional[int]:
+        """
+        Декодирует курсор: base64 JSON {id, published_at} от _generate_cursor,
+        либо сырой числовой id (совместимость со старыми клиентами).
+        """
+        if not cursor or not str(cursor).strip():
+            return None
+        raw = str(cursor).strip()
+        try:
+            import base64
+            import json
+
+            data = json.loads(base64.b64decode(raw.encode()).decode())
+            if isinstance(data, dict) and data.get("id") is not None:
+                return int(data["id"])
+        except Exception:
+            pass
+        try:
+            return int(raw)
+        except Exception:
+            return None
+
     def _generate_cursor(self, post: Optional[Post]) -> Optional[str]:
         """Генерация курсора для пагинации"""
         if not post:
@@ -1056,6 +1185,7 @@ class FeedService:
         from app.models.like import Like
         from app.models.comment import Comment
         from app.models.repost import Repost
+        from app.models.saved_post import SavedPost
         from app.models.community import Channel
         from app.models.follower import Follower
         from sqlalchemy import func
@@ -1109,6 +1239,12 @@ class FeedService:
             Repost.post_id.in_(post_ids)
         ).all()
         user_reposted_post_ids = {row.post_id for row in user_reposts}
+
+        user_saved_rows = self.db.query(SavedPost.post_id).filter(
+            SavedPost.user_id == user_id,
+            SavedPost.post_id.in_(post_ids),
+        ).all()
+        user_saved_post_ids = {row[0] for row in user_saved_rows}
         
         # 6. Загружаем всех авторов одним запросом
         authors = self.db.query(User).filter(User.id.in_(user_ids)).all()
@@ -1126,32 +1262,38 @@ class FeedService:
         ).all()]
         check_user_ids = following_ids + [user_id]
         
-        # 9. Загружаем последние репосты от подписок одним запросом
+        # 9. Репост от подписок / себя: кто последний репостнул и текст комментария к репосту
         reposted_by_dict = {}
-        if check_user_ids:
-            # Получаем последние репосты для каждого поста
-            latest_reposts = self.db.query(
-                Repost.post_id,
-                Repost.user_id,
-                func.max(Repost.created_at).label('max_created_at')
-            ).filter(
-                Repost.post_id.in_(post_ids),
-                Repost.user_id.in_(check_user_ids)
-            ).group_by(Repost.post_id, Repost.user_id).all()
-            
-            # Для каждого поста находим последний репост
-            for post_id in post_ids:
-                post_reposts = [r for r in latest_reposts if r.post_id == post_id]
-                if post_reposts:
-                    latest = max(post_reposts, key=lambda x: x.max_created_at)
-                    reposter = authors_dict.get(latest.user_id)
-                    if reposter:
-                        reposted_by_dict[post_id] = {
-                            "id": reposter.id,
-                            "name": reposter.name,
-                            "username": reposter.username,
-                            "avatar_url": reposter.avatar_url,
-                        }
+        if check_user_ids and post_ids:
+            all_repost_rows = (
+                self.db.query(
+                    Repost.post_id,
+                    Repost.user_id,
+                    Repost.comment,
+                    Repost.created_at,
+                )
+                .filter(
+                    Repost.post_id.in_(post_ids),
+                    Repost.user_id.in_(check_user_ids),
+                )
+                .all()
+            )
+            by_post: dict = {}
+            for r in all_repost_rows:
+                by_post.setdefault(r.post_id, []).append(r)
+            for post_id, rows in by_post.items():
+                best = max(rows, key=lambda x: x.created_at)
+                reposter = authors_dict.get(best.user_id)
+                if reposter:
+                    entry = {
+                        "id": reposter.id,
+                        "name": reposter.name,
+                        "username": reposter.username,
+                        "avatar_url": reposter.avatar_url,
+                    }
+                    if best.comment and str(best.comment).strip():
+                        entry["comment"] = str(best.comment).strip()
+                    reposted_by_dict[post_id] = entry
         
         # Формируем результат
         enriched = []
@@ -1170,12 +1312,14 @@ class FeedService:
                 "user_id": post.user_id,
                 "channel_id": post.channel_id,
                 "community_id": post.channel_id,  # Для обратной совместимости
+                "is_promoted": bool(getattr(post, "is_promoted", False)),
                 "body": post.body,
                 "tags": post.tags,
                 "likes_count": likes_counts_dict.get(post.id, 0),
                 "comments_count": comments_counts_dict.get(post.id, 0),
                 "reposts_count": reposts_counts_dict.get(post.id, 0),
                 "is_liked": post.id in user_liked_post_ids,
+                "is_saved": post.id in user_saved_post_ids,
                 "is_reposted": post.id in user_reposted_post_ids,
                 "author": {
                     "id": author.id if author else None,
@@ -1246,15 +1390,20 @@ class FeedService:
             feed_type: Тип фида (если None, инвалидирует все типы)
         """
         try:
-            if feed_type:
-                cache_key = f"feed:{user_id}:{feed_type}"
-                self.redis.delete(cache_key)
-            else:
-                # Инвалидируем все типы фида
-                feed_types = ["all", "reels", "recipes", "photos"]
-                for ft in feed_types:
-                    cache_key = f"feed:{user_id}:{ft}"
-                    self.redis.delete(cache_key)
+            feed_types = (
+                [feed_type] if feed_type else ["all", "reels", "recipes", "photos"]
+            )
+            for ft in feed_types:
+                for following_only in (True, False):
+                    for hide_promo in (True, False):
+                        self.redis.delete(
+                            f"feed:{user_id}:{ft}:following_only={following_only}"
+                            f":hide_promo={hide_promo}"
+                        )
+                    # legacy key (до hide_promo в ключе)
+                    self.redis.delete(
+                        f"feed:{user_id}:{ft}:following_only={following_only}"
+                    )
             logger.debug(f"Invalidated feed cache for user {user_id}")
         except Exception as e:
             logger.warning(f"Failed to invalidate feed cache: {e}")

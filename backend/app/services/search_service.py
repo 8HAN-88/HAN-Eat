@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from app.models.post import Post
+from app.services.feed_service import FeedService
 from app.models.user import User
 
 
@@ -57,7 +58,8 @@ class SearchService:
         base_query = self.db.query(Post).filter(
             Post.status == "published",
             Post.deleted_at.is_(None),
-            Post.visibility.in_(["public", "followers"])
+            Post.visibility.in_(["public", "followers"]),
+            *FeedService._recommendation_post_filters(),
         )
         
         # Фильтр по типу
@@ -303,7 +305,8 @@ class SearchService:
         # Предложения из тегов
         tags = self.db.query(Post.tags).filter(
             Post.status == "published",
-            Post.deleted_at.is_(None)
+            Post.deleted_at.is_(None),
+            *FeedService._recommendation_post_filters(),
         ).distinct().all()
         
         query_lower = query.lower()
@@ -320,7 +323,8 @@ class SearchService:
             titles = self.db.query(Post.title).filter(
                 Post.status == "published",
                 Post.deleted_at.is_(None),
-                Post.title.ilike(f"%{query}%")
+                Post.title.ilike(f"%{query}%"),
+                *FeedService._recommendation_post_filters(),
             ).distinct().limit(limit - len(suggestions)).all()
             
             for title_tuple in titles:

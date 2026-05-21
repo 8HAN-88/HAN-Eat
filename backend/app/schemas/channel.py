@@ -62,6 +62,8 @@ class ChannelDetailResponse(ChannelResponse):
     is_admin: bool = False
     is_owner: bool = False  # Владелец канала
     is_moderator: bool = False  # Модератор канала
+    # Участник: включены ли уведомления о канале; не участник — null
+    channel_notifications_enabled: Optional[bool] = None
     rules: Optional[str] = None
     auto_publish_to_feed: bool = True
     auto_publish_to_menu: bool = True
@@ -74,6 +76,10 @@ class ChannelDetailResponse(ChannelResponse):
 class JoinChannelResponse(BaseModel):
     joined: bool
     members_count: int
+
+
+class ChannelNotificationsPatchRequest(BaseModel):
+    enabled: bool
 
 
 class ChannelMemberResponse(BaseModel):

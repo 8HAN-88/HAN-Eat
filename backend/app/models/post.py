@@ -27,9 +27,12 @@ class Post(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     published_at = Column(DateTime, nullable=True, index=True)
+    scheduled_publish_at = Column(DateTime, nullable=True, index=True)
     deleted_at = Column(DateTime, nullable=True)
     views_count = Column(Integer, default=0, nullable=False)  # Счетчик просмотров
-    
+    is_promoted = Column(Boolean, default=False, nullable=False, index=True)  # Продвижение в ленте
+    hidden_from_recommendations = Column(Boolean, default=False, nullable=False)
+
     # Relationships для оптимизации запросов (eager loading)
     # Используем lazy="select" для избежания circular imports
     user = relationship("User", foreign_keys=[user_id], lazy="select")

@@ -55,3 +55,24 @@ def decode_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
+
+def create_ai_scan_ticket(user_id: int, expires_minutes: int = 15) -> str:
+    """Одноразовый билет после резерва AI scan (для POST /analyze без повторного списания)."""
+    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    to_encode = {
+        "sub": str(user_id),
+        "exp": expire,
+        "type": "ai_scan_ticket",
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_ai_scan_ticket(token: str, user_id: int) -> bool:
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "ai_scan_ticket":
+        return False
+    try:
+        return int(payload.get("sub")) == int(user_id)
+    except (TypeError, ValueError):
+        return False
+

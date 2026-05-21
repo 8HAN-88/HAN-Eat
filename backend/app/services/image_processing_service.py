@@ -3,10 +3,10 @@
 """
 import os
 import logging
+import io
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 from PIL import Image, ImageOps
-import io
 
 logger = logging.getLogger(__name__)
 
@@ -282,4 +282,39 @@ class ImageProcessingService:
         except Exception as e:
             logger.error(f"Error getting image info: {e}")
             return {}
+
+
+def optimize_scan_image_for_ai(
+    image_bytes: bytes,
+    max_side: int = 768,
+    jpeg_quality: int = 75,
+) -> bytes:
+    """
+    Уменьшить длинную сторону до max_side и сохранить JPEG для AI pipeline (Spoonacular / экономия трафика).
+    При ошибке возвращает исходные байты.
+    """
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img = ImageOps.exif_transpose(img)
+            if img.mode in ("RGBA", "LA", "P"):
+                rgb = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode == "P":
+                    img = img.convert("RGBA")
+                alpha = img.split()[-1] if img.mode in ("RGBA", "LA") else None
+                rgb.paste(img, mask=alpha)
+                img = rgb
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+            img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            out = io.BytesIO()
+            img.save(
+                out,
+                format="JPEG",
+                quality=jpeg_quality,
+                optimize=True,
+            )
+            return out.getvalue()
+    except Exception as e:
+        logger.warning("optimize_scan_image_for_ai: %s", e)
+        return image_bytes
 

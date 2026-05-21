@@ -26,6 +26,7 @@ from app.schemas.channel import (
     JoinChannelResponse,
     ChannelMemberResponse,
     UpdateChannelMemberRoleRequest,
+    ChannelNotificationsPatchRequest,
 )
 from app.schemas.post import CreatePostRequest, UpdatePostRequest, PostResponse, RecipeStep
 
@@ -236,6 +237,7 @@ async def get_channel(
     is_admin = False
     is_owner = False
     is_moderator = False
+    channel_notifications_enabled = None
     if current_user:
         member = db.query(ChannelMember).filter(
             ChannelMember.channel_id == channel_id,
@@ -246,6 +248,9 @@ async def get_channel(
             is_admin = member.role == "admin"
             is_owner = member.role == "owner" or channel.admin_user_id == current_user.id
             is_moderator = member.role == "moderator"
+            channel_notifications_enabled = bool(
+                getattr(member, "notifications_enabled", True)
+            )
         # Также проверяем, является ли пользователь владельцем через admin_user_id
         if channel.admin_user_id == current_user.id:
             is_owner = True
@@ -284,6 +289,7 @@ async def get_channel(
         } if admin else None,
         is_member=is_member,
         is_admin=is_admin,
+        channel_notifications_enabled=channel_notifications_enabled,
     )
 
 
@@ -539,6 +545,28 @@ async def leave_channel(
         joined=False,
         members_count=channel.members_count
     )
+
+
+@router.patch("/{channel_id}/notifications")
+async def patch_channel_notifications(
+    channel_id: int,
+    body: ChannelNotificationsPatchRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Включить/выключить уведомления о постах канала (для подписчика)."""
+    member = db.query(ChannelMember).filter(
+        ChannelMember.channel_id == channel_id,
+        ChannelMember.user_id == current_user.id,
+    ).first()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not a member of this channel",
+        )
+    member.notifications_enabled = body.enabled
+    db.commit()
+    return {"enabled": body.enabled}
 
 
 @router.get("/{channel_id}/posts")
@@ -844,6 +872,13 @@ async def create_channel_recipe(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This endpoint is only for creating recipes. Use /posts for other types."
         )
+
+    # Рецепт без названия публиковать нельзя
+    if not (request.title or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Название рецепта обязательно"
+        )
     
     # Формируем body для рецепта
     steps_data = []
@@ -869,6 +904,12 @@ async def create_channel_recipe(
         "servings": request.servings,
         "calories": request.calories,
     }
+    # Денормализация для карточек «Меню» / клиентов, читающих только body
+    if channel.name:
+        body["channel_name"] = channel.name
+    ch_img = (channel.avatar_url or channel.cover_url or "").strip()
+    if ch_img:
+        body["channel_avatar"] = ch_img
     
     # Добавляем медиа, если есть
     if request.media:
@@ -879,17 +920,6 @@ async def create_channel_recipe(
     import json
     logger.info(f"Body JSON: {json.dumps(body, ensure_ascii=False, indent=2)}")
     
-    # Премодерация только если включена (старт продукта = публикуем сразу)
-    from app.core.config import settings
-    needs_moderation = False
-    if getattr(settings, "ENABLE_PRE_MODERATION", False):
-        moderation_service = ModerationService()
-        needs_moderation = moderation_service.should_moderate(
-            text=request.description or "",
-            title=request.title,
-        )
-    
-    # Создаем пост-рецепт
     post = Post(
         user_id=current_user.id,
         channel_id=channel_id,
@@ -900,24 +930,17 @@ async def create_channel_recipe(
         publish_to=["feed", f"channel:{channel_id}"],
         visibility="public",
         tags=request.tags or [],
-        status="pending" if needs_moderation else "published",
-        published_at=datetime.utcnow() if not needs_moderation else None,
     )
-    
+
     db.add(post)
     channel.posts_count = (channel.posts_count or 0) + 1
-    
-    if needs_moderation:
-        from app.models.moderation_queue import ModerationQueue
-        queue_item = ModerationQueue(
-            content_type="post",
-            content_id=post.id,
-            user_id=current_user.id,
-            reason="auto_flagged",
-            status="pending",
-        )
-        db.add(queue_item)
-    
+    db.flush()
+
+    from app.services.moderation_apply import run_post_moderation, raise_if_post_rejected
+
+    scores = run_post_moderation(db, post, current_user)
+    raise_if_post_rejected(db, post, scores)
+
     db.commit()
     db.refresh(post)
     
@@ -1036,17 +1059,6 @@ async def create_channel_post(
     if request.type == "reel" and publish_to_reels:
         publish_to.append("reels")  # Автоматически в Рилсы
     
-    # Премодерация только если включена (старт продукта = публикуем сразу)
-    from app.core.config import settings
-    needs_moderation = False
-    if getattr(settings, "ENABLE_PRE_MODERATION", False):
-        moderation_service = ModerationService()
-        needs_moderation = moderation_service.should_moderate(
-            text=request.description or "",
-            title=request.title,
-        )
-    
-    # Создаем пост
     post = Post(
         user_id=current_user.id,
         channel_id=channel_id,
@@ -1057,48 +1069,45 @@ async def create_channel_post(
         publish_to=publish_to,
         visibility="public",
         tags=request.tags or [],
-        status="pending" if needs_moderation else "published",
-        published_at=datetime.utcnow() if not needs_moderation else None,
     )
-    
+
     db.add(post)
     channel.posts_count = (channel.posts_count or 0) + 1
-    
-    if needs_moderation:
-        from app.models.moderation_queue import ModerationQueue
-        queue_item = ModerationQueue(
-            content_type="post",
-            content_id=post.id,
-            user_id=current_user.id,
-            reason="auto_flagged",
-            status="pending",
-        )
-        db.add(queue_item)
-    
+    db.flush()
+
+    from app.services.moderation_apply import run_post_moderation, raise_if_post_rejected
+    from app.services.post_publish_service import (
+        defer_post_if_scheduled,
+        require_creator_for_schedule,
+    )
+
+    require_creator_for_schedule(db, current_user, request.scheduled_publish_at)
+
+    scores = run_post_moderation(db, post, current_user)
+    raise_if_post_rejected(db, post, scores)
+
+    defer_post_if_scheduled(post, request.scheduled_publish_at)
+
     db.commit()
     db.refresh(post)
-    
-    # Инвалидируем кэш ленты для всех подписчиков канала
+
     if post.status == "published":
         try:
             from app.services.feed_service import FeedService
             from app.core.redis_client import get_redis
             redis_client = get_redis()
             feed_service = FeedService(db=db, redis_client=redis_client)
-            
-            # Получаем всех подписчиков канала
+
             channel_members = db.query(ChannelMember.user_id).filter(
                 ChannelMember.channel_id == channel_id
             ).all()
-            
-            # Инвалидируем кэш для каждого подписчика
+
             for member_user_id, in channel_members:
                 feed_service.invalidate_feed_cache(member_user_id)
                 logger.info(f"Invalidated feed cache for user {member_user_id} after channel post creation")
         except Exception as e:
             logger.warning(f"Failed to invalidate feed cache: {e}")
-    
-    # Отправляем уведомления подписчикам канала о новом посте
+
     if post.status == "published":
         from app.services.channel_notification_service import send_channel_post_notification
         try:
@@ -1112,7 +1121,7 @@ async def create_channel_post(
             )
         except Exception as e:
             print(f"⚠️ Error sending channel notifications: {e}")
-    
+
     return PostResponse.model_validate(post)
 
 
@@ -1587,7 +1596,11 @@ async def delete_channel(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
-    """Удалить канал (только владелец)"""
+    """Удалить канал (только владелец).
+
+    Посты канала помечаются как удалённые; участники удаляются каскадом;
+    кэш ленты инвалидируется для всех затронутых пользователей.
+    """
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
         raise HTTPException(
@@ -1600,9 +1613,36 @@ async def delete_channel(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only channel owner can delete channel"
         )
-    
+
+    member_rows = (
+        db.query(ChannelMember.user_id)
+        .filter(ChannelMember.channel_id == channel_id)
+        .all()
+    )
+    feed_user_ids = {uid for (uid,) in member_rows if uid is not None}
+    feed_user_ids.add(channel.admin_user_id)
+
+    from datetime import datetime as dt_utc
+
+    now = dt_utc.utcnow()
+    db.query(Post).filter(
+        Post.channel_id == channel_id,
+        Post.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session=False)
+
     db.delete(channel)
     db.commit()
-    
+
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        redis = get_redis()
+        feed_service = FeedService(db=db, redis_client=redis)
+        for uid in feed_user_ids:
+            feed_service.invalidate_feed_cache(uid)
+    except Exception as e:
+        logger.warning("Failed to invalidate feed cache after channel delete: %s", e)
+
     return {"message": "Channel deleted successfully"}
 

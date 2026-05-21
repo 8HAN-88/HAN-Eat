@@ -322,6 +322,10 @@ async def get_saved_posts(
         
         # Обрабатываем рецепты Spoonacular
         elif has_spoonacular_fields and saved_post.spoonacular_recipe_id is not None and saved_post.recipe_data:
+            # Spoonacular-элементы участвуют только в "Общее" и "Рецепты".
+            # В "Рилсы" (post_type == "reel") и других типах их быть не должно.
+            if post_type not in (None, "recipe"):
+                continue
             recipe_data = saved_post.recipe_data
             # Создаем объект поста из данных рецепта Spoonacular
             saved_at = saved_post.created_at if saved_post.created_at else None

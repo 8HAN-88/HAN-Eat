@@ -4,6 +4,7 @@
 import boto3
 import uuid
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from botocore.config import Config
@@ -89,9 +90,10 @@ class MediaService:
         
         # Если S3 не настроен (локальная разработка), возвращаем mock URL
         if not self.s3_client:
+            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
             return {
                 "upload_id": upload_id,
-                "upload_url": f"http://localhost:5000/api/v1/uploads/mock/{upload_id}",
+                "upload_url": f"{base}/api/v1/uploads/mock/{upload_id}",
                 "file_key": file_key,
                 "expires_in": 3600,
                 "cdn_url": f"{self.cdn_url}/{file_key}"
@@ -119,7 +121,18 @@ class MediaService:
             }
         except ClientError as e:
             raise Exception(f"Failed to generate presigned URL: {str(e)}")
-    
+
+    @staticmethod
+    def _user_id_from_file_key(file_key: str) -> Optional[int]:
+        """Ключ вида uploads/user_123/... → 123."""
+        m = re.search(r"uploads/user_(\d+)/", file_key)
+        if not m:
+            return None
+        try:
+            return int(m.group(1))
+        except ValueError:
+            return None
+
     def complete_upload(
         self,
         upload_id: str,
@@ -145,7 +158,8 @@ class MediaService:
             # Mock для локальной разработки
             # Используем локальный URL вместо CDN
             # file_key имеет формат: uploads/user_2/2025/12/10/uuid.jpg
-            local_url = f"http://localhost:5000/api/v1/uploads/file/{file_key}"
+            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
+            local_url = f"{base}/api/v1/uploads/file/{file_key}"
             return {
                 "status": "completed",
                 "url": local_url,
@@ -162,19 +176,12 @@ class MediaService:
             raise
         
         url = f"{self.cdn_url}/{file_key}"
-        
+
+        effective_user_id = user_id if user_id is not None else self._user_id_from_file_key(file_key)
+
         # Для видео запускаем обработку
         if file_type == "video":
-            # Импортируем здесь, чтобы избежать circular imports
-            from app.services.video_queue_service import VideoQueueService
-            from app.core.database import get_db
-            from app.models.video_processing import VideoProcessing
-            
-            # Получаем user_id из upload_id (можно передавать отдельно)
-            # Пока используем временное решение - извлекаем из file_key
-            # В реальности нужно передавать user_id в complete_upload
-            user_id = 0  # TODO: получать из контекста или параметра
-            
+            # Очередь видео ставится в API /uploads/complete (есть db и current_user).
             # Создаем запись обработки и добавляем в очередь
             # Для этого нужна db session, но здесь её нет
             # Поэтому возвращаем статус "processing" и обработка будет запущена асинхронно
@@ -193,7 +200,7 @@ class MediaService:
         # Создаем запись обработки и добавляем в очередь
         # Для этого нужна db session, но здесь её нет
         # Поэтому возвращаем статус "processing" и обработка будет запущена асинхронно
-        if user_id:
+        if effective_user_id:
             return {
                 "status": "processing",
                 "url": url,  # Временный URL исходного файла

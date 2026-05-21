@@ -214,7 +214,15 @@ class NotificationService:
                     return
                 elif notification_type == "mention" and not prefs.mentions_enabled:
                     return
-                elif notification_type == "system" and not prefs.system_enabled:
+                elif notification_type in (
+                    "system",
+                    "subscription_expiring",
+                    "subscription_expired",
+                    "subscription_refund_requested",
+                    "subscription_refund_approved",
+                    "subscription_refund_rejected",
+                    "post_scheduled_published",
+                ) and not prefs.system_enabled:
                     return
             
             # Импортируем PushService

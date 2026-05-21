@@ -253,3 +253,90 @@ final reelsFeed = await FeedService.getReelsFeed();
 - Система прав и ролей
 - Кэширование и оптимизация запросов
 
+---
+
+## Подписки и платежи (V1, ЮKassa)
+
+### Тарифы
+
+| Тариф | Код | Цена/мес | Возможности |
+|-------|-----|----------|-------------|
+| Free | `free` | 0 ₽ | Базовый доступ |
+| H.A.N. AI | `ai` | 199 ₽ | AI-сканы, питание |
+| H.A.N. Creator | `creator` | 499 ₽ | Продвижение, отложенные посты, аналитика |
+| H.A.N. Pro | `pro` | 649 ₽ | AI + Creator |
+
+Legacy `plus` в API маппится на `pro`.
+
+### Backend
+
+- `GET /api/v1/subscriptions/status` — тариф, grace period (3 дня), `upgrade_options` с прорацией
+- `POST /api/v1/subscriptions/trial` — пробный период (ai/pro)
+- `POST /api/v1/payments/checkout` — оплата через ЮKassa (RU/CIS)
+- `POST /api/v1/payments/webhook/yookassa` — активация подписки, возвраты
+- `GET /api/v1/payments/history` — история, чек, статус возврата
+- `POST /api/v1/payments/refund-request` — запрос возврата (тикет поддержки)
+- `GET /api/v1/payments/admin/refund-queue` — очередь возвратов (админ)
+- `POST /api/v1/payments/admin/refund` — провести возврат в ЮKassa (админ)
+- `POST /api/v1/payments/admin/refund/reject` — отклонить запрос (админ)
+
+Прорация при апгрейде: кредит за неиспользованные дни текущего тарифа вычитается из суммы checkout.
+
+### Creator tools
+
+- `POST /api/v1/creator/posts/{id}/promote` — до 5 продвигаемых постов
+- `GET /api/v1/creator/posts/promoted` — список активных продвижений
+- `GET /api/v1/creator/posts/scheduled` — отложенные публикации
+- Фоновая задача в `main.py` (60 с): публикация scheduled + maintenance подписок
+
+### Flutter
+
+- `SubscriptionScreen` — выбор тарифа, trial, история оплат, чек, запрос возврата
+- `CreatorToolsScreen` → продвижение, scheduled, аналитика
+- `PromotedPostsScreen`, `ScheduledPostsScreen`
+- Push deep links: `route=subscription`, открытие поста после scheduled publish
+
+### Миграции
+
+- `029_subscriptions_tiers_v1` — product, статусы пользователя
+- `030_scheduled_posts_v1` — `scheduled_publish_at`
+- `031_receipt_refund_v1` — `receipt_url`, `refund_status`, `refunded_at`
+
+### Админ (Flutter)
+
+- Настройки → **Возвраты подписок** (только `is_admin`)
+- `AdminRefundQueueScreen` — одобрение/отклонение запросов
+- `python3 scripts/grant_admin.py user@email.com` — выдать права админа
+
+### Уведомления о возвратах
+
+| Тип | Когда |
+|-----|--------|
+| `subscription_refund_requested` | Пользователь отправил запрос |
+| `subscription_refund_approved` | Возврат проведён (админ или webhook) |
+| `subscription_refund_rejected` | Админ отклонил запрос |
+
+Push → экран подписки (`route=subscription`).
+
+### Production checklist (ЮKassa)
+
+```bash
+cd backend
+python3 scripts/check_yookassa_config.py
+curl -s http://127.0.0.1:5001/api/v1/payments/readiness | python3 -m json.tool
+```
+
+В `.env`: `YOOKASSA_ENABLED`, `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `FRONTEND_URL`, `API_PUBLIC_BASE_URL` (публичный HTTPS для webhook).
+
+### Smoke
+
+```bash
+cd backend
+python3 scripts/check_yookassa_config.py
+SMOKE_EMAIL=user@example.com SMOKE_PASSWORD=secret SMOKE_AUTO_REGISTER=1 \
+  python3 scripts/smoke_subscriptions.py
+
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=secret \
+  python3 scripts/smoke_admin_refunds.py
+```
+

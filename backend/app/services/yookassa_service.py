@@ -52,14 +52,24 @@ class YooKassaService:
             logger.error(f"Failed to initialize YooKassa: {e}")
             self.enabled = False
     
+    @staticmethod
+    def receipt_item_description(product: str, plan: str = "monthly") -> str:
+        """Короткое наименование для чека 54-ФЗ (до 128 символов)."""
+        names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+        period = "1 мес." if plan == "monthly" else "1 год"
+        return f"Подписка {names.get(product, product)} ({period})"
+
     def create_payment(
         self,
         user_id: int,
         user_email: str,
         amount: float,
         plan: str,  # monthly | yearly
-        description: str = "Подписка H.A.N. Plus",
-        return_url: Optional[str] = None
+        description: str = "Подписка H.A.N. Pro",
+        return_url: Optional[str] = None,
+        product: str = "pro",
+        receipt_description: Optional[str] = None,
+        metadata_extra: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Создать платеж через ЮKassa с поддержкой СБП
@@ -101,6 +111,8 @@ class YooKassaService:
                 "metadata": {
                     "user_id": str(user_id),
                     "plan": plan,
+                    "product": product,
+                    **(metadata_extra or {}),
                 },
                 "receipt": {
                     "customer": {
@@ -108,13 +120,18 @@ class YooKassaService:
                     },
                     "items": [
                         {
-                            "description": description,
-                            "quantity": "1",
+                            "description": (
+                                receipt_description
+                                or self.receipt_item_description(product, plan)
+                            )[:128],
+                            "quantity": "1.00",
                             "amount": {
                                 "value": f"{amount:.2f}",
                                 "currency": "RUB"
                             },
-                            "vat_code": 1  # НДС не облагается
+                            "vat_code": 1,
+                            "payment_mode": "full_payment",
+                            "payment_subject": "service",
                         }
                     ]
                 }
@@ -136,6 +153,52 @@ class YooKassaService:
             logger.error(f"YooKassa error creating payment: {e}")
             raise ValueError(f"Failed to create payment: {str(e)}")
     
+    @staticmethod
+    def extract_receipt_url(payment: Any) -> Optional[str]:
+        """URL фискального чека из объекта Payment ЮKassa (если уже зарегистрирован)."""
+        if payment is None:
+            return None
+        for attr in ("receipt_ofd_url", "fiscal_receipt_url"):
+            url = getattr(payment, attr, None)
+            if url:
+                return str(url)
+        reg = getattr(payment, "receipt_registration", None)
+        if reg:
+            for attr in ("receipt_ofd_url", "fiscal_receipt_url"):
+                url = getattr(reg, attr, None)
+                if url:
+                    return str(url)
+        return None
+
+    def create_refund(
+        self,
+        payment_id: str,
+        amount: float,
+        currency: str = "RUB",
+        reason: str = "Возврат по запросу пользователя",
+    ) -> Dict[str, Any]:
+        """Создать возврат в ЮKassa (полный или частичный)."""
+        if not self.enabled or not YOOKASSA_AVAILABLE:
+            raise ValueError("YooKassa is not enabled or not available")
+        import uuid
+
+        from yookassa import Refund
+
+        refund = Refund.create(
+            {
+                "payment_id": payment_id,
+                "amount": {"value": f"{amount:.2f}", "currency": currency},
+                "description": reason[:250],
+            },
+            str(uuid.uuid4()),
+        )
+        return {
+            "refund_id": refund.id,
+            "status": refund.status,
+            "amount": amount,
+            "currency": currency,
+        }
+
     def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
         """
         Получить статус платежа
@@ -158,6 +221,7 @@ class YooKassaService:
                 "amount": float(payment.amount.value),
                 "currency": payment.amount.currency,
                 "metadata": payment.metadata,
+                "receipt_url": self.extract_receipt_url(payment),
                 "created_at": payment.created_at.isoformat() if payment.created_at else None,
             }
         except Exception as e:
@@ -215,19 +279,13 @@ class YooKassaService:
         }
         
         if event_type == 'payment.succeeded':
-            # Платеж успешно завершен
+            # Доверяем только payment_id; user/plan/product — из API Payment.find_one().
             payment_id = payment_data.get('id')
-            metadata = payment_data.get('metadata', {})
-            user_id = int(metadata.get('user_id', 0))
-            plan = metadata.get('plan', 'monthly')
-            
-            if payment_id and user_id:
+            if payment_id:
                 result["processed"] = True
                 result["action"] = "payment_succeeded"
-                result["user_id"] = user_id
                 result["payment_id"] = payment_id
-                result["plan"] = plan
-                result["message"] = f"Payment succeeded for user {user_id}"
+                result["message"] = f"Payment succeeded: {payment_id}"
         
         elif event_type == 'payment.canceled':
             # Платеж отменен
@@ -237,6 +295,16 @@ class YooKassaService:
                 result["action"] = "payment_canceled"
                 result["payment_id"] = payment_id
                 result["message"] = f"Payment {payment_id} canceled"
+
+        elif event_type == 'refund.succeeded':
+            refund_id = payment_data.get('id')
+            payment_id = payment_data.get('payment_id')
+            if payment_id:
+                result["processed"] = True
+                result["action"] = "refund_succeeded"
+                result["payment_id"] = payment_id
+                result["refund_id"] = refund_id
+                result["message"] = f"Refund succeeded for payment {payment_id}"
         
         return result
 

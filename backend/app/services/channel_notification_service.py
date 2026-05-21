@@ -1,14 +1,49 @@
 """
 Сервис для отправки уведомлений о событиях в каналах
 """
-from sqlalchemy.orm import Session
+import logging
 from datetime import datetime
 from typing import Optional
-from app.models.notification import Notification
-from app.models.community_member import ChannelMember
+
+from sqlalchemy.orm import Session
+
 from app.models.community import Channel
-from app.models.post import Post
+from app.models.community_member import ChannelMember
+from app.models.notification import Notification
+from app.models.user import User
 from app.services.push_service import get_push_service
+
+logger = logging.getLogger(__name__)
+
+
+def _send_channel_push_batch(db: Session, notifications: list[Notification]) -> None:
+    """Отправить push подписчикам канала через FCM."""
+    if not notifications:
+        return
+
+    push_service = get_push_service()
+    if not push_service.enabled:
+        return
+
+    user_ids = [n.user_id for n in notifications]
+    users = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(user_ids)).all()
+    }
+
+    batch: list[tuple[User, Notification]] = []
+    for notification in notifications:
+        user = users.get(notification.user_id)
+        if user and user.fcm_token:
+            batch.append((user, notification))
+
+    if not batch:
+        return
+
+    try:
+        push_service.send_batch_push_notifications(batch)
+    except Exception as e:
+        logger.warning("Error sending channel push notifications: %s", e, exc_info=True)
 
 
 def send_channel_post_notification(
@@ -21,32 +56,29 @@ def send_channel_post_notification(
 ):
     """
     Отправить уведомления подписчикам канала о новом посте
-    
+
     Типы уведомлений:
     - channel_post: новый пост в канале
     - channel_recipe: новый рецепт в канале
     - channel_video: новое видео в канале
     - channel_announcement: объявление от автора
     """
-    # Получаем канал
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
         return
-    
-    # Получаем всех подписчиков канала (кроме автора поста)
+
     subscribers = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id != author_id  # Не отправляем автору
+        ChannelMember.user_id != author_id
     ).all()
-    
+
     if not subscribers:
         return
-    
-    # Определяем тип уведомления и текст
+
     notification_type = "channel_post"
     title = f"Новый пост в канале {channel.name}"
     body = post_title or "Новый пост"
-    
+
     if post_type == "recipe":
         notification_type = "channel_recipe"
         title = f"Новый рецепт в канале {channel.name}"
@@ -55,15 +87,12 @@ def send_channel_post_notification(
         notification_type = "channel_video"
         title = f"Новое видео в канале {channel.name}"
         body = post_title or "Новое видео"
-    
-    # Создаем уведомления для всех подписчиков
+
     notifications = []
-    push_service = get_push_service()
-    
     for subscriber in subscribers:
-        # Проверяем настройки уведомлений пользователя (TODO: добавить проверку)
-        # Пока отправляем всем
-        
+        if getattr(subscriber, "notifications_enabled", True) is False:
+            continue
+
         notification = Notification(
             user_id=subscriber.user_id,
             type=notification_type,
@@ -82,26 +111,11 @@ def send_channel_post_notification(
             created_at=datetime.utcnow()
         )
         notifications.append(notification)
-    
-    # Массовое добавление уведомлений
+
     if notifications:
         db.bulk_save_objects(notifications)
         db.commit()
-        
-        # Отправляем push-уведомления
-        if push_service.enabled:
-            try:
-                for notification in notifications:
-                    push_service.send_notification(
-                        user_id=notification.user_id,
-                        title=notification.title,
-                        body=notification.body,
-                        data=notification.data
-                    )
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Error sending push notifications: {e}", exc_info=True)
+        _send_channel_push_batch(db, notifications)
 
 
 def send_channel_announcement(
@@ -110,25 +124,24 @@ def send_channel_announcement(
     announcement_text: str,
     author_id: int
 ):
-    """
-    Отправить объявление подписчикам канала
-    """
+    """Отправить объявление подписчикам канала."""
     channel = db.query(Channel).filter(Channel.id == channel_id).first()
     if not channel:
         return
-    
+
     subscribers = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,
         ChannelMember.user_id != author_id
     ).all()
-    
+
     if not subscribers:
         return
-    
+
     notifications = []
-    push_service = get_push_service()
-    
     for subscriber in subscribers:
+        if getattr(subscriber, "notifications_enabled", True) is False:
+            continue
+
         notification = Notification(
             user_id=subscriber.user_id,
             type="channel_announcement",
@@ -145,22 +158,8 @@ def send_channel_announcement(
             created_at=datetime.utcnow()
         )
         notifications.append(notification)
-    
+
     if notifications:
         db.bulk_save_objects(notifications)
         db.commit()
-        
-        if push_service.enabled:
-            try:
-                for notification in notifications:
-                    push_service.send_notification(
-                        user_id=notification.user_id,
-                        title=notification.title,
-                        body=notification.body,
-                        data=notification.data
-                    )
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Error sending push notifications: {e}", exc_info=True)
-
+        _send_channel_push_batch(db, notifications)

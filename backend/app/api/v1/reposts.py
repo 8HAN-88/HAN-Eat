@@ -1,25 +1,83 @@
 """
 API endpoints для репостов
 """
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.api.dependencies import get_current_user_required, get_current_user
 from app.models.user import User
 from app.models.post import Post
 from app.models.repost import Repost
-from app.models.like import Like
-from app.models.comment import Comment
-from app.schemas.post import PostResponse
+from app.models.community import Channel
+from app.models.community_member import ChannelMember
 
 router = APIRouter()
 
 
+def _meaningful_text(s: Optional[str]) -> Optional[str]:
+    if s is None:
+        return None
+    t = (s or "").strip()
+    if not t or t in (".", "…", "..."):
+        return None
+    return t
+
+
+def _title_from_post_body(body: Any) -> Optional[str]:
+    if not body or not isinstance(body, dict):
+        return None
+    recipe = body.get("recipe")
+    if isinstance(recipe, dict):
+        rt = recipe.get("title")
+        if isinstance(rt, str):
+            mt = _meaningful_text(rt)
+            if mt:
+                return mt
+    for key in ("title", "name", "translated_title"):
+        v = body.get(key)
+        if isinstance(v, str):
+            mt = _meaningful_text(v)
+            if mt:
+                return mt
+    text = body.get("text")
+    if isinstance(text, str) and text.strip():
+        line = text.strip().splitlines()[0].strip()
+        mt = _meaningful_text(line)
+        if mt:
+            return line[:120] if len(line) > 120 else line
+    media = body.get("media")
+    if isinstance(media, list) and len(media) > 0:
+        return "Медиа"
+    return None
+
+
+def effective_repost_source_title(post: Post) -> str:
+    """Заголовок для «Репост: …» при публикации в канал (без «.» и пустых значений)."""
+    t = _meaningful_text(post.title)
+    if t:
+        return t
+    d = _meaningful_text(post.description)
+    if d:
+        return d[:77] + "…" if len(d) > 80 else d
+    body = post.body
+    if isinstance(body, dict):
+        bt = _title_from_post_body(body)
+        if bt:
+            return bt
+    return "Пост"
+
+
 class CreateRepostRequest(BaseModel):
     comment: Optional[str] = None  # Комментарий к репосту
+
+
+class RepostToChannelRequest(BaseModel):
+    channel_id: int
+    comment: Optional[str] = None
 
 
 @router.post("/posts/{post_id}/repost", status_code=status.HTTP_201_CREATED)
@@ -93,11 +151,96 @@ async def create_repost(
     
     db.commit()
     db.refresh(repost)
-    
+
+    try:
+        from app.services.feed_service import FeedService
+        from app.core.redis_client import get_redis
+
+        feed_service = FeedService(db, get_redis())
+        feed_service.invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
+
     return {
         "reposted": True,
         "repost_id": repost.id,
         "message": "Post reposted successfully"
+    }
+
+
+@router.post("/posts/{post_id}/repost-to-channel", status_code=status.HTTP_201_CREATED)
+async def repost_to_channel(
+    post_id: int,
+    request: RepostToChannelRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """One-click репост поста в канал."""
+    post = db.query(Post).filter(
+        Post.id == post_id,
+        Post.deleted_at.is_(None)
+    ).first()
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    channel = db.query(Channel).filter(Channel.id == request.channel_id).first()
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel not found"
+        )
+
+    is_owner = channel.admin_user_id == current_user.id
+    if not is_owner:
+        member = db.query(ChannelMember).filter(
+            ChannelMember.channel_id == channel.id,
+            ChannelMember.user_id == current_user.id
+        ).first()
+        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
+        if not is_admin_or_moderator:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only channel owner, admins and moderators can repost to channel"
+            )
+
+    source_title = effective_repost_source_title(post)
+    deep_link = f"haneat://post/{post.id}"
+    comment = (request.comment or "").strip()
+    display_title = f"Репост: {source_title}"
+
+    repost_post = Post(
+        user_id=current_user.id,
+        channel_id=channel.id,
+        type="text",
+        title=display_title,
+        description=comment if comment else None,
+        body={
+            "repost_original_post_id": post.id,
+            "repost_deep_link": deep_link,
+            "repost_original_type": post.type,
+            "repost_original_title": post.title,
+            "repost_original_description": post.description,
+            "repost_to_channel_comment": comment or None,
+        },
+        publish_to=["feed", f"channel:{channel.id}"],
+        visibility="public",
+        tags=post.tags or [],
+        status="published",
+        published_at=datetime.utcnow(),
+    )
+    db.add(repost_post)
+    channel.posts_count = (channel.posts_count or 0) + 1
+    db.commit()
+    db.refresh(repost_post)
+
+    return {
+        "ok": True,
+        "post_id": repost_post.id,
+        "channel_id": channel.id,
+        "message": "Repost published to channel",
     }
 
 

@@ -8,6 +8,7 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.subscription_service import SubscriptionService
 
 security = HTTPBearer(auto_error=False)
 
@@ -72,7 +73,12 @@ async def get_current_user_required(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
-    
+    if user.banned_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
+        )
+
     return user
 
 
@@ -96,6 +102,48 @@ async def get_current_moderator_required(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Moderator or admin access required"
+        )
+    return current_user
+
+
+async def require_han_plus_subscriber(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> User:
+    """Совместимость: Plus = доступ к AI."""
+    return await require_han_ai_subscriber(current_user, db)
+
+
+async def require_han_ai_subscriber(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> User:
+    if not SubscriptionService(db).has_ai_access(current_user.id):
+        from app.core.entitlements import HAN_AI_REQUIRED_CODE
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_AI_REQUIRED_CODE,
+                "message": "Требуется подписка H.A.N. AI или Pro",
+            },
+        )
+    return current_user
+
+
+async def require_han_creator_subscriber(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> User:
+    if not SubscriptionService(db).has_creator_access(current_user.id):
+        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_CREATOR_REQUIRED_CODE,
+                "message": "Требуется подписка H.A.N. Creator или Pro",
+            },
         )
     return current_user
 

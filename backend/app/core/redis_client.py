@@ -16,7 +16,9 @@ class _RedisStub:
     def get(self, key):
         return None
 
-    def set(self, key, value, ex=None, px=None, **kwargs):
+    def set(self, key, value, ex=None, px=None, nx=False, **kwargs):
+        if nx:
+            return True
         pass
 
     def setex(self, name, time, value):
@@ -30,6 +32,15 @@ class _RedisStub:
 
     def rpop(self, name):
         return None
+
+    def incr(self, key, amount=1):
+        if not hasattr(self, "_counts"):
+            self._counts = {}
+        self._counts[key] = self._counts.get(key, 0) + amount
+        return self._counts[key]
+
+    def expire(self, key, time):
+        pass
 
     def ping(self):
         pass
@@ -72,4 +83,7 @@ else:
 def get_redis():
     """Dependency для получения Redis клиента"""
     return redis_client
+
+
+REDIS_IS_STUB = isinstance(redis_client, _RedisStub)
 

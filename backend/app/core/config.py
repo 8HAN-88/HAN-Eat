@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     APP_NAME: str = "H.A.N. Eat API"
     APP_ENV: str = "development"
     DEBUG: bool = True
+    # Разрешить POST /api/v1/subscriptions/create при APP_ENV=production (иначе только webhook’и оплаты)
+    ALLOW_DIRECT_SUBSCRIPTION_CREATE: bool = False
     
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/haneat"
@@ -26,8 +28,8 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = True  # False = работать без Redis (медленнее, без кеша)
     REDIS_MAX_CONNECTIONS: int = 50  # Максимум соединений к Redis
     
-    # JWT
-    SECRET_KEY: str
+    # JWT (в production задайте SECRET_KEY в .env; значение по умолчанию только для локального запуска)
+    SECRET_KEY: str = "dev-only-change-with-SECRET_KEY-env-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -45,12 +47,35 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
     
-    # Модерация: премодерация при публикации (False = старт продукта: публикуем сразу, модерация только по жалобам)
+    # Анализ фото (/analyze): авторизация обязательна; доступ по JWT ai_scan_ticket после POST /ai-scan/reserve.
+    # Флаг ниже больше не используется в analyze_photo (оставлен для совместимости .env).
+    REQUIRE_PLUS_FOR_PHOTO_ANALYSIS: bool = False
+
+    # Модерация: премодерация при публикации (legacy, см. ENABLE_AI_MODERATION)
     ENABLE_PRE_MODERATION: bool = False
+    # AI pipeline при публикации (текст + изображения): safe / warning / block
+    ENABLE_AI_MODERATION: bool = True
+
+    # Подписки (RUB, ЮKassa) — V1 тарифы
+    AI_MONTHLY_PRICE_RUB: float = 199.0
+    CREATOR_MONTHLY_PRICE_RUB: float = 499.0
+    PRO_MONTHLY_PRICE_RUB: float = 649.0
+    # Legacy aliases (совместимость)
+    PLUS_MONTHLY_PRICE_RUB: float = 649.0
+    PLUS_YEARLY_PRICE_RUB: float = 6490.0
+    SUBSCRIPTION_TRIAL_DAYS: int = 7
+    SUBSCRIPTION_GRACE_PERIOD_DAYS: int = 3
+    # Окно для запроса возврата через поддержку (дней с даты оплаты)
+    SUBSCRIPTION_REFUND_REQUEST_DAYS: int = 14
     
     # Spoonacular API (для рецептов)
     SPOONACULAR_API_KEY: str = ""
     
+    # Google Sign-In (OAuth id_token): audiences из Cloud Console, через запятую; пусто = любой валидный aud от Google
+    GOOGLE_OAUTH_CLIENT_IDS: str = ""
+    # Только локальные тесты: не вызывать tokeninfo (небезопасно, в production всегда false)
+    SKIP_GOOGLE_ID_TOKEN_VERIFICATION: bool = False
+
     # Firebase (для FCM и APNs)
     FIREBASE_ENABLED: bool = False
     FIREBASE_CREDENTIALS_PATH: str = ""  # Путь к JSON файлу с credentials Firebase
@@ -70,6 +95,9 @@ class Settings(BaseSettings):
     YOOKASSA_SECRET_KEY: str = ""  # Secret Key из личного кабинета ЮKassa
     
     FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
+
+    # Базовый URL API для ссылок на загруженные файлы без S3 (mock). Должен совпадать с портом uvicorn (часто 5001).
+    API_PUBLIC_BASE_URL: str = "http://127.0.0.1:5001"
     
     # Queue
     RABBITMQ_URL: str = "amqp://localhost:5672"
@@ -109,6 +137,7 @@ class Settings(BaseSettings):
         return data
     
     # Rate Limiting (для 100k пользователей)
+    RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 120  # Увеличено для production
     RATE_LIMIT_PER_HOUR: int = 5000
     RATE_LIMIT_BURST: int = 20  # Кратковременные всплески

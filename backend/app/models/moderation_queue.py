@@ -1,7 +1,7 @@
 """
 Модель очереди модерации
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, Float
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import ENUM
 from app.core.database import Base
@@ -35,4 +35,11 @@ class ModerationQueue(Base):
     moderated_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Кто модерировал
     created_at = Column(DateTime, server_default=func.now(), index=True)
     moderated_at = Column(DateTime, nullable=True)
+    # AI moderation (V1)
+    toxicity_score = Column(Float, nullable=True)
+    spam_score = Column(Float, nullable=True)
+    nsfw_score = Column(Float, nullable=True)
+    danger_score = Column(Float, nullable=True)
+    ai_decision = Column(String(20), nullable=True)  # safe | warning | block
+    report_category = Column(String(50), nullable=True)
 

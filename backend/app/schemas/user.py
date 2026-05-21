@@ -15,7 +15,12 @@ class UserResponse(BaseModel):
     bio: Optional[str] = None
     is_private: bool
     created_at: datetime
-    
+    subscription_type: Optional[str] = "free"
+    scan_credits: Optional[int] = None
+    is_admin: bool = False
+    is_moderator: bool = False
+    trust_score: Optional[float] = None
+
     class Config:
         from_attributes = True
 

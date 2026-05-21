@@ -1,6 +1,7 @@
 """
 API endpoints для уведомлений
 """
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -46,7 +47,16 @@ async def get_notifications(
         actor = None
         if notif.actor_id:
             actor = db.query(User).filter(User.id == notif.actor_id).first()
-        
+
+        payload_data = notif.data
+        if isinstance(payload_data, str):
+            try:
+                payload_data = json.loads(payload_data)
+            except (json.JSONDecodeError, TypeError):
+                payload_data = None
+        if payload_data is not None and not isinstance(payload_data, dict):
+            payload_data = {"_raw": payload_data}
+
         enriched_notifications.append({
             "id": notif.id,
             "type": notif.type,
@@ -63,7 +73,7 @@ async def get_notifications(
             "is_read": notif.is_read,
             "read_at": notif.read_at.isoformat() if notif.read_at else None,
             "created_at": notif.created_at.isoformat() if notif.created_at else None,
-            "data": notif.data,
+            "data": payload_data,
         })
     
     # Получаем общее количество непрочитанных

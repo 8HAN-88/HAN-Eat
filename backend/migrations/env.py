@@ -25,6 +25,7 @@ from app.models.comment import Comment
 from app.models.repost import Repost
 from app.models.moderation_queue import ModerationQueue
 from app.models.analytics_event import AnalyticsEvent
+from app.models.ai_meal_plan_record import AiMealPlanRecord
 from app.models.notification import Notification
 from app.models.subscription import Subscription
 from app.models.support_ticket import SupportTicket

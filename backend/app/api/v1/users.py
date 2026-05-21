@@ -2,13 +2,17 @@
 API endpoints для пользователей
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import func, or_, and_, exists
 from typing import Optional
 from app.core.database import get_db
+from app.services.ai_scan_credits_service import AiScanCreditsService
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
 from app.models.post import Post
+from app.models.repost import Repost
 from app.models.follower import Follower
 from app.models.saved_post import SavedPost
 from app.schemas.user import UserProfileResponse, UserStats, UpdateUserRequest, UserResponse
@@ -20,9 +24,13 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_profile(current_user: User = Depends(get_current_user_required)):
-    """Получить профиль текущего пользователя"""
-    return UserResponse.model_validate(current_user)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Получить профиль текущего пользователя (кредиты AI scan начисляются по суткам)."""
+    user = AiScanCreditsService(db).refresh_user(current_user.id)
+    return UserResponse.model_validate(user)
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)
@@ -221,8 +229,7 @@ async def get_user_posts(
     
     # Проверяем приватность
     if user.is_private and (not current_user or current_user.id != user_id):
-        # Проверяем подписку
-        from app.models.follower import Follower
+        # Проверяем подписку (Follower импортирован в начале модуля)
         is_following = db.query(Follower).filter(
             Follower.follower_id == (current_user.id if current_user else 0),
             Follower.followee_id == user_id
@@ -234,61 +241,183 @@ async def get_user_posts(
                 detail="User profile is private"
             )
     
-    # Получаем посты (только личные посты, без постов из каналов)
-    query = db.query(Post).filter(
+    # Личные посты на стене (без каналов) + репосты пользователя (оригиналы из ленты/каналов)
+    owned_filters = [
         Post.user_id == user_id,
         Post.status == "published",
         Post.deleted_at.is_(None),
-        Post.channel_id.is_(None)  # Исключаем посты из каналов
-    )
-    
+        Post.channel_id.is_(None),
+    ]
+
+    # Оригиналы репостов: для чужого профиля учитываем видимость; на своей стене — все свои репосты
+    repost_visibility = []
+    if current_user is not None and current_user.id == user_id:
+        pass
+    elif current_user is None:
+        repost_visibility.append(Post.visibility == "public")
+    else:
+        follow_exists = exists().where(
+            Follower.follower_id == current_user.id,
+            Follower.followee_id == Post.user_id,
+        )
+        repost_visibility.append(
+            or_(
+                Post.visibility == "public",
+                Post.user_id == current_user.id,
+                and_(Post.visibility == "followers", follow_exists),
+            )
+        )
+
+    repost_filters = [
+        Repost.user_id == user_id,
+        Post.status == "published",
+        Post.deleted_at.is_(None),
+        *repost_visibility,
+    ]
+
+    # Вкладка «Рилсы» в приложении: не только type=reel, но и видео в body.media (часто type=photo)
     if post_type:
-        # Если post_type == "post", фильтруем все типы кроме "reel"
         if post_type == "post":
-            query = query.filter(Post.type != "reel")
+            type_clause = Post.type != "reel"
+        elif post_type == "reel":
+            from sqlalchemy import cast as sa_cast
+            from sqlalchemy.dialects.postgresql import JSONB
+
+            body_j = sa_cast(Post.body, JSONB)
+            video_in_media = and_(
+                Post.body.isnot(None),
+                body_j.contains({"media": [{"type": "video"}]}),
+            )
+            type_clause = or_(Post.type == "reel", video_in_media)
         else:
-            query = query.filter(Post.type == post_type)
-    
-    # Загружаем посты с eager loading для оптимизации
-    from sqlalchemy.orm import joinedload
-    posts = query.options(joinedload(Post.user)).order_by(Post.published_at.desc()).limit(limit).offset(offset).all()
-    
-    # Получаем количество лайков и комментариев для каждого поста
+            type_clause = Post.type == post_type
+        owned_filters.append(type_clause)
+        repost_filters.append(type_clause)
+
+    total_owned = db.query(func.count(Post.id)).filter(*owned_filters).scalar() or 0
+
+    total_reposts = (
+        db.query(func.count(Repost.id))
+        .join(Post, Repost.post_id == Post.id)
+        .filter(*repost_filters)
+        .scalar()
+        or 0
+    )
+    total = int(total_owned + total_reposts)
+
+    # Собираем таймлайн без UNION (надёжнее для разных СУБД и типов дат)
+    owned_rows = (
+        db.query(Post.id, func.coalesce(Post.published_at, Post.created_at))
+        .filter(*owned_filters)
+        .all()
+    )
+    repost_rows = (
+        db.query(Post.id, Repost.created_at)
+        .select_from(Repost)
+        .join(Post, Repost.post_id == Post.id)
+        .filter(*repost_filters)
+        .all()
+    )
+    _sentinel = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+    def _ts(v):
+        if v is None:
+            return _sentinel
+        if getattr(v, "tzinfo", None) is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+
+    timeline = [(pid, _ts(ts), False) for pid, ts in owned_rows]
+    timeline.extend((pid, _ts(ts), True) for pid, ts in repost_rows)
+    timeline.sort(key=lambda x: x[1], reverse=True)
+    slice_tl = timeline[offset : offset + limit]
+
     from app.models.like import Like
     from app.models.comment import Comment
-    
+
+    profile_reposter = {
+        "id": user.id,
+        "name": user.name or user.username or "",
+        "username": user.username,
+        "avatar_url": user.avatar_url,
+    }
+
+    if not slice_tl:
+        return {"posts": [], "total": total}
+
+    pids = [x[0] for x in slice_tl]
+    posts_by_id = {
+        p.id: p
+        for p in db.query(Post)
+        .options(joinedload(Post.user), selectinload(Post.channel))
+        .filter(Post.id.in_(pids))
+        .all()
+    }
+
     posts_data = []
-    for post in posts:
+    for pid, _, is_rp in slice_tl:
+        post = posts_by_id.get(pid)
+        if post is None:
+            continue
         likes_count = db.query(func.count(Like.id)).filter(Like.post_id == post.id).scalar() or 0
-        comments_count = db.query(func.count(Comment.id)).filter(
-            Comment.post_id == post.id,
-            Comment.deleted_at.is_(None)
-        ).scalar() or 0
-        
-        # Проверяем, лайкнул ли текущий пользователь
+        comments_count = (
+            db.query(func.count(Comment.id))
+            .filter(Comment.post_id == post.id, Comment.deleted_at.is_(None))
+            .scalar()
+            or 0
+        )
         is_liked = False
         if current_user:
-            is_liked = db.query(Like).filter(
-                Like.user_id == current_user.id,
-                Like.post_id == post.id
-            ).first() is not None
-        
-        posts_data.append({
-            **PostResponse.model_validate(post).model_dump(),
-            "likes_count": likes_count,
-            "comments_count": comments_count,
-            "is_liked": is_liked,
-        })
-    
-    return {
-        "posts": posts_data,
-        "total": db.query(func.count(Post.id)).filter(
-            Post.user_id == user_id,
-            Post.status == "published",
-            Post.deleted_at.is_(None),
-            Post.channel_id.is_(None)  # Исключаем посты из каналов
-        ).scalar() or 0
-    }
+            is_liked = (
+                db.query(Like)
+                .filter(Like.user_id == current_user.id, Like.post_id == post.id)
+                .first()
+                is not None
+            )
+        is_reposted_by_viewer = False
+        if current_user:
+            is_reposted_by_viewer = (
+                db.query(Repost)
+                .filter(Repost.user_id == current_user.id, Repost.post_id == post.id)
+                .first()
+                is not None
+            )
+        reposts_count = (
+            db.query(func.count(Repost.id)).filter(Repost.post_id == post.id).scalar() or 0
+        )
+
+        row = PostResponse.model_validate(post).model_dump()
+        row["likes_count"] = likes_count
+        row["comments_count"] = comments_count
+        row["is_liked"] = is_liked
+        row["reposts_count"] = reposts_count
+        row["is_reposted"] = is_reposted_by_viewer
+        if is_rp:
+            rb = {**profile_reposter}
+            rc = (
+                db.query(Repost.comment)
+                .filter(Repost.user_id == user.id, Repost.post_id == post.id)
+                .scalar()
+            )
+            if rc and str(rc).strip():
+                rb["comment"] = str(rc).strip()
+            row["reposted_by"] = rb
+        else:
+            row["reposted_by"] = None
+        ch = post.channel
+        if post.channel_id and ch:
+            row["channel"] = {
+                "id": ch.id,
+                "name": ch.name,
+                "slug": getattr(ch, "slug", None),
+                "avatar_url": ch.avatar_url,
+                "description": ch.description,
+            }
+        else:
+            row["channel"] = None
+        posts_data.append(row)
+
+    return {"posts": posts_data, "total": total}
 
 
 @router.get("/me/notification-preferences", response_model=NotificationPreferencesResponse)

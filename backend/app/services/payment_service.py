@@ -375,12 +375,15 @@ class PaymentService:
             subscription = event_data
             subscription_id = subscription.get('id')
             status = subscription.get('status')
+            period_end = subscription.get('current_period_end')
             
             if subscription_id:
                 result["processed"] = True
                 result["action"] = "subscription_updated"
                 result["subscription_id"] = subscription_id
                 result["status"] = status
+                if period_end is not None:
+                    result["current_period_end"] = period_end
                 result["message"] = f"Subscription {subscription_id} updated to {status}"
             
         elif event_type == 'customer.subscription.deleted':
@@ -398,11 +401,14 @@ class PaymentService:
             # Успешная оплата инвойса (продление подписки)
             invoice = event_data
             subscription_id = invoice.get('subscription')
+            period_end = invoice.get('period_end')
             
             if subscription_id:
                 result["processed"] = True
                 result["action"] = "payment_succeeded"
                 result["subscription_id"] = subscription_id
+                if period_end is not None:
+                    result["period_end"] = period_end
                 result["message"] = f"Payment succeeded for subscription {subscription_id}"
             
         elif event_type == 'invoice.payment_failed':

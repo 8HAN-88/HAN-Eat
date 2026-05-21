@@ -40,6 +40,7 @@ class CreatePostRequest(BaseModel):
     cook_time_min: Optional[int] = None
     servings: Optional[int] = None
     calories: Optional[int] = None
+    scheduled_publish_at: Optional[datetime] = None
 
 
 class UpdatePostRequest(BaseModel):
@@ -87,9 +88,12 @@ class PostResponse(BaseModel):
     comments_count: int = 0
     reposts_count: Optional[int] = None
     views_count: int = 0  # Счетчик просмотров
+    is_promoted: bool = False
     is_liked: bool = False
+    is_saved: bool = False
     published_at: Optional[datetime] = None
-    
+    scheduled_publish_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
     
@@ -110,11 +114,14 @@ class PostResponse(BaseModel):
             'tags': obj.tags or [],
             'community_id': obj.channel_id,  # Для обратной совместимости
             'published_at': obj.published_at,
+            'scheduled_publish_at': getattr(obj, 'scheduled_publish_at', None),
             'likes_count': getattr(obj, 'likes_count', 0) or 0,
             'comments_count': getattr(obj, 'comments_count', 0) or 0,
             'reposts_count': getattr(obj, 'reposts_count', None),
             'views_count': getattr(obj, 'views_count', 0) or 0,
+            'is_promoted': bool(getattr(obj, 'is_promoted', False)),
             'is_liked': getattr(obj, 'is_liked', False),
+            'is_saved': getattr(obj, 'is_saved', False),
         }
         
         # Добавляем данные автора, если доступны
