@@ -20,6 +20,38 @@ class AuthResponse(BaseModel):
     token: str
     refresh_token: str
     user: "UserResponse"
+    message: str | None = None
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class TokenBody(BaseModel):
+    token: str = Field(..., min_length=16)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=16)
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: EmailStr
+    password: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr | None = None
 
 
 class RefreshTokenRequest(BaseModel):
@@ -28,6 +60,11 @@ class RefreshTokenRequest(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     id_token: str
+
+
+class YandexAuthRequest(BaseModel):
+    code: str
+    redirect_uri: str
 
 
 from app.schemas.user import UserResponse

@@ -1,12 +1,15 @@
 // Экран регистрации
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/push_notification_service.dart';
 import '../../../../app/app_router.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
   
   static const routeName = '/register';
   
@@ -41,7 +44,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _isLoading = true);
     
     try {
-      await AuthService.register(
+      final response = await AuthService.register(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         name: _nameController.text.trim(),
@@ -49,9 +52,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ? null
             : _usernameController.text.trim(),
       );
-      
+
+      unawaited(
+        PushNotificationService.syncTokenAfterAuth().catchError(
+          (Object e) => debugPrint('FCM after register: $e'),
+        ),
+      );
+
       if (mounted) {
-        context.go(FeedRoute.path);
+        if (response.message != null && response.message!.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response.message!)),
+          );
+        }
+        if (!response.user.emailVerified) {
+          context.go(VerifyEmailRoute.withEmail(response.user.email));
+        } else {
+          context.go(FeedRoute.path);
+        }
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -77,11 +95,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Регистрация'),
@@ -220,13 +236,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       : const Text('Зарегистрироваться'),
                 ),
                 const SizedBox(height: 16),
-                // Ссылка на вход
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text('Уже есть аккаунт? '),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _isLoading
+                          ? null
+                          : () => context.go(LoginRoute.path),
                       child: const Text('Войти'),
                     ),
                   ],

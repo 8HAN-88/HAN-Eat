@@ -1,9 +1,9 @@
 """
 Pydantic схемы для пользователей
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 
 class UserResponse(BaseModel):
@@ -20,6 +20,18 @@ class UserResponse(BaseModel):
     is_admin: bool = False
     is_moderator: bool = False
     trust_score: Optional[float] = None
+    email_verified: bool = False
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _email_verified_from_orm(cls, data: Any, handler):
+        if hasattr(data, "email_verified_at"):
+            result = handler(data)
+            verified = getattr(data, "email_verified_at", None) is not None
+            if result.email_verified != verified:
+                return result.model_copy(update={"email_verified": verified})
+            return result
+        return handler(data)
 
     class Config:
         from_attributes = True

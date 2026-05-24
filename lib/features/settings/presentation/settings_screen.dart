@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
+import '../../meal_plan/presentation/nutrition_survey_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../widgets/ai_scan_credits_tile.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -17,14 +21,15 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _unreadNotificationsCount = 0;
   bool _isAdminOrModerator = false;
-  
+  bool _isAdmin = false;
+
   @override
   void initState() {
     super.initState();
     _loadUnreadCount();
     _checkAdminStatus();
   }
-  
+
   Future<void> _loadUnreadCount() async {
     try {
       final count = await NotificationService.getUnreadCount();
@@ -35,12 +40,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Игнорируем ошибки
     }
   }
-  
+
   Future<void> _checkAdminStatus() async {
     try {
       final user = await AuthService.getCurrentUser();
       if (mounted && user != null) {
         setState(() {
+          _isAdmin = user.isAdmin;
           _isAdminOrModerator = user.isAdmin || user.isModerator;
         });
       }
@@ -62,36 +68,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(analysisSettingsProvider);
     final controller = ref.read(analysisSettingsProvider.notifier);
+    final scheme = Theme.of(context).colorScheme;
 
-    final placeholderItems = [
+    final serviceItems = <_SettingsItem>[
       _SettingsItem(
-        title: 'Профиль',
-        icon: Icons.person_outline_rounded,
-        subtitle: 'Войти, загрузить аватар, управлять UGC',
-        onTap: () => context.push('/profile'),
+        title: 'Настройки профиля',
+        icon: Icons.manage_accounts_outlined,
+        subtitle: 'Имя, аватар, аналитика, выход из аккаунта',
+        onTap: () => context.push(ProfileAuthRoute.path),
+      ),
+      _SettingsItem(
+        title: 'Пароль и email',
+        icon: Icons.lock_outline,
+        subtitle: 'Смена пароля, смена email',
+        onTap: () => context.push(AccountSecurityRoute.path),
       ),
       _SettingsItem(
         title: 'Уведомления',
         icon: Icons.notifications_outlined,
         subtitle: 'Тренды, новые видео сообщества, напоминания',
         onTap: () {
-          context.push('/notifications-list');
-          // Обновляем счетчик после перехода
+          context.push(NotificationsRoute.path);
           _loadUnreadCount();
         },
         badge: _unreadNotificationsCount > 0 ? _unreadNotificationsCount : null,
       ),
       _SettingsItem(
         title: 'Поддержка',
-        icon: Icons.support_agent,
+        icon: Icons.support_agent_outlined,
         subtitle: 'Создать обращение, отменить подписку',
         onTap: () => context.push('/support'),
       ),
       _SettingsItem(
-        title: 'Подписка H.A.N. Plus',
+        title: 'Подписка',
         icon: Icons.workspace_premium_outlined,
-        subtitle: 'Без рекламы, оффлайн, анализ питания, выплаты авторам',
+        subtitle: 'Тарифы AI, Creator и Pro — от 199 ₽/мес',
         onTap: () => context.push('/subscription'),
+      ),
+      _SettingsItem(
+        title: 'Опрос питания',
+        icon: Icons.monitor_heart_outlined,
+        subtitle: 'Калории, диета, бюджет — для AI-плана',
+        onTap: () => context.push(NutritionSurveyRoute.path),
       ),
       _SettingsItem(
         title: 'Поддержка и безопасность',
@@ -105,13 +123,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         subtitle: 'Экспорт и восстановление данных',
         onTap: () => context.push('/backup'),
       ),
-      // Показывать только для админов/модераторов
+      if (_isAdmin)
+        _SettingsItem(
+          title: 'Возвраты подписок',
+          icon: Icons.currency_exchange_outlined,
+          subtitle: 'Очередь запросов на возврат (ЮKassa)',
+          onTap: () => context.push(AdminRefundQueueRoute.path),
+        ),
       if (_isAdminOrModerator)
         _SettingsItem(
           title: 'Модерация',
           icon: Icons.admin_panel_settings_outlined,
-          subtitle: 'Очередь модерации контента',
-          onTap: () => context.push('/moderation'),
+          subtitle: 'Панель модератора и очередь контента',
+          onTap: () => context.push(ModerationDashboardRoute.path),
           badge: null,
         ),
       _SettingsItem(
@@ -125,8 +149,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          20,
+          16,
+          20 + floatingBottomPadding(context),
+        ),
         children: [
+          _SettingsSectionHeader(title: 'Внешний вид'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -138,34 +168,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 12),
-                  SegmentedButton<ThemeMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: ThemeMode.system,
-                        icon: Icon(Icons.brightness_auto),
-                        label: Text('Системная'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeMode.light,
-                        icon: Icon(Icons.light_mode),
-                        label: Text('Светлая'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeMode.dark,
-                        icon: Icon(Icons.dark_mode),
-                        label: Text('Тёмная'),
-                      ),
-                    ],
-                    selected: {ref.watch(themeModeProvider)},
-                    onSelectionChanged: (selection) {
-                      ref.read(themeModeProvider.notifier).setThemeMode(selection.first);
+                  _ThemeModeRow(
+                    selected: ref.watch(themeModeProvider),
+                    onSelected: (mode) {
+                      ref.read(themeModeProvider.notifier).setThemeMode(mode);
                     },
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -178,7 +191,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value:
+                    initialValue:
                         supportedLanguages.keys.contains(settings.language)
                             ? settings.language
                             : 'ru',
@@ -200,37 +213,219 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'Все рецепты, ингредиенты и шаги будут автоматически переводиться на выбранный язык.',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                   ),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 24),
-          ...placeholderItems.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: Icon(
-                  item.icon,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                title: Text(item.title),
-                subtitle: Text(item.subtitle),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                tileColor: Theme.of(context).colorScheme.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                onTap: item.onTap,
-              ),
+          _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
+          const Card(
+            child: AiScanCreditsTile(),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                for (var i = 0; i < serviceItems.length; i++) ...[
+                  _SettingsTile(item: serviceItems[i]),
+                  if (i < serviceItems.length - 1)
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: scheme.outlineVariant,
+                    ),
+                ],
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Переключатель темы: три варианта в одну строку, подпись без переноса.
+class _ThemeModeRow extends StatelessWidget {
+  const _ThemeModeRow({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final ThemeMode selected;
+  final ValueChanged<ThemeMode> onSelected;
+
+  static const _options = [
+    _ThemeModeChoice(ThemeMode.system, Icons.brightness_auto, 'Системная'),
+    _ThemeModeChoice(ThemeMode.light, Icons.light_mode, 'Светлая'),
+    _ThemeModeChoice(ThemeMode.dark, Icons.dark_mode, 'Тёмная'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        for (var i = 0; i < _options.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: _ThemeModeOption(
+              icon: _options[i].icon,
+              label: _options[i].label,
+              isSelected: selected == _options[i].mode,
+              onTap: () => onSelected(_options[i].mode),
+              scheme: scheme,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ThemeModeChoice {
+  const _ThemeModeChoice(this.mode, this.icon, this.label);
+
+  final ThemeMode mode;
+  final IconData icon;
+  final String label;
+}
+
+class _ThemeModeOption extends StatelessWidget {
+  const _ThemeModeOption({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    required this.scheme,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected
+          ? scheme.primaryContainer.withValues(alpha: 0.65)
+          : scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? scheme.primary : Colors.transparent,
+              width: isSelected ? 1.5 : 0,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.fade,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected
+                            ? scheme.onPrimaryContainer
+                            : scheme.onSurface,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsSectionHeader extends StatelessWidget {
+  const _SettingsSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 10, top: 4),
+      child: Text(
+        title.toUpperCase(),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({required this.item});
+
+  final _SettingsItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      minLeadingWidth: 40,
+      leading: Icon(
+        item.icon,
+        color: scheme.primary,
+      ),
+      title: Row(
+        children: [
+          Expanded(child: Text(item.title)),
+          if (item.badge != null && item.badge! > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Badge(
+                label: Text(
+                  item.badge! > 99 ? '99+' : '${item.badge}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+            ),
+        ],
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          item.subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+      ),
+      trailing: Icon(Icons.chevron_right_rounded, color: scheme.outline),
+      onTap: item.onTap,
     );
   }
 }

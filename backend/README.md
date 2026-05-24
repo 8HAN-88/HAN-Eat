@@ -10,6 +10,15 @@ Backend API для социальной платформы с рецептами
 - **S3-compatible Storage** - медиа файлы
 - **RabbitMQ/Redis Streams** - очереди задач
 
+## Миграции
+
+После обновления кода примените миграции (в т.ч. `034_recipe_visibility_v1`, `035_channel_member_status_v1`, `036_email_auth_tokens_v1`):
+
+```bash
+cd backend
+alembic upgrade head
+```
+
 ## Структура проекта
 
 ```
@@ -74,6 +83,16 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
+## Тестовые аккаунты
+
+Пароль для всех: `HANtest2026!` — тарифы (free / AI / Creator / Pro), модераторы и админы.
+
+```bash
+python3 scripts/create_all_test_accounts.py
+```
+
+Полный список: [docs/TEST_ACCOUNTS.md](docs/TEST_ACCOUNTS.md)
+
 ## Переменные окружения
 
 ```env
@@ -98,9 +117,36 @@ S3_SECRET_KEY=...
 # OpenAI (для модерации)
 OPENAI_API_KEY=...
 
+# Email (регистрация, сброс/смена пароля, смена email)
+REQUIRE_EMAIL_VERIFICATION=true
+AUTH_LINK_BASE_URL=haneat://auth
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=
+EMAIL_SMTP_PASSWORD=
+EMAIL_SMTP_USE_TLS=true
+EMAIL_FROM=noreply@haneat.app
+EMAIL_FROM_NAME=HAN Eat
+
 # Queue
 RABBITMQ_URL=amqp://localhost:5672
 ```
+
+### Auth API (email)
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/api/v1/auth/register` | Регистрация + письмо подтверждения |
+| POST | `/api/v1/auth/login` | Вход (403 `EMAIL_NOT_VERIFIED`, если почта не подтверждена) |
+| POST | `/api/v1/auth/verify-email` | `{ "token": "..." }` |
+| POST | `/api/v1/auth/forgot-password` | `{ "email": "..." }` |
+| POST | `/api/v1/auth/reset-password` | `{ "token", "new_password" }` |
+| POST | `/api/v1/auth/change-password` | JWT + текущий и новый пароль |
+| POST | `/api/v1/auth/change-email` | JWT + новый email и пароль |
+| POST | `/api/v1/auth/confirm-email-change` | `{ "token": "..." }` |
+| POST | `/api/v1/auth/resend-verification` | Повторное письмо (email в теле или JWT) |
+
+Без SMTP в dev письма пишутся в лог сервера.
 
 ## API Документация
 

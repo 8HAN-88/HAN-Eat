@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import Base
 # Импортируем все модели для autogenerate
 from app.models.user import User
+from app.models.auth_token import AuthToken
 from app.models.post import Post
 from app.models.community import Channel
 from app.models.follower import Follower

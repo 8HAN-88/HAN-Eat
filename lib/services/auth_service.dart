@@ -1,17 +1,80 @@
+import 'package:flutter/foundation.dart';
 // Сервис для аутентификации
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../core/config/google_auth_config.dart';
+import 'account_session_service.dart';
 import 'server_config.dart';
+
+bool _apiUnreachable(Object e) {
+  final s = e.toString();
+  return s.contains('Failed host lookup') ||
+      s.contains('Connection refused') ||
+      s.contains('Failed to fetch') ||
+      s.contains('SocketException') ||
+      s.contains('ClientException') ||
+      s.contains('Network is unreachable') ||
+      s.contains('No route to host') ||
+      s.contains('Connection reset');
+}
+
+bool _isDefinitiveSessionLoss(AuthException e) {
+  final m = e.message;
+  return m.contains('Сессия истекла') ||
+      m.contains('Token refresh failed') ||
+      m.contains('No refresh token');
+}
 
 class AuthService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
+
+  static final List<void Function(User?)> _sessionListeners = [];
+
+  /// Подписка на смену аккаунта (вход/выход). Не вызывается при обновлении профиля (PATCH /users/me).
+  static void registerSessionListener(void Function(User?) listener) {
+    _sessionListeners.add(listener);
+  }
+
+  static void unregisterSessionListener(void Function(User?) listener) {
+    _sessionListeners.remove(listener);
+  }
+
+  static void _dispatchSessionChanged(User? user) {
+    unawaited(AccountSessionService.applySessionChange(user));
+    for (final listener in List<void Function(User?)>.from(_sessionListeners)) {
+      try {
+        listener(user);
+      } catch (e, st) {
+        debugPrint('AuthService session listener: $e\n$st');
+      }
+    }
+  }
+
   // Singleton instance
   static final AuthService instance = AuthService._();
   AuthService._();
+
+  static GoogleSignIn? _googleSignIn;
+
+  static GoogleSignIn _googleSignInInstance() {
+    try {
+      GoogleAuthConfig.ensureConfigured();
+    } on StateError catch (e) {
+      throw AuthException(e.message);
+    }
+    final platformHint = GoogleAuthConfig.missingPlatformHint();
+    if (platformHint != null) {
+      throw AuthException(platformHint);
+    }
+    return _googleSignIn ??= GoogleSignIn(
+      scopes: const ['email', 'profile'],
+      clientId: GoogleAuthConfig.iosClientId,
+      serverClientId: GoogleAuthConfig.webClientId,
+    );
+  }
   
   // Текущий пользователь (кэшированный)
   User? _cachedUser;
@@ -22,9 +85,23 @@ class AuthService {
     _cachedUser = user;
   }
 
-  /// Установить пользователя после входа/регистрации (для статических login/register)
-  void setUserAfterAuth(User user) {
+  /// Установить пользователя после входа/регистрации (для статических login/register).
+  /// [notifySessionListeners] — только при реальном входе; для PATCH профиля оставляйте false.
+  void setUserAfterAuth(User user, {bool notifySessionListeners = false}) {
     _cachedUser = user;
+    if (notifySessionListeners) {
+      _dispatchSessionChanged(user);
+    }
+  }
+
+  /// Счётчик обновлений профиля (scan_credits и т.д.) — для перерисовки UI.
+  static final ValueNotifier<int> profileVersion = ValueNotifier(0);
+
+  /// После PATCH /users/me (аватар, имя): обновить кэш и SharedPreferences.
+  static Future<void> persistUpdatedUser(User user) async {
+    instance.setUserAfterAuth(user);
+    await _saveUser(user);
+    profileVersion.value++;
   }
   
   /// Проверить, инициализирован ли сервис
@@ -43,9 +120,9 @@ class AuthService {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.reload();
-        print('🔄 SharedPreferences перезагружен при инициализации');
+        debugPrint('🔄 SharedPreferences перезагружен при инициализации');
       } catch (e) {
-        print('⚠️ Не удалось перезагрузить SharedPreferences: $e');
+        debugPrint('⚠️ Не удалось перезагрузить SharedPreferences: $e');
       }
       
       final user = await getCurrentUser();
@@ -53,28 +130,39 @@ class AuthService {
       
       if (user != null && token != null) {
         instance._cachedUser = user;
-        print('✅ AuthService: Пользователь загружен из SharedPreferences: ${user.email} (id: ${user.id})');
-        print('✅ AuthService: Токен найден: ${token.substring(0, 20)}...');
+        AccountSessionService.restoreCachedUser(user);
+        debugPrint('✅ AuthService: Пользователь загружен из SharedPreferences: ${user.email} (id: ${user.id})');
+        if (kDebugMode) {
+          debugPrint('✅ AuthService: Токен найден: ${token.substring(0, 20)}...');
+        }
         
-        // Проверяем, не истек ли токен, и обновляем при необходимости
+        // Обновляем access token, если истёк; выход только при невалидной сессии (не при сети).
         try {
-          // Пытаемся проверить токен, делая запрос к API
-          // Если токен истек, попробуем обновить его
-          final refreshToken = await SharedPreferences.getInstance().then((prefs) => prefs.getString(_refreshTokenKey));
-          if (refreshToken != null) {
-            // Токен есть, пользователь должен оставаться авторизованным
-            print('✅ AuthService: Refresh токен найден, пользователь остается авторизованным');
+          final fresh = await getAccessTokenForApi();
+          if (fresh == null || fresh.isEmpty) {
+            debugPrint('⚠️ AuthService: нет валидного access token после init');
+            await logout();
+          } else {
+            debugPrint('✅ AuthService: access token готов к запросам API');
+          }
+        } on AuthException catch (e) {
+          if (_isDefinitiveSessionLoss(e)) {
+            debugPrint('⚠️ AuthService: сессия недействительна при init: $e');
+            await logout();
+          } else {
+            debugPrint(
+              '⚠️ AuthService: refresh при init не удался (сеть?), сессия сохранена: $e',
+            );
           }
         } catch (e) {
-          print('⚠️ AuthService: Ошибка при проверке токена: $e');
-          // Не очищаем пользователя, возможно токен еще действителен
+          debugPrint('⚠️ AuthService: не удалось обновить сессию при init: $e');
         }
       } else {
         if (user == null) {
-          print('⚠️ AuthService: Пользователь не найден в SharedPreferences');
+          debugPrint('⚠️ AuthService: Пользователь не найден в SharedPreferences');
         }
         if (token == null) {
-          print('⚠️ AuthService: Токен не найден в SharedPreferences');
+          debugPrint('⚠️ AuthService: Токен не найден в SharedPreferences');
         }
         // Очищаем кэш, если нет пользователя или токена
         instance._cachedUser = null;
@@ -89,16 +177,22 @@ class AuthService {
           final retryToken = await getAccessToken();
           if (retryUser != null && retryToken != null) {
             instance._cachedUser = retryUser;
-            print('✅ AuthService: Пользователь найден при повторной проверке: ${retryUser.email}');
+            AccountSessionService.restoreCachedUser(retryUser);
+            debugPrint('✅ AuthService: Пользователь найден при повторной проверке: ${retryUser.email}');
+            try {
+              await getAccessTokenForApi();
+            } catch (e) {
+              debugPrint('⚠️ AuthService: refresh после retry: $e');
+            }
           } else {
-            print('⚠️ AuthService: Повторная проверка не дала результатов');
+            debugPrint('⚠️ AuthService: Повторная проверка не дала результатов');
           }
         } catch (e) {
-          print('⚠️ AuthService: Ошибка при повторной проверке: $e');
+          debugPrint('⚠️ AuthService: Ошибка при повторной проверке: $e');
         }
       }
     } catch (e) {
-      print('❌ AuthService: Ошибка при загрузке пользователя: $e');
+      debugPrint('❌ AuthService: Ошибка при загрузке пользователя: $e');
       // Игнорируем ошибки при инициализации
       instance._cachedUser = null;
     }
@@ -107,37 +201,12 @@ class AuthService {
   /// Вход по email и паролю
   Future<void> signInWithEmail(String email, String password) async {
     final response = await login(email: email, password: password);
-    _cachedUser = response.user;
-    
-    // Дополнительно сохраняем пользователя в кэш (на случай, если _saveUser не сработал)
+    // login() уже сохранил токены и вызвал session change; синхронизируем кэш.
+    setUserAfterAuth(response.user, notifySessionListeners: false);
     try {
       await _saveUser(response.user);
     } catch (e) {
-      print('⚠️ Предупреждение: не удалось сохранить пользователя дополнительно: $e');
-    }
-    
-    // Проверяем, что токен и пользователь сохранены
-    await Future.delayed(const Duration(milliseconds: 100)); // Даем время на сохранение
-    final savedToken = await getAccessToken();
-    final savedUser = await getCurrentUser();
-    if (savedToken != null && savedUser != null) {
-      print('✅ Токен и пользователь сохранены после входа: ${savedUser.email}');
-      print('✅ Токен: ${savedToken.substring(0, 20)}...');
-      // Обновляем кэш на всякий случай
-      _cachedUser = savedUser;
-    } else {
-      print('❌ ОШИБКА: Токен или пользователь не сохранены после входа!');
-      if (savedToken == null) print('   - Токен отсутствует');
-      if (savedUser == null) print('   - Пользователь отсутствует');
-      // Пытаемся сохранить еще раз
-      if (savedUser == null) {
-        try {
-          await _saveUser(response.user);
-          print('🔄 Попытка повторного сохранения пользователя...');
-        } catch (e) {
-          print('❌ Не удалось сохранить пользователя повторно: $e');
-        }
-      }
+      debugPrint('⚠️ Предупреждение: не удалось сохранить пользователя дополнительно: $e');
     }
   }
   
@@ -148,26 +217,13 @@ class AuthService {
       password: password,
       name: name ?? email.split('@').first,
     );
-    _cachedUser = response.user;
-    // Проверяем, что токен и пользователь сохранены
-    final savedToken = await getAccessToken();
-    final savedUser = await getCurrentUser();
-    if (savedToken != null && savedUser != null) {
-      print('✅ Токен и пользователь сохранены после регистрации: ${savedUser.email}');
-    } else {
-      print('❌ ОШИБКА: Токен или пользователь не сохранены после регистрации!');
-    }
+    setUserAfterAuth(response.user, notifySessionListeners: false);
   }
   
   /// Вход через Google
   Future<void> signInWithGoogle() async {
     try {
-      // Инициализируем Google Sign In
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        scopes: ['email', 'profile'],
-      );
-      
-      // Запускаем процесс входа
+      final GoogleSignIn googleSignIn = _googleSignInInstance();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       
       if (googleUser == null) {
@@ -187,14 +243,14 @@ class AuthService {
       
       // Отправляем id_token на backend
       final response = await googleAuth(idToken: idToken);
-      _cachedUser = response.user;
+      setUserAfterAuth(response.user, notifySessionListeners: true);
       // Проверяем, что токен и пользователь сохранены
       final savedToken = await getAccessToken();
       final savedUser = await getCurrentUser();
       if (savedToken != null && savedUser != null) {
-        print('✅ Токен и пользователь сохранены после входа через Google: ${savedUser.email}');
+        debugPrint('✅ Токен и пользователь сохранены после входа через Google: ${savedUser.email}');
       } else {
-        print('❌ ОШИБКА: Токен или пользователь не сохранены после входа через Google!');
+        debugPrint('❌ ОШИБКА: Токен или пользователь не сохранены после входа через Google!');
       }
     } catch (e) {
       if (e is AuthException) {
@@ -237,9 +293,7 @@ class AuthService {
       if (e is AuthException) {
         rethrow;
       }
-      if (e.toString().contains('Failed host lookup') || 
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('Failed to fetch')) {
+      if (_apiUnreachable(e)) {
         throw AuthException('Backend сервер не запущен. Пожалуйста, запустите backend сервер (см. BACKEND_START_INSTRUCTIONS.md)');
       }
       throw AuthException('Ошибка входа через Google: $e');
@@ -249,19 +303,21 @@ class AuthService {
   /// Выйти из аккаунта
   Future<void> signOut() async {
     _cachedUser = null;
+    try {
+      await _googleSignIn?.signOut();
+    } catch (e) {
+      debugPrint('Google signOut: $e');
+    }
     await _clearTokens();
     // Также очищаем пользователя из SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
-    print('✅ Выход выполнен, токены и пользователь очищены');
+    // Совпадает с PushNotificationService — после входа FCM снова уйдёт на сервер.
+    await prefs.remove('fcm_token');
+    debugPrint('✅ Выход выполнен, токены и пользователь очищены');
+    _dispatchSessionChanged(null);
   }
-  
-  /// Stream изменений состояния авторизации (заглушка)
-  Stream<User?> authStateChanges() {
-    // TODO: Реализовать stream изменений
-    return Stream.value(_cachedUser);
-  }
-  
+
   /// Очистить токены
   static Future<void> _clearTokens() async {
     final prefs = await SharedPreferences.getInstance();
@@ -297,24 +353,23 @@ class AuthService {
         // Сохраняем токены и пользователя
         await _saveTokens(authResponse.token, authResponse.refreshToken);
         await _saveUser(authResponse.user);
-        instance.setUserAfterAuth(authResponse.user);
-        
+        instance.setUserAfterAuth(
+          authResponse.user,
+          notifySessionListeners: true,
+        );
+
         return authResponse;
       } else {
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw AuthException(error['detail'] ?? 'Registration failed');
-        } catch (e) {
-          throw AuthException('Registration failed: ${response.statusCode}');
-        }
+        throw _authExceptionFromResponse(
+          response,
+          'Ошибка регистрации: ${response.statusCode}',
+        );
       }
     } catch (e) {
       if (e is AuthException) {
         rethrow;
       }
-      if (e.toString().contains('Failed host lookup') || 
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('Failed to fetch')) {
+      if (_apiUnreachable(e)) {
         throw AuthException('Backend сервер не запущен. Пожалуйста, запустите backend сервер (см. BACKEND_START_INSTRUCTIONS.md)');
       }
       throw AuthException('Ошибка регистрации: $e');
@@ -349,32 +404,177 @@ class AuthService {
         // Сохраняем токены и пользователя
         await _saveTokens(authResponse.token, authResponse.refreshToken);
         await _saveUser(authResponse.user);
-        instance.setUserAfterAuth(authResponse.user);
-        
+        instance.setUserAfterAuth(
+          authResponse.user,
+          notifySessionListeners: true,
+        );
+
         return authResponse;
       } else {
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw AuthException(error['detail'] ?? 'Login failed');
-        } catch (e) {
-          throw AuthException('Login failed: ${response.statusCode}');
-        }
+        throw _authExceptionFromResponse(
+          response,
+          'Ошибка входа: ${response.statusCode}',
+        );
       }
     } catch (e) {
       if (e is AuthException) {
         rethrow;
       } else if (e is TimeoutException) {
-        throw AuthException('Превышено время ожидания ответа от сервера. Проверьте, что сервер запущен и доступен на http://localhost:5000');
-      } else if (e is http.ClientException || 
-                 e.toString().contains('Failed host lookup') || 
-                 e.toString().contains('Connection refused') ||
-                 e.toString().contains('Failed to fetch')) {
-        throw AuthException('Не удалось подключиться к серверу. Проверьте, что сервер запущен на http://localhost:5000');
+        throw AuthException('Превышено время ожидания ответа от сервера. Проверьте, что backend запущен: ${ServerConfig.baseUrl}');
+      } else if (e is http.ClientException || _apiUnreachable(e)) {
+        throw AuthException('Не удалось подключиться к серверу. Проверьте, что backend запущен: ${ServerConfig.baseUrl}');
       }
       throw AuthException('Ошибка входа: $e');
     }
   }
   
+  static Future<MessageResponse> forgotPassword({required String email}) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/forgot-password'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email.trim()}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось отправить письмо');
+  }
+
+  static Future<MessageResponse> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/reset-password'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token, 'new_password': newPassword}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось сменить пароль');
+  }
+
+  static Future<MessageResponse> verifyEmail({required String token}) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/verify-email'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось подтвердить email');
+  }
+
+  static Future<MessageResponse> resendVerification({String? email}) async {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    final token = await getAccessTokenForApi();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/resend-verification'),
+          headers: headers,
+          body: jsonEncode({if (email != null) 'email': email.trim()}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(
+      response,
+      'Не удалось отправить письмо',
+    );
+  }
+
+  static Future<MessageResponse> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final token = await getAccessTokenForApi();
+    if (token == null) throw AuthException('Войдите в аккаунт');
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/change-password'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'current_password': currentPassword,
+            'new_password': newPassword,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось сменить пароль');
+  }
+
+  static Future<MessageResponse> changeEmailRequest({
+    required String newEmail,
+    required String password,
+  }) async {
+    final token = await getAccessTokenForApi();
+    if (token == null) throw AuthException('Войдите в аккаунт');
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/change-email'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'new_email': newEmail.trim(),
+            'password': password,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось сменить email');
+  }
+
+  static Future<MessageResponse> confirmEmailChange({
+    required String token,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/confirm-email-change'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'token': token}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == 200) {
+      return MessageResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw _authExceptionFromResponse(response, 'Не удалось подтвердить email');
+  }
+
   /// Выход
   static Future<void> logout() async {
     instance._cachedUser = null;
@@ -382,12 +582,61 @@ class AuthService {
     await prefs.remove(_accessTokenKey);
     await prefs.remove(_refreshTokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove('fcm_token');
+    _dispatchSessionChanged(null);
   }
   
   /// Получить текущий токен
   static Future<String?> getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_accessTokenKey);
+  }
+
+  /// Декодирует payload JWT без проверки подписи (только [exp]).
+  static bool _accessTokenLooksExpired(
+    String token, {
+    Duration skew = const Duration(seconds: 60),
+  }) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      ) as Map<String, dynamic>;
+      final exp = payload['exp'];
+      if (exp is! num) return false;
+      final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+      return nowSec >= exp.toInt() - skew.inSeconds;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Access для запросов к API: при истёкшем JWT обновляет через refresh (если он есть).
+  static Future<String?> getAccessTokenForApi() async {
+    final token = await getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    if (!_accessTokenLooksExpired(token)) return token;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_refreshTokenKey) == null) {
+        await logout();
+        return null;
+      }
+      return await refreshToken();
+    } on AuthException catch (e) {
+      if (_isDefinitiveSessionLoss(e)) {
+        await logout();
+        return null;
+      }
+      rethrow;
+    } catch (e) {
+      debugPrint('⚠️ getAccessTokenForApi: refresh failed: $e');
+      if (_accessTokenLooksExpired(token)) {
+        throw AuthException('Сервер недоступен. Проверьте подключение к серверу.');
+      }
+      return token;
+    }
   }
   
   /// Получить текущего пользователя
@@ -398,10 +647,15 @@ class AuthService {
     return User.fromJson(jsonDecode(userJson));
   }
   
-  /// Проверить, авторизован ли пользователь
+  /// Проверить, авторизован ли пользователь (есть пользователь и хотя бы один токен).
   static Future<bool> isAuthenticated() async {
-    final token = await getAccessToken();
-    return token != null && token.isNotEmpty;
+    final user = await getCurrentUser();
+    if (user == null) return false;
+    final prefs = await SharedPreferences.getInstance();
+    final access = prefs.getString(_accessTokenKey);
+    final refresh = prefs.getString(_refreshTokenKey);
+    return (access != null && access.isNotEmpty) ||
+        (refresh != null && refresh.isNotEmpty);
   }
   
   /// Обновить токен
@@ -433,16 +687,17 @@ class AuthService {
         
         await _saveTokens(newAccessToken, newRefreshToken);
         return newAccessToken;
-      } else {
-        throw AuthException('Token refresh failed');
       }
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        await logout();
+        throw AuthException('Сессия истекла. Войдите снова.');
+      }
+      throw AuthException('Token refresh failed');
     } catch (e) {
       if (e is AuthException) {
         rethrow;
       }
-      if (e.toString().contains('Failed host lookup') || 
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('Failed to fetch') ||
+      if (_apiUnreachable(e) ||
           e.toString().contains('Превышено время ожидания')) {
         throw AuthException('Сервер недоступен. Проверьте подключение к серверу.');
       }
@@ -454,26 +709,26 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final saved1 = await prefs.setString(_accessTokenKey, accessToken);
     final saved2 = await prefs.setString(_refreshTokenKey, refreshToken);
-    print('💾 Токены сохранены: access_token=${saved1}, refresh_token=${saved2}');
+    debugPrint('💾 Токены сохранены: access_token=$saved1, refresh_token=$saved2');
     
     // На веб-платформе нужно перезагрузить SharedPreferences для гарантии сохранения
     try {
       await prefs.reload();
     } catch (e) {
-      print('⚠️ Не удалось перезагрузить SharedPreferences: $e');
+      debugPrint('⚠️ Не удалось перезагрузить SharedPreferences: $e');
     }
     
     // Проверяем, что токены действительно сохранены
     final verifyAccess = prefs.getString(_accessTokenKey);
     final verifyRefresh = prefs.getString(_refreshTokenKey);
     if (verifyAccess == null || verifyRefresh == null) {
-      print('❌ ОШИБКА: Токены не сохранились!');
-      print('   verifyAccess: ${verifyAccess != null ? "OK" : "NULL"}');
-      print('   verifyRefresh: ${verifyRefresh != null ? "OK" : "NULL"}');
+      debugPrint('❌ ОШИБКА: Токены не сохранились!');
+      debugPrint('   verifyAccess: ${verifyAccess != null ? "OK" : "NULL"}');
+      debugPrint('   verifyRefresh: ${verifyRefresh != null ? "OK" : "NULL"}');
     } else {
-      print('✅ Токены успешно сохранены и проверены');
-      print('   access_token длина: ${verifyAccess.length}');
-      print('   refresh_token длина: ${verifyRefresh.length}');
+      debugPrint('✅ Токены успешно сохранены и проверены');
+      debugPrint('   access_token длина: ${verifyAccess.length}');
+      debugPrint('   refresh_token длина: ${verifyRefresh.length}');
     }
   }
   
@@ -482,33 +737,33 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       final userJson = jsonEncode(user.toJson());
       final saved = await prefs.setString(_userKey, userJson);
-      print('💾 Пользователь сохранен: ${user.email} (id: ${user.id}), saved=$saved');
+      debugPrint('💾 Пользователь сохранен: ${user.email} (id: ${user.id}), saved=$saved');
       
       // На веб-платформе нужно перезагрузить SharedPreferences для гарантии сохранения
       try {
         await prefs.reload();
       } catch (e) {
-        print('⚠️ Не удалось перезагрузить SharedPreferences: $e');
+        debugPrint('⚠️ Не удалось перезагрузить SharedPreferences: $e');
       }
       
       // Проверяем, что пользователь действительно сохранен
       final verifyUser = prefs.getString(_userKey);
       if (verifyUser == null) {
-        print('❌ ОШИБКА: Пользователь не сохранился!');
+        debugPrint('❌ ОШИБКА: Пользователь не сохранился!');
       } else {
-        print('✅ Пользователь успешно сохранен и проверен');
-        print('   Длина JSON: ${verifyUser.length} символов');
+        debugPrint('✅ Пользователь успешно сохранен и проверен');
+        debugPrint('   Длина JSON: ${verifyUser.length} символов');
         // Дополнительная проверка - пытаемся распарсить
         try {
           final parsedUser = User.fromJson(jsonDecode(verifyUser));
-          print('✅ Пользователь успешно загружен из проверки: ${parsedUser.email} (id: ${parsedUser.id})');
+          debugPrint('✅ Пользователь успешно загружен из проверки: ${parsedUser.email} (id: ${parsedUser.id})');
         } catch (e) {
-          print('❌ ОШИБКА: Не удалось распарсить сохраненного пользователя: $e');
-          print('   JSON начало: ${verifyUser.substring(0, verifyUser.length > 100 ? 100 : verifyUser.length)}...');
+          debugPrint('❌ ОШИБКА: Не удалось распарсить сохраненного пользователя: $e');
+          debugPrint('   JSON начало: ${verifyUser.substring(0, verifyUser.length > 100 ? 100 : verifyUser.length)}...');
         }
       }
     } catch (e) {
-      print('❌ ОШИБКА при сохранении пользователя: $e');
+      debugPrint('❌ ОШИБКА при сохранении пользователя: $e');
       rethrow;
     }
   }
@@ -518,19 +773,32 @@ class AuthResponse {
   final String token;
   final String refreshToken;
   final User user;
-  
+  final String? message;
+
   AuthResponse({
     required this.token,
     required this.refreshToken,
     required this.user,
+    this.message,
   });
-  
+
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
     return AuthResponse(
       token: json['token'] as String,
       refreshToken: json['refresh_token'] as String,
       user: User.fromJson(json['user'] as Map<String, dynamic>),
+      message: json['message'] as String?,
     );
+  }
+}
+
+class MessageResponse {
+  final String message;
+
+  MessageResponse({required this.message});
+
+  factory MessageResponse.fromJson(Map<String, dynamic> json) {
+    return MessageResponse(message: json['message'] as String);
   }
 }
 
@@ -545,10 +813,14 @@ class User {
   final bool isAdmin;
   final bool isModerator;
   final DateTime createdAt;
-  
+  /// С бэкенда (GET /users/me); для UI лимитов не показывать.
+  final int? scanCredits;
+  final String? subscriptionType;
+  final bool emailVerified;
+
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
-  
+
   User({
     required this.id,
     required this.email,
@@ -560,8 +832,11 @@ class User {
     this.isAdmin = false,
     this.isModerator = false,
     required this.createdAt,
+    this.scanCredits,
+    this.subscriptionType,
+    this.emailVerified = true,
   });
-  
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as int,
@@ -574,9 +849,12 @@ class User {
       isAdmin: json['is_admin'] as bool? ?? false,
       isModerator: json['is_moderator'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
+      scanCredits: (json['scan_credits'] as num?)?.toInt(),
+      subscriptionType: json['subscription_type'] as String?,
+      emailVerified: json['email_verified'] as bool? ?? true,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -589,14 +867,67 @@ class User {
       'is_admin': isAdmin,
       'is_moderator': isModerator,
       'created_at': createdAt.toIso8601String(),
+      'email_verified': emailVerified,
+      if (scanCredits != null) 'scan_credits': scanCredits,
+      if (subscriptionType != null) 'subscription_type': subscriptionType,
     };
+  }
+
+  User copyWith({
+    int? scanCredits,
+    String? subscriptionType,
+    bool? emailVerified,
+    String? email,
+  }) {
+    return User(
+      id: id,
+      email: email ?? this.email,
+      name: name,
+      username: username,
+      avatarUrl: avatarUrl,
+      bio: bio,
+      isPrivate: isPrivate,
+      isAdmin: isAdmin,
+      isModerator: isModerator,
+      createdAt: createdAt,
+      scanCredits: scanCredits ?? this.scanCredits,
+      subscriptionType: subscriptionType ?? this.subscriptionType,
+      emailVerified: emailVerified ?? this.emailVerified,
+    );
   }
 }
 
 class AuthException implements Exception {
   final String message;
-  AuthException(this.message);
-  
+  final String? code;
+
+  AuthException(this.message, {this.code});
+
+  bool get isEmailNotVerified => code == 'EMAIL_NOT_VERIFIED';
+
   @override
   String toString() => message;
+}
+
+AuthException _authExceptionFromResponse(
+  http.Response response,
+  String fallback,
+) {
+  try {
+    final error = jsonDecode(response.body);
+    if (error is Map<String, dynamic>) {
+      final detail = error['detail'];
+      if (detail is Map<String, dynamic>) {
+        final code = detail['code'] as String?;
+        final message = (detail['message'] as String?) ??
+            (detail['detail'] as String?) ??
+            fallback;
+        return AuthException(message, code: code);
+      }
+      if (detail is String && detail.isNotEmpty) {
+        return AuthException(detail);
+      }
+    }
+  } catch (_) {}
+  return AuthException(fallback);
 }

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     
     # OpenAI
     OPENAI_API_KEY: str = ""
+    # Vision для AI-скана (КБЖУ): дешевле и быстрее gpt-4o-mini
+    OPENAI_FOOD_SCAN_MODEL: str = "gpt-4.1-nano"
     
     # Анализ фото (/analyze): авторизация обязательна; доступ по JWT ai_scan_ticket после POST /ai-scan/reserve.
     # Флаг ниже больше не используется в analyze_photo (оставлен для совместимости .env).
@@ -76,6 +78,10 @@ class Settings(BaseSettings):
     # Только локальные тесты: не вызывать tokeninfo (небезопасно, в production всегда false)
     SKIP_GOOGLE_ID_TOKEN_VERIFICATION: bool = False
 
+    # Яндекс ID (OAuth 2.0) — https://oauth.yandex.ru
+    YANDEX_OAUTH_CLIENT_ID: str = ""
+    YANDEX_OAUTH_CLIENT_SECRET: str = ""
+
     # Firebase (для FCM и APNs)
     FIREBASE_ENABLED: bool = False
     FIREBASE_CREDENTIALS_PATH: str = ""  # Путь к JSON файлу с credentials Firebase
@@ -96,6 +102,23 @@ class Settings(BaseSettings):
     
     FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
 
+    # Email-only auth: подтверждение почты, сброс/смена пароля, смена email
+    REQUIRE_EMAIL_VERIFICATION: bool = True
+    # Ссылки в письмах (в приложении — deep link haneat://auth/...)
+    AUTH_LINK_BASE_URL: str = "haneat://auth"
+    AUTH_VERIFY_EMAIL_HOURS: int = 48
+    AUTH_RESET_PASSWORD_HOURS: int = 2
+    AUTH_CHANGE_EMAIL_HOURS: int = 24
+
+    EMAIL_SMTP_HOST: str = ""
+    EMAIL_SMTP_PORT: int = 587
+    EMAIL_SMTP_USER: str = ""
+    EMAIL_SMTP_PASSWORD: str = ""
+    EMAIL_SMTP_USE_TLS: bool = True
+    EMAIL_SMTP_USE_SSL: bool = False
+    EMAIL_FROM: str = ""
+    EMAIL_FROM_NAME: str = "HAN Eat"
+
     # Базовый URL API для ссылок на загруженные файлы без S3 (mock). Должен совпадать с портом uvicorn (часто 5001).
     API_PUBLIC_BASE_URL: str = "http://127.0.0.1:5001"
     
@@ -107,25 +130,41 @@ class Settings(BaseSettings):
     # Для Flutter web нужно разрешить конкретные origins
     # В development разрешаем localhost на любых портах
     # Может быть задан как строка через запятую в .env или как список
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:5000",
-        "http://127.0.0.1:5000",
-    ]
-    
+    # Union[str, List[str]]: pydantic-settings парсит List из .env как JSON;
+    # comma-separated строка без кавычек иначе падает при старте.
+    ALLOWED_ORIGINS: Union[str, List[str]] = (
+        "http://localhost:3000,"
+        "http://localhost:8080,"
+        "http://localhost:5000,"
+        "http://127.0.0.1:5000"
+    )
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            origins_str = value.strip()
+            if not origins_str:
+                return []
+            if origins_str.startswith("["):
+                import json
+
+                parsed = json.loads(origins_str)
+                if not isinstance(parsed, list):
+                    raise ValueError("ALLOWED_ORIGINS JSON must be a list")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+        return list(value)
+
     @model_validator(mode='before')
     @classmethod
     def parse_env_values(cls, data: Any) -> Any:
         """Обрабатывает значения из .env до парсинга JSON"""
         if isinstance(data, dict):
-            # Обрабатываем ALLOWED_ORIGINS
-            if 'ALLOWED_ORIGINS' in data and isinstance(data['ALLOWED_ORIGINS'], str):
-                origins_str = data['ALLOWED_ORIGINS'].strip()
-                if origins_str:
-                    data['ALLOWED_ORIGINS'] = [origin.strip() for origin in origins_str.split(',') if origin.strip()]
-                else:
-                    data['ALLOWED_ORIGINS'] = []
             # Обрабатываем другие List поля
             for field in ['ALLOWED_IMAGE_TYPES', 'ALLOWED_VIDEO_TYPES']:
                 if field in data and isinstance(data[field], str):

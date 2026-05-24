@@ -54,9 +54,33 @@ scp -i ~/.ssh/haneat_timeweb firebase-adminsdk.json root@IP:/etc/haneat/firebase
 
 ## Обновление
 
+### С Mac (рекомендуется — заливает локальный код, в т.ч. незакоммиченный)
+
+```bash
+bash scripts/update_production_timeweb.sh
+```
+
+Скрипт: `rsync` backend → сервер, `alembic upgrade head`, `systemctl restart haneat-api`, проверка `https://api.haneat.app`.
+
+### На сервере (если код уже в GitHub)
+
 ```bash
 cd /root/HAN-Eat && git pull
 cd backend && source venv/bin/activate && pip install -r requirements.txt
 alembic upgrade head
+python3 scripts/create_all_test_accounts.py
 systemctl restart haneat-api
 ```
+
+Миграции: `034_recipe_visibility_v1`, `035_channel_member_status_v1`, `036_email_auth_tokens_v1` (email, сброс пароля).
+
+После `git pull` добавьте в `backend/.env` блок SMTP (см. `backend/env_template.txt`) и перезапустите API.
+
+### Проверка, что новый API на проде
+
+```bash
+./scripts/verify_launch.sh https://api.haneat.app
+# или вручную: в ответе GET /channels/{id} должны быть поля membership_status, can_view_posts
+```
+
+Приложение всегда смотрит на `https://api.haneat.app` (см. `.env` → `HANEAT_API_BASE`). Локальный `127.0.0.1:5001` — только для разработки.

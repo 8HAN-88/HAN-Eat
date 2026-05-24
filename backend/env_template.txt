@@ -26,7 +26,21 @@ REDIS_ENABLED=true
 
 APP_ENV=development
 DEBUG=true
+# В production оставьте false: подписки создаются через Stripe/YooKassa webhook, не через этот эндпоинт
+ALLOW_DIRECT_SUBSCRIPTION_CREATE=false
+
+# Google Sign-In: Web client ID (и при необходимости iOS/Android), через запятую — проверка aud id_token
+GOOGLE_OAUTH_CLIENT_IDS=
+# true только для локальной отладки без вызова Google tokeninfo (запрещено при APP_ENV=production)
+SKIP_GOOGLE_ID_TOKEN_VERIFICATION=false
+
+# Flutter (.env в корне или --dart-define):
+# GOOGLE_WEB_CLIENT_ID=....apps.googleusercontent.com
+# GOOGLE_IOS_CLIENT_ID=....apps.googleusercontent.com
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080,http://localhost:5000
+
+# Базовый URL API для ссылок на загруженные файлы (mock без S3). Должен совпадать с адресом, по которому открываете приложение (часто порт 5001).
+API_PUBLIC_BASE_URL=http://127.0.0.1:5001
 
 # ============================================
 # OPENAI API KEY (для модерации контента при ENABLE_PRE_MODERATION=true)
@@ -37,6 +51,14 @@ OPENAI_API_KEY=sk-proj-ЗАМЕНИТЕ_НА_ВАШ_OPENAI_API_KEY
 
 # Премодерация при публикации: false = старт продукта (публикуем сразу, модерация только по жалобам)
 ENABLE_PRE_MODERATION=false
+# AI pipeline при публикации (safe / warning / block); нужен OPENAI_API_KEY
+ENABLE_AI_MODERATION=true
+
+# ============================================
+# SPOONACULAR (рецепты: /api/v1/recommendations, /api/v1/recipes)
+# Тот же ключ, что в корневом .env Flutter (меню в приложении ходит в API, не в Spoonacular напрямую)
+# 🔗 https://spoonacular.com/food-api/console
+SPOONACULAR_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_SPOONACULAR_API_KEY
 
 # ============================================
 # ЮKASSA (для подписок в России) - РЕКОМЕНДУЕТСЯ
@@ -74,6 +96,24 @@ STRIPE_WEBHOOK_SECRET=whsec_ЗАМЕНИТЕ_НА_ВАШ_STRIPE_WEBHOOK_SECRET
 STRIPE_PRICE_ID_MONTHLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_МЕСЯЧНОЙ_ПОДПИСКИ
 STRIPE_PRICE_ID_YEARLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_ГОДОВОЙ_ПОДПИСКИ
 FRONTEND_URL=http://localhost:8080
+
+# ============================================
+# EMAIL (регистрация, сброс/смена пароля, смена email)
+# Без SMTP в dev письма пишутся в лог uvicorn
+# ============================================
+REQUIRE_EMAIL_VERIFICATION=true
+AUTH_LINK_BASE_URL=haneat://auth
+AUTH_VERIFY_EMAIL_HOURS=48
+AUTH_RESET_PASSWORD_HOURS=2
+AUTH_CHANGE_EMAIL_HOURS=24
+EMAIL_SMTP_HOST=
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USER=
+EMAIL_SMTP_PASSWORD=
+EMAIL_SMTP_USE_TLS=true
+EMAIL_SMTP_USE_SSL=false
+EMAIL_FROM=
+EMAIL_FROM_NAME=HAN Eat
 
 # ============================================
 # FIREBASE (для push уведомлений) - ОПЦИОНАЛЬНО

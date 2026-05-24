@@ -1,13 +1,15 @@
 // Экран входа
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../services/auth_service.dart';
-import 'register_screen.dart';
+import '../../../../services/push_notification_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
   
   static const routeName = '/login';
   
@@ -39,12 +41,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      
+
+      unawaited(
+        PushNotificationService.syncTokenAfterAuth().catchError(
+          (Object e) => debugPrint('FCM after login: $e'),
+        ),
+      );
+
       if (mounted) {
         context.go(FeedRoute.path);
       }
     } on AuthException catch (e) {
       if (mounted) {
+        if (e.isEmailNotVerified) {
+          context.go(
+            VerifyEmailRoute.withEmail(_emailController.text.trim()),
+          );
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message)),
         );
@@ -61,7 +75,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -145,8 +159,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-                // Кнопка входа
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => context.push(
+                              ForgotPasswordRoute.withEmail(
+                                _emailController.text.trim(),
+                              ),
+                            ),
+                    child: const Text('Забыли пароль?'),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 FilledButton(
                   onPressed: _isLoading ? null : _handleLogin,
                   style: FilledButton.styleFrom(
@@ -161,19 +187,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       : const Text('Войти'),
                 ),
                 const SizedBox(height: 16),
-                // Ссылка на регистрацию
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text('Нет аккаунта? '),
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterScreen(),
-                          ),
-                        );
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () => context.push(RegisterRoute.path),
                       child: const Text('Зарегистрироваться'),
                     ),
                   ],
