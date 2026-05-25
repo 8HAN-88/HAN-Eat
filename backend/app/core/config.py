@@ -119,6 +119,19 @@ class Settings(BaseSettings):
     EMAIL_FROM: str = ""
     EMAIL_FROM_NAME: str = "HAN Eat"
 
+    @field_validator(
+        "EMAIL_SMTP_USER",
+        "EMAIL_SMTP_PASSWORD",
+        "EMAIL_FROM",
+        "EMAIL_SMTP_HOST",
+        mode="before",
+    )
+    @classmethod
+    def _strip_email_env(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
     # Базовый URL API для ссылок на загруженные файлы без S3 (mock). Должен совпадать с портом uvicorn (часто 5001).
     API_PUBLIC_BASE_URL: str = "http://127.0.0.1:5001"
     

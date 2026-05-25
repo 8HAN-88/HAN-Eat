@@ -47,15 +47,26 @@ def send_transactional_email(
     if html_body:
         msg.attach(MIMEText(html_body, "html", "utf-8"))
 
+    user = (settings.EMAIL_SMTP_USER or "").strip()
+    password = (settings.EMAIL_SMTP_PASSWORD or "").strip()
+
     try:
         if settings.EMAIL_SMTP_USE_SSL:
-            server = smtplib.SMTP_SSL(settings.EMAIL_SMTP_HOST, settings.EMAIL_SMTP_PORT)
+            server = smtplib.SMTP_SSL(
+                settings.EMAIL_SMTP_HOST,
+                settings.EMAIL_SMTP_PORT,
+                timeout=30,
+            )
         else:
-            server = smtplib.SMTP(settings.EMAIL_SMTP_HOST, settings.EMAIL_SMTP_PORT)
+            server = smtplib.SMTP(
+                settings.EMAIL_SMTP_HOST,
+                settings.EMAIL_SMTP_PORT,
+                timeout=30,
+            )
             if settings.EMAIL_SMTP_USE_TLS:
                 server.starttls()
-        if settings.EMAIL_SMTP_USER and settings.EMAIL_SMTP_PASSWORD:
-            server.login(settings.EMAIL_SMTP_USER, settings.EMAIL_SMTP_PASSWORD)
+        if user and password:
+            server.login(user, password)
         server.sendmail(settings.EMAIL_FROM, [to_email], msg.as_string())
         server.quit()
         logger.info("Email sent to %s: %s", to_email, subject)
