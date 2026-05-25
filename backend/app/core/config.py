@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     EMAIL_SMTP_USE_SSL: bool = False
     EMAIL_FROM: str = ""
     EMAIL_FROM_NAME: str = "HAN Eat"
+    # smtp (по умолчанию) или resend — HTTP API, обходит блокировки SMTP Яндекса с VPS
+    EMAIL_PROVIDER: str = "smtp"
+    RESEND_API_KEY: str = ""
 
     @field_validator(
         "EMAIL_SMTP_USER",

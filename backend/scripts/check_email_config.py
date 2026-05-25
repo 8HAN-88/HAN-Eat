@@ -23,6 +23,14 @@ from app.services.email_delivery_service import (
 
 def collect_email_issues() -> list[str]:
     issues: list[str] = []
+    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+    if provider == "resend":
+        if not (settings.RESEND_API_KEY or "").strip():
+            issues.append("RESEND_API_KEY не задан (resend.com → API Keys)")
+        if not settings.EMAIL_FROM:
+            issues.append("EMAIL_FROM не задан (отправитель для Resend)")
+        return issues
+
     if not settings.EMAIL_SMTP_HOST:
         issues.append("EMAIL_SMTP_HOST не задан")
     if not settings.EMAIL_FROM:
@@ -148,11 +156,16 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.probe:
+        if (settings.EMAIL_PROVIDER or "smtp").strip().lower() == "resend":
+            print("EMAIL_PROVIDER=resend — SMTP probe не нужен, используйте --send-test")
+            return 0
         return run_probe()
 
     print("=== Email / SMTP checklist ===\n")
     pwd = (settings.EMAIL_SMTP_PASSWORD or "").strip()
     print(f"APP_ENV:              {settings.APP_ENV}")
+    print(f"EMAIL_PROVIDER:       {settings.EMAIL_PROVIDER or 'smtp'}")
+    print(f"RESEND_API_KEY set:   {bool((settings.RESEND_API_KEY or '').strip())}")
     print(f"AUTH_LINK_BASE_URL:   {settings.AUTH_LINK_BASE_URL}")
     print(f"EMAIL_SMTP_HOST:      {settings.EMAIL_SMTP_HOST or '(пусто)'}")
     print(f"EMAIL_SMTP_PORT:      {settings.EMAIL_SMTP_PORT}")

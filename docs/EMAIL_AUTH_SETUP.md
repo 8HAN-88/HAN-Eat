@@ -101,3 +101,27 @@ journalctl -u haneat-api -n 80 --no-pager | grep -iE 'email|smtp|forgot-password
 ```
 
 В приложении API всегда отвечает «если аккаунт существует…» — даже если SMTP сломан (безопасность). Проверяйте сервер, а не только почтовый ящик.
+
+## 7. Яндекс SMTP: все варианты `--probe` дают 535
+
+Это отказ **Яндекса** (нет прав на SMTP для ящика с VPS), а не ошибка HAN Eat. Пароль 16 символов и IMAP в настройках — недостаточно, если Яндекс не выдаёт доступ.
+
+**Решение: Resend** (бесплатно ~100 писем/день, работает с Timeweb):
+
+1. Регистрация: https://resend.com → **API Keys** → создать ключ `re_...`
+2. В `backend/.env` на сервере:
+
+```env
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_ваш_ключ
+EMAIL_FROM=onboarding@resend.dev
+EMAIL_FROM_NAME=HAN Eat
+AUTH_LINK_BASE_URL=haneat://auth
+```
+
+Для production позже: в Resend добавить домен `haneat.app` и сменить `EMAIL_FROM` на `noreply@haneat.app`.
+
+3. `systemctl restart haneat-api`
+4. `python3 scripts/check_email_config.py --send-test airat8446@gmail.com`
+
+Яндекс SMTP можно оставить закомментированным — при `EMAIL_PROVIDER=resend` он не используется.
