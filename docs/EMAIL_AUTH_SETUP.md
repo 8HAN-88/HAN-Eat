@@ -73,3 +73,31 @@ HANEAT_API_BASE=https://api.haneat.app
 ## 5. Локально без SMTP
 
 Письма попадают в **лог uvicorn** — скопируй `token` из ссылки `haneat://auth/verify-email?token=...` на экран подтверждения в приложении.
+
+## 6. Письмо не приходит (сброс пароля / подтверждение)
+
+На сервере в консоли Timeweb:
+
+```bash
+cd ~/HAN-Eat/backend
+source venv/bin/activate
+python3 scripts/check_email_config.py
+python3 scripts/check_email_config.py --send-test ваш@gmail.com
+curl -s http://127.0.0.1:8000/health | python3 -m json.tool
+```
+
+В `health` должно быть `"email_smtp_configured": true`. Если `false` — в `backend/.env` не заданы `EMAIL_*` или сервис не перезапущен после правки.
+
+Проверьте в `.env`:
+
+- `EMAIL_SMTP_USER` и `EMAIL_FROM` — **один и тот же** ящик Яндекса
+- `EMAIL_SMTP_PASSWORD` — **пароль приложения** (id.yandex.ru → Безопасность → Пароли приложений), не пароль от входа
+- после правки: `systemctl restart haneat-api`
+
+Логи ошибок SMTP:
+
+```bash
+journalctl -u haneat-api -n 80 --no-pager | grep -iE 'email|smtp|forgot-password'
+```
+
+В приложении API всегда отвечает «если аккаунт существует…» — даже если SMTP сломан (безопасность). Проверяйте сервер, а не только почтовый ящик.

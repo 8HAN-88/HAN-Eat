@@ -96,6 +96,7 @@ async def root():
 @app.get("/health")
 async def health():
     from app.core.infrastructure_startup import infrastructure_status
+    from app.services.email_delivery_service import email_delivery_configured
 
     infra = infrastructure_status()
     db_ok = infra["database"]["ok"]
@@ -106,6 +107,7 @@ async def health():
         "status": "ok" if ok else "degraded",
         "database": db_ok,
         "redis": redis_cfg,
+        "email_smtp_configured": email_delivery_configured(),
     }
 
 

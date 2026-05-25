@@ -549,11 +549,22 @@ async def verify_email(body: TokenBody, db: Session = Depends(get_db)):
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == body.email).first()
+    from sqlalchemy import func
+
+    email_norm = str(body.email).strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == email_norm).first()
     if user and not user.deleted_at and not user.banned_at:
         try:
-            send_password_reset_email(db, user)
-            db.commit()
+            sent = send_password_reset_email(db, user)
+            if sent:
+                db.commit()
+            else:
+                db.rollback()
+                logger.error(
+                    "forgot-password: SMTP не отправил письмо user_id=%s email=%s",
+                    user.id,
+                    user.email,
+                )
         except Exception as e:
             logger.warning("forgot-password email failed: %s", e)
             db.rollback()
