@@ -6,6 +6,7 @@ import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
@@ -37,6 +38,7 @@ from app.models.auth_token import (
     PURPOSE_RESET_PASSWORD,
     PURPOSE_VERIFY_EMAIL,
 )
+from app.services.auth_link_redirect import render_open_link_page
 from app.services.auth_email_service import (
     consume_token,
     is_email_verified,
@@ -59,6 +61,10 @@ logger = logging.getLogger(__name__)
 
 _FORGOT_PASSWORD_MSG = (
     "Если аккаунт с таким email существует, мы отправили письмо со ссылкой для сброса пароля."
+)
+
+_AUTH_OPEN_PURPOSES = frozenset(
+    {"verify-email", "reset-password", "confirm-email-change"}
 )
 
 
@@ -532,6 +538,17 @@ async def yandex_auth(request: YandexAuthRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Yandex authentication failed: {str(e)}",
         )
+
+
+@router.get("/open/{purpose}", response_class=HTMLResponse)
+async def open_auth_email_link(purpose: str, token: str = ""):
+    """Страница из письма: редирект в приложение (haneat://) + код для ручного ввода."""
+    if purpose not in _AUTH_OPEN_PURPOSES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
+    token = token.strip()
+    if len(token) < 16:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+    return HTMLResponse(render_open_link_page(purpose, token))
 
 
 @router.post("/verify-email", response_model=MessageResponse)

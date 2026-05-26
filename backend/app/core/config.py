@@ -106,6 +106,8 @@ class Settings(BaseSettings):
     REQUIRE_EMAIL_VERIFICATION: bool = True
     # Ссылки в письмах (в приложении — deep link haneat://auth/...)
     AUTH_LINK_BASE_URL: str = "haneat://auth"
+    # Ссылки в письмах (HTTPS → страница → haneat://). Пусто = API_PUBLIC_BASE_URL + /api/v1/auth/open
+    AUTH_EMAIL_WEB_BASE_URL: str = ""
     AUTH_VERIFY_EMAIL_HOURS: int = 48
     AUTH_RESET_PASSWORD_HOURS: int = 2
     AUTH_CHANGE_EMAIL_HOURS: int = 24

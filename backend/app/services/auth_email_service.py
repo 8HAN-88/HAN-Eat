@@ -7,8 +7,6 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
-from urllib.parse import quote
-
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -19,6 +17,7 @@ from app.models.auth_token import (
     AuthToken,
 )
 from app.models.user import User
+from app.services.auth_link_redirect import email_web_link
 from app.services.email_delivery_service import send_transactional_email
 from app.services.email_templates import render_branded_email
 
@@ -39,11 +38,6 @@ def _hash_token(raw: str) -> str:
 
 def _generate_raw_token() -> str:
     return secrets.token_urlsafe(32)
-
-
-def _verify_link(purpose: str, raw_token: str) -> str:
-    base = settings.AUTH_LINK_BASE_URL.rstrip("/")
-    return f"{base}/{purpose}?token={quote(raw_token, safe='')}"
 
 
 def _invalidate_active_tokens(db: Session, user_id: int, purpose: str) -> None:
@@ -90,7 +84,7 @@ def send_verify_email(db: Session, user: User) -> bool:
         PURPOSE_VERIFY_EMAIL,
         settings.AUTH_VERIFY_EMAIL_HOURS,
     )
-    link = _verify_link("verify-email", raw)
+    link = email_web_link("verify-email", raw)
     subject = "Подтвердите email — HAN Eat"
     text, html = render_branded_email(
         preheader="Подтвердите email, чтобы войти в HAN Eat",
@@ -114,7 +108,7 @@ def send_password_reset_email(db: Session, user: User) -> bool:
         PURPOSE_RESET_PASSWORD,
         settings.AUTH_RESET_PASSWORD_HOURS,
     )
-    link = _verify_link("reset-password", raw)
+    link = email_web_link("reset-password", raw)
     subject = "Сброс пароля — HAN Eat"
     display_name = (user.name or "").strip() or "друг"
     text, html = render_branded_email(
@@ -145,7 +139,7 @@ def send_change_email_confirmation(db: Session, user: User, new_email: str) -> b
         settings.AUTH_CHANGE_EMAIL_HOURS,
         extra_data={"new_email": new_email},
     )
-    link = _verify_link("confirm-email-change", raw)
+    link = email_web_link("confirm-email-change", raw)
     subject = "Подтвердите новый email — HAN Eat"
     text, html = render_branded_email(
         preheader="Подтвердите смену email в HAN Eat",

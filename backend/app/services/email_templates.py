@@ -102,7 +102,7 @@ def render_branded_email(
               </table>
               {expiry_html}
               <p style="margin:24px 0 0;font-size:13px;line-height:20px;color:{_TEXT_MUTED};">
-                Кнопка не работает? Скопируйте ссылку в браузер на телефоне с приложением HAN Eat:
+                Кнопка не работает? Откройте ссылку ниже в браузере на телефоне с установленным HAN Eat:
               </p>
               <p style="margin:8px 0 0;font-size:12px;line-height:18px;word-break:break-all;">
                 <a href="{safe_url}" style="color:{_BRAND_PRIMARY_DARK};">{safe_url}</a>

@@ -232,12 +232,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 10),
         _InstructionStep(
           number: 2,
-          text: 'Нажмите оранжевую кнопку «Задать новый пароль».',
+          text:
+              'Нажмите оранжевую кнопку в письме — откроется страница, затем приложение.',
         ),
         const SizedBox(height: 10),
         _InstructionStep(
           number: 3,
-          text: 'Приложение откроет экран ввода нового пароля.',
+          text:
+              'На экране «Новый пароль» задайте пароль. Если ссылка не открылась — «Ввести код вручную».',
         ),
         const SizedBox(height: 28),
         FilledButton(

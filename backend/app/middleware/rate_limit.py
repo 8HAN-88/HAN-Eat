@@ -19,6 +19,7 @@ _EXEMPT_PREFIXES = (
     "/api/v1/payments/webhook",
     "/api/v1/payments/readiness",
     "/api/v1/auth/google/readiness",
+    "/api/v1/auth/open/",
     "/privacy",
     "/terms",
     "/docs",
