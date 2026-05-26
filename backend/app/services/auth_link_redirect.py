@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import json
 from urllib.parse import quote
 
 from app.core.config import settings
@@ -40,6 +41,7 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
     }
     title = titles.get(purpose, "HAN Eat")
     button = cta.get(purpose, "Открыть приложение")
+    deep_js = json.dumps(deep)
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -85,13 +87,11 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
   </div>
   <script>
     (function() {{
-      var deep = {json_deep};
+      var deep = {deep_js};
       try {{
         window.location.replace(deep);
       }} catch (e) {{}}
     }})();
   </script>
 </body>
-</html>""".replace(
-        "{json_deep}", repr(deep)
-    )
+</html>"""
