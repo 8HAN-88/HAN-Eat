@@ -20,6 +20,7 @@ from app.models.auth_token import (
 )
 from app.models.user import User
 from app.services.email_delivery_service import send_transactional_email
+from app.services.email_templates import render_branded_email
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +92,17 @@ def send_verify_email(db: Session, user: User) -> bool:
     )
     link = _verify_link("verify-email", raw)
     subject = "Подтвердите email — HAN Eat"
-    text = (
-        f"Здравствуйте, {user.name}!\n\n"
-        f"Подтвердите адрес почты для входа в HAN Eat:\n{link}\n\n"
-        f"Ссылка действует {settings.AUTH_VERIFY_EMAIL_HOURS} ч.\n"
-    )
-    html = (
-        f"<p>Здравствуйте, <strong>{user.name}</strong>!</p>"
-        f'<p><a href="{link}">Подтвердить email</a></p>'
-        f"<p>Ссылка действует {settings.AUTH_VERIFY_EMAIL_HOURS} ч.</p>"
+    text, html = render_branded_email(
+        preheader="Подтвердите email, чтобы войти в HAN Eat",
+        title="Подтвердите ваш email",
+        greeting=f"Здравствуйте, {user.name}!",
+        paragraphs=[
+            "Спасибо за регистрацию в HAN Eat. Нажмите кнопку ниже, "
+            "чтобы подтвердить адрес почты и завершить создание аккаунта.",
+        ],
+        cta_label="Подтвердить email",
+        cta_url=link,
+        expiry_note=f"Ссылка действует {settings.AUTH_VERIFY_EMAIL_HOURS} ч.",
     )
     return send_transactional_email(user.email, subject, text, html)
 
@@ -113,15 +116,23 @@ def send_password_reset_email(db: Session, user: User) -> bool:
     )
     link = _verify_link("reset-password", raw)
     subject = "Сброс пароля — HAN Eat"
-    text = (
-        f"Здравствуйте!\n\n"
-        f"Чтобы задать новый пароль, перейдите по ссылке:\n{link}\n\n"
-        f"Если вы не запрашивали сброс, проигнорируйте письмо.\n"
-        f"Ссылка действует {settings.AUTH_RESET_PASSWORD_HOURS} ч.\n"
-    )
-    html = (
-        f'<p><a href="{link}">Задать новый пароль</a></p>'
-        f"<p>Если вы не запрашивали сброс, проигнорируйте это письмо.</p>"
+    display_name = (user.name or "").strip() or "друг"
+    text, html = render_branded_email(
+        preheader="Запрос на сброс пароля в HAN Eat",
+        title="Сброс пароля",
+        greeting=f"Здравствуйте, {display_name}!",
+        paragraphs=[
+            "Мы получили запрос на сброс пароля для вашего аккаунта HAN Eat.",
+            "Нажмите кнопку ниже на этом телефоне — откроется приложение, "
+            "где вы сможете задать новый пароль.",
+        ],
+        cta_label="Задать новый пароль",
+        cta_url=link,
+        expiry_note=f"Ссылка действует {settings.AUTH_RESET_PASSWORD_HOURS} ч.",
+        security_note=(
+            "Если вы не запрашивали сброс пароля, проигнорируйте это письмо. "
+            "Ваш текущий пароль останется без изменений."
+        ),
     )
     return send_transactional_email(user.email, subject, text, html)
 
@@ -136,11 +147,18 @@ def send_change_email_confirmation(db: Session, user: User, new_email: str) -> b
     )
     link = _verify_link("confirm-email-change", raw)
     subject = "Подтвердите новый email — HAN Eat"
-    text = (
-        f"Подтвердите смену email на {new_email}:\n{link}\n\n"
-        f"Ссылка действует {settings.AUTH_CHANGE_EMAIL_HOURS} ч.\n"
+    text, html = render_branded_email(
+        preheader="Подтвердите смену email в HAN Eat",
+        title="Подтвердите новый email",
+        greeting=None,
+        paragraphs=[
+            f"Вы запросили смену email на {new_email}.",
+            "Нажмите кнопку ниже, чтобы подтвердить новый адрес.",
+        ],
+        cta_label="Подтвердить email",
+        cta_url=link,
+        expiry_note=f"Ссылка действует {settings.AUTH_CHANGE_EMAIL_HOURS} ч.",
     )
-    html = f'<p><a href="{link}">Подтвердить {new_email}</a></p>'
     return send_transactional_email(new_email, subject, text, html)
 
 
