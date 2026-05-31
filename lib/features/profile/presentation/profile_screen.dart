@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../widgets/app_empty_state.dart';
+import '../../content/create_content_actions.dart';
 
 /// Минимальный профиль из данных [AuthService], пока не пришёл ответ API.
 user_service.UserProfile _userProfileFromAuthUser(User u) {
@@ -61,6 +62,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   final Set<int> _loadedTabs = {0};
   late final void Function(User?) _onSessionChanged;
   int? _postsListEpoch;
+  int _postsRefreshGeneration = 0;
 
   @override
   void initState() {
@@ -284,8 +286,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 // Кнопка создать пост
                 IconButton(
                   icon: const Icon(Icons.add),
-                  tooltip: 'Создать пост',
-                  onPressed: () => context.push(CreatePostRoute.path),
+                  tooltip: 'Создать пост или рилс',
+                  onPressed: _openCreateContent,
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
@@ -401,9 +403,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   int get _effectiveUserId => widget.userId ?? _profile!.user.id;
 
+  Future<void> _openCreateContent() async {
+    final published = await showCreateContentSheet(
+      context,
+      ref: ref,
+      includeReel: true,
+    );
+    if (!mounted || !published) return;
+    setState(() => _postsRefreshGeneration++);
+    await _loadProfile();
+  }
+
   Widget _postsList({required String? postType}) {
     return _PostsListWidget(
-      key: ValueKey('posts_${_effectiveUserId}_${postType ?? 'all'}_$_postsListEpoch'),
+      key: ValueKey(
+        'posts_${_effectiveUserId}_${postType ?? 'all'}_${_postsListEpoch}_$_postsRefreshGeneration',
+      ),
       userId: _effectiveUserId,
       postType: postType,
     );

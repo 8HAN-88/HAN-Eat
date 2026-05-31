@@ -28,8 +28,14 @@ Future<bool?> openCreateReel(BuildContext context, {WidgetRef? ref}) async {
   return created;
 }
 
-/// Выбор: обычный пост или рилс.
-Future<void> showCreateContentSheet(BuildContext context, {WidgetRef? ref}) async {
+/// Выбор: обычный пост и (опционально) рилс в ленту.
+///
+/// [includeReel] — для профиля; на главной не используется.
+Future<bool> showCreateContentSheet(
+  BuildContext context, {
+  WidgetRef? ref,
+  bool includeReel = false,
+}) async {
   final choice = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
@@ -37,6 +43,13 @@ Future<void> showCreateContentSheet(BuildContext context, {WidgetRef? ref}) asyn
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (includeReel)
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Рилс'),
+              subtitle: const Text('Короткое видео в ленту рилсов'),
+              onTap: () => Navigator.pop(ctx, 'reel'),
+            ),
           ListTile(
             leading: const Icon(Icons.edit_outlined),
             title: const Text('Пост'),
@@ -49,8 +62,13 @@ Future<void> showCreateContentSheet(BuildContext context, {WidgetRef? ref}) asyn
     ),
   );
 
-  if (!context.mounted || choice == null) return;
-  if (choice == 'post') {
-    await context.push(CreatePostRoute.path);
+  if (!context.mounted || choice == null) return false;
+
+  if (choice == 'reel') {
+    final created = await openCreateReel(context, ref: ref);
+    return created == true;
   }
+
+  final postResult = await context.push<bool?>(CreatePostRoute.path);
+  return postResult == true;
 }
