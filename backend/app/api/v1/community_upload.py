@@ -234,7 +234,7 @@ async def upload_community_video(
         title=request_body.title,
         description=request_body.description or "",
         body=body,
-        publish_to=["feed"],
+        publish_to=["feed", "reels"],
         visibility="public",
         tags=request_body.tags or [],
         status="published",

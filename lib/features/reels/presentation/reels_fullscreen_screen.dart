@@ -186,8 +186,18 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
 
   Future<void> _toggleLike(PostModel reel) async {
     try {
-      final response = await LikeService.likePost(reel.id);
-      _updateReelAt(reel.id, (r) => _copyReelWith(r, likesCount: response.likesCount, isLiked: !r.isLiked));
+      final wasLiked = reel.isLiked ?? false;
+      final response = wasLiked
+          ? await LikeService.unlikePost(reel.id)
+          : await LikeService.likePost(reel.id);
+      _updateReelAt(
+        reel.id,
+        (r) => _copyReelWith(
+          r,
+          likesCount: response.likesCount,
+          isLiked: response.liked,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userVisibleError(e))));

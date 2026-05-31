@@ -34,6 +34,25 @@ class FeedService:
             Post.hidden_from_recommendations == False,
             ~blocked_author,
         )
+
+    @staticmethod
+    def _apply_feed_type_filter(query, feed_type: str):
+        """
+        Фильтр типа ленты. Для reels — как в профиле: type=reel или видео в body.media.
+        """
+        if feed_type == "all":
+            return query
+        if feed_type == "reels":
+            from sqlalchemy import cast as sa_cast
+            from sqlalchemy.dialects.postgresql import JSONB
+
+            body_j = sa_cast(Post.body, JSONB)
+            video_in_media = and_(
+                Post.body.isnot(None),
+                body_j.contains({"media": [{"type": "video"}]}),
+            )
+            return query.filter(or_(Post.type == "reel", video_in_media))
+        return query.filter(Post.type == feed_type)
     
     def __init__(self, db: Session, redis_client):
         self.db = db
@@ -239,8 +258,7 @@ class FeedService:
                 *FeedService._recommendation_post_filters(),
             )
             
-            if feed_type != "all":
-                query = query.filter(Post.type == feed_type)
+            query = FeedService._apply_feed_type_filter(query, feed_type)
             
             original_posts = query.order_by(Post.published_at.desc()).limit(100).all()
             logger.debug(f"User {user_id} (following_only=True): Found {len(original_posts)} posts")
@@ -259,8 +277,7 @@ class FeedService:
                     *FeedService._recommendation_post_filters(),
                 )
                 
-                if feed_type != "all":
-                    reposted_query = reposted_query.filter(Post.type == feed_type)
+                reposted_query = FeedService._apply_feed_type_filter(reposted_query, feed_type)
                 
                 reposted_posts_list = reposted_query.order_by(Post.published_at.desc()).limit(50).all()
                 
@@ -317,8 +334,7 @@ class FeedService:
             *FeedService._recommendation_post_filters(),
         )
         
-        if feed_type != "all":
-            query = query.filter(Post.type == feed_type)
+        query = FeedService._apply_feed_type_filter(query, feed_type)
         
         original_posts = query.order_by(Post.published_at.desc()).limit(100).all()
         logger.debug(f"User {user_id} (following_only=False): Found {len(original_posts)} posts")
@@ -337,8 +353,7 @@ class FeedService:
                 *FeedService._recommendation_post_filters(),
             )
             
-            if feed_type != "all":
-                reposted_query = reposted_query.filter(Post.type == feed_type)
+            reposted_query = FeedService._apply_feed_type_filter(reposted_query, feed_type)
             
             reposted_posts_list = reposted_query.order_by(Post.published_at.desc()).limit(50).all()
             
@@ -1139,8 +1154,7 @@ class FeedService:
             *FeedService._recommendation_post_filters(),
         )
         
-        if feed_type != "all":
-            query = query.filter(Post.type == feed_type)
+        query = FeedService._apply_feed_type_filter(query, feed_type)
         
         posts = query.order_by(Post.published_at.desc()).limit(limit).all()
         return posts

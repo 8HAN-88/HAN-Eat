@@ -426,9 +426,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   
   Future<void> _toggleLike(PostModel reel) async {
     try {
-      final response = await LikeService.likePost(reel.id);
+      final wasLiked = reel.isLiked ?? false;
+      final response = wasLiked
+          ? await LikeService.unlikePost(reel.id)
+          : await LikeService.likePost(reel.id);
       setState(() {
-        // Обновляем счетчик лайков
         final index = _reels.indexWhere((r) => r.id == reel.id);
         if (index != -1) {
           _reels[index] = PostModel(
@@ -448,7 +450,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             repostsCount: _reels[index].repostsCount,
             viewsCount: _reels[index].viewsCount,
             isPromoted: _reels[index].isPromoted,
-            isLiked: !_reels[index].isLiked,
+            isLiked: response.liked,
             isSaved: _reels[index].isSaved,
             isReposted: _reels[index].isReposted,
             author: _reels[index].author,
