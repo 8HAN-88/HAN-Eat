@@ -17,6 +17,7 @@ import '../application/channels_list_refresh_provider.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_search_screen.dart';
+import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -329,8 +330,12 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       ),
       floatingActionButton: (c.isAdmin || c.isOwner)
           ? FloatingActionButton(
-              onPressed: _openCreatePost,
-              tooltip: 'Создать пост',
+              onPressed: () => showChannelCreateContentSheet(
+                context,
+                channelId: widget.channelId,
+                channelName: c.name,
+              ),
+              tooltip: 'Создать',
               child: const Icon(Icons.add),
             )
           : null,

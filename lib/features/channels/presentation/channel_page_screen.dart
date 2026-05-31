@@ -8,6 +8,8 @@ import '../../../models/post_model.dart';
 import '../../../app/app_router.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/app_empty_state.dart';
+import 'channel_create_content_sheet.dart';
+
 class ChannelPageScreen extends ConsumerStatefulWidget {
   final int channelId;
 
@@ -326,101 +328,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
   }
 
   void _showCreateContentMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.restaurant_menu),
-              title: const Text('Создать рецепт'),
-              subtitle: const Text(
-                'Выберите: публичный в Menu или приватный в канале',
-              ),
-              onTap: () async {
-                Navigator.of(context).pop();
-                if (!context.mounted) return;
-                context
-                    .push(
-                  ChannelDetailRoute.createRecipe(
-                    widget.channelId,
-                    _channel!.name,
-                  ),
-                )
-                    .then((success) {
-                  if (success == true) {
-                    // Обновляем посты после публикации
-                  }
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Пост с фото'),
-              subtitle: const Text('Текст и изображения'),
-              onTap: () {
-                Navigator.of(context).pop();
-                context
-                    .push(
-                  ChannelDetailRoute.createPost(
-                    widget.channelId,
-                    channelName: _channel!.name,
-                    type: 'photo',
-                  ),
-                )
-                    .then((success) {
-                  if (success == true) {
-                    // Обновляем посты после публикации
-                  }
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.text_fields),
-              title: const Text('Текстовый пост'),
-              subtitle: const Text('Только текст'),
-              onTap: () {
-                Navigator.of(context).pop();
-                context
-                    .push(
-                  ChannelDetailRoute.createPost(
-                    widget.channelId,
-                    channelName: _channel!.name,
-                    type: 'text',
-                  ),
-                )
-                    .then((success) {
-                  if (success == true) {
-                    // Обновляем посты после публикации
-                  }
-                });
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.video_library),
-              title: const Text('Рилс (короткое видео)'),
-              subtitle: const Text('Автоматически в раздел Рилсы'),
-              onTap: () {
-                Navigator.of(context).pop();
-                context
-                    .push(
-                  ChannelDetailRoute.createPost(
-                    widget.channelId,
-                    channelName: _channel!.name,
-                    type: 'reel',
-                  ),
-                )
-                    .then((success) {
-                  if (success == true) {
-                    // Обновляем посты после публикации
-                  }
-                });
-              },
-            ),
-          ],
-        ),
-      ),
+    if (_channel == null) return;
+    showChannelCreateContentSheet(
+      context,
+      channelId: widget.channelId,
+      channelName: _channel!.name,
     );
   }
 }

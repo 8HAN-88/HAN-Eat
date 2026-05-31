@@ -26,17 +26,10 @@ import '../../../app/app_router.dart';
 import '../application/reels_feed_refresh_provider.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
-  const ReelsFeedScreen({
-    super.key,
-    this.hideScaffold = false,
-    this.onCreateReel,
-  });
+  const ReelsFeedScreen({super.key, this.hideScaffold = false});
 
   /// Без вложенного Scaffold (вкладка «Рилсы» в [MainFeedScreen]).
   final bool hideScaffold;
-
-  /// Кнопка «Создать рилс» в пустой ленте (если null — кнопки нет).
-  final Future<void> Function()? onCreateReel;
 
   @override
   ConsumerState<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
@@ -298,23 +291,14 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
                   ? 'Не удалось загрузить рилсы'
                   : 'Пока нет рилсов',
               subtitle: _lastLoadError ??
-                  'Снимите короткое видео — оно появится в ленте рилсов.',
+                  'Рилсы публикуются из каналов — откройте канал и нажмите «+».',
               action: _lastLoadError != null
                   ? FilledButton.icon(
                       onPressed: () => _loadReels(refresh: true),
                       icon: const Icon(Icons.refresh),
                       label: const Text('Повторить'),
                     )
-                  : widget.onCreateReel != null
-                      ? FilledButton.icon(
-                          onPressed: () async {
-                            await widget.onCreateReel!();
-                            if (mounted) _loadReels(refresh: true);
-                          },
-                          icon: const Icon(Icons.videocam_outlined),
-                          label: const Text('Создать рилс'),
-                        )
-                      : null,
+                  : null,
             ),
           ),
         ],

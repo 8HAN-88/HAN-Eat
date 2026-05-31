@@ -21,6 +21,8 @@ import '../../../services/media_upload_service.dart';
 import '../../../utils/file_helper.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/url_validator.dart';
+import '../../../services/feed_api_cache.dart';
+import '../../reels/application/reels_feed_refresh_provider.dart';
 
 class CreateChannelPostScreen extends ConsumerStatefulWidget {
   final int channelId;
@@ -1258,6 +1260,13 @@ class _CreateChannelPostScreenState
             ),
           ),
         );
+        if (!isEditing &&
+            !scheduled &&
+            (_selectedPostType == 'reel' ||
+                (createdPost?.type == 'reel'))) {
+          await FeedApiCache.clear('rec_reels');
+          notifyReelsFeedRefresh(ref);
+        }
         context.pop(createdPost ?? true);
       }
     } on ApiClientException catch (e) {

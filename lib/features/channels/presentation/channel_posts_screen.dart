@@ -15,6 +15,7 @@ import 'channel_search_screen.dart';
 import 'channel_settings_bottom_sheet.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../widgets/app_empty_state.dart';
+import 'channel_create_content_sheet.dart';
 
 // Импортируем ChannelDetail из channel_service
 export '../../../services/channel_service.dart' show ChannelDetail;
@@ -173,8 +174,12 @@ class _ChannelPostsScreenState extends ConsumerState<ChannelPostsScreen> {
           if (_channel!.isOwner || _channel!.isAdmin) ...[
             FloatingActionButton(
               heroTag: 'channel_posts_create',
-              onPressed: _openCreatePost,
-              tooltip: 'Создать пост',
+              onPressed: () => showChannelCreateContentSheet(
+                context,
+                channelId: widget.channelId,
+                channelName: _channel?.name,
+              ),
+              tooltip: 'Создать',
               child: const Icon(Icons.add),
             ),
             const SizedBox(height: 12),

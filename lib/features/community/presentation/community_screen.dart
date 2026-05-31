@@ -34,10 +34,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
     super.initState();
     // Начинаем с таба «Рилсы» для лучшего удержания пользователя
     _tabController = TabController(length: 4, vsync: this, initialIndex: 3);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      if (mounted) setState(() {});
-    });
   }
 
   @override
@@ -150,33 +146,18 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
                 _buildSubscriptionsTab(context),
                 const FeedScreen(hideScaffold: true),
                 _buildRecommendationsTab(context, state, controller),
-                api_reels.ReelsFeedScreen(
-                  onCreateReel: () => openCreateReel(context, ref: ref),
-                ),
+                const api_reels.ReelsFeedScreen(),
               ],
             ),
       floatingActionButton: _isSearchMode
           ? null
           : FloatingActionButton.extended(
               onPressed: () async {
-                if (_tabController.index == 3) {
-                  final created = await openCreateReel(context, ref: ref);
-                  if (created == true) {
-                    controller.load(tag: state.activeTag);
-                  }
-                } else {
-                  await showCreateContentSheet(context, ref: ref);
-                  controller.load(tag: state.activeTag);
-                }
+                await showCreateContentSheet(context, ref: ref);
+                controller.load(tag: state.activeTag);
               },
-              icon: Icon(
-                _tabController.index == 3
-                    ? Icons.videocam_outlined
-                    : Icons.add,
-              ),
-              label: Text(
-                _tabController.index == 3 ? 'Создать рилс' : 'Создать',
-              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Создать пост'),
             ),
     );
   }

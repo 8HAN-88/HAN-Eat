@@ -43,12 +43,6 @@ Future<void> showCreateContentSheet(BuildContext context, {WidgetRef? ref}) asyn
             subtitle: const Text('Текст, фото, рецепт, опрос'),
             onTap: () => Navigator.pop(ctx, 'post'),
           ),
-          ListTile(
-            leading: const Icon(Icons.videocam_outlined),
-            title: const Text('Рилс'),
-            subtitle: const Text('Короткое вертикальное видео'),
-            onTap: () => Navigator.pop(ctx, 'reel'),
-          ),
           const SizedBox(height: 8),
         ],
       ),
@@ -56,12 +50,7 @@ Future<void> showCreateContentSheet(BuildContext context, {WidgetRef? ref}) asyn
   );
 
   if (!context.mounted || choice == null) return;
-  switch (choice) {
-    case 'post':
-      await context.push(CreatePostRoute.path);
-      break;
-    case 'reel':
-      await openCreateReel(context, ref: ref);
-      break;
+  if (choice == 'post') {
+    await context.push(CreatePostRoute.path);
   }
 }

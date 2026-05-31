@@ -8,9 +8,6 @@ import '../../../app/app_router.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/notification_bell_button.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
-import '../../../core/layout/floating_bottom_padding.dart';
-import '../../content/create_content_actions.dart';
-
 /// Главный экран ленты с табами: Подписки, Рекомендации, Рилсы
 class MainFeedScreen extends ConsumerStatefulWidget {
   const MainFeedScreen({super.key});
@@ -129,27 +126,8 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
               hideScaffold: true,
               externalFeedType: _recFeedType,
             ),
-            ReelsFeedScreen(
-              hideScaffold: true,
-              onCreateReel: () => openCreateReel(context, ref: ref),
-            ),
+            const ReelsFeedScreen(hideScaffold: true),
           ],
-        ),
-      ),
-      floatingActionButton: floatingActionButtonClearOfBottomNav(
-        context,
-        child: FloatingActionButton.extended(
-          onPressed: () async {
-            if (_tabController.index == 2) {
-              await openCreateReel(context, ref: ref);
-            } else {
-              await showCreateContentSheet(context, ref: ref);
-            }
-          },
-          icon: Icon(
-            _tabController.index == 2 ? Icons.videocam_outlined : Icons.add,
-          ),
-          label: Text(_tabController.index == 2 ? 'Создать рилс' : 'Создать'),
         ),
       ),
     );
