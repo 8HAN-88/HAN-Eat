@@ -6,7 +6,7 @@ import 'auth_service.dart';
 import 'server_config.dart';
 
 class MediaUploadService {
-  /// URL API — на эмуляторе Android используется 10.0.2.2:5000
+  /// URL API — на эмуляторе Android используется 10.0.2.2 (см. ServerConfig)
   static String get baseUrl => ServerConfig.apiBaseUrl;
 
   /// Подменить хост в URL на тот, с которого доступен сервер (для эмулятора — 10.0.2.2)
@@ -26,7 +26,7 @@ class MediaUploadService {
     required String contentType, // 'image/jpeg', 'video/mp4', etc.
     required int fileSize,
   }) async {
-    var token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated. Please log in first.');
     }
@@ -92,9 +92,9 @@ class MediaUploadService {
       'Content-Type': contentType,
     };
 
-    // Для mock эндпоинта нужен токен авторизации
+    // Загрузка через API (не presigned S3) — нужен JWT
     if (effectiveUrl.contains('/uploads/mock/')) {
-      final token = await AuthService.getAccessToken();
+      final token = await AuthService.getAccessTokenForApi();
       if (token != null) {
         headers['Authorization'] = 'Bearer $token';
       }
@@ -108,6 +108,12 @@ class MediaUploadService {
     
     if (response.statusCode != 200 && response.statusCode != 204) {
       final errorBody = response.body;
+      if (errorBody.contains('InvalidAccessKeyId') ||
+          errorBody.contains('AWS Access Key')) {
+        throw Exception(
+          'Хранилище медиа настроено неверно (S3). Обратитесь к администратору или повторите позже.',
+        );
+      }
       throw Exception('Failed to upload file: ${response.statusCode} - $errorBody');
     }
   }
@@ -118,7 +124,7 @@ class MediaUploadService {
     required String fileKey,
     required String fileType,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -148,7 +154,7 @@ class MediaUploadService {
   
   /// Получить статус обработки
   static Future<UploadStatusResponse> getUploadStatus(String uploadId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
 import '../../../../app/app_router.dart';
 
@@ -84,7 +85,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка регистрации: ${e.toString()}'),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось зарегистрироваться. Попробуйте позже.'),
+            ),
             backgroundColor: Colors.red,
           ),
         );

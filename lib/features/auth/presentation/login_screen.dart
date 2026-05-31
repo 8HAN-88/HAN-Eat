@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
+import '../../../../widgets/app_brand_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -66,7 +68,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка входа: ${e.toString()}')),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось войти. Проверьте email и пароль.'),
+            ),
+          ),
         );
       }
     } finally {
@@ -93,12 +99,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 32),
-                // Логотип или заголовок
-                Icon(
-                  Icons.restaurant_menu,
-                  size: 80,
-                  color: theme.colorScheme.primary,
-                ),
+                const AppBrandLogo(size: 88),
                 const SizedBox(height: 16),
                 Text(
                   'H.A.N. Eat',

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/community_video.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/api_error_parser.dart';
 
 class CommunityState {
   const CommunityState({
@@ -71,7 +72,7 @@ class CommunityController extends StateNotifier<CommunityState> {
       } else {
         state = state.copyWith(
           loading: false,
-          error: 'Не удалось загрузить канал: $e',
+          error: userVisibleError(e, fallback: 'Не удалось загрузить видео'),
         );
       }
     }

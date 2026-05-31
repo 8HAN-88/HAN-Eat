@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../services/server_config.dart';
 import '../utils/file_helper.dart';
 import '../utils/image_url_helper.dart';
 import 'fullscreen_image_viewer.dart';
@@ -16,14 +16,14 @@ class TelegramPhotoGrid extends StatelessWidget {
   final bool enableFullscreen; // Включить полноэкранный просмотр при клике на фото
 
   const TelegramPhotoGrid({
-    Key? key,
+    super.key,
     required this.imageUrls,
     this.maxHeight = 300,
     this.spacing = 2,
     this.borderRadius,
     this.onTap,
     this.enableFullscreen = true, // По умолчанию включен
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -316,8 +316,10 @@ class TelegramPhotoGrid extends StatelessWidget {
     // Проверяем, является ли это локальным файлом или URL
     final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
     
-    // Для URL используем оптимизированную версию
-    final optimizedUrl = isLocalFile ? url : getOptimizedImageUrl(url);
+    // Локальный API часто отдаёт localhost:5000 — подставляем baseUrl (порт 5001 и т.д.)
+    final resolvedUrl = isLocalFile ? url : ServerConfig.resolveMediaUrl(url);
+    final optimizedUrl =
+        isLocalFile ? resolvedUrl : getOptimizedImageUrl(resolvedUrl);
     
     if (isLocalFile) {
       if (kIsWeb) {
@@ -372,6 +374,12 @@ class TelegramPhotoGrid extends StatelessWidget {
         width: width.isFinite ? width : null,
         height: height.isFinite ? height : null,
         fit: BoxFit.cover,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        httpHeaders: const {
+          'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+          'User-Agent': 'HAN-Eat/1.0 (Flutter)',
+        },
         memCacheWidth: memCacheWidth,
         memCacheHeight: memCacheHeight,
         maxWidthDiskCache: 1200,

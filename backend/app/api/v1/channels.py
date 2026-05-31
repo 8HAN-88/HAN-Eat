@@ -5,7 +5,7 @@ import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import Optional, List
 from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from app.core.database import get_db
@@ -18,6 +18,28 @@ from app.models.post import Post
 from app.models.post_view import PostView
 
 logger = logging.getLogger(__name__)
+from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+from app.services.subscription_service import SubscriptionService
+from app.services.recipe_body_nutrition import apply_nutrition_to_recipe_body
+from app.services.channel_membership_service import (
+    MEMBER_STATUS_ACTIVE,
+    MEMBER_STATUS_PENDING,
+    active_member_channel_ids_subquery,
+    can_view_channel_posts,
+    get_membership,
+    is_channel_owner,
+    is_staff_member,
+    membership_status_for_user,
+    sync_channel_members_count,
+)
+from app.services.recipe_visibility_service import (
+    assert_can_create_private_channel,
+    assert_can_set_channel_visibility_mode,
+    invalidate_recipe_search_cache,
+    normalize_channel_visibility_mode,
+    resolve_recipe_visibility,
+    sync_recipe_index_flags,
+)
 from app.schemas.channel import (
     CreateChannelRequest,
     UpdateChannelRequest,
@@ -27,10 +49,74 @@ from app.schemas.channel import (
     ChannelMemberResponse,
     UpdateChannelMemberRoleRequest,
     ChannelNotificationsPatchRequest,
+    ChannelJoinRequestResponse,
 )
 from app.schemas.post import CreatePostRequest, UpdatePostRequest, PostResponse, RecipeStep
 
 router = APIRouter()
+
+
+def _require_can_view_posts(
+    db: Session, channel: Channel, user: Optional[User]
+) -> ChannelMember:
+    member = get_membership(db, channel.id, user.id) if user else None
+    if not can_view_channel_posts(channel, user, member):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
+        if member and member.status == MEMBER_STATUS_PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Membership pending approval",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Channel is private",
+        )
+    return member
+
+
+def _build_channel_response(
+    db: Session,
+    channel: Channel,
+    current_user: Optional[User],
+) -> ChannelResponse:
+    item = ChannelResponse.model_validate(channel)
+    if not current_user:
+        return item
+    member = get_membership(db, channel.id, current_user.id)
+    pending_count = None
+    if is_staff_member(member, channel, current_user):
+        pending_count = (
+            db.query(ChannelMember)
+            .filter(
+                ChannelMember.channel_id == channel.id,
+                ChannelMember.status == MEMBER_STATUS_PENDING,
+            )
+            .count()
+        )
+    return item.model_copy(
+        update={
+            "membership_status": membership_status_for_user(
+                member, channel, current_user
+            ),
+            "pending_join_requests_count": pending_count,
+        }
+    )
+
+
+def _require_staff(
+    db: Session, channel: Channel, user: User
+) -> ChannelMember:
+    member = get_membership(db, channel.id, user.id)
+    if not is_staff_member(member, channel, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only channel staff can perform this action",
+        )
+    return member
 
 
 @router.post("", response_model=ChannelResponse, status_code=status.HTTP_201_CREATED)
@@ -52,6 +138,16 @@ async def create_channel(
                 detail="Channel with this slug already exists"
             )
         
+        is_public = request.is_public if request.is_public is not None else True
+        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+        assert_can_create_private_channel(is_public, has_creator)
+
+        mode = normalize_channel_visibility_mode(request.recipe_visibility_mode)
+        if not has_creator:
+            mode = "public"
+        else:
+            assert_can_set_channel_visibility_mode(mode, has_creator)
+
         # Создаем канал
         channel = Channel(
             name=request.name,
@@ -60,13 +156,14 @@ async def create_channel(
             cover_url=request.cover_url,
             avatar_url=request.avatar_url,
             admin_user_id=current_user.id,
-            is_public=request.is_public if request.is_public is not None else True,
+            is_public=is_public,
+            recipe_visibility_mode=mode,
             category=request.category,
             tags=request.tags if request.tags is not None else [],
             members_count=1,  # Админ автоматически становится участником
             posts_count=0,
             auto_publish_to_feed=True,
-            auto_publish_to_menu=True,
+            auto_publish_to_menu=False,
             allow_comments=True,
             allow_likes=True,
             allow_reposts=True,
@@ -82,6 +179,7 @@ async def create_channel(
             channel_id=channel.id,
             user_id=current_user.id,
             role="owner",
+            status=MEMBER_STATUS_ACTIVE,
         )
         db.add(member)
         db.commit()
@@ -169,8 +267,14 @@ async def update_channel(
         channel.cover_url = request.cover_url
     if request.avatar_url is not None:
         channel.avatar_url = request.avatar_url
+    has_creator = SubscriptionService(db).has_creator_access(current_user.id)
     if request.is_public is not None:
+        assert_can_create_private_channel(request.is_public, has_creator)
         channel.is_public = request.is_public
+    if request.recipe_visibility_mode is not None:
+        mode = normalize_channel_visibility_mode(request.recipe_visibility_mode)
+        assert_can_set_channel_visibility_mode(mode, has_creator)
+        channel.recipe_visibility_mode = mode
     if request.category is not None:
         channel.category = request.category
     if request.tags is not None:
@@ -180,7 +284,7 @@ async def update_channel(
     if request.auto_publish_to_feed is not None:
         channel.auto_publish_to_feed = request.auto_publish_to_feed
     if request.auto_publish_to_menu is not None:
-        channel.auto_publish_to_menu = request.auto_publish_to_menu
+        channel.auto_publish_to_menu = bool(request.auto_publish_to_menu)
     if request.allow_comments is not None:
         channel.allow_comments = request.allow_comments
     if request.allow_likes is not None:
@@ -232,33 +336,43 @@ async def get_channel(
             detail="Channel not found"
         )
     
-    # Проверяем, является ли пользователь участником и его роль
-    is_member = False
-    is_admin = False
-    is_owner = False
-    is_moderator = False
+    member = (
+        get_membership(db, channel_id, current_user.id) if current_user else None
+    )
+    m_status = membership_status_for_user(member, channel, current_user)
+    can_posts = can_view_channel_posts(channel, current_user, member)
+
+    is_member = m_status == MEMBER_STATUS_ACTIVE
+    is_owner = is_channel_owner(channel, current_user)
+    is_admin = is_owner or (
+        member is not None
+        and member.status == MEMBER_STATUS_ACTIVE
+        and member.role == "admin"
+    )
+    is_moderator = (
+        member is not None
+        and member.status == MEMBER_STATUS_ACTIVE
+        and member.role == "moderator"
+    )
     channel_notifications_enabled = None
-    if current_user:
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first()
-        if member:
-            is_member = True
-            is_admin = member.role == "admin"
-            is_owner = member.role == "owner" or channel.admin_user_id == current_user.id
-            is_moderator = member.role == "moderator"
-            channel_notifications_enabled = bool(
-                getattr(member, "notifications_enabled", True)
+    if is_member and member:
+        channel_notifications_enabled = bool(
+            getattr(member, "notifications_enabled", True)
+        )
+
+    pending_count = None
+    if current_user and is_staff_member(member, channel, current_user):
+        pending_count = (
+            db.query(ChannelMember)
+            .filter(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == MEMBER_STATUS_PENDING,
             )
-        # Также проверяем, является ли пользователь владельцем через admin_user_id
-        if channel.admin_user_id == current_user.id:
-            is_owner = True
-            is_admin = True
-    
-    # Информация об админе (уже может быть загружен через relationship, но на всякий случай)
+            .count()
+        )
+
     admin = db.query(User).filter(User.id == channel.admin_user_id).first()
-    
+
     return ChannelDetailResponse(
         id=channel.id,
         name=channel.name,
@@ -271,8 +385,11 @@ async def get_channel(
         category=channel.category,
         tags=channel.tags if channel.tags is not None else [],
         rules=channel.rules,
+        recipe_visibility_mode=normalize_channel_visibility_mode(
+            channel.recipe_visibility_mode
+        ),
         auto_publish_to_feed=channel.auto_publish_to_feed if channel.auto_publish_to_feed is not None else True,
-        auto_publish_to_menu=channel.auto_publish_to_menu if channel.auto_publish_to_menu is not None else True,
+        auto_publish_to_menu=channel.auto_publish_to_menu if channel.auto_publish_to_menu is not None else False,
         allow_comments=channel.allow_comments if channel.allow_comments is not None else True,
         allow_likes=channel.allow_likes if channel.allow_likes is not None else True,
         allow_reposts=channel.allow_reposts if channel.allow_reposts is not None else True,
@@ -290,6 +407,9 @@ async def get_channel(
         is_member=is_member,
         is_admin=is_admin,
         channel_notifications_enabled=channel_notifications_enabled,
+        membership_status=m_status,
+        can_view_posts=can_posts,
+        pending_join_requests_count=pending_count,
     )
 
 
@@ -299,6 +419,7 @@ async def list_channels(
     offset: int = Query(0, ge=0),
     search: Optional[str] = Query(None, description="Поиск по названию и описанию"),
     subscribed: Optional[bool] = Query(None, description="Мои каналы (требует авторизации)"),
+    mine: Optional[bool] = Query(None, description="Каналы, где я создатель (включая приватные)"),
     recommended: Optional[bool] = Query(None, description="Рекомендованные каналы"),
     catalog: Optional[bool] = Query(None, description="Каталог всех каналов"),
     category: Optional[str] = Query(None, description="Фильтр по категории/тематике"),
@@ -320,22 +441,56 @@ async def list_channels(
     - category: Фильтр по категории
     - sort: Сортировка (popular, new, members)
     """
-    query = db.query(Channel).filter(Channel.is_public == True)
-    
-    # Мои каналы
-    if subscribed and current_user:
-        query = query.join(ChannelMember).filter(
-            ChannelMember.user_id == current_user.id,
-            ChannelMember.channel_id == Channel.id
+    # Каналы, где пользователь создатель (публичные и приватные)
+    if mine:
+        if not current_user:
+            return {"items": [], "total": 0}
+        query = (
+            db.query(Channel)
+            .filter(Channel.admin_user_id == current_user.id)
+            .order_by(Channel.created_at.desc())
         )
-    # Рекомендованные (улучшенный алгоритм)
+    # Участник или создатель (подписки + свои каналы)
+    elif subscribed:
+        if not current_user:
+            return {"items": [], "total": 0}
+        member_channel_ids = (
+            db.query(ChannelMember.channel_id)
+            .filter(
+                ChannelMember.user_id == current_user.id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+            )
+        )
+        query = db.query(Channel).filter(
+            or_(
+                Channel.id.in_(member_channel_ids),
+                Channel.admin_user_id == current_user.id,
+            )
+        ).order_by(Channel.created_at.desc())
     elif recommended:
+        query = db.query(Channel).filter(Channel.is_public.is_(True))
+    elif search and search.strip():
+        term = f"%{search.strip()}%"
+        query = db.query(Channel).filter(
+            or_(
+                Channel.name.ilike(term),
+                Channel.slug.ilike(term),
+            )
+        )
+    else:
+        query = db.query(Channel).filter(Channel.is_public.is_(True))
+
+    # Рекомендованные (улучшенный алгоритм)
+    if recommended:
         if current_user:
             # Исключаем каналы, на которые пользователь уже подписан
-            subscribed_channel_ids = db.query(ChannelMember.channel_id).filter(
-                ChannelMember.user_id == current_user.id
-            ).subquery()
-            query = query.filter(~Channel.id.in_(subscribed_channel_ids))
+            subscribed_channel_ids = active_member_channel_ids_subquery(
+                db, current_user.id
+            )
+            query = query.filter(
+                ~Channel.id.in_(subscribed_channel_ids),
+                Channel.admin_user_id != current_user.id,
+            )
             
             # Улучшенный алгоритм рекомендаций:
             # 1. Приоритет каналам с активностью за последние 7 дней
@@ -348,7 +503,8 @@ async def list_channels(
                 ChannelMember
             ).filter(
                 ChannelMember.user_id == current_user.id,
-                Channel.category.isnot(None)
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+                Channel.category.isnot(None),
             ).distinct().all()
             subscribed_categories_list = [cat[0] for cat in subscribed_categories if cat[0]]
             
@@ -442,7 +598,7 @@ async def list_channels(
     items = []
     for ch in channels:
         try:
-            items.append(ChannelResponse.model_validate(ch))
+            items.append(_build_channel_response(db, ch, current_user))
         except Exception as e:
             # Логируем ошибку, но продолжаем обработку других каналов
             import logging
@@ -478,26 +634,41 @@ async def join_channel(
     ).first()
     
     if existing:
+        if existing.status == MEMBER_STATUS_PENDING:
+            return JoinChannelResponse(
+                joined=False,
+                pending=True,
+                members_count=channel.members_count or 0,
+                membership_status=MEMBER_STATUS_PENDING,
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already a member of this channel"
+            detail="Already a member of this channel",
         )
-    
-    # Добавляем участника
+
+    if channel.is_public:
+        member_status = MEMBER_STATUS_ACTIVE
+    else:
+        member_status = MEMBER_STATUS_PENDING
+
     member = ChannelMember(
         channel_id=channel_id,
         user_id=current_user.id,
         role="member",
+        status=member_status,
     )
     db.add(member)
-    
-    # Обновляем счетчик
-    channel.members_count = (channel.members_count or 0) + 1
+
+    if member_status == MEMBER_STATUS_ACTIVE:
+        sync_channel_members_count(db, channel_id)
     db.commit()
-    
+    db.refresh(channel)
+
     return JoinChannelResponse(
-        joined=True,
-        members_count=channel.members_count
+        joined=member_status == MEMBER_STATUS_ACTIVE,
+        pending=member_status == MEMBER_STATUS_PENDING,
+        members_count=channel.members_count or 0,
+        membership_status=member_status,
     )
 
 
@@ -527,24 +698,169 @@ async def leave_channel(
             detail="Not a member of this channel"
         )
     
-    # Админ не может покинуть канал (нужно передать права или удалить канал)
-    if member.role == "admin":
+    if member.role in ("owner", "admin"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin cannot leave channel. Transfer admin rights or delete channel."
+            detail="Owner or admin cannot leave channel. Transfer rights or delete channel.",
         )
-    
-    # Удаляем участника
+
     db.delete(member)
-    
-    # Обновляем счетчик
-    channel.members_count = max((channel.members_count or 1) - 1, 0)
+    sync_channel_members_count(db, channel_id)
     db.commit()
-    
+    db.refresh(channel)
+
     return JoinChannelResponse(
         joined=False,
-        members_count=channel.members_count
+        pending=False,
+        members_count=channel.members_count or 0,
+        membership_status="none",
     )
+
+
+@router.get(
+    "/{channel_id}/join-requests",
+    response_model=dict,
+)
+async def list_channel_join_requests(
+    channel_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Заявки на вступление в приватный канал (для владельца / админа / модератора)."""
+    channel = db.query(Channel).filter(Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel not found",
+        )
+    _require_staff(db, channel, current_user)
+
+    rows = (
+        db.query(ChannelMember, User)
+        .join(User, ChannelMember.user_id == User.id)
+        .filter(
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.status == MEMBER_STATUS_PENDING,
+        )
+        .order_by(ChannelMember.joined_at.asc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    total = (
+        db.query(func.count(ChannelMember.id))
+        .filter(
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.status == MEMBER_STATUS_PENDING,
+        )
+        .scalar()
+        or 0
+    )
+    items = []
+    for m, u in rows:
+        items.append(
+            ChannelJoinRequestResponse(
+                id=m.id,
+                user_id=m.user_id,
+                channel_id=m.channel_id,
+                joined_at=m.joined_at,
+                user={
+                    "id": u.id,
+                    "name": u.name,
+                    "username": u.username,
+                    "avatar_url": u.avatar_url,
+                },
+            )
+        )
+    return {"items": items, "total": total}
+
+
+@router.post(
+    "/{channel_id}/join-requests/{user_id}/approve",
+    response_model=JoinChannelResponse,
+)
+async def approve_channel_join_request(
+    channel_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    channel = db.query(Channel).filter(Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel not found",
+        )
+    _require_staff(db, channel, current_user)
+
+    pending = get_membership(db, channel_id, user_id)
+    if not pending or pending.status != MEMBER_STATUS_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Join request not found",
+        )
+    pending.status = MEMBER_STATUS_ACTIVE
+    sync_channel_members_count(db, channel_id)
+    db.commit()
+    db.refresh(channel)
+
+    try:
+        from app.models.notification import Notification
+
+        db.add(
+            Notification(
+                user_id=user_id,
+                type="channel_join_approved",
+                entity_type="channel",
+                entity_id=channel_id,
+                actor_id=current_user.id,
+                title=f"Вас приняли в канал «{channel.name}»",
+                body="Теперь доступны все публикации канала.",
+                data={"channel_id": channel_id, "channel_name": channel.name},
+                is_read=False,
+            )
+        )
+        db.commit()
+    except Exception as e:
+        logger.warning("Failed to notify user about join approval: %s", e)
+
+    return JoinChannelResponse(
+        joined=True,
+        pending=False,
+        members_count=channel.members_count or 0,
+        membership_status=MEMBER_STATUS_ACTIVE,
+    )
+
+
+@router.post(
+    "/{channel_id}/join-requests/{user_id}/reject",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def reject_channel_join_request(
+    channel_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    channel = db.query(Channel).filter(Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel not found",
+        )
+    _require_staff(db, channel, current_user)
+
+    pending = get_membership(db, channel_id, user_id)
+    if not pending or pending.status != MEMBER_STATUS_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Join request not found",
+        )
+    db.delete(pending)
+    db.commit()
+    return None
 
 
 @router.patch("/{channel_id}/notifications")
@@ -559,7 +875,7 @@ async def patch_channel_notifications(
         ChannelMember.channel_id == channel_id,
         ChannelMember.user_id == current_user.id,
     ).first()
-    if not member:
+    if not member or member.status != MEMBER_STATUS_ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not a member of this channel",
@@ -607,24 +923,8 @@ async def get_channel_posts(
             detail="Channel not found"
         )
     
-    # Проверяем доступ (если канал приватный, нужна подписка)
-    if not channel.is_public:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
-        is_member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first() is not None
-        
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Channel is private"
-            )
-    
+    _require_can_view_posts(db, channel, current_user)
+
     # Получаем посты с фильтрацией по типу
     query = db.query(Post).filter(
         Post.channel_id == channel_id,
@@ -707,6 +1007,12 @@ async def get_channel_posts(
         for post_id, count in views_subquery:
             views_counts[post_id] = count
     
+    from app.services.post_poll_service import enrich_posts_poll_batch
+
+    poll_bodies = enrich_posts_poll_batch(
+        db, posts, current_user.id if current_user else None
+    )
+
     # Формируем ответ
     posts_data = []
     for post in posts:
@@ -716,6 +1022,8 @@ async def get_channel_posts(
         is_liked = post.id in user_liked_posts
         
         post_response = PostResponse.model_validate(post).model_dump()
+        if post.id in poll_bodies:
+            post_response["body"] = poll_bodies[post.id]
         posts_data.append({
             **post_response,
             "likes_count": likes_count,
@@ -760,36 +1068,22 @@ async def get_channel_members(
             detail="Channel not found"
         )
     
-    # Проверяем доступ (если канал приватный, нужна подписка)
-    if not channel.is_public:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
-        is_member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first() is not None
-        
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Channel is private"
-            )
-    
+    _require_can_view_posts(db, channel, current_user)
+
     # Получаем участников
     members = db.query(ChannelMember, User).join(
         User, ChannelMember.user_id == User.id
     ).filter(
-        ChannelMember.channel_id == channel_id
+        ChannelMember.channel_id == channel_id,
+        ChannelMember.status == MEMBER_STATUS_ACTIVE,
     ).order_by(
         ChannelMember.role.desc(),  # Админы и модераторы первыми
         ChannelMember.joined_at.asc()
     ).limit(limit).offset(offset).all()
     
     total = db.query(func.count(ChannelMember.id)).filter(
-        ChannelMember.channel_id == channel_id
+        ChannelMember.channel_id == channel_id,
+        ChannelMember.status == MEMBER_STATUS_ACTIVE,
     ).scalar() or 0
     
     members_data = []
@@ -817,13 +1111,10 @@ async def create_channel_recipe(
     db: Session = Depends(get_db)
 ):
     """
-    Создать рецепт в канале
-    
-    При публикации рецепта в канале:
-    1. Сохраняется в posts с type='recipe' и channel_id
-    2. Автоматически участвует в поиске по ингредиентам (Menu)
-    3. Отображается в ленте каналов
-    4. Отображается в Menu
+    Создать рецепт в канале.
+
+    visibility=public — в общем Menu/поиске/рекомендациях.
+    visibility=private — только в канале (тариф Creator или Pro).
     """
     from datetime import datetime
     from app.services.moderation_service import ModerationService
@@ -836,7 +1127,12 @@ async def create_channel_recipe(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found"
         )
-    
+
+    has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+    recipe_visibility = resolve_recipe_visibility(
+        request.visibility, channel, has_creator
+    )
+
     # Проверяем, является ли пользователь владельцем, админом или модератором канала
     is_owner = channel.admin_user_id == current_user.id
     
@@ -902,8 +1198,15 @@ async def create_channel_recipe(
         "prep_time_min": request.prep_time_min,
         "cook_time_min": request.cook_time_min,
         "servings": request.servings,
-        "calories": request.calories,
     }
+    apply_nutrition_to_recipe_body(
+        body,
+        calories=request.calories,
+        protein_g=request.protein_g,
+        carbs_g=request.carbs_g,
+        fat_g=request.fat_g,
+        fiber_g=request.fiber_g,
+    )
     # Денормализация для карточек «Меню» / клиентов, читающих только body
     if channel.name:
         body["channel_name"] = channel.name
@@ -920,6 +1223,10 @@ async def create_channel_recipe(
     import json
     logger.info(f"Body JSON: {json.dumps(body, ensure_ascii=False, indent=2)}")
     
+    publish_to = [f"channel:{channel_id}"]
+    if channel.auto_publish_to_feed:
+        publish_to.insert(0, "feed")
+
     post = Post(
         user_id=current_user.id,
         channel_id=channel_id,
@@ -927,10 +1234,11 @@ async def create_channel_recipe(
         title=request.title,
         description=request.description,
         body=body,
-        publish_to=["feed", f"channel:{channel_id}"],
-        visibility="public",
+        publish_to=publish_to,
+        visibility=recipe_visibility,
         tags=request.tags or [],
     )
+    sync_recipe_index_flags(post)
 
     db.add(post)
     channel.posts_count = (channel.posts_count or 0) + 1
@@ -940,9 +1248,32 @@ async def create_channel_recipe(
 
     scores = run_post_moderation(db, post, current_user)
     raise_if_post_rejected(db, post, scores)
+    sync_recipe_index_flags(post)
 
     db.commit()
     db.refresh(post)
+
+    try:
+        from app.services.analytics_service import AnalyticsService
+
+        AnalyticsService(db).log_event(
+            event_type="recipe_created",
+            entity_type="post",
+            entity_id=post.id,
+            user_id=current_user.id,
+            author_id=current_user.id,
+            metadata={
+                "channel_id": channel_id,
+                "visibility": recipe_visibility,
+                "is_global_visible": post.is_global_visible,
+                "recipe_visibility_mode": channel.recipe_visibility_mode,
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Analytics recipe_created failed: {e}")
+
+    if post.is_global_visible:
+        invalidate_recipe_search_cache()
     
     # Инвалидируем кэш ленты для всех подписчиков канала
     if post.status == "published":
@@ -954,7 +1285,8 @@ async def create_channel_recipe(
             
             # Получаем всех подписчиков канала
             channel_members = db.query(ChannelMember.user_id).filter(
-                ChannelMember.channel_id == channel_id
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
             ).all()
             
             # Инвалидируем кэш для каждого подписчика
@@ -1099,7 +1431,8 @@ async def create_channel_post(
             feed_service = FeedService(db=db, redis_client=redis_client)
 
             channel_members = db.query(ChannelMember.user_id).filter(
-                ChannelMember.channel_id == channel_id
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
             ).all()
 
             for member_user_id, in channel_members:
@@ -1181,6 +1514,15 @@ async def update_channel_post(
     if request.tags is not None:
         post.tags = request.tags
     
+    visibility_changed = False
+    if request.visibility is not None and post.type == "recipe":
+        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+        new_vis = resolve_recipe_visibility(request.visibility, channel, has_creator)
+        if new_vis != post.visibility:
+            visibility_changed = True
+            post.visibility = new_vis
+            sync_recipe_index_flags(post)
+
     # Обновляем body для рецептов
     if post.type == "recipe":
         body = post.body or {}
@@ -1195,8 +1537,14 @@ async def update_channel_post(
             body["cook_time_min"] = request.cook_time_min
         if request.servings is not None:
             body["servings"] = request.servings
-        if request.calories is not None:
-            body["calories"] = request.calories
+        apply_nutrition_to_recipe_body(
+            body,
+            calories=request.calories,
+            protein_g=request.protein_g,
+            carbs_g=request.carbs_g,
+            fat_g=request.fat_g,
+            fiber_g=request.fiber_g,
+        )
         
         post.body = body
     
@@ -1205,9 +1553,57 @@ async def update_channel_post(
         body = post.body or {}
         body["media"] = [media.model_dump() for media in request.media]
         post.body = body
+
+    # Обновляем ссылку (link-пост)
+    if post.type == "link" and request.link is not None:
+        from app.services.link_preview_service import build_link_body
+
+        try:
+            link_body = build_link_body(request.link.url, request.link.preview)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        body = post.body or {}
+        body.update(link_body)
+        post.body = body
+
+    if post.type == "poll" and request.poll is not None:
+        from app.services.post_poll_service import update_poll_in_post
+
+        try:
+            update_poll_in_post(
+                db, post, request.poll.question, request.poll.options
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
     
     db.commit()
     db.refresh(post)
+
+    if visibility_changed:
+        invalidate_recipe_search_cache()
+        try:
+            from app.services.analytics_service import AnalyticsService
+
+            AnalyticsService(db).log_event(
+                event_type="recipe_visibility_changed",
+                entity_type="post",
+                entity_id=post.id,
+                user_id=current_user.id,
+                author_id=post.user_id,
+                metadata={
+                    "channel_id": channel_id,
+                    "visibility": post.visibility,
+                    "is_global_visible": post.is_global_visible,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Analytics recipe_visibility_changed failed: {e}")
     
     # Инвалидируем кэш ленты
     if post.status == "published":
@@ -1219,7 +1615,8 @@ async def update_channel_post(
             
             # Получаем всех подписчиков канала
             channel_members = db.query(ChannelMember.user_id).filter(
-                ChannelMember.channel_id == channel_id
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
             ).all()
             
             # Инвалидируем кэш для каждого подписчика
@@ -1297,7 +1694,8 @@ async def delete_channel_post(
         
         # Получаем всех подписчиков канала
         channel_members = db.query(ChannelMember.user_id).filter(
-            ChannelMember.channel_id == channel_id
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
         ).all()
         
         # Инвалидируем кэш для каждого подписчика
@@ -1337,9 +1735,9 @@ async def get_channels_feed(
         query = query.filter(Post.channel_id == channel_id)
     # Если пользователь авторизован, показываем посты из его каналов
     elif current_user:
-        subscribed_channels = db.query(ChannelMember.channel_id).filter(
-            ChannelMember.user_id == current_user.id
-        ).subquery()
+        subscribed_channels = active_member_channel_ids_subquery(
+            db, current_user.id
+        )
         query = query.filter(
             (Post.channel_id.in_(subscribed_channels)) |
             (Post.channel_id.is_(None))  # Посты без канала (личные)
@@ -1402,22 +1800,8 @@ async def get_channel_recipes(
             detail="Channel not found"
         )
     
-    if not channel.is_public:
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
-        is_member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first() is not None
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Channel is private"
-            )
-    
+    _require_can_view_posts(db, channel, current_user)
+
     from app.models.like import Like
     from app.models.comment import Comment
     from app.schemas.post import PostResponse
@@ -1517,16 +1901,20 @@ async def update_member_role(
         )
     
     member.role = request.role
+    if request.role in ("admin", "moderator"):
+        member.status = MEMBER_STATUS_ACTIVE
+    sync_channel_members_count(db, channel_id)
     db.commit()
     db.refresh(member)
-    
+
     user = db.query(User).filter(User.id == user_id).first()
-    
+
     return ChannelMemberResponse(
         id=member.id,
         user_id=member.user_id,
         channel_id=member.channel_id,
         role=member.role,
+        status=member.status,
         joined_at=member.joined_at,
         user={
             "id": user.id,
@@ -1582,11 +1970,10 @@ async def remove_member(
             detail="Cannot remove channel owner"
         )
     
-    channel.members_count = max(0, channel.members_count - 1)
-    
     db.delete(member)
+    sync_channel_members_count(db, channel_id)
     db.commit()
-    
+
     return {"message": "Member removed successfully"}
 
 

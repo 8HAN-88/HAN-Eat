@@ -1,11 +1,17 @@
 // Экран уведомлений
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../../services/notification_service.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../application/unread_notifications_provider.dart';
+
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({Key? key}) : super(key: key);
+  const NotificationsScreen({super.key});
   
   @override
   ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -17,6 +23,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _hasMore = true;
   int _offset = 0;
   int _unreadCount = 0;
+  Object? _loadError;
   final ScrollController _scrollController = ScrollController();
   
   @override
@@ -51,6 +58,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _notifications = [];
         _offset = 0;
         _hasMore = true;
+        _loadError = null;
       }
     });
     
@@ -69,11 +77,18 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _offset += response.notifications.length;
         _hasMore = response.hasMore;
         _unreadCount = response.unreadCount;
+        _loadError = null;
       });
+      ref.read(unreadNotificationsCountProvider.notifier).refresh();
     } catch (e) {
       if (mounted) {
+        setState(() => _loadError = e);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки уведомлений: $e')),
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось загрузить уведомления'),
+            ),
+          ),
         );
       }
     } finally {
@@ -126,10 +141,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           _unreadCount = (_unreadCount - 1).clamp(0, double.infinity).toInt();
         }
       });
+      ref.read(unreadNotificationsCountProvider.notifier).refresh();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
@@ -158,7 +174,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         }
         _unreadCount = 0;
       });
-      
+      ref.read(unreadNotificationsCountProvider.notifier).refresh();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Все уведомления помечены как прочитанные')),
@@ -167,7 +184,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
@@ -198,11 +215,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (channelId != null) {
         context.push('/channel/$channelId/post/${notification.entityId}');
       } else {
-        // TODO: открыть обычный пост
+        context.push('/post/${notification.entityId}');
       }
     } else if (notification.entityType == 'user' && notification.entityId != null) {
-      // TODO: открыть профиль
-      // context.push('/profile?userId=${notification.entityId}');
+      context.push('${ProfileRoute.path}?userId=${notification.entityId}');
+    } else if (notification.type == 'subscription_expiring' ||
+        notification.type == 'subscription_expired' ||
+        notification.type == 'subscription_refund_requested' ||
+        notification.type == 'subscription_refund_approved' ||
+        notification.type == 'subscription_refund_rejected' ||
+        notification.data?['route'] == 'subscription') {
+      context.push(SubscriptionRoute.path);
+    } else if (notification.type == 'post_scheduled_published') {
+      final postId = notification.entityId ?? notification.data?['post_id'];
+      final channelId = notification.data?['channel_id'];
+      if (channelId != null && postId != null) {
+        context.push('/channel/$channelId/post/$postId');
+      } else if (postId != null) {
+        final id = postId is int ? postId : int.tryParse('$postId');
+        if (id != null && id > 0) {
+          context.push(PostFeedRoute.pathFor(id));
+        }
+      }
     }
   }
   
@@ -230,14 +264,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return Icons.check_circle;
       case 'moderation_rejected':
         return Icons.cancel;
-      case 'channel_post':
-        return Icons.article;
-      case 'channel_recipe':
-        return Icons.restaurant_menu;
-      case 'channel_video':
-        return Icons.videocam;
-      case 'channel_announcement':
-        return Icons.campaign;
+      case 'moderation_warning':
+        return Icons.warning_amber_outlined;
+      case 'subscription_expiring':
+      case 'subscription_expired':
+        return Icons.workspace_premium_outlined;
+      case 'subscription_refund_requested':
+        return Icons.hourglass_top_outlined;
+      case 'subscription_refund_approved':
+        return Icons.check_circle_outline;
+      case 'subscription_refund_rejected':
+        return Icons.money_off_outlined;
+      case 'post_scheduled_published':
+        return Icons.schedule_send_outlined;
       default:
         return Icons.notifications;
     }
@@ -259,6 +298,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return Colors.green;
       case 'moderation_rejected':
         return Colors.red;
+      case 'moderation_warning':
+        return Colors.orange;
       default:
         return Colors.grey;
     }
@@ -304,28 +345,27 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body: RefreshIndicator(
         onRefresh: () => _loadNotifications(refresh: true),
         child: _notifications.isEmpty && !_isLoading
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.notifications_none,
-                      size: 64,
-                      color: Colors.grey[400],
+            ? (_loadError != null
+                ? AppEmptyState(
+                    icon: Icons.cloud_off_rounded,
+                    title: 'Не удалось загрузить',
+                    subtitle: userVisibleError(
+                      _loadError!,
+                      fallback: 'Проверьте сеть и попробуйте снова',
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Нет уведомлений',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[600],
-                      ),
+                    action: FilledButton(
+                      onPressed: () => _loadNotifications(refresh: true),
+                      child: const Text('Повторить'),
                     ),
-                  ],
-                ),
-              )
+                  )
+                : const AppEmptyState(
+                    icon: Icons.notifications_none_rounded,
+                    title: 'Нет уведомлений',
+                    subtitle: 'Здесь появятся лайки, комментарии и подписки',
+                  ))
             : ListView.builder(
                 controller: _scrollController,
+                padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
                 itemCount: _notifications.length + (_hasMore ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == _notifications.length) {
@@ -344,7 +384,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     child: Container(
                       color: notification.isRead
                           ? null
-                          : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                          : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
@@ -357,7 +397,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
                               color: _getNotificationColor(notification.type)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(

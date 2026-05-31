@@ -44,8 +44,7 @@ class UploadService {
       final mod = ModerationService.moderateText(titleUsed);
 
       // store metadata in Firestore, include moderation status if flagged
-      final docRef =
-          await FirebaseFirestore.instance.collection('community_videos').add({
+      await FirebaseFirestore.instance.collection('community_videos').add({
         'url': downloadUrl,
         'title': titleUsed,
         'uploaderId': uid,

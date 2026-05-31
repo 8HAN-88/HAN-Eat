@@ -1,20 +1,27 @@
 // lib/screens/detail_page.dart
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import '../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../widgets/recipe_network_image.dart';
 import '../models/recipe.dart';
 import '../models/recipe_model.dart';
 import '../features/meal_plan/presentation/add_to_meal_plan_screen.dart';
 import '../services/recipe_comments_service.dart';
+import '../services/comment_service.dart';
+import '../services/recipe_interaction_stats.dart';
 import '../services/author_subscription_service.dart';
 import '../services/auth_service.dart';
-import '../services/api_service.dart';
 import '../services/saved_posts_service.dart';
 import '../services/shopping_service.dart';
+import '../widgets/share_action_sheet.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import 'cooking_mode_screen.dart';
 import '../services/recipe_notes_service.dart';
+import '../utils/recipe_nutrition.dart';
+import '../core/layout/floating_bottom_padding.dart';
+import '../features/settings/application/subscription_status_provider.dart';
+import '../features/subscription/presentation/widgets/nutrition_upsell.dart';
 
 class DetailPage extends StatefulWidget {
   final Recipe recipe;
@@ -41,9 +48,53 @@ class _DetailPageState extends State<DetailPage> {
   List<RecipeComment> _comments = [];
   bool _commentsLoading = false;
   final _commentController = TextEditingController();
+  final _commentFocusNode = FocusNode();
+
+  /// Резерв под закреплённый композер комментариев, чтобы последние комментарии не прятались под панелью.
+  static const double _kCommentComposerScrollReserve = 200;
   int _selectedServings = 1;
   String _recipeNote = '';
   final _noteController = TextEditingController();
+  int? _replyToCommentId;
+  String? _replyToAuthor;
+  double _avgRating = 0;
+  int _ratingCount = 0;
+  final Set<int> _expandedReplyThreads = <int>{};
+  bool _statsDirty = false;
+
+  String get _recipeStatsSource => widget.recipe.source ?? 'spoonacular';
+
+  void _markStatsDirty() => _statsDirty = true;
+
+  void _popWithResult() {
+    if (_statsDirty) {
+      Navigator.of(context).pop(
+        RecipeDetailPopResult(
+          recipeId: widget.recipe.id,
+          source: _recipeStatsSource,
+          commentCount: _comments.length,
+          avgRating: _avgRating,
+          ratingCount: _ratingCount,
+        ),
+      );
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _showNotice(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _focusCommentInput() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _commentFocusNode.requestFocus();
+    });
+  }
 
   @override
   void initState() {
@@ -53,6 +104,7 @@ class _DetailPageState extends State<DetailPage> {
     if (_selectedServings < 1) _selectedServings = 1;
     _loadNote();
     _loadComments();
+    _loadRecipeRating();
     _loadSavedStatus();
     if (widget.recipe.author != null && widget.recipe.author!.isNotEmpty) {
       _checkSubscription();
@@ -65,8 +117,29 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   bool get _isSpoonacularRecipe {
-    final source = widget.recipe.source;
-    return source == null || source == 'spoonacular' || (source != 'user' && source != 'channel');
+    final source = widget.recipe.source?.trim().toLowerCase();
+    if (source == 'user' || source == 'channel') return false;
+    if (source == 'spoonacular') return true;
+
+    // Надежный fallback: по домену изображений Spoonacular.
+    final mediaCandidates = <String?>[
+      widget.recipe.image,
+      widget.recipe.sourceImage,
+      widget.recipe.videoThumbnail,
+    ];
+    final hasSpoonacularMedia = mediaCandidates.any((url) {
+      final u = url?.trim().toLowerCase();
+      if (u == null || u.isEmpty) return false;
+      return u.contains('img.spoonacular.com') || u.contains('spoonacular.com');
+    });
+    if (hasSpoonacularMedia) return true;
+
+    // Spoonacular IDs обычно шестизначные/семизначные; у локальных постов обычно маленькие.
+    if (widget.recipe.id >= 100000) return true;
+
+    // Последний fallback: если автора нет — считаем внешним (Spoonacular) рецептом.
+    final hasAuthor = (widget.recipe.author ?? '').trim().isNotEmpty;
+    return !hasAuthor;
   }
 
   Future<void> _loadSavedStatus() async {
@@ -101,17 +174,71 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
   Future<void> _loadComments() async {
     setState(() => _commentsLoading = true);
-    final comments = await RecipeCommentsService.getComments(widget.recipe.id.toString());
-    setState(() {
-      _comments = comments;
-      _commentsLoading = false;
-    });
+    try {
+      debugPrint(
+        '🧵 Load comments for recipe=${widget.recipe.id}, source=${widget.recipe.source}, spoonacular=$_isSpoonacularRecipe',
+      );
+      if (_isSpoonacularRecipe) {
+        final comments =
+            await RecipeCommentsService.getComments(widget.recipe.id.toString());
+        setState(() {
+          _comments = comments;
+          _commentsLoading = false;
+        });
+        return;
+      }
+
+      final response = await CommentService.getComments(
+        widget.recipe.id,
+        limit: 100,
+        offset: 0,
+      );
+      final mapped = response.comments
+          .map(
+            (c) => RecipeComment(
+              id: c.id,
+              recipeId: c.postId.toString(),
+              author: c.authorName ?? 'Неизвестный',
+              authorAvatar: c.authorAvatar,
+              authorId: c.userId.toString(),
+              text: c.text,
+              parentId: c.parentId,
+              rating: c.rating,
+              createdAt: c.createdAt.millisecondsSinceEpoch ~/ 1000,
+            ),
+          )
+          .toList();
+      setState(() {
+        _comments = mapped;
+        _commentsLoading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _commentsLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadRecipeRating() async {
+    try {
+      final data = _isSpoonacularRecipe
+          ? await RecipeCommentsService.getRecipeRating(widget.recipe.id.toString())
+          : await CommentService.getPostRating(widget.recipe.id);
+      if (!mounted) return;
+      setState(() {
+        _avgRating = (data['rating'] as num?)?.toDouble() ?? 0;
+        _ratingCount = (data['count'] as int?) ?? 0;
+      });
+    } catch (_) {
+      // ignore rating loading errors
+    }
   }
 
   Future<void> _checkSubscription() async {
@@ -143,12 +270,43 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   int? _selectedRating;
+  static const _menuCook = 'cook';
+  static const _menuPlan = 'plan';
+  static const _menuShopping = 'shopping';
+  static const _menuSave = 'save';
+
+  Future<void> _handleMenuAction(String value, Recipe r) async {
+    switch (value) {
+      case _menuCook:
+        if (r.steps.isNotEmpty || (r.translatedSteps?.isNotEmpty == true)) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CookingModeScreen(recipe: r),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Нет пошаговой инструкции')),
+          );
+        }
+        break;
+      case _menuPlan:
+        await _addToMealPlan();
+        break;
+      case _menuShopping:
+        await _addToShoppingList();
+        break;
+      case _menuSave:
+        await _toggleSaved();
+        break;
+    }
+  }
 
   Future<void> _addComment() async {
     final text = _commentController.text.trim();
-    if (text.isEmpty) {
+    if (text.isEmpty && _selectedRating == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите комментарий')),
+        const SnackBar(content: Text('Введите комментарий или выберите оценку')),
       );
       return;
     }
@@ -168,43 +326,79 @@ class _DetailPageState extends State<DetailPage> {
     final authorAvatar = currentUser.avatarUrl;
 
     try {
-    final comment = await RecipeCommentsService.addComment(
-      widget.recipe.id.toString(),
-      author,
-      text,
-        authorAvatar: authorAvatar,
-      authorId: authorId,
-      rating: _selectedRating,
-    );
+      if (_isSpoonacularRecipe) {
+        final selectedRating = _selectedRating;
+        final comment = await RecipeCommentsService.addComment(
+          widget.recipe.id.toString(),
+          author,
+          text,
+          authorAvatar: authorAvatar,
+          authorId: authorId,
+          parentId: _replyToCommentId,
+          rating: selectedRating,
+        );
 
-    if (comment != null) {
-      _commentController.clear();
-      _selectedRating = null;
-      _loadComments();
-        if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Комментарий добавлен')),
-      );
+        if (comment != null) {
+          if (mounted) {
+            setState(() {
+              _comments.removeWhere((c) => c.id == comment.id);
+              _comments = [comment, ..._comments];
+              _commentController.clear();
+              _selectedRating = null;
+              _replyToCommentId = null;
+              _replyToAuthor = null;
+            });
+            _markStatsDirty();
+          }
+          if (selectedRating != null && selectedRating > 0) {
+            await _loadRecipeRating();
+            if (mounted) _markStatsDirty();
+          }
+          _showNotice('Комментарий добавлен');
+        } else {
+          _showNotice('Ошибка при добавлении комментария');
         }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ошибка при добавлении комментария')),
-        );
+        return;
       }
-    }
+
+      final created = await CommentService.createComment(
+        widget.recipe.id,
+        text,
+        parentId: _replyToCommentId,
+        rating: _selectedRating,
+      );
+      final optimistic = RecipeComment(
+        id: created.id,
+        recipeId: created.postId.toString(),
+        author: created.authorName ?? author,
+        authorAvatar: created.authorAvatar ?? authorAvatar,
+        authorId: created.userId.toString(),
+        text: created.text,
+        rating: created.rating,
+        parentId: created.parentId,
+        createdAt: created.createdAt.millisecondsSinceEpoch ~/ 1000,
+      );
+      if (mounted) {
+        setState(() {
+          _comments = [optimistic, ..._comments];
+          _commentController.clear();
+          _selectedRating = null;
+          _replyToCommentId = null;
+          _replyToAuthor = null;
+        });
+        _markStatsDirty();
+      }
+      _showNotice('Комментарий добавлен');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка при добавлении комментария: $e')),
-        );
-      }
+      _showNotice(
+        userVisibleError(e, fallback: 'Не удалось добавить комментарий'),
+      );
     }
   }
 
   Future<void> _deleteComment(RecipeComment comment) async {
     final currentUser = await AuthService.getCurrentUser();
-    final authorId = currentUser?.uid;
+    final authorId = currentUser?.id.toString();
 
     if (comment.authorId != authorId) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -213,20 +407,42 @@ class _DetailPageState extends State<DetailPage> {
       return;
     }
 
-    final success = await RecipeCommentsService.deleteComment(
-      widget.recipe.id.toString(),
-      comment.id,
-      authorId: authorId,
-    );
-
-    if (success) {
-      _loadComments();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Комментарий удален')),
+    bool success;
+    if (_isSpoonacularRecipe) {
+      success = await RecipeCommentsService.deleteComment(
+        widget.recipe.id.toString(),
+        comment.id,
+        authorId: authorId,
       );
     } else {
+      try {
+        await CommentService.deleteComment(comment.id);
+        success = true;
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                userVisibleError(e, fallback: 'Не удалось удалить комментарий'),
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    if (success) {
+      await _loadComments();
+      _markStatsDirty();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Комментарий удален')),
+        );
+      }
+    } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ошибка при удалении комментария')),
+        const SnackBar(content: Text('Не удалось удалить комментарий')),
       );
     }
   }
@@ -240,7 +456,7 @@ class _DetailPageState extends State<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка при добавлении в избранное: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось добавить в избранное'))),
         );
       }
     }
@@ -270,7 +486,7 @@ class _DetailPageState extends State<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка при сохранении: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     } finally {
@@ -321,48 +537,7 @@ class _DetailPageState extends State<DetailPage> {
     return null;
   }
 
-  double? _getFat(Recipe recipe) {
-    final nutrition = recipe.nutrition;
-    if (nutrition == null) return null;
-    
-    // Сначала пробуем прямые ключи
-    var fat = nutrition['fat'] ?? nutrition['fats'];
-    
-    // Если нет, пробуем извлечь из массива nutrients
-    if (fat == null) {
-      final nutrients = nutrition['nutrients'];
-      if (nutrients is List) {
-        for (var n in nutrients) {
-          if (n is Map) {
-            final name = (n['name']?.toString() ?? '').toLowerCase();
-            final title = (n['title']?.toString() ?? '').toLowerCase();
-            final searchName = title.isNotEmpty ? title : name;
-            if (searchName.contains('fat') && searchName.contains('total')) {
-              final amount = n['amount'];
-              if (amount != null) {
-                if (amount is num) {
-                  fat = amount.toDouble();
-                  break;
-                } else if (amount is String) {
-                  fat = double.tryParse(amount);
-                  if (fat != null) break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if (fat == null) return null;
-    
-    if (fat is num) return fat.toDouble();
-    if (fat is String) {
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(fat);
-      if (match != null) return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
+  double? _getFat(Recipe recipe) => parseNutritionFat(recipe.nutrition);
 
   double? _getCarbs(Recipe recipe) {
     final nutrition = recipe.nutrition;
@@ -408,10 +583,41 @@ class _DetailPageState extends State<DetailPage> {
     return null;
   }
 
+  Widget _nutritionChip(
+    BuildContext context, {
+    required bool canViewNutrition,
+    required IconData icon,
+    required String label,
+    required Color tint,
+  }) {
+    final locked = !canViewNutrition;
+    return ActionChip(
+      avatar: Icon(icon, size: 18, color: tint),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (locked) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.lock_outline,
+              size: 16,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ],
+      ),
+      backgroundColor: tint.withValues(alpha: 0.1),
+      onPressed: locked
+          ? () => showNutritionUpsellSheet(context)
+          : null,
+    );
+  }
+
   Future<void> _addToMealPlan() async {
     try {
       final recipeModel = _convertToRecipeModel(widget.recipe);
-      await Navigator.of(context).push<bool>(
+      await Navigator.of(context).push<DateTime>(
         MaterialPageRoute(
           builder: (_) => AddToMealPlanScreen(recipe: recipeModel),
         ),
@@ -419,7 +625,7 @@ class _DetailPageState extends State<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Не удалось открыть план питания: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось открыть план питания'))),
         );
       }
     }
@@ -457,11 +663,7 @@ class _DetailPageState extends State<DetailPage> {
 
   /// Поделиться рецептом: только название и ссылка на открытие в приложении (без полного текста).
   void _shareRecipe() {
-    final r = widget.recipe;
-    final title = r.translatedTitle ?? r.title;
-    final link = 'haneat://recipe/${r.id}';
-    final text = '$title\n\nОткрыть в приложении H.A.N. Eat: $link';
-    Share.share(text, subject: title);
+    ShareActionSheet.showForRecipe(context, recipe: widget.recipe);
   }
 
   /// Масштабирует количество в строке ингредиента (например "200 г муки" -> при factor 2 "400 г муки").
@@ -497,6 +699,10 @@ class _DetailPageState extends State<DetailPage> {
       steps: stepsList,
       image: recipe.image,
       updatedAt: DateTime.now(),
+      calories: recipe.calories?.toDouble(),
+      proteinG: recipe.nutrientGrams('Protein'),
+      carbsG: recipe.nutrientGrams('Carbohydrates'),
+      fatG: recipe.nutrientGrams('Fat'),
     );
   }
 
@@ -515,7 +721,15 @@ class _DetailPageState extends State<DetailPage> {
     final steps = r.translatedSteps?.isNotEmpty == true
         ? r.translatedSteps!
         : r.steps;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _popWithResult();
+      },
+      child: Scaffold(
+      resizeToAvoidBottomInset: true,
+      bottomNavigationBar: _buildCommentComposerBar(context),
       body: CustomScrollView(
         slivers: [
           // Hero изображение или видео
@@ -526,19 +740,19 @@ class _DetailPageState extends State<DetailPage> {
             leading: Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 shape: BoxShape.circle,
               ),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: _popWithResult,
               ),
             ),
             actions: [
               Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -550,82 +764,7 @@ class _DetailPageState extends State<DetailPage> {
               Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.menu_book, color: Colors.white),
-                  tooltip: 'Режим готовки',
-                  onPressed: () {
-                    if (r.steps.isNotEmpty || (r.translatedSteps?.isNotEmpty == true)) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => CookingModeScreen(recipe: r),
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Нет пошаговой инструкции')),
-                      );
-                    }
-                  },
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.calendar_today, color: Colors.white),
-                  tooltip: 'Добавить в план питания',
-                  onPressed: () => _addToMealPlan(),
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
-                  tooltip: 'Добавить ингредиенты в список покупок',
-                  onPressed: () => _addToShoppingList(),
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: _isSavedLoading
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    : IconButton(
-                        icon: Icon(
-                          _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          color: Colors.white,
-                        ),
-                        tooltip: _isSaved ? 'Удалить из сохраненных' : 'Сохранить',
-                        onPressed: _toggleSaved,
-                      ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
@@ -635,6 +774,68 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                   tooltip: fav ? 'Удалить из избранного' : 'Добавить в избранное',
                   onPressed: _toggle,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  shape: BoxShape.circle,
+                ),
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_horiz, color: Colors.white),
+                  tooltip: 'Действия',
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 10,
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  onSelected: (value) => _handleMenuAction(value, r),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      value: _menuCook,
+                      child: Row(
+                        children: [
+                          Icon(Icons.menu_book, size: 20),
+                          SizedBox(width: 10),
+                          Text('Режим готовки'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: _menuPlan,
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 20),
+                          SizedBox(width: 10),
+                          Text('В план питания'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: _menuShopping,
+                      child: Row(
+                        children: [
+                          Icon(Icons.shopping_cart_outlined, size: 20),
+                          SizedBox(width: 10),
+                          Text('В список покупок'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: _menuSave,
+                      child: Row(
+                        children: [
+                          Icon(
+                            _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(_isSaved ? 'Убрать из сохраненных' : 'Сохранить'),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -683,45 +884,101 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                   ],
                   const SizedBox(height: 16),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 480),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Opacity(opacity: value, child: child);
+                    },
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Chip(
+                          avatar: const Icon(Icons.favorite, color: Colors.red, size: 18),
+                          label: Text('${r.likesCount ?? 0}'),
+                        ),
+                        Chip(
+                          avatar: const Icon(Icons.comment_outlined, size: 18),
+                          label: Text('${_comments.length}'),
+                        ),
+                        Chip(
+                          avatar: const Icon(Icons.star, color: Colors.amber, size: 18),
+                          label: Text(
+                            _ratingCount > 0
+                                ? '${_avgRating.toStringAsFixed(1)} ($_ratingCount)'
+                                : '0.0 (0)',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   // Метаданные (калории и БЖУ)
-                  if (r.calories != null || _getProtein(r) != null || _getFat(r) != null || _getCarbs(r) != null)
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(opacity: value, child: child);
+                  if (r.calories != null ||
+                      _getProtein(r) != null ||
+                      _getFat(r) != null ||
+                      _getCarbs(r) != null)
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final canViewNutrition =
+                            ref.watch(canViewRecipeNutritionProvider);
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOut,
+                          builder: (context, value, child) {
+                            return Opacity(opacity: value, child: child);
+                          },
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (r.calories != null)
+                                _nutritionChip(
+                                  context,
+                                  canViewNutrition: canViewNutrition,
+                                  icon: Icons.local_fire_department_outlined,
+                                  label: canViewNutrition
+                                      ? '${r.calories} ккал'
+                                      : 'Калории',
+                                  tint: Colors.orange,
+                                ),
+                              if (_getProtein(r) != null)
+                                _nutritionChip(
+                                  context,
+                                  canViewNutrition: canViewNutrition,
+                                  icon: Icons.fitness_center,
+                                  label: canViewNutrition
+                                      ? '${_getProtein(r)!.toStringAsFixed(1)} г белков'
+                                      : 'Белки',
+                                  tint: Colors.blue,
+                                ),
+                              if (_getFat(r) != null)
+                                _nutritionChip(
+                                  context,
+                                  canViewNutrition: canViewNutrition,
+                                  icon: Icons.opacity,
+                                  label: canViewNutrition
+                                      ? '${_getFat(r)!.toStringAsFixed(1)} г жиров'
+                                      : 'Жиры',
+                                  tint: Colors.yellow.shade700,
+                                ),
+                              if (_getCarbs(r) != null)
+                                _nutritionChip(
+                                  context,
+                                  canViewNutrition: canViewNutrition,
+                                  icon: Icons.eco,
+                                  label: canViewNutrition
+                                      ? '${_getCarbs(r)!.toStringAsFixed(1)} г углеводов'
+                                      : 'Углеводы',
+                                  tint: Colors.green,
+                                ),
+                            ],
+                          ),
+                        );
                       },
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          if (r.calories != null)
-                            Chip(
-                              avatar: const Icon(Icons.local_fire_department_outlined),
-                              label: Text('${r.calories} ккал'),
-                              backgroundColor: Colors.orange.withOpacity(0.1),
-                            ),
-                          if (_getProtein(r) != null)
-                            Chip(
-                              avatar: const Icon(Icons.fitness_center),
-                              label: Text('${_getProtein(r)!.toStringAsFixed(1)} г белков'),
-                              backgroundColor: Colors.blue.withOpacity(0.1),
-                            ),
-                          if (_getFat(r) != null)
-                            Chip(
-                              avatar: const Icon(Icons.opacity),
-                              label: Text('${_getFat(r)!.toStringAsFixed(1)} г жиров'),
-                              backgroundColor: Colors.yellow.withOpacity(0.1),
-                            ),
-                          if (_getCarbs(r) != null)
-                            Chip(
-                              avatar: const Icon(Icons.eco),
-                              label: Text('${_getCarbs(r)!.toStringAsFixed(1)} г углеводов'),
-                              backgroundColor: Colors.green.withOpacity(0.1),
-                            ),
-                        ],
-                      ),
                     ),
                   const SizedBox(height: 24),
                   // Видео, если есть
@@ -928,7 +1185,7 @@ class _DetailPageState extends State<DetailPage> {
                             final txtRaw = step['step'] ?? 
                                           step['text'] ?? 
                                           step['instruction'] ?? 
-                                          (step is Map ? step.toString() : step);
+                                          (step.toString());
                             // Убираем лишние символы JSON, если это строка-представление Map
                             String txt = txtRaw is String ? txtRaw : txtRaw.toString();
                             // Если это JSON-строка объекта, пытаемся извлечь текст
@@ -959,7 +1216,7 @@ class _DetailPageState extends State<DetailPage> {
                             if (imgUrl != null && imgUrl.isNotEmpty) {
                               debugPrint('🖼️ Шаг $num: найдено изображение $imgUrl');
                             } else {
-                              debugPrint('⚠️ Шаг $num: изображение отсутствует. imgRaw=$imgRaw, step keys=${step is Map ? step.keys.toList() : 'not a map'}');
+                              debugPrint('⚠️ Шаг $num: изображение отсутствует. imgRaw=$imgRaw, step keys=${step.keys.toList()}');
                             }
                             
                             return TweenAnimationBuilder<double>(
@@ -1019,11 +1276,11 @@ class _DetailPageState extends State<DetailPage> {
                                             for (var s in steps) {
                                               final stepImg = s['image'] ?? s['image_url'];
                                               if (stepImg != null && stepImg.toString().isNotEmpty && stepImg.toString() != 'null') {
-                                                allStepImages.add(_getProxyUrl(stepImg.toString()));
+                                                allStepImages.add(stepImg.toString());
                                               }
                                             }
                                             if (allStepImages.isNotEmpty && imgUrl != null) {
-                                              final currentIndex = allStepImages.indexOf(_getProxyUrl(imgUrl!));
+                                              final currentIndex = allStepImages.indexOf(imgUrl);
                                               showFullscreenImageViewer(
                                                 context,
                                                 imageUrls: allStepImages,
@@ -1033,36 +1290,15 @@ class _DetailPageState extends State<DetailPage> {
                                           },
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(12),
-                                            child: Image.network(
-                                              _getProxyUrl(imgUrl),
+                                            child: RecipeNetworkImage(
+                                              rawUrl: imgUrl,
+                                              profile: RecipeImageProfile.card,
                                               height: 180,
                                               width: double.infinity,
                                               fit: BoxFit.cover,
-                                              loadingBuilder: (context, child, loadingProgress) {
-                                                if (loadingProgress == null) return child;
-                                                return Container(
-                                                  height: 180,
-                                                  width: double.infinity,
-                                                  color: Colors.grey[200],
-                                                  child: Center(
-                                                    child: CircularProgressIndicator(
-                                                      value: loadingProgress.expectedTotalBytes != null
-                                                          ? loadingProgress.cumulativeBytesLoaded /
-                                                              loadingProgress.expectedTotalBytes!
-                                                          : null,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              errorBuilder: (_, __, ___) => Container(
-                                              height: 180,
-                                              width: double.infinity,
-                                              color: Colors.grey[300],
-                                              child: const Icon(Icons.error_outline, color: Colors.red),
                                             ),
                                           ),
                                         ),
-                                      ),
                                       ],
                                     ],
                                   ),
@@ -1091,17 +1327,203 @@ class _DetailPageState extends State<DetailPage> {
                     },
                     child: _buildCommentsSection(context),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(
+                    height: 12 +
+                        floatingBottomPadding(context) +
+                        _kCommentComposerScrollReserve,
+                  ),
                 ],
               ),
             ),
           ),
         ],
       ),
+      ),
+    );
+  }
+
+  Widget _buildCommentComposerBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 8,
+      shadowColor: Colors.black26,
+      color: theme.colorScheme.surface,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_replyToCommentId != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Ответ для: ${_replyToAuthor ?? 'пользователя'}',
+                          style: theme.textTheme.bodySmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _replyToCommentId = null;
+                            _replyToAuthor = null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              FutureBuilder(
+                future: AuthService.getCurrentUser(),
+                builder: (context, snapshot) {
+                  final currentUser = snapshot.data;
+                  if (currentUser == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'От имени: ${currentUser.name}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      focusNode: _commentFocusNode,
+                      minLines: 1,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: _replyToCommentId != null
+                            ? 'Ваш ответ…'
+                            : 'Комментарий…',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: _addComment,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      minimumSize: const Size(48, 48),
+                    ),
+                    child: const Icon(Icons.send, size: 20),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 2,
+                runSpacing: 2,
+                children: [
+                  Text(_isSpoonacularRecipe ? 'Оценка рецепта: ' : 'Оценка: '),
+                  ...List.generate(5, (index) {
+                    return IconButton(
+                      visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
+                      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                      padding: EdgeInsets.zero,
+                      splashRadius: 16,
+                      icon: Icon(
+                        _selectedRating != null && index < _selectedRating!
+                            ? Icons.star
+                            : Icons.star_border,
+                        color: Colors.amber,
+                      ),
+                      onPressed: () {
+                        setState(() => _selectedRating = index + 1);
+                      },
+                    );
+                  }),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildCommentsSection(BuildContext context) {
+    final commentIds = _comments.map((c) => c.id).toSet();
+    final topLevelComments = _comments
+        .where((c) => c.parentId == null || !commentIds.contains(c.parentId))
+        .toList();
+    final commentsById = <int, RecipeComment>{
+      for (final c in _comments) c.id: c,
+    };
+    final repliesByParent = <int, List<RecipeComment>>{};
+    for (final comment in _comments) {
+      final parentId = comment.parentId;
+      if (parentId != null) {
+        repliesByParent.putIfAbsent(parentId, () => <RecipeComment>[]).add(comment);
+      }
+    }
+    topLevelComments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    for (final list in repliesByParent.values) {
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+    int rootIdFor(RecipeComment c) {
+      RecipeComment current = c;
+      final visited = <int>{};
+      while (current.parentId != null &&
+          commentsById.containsKey(current.parentId) &&
+          !visited.contains(current.id)) {
+        visited.add(current.id);
+        current = commentsById[current.parentId]!;
+      }
+      return current.id;
+    }
+
+    final repliesByRoot = <int, List<RecipeComment>>{};
+    for (final c in _comments) {
+      if (c.parentId == null) continue;
+      final rootId = rootIdFor(c);
+      repliesByRoot.putIfAbsent(rootId, () => <RecipeComment>[]).add(c);
+    }
+    for (final list in repliesByRoot.values) {
+      list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1109,7 +1531,7 @@ class _DetailPageState extends State<DetailPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Комментарии',
+              'Комментарии (${_comments.length})',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1131,86 +1553,31 @@ class _DetailPageState extends State<DetailPage> {
               ),
           ],
         ),
-        const SizedBox(height: 16),
-        // Форма добавления комментария
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+        const SizedBox(height: 8),
+        if (_ratingCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
               children: [
-                // Показываем имя пользователя из профиля (только для информации)
-                FutureBuilder(
-                  future: AuthService.getCurrentUser(),
-                  builder: (context, snapshot) {
-                    final currentUser = snapshot.data;
-                    if (currentUser != null) {
-                      final userName = currentUser.name ?? currentUser.email ?? 'Пользователь';
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.person, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                            const SizedBox(width: 8),
-                            Text(
-                              'От имени: $userName',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                Icon(Icons.star_rounded, color: Colors.amber.shade600, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  '${_avgRating.toStringAsFixed(1)} из 5',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
-                          ],
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-                TextField(
-                  controller: _commentController,
-                  decoration: const InputDecoration(
-                    labelText: 'Комментарий',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 8),
-                // Выбор рейтинга
-                Row(
-                  children: [
-                    const Text('Рейтинг: '),
-                    ...List.generate(5, (index) {
-                      return IconButton(
-                        icon: Icon(
-                          _selectedRating != null && index < _selectedRating!
-                              ? Icons.star
-                              : Icons.star_border,
-                          color: Colors.amber,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _selectedRating = index + 1;
-                          });
-                        },
-                      );
-                    }),
-                    const Spacer(),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: _addComment,
-                    icon: const Icon(Icons.send, size: 18),
-                    label: const Text('Отправить'),
-                  ),
+                const SizedBox(width: 8),
+                Text(
+                  '($_ratingCount оценок)',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        // Список комментариев
+        const SizedBox(height: 10),
         if (_commentsLoading)
           const Center(child: CircularProgressIndicator())
         else if (_comments.isEmpty)
@@ -1221,75 +1588,182 @@ class _DetailPageState extends State<DetailPage> {
                 ),
           )
         else
-          ..._comments.map((comment) {
+          ...topLevelComments.map((comment) {
+            final replies = repliesByRoot[comment.id] ?? const <RecipeComment>[];
+            final isExpanded = _expandedReplyThreads.contains(comment.id);
             return FutureBuilder(
               future: AuthService.getCurrentUser(),
               builder: (context, snapshot) {
                 final currentUser = snapshot.data;
-                final currentUserId = currentUser?.uid;
-                final canDelete = comment.authorId != null && 
-                                 currentUserId != null &&
-                                 currentUserId == comment.authorId;
-                
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: comment.authorAvatar != null && comment.authorAvatar!.isNotEmpty
-                        ? CircleAvatar(
-                            backgroundImage: NetworkImage(comment.authorAvatar!),
-                            onBackgroundImageError: (_, __) {},
-                          )
-                        : CircleAvatar(
-                            child: Text(comment.author[0].toUpperCase()),
-                          ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            comment.author,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+                final currentUserId = currentUser?.id.toString();
+
+                Widget buildCommentTile(RecipeComment c, {double leftPad = 0}) {
+                  final canDelete = c.authorId != null &&
+                      currentUserId != null &&
+                      currentUserId == c.authorId;
+
+                  return Padding(
+                    padding: EdgeInsets.only(left: leftPad, bottom: 8),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            c.authorAvatar != null && c.authorAvatar!.isNotEmpty
+                                ? CircleAvatar(
+                                    radius: 16,
+                                    backgroundImage: NetworkImage(c.authorAvatar!),
+                                    onBackgroundImageError: (_, __) {},
+                                  )
+                                : CircleAvatar(
+                                    radius: 16,
+                                    child: Text(c.author[0].toUpperCase()),
+                                  ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          c.author,
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      if (c.rating != null)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: List.generate(5, (index) {
+                                            return Icon(
+                                              index < c.rating! ? Icons.star : Icons.star_border,
+                                              size: 14,
+                                              color: Colors.amber,
+                                            );
+                                          }),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(c.text),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _replyToCommentId = c.id;
+                                            _replyToAuthor = c.author;
+                                          });
+                                          _focusCommentInput();
+                                        },
+                                        style: TextButton.styleFrom(
+                                          padding: EdgeInsets.zero,
+                                          visualDensity: const VisualDensity(
+                                            horizontal: -2,
+                                            vertical: -3,
+                                          ),
+                                          minimumSize: const Size(0, 20),
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text('Ответить'),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        _formatDate(c.createdAt),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (canDelete) ...[
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          visualDensity: const VisualDensity(
+                                            horizontal: -4,
+                                            vertical: -4,
+                                          ),
+                                          constraints: const BoxConstraints.tightFor(
+                                            width: 24,
+                                            height: 24,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                                          onPressed: () => _deleteComment(c),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        if (comment.rating != null)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: List.generate(5, (index) {
-                              return Icon(
-                                index < comment.rating! ? Icons.star : Icons.star_border,
-                                size: 16,
-                                color: Colors.amber,
-                              );
-                            }),
-                          ),
-                      ],
+                      ),
                     ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(comment.text),
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatDate(comment.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    trailing: canDelete
-                        ? IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _deleteComment(comment),
-                          )
-                        : Text(
-                            _formatDate(comment.createdAt),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  );
+                }
+
+                return Column(
+                  children: [
+                    buildCommentTile(comment),
+                    if (replies.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 12, bottom: 6),
+                          child: TextButton(
+                            onPressed: () {
+                              setState(() {
+                                if (isExpanded) {
+                                  _expandedReplyThreads.remove(comment.id);
+                                } else {
+                                  _expandedReplyThreads.add(comment.id);
+                                }
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 20),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              isExpanded
+                                  ? 'Скрыть ответы'
+                                  : 'Показать ответы (${replies.length})',
                             ),
                           ),
-                  ),
+                        ),
+                      ),
+                    if (replies.isNotEmpty && isExpanded)
+                      ...replies.map((reply) {
+                        final parentAuthor = reply.parentId != null
+                            ? commentsById[reply.parentId!]?.author
+                            : null;
+                        final mention = (parentAuthor != null && parentAuthor.isNotEmpty)
+                            ? '$parentAuthor, '
+                            : '';
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 18),
+                          child: buildCommentTile(
+                            RecipeComment(
+                              id: reply.id,
+                              recipeId: reply.recipeId,
+                              author: reply.author,
+                              authorAvatar: reply.authorAvatar,
+                              authorId: reply.authorId,
+                              text: '$mention${reply.text}',
+                              parentId: reply.parentId,
+                              rating: reply.rating,
+                              createdAt: reply.createdAt,
+                            ),
+                          ),
+                        );
+                      }),
+                  ],
                 );
               },
             );
@@ -1318,26 +1792,36 @@ class _DetailPageState extends State<DetailPage> {
 
   Widget _buildHeroImage(BuildContext context, Recipe r) {
     // Приоритет: videoThumbnail > image
-    final imageUrl = r.videoThumbnail ?? r.image;
+    final primary = r.videoThumbnail ?? r.image;
+    final fallback = r.sourceImage;
     
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      final proxyUrl = _getProxyUrl(imageUrl);
+    if ((primary != null && primary.isNotEmpty) || (fallback != null && fallback.isNotEmpty)) {
+      final primaryRaw =
+          (primary != null && primary.isNotEmpty) ? primary : fallback!;
       return GestureDetector(
         onTap: () {
-          // Открываем изображение на полный экран
+          final urls = <String>[
+            primaryRaw,
+            if (fallback != null &&
+                fallback.isNotEmpty &&
+                fallback != primaryRaw)
+              fallback,
+          ];
           showFullscreenImageViewer(
             context,
-            imageUrls: [proxyUrl],
+            imageUrls: urls,
             initialIndex: 0,
           );
         },
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              proxyUrl,
+            RecipeNetworkImage(
+              rawUrl: primaryRaw,
+              profile: RecipeImageProfile.detailHero,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildPlaceholder(context),
+              cacheKey: 'hero:${r.id}',
+              errorWidget: _buildPlaceholder(context),
             ),
             // Иконка видео поверх изображения
             if (r.videoUrl != null && r.videoUrl!.isNotEmpty)
@@ -1345,7 +1829,7 @@ class _DetailPageState extends State<DetailPage> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -1379,27 +1863,6 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
-  String _getProxyUrl(String originalUrl) {
-    // Для Flutter Web используем прокси через бэкенд для обхода CORS
-    // Для других платформ используем оригинальный URL
-    if (originalUrl.startsWith('https://img.spoonacular.com') || 
-        originalUrl.startsWith('https://spoonacular.com')) {
-      // Используем прокси только для Spoonacular изображений
-      final baseUrl = '${ApiService.baseUrl}/api/v1';
-      final encodedUrl = Uri.encodeComponent(originalUrl);
-      final proxyUrl = '$baseUrl/recipes/image-proxy?url=$encodedUrl';
-      return proxyUrl;
-    }
-    // Для локальных URL (localhost) и URL из каналов просто возвращаем как есть
-    // Они должны работать напрямую
-    if (originalUrl.startsWith('http://localhost') || 
-        originalUrl.startsWith('http://127.0.0.1') ||
-        originalUrl.startsWith('/api/v1/uploads/')) {
-      return originalUrl;
-    }
-    return originalUrl;
-  }
-
   Widget _buildVideoSection(BuildContext context, Recipe r) {
     return Card(
       elevation: 4,
@@ -1417,10 +1880,11 @@ class _DetailPageState extends State<DetailPage> {
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: r.videoThumbnail != null && r.videoThumbnail!.isNotEmpty
-                    ? Image.network(
-                        _getProxyUrl(r.videoThumbnail!),
+                    ? RecipeNetworkImage(
+                        rawUrl: r.videoThumbnail!,
+                        profile: RecipeImageProfile.detailHero,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorWidget: Container(
                           color: Colors.grey[300],
                           child: const Icon(Icons.video_library, size: 48),
                         ),
@@ -1437,7 +1901,7 @@ class _DetailPageState extends State<DetailPage> {
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -1455,7 +1919,7 @@ class _DetailPageState extends State<DetailPage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
+                  color: Colors.black.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -1613,10 +2077,10 @@ class _AddToShoppingSheetState extends State<_AddToShoppingSheet> {
                         }
                         Navigator.of(context).pop(list);
                       },
-                child: Text('Добавить выбранные ($count)'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 48),
                 ),
+                child: Text('Добавить выбранные ($count)'),
               ),
             ),
           ],

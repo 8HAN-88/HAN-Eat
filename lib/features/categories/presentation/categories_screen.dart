@@ -1,18 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../subscription/presentation/widgets/nutrition_upsell.dart';
+import '../../../core/subscription/recipe_nutrition_access.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/recipe_category.dart';
 import '../../../services/category_service.dart';
 
-class CategoriesScreen extends StatefulWidget {
+class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
   @override
-  State<CategoriesScreen> createState() => _CategoriesScreenState();
+  ConsumerState<CategoriesScreen> createState() => _CategoriesScreenState();
 }
 
-class _CategoriesScreenState extends State<CategoriesScreen> {
+class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
+  Future<void> _openDietSettings() async {
+    final canView = ref.read(canViewRecipeNutritionProvider);
+    if (!canView) {
+      await showNutritionUpsellSheet(context);
+      return;
+    }
+    if (!mounted) return;
+    context.push(DietRoute.path);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -37,8 +52,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          final bottom = floatingBottomPadding(context);
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),
             children: [
               _buildSectionCard(
                 context: context,
@@ -54,7 +70,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 title: 'Диета',
                 subtitle: 'Калории, БЖУ на блюдо, тип диеты',
                 hint: 'Лимиты по калориям и БЖУ помогают подбирать рецепты под ваши цели (похудение, набор массы, ЗОЖ).',
-                onTap: () => context.push(DietRoute.path),
+                onTap: _openDietSettings,
               ),
               _buildCategoryGroup(context, 'Практические', CategoryType.practical, filters),
               _buildCategoryGroup(context, 'Тип приема пищи', CategoryType.mealType, filters),
@@ -167,7 +183,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         style: Theme.of(context).textTheme.bodySmall,
       ),
       value: isActive,
-      onChanged: (value) {
+      onChanged: (value) async {
+        if (value &&
+            RecipeNutritionAccess.isNutritionCategory(category) &&
+            !ref.read(canViewRecipeNutritionProvider)) {
+          await showNutritionUpsellSheet(context);
+          return;
+        }
         CategoryService.instance.toggleCategory(category, value);
         setState(() {});
       },
@@ -206,8 +228,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         return Icons.dinner_dining;
       case 'cookie':
         return Icons.cookie;
-      case 'dinner_dining':
-        return Icons.dinner_dining;
       case 'ramen_dining':
         return Icons.ramen_dining;
       case 'local_dining':
@@ -222,10 +242,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         return Icons.rice_bowl;
       case 'spicy':
         return Icons.local_fire_department; // Острая еда
-      case 'local_fire_department':
-        return Icons.local_fire_department;
-      case 'eco':
-        return Icons.eco; // Тайская кухня
+// Тайская кухня
       case 'circle':
         return Icons.circle;
       case 'tapas':
@@ -236,18 +253,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         return Icons.soup_kitchen;
       case 'fastfood':
         return Icons.fastfood;
-      case 'lunch_dining':
-        return Icons.lunch_dining;
       case 'kebab':
         return Icons.restaurant_menu; // Кебаб - меню ресторана
       case 'outdoor_grill':
         return Icons.outdoor_grill;
-      case 'breakfast_dining':
-        return Icons.breakfast_dining;
-      case 'cookie':
-        return Icons.cookie;
-      case 'cake':
-        return Icons.cake;
       default:
         return Icons.category;
     }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
+
+import '../../../core/layout/floating_bottom_padding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AllergiesScreen extends StatefulWidget {
@@ -101,7 +104,7 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     } finally {
@@ -117,7 +120,12 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
       body: _loading && _standardAllergies.values.every((v) => !v) && _customAllergies.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + floatingBottomPadding(context),
+              ),
               children: [
                 Text(
                   'Исключите продукты, которые вам нельзя',

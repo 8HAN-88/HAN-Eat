@@ -2,13 +2,14 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'server_config.dart';
 
 class LikeService {
-  static const String baseUrl = 'http://localhost:5000/api/v1';
+  static String get baseUrl => ServerConfig.apiBaseUrl;
   
   /// Лайкнуть пост
   static Future<LikeResponse> likePost(int postId) async {
-    var token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -54,7 +55,7 @@ class LikeService {
   
   /// Убрать лайк
   static Future<LikeResponse> unlikePost(int postId) async {
-    var token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -100,7 +101,7 @@ class LikeService {
   
   /// Проверить статус лайка
   static Future<LikeResponse> getLikeStatus(int postId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }

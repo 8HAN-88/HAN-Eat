@@ -20,8 +20,18 @@ class RecipeStep(BaseModel):
     image: Optional[str] = None  # Дублируем для совместимости с фронтендом
 
 
+class PollCreate(BaseModel):
+    question: str
+    options: List[str]  # 2–10 вариантов
+
+
+class LinkCreate(BaseModel):
+    url: str
+    preview: Optional[str] = None
+
+
 class CreatePostRequest(BaseModel):
-    type: str  # photo | recipe | reel | text
+    type: str  # photo | recipe | reel | text | poll | link
     title: Optional[str] = None
     description: Optional[str] = None
     ingredients: Optional[List[str]] = None  # для рецептов
@@ -40,7 +50,17 @@ class CreatePostRequest(BaseModel):
     cook_time_min: Optional[int] = None
     servings: Optional[int] = None
     calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    fiber_g: Optional[float] = None
     scheduled_publish_at: Optional[datetime] = None
+    poll: Optional[PollCreate] = None
+    link: Optional[LinkCreate] = None
+
+
+class PollVoteRequest(BaseModel):
+    option_index: int
 
 
 class UpdatePostRequest(BaseModel):
@@ -50,12 +70,19 @@ class UpdatePostRequest(BaseModel):
     steps: Optional[List[RecipeStep]] = None  # для рецептов
     media: Optional[List[MediaItem]] = None
     tags: Optional[List[str]] = None
+    visibility: Optional[str] = None  # public | private (рецепты)
+    link: Optional[LinkCreate] = None
     
     # Для рецептов
     prep_time_min: Optional[int] = None
     cook_time_min: Optional[int] = None
     servings: Optional[int] = None
     calories: Optional[int] = None
+    protein_g: Optional[float] = None
+    carbs_g: Optional[float] = None
+    fat_g: Optional[float] = None
+    fiber_g: Optional[float] = None
+    poll: Optional[PollCreate] = None
 
 
 class PostAuthorResponse(BaseModel):
@@ -77,6 +104,9 @@ class PostResponse(BaseModel):
     created_at: datetime
     user_id: int
     channel_id: Optional[int] = None
+    visibility: Optional[str] = "public"
+    is_global_visible: bool = True
+    is_indexed: bool = True
     body: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     # Для обратной совместимости
@@ -110,6 +140,9 @@ class PostResponse(BaseModel):
             'created_at': obj.created_at,
             'user_id': obj.user_id,
             'channel_id': obj.channel_id,
+            'visibility': getattr(obj, 'visibility', None) or 'public',
+            'is_global_visible': bool(getattr(obj, 'is_global_visible', True)),
+            'is_indexed': bool(getattr(obj, 'is_indexed', True)),
             'body': obj.body,
             'tags': obj.tags or [],
             'community_id': obj.channel_id,  # Для обратной совместимости

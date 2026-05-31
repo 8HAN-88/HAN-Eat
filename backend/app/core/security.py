@@ -76,3 +76,4 @@ def verify_ai_scan_ticket(token: str, user_id: int) -> bool:
     except (TypeError, ValueError):
         return False
 
+

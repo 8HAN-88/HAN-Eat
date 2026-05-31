@@ -35,6 +35,20 @@ extension MealTypeX on MealType {
         return 'cookie';
     }
   }
+
+  /// Локальное время приёма пищи по умолчанию (час, минута).
+  (int hour, int minute) get defaultTime {
+    switch (this) {
+      case MealType.breakfast:
+        return (8, 0);
+      case MealType.lunch:
+        return (13, 0);
+      case MealType.dinner:
+        return (19, 0);
+      case MealType.snack:
+        return (16, 0);
+    }
+  }
 }
 
 class MealPlanEntry {

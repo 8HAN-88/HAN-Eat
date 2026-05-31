@@ -99,11 +99,19 @@ def run_post_moderation(
     if not force_pipeline or not pipeline_enabled:
         post.status = "published"
         post.published_at = datetime.utcnow()
+        if post.type == "recipe":
+            from app.services.recipe_visibility_service import sync_recipe_index_flags
+
+            sync_recipe_index_flags(post)
         return ModerationScores(decision=DECISION_SAFE)
 
     if author.is_admin or author.is_moderator:
         post.status = "published"
         post.published_at = datetime.utcnow()
+        if post.type == "recipe":
+            from app.services.recipe_visibility_service import sync_recipe_index_flags
+
+            sync_recipe_index_flags(post)
         return ModerationScores(decision=DECISION_SAFE)
 
     svc = ModerationPipelineService()
@@ -141,6 +149,11 @@ def run_post_moderation(
         post.status = "published"
         post.published_at = datetime.utcnow()
         post.hidden_from_recommendations = False
+
+    if post.type == "recipe":
+        from app.services.recipe_visibility_service import sync_recipe_index_flags
+
+        sync_recipe_index_flags(post)
 
     return scores
 

@@ -1,8 +1,13 @@
-// Экран аналитики для авторов
+// Экран аналитики для авторов (тариф Creator / Pro).
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../app/app_router.dart';
 import '../../../../services/analytics_service.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class AnalyticsScreen extends ConsumerStatefulWidget {
   final int? postId; // Если указан, показываем аналитику поста, иначе профиля
@@ -16,6 +21,7 @@ class AnalyticsScreen extends ConsumerStatefulWidget {
 class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   int _selectedDays = 30;
   bool _isLoading = false;
+  Object? _loadError;
   PostAnalyticsResponse? _postAnalytics;
   ProfileAnalyticsResponse? _profileAnalytics;
   
@@ -26,7 +32,15 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   }
   
   Future<void> _loadAnalytics() async {
-    setState(() => _isLoading = true);
+    final status = ref.read(subscriptionStatusProvider).asData?.value;
+    if (status != null && !status.hasCreator) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     
     try {
       if (widget.postId != null) {
@@ -43,9 +57,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки аналитики: $e')),
-        );
+        setState(() => _loadError = e);
       }
     } finally {
       if (mounted) {
@@ -54,8 +66,63 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     }
   }
   
+  Widget _creatorUpsell() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.analytics_outlined,
+              size: 64,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Аналитика для авторов',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Подключите H.A.N. Creator или Pro, чтобы видеть статистику постов и канала.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () =>
+                  context.push(SubscriptionRoute.pathWithProduct('creator')),
+              child: const Text('Выбрать тариф'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final statusAsync = ref.watch(subscriptionStatusProvider);
+    final status = statusAsync.asData?.value;
+
+    if (statusAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.postId != null ? 'Аналитика поста' : 'Аналитика'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (status != null && !status.hasCreator) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Аналитика')),
+        body: _creatorUpsell(),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.postId != null ? 'Аналитика поста' : 'Аналитика профиля'),
@@ -96,8 +163,23 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   }
   
   Widget _buildPostAnalytics() {
+    if (_loadError != null && _postAnalytics == null) {
+      return AppEmptyState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Не удалось загрузить',
+        subtitle: userVisibleError(_loadError!, fallback: 'Проверьте сеть'),
+        action: FilledButton(
+          onPressed: _loadAnalytics,
+          child: const Text('Повторить'),
+        ),
+      );
+    }
     if (_postAnalytics == null) {
-      return const Center(child: Text('Нет данных'));
+      return const AppEmptyState(
+        icon: Icons.analytics_outlined,
+        title: 'Нет данных',
+        subtitle: 'За выбранный период статистика пока пуста',
+      );
     }
     
     final analytics = _postAnalytics!;
@@ -180,8 +262,23 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   }
   
   Widget _buildProfileAnalytics() {
+    if (_loadError != null && _profileAnalytics == null) {
+      return AppEmptyState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Не удалось загрузить',
+        subtitle: userVisibleError(_loadError!, fallback: 'Проверьте сеть'),
+        action: FilledButton(
+          onPressed: _loadAnalytics,
+          child: const Text('Повторить'),
+        ),
+      );
+    }
     if (_profileAnalytics == null) {
-      return const Center(child: Text('Нет данных'));
+      return const AppEmptyState(
+        icon: Icons.analytics_outlined,
+        title: 'Нет данных',
+        subtitle: 'За выбранный период статистика пока пуста',
+      );
     }
     
     final analytics = _profileAnalytics!;
@@ -259,7 +356,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             metrics: [
               _MetricItem(
                 label: 'Средний Engagement Rate',
-                value: '${(analytics.avgEngagementRate * 100).toStringAsFixed(2)}%',
+                value: '${analytics.engagementRatePercent.toStringAsFixed(2)}%',
                 subtitle: 'Средний уровень вовлеченности',
                 icon: Icons.trending_up,
                 color: Colors.indigo,
@@ -371,7 +468,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     );
   }
   
-  Widget _buildTopPostsCard(List<PostAnalyticsResponse> topPosts) {
+  Widget _buildTopPostsCard(List<ProfileTopPostSummary> topPosts) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -417,7 +514,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           Text(
-                            '${post.viewsTotal} просмотров • ${(post.engagementRate * 100).toStringAsFixed(1)}% engagement',
+                            '${post.views} просмотров • ${post.engagementRatePercent.toStringAsFixed(1)}% engagement',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.grey[600],
                             ),
@@ -460,7 +557,14 @@ class _SimpleLineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (data.isEmpty) {
-      return const Center(child: Text('Нет данных'));
+      return Center(
+        child: Text(
+          'Нет данных за период',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
     }
     
     final maxValue = data.map((d) => d.count).reduce((a, b) => a > b ? a : b);

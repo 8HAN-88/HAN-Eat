@@ -2,26 +2,95 @@
 import 'package:flutter/material.dart';
 import '../../../services/channel_service.dart';
 
+/// Пустое состояние вкладки (NestedScrollView + TabBarView): без bottom overflow.
+class ChannelTabEmptyPlaceholder extends StatelessWidget {
+  const ChannelTabEmptyPlaceholder({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Icon(icon, size: 64, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[700],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // Делегат для закрепления TabBar в Sliver
 class SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
   final TabBar tabBar;
-  
+
   SliverTabBarDelegate(this.tabBar);
-  
+
   @override
   double get minExtent => tabBar.preferredSize.height;
-  
+
   @override
   double get maxExtent => tabBar.preferredSize.height;
-  
+
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: tabBar,
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      elevation: overlapsContent ? 1 : 0,
+      shadowColor: Colors.black26,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.35)),
+          ),
+        ),
+        child: tabBar,
+      ),
     );
   }
-  
+
   @override
   bool shouldRebuild(SliverTabBarDelegate oldDelegate) {
     return tabBar != oldDelegate.tabBar;
@@ -31,9 +100,16 @@ class SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
 // Вкладка "О канале"
 class ChannelAboutTab extends StatelessWidget {
   final ChannelDetail channel;
-  
-  const ChannelAboutTab({Key? key, required this.channel}) : super(key: key);
-  
+
+  /// Если описание уже показано на экране профиля (карточка как в Telegram).
+  final bool omitDescription;
+
+  const ChannelAboutTab({
+    super.key,
+    required this.channel,
+    this.omitDescription = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -42,12 +118,14 @@ class ChannelAboutTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Описание
-          if (channel.description != null && channel.description!.isNotEmpty) ...[
+          if (!omitDescription &&
+              channel.description != null &&
+              channel.description!.isNotEmpty) ...[
             Text(
               'Описание',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -61,14 +139,14 @@ class ChannelAboutTab extends StatelessWidget {
             Text(
               'Правила канала',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -83,8 +161,8 @@ class ChannelAboutTab extends StatelessWidget {
             Text(
               'Теги',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -93,7 +171,8 @@ class ChannelAboutTab extends StatelessWidget {
               children: channel.tags!.map((tag) {
                 return Chip(
                   label: Text('#$tag'),
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                 );
               }).toList(),
             ),
@@ -103,8 +182,8 @@ class ChannelAboutTab extends StatelessWidget {
           Text(
             'Статистика',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -132,13 +211,13 @@ class _StatItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
-  
+
   const _StatItem({
     required this.icon,
     required this.label,
     required this.value,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -151,8 +230,8 @@ class _StatItem extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
           ],
         ),
@@ -160,11 +239,10 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.grey[600],
-          ),
+                color: Colors.grey[600],
+              ),
         ),
       ],
     );
   }
 }
-

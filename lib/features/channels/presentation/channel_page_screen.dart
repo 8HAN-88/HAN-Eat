@@ -1,19 +1,20 @@
 // Страница канала
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../models/post_model.dart';
-import '../../../services/user_posts_service.dart';
+import '../../../app/app_router.dart';
 import '../../feed/presentation/new_post_card.dart';
-
+import '../../../widgets/app_empty_state.dart';
 class ChannelPageScreen extends ConsumerStatefulWidget {
   final int channelId;
 
   const ChannelPageScreen({
-    Key? key,
+    super.key,
     required this.channelId,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<ChannelPageScreen> createState() => _ChannelPageScreenState();
@@ -21,6 +22,7 @@ class ChannelPageScreen extends ConsumerStatefulWidget {
 
 class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
   ChannelDetail? _channel;
+  Object? _channelLoadError;
   bool _isLoading = true;
   bool _isJoining = false;
 
@@ -31,16 +33,22 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
   }
 
   Future<void> _loadChannel() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _channelLoadError = null;
+    });
 
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
-      setState(() => _channel = channel);
+      if (mounted) {
+        setState(() {
+          _channel = channel;
+          _channelLoadError = null;
+        });
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки канала: $e')),
-        );
+        setState(() => _channelLoadError = e);
       }
     } finally {
       if (mounted) {
@@ -55,42 +63,24 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
     setState(() => _isJoining = true);
 
     try {
-      final response = _channel!.isMember
+      final response = _channel!.isMember || _channel!.isPending
           ? await ChannelService.leaveChannel(widget.channelId)
           : await ChannelService.joinChannel(widget.channelId);
 
-      setState(() {
-        _channel = ChannelDetail(
-          id: _channel!.id,
-          name: _channel!.name,
-          slug: _channel!.slug,
-          description: _channel!.description,
-          coverUrl: _channel!.coverUrl,
-          avatarUrl: _channel!.avatarUrl,
-          adminUserId: _channel!.adminUserId,
-          isPublic: _channel!.isPublic,
-          membersCount: response.membersCount,
-          postsCount: _channel!.postsCount,
-          createdAt: _channel!.createdAt,
-          adminUser: _channel!.adminUser,
-          isMember: response.joined,
-          isAdmin: _channel!.isAdmin,
-          isOwner: _channel!.isOwner,
-          isModerator: _channel!.isModerator,
-          tags: _channel!.tags,
-          rules: _channel!.rules,
-          autoPublishToFeed: _channel!.autoPublishToFeed,
-          autoPublishToMenu: _channel!.autoPublishToMenu,
-          autoPublishReels: _channel!.autoPublishReels,
-          allowComments: _channel!.allowComments,
-          allowLikes: _channel!.allowLikes,
-          allowReposts: _channel!.allowReposts,
+      await _loadChannel();
+      if (response.pending && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Заявка отправлена. После одобрения модератора откроются посты канала.',
+            ),
+          ),
         );
-      });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     } finally {
@@ -110,20 +100,45 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
     }
 
     if (_channel == null) {
+      if (_channelLoadError != null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Канал')),
+          body: AppEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Не удалось загрузить канал',
+            subtitle: userVisibleError(
+              _channelLoadError!,
+              fallback: 'Проверьте сеть',
+            ),
+            action: FilledButton(
+              onPressed: _loadChannel,
+              child: const Text('Повторить'),
+            ),
+          ),
+        );
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('Канал')),
-        body: const Center(child: Text('Канал не найден')),
+        body: const AppEmptyState(
+          icon: Icons.group_off_outlined,
+          title: 'Канал не найден',
+          subtitle: 'Возможно, он удалён или у вас нет доступа',
+        ),
       );
     }
 
     return Scaffold(
-      floatingActionButton: _channel!.isAdmin || _channel!.isMember
+      floatingActionButton: _channel!.canViewPosts &&
+              (_channel!.isAdmin ||
+                  _channel!.isOwner ||
+                  _channel!.isModerator ||
+                  _channel!.isMember)
           ? FloatingActionButton(
               onPressed: () {
                 _showCreateContentMenu(context);
               },
-              child: const Icon(Icons.add),
               tooltip: 'Создать контент',
+              child: const Icon(Icons.add),
             )
           : null,
       body: NestedScrollView(
@@ -147,9 +162,54 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
             ),
           ];
         },
-        body: _ChannelPostsTab(channelId: widget.channelId),
+        body: _channel!.canViewPosts
+            ? _ChannelPostsTab(channelId: widget.channelId)
+            : _buildPostsLockedPlaceholder(),
       ),
     );
+  }
+
+  Widget _buildPostsLockedPlaceholder() {
+    final c = _channel!;
+    final message = c.isPending
+        ? 'Заявка на вступление на рассмотрении. Посты появятся после одобрения.'
+        : !c.isPublic
+            ? 'Это приватный канал. Подпишитесь — модератор одобрит доступ к постам.'
+            : 'Подпишитесь на канал, чтобы видеть публикации.';
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            c.isPending ? Icons.hourglass_top : Icons.lock_outline,
+            size: 48,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          if (c.isPending) ...[
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _isJoining ? null : _toggleJoin,
+              child: const Text('Отменить заявку'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _joinButtonLabel(ChannelDetail c) {
+    if (c.isMember) return 'Покинуть канал';
+    if (c.isPending) return 'Ожидает одобрения';
+    if (!c.isPublic) return 'Запросить вступление';
+    return 'Присоединиться';
   }
 
   Widget _buildChannelHeader() {
@@ -193,7 +253,8 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               InkWell(
-                onTap: () {
+                onTap: _channel!.canViewPosts
+                    ? () {
                   // Показываем участников
                   showModalBottomSheet(
                     context: context,
@@ -209,7 +270,8 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                       ),
                     ),
                   );
-                },
+                }
+                    : null,
                 child: _StatItem(
                     label: 'Участники', value: '${_channel!.membersCount}'),
               ),
@@ -225,16 +287,21 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                 OutlinedButton.icon(
                   onPressed: () {
                     context.push(
-                        '/channel/${widget.channelId}/settings?channelName=${Uri.encodeComponent(_channel!.name)}');
+                      ChannelDetailRoute.settings(
+                        widget.channelId,
+                        _channel!.name,
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.settings_outlined),
                   label: const Text('Настройки'),
                 ),
               if (_channel!.isAdmin) const SizedBox(width: 8),
               FilledButton(
-                onPressed: _isJoining ? null : _toggleJoin,
-                child: Text(
-                    _channel!.isMember ? 'Покинуть канал' : 'Присоединиться'),
+                onPressed: (_isJoining || _channel!.isPending)
+                    ? null
+                    : _toggleJoin,
+                child: Text(_joinButtonLabel(_channel!)),
               ),
             ],
           ),
@@ -268,12 +335,18 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
             ListTile(
               leading: const Icon(Icons.restaurant_menu),
               title: const Text('Создать рецепт'),
-              subtitle: const Text('Рецепт появится в Menu и в канале'),
-              onTap: () {
+              subtitle: const Text(
+                'Выберите: публичный в Menu или приватный в канале',
+              ),
+              onTap: () async {
                 Navigator.of(context).pop();
+                if (!context.mounted) return;
                 context
                     .push(
-                  '/channel/${widget.channelId}/create-recipe?channelName=${Uri.encodeComponent(_channel!.name)}',
+                  ChannelDetailRoute.createRecipe(
+                    widget.channelId,
+                    _channel!.name,
+                  ),
                 )
                     .then((success) {
                   if (success == true) {
@@ -290,7 +363,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                 Navigator.of(context).pop();
                 context
                     .push(
-                  '/channel/${widget.channelId}/create-post?channelName=${Uri.encodeComponent(_channel!.name)}&type=photo',
+                  ChannelDetailRoute.createPost(
+                    widget.channelId,
+                    channelName: _channel!.name,
+                    type: 'photo',
+                  ),
                 )
                     .then((success) {
                   if (success == true) {
@@ -307,7 +384,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                 Navigator.of(context).pop();
                 context
                     .push(
-                  '/channel/${widget.channelId}/create-post?channelName=${Uri.encodeComponent(_channel!.name)}&type=text',
+                  ChannelDetailRoute.createPost(
+                    widget.channelId,
+                    channelName: _channel!.name,
+                    type: 'text',
+                  ),
                 )
                     .then((success) {
                   if (success == true) {
@@ -324,7 +405,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                 Navigator.of(context).pop();
                 context
                     .push(
-                  '/channel/${widget.channelId}/create-post?channelName=${Uri.encodeComponent(_channel!.name)}&type=reel',
+                  ChannelDetailRoute.createPost(
+                    widget.channelId,
+                    channelName: _channel!.name,
+                    type: 'reel',
+                  ),
                 )
                     .then((success) {
                   if (success == true) {
@@ -380,6 +465,7 @@ class _ChannelPostsTab extends StatefulWidget {
 
 class _ChannelPostsTabState extends State<_ChannelPostsTab> {
   List<PostModel> _posts = [];
+  Object? _postsLoadError;
   bool _isLoading = false;
   bool _hasMore = true;
   int _offset = 0;
@@ -416,6 +502,7 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
         _posts = [];
         _offset = 0;
         _hasMore = true;
+        _postsLoadError = null;
       }
     });
 
@@ -436,12 +523,15 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
         }
         _offset = _posts.length;
         _hasMore = _posts.length < response.total;
+        _postsLoadError = null;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки постов: $e')),
-        );
+        setState(() {
+          if (refresh) {
+            _postsLoadError = e;
+          }
+        });
       }
     } finally {
       if (mounted) {
@@ -461,7 +551,45 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
     }
 
     if (_posts.isEmpty) {
-      return const Center(child: Text('Нет постов'));
+      if (_postsLoadError != null) {
+        return RefreshIndicator(
+          onRefresh: () => _loadPosts(refresh: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.4,
+                child: AppEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Не удалось загрузить посты',
+                  subtitle: userVisibleError(
+                    _postsLoadError!,
+                    fallback: 'Проверьте сеть',
+                  ),
+                  action: FilledButton(
+                    onPressed: () => _loadPosts(refresh: true),
+                    child: const Text('Повторить'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return RefreshIndicator(
+        onRefresh: () => _loadPosts(refresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 120),
+            AppEmptyState(
+              icon: Icons.inbox_outlined,
+              title: 'Здесь пока нет постов',
+              subtitle: 'Как только появятся публикации — они будут здесь',
+            ),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(
@@ -482,11 +610,10 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
           final post = _posts[index];
           return NewPostCard(
             post: post,
-            onCommentTap: () {
-              context.push('/post/${post.id}/comments');
-            },
+            onCommentTap: () =>
+                context.push(PostCommentsRoute.pathFor(post.id)),
             onAuthorTap: () {
-              context.push('/profile?userId=${post.userId}');
+              context.push(ProfileRoute.withUserId(post.userId));
             },
           );
         },
@@ -535,7 +662,7 @@ class _ChannelMembersTabState extends State<_ChannelMembersTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки участников: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников'))),
         );
       }
       setState(() => _isLoading = false);
@@ -571,7 +698,11 @@ class _ChannelMembersTabState extends State<_ChannelMembersTab> {
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _members.isEmpty
-                  ? const Center(child: Text('Нет участников'))
+                  ? const AppEmptyState(
+                      icon: Icons.people_outline_rounded,
+                      title: 'Нет участников',
+                      subtitle: 'Пригласите людей в канал',
+                    )
                   : ListView(
                       controller: widget.scrollController,
                       children: _members.map((member) {
@@ -607,8 +738,11 @@ class _ChannelMembersTabState extends State<_ChannelMembersTab> {
                                     )
                                   : null,
                           onTap: () {
-                            context
-                                .push('/profile?userId=${member['user_id']}');
+                            final uid = member['user_id'];
+                            final id = uid is int ? uid : int.tryParse('$uid');
+                            if (id != null) {
+                              context.push(ProfileRoute.withUserId(id));
+                            }
                             Navigator.of(context).pop();
                           },
                         );

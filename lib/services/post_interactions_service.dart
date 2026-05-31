@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import 'auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Сервис для взаимодействий с постами (лайки, дизлайки, репосты, сохранения)
 class PostInteractionsService {
@@ -48,7 +49,7 @@ class PostInteractionsService {
         }
       }
     } catch (e) {
-      print('Error liking post: $e');
+      debugPrint('Error liking post: $e');
       rethrow;
     }
   }
@@ -94,7 +95,7 @@ class PostInteractionsService {
         }
       }
     } catch (e) {
-      print('Error disliking post: $e');
+      debugPrint('Error disliking post: $e');
       rethrow;
     }
   }
@@ -150,7 +151,9 @@ class PostInteractionsService {
         userId: int.tryParse(currentUser.uid) ?? 0,
         likesCount: 0,
         commentsCount: 0,
+        isPromotedFromApi: false,
         isLiked: false,
+        isSaved: false,
         body: {
           if (text != null) 'text': text,
           'reposted_post': originalPost.toJson(),
@@ -181,7 +184,7 @@ class PostInteractionsService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('Error reposting: $e');
+      debugPrint('Error reposting: $e');
       rethrow;
     }
   }
@@ -210,7 +213,7 @@ class PostInteractionsService {
         });
       }
     } catch (e) {
-      print('Error saving post: $e');
+      debugPrint('Error saving post: $e');
       rethrow;
     }
   }

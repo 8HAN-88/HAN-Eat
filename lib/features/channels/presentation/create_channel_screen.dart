@@ -1,5 +1,6 @@
 // Экран создания канала
 import 'dart:io';
+import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -10,12 +11,13 @@ import '../../../services/media_upload_service.dart';
 import 'package:go_router/go_router.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
-  const CreateChannelScreen({Key? key}) : super(key: key);
-  
+  const CreateChannelScreen({super.key});
+
   static const routeName = '/create-channel';
-  
+
   @override
-  ConsumerState<CreateChannelScreen> createState() => _CreateChannelScreenState();
+  ConsumerState<CreateChannelScreen> createState() =>
+      _CreateChannelScreenState();
 }
 
 class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
@@ -23,17 +25,18 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
   final _nameController = TextEditingController();
   final _slugController = TextEditingController();
   final _descriptionController = TextEditingController();
-  late final TextEditingController _categoryController = TextEditingController();
+  late final TextEditingController _categoryController =
+      TextEditingController();
   bool _isLoading = false;
   bool _isPublic = true;
-  
+
   // Медиа
   final ImagePicker _imagePicker = ImagePicker();
   XFile? _selectedAvatar;
   String? _uploadedAvatarUrl;
   bool _isUploadingAvatar = false;
   Uint8List? _selectedAvatarBytes;
-  
+
   // Популярные категории
   static const List<String> _categories = [
     'Итальянская',
@@ -49,7 +52,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     'Рыба',
     'Вегетарианская',
   ];
-  
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -58,7 +61,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     _categoryController.dispose();
     super.dispose();
   }
-  
+
   String _generateSlug(String name) {
     return name
         .toLowerCase()
@@ -67,13 +70,13 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
         .replaceAll(RegExp(r'-+'), '_')
         .substring(0, name.length > 50 ? 50 : name.length);
   }
-  
+
   void _updateSlug() {
     if (_nameController.text.isNotEmpty) {
       _slugController.text = _generateSlug(_nameController.text);
     }
   }
-  
+
   Future<void> _pickAvatar() async {
     try {
       final XFile? image = await _imagePicker.pickImage(
@@ -82,20 +85,20 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
         maxHeight: 512,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         // Для веб-платформы читаем байты
         Uint8List? bytes;
         if (kIsWeb) {
           bytes = await image.readAsBytes();
         }
-        
+
         setState(() {
           _selectedAvatar = image;
           _selectedAvatarBytes = bytes;
           _isUploadingAvatar = true;
         });
-        
+
         try {
           final response = await MediaUploadService.uploadMediaFile(
             file: image,
@@ -114,7 +117,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           setState(() => _isUploadingAvatar = false);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка загрузки аватара: $e')),
+              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
             );
           }
         }
@@ -122,24 +125,24 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора изображения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
   }
-  
+
   Future<void> _handleCreate() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_isUploadingAvatar) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Дождитесь завершения загрузки аватара')),
       );
       return;
     }
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       final channel = await ChannelService.createChannel(
         name: _nameController.text.trim(),
@@ -153,7 +156,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
             ? null
             : _categoryController.text.trim(),
       );
-      
+
       if (mounted) {
         context.pop(channel.id); // Возвращаемся с ID созданного канала
         ScaffoldMessenger.of(context).showSnackBar(
@@ -163,7 +166,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка создания канала: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось создать канал'))),
         );
       }
     } finally {
@@ -172,11 +175,9 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Создать канал'),
@@ -201,14 +202,18 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                           backgroundColor: Colors.grey[300],
                           backgroundImage: _selectedAvatar != null
                               ? (kIsWeb && _selectedAvatarBytes != null
-                                  ? MemoryImage(_selectedAvatarBytes!) as ImageProvider
+                                  ? MemoryImage(_selectedAvatarBytes!)
+                                      as ImageProvider
                                   : !kIsWeb
-                                      ? FileImage(File(_selectedAvatar!.path)) as ImageProvider
+                                      ? FileImage(File(_selectedAvatar!.path))
+                                          as ImageProvider
                                       : null)
                               : _uploadedAvatarUrl != null
-                                  ? NetworkImage(_uploadedAvatarUrl!) as ImageProvider
+                                  ? NetworkImage(_uploadedAvatarUrl!)
+                                      as ImageProvider
                                   : null,
-                          child: _selectedAvatar == null && _uploadedAvatarUrl == null
+                          child: _selectedAvatar == null &&
+                                  _uploadedAvatarUrl == null
                               ? const Icon(Icons.add_photo_alternate, size: 40)
                               : null,
                         ),
@@ -220,7 +225,8 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                                 shape: BoxShape.circle,
                               ),
                               child: const Center(
-                                child: CircularProgressIndicator(color: Colors.white),
+                                child: CircularProgressIndicator(
+                                    color: Colors.white),
                               ),
                             ),
                           ),
@@ -297,11 +303,12 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     if (textEditingValue.text.isEmpty) {
                       return _categories;
                     }
-                    return _categories.where((category) =>
-                        category.toLowerCase().contains(
-                            textEditingValue.text.toLowerCase()));
+                    return _categories.where((category) => category
+                        .toLowerCase()
+                        .contains(textEditingValue.text.toLowerCase()));
                   },
-                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  fieldViewBuilder:
+                      (context, controller, focusNode, onFieldSubmitted) {
                     // Синхронизируем внешний контроллер с внутренним
                     if (controller.text != _categoryController.text) {
                       _categoryController.text = controller.text;
@@ -330,13 +337,43 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                 Card(
                   child: SwitchListTile(
                     title: const Text('Публичный канал'),
-                    subtitle: const Text('Канал будет виден всем пользователям'),
+                    subtitle: Text(
+                      _isPublic
+                          ? 'Канал будет виден всем пользователям'
+                          : 'Приватный канал — только для подписчиков',
+                    ),
                     value: _isPublic,
                     onChanged: (value) {
                       setState(() => _isPublic = value);
                     },
                   ),
                 ),
+                if (!_isPublic) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Рецепты в приватном канале — индивидуальный контент: '
+                              'они не попадают в общий Menu и доступны только здесь. '
+                              'Публикация рецептов — с тарифом H.A.N. Creator или Pro.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 32),
                 // Кнопка создания
                 FilledButton(
@@ -360,4 +397,3 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     );
   }
 }
-

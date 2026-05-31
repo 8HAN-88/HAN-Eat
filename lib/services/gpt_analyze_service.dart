@@ -2,43 +2,47 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+
+import '../core/config/dotenv_safe.dart';
 
 import '../models/analysis_mode.dart';
 import '../models/analysis_result.dart';
 import '../models/recipe.dart';
+import '../features/menu/scan_recipe_ranking.dart';
 import 'api_service.dart';
-import 'server_config.dart';
 
-/// Анализ фото блюда через GPT-4 Vision. Возвращает название блюда, калории, БЖУ и т.д.,
-/// затем подгружает похожие рецепты через поиск (с картинками и переводом).
+/// Быстрый анализ фото через GPT-4o-mini (без блокирующего поиска рецептов).
 class GptAnalyzeService {
   static String? get _apiKey {
-    if (kIsWeb) return null; // на web .env не загружается
-    try {
-      return dotenv.env['OPENAI_API_KEY'];
-    } catch (_) {
-      return null; // NotInitializedError если dotenv ещё не загружен
-    }
+    if (kIsWeb) return null;
+    return dotenvString('OPENAI_API_KEY');
   }
 
   static bool get isAvailable => _apiKey != null && _apiKey!.isNotEmpty;
 
+  /// Дешевле и быстрее gpt-4o-mini; переопределение: OPENAI_FOOD_SCAN_MODEL в .env
+  static String get _model =>
+      dotenvString('OPENAI_FOOD_SCAN_MODEL') ?? 'gpt-4o-mini';
+
   static const _visionUrl = 'https://api.openai.com/v1/chat/completions';
 
-  /// Парсит число из ответа GPT (может прийти как num или строка "25" / "25 g").
   static num? _parseNum(dynamic v) {
     if (v == null) return null;
     if (v is num) return v;
     if (v is String) {
-      final s = v.trim().replaceAll(RegExp(r'\s*(g|mg|kcal|ккал|г|мг)\s*$', caseSensitive: false), '').trim();
+      final s = v
+          .trim()
+          .replaceAll(
+            RegExp(r'\s*(g|mg|kcal|ккал|г|мг)\s*$', caseSensitive: false),
+            '',
+          )
+          .trim();
       return num.tryParse(s);
     }
     return null;
   }
 
-  /// Язык для ответа GPT (ru, en, es, de, fr).
   static String _langName(String code) {
     switch (code.toLowerCase()) {
       case 'ru':
@@ -55,41 +59,31 @@ class GptAnalyzeService {
     }
   }
 
-  /// Анализировать фото через GPT-4 Vision и подгрузить похожие рецепты (с картинками и языком).
-  static Future<AnalysisResult> analyzePhoto(
+  /// Только распознавание блюда и КБЖУ (~3–8 с).
+  static Future<AnalysisResult> analyzePhotoCore(
     Uint8List imageBytes, {
     required String language,
   }) async {
     final apiKey = _apiKey;
     if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('OPENAI_API_KEY не задан. Добавьте в .env: OPENAI_API_KEY=sk-...');
+      throw Exception('OPENAI_API_KEY не задан');
     }
 
     final lang = _langName(language);
     final base64Image = base64Encode(imageBytes);
 
     final prompt = '''
-Analyze this food dish photo. You MUST reply only in $lang. The dish_name MUST be written exclusively in $lang (e.g. if $lang is Russian, write the dish name in Russian).
-Reply with a single JSON object, no markdown, no extra text:
-{
-  "dish_name": "name of the dish in $lang only",
-  "calories": number (estimated kcal, digits only, no units),
-  "confidence": number between 0 and 1,
-  "nutrition": {
-    "protein": number (grams, digits only),
-    "fat": number (grams, digits only),
-    "carbohydrates": number (grams, digits only),
-    "fiber": number or null,
-    "sugar": number or null,
-    "sodium": number or null
-  }
-}
-Rules: dish_name must be in $lang. All numeric values must be plain numbers (no strings, no units like "g" or "kcal"). If unknown use null. Use only the keys above.
+Food photo. Reply in $lang. JSON only.
+Pick ONE most likely dish with a specific stable name (not generic "food").
+Estimate portion_grams (visible serving on the plate). calories and nutrition must match THAT portion, not per 100g. Round calories to nearest 10.
+{"dish_name":"...","portion_grams":number,"calories":number,"confidence":0-1,"nutrition":{"protein":g,"fat":g,"carbohydrates":g,"fiber":g or null,"sugar":g or null,"sodium":mg or null}}
 ''';
 
     final body = {
-      'model': 'gpt-4o',
-      'max_tokens': 500,
+      'model': _model,
+      'max_tokens': 220,
+      'temperature': 0,
+      'seed': 42,
       'messages': [
         {
           'role': 'user',
@@ -107,18 +101,18 @@ Rules: dish_name must be in $lang. All numeric values must be plain numbers (no 
       ],
     };
 
-    final resp = await http.post(
-      Uri.parse(_visionUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode(body),
-    ).timeout(const Duration(seconds: 30));
+    final resp = await http
+        .post(
+          Uri.parse(_visionUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 18));
 
     if (resp.statusCode != 200) {
-      final err = resp.body;
-      if (kDebugMode) debugPrint('OpenAI error: $err');
       throw Exception('Ошибка анализа: ${resp.statusCode}');
     }
 
@@ -130,10 +124,11 @@ Rules: dish_name must be in $lang. All numeric values must be plain numbers (no 
       throw Exception('Пустой ответ от GPT');
     }
 
-    // Убираем возможные markdown-обёртки
-    String jsonStr = content.trim();
+    var jsonStr = content.trim();
     if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.replaceFirst(RegExp(r'^```\w*\n?'), '').replaceAll(RegExp(r'\n?```$'), '');
+      jsonStr = jsonStr
+          .replaceFirst(RegExp(r'^```\w*\n?'), '')
+          .replaceAll(RegExp(r'\n?```$'), '');
     }
     final analysisJson = jsonDecode(jsonStr) as Map<String, dynamic>;
 
@@ -144,29 +139,14 @@ Rules: dish_name must be in $lang. All numeric values must be plain numbers (no 
     Map<String, dynamic>? nutrition;
     if (nutritionRaw is Map) {
       nutrition = {};
-      for (final e in (nutritionRaw as Map).entries) {
+      for (final e in nutritionRaw.entries) {
         if (e.value == null) continue;
-        final num? n = _parseNum(e.value);
+        final n = _parseNum(e.value);
         if (n == null) continue;
         final k = (e.key as String).toLowerCase();
         final key = k == 'carbs' || k == 'carb' ? 'carbohydrates' : k;
         nutrition[key] = n;
       }
-    }
-
-    // Похожие рецепты — через поиск по названию блюда (приходят с картинками и переводом с бэкенда)
-    List<Recipe> recipes = [];
-    try {
-      recipes = await ApiService.searchRecipes(
-        dishName,
-        mode: AnalysisMode.all,
-        language: language,
-      );
-      if (recipes.length > 10) {
-        recipes = recipes.take(10).toList();
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('Search recipes for similar failed: $e');
     }
 
     return AnalysisResult(
@@ -175,6 +155,54 @@ Rules: dish_name must be in $lang. All numeric values must be plain numbers (no 
       confidence: confidence,
       calories: calories,
       nutrition: nutrition,
+      recipes: const [],
+      portionGrams: _parseNum(
+        analysisJson['portion_grams'] ?? analysisJson['portionGrams'],
+      ),
+    );
+  }
+
+  /// Похожие рецепты отдельным запросом (после показа блюда).
+  static Future<List<Recipe>> fetchSimilarRecipes(
+    String dishName, {
+    required String language,
+  }) async {
+    if (dishName.trim().length < 2) return const [];
+    try {
+      var recipes = await ApiService.searchRecipes(
+        dishName,
+        mode: AnalysisMode.all,
+        language: language,
+        timeout: const Duration(seconds: 12),
+      );
+      if (recipes.length > 6) {
+        recipes = recipes.take(6).toList();
+      }
+      return ScanRecipeRanking.filterForScan(recipes, dishName);
+    } catch (e) {
+      if (kDebugMode) debugPrint('GPT scan searchRecipes: $e');
+      return const [];
+    }
+  }
+
+  static Future<AnalysisResult> analyzePhoto(
+    Uint8List imageBytes, {
+    required String language,
+  }) async {
+    final core = await analyzePhotoCore(
+      imageBytes,
+      language: language,
+    );
+    final recipes = await fetchSimilarRecipes(
+      core.translatedLabel ?? core.label ?? '',
+      language: language,
+    );
+    return AnalysisResult(
+      label: core.label,
+      translatedLabel: core.translatedLabel,
+      confidence: core.confidence,
+      calories: core.calories,
+      nutrition: core.nutrition,
       recipes: recipes,
     );
   }

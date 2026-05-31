@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+
 const _keyOnboardingDone = 'onboarding_done';
 
 class OnboardingOverlay extends StatefulWidget {
@@ -73,7 +74,7 @@ class _OnboardingContent extends StatefulWidget {
 class _OnboardingContentState extends State<_OnboardingContent> {
   final _pageController = PageController();
   int _currentPage = 0;
-  static const _pages = [
+  static const _infoPages = [
     _OnboardingPage(
       icon: Icons.restaurant_menu,
       title: 'Добро пожаловать в H.A.N. Eat',
@@ -89,7 +90,16 @@ class _OnboardingContentState extends State<_OnboardingContent> {
       title: 'План и список покупок',
       body: 'Добавляйте рецепты в план на неделю и формируйте список покупок одним нажатием.',
     ),
+    _OnboardingPage(
+      icon: Icons.auto_awesome_rounded,
+      title: 'AI-план питания',
+      body:
+          'Персональный план составляется в разделе «План питания» — '
+          'короткая анкета откроется только когда вы решите его создать.',
+    ),
   ];
+
+  int get _pageCount => _infoPages.length;
 
   @override
   void dispose() {
@@ -113,10 +123,10 @@ class _OnboardingContentState extends State<_OnboardingContent> {
           Expanded(
             child: PageView.builder(
               controller: _pageController,
-              itemCount: _pages.length,
+              itemCount: _pageCount,
               onPageChanged: (i) => setState(() => _currentPage = i),
               itemBuilder: (context, index) {
-                final p = _pages[index];
+                final p = _infoPages[index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Column(
@@ -152,9 +162,9 @@ class _OnboardingContentState extends State<_OnboardingContent> {
           Padding(
             padding: const EdgeInsets.all(24),
             child: FilledButton(
-              onPressed: () {
-                if (_currentPage < _pages.length - 1) {
-                  _pageController.nextPage(
+              onPressed: () async {
+                if (_currentPage < _pageCount - 1) {
+                  await _pageController.nextPage(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeInOut,
                   );
@@ -163,7 +173,7 @@ class _OnboardingContentState extends State<_OnboardingContent> {
                 }
               },
               child: Text(
-                _currentPage < _pages.length - 1 ? 'Далее' : 'Начать',
+                _currentPage < _pageCount - 1 ? 'Далее' : 'Начать',
               ),
             ),
           ),

@@ -175,8 +175,13 @@ class FeedService:
         following_ids = [row[0] for row in following]
         
         # Получаем каналы, на которые подписан пользователь
-        channel_memberships = self.db.query(ChannelMember.channel_id, ChannelMember.role).filter(
-            ChannelMember.user_id == user_id
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
+
+        channel_memberships = self.db.query(
+            ChannelMember.channel_id, ChannelMember.role
+        ).filter(
+            ChannelMember.user_id == user_id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
         ).all()
         subscribed_channel_ids = [row[0] for row in channel_memberships]
         subscribed_channels_with_roles = {row[0]: row[1] for row in channel_memberships}
@@ -1111,16 +1116,21 @@ class FeedService:
         ).all()
         public_channel_ids = [row[0] for row in public_channels]
         
-        # Включаем публичные посты и посты из публичных каналов
+        # Публичные посты профиля + глобально видимые посты из публичных каналов
         conditions = [
             and_(
+                Post.channel_id.is_(None),
                 Post.visibility == "public",
-                Post.channel_id.is_(None)  # Посты не из каналов
             )
         ]
         
         if public_channel_ids:
-            conditions.append(Post.channel_id.in_(public_channel_ids))
+            conditions.append(
+                and_(
+                    Post.channel_id.in_(public_channel_ids),
+                    Post.is_global_visible.is_(True),
+                )
+            )
         
         query = self.db.query(Post).filter(
             or_(*conditions),
@@ -1174,9 +1184,12 @@ class FeedService:
     def _is_channel_member(self, user_id: int, channel_id: int) -> bool:
         """Проверить, является ли пользователь участником канала"""
         from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
+
         count = self.db.query(ChannelMember).filter(
             ChannelMember.user_id == user_id,
-            ChannelMember.channel_id == channel_id
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
         ).count()
         return count > 0
     
@@ -1295,12 +1308,17 @@ class FeedService:
                         entry["comment"] = str(best.comment).strip()
                     reposted_by_dict[post_id] = entry
         
+        from app.services.post_poll_service import enrich_posts_poll_batch
+
+        poll_bodies = enrich_posts_poll_batch(self.db, posts, user_id)
+
         # Формируем результат
         enriched = []
         for post in posts:
             author = authors_dict.get(post.user_id)
             channel = channels_dict.get(post.channel_id) if post.channel_id else None
-            
+            post_body = poll_bodies.get(post.id, post.body)
+
             enriched.append({
                 "id": post.id,
                 "type": post.type,
@@ -1313,7 +1331,7 @@ class FeedService:
                 "channel_id": post.channel_id,
                 "community_id": post.channel_id,  # Для обратной совместимости
                 "is_promoted": bool(getattr(post, "is_promoted", False)),
-                "body": post.body,
+                "body": post_body,
                 "tags": post.tags,
                 "likes_count": likes_counts_dict.get(post.id, 0),
                 "comments_count": comments_counts_dict.get(post.id, 0),

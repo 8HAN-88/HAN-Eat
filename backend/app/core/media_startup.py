@@ -11,7 +11,17 @@ logger = logging.getLogger(__name__)
 def collect_media_issues() -> list[str]:
     issues: list[str] = []
     if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
-        issues.append("S3_ACCESS_KEY / S3_SECRET_KEY не заданы — загрузки через mock API")
+        issues.append("S3_ACCESS_KEY / S3_SECRET_KEY не заданы — загрузки через API (диск)")
+    else:
+        try:
+            from app.services.media_service import MediaService
+
+            if MediaService().uses_api_upload:
+                issues.append(
+                    "S3 ключи заданы, но недоступны (InvalidAccessKeyId и т.п.) — загрузки через API"
+                )
+        except Exception as e:
+            issues.append(f"S3 проверка не удалась: {e}")
     if not settings.S3_BUCKET:
         issues.append("S3_BUCKET не задан")
     if settings.APP_ENV == "production":

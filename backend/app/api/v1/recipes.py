@@ -13,6 +13,7 @@ import asyncio
 import concurrent.futures
 import logging
 import hashlib
+import re
 from sqlalchemy.orm import Session
 from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from app.core.config import settings
@@ -509,67 +510,158 @@ def search_base_recipes(
     
     recipes = []
     for recipe in results:
-        # Форматируем ингредиенты
-        ingredients = recipe.ingredients or []
-        formatted_ingredients = []
-        for ing in ingredients:
-            if isinstance(ing, str):
-                formatted_ingredients.append(ing)
-            elif isinstance(ing, dict):
-                formatted_ingredients.append(ing.get("name", "") or str(ing))
-        
-        # Форматируем шаги
-        steps = recipe.steps or []
-        formatted_steps = []
-        for step in steps:
-            if isinstance(step, dict):
-                formatted_steps.append({
-                    "number": step.get("number", len(formatted_steps) + 1),
-                    "step": step.get("step") or step.get("instruction") or "",
-                    "instruction": step.get("step") or step.get("instruction") or "",
-                })
-            elif isinstance(step, str):
-                formatted_steps.append({
-                    "number": len(formatted_steps) + 1,
-                    "step": step,
-                    "instruction": step,
-                })
-        
-        # Подсчитываем релевантность (сколько слов совпало)
         matched_count = 0
         title_lower = (recipe.title or "").lower()
         for word in query_words:
             if word in title_lower:
                 matched_count += 2
-
-        rid = f"base_{recipe.id}"
-        likes_count = _likes_count_for_external_recipe_id(db, rid)
-        meal_plan_count = _meal_plan_count_for_recipe_id(db, rid)
-
-        recipe_dict = {
-            "id": rid,  # Префикс для идентификации
-            "title": recipe.title,
-            "image": recipe.image_url,
-            "source_image": recipe.image_url,
-            "ingredients": formatted_ingredients,
-            "steps": formatted_steps,
-            "usedIngredientCount": len(formatted_ingredients),
-            "translated_title": recipe.title,  # Уже на русском
-            "translated_ingredients": formatted_ingredients,  # Уже на русском
-            "translated_steps": formatted_steps,  # Уже на русском
-            "calories": recipe.calories,
-            "nutrition": recipe.nutrition or {},
-            "likes_count": likes_count,
-            "meal_plan_count": meal_plan_count,
-            "source": "base",  # Идентификатор источника
-            "relevance_score": matched_count,
-        }
-        recipes.append(recipe_dict)
+        card = _base_recipe_to_card(recipe, db, relevance_score=matched_count)
+        recipes.append(card)
     
     # Сортируем по релевантности
     recipes.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
     
     return recipes
+
+
+def _base_recipe_to_card(
+    recipe: BaseRecipe, db: Session, *, relevance_score: int = 0
+) -> Dict[str, Any]:
+    ingredients = recipe.ingredients or []
+    formatted_ingredients: List[str] = []
+    for ing in ingredients:
+        if isinstance(ing, str):
+            formatted_ingredients.append(ing)
+        elif isinstance(ing, dict):
+            formatted_ingredients.append(ing.get("name", "") or str(ing))
+
+    steps = recipe.steps or []
+    formatted_steps: List[Dict[str, Any]] = []
+    for step in steps:
+        if isinstance(step, dict):
+            formatted_steps.append({
+                "number": step.get("number", len(formatted_steps) + 1),
+                "step": step.get("step") or step.get("instruction") or "",
+                "instruction": step.get("step") or step.get("instruction") or "",
+            })
+        elif isinstance(step, str):
+            formatted_steps.append({
+                "number": len(formatted_steps) + 1,
+                "step": step,
+                "instruction": step,
+            })
+
+    rid = f"base_{recipe.id}"
+    return {
+        "id": rid,
+        "title": recipe.title,
+        "image": recipe.image_url,
+        "source_image": recipe.image_url,
+        "ingredients": formatted_ingredients,
+        "steps": formatted_steps,
+        "usedIngredientCount": len(formatted_ingredients),
+        "translated_title": recipe.title,
+        "translated_ingredients": formatted_ingredients,
+        "translated_steps": formatted_steps,
+        "calories": recipe.calories,
+        "nutrition": recipe.nutrition or {},
+        "likes_count": _likes_count_for_external_recipe_id(db, rid),
+        "meal_plan_count": _meal_plan_count_for_recipe_id(db, rid),
+        "source": "base",
+        "relevance_score": relevance_score,
+    }
+
+
+def list_popular_base_recipes(db: Session, limit: int = 8) -> List[Dict[str, Any]]:
+    """Популярные рецепты из локальной базы (без Spoonacular)."""
+    results = (
+        db.query(BaseRecipe)
+        .order_by(BaseRecipe.popularity_score.desc(), BaseRecipe.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_base_recipe_to_card(r, db) for r in results]
+
+
+def _nutrition_from_recipe_body(body: Dict[str, Any]) -> tuple:
+    nutrition = body.get("nutrition")
+    if isinstance(nutrition, dict) and nutrition:
+        return body.get("calories"), nutrition
+    protein = body.get("protein_g")
+    carbs = body.get("carbs_g")
+    fat = body.get("fat_g")
+    if protein is None and carbs is None and fat is None:
+        return body.get("calories"), None
+    built = {}
+    if protein is not None:
+        built["protein"] = protein
+    if carbs is not None:
+        built["carbohydrates"] = carbs
+    if fat is not None:
+        built["fat"] = fat
+    return body.get("calories"), built or None
+
+
+def _merge_recipe_cards(*lists: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    seen: set = set()
+    out: List[Dict[str, Any]] = []
+    for lst in lists:
+        for card in lst:
+            rid = card.get("id")
+            if rid in seen:
+                continue
+            seen.add(rid)
+            out.append(card)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def get_recommendations_local_fallback(
+    db: Session,
+    limit: int,
+    tags: Optional[str] = None,
+    ingredients: Optional[str] = None,
+    *,
+    apply_spoonacular_tag_filter: bool = False,
+) -> List[Dict[str, Any]]:
+    """Каналы/профили + база рецептов, когда Spoonacular недоступен."""
+    channel_tags = tags if apply_spoonacular_tag_filter else None
+    channel = get_channel_recipes_for_recommendations(
+        db, limit=limit, tags=channel_tags, ingredients=ingredients
+    )
+    base = list_popular_base_recipes(db, limit=limit)
+    return _merge_recipe_cards(channel, base, limit=limit)
+
+
+def _recommendations_cache_usable(payload: Dict[str, Any]) -> bool:
+    recipes = payload.get("recipes") or []
+    meta = payload.get("meta") or {}
+    if len(recipes) < 3:
+        return False
+    if meta.get("spoonacular_quota_exhausted"):
+        return False
+    return True
+
+
+def _recommendations_response(
+    recipes: List[Dict[str, Any]],
+    meta: Optional[Dict[str, Any]],
+    db: Session,
+    current_user: Optional[User],
+    language: Optional[str],
+) -> Dict[str, Any]:
+    """Ответ /recommendations: перевод карточек для AI-подписчиков (после общего кэша)."""
+    from app.services.recipe_localization_service import apply_recipe_localization_to_cards
+
+    lang = (language or "ru").lower()
+    localized, loc_meta = apply_recipe_localization_to_cards(
+        recipes, lang, db, current_user, full=False
+    )
+    merged_meta = dict(meta or {})
+    merged_meta.update(loc_meta)
+    _inject_viewer_plus_meta(merged_meta, db, current_user)
+    return {"recipes": localized, "meta": merged_meta}
 
 
 def search_user_recipes(
@@ -617,11 +709,7 @@ def search_user_recipes(
         Post.type == "recipe",
         Post.status == "published",
         Post.deleted_at.is_(None),
-        # Проверяем, что канал разрешает публикацию в Menu (или это профильный рецепт)
-        or_(
-            Post.channel_id.is_(None),  # Профильные рецепты
-            Post.channel_id.isnot(None)  # Рецепты из каналов (проверка auto_publish_to_menu будет ниже)
-        )
+        Post.is_global_visible.is_(True),
     ).group_by(Post.id)
     
     # Фильтруем по тексту запроса (без cast(body) целиком — он ловит мусор в JSON/URL).
@@ -725,12 +813,6 @@ def search_user_recipes(
                     image = item.get("url")
                     break
         
-        # Проверяем настройки канала (если рецепт из канала)
-        if post.channel_id:
-            channel = db.query(Channel).filter(Channel.id == post.channel_id).first()
-            if channel and not channel.auto_publish_to_menu:
-                continue  # Пропускаем рецепты из каналов, где auto_publish_to_menu = false
-
         author, author_avatar = _recipe_author_fields(db, post)
 
         recipe_data = {
@@ -789,11 +871,7 @@ def get_channel_recipes_for_recommendations(
         Post.type == "recipe",
         Post.status == "published",
         Post.deleted_at.is_(None),
-        # Включаем рецепты из каналов (где auto_publish_to_menu = true) и профильные рецепты
-        or_(
-            Post.channel_id.is_(None),  # Профильные рецепты
-            Post.channel_id.isnot(None)  # Рецепты из каналов
-        )
+        Post.is_global_visible.is_(True),
     ).group_by(Post.id)
     
     # Фильтр по тегам (если указаны)
@@ -825,12 +903,6 @@ def get_channel_recipes_for_recommendations(
     
     recipes = []
     for post, likes_count in results:
-        # Проверяем настройки канала (если рецепт из канала)
-        if post.channel_id:
-            channel = db.query(Channel).filter(Channel.id == post.channel_id).first()
-            if channel and not channel.auto_publish_to_menu:
-                continue  # Пропускаем рецепты из каналов, где auto_publish_to_menu = false
-
         author, author_avatar = _recipe_author_fields(db, post)
 
         body = post.body or {}
@@ -866,6 +938,7 @@ def get_channel_recipes_for_recommendations(
                     image = item.get("url")
                     break
         
+        calories, nutrition = _nutrition_from_recipe_body(body)
         recipe_data = {
             "id": f"user_{post.id}",  # ID для рецептов пользователей
             "title": post.title or "Рецепт без названия",
@@ -878,8 +951,8 @@ def get_channel_recipes_for_recommendations(
             "translated_title": post.title or "Рецепт без названия",
             "translated_ingredients": formatted_ingredients,
             "translated_steps": formatted_steps,
-            "calories": body.get("calories"),
-            "nutrition": None,
+            "calories": calories,
+            "nutrition": nutrition,
             "channel_id": post.channel_id,
             "user_id": post.user_id,
             "source": "user" if post.channel_id is None else "channel",
@@ -918,39 +991,42 @@ async def get_recommendations(
     # Если Spoonacular не настроен — отдаём рецепты из каналов/профилей, чтобы в Menu что-то было
     if not SPOONACULAR_API_KEY:
         try:
-            channel_recipes = get_channel_recipes_for_recommendations(
+            local_recipes = get_recommendations_local_fallback(
                 db, limit=limit, tags=tags, ingredients=ingredients
             )
             meta = {
                 "mode": mode or "balanced",
                 "language": language or "ru",
             }
-            _inject_viewer_plus_meta(meta, db, current_user)
-            return {
-                "recipes": channel_recipes[:limit],
-                "meta": meta,
-            }
+            return _recommendations_response(
+                local_recipes[:limit], meta, db, current_user, language
+            )
         except Exception as e:
             logger.warning(f"Ошибка загрузки рецептов из каналов: {e}")
             meta = {"mode": mode or "balanced", "language": language or "ru"}
-            _inject_viewer_plus_meta(meta, db, current_user)
-            return {
-                "recipes": [],
-                "meta": meta,
-            }
+            return _recommendations_response([], meta, db, current_user, language)
 
     # Ключ кэша: при изменении состава полей (например author/author_avatar) — поднять версию.
-    cache_key = f"recommendations:v7:{limit}:{tags or 'none'}:{language or 'ru'}:q{int(quick)}"
+    cache_key = f"recommendations:v9:{limit}:{tags or 'none'}:{language or 'ru'}:q{int(quick)}"
     
     # Проверяем кэш
     try:
         cached = redis_client.get(cache_key)
         if cached:
-            logger.info(f"✅ Используем кэш для рекомендаций: {cache_key}")
             payload = json.loads(cached)
-            m = payload.get("meta")
-            _inject_viewer_plus_meta(m, db, current_user)
-            return payload
+            if _recommendations_cache_usable(payload):
+                logger.info(f"✅ Используем кэш для рекомендаций: {cache_key}")
+                return _recommendations_response(
+                    payload.get("recipes") or [],
+                    payload.get("meta"),
+                    db,
+                    current_user,
+                    language,
+                )
+            logger.info(
+                "Пропуск кэша рекомендаций (%s): мало карточек или исчерпана квота Spoonacular",
+                cache_key,
+            )
     except (RedisConnectionError, RedisTimeoutError) as e:
         logger.warning(f"Redis недоступен для кэша: {e}")
     except Exception as e:
@@ -987,21 +1063,20 @@ async def get_recommendations(
                 "spoonacular_status": resp.status_code,
                 "spoonacular_quota_exhausted": quota_exhausted,
             }
-            _inject_viewer_plus_meta(meta_err, db, current_user)
             try:
-                channel_recipes = get_channel_recipes_for_recommendations(
-                    db, limit=limit, tags=tags, ingredients=ingredients
+                local_recipes = get_recommendations_local_fallback(
+                    db,
+                    limit=limit,
+                    tags=tags,
+                    ingredients=ingredients,
+                    apply_spoonacular_tag_filter=False,
                 )
-                return {
-                    "recipes": channel_recipes[:limit],
-                    "meta": meta_err,
-                }
+                return _recommendations_response(
+                    local_recipes[:limit], meta_err, db, current_user, language
+                )
             except Exception as e:
-                logger.warning(f"Ошибка загрузки рецептов из каналов: {e}")
-            return {
-                "recipes": [],
-                "meta": meta_err,
-            }
+                logger.warning(f"Ошибка локального fallback рекомендаций: {e}")
+            return _recommendations_response([], meta_err, db, current_user, language)
         
         data = resp.json()
         logger.debug(f"📦 Ответ Spoonacular: keys={list(data.keys())}")
@@ -1030,6 +1105,8 @@ async def get_recommendations(
                 image_clean = image.strip() if image else None
                 if not image_clean:
                     image_clean = None
+                else:
+                    image_clean = _spoonacular_card_image_url(image_clean)
                 out_quick.append(
                     {
                         "id": rid,
@@ -1190,6 +1267,10 @@ async def get_recommendations(
         except Exception as e:
             logger.warning(f"⚠️ Error fetching channel recipes: {e}")
             all_recipes = out
+
+        if len(all_recipes) < limit:
+            base_extra = list_popular_base_recipes(db, limit=limit)
+            all_recipes = _merge_recipe_cards(all_recipes, base_extra, limit=limit)
         
         logger.debug(f"📤 Возвращаем {len(all_recipes)} рецептов (из них {len(channel_recipes) if 'channel_recipes' in locals() else 0} из каналов)")
         result = {
@@ -1200,43 +1281,49 @@ async def get_recommendations(
             },
         }
         
-        # Сохраняем в кэш на 1 час (3600 секунд) — payload без полей, зависящих от пользователя
-        try:
-            redis_client.setex(cache_key, 3600, json.dumps(result, ensure_ascii=False, default=str))
-            logger.info(f"💾 Сохранено в кэш: {cache_key}")
-        except (RedisConnectionError, RedisTimeoutError) as e:
-            logger.warning(f"Redis недоступен для сохранения кэша: {e}")
-        except Exception as e:
-            logger.warning(f"Ошибка сохранения кэша: {e}")
+        # Сохраняем в кэш на 1 час — не кэшируем «бедные» ответы при исчерпании квоты
+        if _recommendations_cache_usable(result):
+            try:
+                redis_client.setex(
+                    cache_key, 3600, json.dumps(result, ensure_ascii=False, default=str)
+                )
+                logger.info(f"💾 Сохранено в кэш: {cache_key}")
+            except (RedisConnectionError, RedisTimeoutError) as e:
+                logger.warning(f"Redis недоступен для сохранения кэша: {e}")
+            except Exception as e:
+                logger.warning(f"Ошибка сохранения кэша: {e}")
         
-        _inject_viewer_plus_meta(result.get("meta"), db, current_user)
-        return result
+        return _recommendations_response(
+            result.get("recipes") or [],
+            result.get("meta"),
+            db,
+            current_user,
+            language,
+        )
     except Exception as e:
         logger.warning(f"Error fetching recommendations: {e}")
         try:
-            channel_recipes = get_channel_recipes_for_recommendations(
-                db, limit=limit, tags=tags, ingredients=ingredients
+            local_recipes = get_recommendations_local_fallback(
+                db,
+                limit=limit,
+                tags=tags,
+                ingredients=ingredients,
+                apply_spoonacular_tag_filter=False,
             )
             meta = {
                 "mode": mode or "balanced",
                 "language": language or "ru",
             }
-            _inject_viewer_plus_meta(meta, db, current_user)
-            return {
-                "recipes": channel_recipes[:limit],
-                "meta": meta,
-            }
+            return _recommendations_response(
+                local_recipes[:limit], meta, db, current_user, language
+            )
         except Exception as e2:
             logger.warning(f"Fallback channel recipes failed: {e2}")
         meta = {
             "mode": mode or "balanced",
             "language": language or "ru",
         }
-        _inject_viewer_plus_meta(meta, db, current_user)
-        return {
-            "recipes": [],
-            "meta": meta,
-        }
+        return _recommendations_response([], meta, db, current_user, language)
 
 
 @router.post("/recipes")
@@ -1247,6 +1334,7 @@ async def search_recipes(
     tags: Optional[str] = Body(None, description="Теги для фильтрации"),
     max_ready_time: Optional[int] = Body(None, description="Макс. время готовки в минутах (фильтр)"),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Поиск рецептов по ингредиентам
@@ -1258,6 +1346,14 @@ async def search_recipes(
     user_settings = get_user_settings()
     requested_mode = normalize_mode(mode or user_settings.get("analysis_mode", DEFAULT_MODE))
     lang = (language or user_settings.get("language", DEFAULT_LANGUAGE)).lower()
+
+    from app.services.recipe_localization_service import (
+        apply_recipe_localization_to_cards,
+        card_needs_localization,
+        viewer_can_localize_recipes,
+    )
+
+    can_localize = viewer_can_localize_recipes(db, current_user, lang)
     
     # Проверяем кэш в Redis
     cache_key = f"recipes:v3:{ingredients.lower()}:{requested_mode}:{lang}:{max_ready_time or 0}"
@@ -1265,9 +1361,16 @@ async def search_recipes(
         cached = redis_client.get(cache_key)
         if cached:
             data = json.loads(cached)
-            # Сохраняем в историю
             store_history_entry(ingredients, None, requested_mode)
-            return {"recipes": data, "meta": {"mode": requested_mode, "language": lang}}
+            meta_cached: Dict[str, Any] = {"mode": requested_mode, "language": lang}
+            if can_localize:
+                data, loc = apply_recipe_localization_to_cards(
+                    data, lang, db, current_user, full=True
+                )
+                meta_cached.update(loc)
+            elif any(card_needs_localization(c, lang) for c in data):
+                meta_cached["recipe_translation_requires_ai"] = True
+            return {"recipes": data, "meta": meta_cached}
     except Exception as e:
         # Redis недоступен, продолжаем без кэша
         logger.warning("Redis cache error (continuing without cache): %s", e)
@@ -1551,14 +1654,19 @@ async def search_recipes(
                 if not image_clean or image_clean == "":
                     image_clean = None
             
-                # Получаем язык из настроек пользователя
                 user_settings = get_user_settings()
                 target_lang = user_settings.get("language", lang or "ru")
-            
-                # Переводим на язык пользователя
-                translated_title = translate_text(title, target_lang)
-                translated_ingredients = translate_list(info["ingredients"], target_lang)
-                translated_steps = translate_steps(info["steps"], target_lang)
+
+                if can_localize:
+                    translated_title = translate_text(title, target_lang)
+                    translated_ingredients = translate_list(
+                        info["ingredients"], target_lang
+                    )
+                    translated_steps = translate_steps(info["steps"], target_lang)
+                else:
+                    translated_title = title
+                    translated_ingredients = info["ingredients"]
+                    translated_steps = info["steps"]
             
                 # Определяем usedIngredientCount
                 used_ingredient_count = item.get("usedIngredientCount", 0)
@@ -1669,10 +1777,14 @@ async def search_recipes(
         except Exception as e:
             logger.warning("Redis cache save error (continuing without cache): %s", e)
     
-        # Сохраняем в историю
         store_history_entry(ingredients, None, requested_mode)
-    
-        return {"recipes": all_recipes, "meta": {"mode": requested_mode, "language": lang}}
+
+        meta_out: Dict[str, Any] = {"mode": requested_mode, "language": lang}
+        if can_localize:
+            meta_out["recipe_translation_enabled"] = True
+        elif any(card_needs_localization(c, lang) for c in all_recipes):
+            meta_out["recipe_translation_requires_ai"] = True
+        return {"recipes": all_recipes, "meta": meta_out}
     except Exception as e:
         logger.warning(f"Error searching recipes: {e}")
         # В случае ошибки все равно пытаемся вернуть рецепты из каналов и профилей
@@ -1682,6 +1794,117 @@ async def search_recipes(
         except Exception as e:
             logger.warning(f"⚠️ Error fetching user recipes: {e}")
             return {"recipes": [], "meta": {"mode": requested_mode, "language": lang}}
+
+
+_SPOONACULAR_CARD_SIZE_RE = re.compile(
+    r"-\d+x\d+(?=\.(jpg|jpeg|png|webp)$)", re.IGNORECASE
+)
+
+
+def _spoonacular_card_image_url(url: Optional[str]) -> Optional[str]:
+    """Меньшее превью Spoonacular — 556x370 из РФ часто грузится десятки секунд."""
+    if not url:
+        return None
+    u = url.strip()
+    if not u:
+        return None
+    if "spoonacular.com" in u.lower():
+        return _SPOONACULAR_CARD_SIZE_RE.sub("-312x231", u)
+    return u
+
+
+def _proxy_allowed_image_url(image_url: str) -> bool:
+    """Разрешённые источники для прокси (CORS Web + стабильная загрузка аватаров на мобильных)."""
+    u = (image_url or "").strip()
+    if not u.startswith("https://"):
+        return False
+    prefixes = (
+        "https://img.spoonacular.com",
+        "https://spoonacular.com",
+        "https://firebasestorage.googleapis.com",
+        "https://lh3.googleusercontent.com",
+        "https://lh4.googleusercontent.com",
+        "https://lh5.googleusercontent.com",
+        "https://lh6.googleusercontent.com",
+        "https://pbs.twimg.com",
+        "https://avatars.githubusercontent.com",
+        "https://secure.gravatar.com",
+        "https://www.gravatar.com",
+        "https://cdn.discordapp.com",
+        "https://storage.googleapis.com",
+        "https://s3.twcstorage.ru",
+    )
+    low = u.lower()
+    return any(low.startswith(p) for p in prefixes)
+
+
+def _fetch_proxied_image(url: str) -> Response:
+    """Прокси для изображений (CORS Web + внешние HTTPS на мобильных)."""
+    import urllib.parse
+
+    if url.startswith("http"):
+        image_url = url
+    else:
+        image_url = urllib.parse.unquote(url)
+
+    if not _proxy_allowed_image_url(image_url):
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    resp = requests.get(
+        image_url,
+        timeout=10,
+        stream=True,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        },
+    )
+    if resp.status_code != 200:
+        logger.warning(f"❌ Image proxy error: {resp.status_code} for {image_url[:80]}...")
+        raise HTTPException(status_code=resp.status_code, detail="Failed to fetch image")
+
+    content_type = resp.headers.get("Content-Type", "image/jpeg")
+
+    return Response(
+        content=resp.content,
+        media_type=content_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Cache-Control": "public, max-age=86400",
+        },
+    )
+
+
+@router.get("/recipe-image-proxy")
+async def proxy_recipe_image_v2(
+    url: str = Query(..., description="URL изображения для проксирования"),
+):
+    """
+    Прокси изображений без префикса /recipes/{id} — иначе на части деплоев
+    путь перехватывается GET /recipes/{recipe_id} (422 для recipe_id=image-proxy).
+    """
+    try:
+        return _fetch_proxied_image(url)
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+@router.get("/recipes/image-proxy")
+async def proxy_recipe_image(url: str = Query(..., description="URL изображения для проксирования")):
+    """Устаревший путь; оставлен для совместимости."""
+    try:
+        return _fetch_proxied_image(url)
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @router.get("/recipes/{recipe_id}")
@@ -1786,6 +2009,74 @@ async def get_recipe_by_id(
     }
 
 
+def _food_scan_recipe_cards_from_search(
+    dish_name: str,
+    db: Session,
+    *,
+    lang: str = "ru",
+) -> List[Dict[str, Any]]:
+    """Похожие рецепты: база HAN Eat → каналы/профили → Spoonacular."""
+    query = (dish_name or "").strip()
+    if not query:
+        return []
+
+    cards: List[Dict[str, Any]] = []
+    if lang == "ru":
+        cards.extend(search_base_recipes(query, db, limit=4))
+    if len(cards) < 8:
+        cards.extend(search_user_recipes(query, db, limit=8 - len(cards)))
+
+    if len(cards) >= 8 or not SPOONACULAR_API_KEY:
+        return cards[:8]
+
+    def _fetch(q: str) -> List[Dict[str, Any]]:
+        try:
+            resp = requests.get(
+                "https://api.spoonacular.com/recipes/complexSearch",
+                params={
+                    "query": q,
+                    "number": 8,
+                    "addRecipeInformation": "true",
+                    "apiKey": SPOONACULAR_API_KEY,
+                },
+                timeout=14,
+            )
+            if resp.status_code != 200:
+                return []
+            return resp.json().get("results") or []
+        except Exception as exc:
+            logger.debug("food scan complexSearch failed: %s", exc)
+            return []
+
+    rows = _fetch(query)
+    if not rows:
+        en_query = translate_query_to_english_for_spoonacular(query)
+        if en_query:
+            rows = _fetch(en_query)
+
+    for rec in rows[: max(0, 8 - len(cards))]:
+        image = rec.get("image")
+        card_image = _spoonacular_card_image_url(image) if image else None
+        orig_title = (rec.get("title") or "").strip()
+        if not orig_title:
+            continue
+        cards.append(
+            {
+                "id": rec.get("id"),
+                "title": orig_title,
+                "translated_title": orig_title,
+                "image": build_proxy(card_image) if card_image else None,
+                "source_image": card_image or image,
+                "source": "spoonacular",
+                "ingredients": [],
+                "steps": [],
+                "usedIngredientCount": 0,
+                "confidence": None,
+            }
+        )
+    return cards
+
+
 @router.post("/analyze")
 async def analyze_photo(
     image_base64: Optional[str] = Body(None, description="Изображение в base64"),
@@ -1801,6 +2092,7 @@ async def analyze_photo(
     """
     from app.core.entitlements import AI_SCAN_RESERVE_REQUIRED_CODE
     from app.core.security import verify_ai_scan_ticket
+    from app.services.food_scan_gpt_service import analyze_food_photo_gpt
     from app.services.image_processing_service import optimize_scan_image_for_ai
 
     if not ai_scan_ticket or not verify_ai_scan_ticket(ai_scan_ticket, current_user.id):
@@ -1814,18 +2106,32 @@ async def analyze_photo(
 
     if not image_base64 and not image_url:
         raise HTTPException(status_code=400, detail="image_base64 or image_url required")
-    
-    if not SPOONACULAR_API_KEY:
-        raise HTTPException(status_code=502, detail="Spoonacular API key not configured")
+
+    use_spoonacular = bool(SPOONACULAR_API_KEY)
+    use_gpt = bool((settings.OPENAI_API_KEY or "").strip())
+    if not use_spoonacular and not use_gpt:
+        raise HTTPException(
+            status_code=502,
+            detail="Сервис анализа не настроен (нужен Spoonacular или OpenAI)",
+        )
     
     user_settings = get_user_settings()
     lang = (language or user_settings.get("language", DEFAULT_LANGUAGE)).lower()
     requested_mode = normalize_mode(mode or user_settings.get("analysis_mode", DEFAULT_MODE))
     
     raw = None
+    gpt_result: Optional[Dict[str, Any]] = None
     url = "https://api.spoonacular.com/food/images/analyze"
     last_spoonacular_status: Optional[int] = None
     last_spoonacular_hint: str = ""
+
+    def _spoonacular_analyze(img: bytes) -> requests.Response:
+        return requests.post(
+            url,
+            params={"apiKey": SPOONACULAR_API_KEY},
+            files={"file": ("capture.jpg", img, "image/jpeg")},
+            timeout=40,
+        )
 
     try:
         if image_base64:
@@ -1834,22 +2140,7 @@ async def analyze_photo(
                 image_bytes = base64.b64decode(cleaned)
             except Exception as exc:
                 raise HTTPException(status_code=400, detail=f"invalid base64 payload: {exc}")
-
             image_bytes = optimize_scan_image_for_ai(image_bytes)
-            files = {
-                "file": ("capture.jpg", image_bytes, "image/jpeg"),
-            }
-            resp = requests.post(
-                url,
-                params={"apiKey": SPOONACULAR_API_KEY},
-                files=files,
-                timeout=22,
-            )
-            last_spoonacular_status = resp.status_code
-            if resp.status_code != 200:
-                last_spoonacular_hint = (resp.text or "")[:240]
-            if resp.status_code == 200:
-                raw = resp.json()
         else:
             try:
                 with requests.get(
@@ -1877,28 +2168,57 @@ async def analyze_photo(
                     status_code=400,
                     detail=f"failed to fetch image_url: {exc}",
                 )
-            files = {
-                "file": ("remote.jpg", image_bytes, "image/jpeg"),
-            }
-            resp = requests.post(
-                url,
-                params={"apiKey": SPOONACULAR_API_KEY},
-                files=files,
-                timeout=40,
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            spoon_future = (
+                executor.submit(_spoonacular_analyze, image_bytes)
+                if use_spoonacular
+                else None
             )
-            last_spoonacular_status = resp.status_code
-            if resp.status_code != 200:
-                last_spoonacular_hint = (resp.text or "")[:240]
-            if resp.status_code == 200:
-                raw = resp.json()
+            gpt_future = (
+                executor.submit(analyze_food_photo_gpt, image_bytes, lang)
+                if use_gpt
+                else None
+            )
+            if spoon_future is not None:
+                resp = spoon_future.result()
+                last_spoonacular_status = resp.status_code
+                if resp.status_code != 200:
+                    last_spoonacular_hint = (resp.text or "")[:240]
+                if resp.status_code == 200:
+                    raw = resp.json()
+            if gpt_future is not None:
+                gpt_result = gpt_future.result()
 
         if not raw:
-            detail = "analysis failed"
-            if last_spoonacular_status:
-                detail = f"analysis failed (spoonacular HTTP {last_spoonacular_status})"
-                if last_spoonacular_hint:
-                    detail = f"{detail}: {last_spoonacular_hint}"
-            raise HTTPException(status_code=502, detail=detail)
+            gpt_usable = bool(
+                gpt_result
+                and (
+                    (gpt_result.get("dish_name") or "").strip()
+                    or gpt_result.get("nutrition")
+                    or gpt_result.get("calories") is not None
+                )
+            )
+            if gpt_usable:
+                raw = {
+                    "category": {
+                        "name": (gpt_result.get("dish_name") or "").strip(),
+                    },
+                    "recipes": [],
+                    "nutrition": {},
+                    "confidence": gpt_result.get("confidence"),
+                }
+                logger.info(
+                    "food scan: Spoonacular unavailable (%s), using GPT-only",
+                    last_spoonacular_status,
+                )
+            else:
+                detail = "analysis failed"
+                if last_spoonacular_status:
+                    detail = f"analysis failed (spoonacular HTTP {last_spoonacular_status})"
+                    if last_spoonacular_hint:
+                        detail = f"{detail}: {last_spoonacular_hint}"
+                raise HTTPException(status_code=502, detail=detail)
         
         nutrition = raw.get("nutrition", {}) or {}
         nutrients = nutrition.get("nutrients") or (nutrition.get("nutrition") or {}).get("nutrients", [])
@@ -1959,10 +2279,21 @@ async def analyze_photo(
         category_name = (category.get("name") or "").strip()
         # Перевод категории в hot-path откладываем — клиент показывает label сразу.
         
-        recipes_raw = (raw.get("recipes", []) or [])[:8]
+        def _recipe_matches_dish(title: str, dish: str) -> bool:
+            dish_n = (dish or "").strip().lower()
+            title_n = (title or "").strip().lower()
+            if not dish_n or not title_n:
+                return False
+            if dish_n in title_n or title_n in dish_n:
+                return True
+            dish_words = [w for w in dish_n.replace("-", " ").split() if len(w) >= 3]
+            return any(w in title_n for w in dish_words)
+
+        recipes_raw = (raw.get("recipes", []) or [])[:12]
         recipes = []
         for rec in recipes_raw:
             image = rec.get("image")
+            card_image = _spoonacular_card_image_url(image) if image else None
             orig_title = (rec.get("title") or "").strip()
             # Перевод каждого рецепта в hot-path сильно замедляет ответ; заголовок — как в Spoonacular.
             translated_title_val = orig_title
@@ -1970,22 +2301,79 @@ async def analyze_photo(
                 "id": rec.get("id"),
                 "title": orig_title,
                 "translated_title": translated_title_val,
-                "image": build_proxy(image) if image else None,
-                "source_image": image,
+                "image": build_proxy(card_image) if card_image else None,
+                "source_image": card_image or image,
                 "source": "spoonacular",
                 "ingredients": [],
                 "steps": [],
                 "usedIngredientCount": 0,
                 "confidence": rec.get("confidence"),
             })
-        
+
+        def _has_macro_nutrition(nut: dict) -> bool:
+            for key in ("protein", "fat", "carbohydrates", "carbs"):
+                val = nut.get(key)
+                if isinstance(val, (int, float)) and val > 0:
+                    return True
+            return False
+
+        portion_grams = None
+        nutrition_source = "spoonacular"
+        dish_for_match = category_name or category.get("name") or ""
+        if gpt_result:
+            gpt_nutrition = gpt_result.get("nutrition") or {}
+            gpt_name = (gpt_result.get("dish_name") or "").strip()
+            if gpt_name:
+                dish_for_match = gpt_name
+            if gpt_nutrition:
+                if not simplified_nutrition or not _has_macro_nutrition(simplified_nutrition):
+                    simplified_nutrition = {
+                        k: v
+                        for k, v in gpt_nutrition.items()
+                        if isinstance(v, (int, float))
+                    }
+                    nutrition_source = "gpt"
+                elif _has_macro_nutrition(gpt_nutrition):
+                    for k, v in gpt_nutrition.items():
+                        if isinstance(v, (int, float)) and (
+                            k not in simplified_nutrition
+                            or not simplified_nutrition.get(k)
+                        ):
+                            simplified_nutrition[k] = v
+                    nutrition_source = "gpt+spoonacular"
+            if gpt_result.get("calories") is not None:
+                calories = gpt_result["calories"]
+                if nutrition_source == "spoonacular":
+                    nutrition_source = "gpt"
+            if gpt_result.get("portion_grams") is not None:
+                portion_grams = gpt_result["portion_grams"]
+            gpt_conf = gpt_result.get("confidence")
+            if gpt_conf is not None and confidence is None:
+                confidence = gpt_conf
+
+        if dish_for_match and recipes:
+            matched = [
+                r
+                for r in recipes
+                if _recipe_matches_dish(r.get("title") or "", dish_for_match)
+            ]
+            if matched:
+                recipes = matched[:8]
+
+        if not recipes and dish_for_match:
+            recipes = _food_scan_recipe_cards_from_search(
+                dish_for_match, db, lang=lang
+            )
+
+        display_label = dish_for_match or category_name or category.get("name")
         analysis = {
-            "label": category.get("name"),
-            "translated_label": category_name or category.get("name"),
+            "label": display_label,
+            "translated_label": display_label,
             "confidence": confidence,
             "nutrition": simplified_nutrition,
             "calories": calories,
             "recipes": recipes,
+            "portion_grams": portion_grams,
         }
 
         AnalyticsService(db).log_event(
@@ -1993,7 +2381,11 @@ async def analyze_photo(
             entity_type="user",
             entity_id=current_user.id,
             user_id=current_user.id,
-            metadata={"mode": requested_mode, "language": lang},
+            metadata={
+                "mode": requested_mode,
+                "language": lang,
+                "nutrition_source": nutrition_source,
+            },
         )
         db.commit()
 
@@ -2142,80 +2534,6 @@ async def get_recipe_comments(recipe_id: int):
     except Exception as e:
         logger.warning(f"Error getting recipe comments: {e}")
         return {"comments": []}
-
-
-def _proxy_allowed_image_url(image_url: str) -> bool:
-    """Разрешённые источники для прокси (CORS Web + стабильная загрузка аватаров на мобильных)."""
-    u = (image_url or "").strip()
-    if not u.startswith("https://"):
-        return False
-    prefixes = (
-        "https://img.spoonacular.com",
-        "https://spoonacular.com",
-        "https://firebasestorage.googleapis.com",
-        "https://lh3.googleusercontent.com",
-        "https://lh4.googleusercontent.com",
-        "https://lh5.googleusercontent.com",
-        "https://lh6.googleusercontent.com",
-        "https://pbs.twimg.com",
-        "https://avatars.githubusercontent.com",
-        "https://secure.gravatar.com",
-        "https://www.gravatar.com",
-        "https://cdn.discordapp.com",
-        "https://storage.googleapis.com",
-    )
-    low = u.lower()
-    return any(low.startswith(p) for p in prefixes)
-
-
-@router.get("/recipes/image-proxy")
-async def proxy_recipe_image(url: str = Query(..., description="URL изображения для проксирования")):
-    """
-    Прокси для изображений рецептов (решает проблему CORS в Flutter Web)
-    и внешних аватарок на iOS/Android.
-    """
-    try:
-        # Декодируем URL если он закодирован
-        import urllib.parse
-        if url.startswith("http"):
-            image_url = url
-        else:
-            image_url = urllib.parse.unquote(url)
-        
-        if not _proxy_allowed_image_url(image_url):
-            raise HTTPException(status_code=400, detail="Invalid image URL")
-        
-        # Загружаем изображение
-        resp = requests.get(
-            image_url, 
-            timeout=10, 
-            stream=True,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
-        )
-        if resp.status_code != 200:
-            logger.warning(f"❌ Image proxy error: {resp.status_code} for {image_url[:80]}...")
-            raise HTTPException(status_code=resp.status_code, detail="Failed to fetch image")
-        
-        # Определяем content type
-        content_type = resp.headers.get("Content-Type", "image/jpeg")
-        
-        # Возвращаем изображение с правильными CORS заголовками
-        return Response(
-            content=resp.content,
-            media_type=content_type,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-                "Cache-Control": "public, max-age=86400",  # Кэш на 24 часа
-            }
-        )
-    except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 @router.post("/recipes/{recipe_id}/comments")

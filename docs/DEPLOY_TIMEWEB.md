@@ -72,9 +72,7 @@ python3 scripts/create_all_test_accounts.py
 systemctl restart haneat-api
 ```
 
-Миграции: `034_recipe_visibility_v1`, `035_channel_member_status_v1`, `036_email_auth_tokens_v1` (email, сброс пароля).
-
-После `git pull` добавьте в `backend/.env` блок SMTP (см. `backend/env_template.txt`) и перезапустите API.
+Миграции для приватных каналов и видимости рецептов: `034_recipe_visibility_v1`, `035_channel_member_status_v1`.
 
 ### Проверка, что новый API на проде
 

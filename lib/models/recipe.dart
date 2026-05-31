@@ -31,6 +31,33 @@ class Recipe {
   final int? mealPlanCount; // Количество добавлений в план питания
   final int? servings; // Количество порций (для пересчёта ингредиентов)
 
+  /// Граммы макронутриента из [nutrition] (Spoonacular `nutrients` или плоские ключи).
+  double? nutrientGrams(String name) {
+    final n = nutrition;
+    if (n == null) return null;
+    final nutrients = n['nutrients'];
+    if (nutrients is List) {
+      for (final raw in nutrients) {
+        if (raw is! Map) continue;
+        final m = Map<String, dynamic>.from(raw);
+        if ('${m['name']}'.toLowerCase() == name.toLowerCase()) {
+          final amt = m['amount'];
+          if (amt is num) return amt.toDouble();
+          return double.tryParse('$amt');
+        }
+      }
+    }
+    final key = name.toLowerCase();
+    final direct = n[key] ?? n[name];
+    if (direct is num) return direct.toDouble();
+    if (direct is String) {
+      return double.tryParse(
+        direct.replaceAll(RegExp(r'[^0-9.,-]'), '').replaceAll(',', '.'),
+      );
+    }
+    return null;
+  }
+
   Recipe({
     required this.id,
     required this.title,
@@ -58,6 +85,45 @@ class Recipe {
     this.mealPlanCount,
     this.servings,
   });
+
+  static String? _nonEmptyStr(dynamic v) {
+    if (v == null) return null;
+    final s = v.toString().trim();
+    if (s.isEmpty || s == 'null') return null;
+    return s;
+  }
+
+  static String? _authorFromJson(Map<String, dynamic> json) {
+    final rawAuthor = json['author'];
+    if (rawAuthor is String) {
+      return _nonEmptyStr(rawAuthor);
+    }
+    if (rawAuthor is Map) {
+      final m = Map<String, dynamic>.from(rawAuthor);
+      return _nonEmptyStr(m['name']) ??
+          _nonEmptyStr(m['display_name']) ??
+          _nonEmptyStr(m['username']);
+    }
+    return _nonEmptyStr(json['publisher_name']) ??
+        _nonEmptyStr(json['channel_name']);
+  }
+
+  static String? _authorAvatarFromJson(Map<String, dynamic> json) {
+    final flat = _nonEmptyStr(json['author_avatar']) ??
+        _nonEmptyStr(json['authorAvatar']) ??
+        _nonEmptyStr(json['avatar_url']) ??
+        _nonEmptyStr(json['channel_avatar']) ??
+        _nonEmptyStr(json['channel_image_url']) ??
+        _nonEmptyStr(json['group_avatar']) ??
+        _nonEmptyStr(json['profile_image_url']);
+    if (flat != null) return flat;
+    final rawAuthor = json['author'];
+    if (rawAuthor is Map) {
+      final m = Map<String, dynamic>.from(rawAuthor);
+      return _nonEmptyStr(m['avatar_url']) ?? _nonEmptyStr(m['avatarUrl']);
+    }
+    return null;
+  }
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
     // 1. Парсим ингредиенты надёжно
@@ -185,9 +251,9 @@ class Recipe {
       targetLanguage: json['target_language']?.toString(),
       videoUrl: json['video_url']?.toString(),
       videoThumbnail: json['video_thumbnail']?.toString(),
-      author: json['author']?.toString(),
-      source: json['source']?.toString(),
-      authorAvatar: json['author_avatar']?.toString(),
+      author: _authorFromJson(json),
+      source: _nonEmptyStr(json['source']),
+      authorAvatar: _authorAvatarFromJson(json),
       rating: json['rating'] is num ? (json['rating'] as num).toDouble() : null,
       likesCount: json['likes_count'] is int ? json['likes_count'] : (json['likes_count'] is num ? (json['likes_count'] as num).toInt() : null),
       mealPlanCount: json['meal_plan_count'] is int ? json['meal_plan_count'] : (json['meal_plan_count'] is num ? (json['meal_plan_count'] as num).toInt() : null),

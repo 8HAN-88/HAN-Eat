@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import '../features/feed/home_page.dart';
-import '../features/community/community_page.dart';
+import '../features/feed/presentation/main_feed_screen.dart';
+import '../features/community/presentation/community_screen.dart';
+import '../features/community/presentation/community_upload_screen.dart';
 import '../features/favorites/favorites_page.dart';
 import '../features/shopping/shopping_page.dart';
 
+/// Устаревшая нижняя навигация (4 таба). Используйте [RootShell] + GoRouter.
+@Deprecated('Use RootShell via GoRouter (Feed / Channels / Menu / Profile)')
 class MainShell extends StatefulWidget {
-  const MainShell({Key? key}) : super(key: key);
+  const MainShell({super.key});
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -13,24 +16,19 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
   int _index = 0;
-  static const _titles = ['Home', 'Community', 'Favorites', 'Shopping'];
 
   final List<Widget> _pages = const [
-    HomePage(),
-    CommunityPage(),
+    MainFeedScreen(),
+    CommunityScreen(),
     FavoritesPage(),
     ShoppingPage(),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_index]),
-        centerTitle: true,
-        elevation: 2,
-      ),
+      // Внутренние вкладки уже с собственным AppBar — иначе двойная шапка.
+      appBar: null,
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: _pages[_index],
@@ -40,8 +38,11 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       floatingActionButton: _index == 1
           ? FloatingActionButton(
               heroTag: 'main_shell_upload',
-              onPressed: () => Navigator.pushNamed(context,
-                  '/community'), // Community page already supports upload FAB; here navigate for full screen
+              onPressed: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const CommunityUploadScreen(),
+                ),
+              ),
               child: const Icon(Icons.cloud_upload),
             )
           : null,
@@ -49,16 +50,15 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
         currentIndex: _index,
         onTap: (i) => setState(() => _index = i),
         type: BottomNavigationBarType.fixed,
-        items: [
+        items: const [
           BottomNavigationBarItem(
-              icon: const Icon(Icons.home_outlined), label: 'Home'),
+              icon: Icon(Icons.home_outlined), label: 'Главная'),
           BottomNavigationBarItem(
-              icon: const Icon(Icons.group_outlined), label: 'Community'),
+              icon: Icon(Icons.group_outlined), label: 'Сообщество'),
           BottomNavigationBarItem(
-              icon: const Icon(Icons.favorite_border), label: 'Favorites'),
+              icon: Icon(Icons.favorite_border), label: 'Избранное'),
           BottomNavigationBarItem(
-              icon: const Icon(Icons.shopping_cart_outlined),
-              label: 'Shopping'),
+              icon: Icon(Icons.shopping_cart_outlined), label: 'Покупки'),
         ],
       ),
     );

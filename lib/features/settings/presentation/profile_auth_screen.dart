@@ -1,8 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/app_router.dart';
+import '../../../core/config/google_auth_config.dart';
 import '../../../services/user_service.dart';
 import '../../../services/auth_service.dart';
+import '../../auth/sign_out_helper.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../services/push_notification_service.dart';
+import '../../../widgets/ai_scan_credits_tile.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -13,24 +21,30 @@ class ProfileAuthScreen extends ConsumerStatefulWidget {
 
 class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   final _nameCtl = TextEditingController();
+  final _bioCtl = TextEditingController();
   bool _loading = false;
   double _uploadProgress = 0.0;
+
+  void _syncFieldsFromProfile() {
+    final user = AuthService.instance.currentUser;
+    final p = UserService.instance.profile.value;
+    _nameCtl.text = p?.displayName ?? user?.name ?? '';
+    _bioCtl.text = p?.user.bio ?? user?.bio ?? '';
+  }
 
   @override
   void initState() {
     super.initState();
     if (UserService.isInitialized) {
-      final p = UserService.instance.profile.value;
-      _nameCtl.text = p?.displayName ?? '';
+      _syncFieldsFromProfile();
       UserService.instance.profile.addListener(_onProfileChanged);
     }
   }
 
   void _onProfileChanged() {
-    if (UserService.isInitialized) {
-      final p = UserService.instance.profile.value;
-      _nameCtl.text = p?.displayName ?? '';
-      if (mounted) setState(() {});
+    if (UserService.isInitialized && mounted) {
+      _syncFieldsFromProfile();
+      setState(() {});
     }
   }
 
@@ -40,6 +54,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       UserService.instance.profile.removeListener(_onProfileChanged);
     }
     _nameCtl.dispose();
+    _bioCtl.dispose();
     super.dispose();
   }
 
@@ -47,7 +62,8 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     if (!UserService.isInitialized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис пользователя не инициализирован')),
+          const SnackBar(
+              content: Text('Сервис пользователя не инициализирован')),
         );
       }
       return;
@@ -64,13 +80,13 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Аватар обновлен')),
+          const SnackBar(content: Text('Аватар обновлён')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки аватара: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
         );
       }
     } finally {
@@ -83,28 +99,40 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     }
   }
 
-  Future<void> _saveName() async {
+  Future<void> _saveProfile() async {
     if (!UserService.isInitialized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис пользователя не инициализирован')),
+          const SnackBar(
+              content: Text('Сервис пользователя не инициализирован')),
         );
       }
       return;
     }
     final name = _nameCtl.text.trim();
-    setState(() => _loading = true);
-    try {
-      await UserService.instance.updateDisplayName(name);
+    if (name.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Профиль обновлен')),
+          const SnackBar(content: Text('Введите отображаемое имя')),
+        );
+      }
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await UserService.instance.updateProfileFields(
+        name: name,
+        bio: _bioCtl.text,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Профиль обновлён')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
         );
       }
     } finally {
@@ -115,50 +143,13 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   Future<void> _signOut() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Выйти из аккаунта?'),
-        content: const Text('Вы уверены, что хотите выйти?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Выйти'),
-          ),
-        ],
-      ),
+    await confirmAndSignOut(
+      context,
+      navigateToLogin: false,
+      onSignedOut: () {
+        if (mounted) setState(() {});
+      },
     );
-    if (confirm != true) return;
-
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    try {
-      await AuthService.instance.signOut();
-      // Очищаем профиль пользователя при выходе
-      if (UserService.isInitialized) {
-        UserService.instance.profile.value = null;
-      }
-      if (mounted) {
-        // После выхода экран автоматически обновится и покажет форму входа
-        setState(() {});
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выхода: $e')),
-        );
-      }
-    }
   }
 
   @override
@@ -197,7 +188,8 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               children: [
                 CircleAvatar(
                   radius: 56,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   backgroundImage: currentProfile.avatarUrl != null
                       ? NetworkImage(currentProfile.avatarUrl!)
                       : null,
@@ -206,7 +198,9 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                           _initials(currentProfile.displayName),
                           style: TextStyle(
                             fontSize: 32,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
                           ),
                         )
                       : null,
@@ -251,9 +245,13 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
           Card(
             child: ListTile(
               leading: const Icon(Icons.email_outlined),
-              title: const Text('Email'),
-              subtitle: Text(user.email ?? 'Не указан'),
+              title: const Text('Эл. почта'),
+              subtitle: Text(user.email),
             ),
+          ),
+          const SizedBox(height: 16),
+          const Card(
+            child: AiScanCreditsTile(),
           ),
           const SizedBox(height: 16),
           // Имя
@@ -274,12 +272,28 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                       hintText: 'Введите ваше имя',
                       border: OutlineInputBorder(),
                     ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'О себе',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _bioCtl,
+                    decoration: const InputDecoration(
+                      hintText: 'Краткое описание профиля',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                    textInputAction: TextInputAction.done,
                   ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _loading ? null : _saveName,
+                      onPressed: _loading ? null : _saveProfile,
                       child: _loading
                           ? const SizedBox(
                               width: 16,
@@ -294,18 +308,6 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // Редактировать профиль
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Редактировать профиль'),
-              subtitle: const Text('Изменить имя, описание и другие данные'),
-              onTap: () {
-                // Уже на экране редактирования
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
           // Аналитика
           Card(
             child: ListTile(
@@ -315,6 +317,15 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               onTap: () {
                 context.pushNamed('analytics');
               },
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.auto_awesome_outlined),
+              title: const Text('Инструменты автора'),
+              subtitle: const Text('Продвижение, расписание, аналитика'),
+              onTap: () => context.push(CreatorToolsRoute.path),
             ),
           ),
           const SizedBox(height: 16),
@@ -361,26 +372,46 @@ class _LoginFormState extends State<_LoginForm> {
     if (!AuthService.isInitialized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
+          const SnackBar(
+              content: Text('Сервис авторизации не инициализирован')),
+        );
+      }
+      return;
+    }
+    final email = _emailCtl.text.trim();
+    final password = _passCtl.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите email и пароль')),
         );
       }
       return;
     }
     setState(() => _loading = true);
     try {
-      await AuthService.instance
-          .signInWithEmail(_emailCtl.text.trim(), _passCtl.text.trim());
+      await AuthService.instance.signInWithEmail(email, password);
       // Профиль уже обновлен в AuthService.signInWithEmail, но убедимся
       if (UserService.isInitialized) {
         await UserService.instance.ensureProfileLoaded();
       }
       if (mounted) {
-        context.go('/feed');
+        context.go(FeedRoute.path);
+      }
+    } on AuthException catch (e) {
+      if (mounted) {
+        if (e.isEmailNotVerified) {
+          context.push(VerifyEmailRoute.withEmail(_emailCtl.text.trim()));
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка входа: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось войти'))),
         );
       }
     } finally {
@@ -394,28 +425,47 @@ class _LoginFormState extends State<_LoginForm> {
     if (!AuthService.isInitialized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
+          const SnackBar(
+              content: Text('Сервис авторизации не инициализирован')),
+        );
+      }
+      return;
+    }
+    final email = _emailCtl.text.trim();
+    final password = _passCtl.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Введите email и пароль')),
         );
       }
       return;
     }
     setState(() => _loading = true);
     try {
-      await AuthService.instance
-          .createUserWithEmail(_emailCtl.text.trim(), _passCtl.text.trim());
+      await AuthService.instance.createUserWithEmail(email, password);
+      unawaited(
+        PushNotificationService.syncTokenAfterAuth().catchError(
+          (Object e) => debugPrint('FCM after register: $e'),
+        ),
+      );
       // Профиль уже обновлен в AuthService.createUserWithEmail, но убедимся
       if (UserService.isInitialized) {
         await UserService.instance.ensureProfileLoaded();
       }
       if (mounted) {
-        context.go('/feed');
+        context.go(FeedRoute.path);
       }
     } catch (e) {
       if (mounted) {
+        final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка регистрации: $e'),
-            backgroundColor: Colors.red,
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось зарегистрироваться'),
+              style: TextStyle(color: scheme.onError),
+            ),
+            backgroundColor: scheme.error,
           ),
         );
       }
@@ -430,7 +480,8 @@ class _LoginFormState extends State<_LoginForm> {
     if (!AuthService.isInitialized) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
+          const SnackBar(
+              content: Text('Сервис авторизации не инициализирован')),
         );
       }
       return;
@@ -438,20 +489,22 @@ class _LoginFormState extends State<_LoginForm> {
     setState(() => _loading = true);
     try {
       await AuthService.instance.signInWithGoogle();
+      unawaited(
+        PushNotificationService.syncTokenAfterAuth().catchError(
+          (Object e) => debugPrint('FCM after Google: $e'),
+        ),
+      );
       // Профиль уже обновлен в AuthService.signInWithGoogle, но убедимся
       if (UserService.isInitialized) {
         await UserService.instance.ensureProfileLoaded();
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Вход через Google выполнен успешно')),
-        );
-        context.go('/feed');
+        context.go(FeedRoute.path);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка входа через Google: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось войти через Google'))),
         );
       }
     } finally {
@@ -476,7 +529,7 @@ class _LoginFormState extends State<_LoginForm> {
           TextField(
             controller: _emailCtl,
             decoration: const InputDecoration(
-              labelText: 'Email',
+              labelText: 'Эл. почта',
               border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.emailAddress,
@@ -490,7 +543,18 @@ class _LoginFormState extends State<_LoginForm> {
             ),
             obscureText: true,
           ),
-          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _loading
+                  ? null
+                  : () => context.push(
+                        ForgotPasswordRoute.withEmail(_emailCtl.text.trim()),
+                      ),
+              child: const Text('Забыли пароль?'),
+            ),
+          ),
+          const SizedBox(height: 8),
           if (_loading)
             const CircularProgressIndicator()
           else ...[
@@ -505,23 +569,26 @@ class _LoginFormState extends State<_LoginForm> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: _register,
+                onPressed: _loading
+                    ? null
+                    : () => context.push(RegisterRoute.path),
                 child: const Text('Зарегистрироваться'),
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.login),
-                label: const Text('Войти через Google'),
-                onPressed: _google,
+            if (GoogleAuthConfig.isConfigured) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.login),
+                  label: const Text('Войти через Google'),
+                  onPressed: _google,
+                ),
               ),
-            ),
+            ],
           ],
         ],
       ),
     );
   }
 }
-

@@ -2,7 +2,7 @@
 Creator tools: продвижение постов, отложенные публикации.
 """
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -22,8 +22,65 @@ from app.services.post_publish_service import (
     unpromote_post,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.recipe_nutrition_gpt_service import analyze_recipe_nutrition_gpt
 
 router = APIRouter()
+
+
+class AnalyzeRecipeNutritionRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    ingredients: List[str] = Field(default_factory=list)
+    steps: List[str] = Field(default_factory=list)
+    servings: Optional[int] = Field(default=1, ge=1, le=50)
+    language: str = Field(default="ru", max_length=8)
+
+
+@router.post("/recipes/analyze-nutrition")
+async def analyze_recipe_nutrition(
+    request: AnalyzeRecipeNutritionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """AI-оценка КБЖУ рецепта (тариф Creator или Pro)."""
+    if not SubscriptionService(db).has_creator_access(current_user.id):
+        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_CREATOR_REQUIRED_CODE,
+                "message": "AI-расчёт питания доступен с тарифом Creator или Pro",
+            },
+        )
+
+    result = analyze_recipe_nutrition_gpt(
+        title=request.title,
+        description=request.description,
+        ingredients=request.ingredients,
+        steps=request.steps,
+        servings=request.servings,
+        language=request.language,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Не удалось рассчитать питание. Попробуйте позже.",
+        )
+
+    AnalyticsService(db).log_event(
+        event_type="creator_recipe_nutrition_ai",
+        entity_type="user",
+        entity_id=current_user.id,
+        user_id=current_user.id,
+        metadata={
+            "title_len": len(request.title),
+            "ingredients_count": len(request.ingredients),
+            "confidence": result.get("confidence"),
+        },
+    )
+    db.commit()
+    return result
 
 
 @router.post("/posts/{post_id}/promote", response_model=PostResponse)

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Модель комментария
 class PostComment {
@@ -98,7 +99,7 @@ class PostCommentsService {
 
       return commentRef.id;
     } catch (e) {
-      print('Error adding comment: $e');
+      debugPrint('Error adding comment: $e');
       rethrow;
     }
   }
@@ -166,7 +167,7 @@ class PostCommentsService {
             .update({'likes': FieldValue.increment(1)});
       }
     } catch (e) {
-      print('Error liking comment: $e');
+      debugPrint('Error liking comment: $e');
       rethrow;
     }
   }
@@ -202,7 +203,7 @@ class PostCommentsService {
         'reactions.comments': FieldValue.increment(-1),
       });
     } catch (e) {
-      print('Error deleting comment: $e');
+      debugPrint('Error deleting comment: $e');
       rethrow;
     }
   }

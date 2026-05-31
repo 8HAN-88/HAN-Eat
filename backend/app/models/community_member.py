@@ -13,6 +13,8 @@ class ChannelMember(Base):
     channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String(20), default="member")  # owner | admin | moderator | member
+    # active — полный доступ; pending — заявка в приватный канал
+    status = Column(String(20), default="active", nullable=False, index=True)
     # owner определяется через admin_user_id в channels, но для удобства может быть и здесь
     is_favorite = Column(Boolean, default=False, nullable=False)  # Избранный канал
     # Push / in-app уведомления о постах канала (false = «без звука»)

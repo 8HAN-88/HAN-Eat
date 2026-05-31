@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/config/legacy_firestore_config.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 
 class FavoritesService {
@@ -21,7 +23,7 @@ class FavoritesService {
 
   final ValueNotifier<Set<String>> favorites = ValueNotifier(<String>{});
 
-  StreamSubscription<User?>? _authSub;
+  void Function(User?)? _onSessionChanged;
 
   FavoritesService._internal(this._box) {
     final keys = _box.keys.cast<String>();
@@ -43,16 +45,18 @@ class FavoritesService {
   }
 
   Future<void> _startAuthSync() async {
-    if (_authSub != null) return;
+    if (_onSessionChanged != null) return;
     try {
-      _authSub = AuthService.instance.authStateChanges().listen((user) async {
+      _onSessionChanged = (User? user) {
         if (user != null) {
-          await _mergeWithRemote(user.uid);
+          unawaited(_mergeWithRemote(user.uid));
         }
-      });
+      };
+      AuthService.registerSessionListener(_onSessionChanged!);
       final current = AuthService.instance.currentUser;
       if (current != null) {
-        await _mergeWithRemote(current.uid);
+        // Не блокируем init: Firestore может «висеть» при сетевых сбоях — иначе вечный splash.
+        unawaited(_mergeWithRemote(current.uid));
       }
     } catch (e) {
       if (kDebugMode) debugPrint('FavoritesService _startAuthSync failed: $e');
@@ -60,12 +64,16 @@ class FavoritesService {
   }
 
   Future<void> _mergeWithRemote(String uid) async {
+    if (LegacyFirestoreConfig.disabled) {
+      await _mergeFromApi();
+      return;
+    }
     try {
       final col = FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .collection('favorites');
-      final snapshot = await col.get();
+      final snapshot = await col.get().timeout(const Duration(seconds: 25));
       final remoteIds = snapshot.docs.map((d) => d.id).toSet();
       final local = Set<String>.from(favorites.value);
       final merged = {...local, ...remoteIds};
@@ -85,6 +93,27 @@ class FavoritesService {
     }
   }
 
+  Future<void> _mergeFromApi() async {
+    try {
+      final recipes = await ApiService.getFavorites();
+      final remoteIds = recipes.map((r) => r.id.toString()).toSet();
+      final local = Set<String>.from(favorites.value);
+      final merged = {...local, ...remoteIds};
+      for (final id in merged) {
+        await _box.put(id, true);
+      }
+      favorites.value = merged;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Favorites API sync error: $e');
+    }
+  }
+
+  /// Очистить локальные избранные при выходе или смене аккаунта.
+  Future<void> clearLocalSession() async {
+    await _box.clear();
+    favorites.value = {};
+  }
+
   bool isFavorite(String id) => favorites.value.contains(id);
 
   Future<void> toggleFavorite(String id) async {
@@ -93,7 +122,8 @@ class FavoritesService {
       await _box.delete(id);
       final newSet = Set<String>.from(favorites.value)..remove(id);
       favorites.value = newSet;
-      if (AuthService.isInitialized &&
+      if (LegacyFirestoreConfig.enabled &&
+          AuthService.isInitialized &&
           AuthService.instance.currentUser != null) {
         final user = AuthService.instance.currentUser!;
         try {
@@ -104,15 +134,17 @@ class FavoritesService {
               .doc(id)
               .delete();
         } catch (e) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint('Failed to delete remote favorite $id: $e');
+          }
         }
       }
     } else {
       await _box.put(id, true);
       final newSet = Set<String>.from(favorites.value)..add(id);
       favorites.value = newSet;
-      if (AuthService.isInitialized &&
+      if (LegacyFirestoreConfig.enabled &&
+          AuthService.isInitialized &&
           AuthService.instance.currentUser != null) {
         final user = AuthService.instance.currentUser!;
         try {
@@ -162,7 +194,7 @@ class FavoritesService {
 
     final user =
         AuthService.isInitialized ? AuthService.instance.currentUser : null;
-    if (user != null) {
+    if (LegacyFirestoreConfig.enabled && user != null) {
       try {
         final col = FirebaseFirestore.instance
             .collection('users')
@@ -185,9 +217,12 @@ class FavoritesService {
   }
 
   Future<void> _disposeInternal() async {
-    try {
-      await _authSub?.cancel();
-    } catch (_) {}
+    if (_onSessionChanged != null) {
+      try {
+        AuthService.unregisterSessionListener(_onSessionChanged!);
+      } catch (_) {}
+      _onSessionChanged = null;
+    }
     try {
       await _box.close();
     } catch (_) {}

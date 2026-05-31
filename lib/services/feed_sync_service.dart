@@ -1,8 +1,8 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
-import '../models/post_model.dart';
 import '../models/post_types.dart';
+import 'api_service.dart';
 import 'feed_service.dart';
 import 'feed_cache_service.dart';
 
@@ -32,7 +32,7 @@ class FeedSyncService {
 
   void _initConnectivity() {
     _connectivity.onConnectivityChanged.listen((result) {
-      final online = result != ConnectivityResult.none;
+      final online = !result.contains(ConnectivityResult.none);
       isOnline.value = online;
       
       if (kDebugMode) {
@@ -47,7 +47,7 @@ class FeedSyncService {
 
     // Проверяем текущее состояние
     _connectivity.checkConnectivity().then((result) {
-      isOnline.value = result != ConnectivityResult.none;
+      isOnline.value = !result.contains(ConnectivityResult.none);
     });
   }
 
@@ -122,14 +122,17 @@ class FeedSyncService {
     }
   }
 
-  /// Синхронизировать один пост (например, после лайка)
+  /// Подтянуть один пост с API и обновить его в оффлайн-кеше ленты.
   Future<void> syncPost(String postId) async {
     if (!isOnline.value) return;
+    final id = int.tryParse(postId);
+    if (id == null) return;
 
     try {
-      // TODO: Реализовать загрузку одного поста
-      // Пока просто обновляем кеш
-      if (kDebugMode) debugPrint('Syncing post: $postId');
+      final pm = await ApiService.getPostById(id);
+      if (pm == null) return;
+      await FeedCacheService.instance.upsertPostModelInCache(pm);
+      if (kDebugMode) debugPrint('Synced post $postId in feed cache');
     } catch (e) {
       if (kDebugMode) debugPrint('Error syncing post: $e');
     }

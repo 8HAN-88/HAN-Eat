@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/recipe.dart';
 import '../services/api_service.dart';
+import '../widgets/app_empty_state.dart';
 import 'detail_page.dart';
 
 /// Экран загрузки рецепта по ID (для открытия по ссылке haneat://recipe/id).
@@ -18,6 +19,7 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
   bool _isFavorite = false;
   bool _loading = true;
   String? _error;
+  bool _notFound = false;
 
   @override
   void initState() {
@@ -29,21 +31,25 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _notFound = false;
     });
-    final recipe = await ApiService.getRecipeById(widget.recipeId);
+    final result = await ApiService.loadRecipeById(widget.recipeId);
     if (!mounted) return;
-    if (recipe == null) {
+    if (result.recipe == null) {
       setState(() {
         _loading = false;
-        _error = 'Рецепт не найден';
+        _notFound = result.notFound;
+        _error = result.notFound
+            ? 'Рецепт не найден'
+            : (result.errorMessage ?? 'Не удалось загрузить рецепт');
       });
       return;
     }
     final favorites = await ApiService.getFavorites();
     if (!mounted) return;
-    final isFav = favorites.any((r) => r.id == recipe.id);
+    final isFav = favorites.any((r) => r.id == result.recipe!.id);
     setState(() {
-      _recipe = recipe;
+      _recipe = result.recipe;
       _isFavorite = isFav;
       _loading = false;
     });
@@ -72,30 +78,26 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
     if (_error != null || _recipe == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Рецепт')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.restaurant_menu,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.outline,
+        body: AppEmptyState(
+          icon: _notFound
+              ? Icons.restaurant_menu_outlined
+              : Icons.cloud_off_rounded,
+          title: _notFound ? 'Рецепт не найден' : 'Не удалось загрузить',
+          subtitle: _error,
+          action: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!_notFound)
+                FilledButton(
+                  onPressed: _load,
+                  child: const Text('Повторить'),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  _error ?? 'Не удалось загрузить рецепт',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Закрыть'),
-                ),
-              ],
-            ),
+              if (!_notFound) const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Закрыть'),
+              ),
+            ],
           ),
         ),
       );

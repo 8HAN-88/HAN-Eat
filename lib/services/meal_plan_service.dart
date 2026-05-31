@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:uuid/uuid.dart';
 
 import '../models/meal_plan.dart';
 import '../models/recipe_model.dart';
+import '../core/config/legacy_firestore_config.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
 
@@ -27,7 +27,7 @@ class MealPlanService {
   final ValueNotifier<List<MealPlanEntry>> allEntries = ValueNotifier([]);
   final ValueNotifier<List<MealPlanEntry>> upcomingMeals = ValueNotifier([]);
 
-  StreamSubscription<User?>? _authSub;
+  void Function(User?)? _onSessionChanged;
   Timer? _upcomingMealsTimer;
 
   final _uuid = const Uuid();
@@ -35,6 +35,7 @@ class MealPlanService {
   MealPlanService._internal(this._box) {
     _loadFromBox();
     _updateUpcomingMeals();
+    unawaited(_rescheduleAllMealReminders());
     // Обновляем предстоящие приемы пищи каждую минуту
     _upcomingMealsTimer = Timer.periodic(
       const Duration(minutes: 1),
@@ -56,16 +57,17 @@ class MealPlanService {
   }
 
   Future<void> _startAuthSync() async {
-    if (_authSub != null) return;
+    if (_onSessionChanged != null) return;
     try {
-      _authSub = AuthService.instance.authStateChanges().listen((user) async {
+      _onSessionChanged = (User? user) {
         if (user != null) {
-          await _syncFromCloud(user.uid);
+          unawaited(_syncFromCloud(user.uid));
         }
-      });
+      };
+      AuthService.registerSessionListener(_onSessionChanged!);
       final current = AuthService.instance.currentUser;
       if (current != null) {
-        await _syncFromCloud(current.uid);
+        unawaited(_syncFromCloud(current.uid));
       }
     } catch (e) {
       if (kDebugMode) debugPrint('MealPlanService _startAuthSync failed: $e');
@@ -73,12 +75,13 @@ class MealPlanService {
   }
 
   Future<void> _syncFromCloud(String uid) async {
+    if (LegacyFirestoreConfig.disabled) return;
     try {
       final col = FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .collection('meal_plans');
-      final snapshot = await col.get();
+      final snapshot = await col.get().timeout(const Duration(seconds: 25));
       
       // Загружаем из облака
       for (final doc in snapshot.docs) {
@@ -99,6 +102,7 @@ class MealPlanService {
   }
 
   Future<void> _syncToCloud(MealPlanEntry entry, String uid) async {
+    if (LegacyFirestoreConfig.disabled) return;
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -142,9 +146,9 @@ class MealPlanService {
   }
 
   bool _isSameDate(DateTime date1, DateTime date2) {
-    return date1.year == date2.year &&
-        date1.month == date2.month &&
-        date1.day == date2.day;
+    final a = DateTime(date1.year, date1.month, date1.day);
+    final b = DateTime(date2.year, date2.month, date2.day);
+    return a == b;
   }
 
   void _updateUpcomingMeals() {
@@ -162,11 +166,12 @@ class MealPlanService {
     required DateTime date,
     int servings = 1,
   }) async {
+    final day = DateTime(date.year, date.month, date.day);
     final entry = MealPlanEntry(
       id: _uuid.v4(),
       recipe: recipe,
       mealType: mealType,
-      date: date,
+      date: day,
       servings: servings,
     );
 
@@ -175,7 +180,9 @@ class MealPlanService {
     _updateUpcomingMeals();
 
     // Синхронизация и напоминание — в фоне, чтобы не блокировать UI
-    if (AuthService.isInitialized && AuthService.instance.currentUser != null) {
+    if (LegacyFirestoreConfig.enabled &&
+        AuthService.isInitialized &&
+        AuthService.instance.currentUser != null) {
       final uid = AuthService.instance.currentUser!.uid;
       _syncToCloud(entry, uid).catchError((e) {
         if (kDebugMode) debugPrint('MealPlanService sync to cloud: $e');
@@ -195,7 +202,9 @@ class MealPlanService {
     await _box.delete(entryId);
     
     // Удаляем из облака
-    if (AuthService.isInitialized && AuthService.instance.currentUser != null) {
+    if (LegacyFirestoreConfig.enabled &&
+        AuthService.isInitialized &&
+        AuthService.instance.currentUser != null) {
       try {
         await FirebaseFirestore.instance
             .collection('users')
@@ -211,23 +220,22 @@ class MealPlanService {
     _loadFromBox();
     _updateUpcomingMeals();
     
-    // Отменяем напоминание
-    await NotificationService.instance.cancelNotification(
-      _getNotificationId(entryId).toString(),
-    );
+    await _cancelMealReminder(entryId);
   }
 
   Future<void> updateEntry(MealPlanEntry entry) async {
     await _addToBox(entry);
     
     // Синхронизация с облаком
-    if (AuthService.isInitialized && AuthService.instance.currentUser != null) {
+    if (LegacyFirestoreConfig.enabled &&
+        AuthService.isInitialized &&
+        AuthService.instance.currentUser != null) {
       await _syncToCloud(entry, AuthService.instance.currentUser!.uid);
     }
-    
+
     _loadFromBox();
     _updateUpcomingMeals();
-    
+
     // Обновляем напоминание
     await _scheduleMealReminder(entry);
   }
@@ -246,19 +254,35 @@ class MealPlanService {
       ..sort((a, b) => a.date.compareTo(b.date));
   }
 
+  /// Удалить все записи на указанные календарные даты (для замены AI-планом).
+  Future<void> removeEntriesForDates(List<DateTime> dates) async {
+    final normalized = dates
+        .map((d) => DateTime(d.year, d.month, d.day))
+        .toSet();
+    final toRemove = allEntries.value
+        .where((e) => normalized.contains(DateTime(e.date.year, e.date.month, e.date.day)))
+        .map((e) => e.id)
+        .toList();
+    for (final id in toRemove) {
+      await removeFromPlan(id);
+    }
+  }
+
   Future<void> clearAllPlans() async {
     await _box.clear();
     _loadFromBox();
     _updateUpcomingMeals();
     
     // Удаляем из облака
-    if (AuthService.isInitialized && AuthService.instance.currentUser != null) {
+    if (LegacyFirestoreConfig.enabled &&
+        AuthService.isInitialized &&
+        AuthService.instance.currentUser != null) {
       try {
         final col = FirebaseFirestore.instance
             .collection('users')
             .doc(AuthService.instance.currentUser!.uid)
             .collection('meal_plans');
-        final snapshot = await col.get();
+        final snapshot = await col.get().timeout(const Duration(seconds: 25));
         for (final doc in snapshot.docs) {
           await doc.reference.delete();
         }
@@ -268,17 +292,54 @@ class MealPlanService {
     }
   }
 
-  Future<void> _scheduleMealReminder(MealPlanEntry entry) async {
-    // Напоминание за 30 минут до приема пищи
-    final reminderTime = entry.date.subtract(const Duration(minutes: 30));
-    if (reminderTime.isAfter(DateTime.now())) {
-      await NotificationService.instance.scheduleNotification(
-        id: _getNotificationId(entry.id).toString(),
-        title: 'Напоминание о ${entry.mealType.displayName}',
-        body: 'Через 30 минут: ${entry.recipe.title}',
-        scheduledTime: reminderTime,
-      );
+  /// Дата и время приёма пищи (день из записи + типовое время завтрак/обед/ужин).
+  DateTime mealDateTime(MealPlanEntry entry) {
+    final day = DateTime(entry.date.year, entry.date.month, entry.date.day);
+    final (hour, minute) = entry.mealType.defaultTime;
+    return DateTime(day.year, day.month, day.day, hour, minute);
+  }
+
+  Future<void> _cancelMealReminder(String entryId) async {
+    await NotificationService.instance.cancelNotification(
+      _getNotificationId(entryId).toString(),
+    );
+  }
+
+  Future<void> _rescheduleAllMealReminders() async {
+    for (final entry in allEntries.value) {
+      await _cancelMealReminder(entry.id);
+      await _scheduleMealReminder(entry);
     }
+  }
+
+  Future<void> _scheduleMealReminder(MealPlanEntry entry) async {
+    final mealAt = mealDateTime(entry);
+    final now = DateTime.now();
+
+    // Приём уже прошёл — не напоминаем.
+    if (!mealAt.isAfter(now)) {
+      await _cancelMealReminder(entry.id);
+      return;
+    }
+
+    // За 30 минут до еды; если окно уже прошло, но еда ещё впереди — за 5 минут.
+    var reminderTime = mealAt.subtract(const Duration(minutes: 30));
+    if (!reminderTime.isAfter(now)) {
+      reminderTime = mealAt.subtract(const Duration(minutes: 5));
+    }
+    if (!reminderTime.isAfter(now)) {
+      return;
+    }
+
+    final minutesUntilMeal = mealAt.difference(reminderTime).inMinutes;
+    await NotificationService.instance.scheduleNotification(
+      id: _getNotificationId(entry.id).toString(),
+      title: 'Напоминание о ${entry.mealType.displayName}',
+      body: minutesUntilMeal >= 30
+          ? 'Через 30 минут: ${entry.recipe.title}'
+          : 'Скоро ($minutesUntilMeal мин): ${entry.recipe.title}',
+      scheduledTime: reminderTime,
+    );
   }
 
   int _getNotificationId(String entryId) {
@@ -287,9 +348,12 @@ class MealPlanService {
   }
 
   Future<void> _disposeInternal() async {
-    try {
-      await _authSub?.cancel();
-    } catch (_) {}
+    if (_onSessionChanged != null) {
+      try {
+        AuthService.unregisterSessionListener(_onSessionChanged!);
+      } catch (_) {}
+      _onSessionChanged = null;
+    }
     try {
       _upcomingMealsTimer?.cancel();
     } catch (_) {}

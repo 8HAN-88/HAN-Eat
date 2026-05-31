@@ -1,26 +1,30 @@
 // Экран поиска по каналу в стиле Telegram
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:async';
 import '../../../services/channel_service.dart';
 import '../../../models/post_model.dart';
+import '../../../app/app_router.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
 import 'channel_post_card.dart';
-import 'channel_posts_screen.dart';
 
 class ChannelSearchScreen extends ConsumerStatefulWidget {
   final int channelId;
   final String initialQuery;
   final ChannelDetail channel;
-  
+
   const ChannelSearchScreen({
-    Key? key,
+    super.key,
     required this.channelId,
     required this.initialQuery,
     required this.channel,
-  }) : super(key: key);
-  
+  });
+
   @override
-  ConsumerState<ChannelSearchScreen> createState() => _ChannelSearchScreenState();
+  ConsumerState<ChannelSearchScreen> createState() =>
+      _ChannelSearchScreenState();
 }
 
 class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
@@ -30,7 +34,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
   bool _isLoading = false;
   String? _error;
   Timer? _searchDebounce;
-  
+
   @override
   void initState() {
     super.initState();
@@ -38,11 +42,11 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
     if (widget.initialQuery.isNotEmpty) {
       _performSearch();
     }
-    
+
     // Слушаем изменения в поле поиска для поиска в реальном времени
     _searchController.addListener(_onSearchChanged);
   }
-  
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -50,11 +54,11 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
     _scrollController.dispose();
     super.dispose();
   }
-  
+
   void _onSearchChanged() {
     // Отменяем предыдущий таймер
     _searchDebounce?.cancel();
-    
+
     // Если поле пустое, очищаем результаты
     if (_searchController.text.trim().isEmpty) {
       setState(() {
@@ -64,13 +68,13 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       });
       return;
     }
-    
+
     // Устанавливаем новый таймер для поиска с задержкой (debounce)
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
       _performSearch();
     });
   }
-  
+
   Future<void> _performSearch() async {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
@@ -81,12 +85,12 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    
+
     try {
       final response = await ChannelService.getChannelPosts(
         channelId: widget.channelId,
@@ -94,7 +98,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
         offset: 0,
         search: query,
       );
-      
+
       if (mounted) {
         setState(() {
           _posts = response.posts.map((p) => PostModel.fromJson(p)).toList();
@@ -104,13 +108,13 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _error = userVisibleError(e, fallback: 'Не удалось выполнить поиск');
           _isLoading = false;
         });
       }
     }
   }
-  
+
   void _clearSearch() {
     _searchController.clear();
     setState(() {
@@ -119,7 +123,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       _isLoading = false;
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,88 +162,47 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       body: _buildBody(),
     );
   }
-  
+
   Widget _buildBody() {
     // Используем ValueListenableBuilder для отслеживания изменений в поле поиска
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: _searchController,
       builder: (context, value, child) {
         final query = value.text.trim();
-        
+
         // Если поле поиска пустое, показываем подсказку
         if (query.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.search, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Поиск по каналу',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Введите запрос для поиска постов',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-            ),
+          return const AppEmptyState(
+            icon: Icons.search_rounded,
+            title: 'Поиск по каналу',
+            subtitle: 'Введите запрос для поиска постов',
           );
         }
-        
+
         if (_isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
-        
+
         if (_error != null) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Ошибка поиска',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _performSearch,
-                  child: const Text('Повторить'),
-                ),
-              ],
+          return AppEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Ошибка поиска',
+            subtitle: _error,
+            action: FilledButton(
+              onPressed: _performSearch,
+              child: const Text('Повторить'),
             ),
           );
         }
-        
+
         if (_posts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'Ничего не найдено',
-                  style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Попробуйте изменить запрос',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-            ),
+          return const AppEmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'Ничего не найдено',
+            subtitle: 'Попробуйте изменить запрос',
           );
         }
-        
+
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -253,8 +216,12 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
                   post: post,
                   channelId: widget.channelId,
                   channel: widget.channel,
-                  onCommentTap: () {
-                    // TODO: Navigate to comments
+                  onCommentTap: () =>
+                      context.push(PostCommentsRoute.pathFor(post.id)),
+                  onCardTap: () {
+                    context.push(
+                      ChannelDetailRoute.post(widget.channelId, post.id),
+                    );
                   },
                 ),
               ),

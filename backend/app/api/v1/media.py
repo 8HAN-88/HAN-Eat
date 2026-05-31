@@ -81,8 +81,8 @@ async def init_upload(
             file_size=request.file_size,
             user_id=current_user.id
         )
-        # Сохраняем связь upload_id -> file_key для mock загрузки
-        if not media_service.s3_client:
+        # API-загрузка (mock): запоминаем upload_id → file_key
+        if result.get("upload_via") == "api" or not media_service.s3_client:
             _remember_mock_upload(result["upload_id"], result["file_key"])
         return result
     except ValueError as e:

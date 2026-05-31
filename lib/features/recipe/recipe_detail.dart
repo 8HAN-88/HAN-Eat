@@ -4,7 +4,7 @@ import '../../services/recipe_service.dart';
 import '../../services/favorites_service.dart';
 
 class RecipeDetailPage extends StatefulWidget {
-  const RecipeDetailPage({Key? key}) : super(key: key);
+  const RecipeDetailPage({super.key});
 
   @override
   State<RecipeDetailPage> createState() => _RecipeDetailPageState();
@@ -52,7 +52,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_recipe == null) {
-      return Scaffold(body: Center(child: Text('Recipe not found')));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Рецепт')),
+        body: const Center(
+          child: Text('Рецепт не найден'),
+        ),
+      );
     }
 
     final recipe = _recipe!;
@@ -85,7 +90,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           const Text('Ingredients',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          ...recipe.ingredients.map((i) => ListTile(title: Text(i))).toList(),
+          ...recipe.ingredients.map((i) => ListTile(title: Text(i))),
           const SizedBox(height: 8),
           const Text('Steps',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),

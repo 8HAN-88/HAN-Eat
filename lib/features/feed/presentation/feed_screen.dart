@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
+import '../../../core/share/system_share.dart';
 import '../../../models/post.dart';
 import '../../../models/post_types.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/feed_service.dart';
 import '../../../services/feed_sync_service.dart';
-import '../../../services/auth_service.dart';
+import '../../../services/share_link_service.dart';
+import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/app_empty_state.dart';
 import '../application/feed_controller.dart';
 import 'post_card.dart';
 
@@ -142,9 +150,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           // Поиск
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Navigate to search
-            },
+            onPressed: () => context.push(SearchRoute.path),
           ),
         ],
       ),
@@ -158,45 +164,39 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     }
 
     if (state.error != null && state.posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Ошибка загрузки ленты',
-              style: Theme.of(context).textTheme.titleLarge,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: AppEmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Не удалось загрузить ленту',
+              subtitle: state.error,
+              action: FilledButton(
+                onPressed: _loadFeed,
+                child: const Text('Повторить'),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(state.error!),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadFeed,
-              child: const Text('Повторить'),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
     if (state.posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.feed_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.55,
+            child: const AppEmptyState(
+              icon: Icons.feed_outlined,
+              title: 'Лента пуста',
+              subtitle:
+                  'Подпишитесь на авторов и каналы — их посты появятся здесь',
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Лента пуста',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            const Text('Подпишитесь на друзей или группы, чтобы видеть их посты'),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
@@ -224,6 +224,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
           onShare: () => _sharePost(post),
           onHide: () => _hidePost(post),
           onReport: () => _reportPost(post),
+          onBlockAuthor: () => _blockAuthor(post),
+          onBookmarkChanged: (postId) =>
+              ref.read(feedControllerProvider.notifier).refreshPost(postId),
         );
       },
     );
@@ -237,38 +240,47 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final currentUid = AuthService.instance.currentUser?.uid;
     if (currentUid == null) return;
 
-    final isLiked = await _isPostLiked(post.idString, currentUid);
-    if (isLiked) {
-      await FeedService.unlikePost(post.id, currentUid);
-    } else {
-      await FeedService.likePost(post.id, currentUid);
+    try {
+      if (post.isLiked) {
+        await FeedService.unlikePost(post.id, currentUid);
+      } else {
+        await FeedService.likePost(post.id, currentUid);
+      }
+      await ref.read(feedControllerProvider.notifier).refreshPost(post.idString);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
     }
-
-    // Обновляем состояние
-    ref.read(feedControllerProvider.notifier).refreshPost(post.idString);
   }
 
-  Future<bool> _isPostLiked(String postId, String userId) async {
-    // TODO: Implement
-    return false;
+  Future<void> _blockAuthor(Post post) async {
+    await ref.read(feedControllerProvider.notifier).blockAuthor(post.userId);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Посты этого автора скрыты в вашей ленте'),
+        ),
+      );
+    }
   }
 
   void _openComments(Post post) {
-    // TODO: Navigate to comments
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Комментарии')),
-          body: Center(child: Text('Комментарии к посту ${post.id}')),
-        ),
-      ),
-    );
+    context.push('/post/${post.id}/comments');
   }
 
-  void _sharePost(Post post) {
-    // TODO: Implement share
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Функция репоста в разработке')),
+  Future<void> _sharePost(Post post) async {
+    final link = post.type == 'reel'
+        ? ShareLinkService.reelLink(post.id)
+        : ShareLinkService.postLink(post.id);
+    final title = (post.title ?? post.description ?? 'Пост').trim();
+    final text = '$title\n\nОткрыть в H.A.N. Eat: $link';
+    await SystemShare.shareText(
+      context,
+      text: text,
+      subject: 'Пост',
     );
   }
 
@@ -286,34 +298,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   }
 
   void _reportPost(Post post) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Пожаловаться на пост'),
-        content: const Text('Выберите причину жалобы'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final currentUid = AuthService.instance.currentUser?.uid;
-              if (currentUid != null) {
-                await FeedService.reportPost(post.idString, currentUid, 'spam');
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Жалоба отправлена')),
-                  );
-                }
-              }
-            },
-            child: const Text('Пожаловаться'),
-          ),
-        ],
-      ),
-    );
+    reportPostWithDialog(context, post.id);
   }
 }
 

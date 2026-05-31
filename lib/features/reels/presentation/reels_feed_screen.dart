@@ -1,26 +1,35 @@
 // Экран Reels Feed с вертикальной прокруткой (как TikTok/Instagram Reels)
+import 'dart:async';
+import '../../../utils/api_error_parser.dart';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../../services/feed_service.dart';
+import '../../../core/network/feed_connectivity.dart';
+import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
+import '../../../services/feed_api_cache.dart';
+import '../../../services/feed_service.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/number_formatter.dart';
-import 'package:share_plus/share_plus.dart';
+import '../../../widgets/share_action_sheet.dart';
+import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../../../app/app_router.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
-  const ReelsFeedScreen({Key? key}) : super(key: key);
-  
+  const ReelsFeedScreen({super.key, this.hideScaffold = false});
+
+  /// Без вложенного Scaffold (вкладка «Рилсы» в [MainFeedScreen]).
+  final bool hideScaffold;
+
   @override
   ConsumerState<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
 }
@@ -35,11 +44,21 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   bool _hasMore = true;
   String? _nextCursor;
   int _currentIndex = 0;
+  String? _lastLoadError;
+  bool _loadKickoff = false;
+  bool _servingFromCache = false;
+  Object? _cacheLoadError;
+
+  static const _cacheVariant = 'rec_reels';
   
   @override
   void initState() {
     super.initState();
-    _loadReels();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _loadKickoff = true);
+      _loadReels(refresh: true);
+    });
   }
   
   @override
@@ -69,9 +88,32 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _reels = [];
         _nextCursor = null;
         _hasMore = true;
+        _lastLoadError = null;
+        _servingFromCache = false;
+        _cacheLoadError = null;
         _disposeAllControllers();
       }
     });
+
+    if (refresh && !feedDeviceOnline()) {
+      final cached = await FeedApiCache.load(_cacheVariant);
+      if (!mounted) return;
+      if (cached.isNotEmpty) {
+        setState(() {
+          _reels = cached;
+          _nextCursor = null;
+          _hasMore = false;
+          _lastLoadError = null;
+          _servingFromCache = true;
+          _cacheLoadError = 'offline';
+          _isLoading = false;
+        });
+        if (_reels.isNotEmpty) {
+          _initializeVideos(0, math.min(3, _reels.length));
+        }
+        return;
+      }
+    }
     
     try {
       final response = await FeedService.getFeed(
@@ -80,15 +122,18 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         feedType: 'reels',
       );
       
+      final nextReels = refresh
+          ? response.items
+          : <PostModel>[..._reels, ...response.items];
       setState(() {
-        if (refresh) {
-          _reels = response.items;
-        } else {
-          _reels.addAll(response.items);
-        }
+        _reels = nextReels;
         _nextCursor = response.nextCursor;
         _hasMore = response.hasMore;
+        _lastLoadError = null;
+        _servingFromCache = false;
+        _cacheLoadError = null;
       });
+      await FeedApiCache.save(_cacheVariant, nextReels);
       
       // Инициализируем видео для первых 3 рилсов
       if (_reels.isNotEmpty) {
@@ -96,9 +141,39 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки рилсов: $e')),
-        );
+        if (FeedLoadHelper.isSessionError(e)) {
+          await FeedLoadHelper.clearSessionIfExpired(e);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
+          );
+          return;
+        }
+        final cached = await FeedApiCache.load(_cacheVariant);
+        if (cached.isNotEmpty) {
+          setState(() {
+            _reels = cached;
+            _nextCursor = null;
+            _hasMore = false;
+            _lastLoadError = null;
+            _servingFromCache = true;
+            _cacheLoadError = e;
+          });
+          if (_reels.isNotEmpty) {
+            _initializeVideos(0, math.min(3, _reels.length));
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(FeedLoadHelper.cacheSnackMessage(e))),
+          );
+        } else {
+          final short = e is TimeoutException
+              ? 'Сервер не ответил вовремя. Проверьте подключение и попробуйте снова.'
+              : userVisibleError(e, fallback: 'Не удалось загрузить рилсы');
+          setState(() => _lastLoadError = short);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(short)),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -199,63 +274,153 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     }
   }
   
+  Widget _buildEmptyState() {
+    final empty = RefreshIndicator(
+      onRefresh: () => _loadReels(refresh: true),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: AppEmptyState(
+              icon: _lastLoadError != null
+                  ? Icons.cloud_off_outlined
+                  : Icons.video_library_outlined,
+              title: _lastLoadError != null
+                  ? 'Не удалось загрузить рилсы'
+                  : 'Пока нет рилсов',
+              subtitle: _lastLoadError ??
+                  'Обновите ленту или зайдите позже — новые рилсы появятся здесь.',
+              action: _lastLoadError != null
+                  ? FilledButton.icon(
+                      onPressed: () => _loadReels(refresh: true),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Повторить'),
+                    )
+                  : null,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (widget.hideScaffold) return empty;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Рилсы')),
+      body: empty,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_reels.isEmpty && _isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+    if (_reels.isEmpty && (_isLoading || !_loadKickoff)) {
+      final loading = const Center(child: CircularProgressIndicator());
+      if (widget.hideScaffold) return loading;
+      return Scaffold(body: loading);
     }
     
     if (_reels.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Рилсы'),
-        ),
-        body: const Center(child: Text('Нет рилсов')),
-      );
+      return _buildEmptyState();
     }
-    
+
+    final topPad = MediaQuery.paddingOf(context).top;
+    final pageBody = Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          scrollDirection: Axis.vertical,
+          itemCount: _reels.length + (_hasMore ? 1 : 0),
+          onPageChanged: _onPageChanged,
+          itemBuilder: (context, index) {
+            if (index == _reels.length) {
+              // Индикатор загрузки в конце
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            }
+
+            final reel = _reels[index];
+            return ReelCard(
+              reel: reel,
+              index: index,
+              videoController: _chewieControllers[index],
+              isCurrent: index == _currentIndex,
+              isPaused: _isPaused[index] ?? false,
+              onPauseToggle: (paused) {
+                setState(() {
+                  _isPaused[index] = paused;
+                });
+              },
+              onLike: () => _toggleLike(reel),
+              onComment: () {
+                context.push('/post/${reel.id}/comments');
+              },
+              onShare: () => _shareReel(reel),
+              onSave: () => _toggleSave(reel),
+              onRepost: () => _toggleRepost(reel),
+              onAuthorTap: () {
+                context.push('/profile?userId=${reel.userId}');
+              },
+              onHashtagTap: (tag) {
+                final q = tag.startsWith('#') ? tag : '#$tag';
+                context
+                    .push('${SearchRoute.path}?q=${Uri.encodeQueryComponent(q)}');
+              },
+              onMentionTap: (username, r) {
+                final uname = username.trim();
+                if (uname.isEmpty) return;
+                final author = r.author;
+                if (author?.username != null &&
+                    author!.username!.toLowerCase() == uname.toLowerCase()) {
+                  context.push('${ProfileRoute.path}?userId=${r.userId}');
+                } else {
+                  context.push(
+                    '${SearchRoute.path}?q=${Uri.encodeQueryComponent('@$uname')}',
+                  );
+                }
+              },
+              onReport: () => reportPostWithDialog(context, reel.id),
+            );
+          },
+        ),
+        if (_servingFromCache)
+          Positioned(
+            top: topPad + 6,
+            left: 10,
+            right: 10,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(10),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                child: Row(
+                  children: [
+                    Icon(Icons.offline_pin_outlined,
+                        color: Colors.white70, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Кеш · без сети видео может не воспроизвестись',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+
+    if (widget.hideScaffold) {
+      return pageBody;
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: _reels.length + (_hasMore ? 1 : 0),
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          if (index == _reels.length) {
-            // Индикатор загрузки в конце
-            return const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            );
-          }
-          
-          final reel = _reels[index];
-          return ReelCard(
-            reel: reel,
-            index: index,
-            videoController: _chewieControllers[index],
-            isCurrent: index == _currentIndex,
-            isPaused: _isPaused[index] ?? false,
-            onPauseToggle: (paused) {
-              setState(() {
-                _isPaused[index] = paused;
-              });
-            },
-            onLike: () => _toggleLike(reel),
-            onComment: () {
-              context.push('/post/${reel.id}/comments');
-            },
-            onShare: () => _shareReel(reel),
-            onSave: () => _toggleSave(reel),
-            onRepost: () => _toggleRepost(reel),
-            onAuthorTap: () {
-              context.push('/profile?userId=${reel.userId}');
-            },
-          );
-        },
-      ),
+      body: pageBody,
     );
   }
   
@@ -282,6 +447,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             commentsCount: _reels[index].commentsCount,
             repostsCount: _reels[index].repostsCount,
             viewsCount: _reels[index].viewsCount,
+            isPromoted: _reels[index].isPromoted,
             isLiked: !_reels[index].isLiked,
             isSaved: _reels[index].isSaved,
             isReposted: _reels[index].isReposted,
@@ -292,7 +458,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
@@ -325,6 +491,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             commentsCount: _reels[index].commentsCount,
             repostsCount: _reels[index].repostsCount,
             viewsCount: _reels[index].viewsCount,
+            isPromoted: _reels[index].isPromoted,
             isLiked: _reels[index].isLiked,
             isSaved: !isSaved,
             isReposted: _reels[index].isReposted,
@@ -335,7 +502,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
@@ -368,6 +535,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             commentsCount: _reels[index].commentsCount,
             repostsCount: _reels[index].repostsCount,
             viewsCount: _reels[index].viewsCount,
+            isPromoted: _reels[index].isPromoted,
             isLiked: _reels[index].isLiked,
             isSaved: _reels[index].isSaved,
             isReposted: !isReposted,
@@ -380,46 +548,24 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         final msg = e.toString().toLowerCase();
         final text = msg.contains('own post') || msg.contains('свой пост')
             ? 'Нельзя репостнуть свой пост'
-            : 'Ошибка: $e';
+            : userVisibleAuthError(
+                e,
+                fallback: 'Не удалось сделать репост',
+                authFallback: 'Войдите, чтобы сделать репост',
+              );
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text), backgroundColor: Colors.red),
+          SnackBar(content: Text(text)),
         );
       }
     }
   }
   
   Future<void> _shareReel(PostModel reel) async {
-    try {
-      final videoUrl = _getVideoUrl(reel);
-      final text = reel.description ?? 'Посмотрите этот рилс!';
-      final fullText = '$text\n${videoUrl ?? ''}';
-      if (kIsWeb) {
-        await Clipboard.setData(ClipboardData(text: fullText));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ссылка скопирована в буфер обмена')),
-          );
-        }
-        return;
-      }
-      await Share.share(fullText, subject: reel.title);
-    } catch (e) {
-      if (mounted) {
-        try {
-          final videoUrl = _getVideoUrl(reel);
-          final text = reel.description ?? 'Посмотрите этот рилс!';
-          final fullText = '$text\n${videoUrl ?? ''}';
-          await Clipboard.setData(ClipboardData(text: fullText));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ссылка скопирована в буфер обмена')),
-          );
-        } catch (_) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка при шаринге: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
+    await ShareActionSheet.showForReel(
+      context,
+      reel: reel,
+      onRepostToWall: () => _toggleRepost(reel),
+    );
   }
 }
 
@@ -436,9 +582,12 @@ class ReelCard extends StatefulWidget {
   final VoidCallback onSave;
   final VoidCallback onRepost;
   final VoidCallback onAuthorTap;
-  
+  final void Function(String tagWithoutHash) onHashtagTap;
+  final void Function(String usernameWithoutAt, PostModel reel) onMentionTap;
+  final VoidCallback onReport;
+
   const ReelCard({
-    Key? key,
+    super.key,
     required this.reel,
     required this.index,
     this.videoController,
@@ -451,7 +600,10 @@ class ReelCard extends StatefulWidget {
     required this.onSave,
     required this.onRepost,
     required this.onAuthorTap,
-  }) : super(key: key);
+    required this.onHashtagTap,
+    required this.onMentionTap,
+    required this.onReport,
+  });
 
   @override
   State<ReelCard> createState() => _ReelCardState();
@@ -463,6 +615,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
   late AnimationController _likeAnimationController;
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _likeOpacityAnimation;
+  final List<TapGestureRecognizer> _descriptionRecognizers = [];
 
   @override
   void initState() {
@@ -487,8 +640,19 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
+    for (final r in _descriptionRecognizers) {
+      r.dispose();
+    }
+    _descriptionRecognizers.clear();
     _likeAnimationController.dispose();
     super.dispose();
+  }
+
+  void _clearDescriptionRecognizers() {
+    for (final r in _descriptionRecognizers) {
+      r.dispose();
+    }
+    _descriptionRecognizers.clear();
   }
 
   void _handleDoubleTap() {
@@ -531,8 +695,6 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final author = widget.reel.author;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
     
     return GestureDetector(
       onTap: _handleSingleTap,
@@ -563,7 +725,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
           // Индикатор паузы
           if (widget.isPaused)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               child: const Center(
                 child: Icon(
                   Icons.pause_circle_filled,
@@ -619,8 +781,8 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Colors.black.withOpacity(0.8),
-                    Colors.black.withOpacity(0.4),
+                    Colors.black.withValues(alpha: 0.8),
+                    Colors.black.withValues(alpha: 0.4),
                     Colors.transparent,
                   ],
                 ),
@@ -731,6 +893,14 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                   count: 0,
                   onTap: widget.onShare,
                 ),
+                const SizedBox(height: 20),
+
+                // Пожаловаться
+                _ActionButton(
+                  icon: Icons.flag_outlined,
+                  count: 0,
+                  onTap: widget.onReport,
+                ),
               ],
             ),
             ),
@@ -773,12 +943,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                       runSpacing: 4,
                       children: widget.reel.tags!.map((tag) {
                         return GestureDetector(
-                          onTap: () {
-                            // TODO: Переход к поиску по хештегу
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Поиск по хештегу: #$tag')),
-                            );
-                          },
+                          onTap: () => widget.onHashtagTap(tag),
                           child: Text(
                             '#$tag',
                             style: const TextStyle(
@@ -801,7 +966,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildDescription(String description) {
-    // Простая обработка хештегов и упоминаний
+    _clearDescriptionRecognizers();
     final words = description.split(' ');
     return RichText(
       text: TextSpan(
@@ -812,39 +977,42 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
         ),
         children: words.map((word) {
           if (word.startsWith('#')) {
+            final tag = word.substring(1).replaceAll(RegExp(r'[^\w]+$'), '');
+            if (tag.isEmpty) {
+              return TextSpan(text: '$word ');
+            }
+            final r = TapGestureRecognizer()
+              ..onTap = () => widget.onHashtagTap(tag);
+            _descriptionRecognizers.add(r);
             return TextSpan(
               text: '$word ',
               style: const TextStyle(
                 color: Colors.lightBlueAccent,
                 fontWeight: FontWeight.w500,
               ),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () {
-                  // TODO: Переход к поиску по хештегу
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Поиск по хештегу: $word')),
-                  );
-                },
+              recognizer: r,
             );
-          } else if (word.startsWith('@')) {
-            return TextSpan(
-              text: '$word ',
-              style: const TextStyle(
-                color: Colors.lightBlueAccent,
-                fontWeight: FontWeight.w500,
-              ),
-              recognizer: TapGestureRecognizer()
-                ..onTap = () {
-                  // TODO: Переход к профилю пользователя
-                  final username = word.substring(1);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Профиль: @$username')),
-                  );
-                },
-            );
-          } else {
-            return TextSpan(text: '$word ');
           }
+          if (word.startsWith('@')) {
+            final username = word
+                .substring(1)
+                .replaceAll(RegExp(r'[^\w._]+$'), '');
+            if (username.isEmpty) {
+              return TextSpan(text: '$word ');
+            }
+            final r = TapGestureRecognizer()
+              ..onTap = () => widget.onMentionTap(username, widget.reel);
+            _descriptionRecognizers.add(r);
+            return TextSpan(
+              text: '$word ',
+              style: const TextStyle(
+                color: Colors.lightBlueAccent,
+                fontWeight: FontWeight.w500,
+              ),
+              recognizer: r,
+            );
+          }
+          return TextSpan(text: '$word ');
         }).toList(),
       ),
       maxLines: 2,
@@ -860,12 +1028,11 @@ class _ActionButton extends StatelessWidget {
   final Color? color;
   
   const _ActionButton({
-    Key? key,
     required this.icon,
     required this.count,
     required this.onTap,
     this.color,
-  }) : super(key: key);
+  });
   
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);

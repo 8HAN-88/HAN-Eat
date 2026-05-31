@@ -19,6 +19,8 @@ class Post(Base):
     body = Column(JSON, nullable=True)  # для рецептов: ingredients, steps
     status = Column(String(20), default="pending", index=True)  # pending | published | rejected | deleted
     visibility = Column(String(20), default="public")  # public | followers | private
+    is_global_visible = Column(Boolean, default=True, nullable=False, index=True)
+    is_indexed = Column(Boolean, default=True, nullable=False, index=True)
     publish_to = Column(ARRAY(String), default=[])  # ['feed', 'community:5']
     tags = Column(ARRAY(String), default=[])
     location_name = Column(String(255), nullable=True)

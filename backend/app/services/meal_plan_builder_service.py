@@ -147,6 +147,7 @@ class MealPlanBuilderService:
             tier=tier,
             strategy=strategy,
             regeneration_count=regeneration_count,
+            family_size=family_size,
         )
 
     def regenerate(
@@ -292,6 +293,7 @@ class MealPlanBuilderService:
             plan_id=plan.get("plan_id"),
             ai_recommendation=plan.get("ai_recommendation", ""),
             regeneration_count=regen_count,
+            family_size=family_size,
         )
 
     def _finalize_plan(
@@ -304,8 +306,9 @@ class MealPlanBuilderService:
         plan_id: Optional[str] = None,
         ai_recommendation: Optional[str] = None,
         regeneration_count: int = 0,
+        family_size: int = 1,
     ) -> MealPlanResponse:
-        shopping = self._shopping.build_from_days(days)
+        shopping = self._shopping.build_from_days(days, family_size=family_size)
         ent_ai = tier in ("ai", "pro")
         rec = ai_recommendation if ai_recommendation is not None else strategy.get(
             "ai_recommendation", ""

@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../core/theme/app_card_decorations.dart';
+
 /// Skeleton loader для карточки поста
 class PostCardSkeleton extends StatelessWidget {
   const PostCardSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+    final highlight = scheme.surfaceContainerLow;
+    return AppElevatedCard(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -19,8 +25,8 @@ class PostCardSkeleton extends StatelessWidget {
               children: [
                 // Skeleton аватара
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: const CircleAvatar(
                     radius: 20,
                     backgroundColor: Colors.white,
@@ -33,8 +39,8 @@ class PostCardSkeleton extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Shimmer.fromColors(
-                        baseColor: Colors.grey[300]!,
-                        highlightColor: Colors.grey[100]!,
+                        baseColor: base,
+                        highlightColor: highlight,
                         child: Container(
                           height: 16,
                           width: 120,
@@ -46,8 +52,8 @@ class PostCardSkeleton extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Shimmer.fromColors(
-                        baseColor: Colors.grey[300]!,
-                        highlightColor: Colors.grey[100]!,
+                        baseColor: base,
+                        highlightColor: highlight,
                         child: Container(
                           height: 12,
                           width: 80,
@@ -62,8 +68,8 @@ class PostCardSkeleton extends StatelessWidget {
                 ),
                 // Skeleton меню
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     width: 24,
                     height: 24,
@@ -78,8 +84,8 @@ class PostCardSkeleton extends StatelessWidget {
           ),
           // Skeleton изображения
           Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
+            baseColor: base,
+            highlightColor: highlight,
             child: Container(
               height: 200,
               width: double.infinity,
@@ -93,8 +99,8 @@ class PostCardSkeleton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     height: 16,
                     width: double.infinity,
@@ -106,8 +112,8 @@ class PostCardSkeleton extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     height: 16,
                     width: 200,
@@ -126,8 +132,8 @@ class PostCardSkeleton extends StatelessWidget {
             child: Row(
               children: [
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     width: 40,
                     height: 40,
@@ -139,8 +145,8 @@ class PostCardSkeleton extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     height: 16,
                     width: 30,
@@ -152,8 +158,8 @@ class PostCardSkeleton extends StatelessWidget {
                 ),
                 const Spacer(),
                 Shimmer.fromColors(
-                  baseColor: Colors.grey[300]!,
-                  highlightColor: Colors.grey[100]!,
+                  baseColor: base,
+                  highlightColor: highlight,
                   child: Container(
                     width: 40,
                     height: 40,

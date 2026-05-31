@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/shopping_item.dart';
 import '../../services/shopping_service.dart';
 import '../../app/app_router.dart';
+import '../../widgets/app_empty_state.dart';
 
 /// Экран импорта списка покупок по ссылке (haneat://shopping/import?data=...).
 /// Пользователь видит список и может добавить его в свой список в приложении.
@@ -67,22 +68,13 @@ class _ShoppingImportScreenState extends State<ShoppingImportScreen> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Импорт списка')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.shopping_cart_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
-                const SizedBox(height: 16),
-                Text(_error!, textAlign: TextAlign.center),
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () => context.go(FeedRoute.path),
-                  child: const Text('Закрыть'),
-                ),
-              ],
-            ),
+        body: AppEmptyState(
+          icon: Icons.link_off_rounded,
+          title: 'Не удалось импортировать',
+          subtitle: _error,
+          action: TextButton(
+            onPressed: () => context.go(FeedRoute.path),
+            child: const Text('На главную'),
           ),
         ),
       );

@@ -1,4 +1,7 @@
 // Экран профиля пользователя
+import 'dart:async';
+import '../../../utils/api_error_parser.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../services/auth_service.dart';
@@ -9,229 +12,41 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../core/layout/long_label_tab_bar.dart';
+import '../../../../widgets/app_empty_state.dart';
 
-// Форма входа/регистрации
-class _LoginForm extends StatefulWidget {
-  final VoidCallback? onAuthSuccess;
-  
-  const _LoginForm({this.onAuthSuccess});
-  
-  @override
-  State<_LoginForm> createState() => _LoginFormState();
-}
-
-class _LoginFormState extends State<_LoginForm> {
-  final _emailCtl = TextEditingController();
-  final _passCtl = TextEditingController();
-  bool _loading = false;
-
-  @override
-  void dispose() {
-    _emailCtl.dispose();
-    _passCtl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _signIn() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance
-          .signInWithEmail(_emailCtl.text.trim(), _passCtl.text.trim());
-      if (mounted) {
-        // Пользователь уже сохранен в _cachedUser через signInWithEmail
-        // Но убедимся, что он также сохранен в SharedPreferences
-        final currentUser = AuthService.instance.currentUser;
-        if (currentUser != null) {
-          print('✅ Пользователь в кэше после входа: ${currentUser.email}');
-        } else {
-          // Если не в кэше, пытаемся загрузить из SharedPreferences
-          await Future.delayed(const Duration(milliseconds: 100));
-          final user = await AuthService.getCurrentUser();
-          if (user != null) {
-            print('✅ Пользователь загружен из SharedPreferences после входа: ${user.email}');
-            (AuthService.instance as dynamic)._cachedUser = user;
-          } else {
-            print('⚠️ Пользователь не найден ни в кэше, ни в SharedPreferences');
-          }
-        }
-        // Вызываем callback для перезагрузки профиля
-        widget.onAuthSuccess?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка входа: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _register() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance
-          .createUserWithEmail(_emailCtl.text.trim(), _passCtl.text.trim());
-      if (mounted) {
-        // Пользователь уже сохранен в _cachedUser через createUserWithEmail
-        // Но убедимся, что он также сохранен в SharedPreferences
-        final currentUser = AuthService.instance.currentUser;
-        if (currentUser != null) {
-          print('✅ Пользователь в кэше после регистрации: ${currentUser.email}');
-        } else {
-          // Если не в кэше, пытаемся загрузить из SharedPreferences
-          await Future.delayed(const Duration(milliseconds: 100));
-          final user = await AuthService.getCurrentUser();
-          if (user != null) {
-            print('✅ Пользователь загружен из SharedPreferences после регистрации: ${user.email}');
-            (AuthService.instance as dynamic)._cachedUser = user;
-          } else {
-            print('⚠️ Пользователь не найден ни в кэше, ни в SharedPreferences');
-          }
-        }
-        // Вызываем callback для перезагрузки профиля
-        widget.onAuthSuccess?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка регистрации: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _google() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance.signInWithGoogle();
-      if (mounted) {
-        // Обновляем кэш пользователя
-        final user = await AuthService.getCurrentUser();
-        if (user != null) {
-          (AuthService.instance as dynamic)._cachedUser = user;
-        }
-        // Вызываем callback для перезагрузки профиля
-        widget.onAuthSuccess?.call();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка входа через Google: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Войдите в аккаунт',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 32),
-          TextField(
-            controller: _emailCtl,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _passCtl,
-            decoration: const InputDecoration(
-              labelText: 'Пароль',
-              border: OutlineInputBorder(),
-            ),
-            obscureText: true,
-          ),
-          const SizedBox(height: 24),
-          if (_loading)
-            const CircularProgressIndicator()
-          else ...[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _signIn,
-                child: const Text('Войти'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: _register,
-                child: const Text('Зарегистрироваться'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.login),
-                label: const Text('Войти через Google'),
-                onPressed: _google,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+/// Минимальный профиль из данных [AuthService], пока не пришёл ответ API.
+user_service.UserProfile _userProfileFromAuthUser(User u) {
+  return user_service.UserProfile(
+    user: User(
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      username: u.username,
+      avatarUrl: u.avatarUrl,
+      bio: u.bio,
+      isPrivate: u.isPrivate,
+      isAdmin: u.isAdmin,
+      isModerator: u.isModerator,
+      createdAt: u.createdAt,
+      scanCredits: u.scanCredits,
+      subscriptionType: u.subscriptionType,
+    ),
+    stats: user_service.UserStats(
+      postsCount: 0,
+      reelsCount: 0,
+      savedCount: 0,
+      followersCount: 0,
+      followingCount: 0,
+    ),
+  );
 }
 
 class ProfileScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, показываем текущего пользователя
-  
-  const ProfileScreen({Key? key, this.userId}) : super(key: key);
-  
-  static const routeName = '/profile';
-  
+
+  const ProfileScreen({super.key, this.userId});
+
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -240,90 +55,83 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   user_service.UserProfile? _profile;
+  Object? _profileLoadError;
   bool _isLoading = true;
   bool _isFollowing = false;
-  
+  final Set<int> _loadedTabs = {0};
+  late final void Function(User?) _onSessionChanged;
+  int? _postsListEpoch;
+
   @override
   void initState() {
     super.initState();
+    _postsListEpoch = AuthService.instance.currentUser?.id;
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      final idx = _tabController.index;
+      if (_loadedTabs.add(idx) && mounted) {
+        setState(() {});
+      }
+    });
+    _onSessionChanged = (user) {
+      if (widget.userId != null || !mounted) return;
+      user_service.UserService.instance.profile.value = null;
+      setState(() {
+        _loadedTabs
+          ..clear()
+          ..add(0);
+        _tabController.index = 0;
+        _postsListEpoch = user?.id;
+        _profile = user != null ? _userProfileFromAuthUser(user) : null;
+      });
+      _loadProfile();
+    };
+    AuthService.registerSessionListener(_onSessionChanged);
     _loadProfile();
   }
-  
+
   @override
   void dispose() {
+    AuthService.unregisterSessionListener(_onSessionChanged);
     _tabController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadProfile() async {
-    setState(() => _isLoading = true);
-    
+    setState(() {
+      _isLoading = true;
+      _profileLoadError = null;
+    });
+
     try {
       if (widget.userId == null) {
         // Загружаем текущего пользователя (как в ProfileAuthScreen)
         var currentUser = AuthService.instance.currentUser;
-        
+
         // Если пользователь не загружен, пытаемся загрузить из SharedPreferences
         if (currentUser == null) {
-          print('⚠️ currentUser == null, пытаемся загрузить из SharedPreferences...');
           try {
             final user = await AuthService.getCurrentUser();
             if (user != null) {
-              print('✅ Пользователь загружен из SharedPreferences: ${user.email}');
-              // Обновляем кэш через приватное поле (временно)
-              (AuthService.instance as dynamic)._cachedUser = user;
+              AuthService.instance.setUserAfterAuth(user);
               currentUser = user;
             }
           } catch (e) {
-            print('❌ Ошибка при загрузке пользователя: $e');
+            debugPrint('Ошибка при загрузке пользователя: $e');
           }
         }
-        
-        print('🔍 Загрузка профиля: currentUser = ${currentUser?.id}, email = ${currentUser?.email}');
-        
+
         if (currentUser != null) {
-          // Сначала создаем профиль из данных пользователя (гарантированно)
-          final authUser = currentUser;
-          final userServiceUser = User(
-            id: authUser.id,
-            email: authUser.email,
-            name: authUser.name,
-            username: authUser.username,
-            avatarUrl: authUser.avatarUrl,
-            bio: authUser.bio,
-            isPrivate: authUser.isPrivate,
-            isAdmin: authUser.isAdmin,
-            isModerator: authUser.isModerator,
-            createdAt: authUser.createdAt,
-          );
-          _profile = user_service.UserProfile(
-            user: userServiceUser,
-            stats: user_service.UserStats(
-              postsCount: 0,
-              reelsCount: 0,
-              savedCount: 0,
-              followersCount: 0,
-              followingCount: 0,
-            ),
-          );
-          print('✅ Профиль создан из currentUser: ${_profile?.user.name}');
-          
-          // Затем пытаемся загрузить профиль из API (в фоне, не критично)
-          try {
-            await user_service.UserService.instance.ensureProfileLoaded();
-            final apiProfile = user_service.UserService.instance.profile.value;
-            if (apiProfile != null) {
-              _profile = apiProfile;
-              print('✅ Профиль обновлен из API');
-            }
-          } catch (e) {
-            // Игнорируем ошибки загрузки из API - у нас уже есть профиль
-            print('⚠️ Не удалось загрузить профиль из API: $e');
+          _profile = _userProfileFromAuthUser(currentUser);
+
+          // Не блокируем экран: рендерим профиль сразу, API-обновление делаем фоном.
+          if (mounted) {
+            setState(() => _isLoading = false);
           }
+          unawaited(_refreshOwnProfileFromApi());
+          return;
         } else {
-          // Пользователь не авторизован
-          print('❌ currentUser == null');
           _profile = null;
         }
       } else {
@@ -332,43 +140,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           _profile = await user_service.UserService.getProfile(widget.userId!);
           _isFollowing = _profile?.isFollowing ?? false;
         } catch (e) {
-          print('⚠️ Не удалось загрузить профиль пользователя ${widget.userId}: $e');
+          debugPrint(
+              'Не удалось загрузить профиль пользователя ${widget.userId}: $e');
           _profile = null;
+          _profileLoadError = e;
         }
       }
     } catch (e) {
-      print('⚠️ Ошибка при загрузке профиля: $e');
-      // Если не удалось загрузить, создаем профиль из текущего пользователя
+      debugPrint('Ошибка при загрузке профиля: $e');
       final currentUser = AuthService.instance.currentUser;
-      print('🔧 Catch блок: currentUser = ${currentUser?.id}, userId = ${widget.userId}');
       if (currentUser != null && widget.userId == null) {
-        print('🔧 Создание профиля из currentUser в catch блоке');
-        final authUser = currentUser;
-        final userServiceUser = User(
-          id: authUser.id,
-          email: authUser.email,
-          name: authUser.name,
-          username: authUser.username,
-          avatarUrl: authUser.avatarUrl,
-          bio: authUser.bio,
-          isPrivate: authUser.isPrivate,
-          isAdmin: authUser.isAdmin,
-          isModerator: authUser.isModerator,
-          createdAt: authUser.createdAt,
-        );
-        _profile = user_service.UserProfile(
-          user: userServiceUser,
-          stats: user_service.UserStats(
-            postsCount: 0,
-            reelsCount: 0,
-            savedCount: 0,
-            followersCount: 0,
-            followingCount: 0,
-          ),
-        );
-        print('✅ Профиль создан в catch блоке: ${_profile?.user.name}');
+        _profile = _userProfileFromAuthUser(currentUser);
       } else {
-        print('❌ Не удалось создать профиль: currentUser = ${currentUser?.id}, userId = ${widget.userId}');
         _profile = null;
       }
     } finally {
@@ -377,10 +160,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     }
   }
-  
+
+  Future<void> _refreshOwnProfileFromApi() async {
+    try {
+      await user_service.UserService.instance.ensureProfileLoaded();
+      final apiProfile = user_service.UserService.instance.profile.value;
+      if (apiProfile != null && mounted) {
+        setState(() {
+          _profile = apiProfile;
+        });
+      }
+    } catch (e) {
+      debugPrint('Не удалось обновить профиль из API: $e');
+    }
+  }
+
+  Widget _buildLazyTab(int index, Widget Function() builder) {
+    if (!_loadedTabs.contains(index)) {
+      return const SizedBox.shrink();
+    }
+    return builder();
+  }
+
   Future<void> _toggleFollow() async {
     if (_profile == null || widget.userId == null) return;
-    
+
     try {
       if (_isFollowing) {
         await user_service.UserService.unfollow(widget.userId!);
@@ -392,19 +196,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         _profile = user_service.UserProfile(
           user: _profile!.user,
           stats: _profile!.stats,
-          isFollowing: !_isFollowing,
+          isFollowing: _isFollowing,
           isFollowedBy: _profile!.isFollowedBy,
         );
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -413,60 +217,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    
+
     if (_profile == null) {
-      // Проверяем, авторизован ли пользователь
       final currentUser = AuthService.instance.currentUser;
-      print('🔍 ProfileScreen build: _profile == null, currentUser = ${currentUser?.id}');
-      
-      if (currentUser == null) {
-        // Показываем форму входа/регистрации
+
+      if (currentUser == null && widget.userId == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          context.go(LoginRoute.path);
+        });
         return Scaffold(
           appBar: AppBar(title: const Text('Профиль')),
-          body: _LoginForm(
-            onAuthSuccess: () {
-              // После успешного входа/регистрации перезагружаем профиль
-              _loadProfile();
-            },
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
+      if (widget.userId != null) {
+        if (_profileLoadError != null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Профиль')),
+            body: AppEmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Не удалось загрузить профиль',
+              subtitle: userVisibleError(
+                _profileLoadError!,
+                fallback: 'Проверьте сеть',
+              ),
+              action: FilledButton(
+                onPressed: _loadProfile,
+                child: const Text('Повторить'),
+              ),
+            ),
+          );
+        }
+        return Scaffold(
+          appBar: AppBar(title: const Text('Профиль')),
+          body: const AppEmptyState(
+            icon: Icons.person_off_outlined,
+            title: 'Пользователь не найден',
+            subtitle: 'Возможно, профиль удалён или скрыт',
           ),
         );
       }
-      // Пользователь авторизован, но профиль не загружен - создаем его прямо здесь
-      print('⚠️ Профиль null в build, но currentUser существует. Создаем профиль...');
-      final authUser = currentUser;
-      final userServiceUser = User(
-        id: authUser.id,
-        email: authUser.email,
-        name: authUser.name,
-        username: authUser.username,
-        avatarUrl: authUser.avatarUrl,
-        bio: authUser.bio,
-        isPrivate: authUser.isPrivate,
-        isAdmin: authUser.isAdmin,
-        isModerator: authUser.isModerator,
-        createdAt: authUser.createdAt,
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _profile != null) return;
+        final u = AuthService.instance.currentUser;
+        if (u == null) return;
+        setState(() {
+          _profile = _userProfileFromAuthUser(u);
+        });
+      });
+      return Scaffold(
+        appBar: AppBar(title: const Text('Профиль')),
+        body: const Center(child: CircularProgressIndicator()),
       );
-      _profile = user_service.UserProfile(
-        user: userServiceUser,
-        stats: user_service.UserStats(
-          postsCount: 0,
-          reelsCount: 0,
-          savedCount: 0,
-          followersCount: 0,
-          followingCount: 0,
-        ),
-      );
-      print('✅ Профиль создан в build методе: ${_profile?.user.name}');
-      // Обновляем состояние, чтобы перерисовать экран
-      if (mounted) {
-        setState(() {});
-      }
     }
-    
+
     final user = _profile!.user;
     final stats = _profile!.stats;
     final isOwnProfile = widget.userId == null;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: Text(user.name),
@@ -482,10 +291,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Настройки профиля',
+                  tooltip: 'Настройки приложения',
                   onPressed: () {
-                    // Переход на экран редактирования профиля
-                    context.pushNamed('profile_auth');
+                    context.push(SettingsRoute.path);
                   },
                 ),
               ]
@@ -501,7 +309,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         },
         body: Column(
           children: [
-            TabBar(
+            longLabelTabBar(
               controller: _tabController,
               tabs: const [
                 Tab(text: 'Общее'),
@@ -514,10 +322,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildAllTab(),
-                  _buildRecipesTab(),
-                  _buildReelsTab(),
-                  _buildFavoritesTab(),
+                  _buildLazyTab(0, _buildAllTab),
+                  _buildLazyTab(1, _buildRecipesTab),
+                  _buildLazyTab(2, _buildReelsTab),
+                  _buildLazyTab(3, _buildFavoritesTab),
                 ],
               ),
             ),
@@ -526,8 +334,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
     );
   }
-  
-  Widget _buildProfileHeader(User user, user_service.UserStats stats, bool isOwnProfile) {
+
+  Widget _buildProfileHeader(
+      User user, user_service.UserStats stats, bool isOwnProfile) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -535,12 +344,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           // Аватар (без кнопки смены - она в настройках)
           CircleAvatar(
             radius: 50,
-            backgroundImage: user.avatarUrl != null
-                ? NetworkImage(user.avatarUrl!)
-                : null,
+            backgroundImage:
+                user.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
             child: user.avatarUrl == null
                 ? Text(
-                    user.name[0].toUpperCase(),
+                    user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                     style: const TextStyle(fontSize: 40),
                   )
                 : null,
@@ -592,95 +400,99 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       ),
     );
   }
-  
+
+  int get _effectiveUserId => widget.userId ?? _profile!.user.id;
+
+  Widget _postsList({required String? postType}) {
+    return _PostsListWidget(
+      key: ValueKey('posts_${_effectiveUserId}_${postType ?? 'all'}_$_postsListEpoch'),
+      userId: _effectiveUserId,
+      postType: postType,
+    );
+  }
+
   Widget _buildRecipesTab() {
-    // Показываем только рецепты, которые выложил пользователь
-    return _PostsListWidget(
-      userId: widget.userId ?? _profile!.user.id,
-      postType: 'recipe', // только рецепты
-    );
+    return _postsList(postType: 'recipe');
   }
-  
+
   Widget _buildReelsTab() {
-    // Показываем только рилсы, которые выложил пользователь
-    return _PostsListWidget(
-      userId: widget.userId ?? _profile!.user.id,
-      postType: 'reel', // Только короткие видео (рилсы)
-    );
+    return _postsList(postType: 'reel');
   }
-  
+
   Widget _buildAllTab() {
-    // Показываем все посты (и обычные, и рилсы, и рецепты)
-    return _PostsListWidget(
-      userId: widget.userId ?? _profile!.user.id,
-      postType: null, // все посты
-    );
+    return _postsList(postType: null);
   }
-  
+
   Widget _buildFavoritesTab() {
     final userId = widget.userId ?? _profile?.user.id;
     if (userId == null) {
-      return const Center(child: Text('Войдите, чтобы видеть избранное'));
+      return AppEmptyState(
+        icon: Icons.bookmark_border,
+        title: 'Войдите в аккаунт',
+        subtitle: 'Сохранённые посты доступны после входа',
+        action: FilledButton(
+          onPressed: () => context.push(LoginRoute.path),
+          child: const Text('Войти'),
+        ),
+      );
     }
     // Показываем сохраненные посты (с подвкладками: Общее, Посты, Рилсы)
-    return SavedPostsScreen(userId: userId);
+    return SavedPostsScreen(userId: userId, embedded: true);
   }
 }
 
 class _PostsListWidget extends StatefulWidget {
   final int userId;
   final String? postType;
-  
+
   const _PostsListWidget({
+    super.key,
     required this.userId,
     this.postType,
   });
-  
+
   @override
   State<_PostsListWidget> createState() => _PostsListWidgetState();
 }
 
 class _PostsListWidgetState extends State<_PostsListWidget> {
   List<PostModel> _posts = [];
+  Object? _loadError;
   bool _isLoading = false;
   bool _hasMore = true;
   int _offset = 0;
-  final ScrollController _scrollController = ScrollController();
-  
+
   @override
   void initState() {
     super.initState();
     _loadPosts();
-    _scrollController.addListener(_onScroll);
   }
-  
+
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-  
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_isLoading && _hasMore) {
-        _loadMore();
-      }
+  void didUpdateWidget(covariant _PostsListWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId ||
+        oldWidget.postType != widget.postType) {
+      _posts = [];
+      _offset = 0;
+      _hasMore = true;
+      _loadPosts(refresh: true);
     }
   }
-  
+
   Future<void> _loadPosts({bool refresh = false}) async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
       if (refresh) {
         _posts = [];
         _offset = 0;
         _hasMore = true;
+        _loadError = null;
       }
     });
-    
+
     try {
       final response = await UserPostsService.getUserPosts(
         userId: widget.userId,
@@ -688,7 +500,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         offset: refresh ? 0 : _offset,
         postType: widget.postType,
       );
-      
+
       setState(() {
         if (refresh) {
           _posts = response.posts;
@@ -697,12 +509,15 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         }
         _offset = _posts.length;
         _hasMore = _posts.length < response.total;
+        _loadError = null;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки постов: $e')),
-        );
+        setState(() {
+          if (refresh) {
+            _loadError = e;
+          }
+        });
       }
     } finally {
       if (mounted) {
@@ -710,59 +525,111 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
       }
     }
   }
-  
+
   Future<void> _loadMore() async {
     await _loadPosts(refresh: false);
   }
-  
+
   @override
   Widget build(BuildContext context) {
     if (_posts.isEmpty && _isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return RefreshIndicator(
+        onRefresh: () => _loadPosts(refresh: true),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.35,
+            child: const Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      );
     }
-    
+
     if (_posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.post_add, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Нет постов',
-              style: TextStyle(color: Colors.grey[600]),
+      if (_loadError != null) {
+        return RefreshIndicator(
+          onRefresh: () => _loadPosts(refresh: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * 0.35,
+                child: AppEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Не удалось загрузить',
+                  subtitle: userVisibleError(
+                    _loadError!,
+                    fallback: 'Проверьте сеть',
+                  ),
+                  action: FilledButton(
+                    onPressed: () => _loadPosts(refresh: true),
+                    child: const Text('Повторить'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return RefreshIndicator(
+        onRefresh: () => _loadPosts(refresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 80),
+            AppEmptyState(
+              icon: Icons.post_add_outlined,
+              title: 'Нет постов',
+              subtitle: 'Здесь появятся публикации пользователя',
             ),
           ],
         ),
       );
     }
-    
+
     return RefreshIndicator(
       onRefresh: () => _loadPosts(refresh: true),
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: _posts.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _posts.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.pixels >=
+                  notification.metrics.maxScrollExtent * 0.8 &&
+              !_isLoading &&
+              _hasMore) {
+            _loadMore();
           }
-          
-          final post = _posts[index];
-          return NewPostCard(
-            post: post,
-            onCommentTap: () {
-              context.push('/post/${post.id}/comments');
-            },
-            onAuthorTap: () {
-              context.push('/profile?userId=${post.userId}');
-            },
-          );
+          return false;
         },
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          primary: true,
+          itemCount: _posts.length + (_hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _posts.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+
+            final post = _posts[index];
+            return NewPostCard(
+              post: post,
+              hideFeedHeader: true,
+              onCommentTap: () =>
+                  context.push(PostCommentsRoute.pathFor(post.id)),
+              onPostDeleted: () {
+                setState(() {
+                  _posts.removeWhere((p) => p.id == post.id);
+                });
+              },
+              onAuthorTap: () {
+                context.push(ProfileRoute.withUserId(post.userId));
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -771,9 +638,9 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
 class _StatItem extends StatelessWidget {
   final String label;
   final String value;
-  
+
   const _StatItem({required this.label, required this.value});
-  
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -796,4 +663,3 @@ class _StatItem extends StatelessWidget {
     );
   }
 }
-

@@ -52,18 +52,23 @@ class ChannelCacheService {
     }
     
     // Загружаем с сервера
-    final channel = await ChannelService.getChannel(channelId);
-    
-    // Сохраняем в кэш
-    _channelCache[channelId] = channel;
-    _cacheTimestamps['$_channelPrefix$channelId'] = DateTime.now();
-    
-    // Сохраняем на диск
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_channelPrefix$channelId', jsonEncode(channel.toJson()));
-    await prefs.setString('$_cacheTimestampPrefix$channelId', DateTime.now().toIso8601String());
-    
-    return channel;
+    try {
+      final channel = await ChannelService.getChannel(channelId);
+
+      // Сохраняем в кэш
+      _channelCache[channelId] = channel;
+      _cacheTimestamps['$_channelPrefix$channelId'] = DateTime.now();
+
+      // Сохраняем на диск
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_channelPrefix$channelId', jsonEncode(channel.toJson()));
+      await prefs.setString('$_cacheTimestampPrefix$channelId', DateTime.now().toIso8601String());
+
+      return channel;
+    } on ChannelNotFoundException {
+      await invalidateChannelCache(channelId);
+      rethrow;
+    }
   }
   
   /// Получить посты из кэша или загрузить
@@ -74,7 +79,7 @@ class ChannelCacheService {
     String? postType,
     bool forceRefresh = false,
   }) async {
-    final cacheKey = '${_postsPrefix}${channelId}_${postType ?? 'all'}_$offset';
+    final cacheKey = '$_postsPrefix${channelId}_${postType ?? 'all'}_$offset';
     
     // Проверяем кэш в памяти
     if (!forceRefresh && _postsCache.containsKey(cacheKey)) {
@@ -146,7 +151,7 @@ class ChannelCacheService {
     // Инвалидируем все посты этого канала
     final keysToRemove = <String>[];
     for (final key in _postsCache.keys) {
-      if (key.startsWith('${_postsPrefix}$channelId')) {
+      if (key.startsWith('$_postsPrefix$channelId')) {
         keysToRemove.add(key);
       }
     }

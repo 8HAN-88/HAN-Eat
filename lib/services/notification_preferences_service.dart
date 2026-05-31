@@ -1,34 +1,73 @@
-/// Сервис для работы с настройками уведомлений через backend API
+// Сервис для работы с настройками уведомлений через backend API
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'server_config.dart';
+
+String _parseErrorDetail(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final d = decoded['detail'];
+      if (d is String && d.isNotEmpty) return d;
+      if (d is List && d.isNotEmpty) {
+        final first = d.first;
+        if (first is Map<String, dynamic>) {
+          final msg = first['msg'];
+          final loc = first['loc'];
+          final field = loc is List && loc.isNotEmpty ? loc.last.toString() : 'field';
+          if (msg is String && msg.isNotEmpty) return '$field: $msg';
+        }
+      }
+    }
+  } catch (_) {}
+  final trimmed = body.trim();
+  if (trimmed.length > 280) return '${trimmed.substring(0, 280)}…';
+  return trimmed.isEmpty ? 'Ошибка сервера' : trimmed;
+}
+
+bool _bool(dynamic v, [bool fallback = true]) {
+  if (v == null) return fallback;
+  if (v is bool) return v;
+  if (v is num) return v != 0;
+  if (v is String) {
+    final s = v.toLowerCase();
+    if (s == 'true' || s == '1') return true;
+    if (s == 'false' || s == '0') return false;
+  }
+  return fallback;
+}
 
 class NotificationPreferencesService {
-  static const String baseUrl = 'http://localhost:5000/api/v1';
+  static String get baseUrl => ServerConfig.apiBaseUrl;
+
+  static Map<String, String> _headers(String token) => {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
 
   /// Получить настройки уведомлений текущего пользователя
   static Future<NotificationPreferences> getPreferences() async {
-    final token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
 
     final uri = Uri.parse('$baseUrl/users/me/notification-preferences');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    var response = await http.get(uri, headers: _headers(token));
+
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await http.get(uri, headers: _headers(token));
+    }
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return NotificationPreferences.fromJson(data);
-    } else {
-      final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to load notification preferences');
     }
+    throw Exception(
+      '${_parseErrorDetail(response.body)} (${response.statusCode})',
+    );
   }
 
   /// Обновить настройки уведомлений
@@ -41,7 +80,7 @@ class NotificationPreferencesService {
     bool? systemEnabled,
     bool? pushEnabled,
   }) async {
-    final token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -56,22 +95,28 @@ class NotificationPreferencesService {
     if (systemEnabled != null) body['system_enabled'] = systemEnabled;
     if (pushEnabled != null) body['push_enabled'] = pushEnabled;
 
-    final response = await http.patch(
+    var response = await http.patch(
       uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+      headers: _headers(token),
       body: jsonEncode(body),
     );
+
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await http.patch(
+        uri,
+        headers: _headers(token),
+        body: jsonEncode(body),
+      );
+    }
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return NotificationPreferences.fromJson(data);
-    } else {
-      final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to update notification preferences');
     }
+    throw Exception(
+      '${_parseErrorDetail(response.body)} (${response.statusCode})',
+    );
   }
 }
 
@@ -96,13 +141,13 @@ class NotificationPreferences {
 
   factory NotificationPreferences.fromJson(Map<String, dynamic> json) {
     return NotificationPreferences(
-      likesEnabled: json['likes_enabled'] as bool? ?? true,
-      commentsEnabled: json['comments_enabled'] as bool? ?? true,
-      followsEnabled: json['follows_enabled'] as bool? ?? true,
-      repostsEnabled: json['reposts_enabled'] as bool? ?? true,
-      mentionsEnabled: json['mentions_enabled'] as bool? ?? true,
-      systemEnabled: json['system_enabled'] as bool? ?? true,
-      pushEnabled: json['push_enabled'] as bool? ?? true,
+      likesEnabled: _bool(json['likes_enabled']),
+      commentsEnabled: _bool(json['comments_enabled']),
+      followsEnabled: _bool(json['follows_enabled']),
+      repostsEnabled: _bool(json['reposts_enabled']),
+      mentionsEnabled: _bool(json['mentions_enabled']),
+      systemEnabled: _bool(json['system_enabled']),
+      pushEnabled: _bool(json['push_enabled']),
     );
   }
 
@@ -138,4 +183,3 @@ class NotificationPreferences {
     );
   }
 }
-

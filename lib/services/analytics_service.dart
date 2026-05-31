@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart';
 // Сервис для работы с аналитикой
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'server_config.dart';
 
 class AnalyticsService {
-  static const String baseUrl = 'http://localhost:5000/api/v1';
+  static String get baseUrl => ServerConfig.apiBaseUrl;
   
   /// Получить аналитику поста
   static Future<PostAnalyticsResponse> getPostAnalytics({
     required int postId,
     int days = 30,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -43,7 +45,7 @@ class AnalyticsService {
   static Future<ProfileAnalyticsResponse> getProfileAnalytics({
     int days = 30,
   }) async {
-    var token = await AuthService.getAccessToken();
+    var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated. Please log in first.');
     }
@@ -170,8 +172,65 @@ class PostAnalyticsResponse {
   }
 }
 
+/// Строка «топ постов» в аналитике профиля (не путать с полной аналитикой поста).
+class ProfileTopPostSummary {
+  final int postId;
+  final String title;
+  final int views;
+  final int likes;
+  final int comments;
+  final int saves;
+  final int reposts;
+  /// Доля реакций к просмотрам этого поста за период, 0–100.
+  final double engagementRatePercent;
+
+  ProfileTopPostSummary({
+    required this.postId,
+    required this.title,
+    required this.views,
+    required this.likes,
+    required this.comments,
+    required this.saves,
+    required this.reposts,
+    required this.engagementRatePercent,
+  });
+
+  factory ProfileTopPostSummary.fromJson(Map<String, dynamic> m) {
+    final views = (m['views'] as num?)?.toInt() ??
+        (m['views_total'] as num?)?.toInt() ??
+        0;
+    final likes = (m['likes'] as num?)?.toInt() ??
+        (m['likes_count'] as num?)?.toInt() ??
+        0;
+    final comments = (m['comments'] as num?)?.toInt() ??
+        (m['comments_count'] as num?)?.toInt() ??
+        0;
+    final saves = (m['saves'] as num?)?.toInt() ??
+        (m['saves_count'] as num?)?.toInt() ??
+        0;
+    final reposts = (m['reposts'] as num?)?.toInt() ??
+        (m['reposts_count'] as num?)?.toInt() ??
+        0;
+    final fromApi = (m['engagement_rate'] as num?)?.toDouble();
+    final reactions = likes + comments + saves + reposts;
+    final computed =
+        views > 0 ? (reactions / views * 100) : 0.0;
+    return ProfileTopPostSummary(
+      postId: (m['post_id'] as num).toInt(),
+      title: (m['title'] as String?)?.trim() ?? '',
+      views: views,
+      likes: likes,
+      comments: comments,
+      saves: saves,
+      reposts: reposts,
+      engagementRatePercent: fromApi ?? computed,
+    );
+  }
+}
+
 class ProfileAnalyticsResponse {
   final int userId;
+  final int periodDays;
   final int totalViews;
   final int totalLikes;
   final int totalComments;
@@ -180,13 +239,15 @@ class ProfileAnalyticsResponse {
   final int postsCount;
   final int channelsCount;
   final int followersCount;
-  final List<PostAnalyticsResponse> topPosts;
+  final List<ProfileTopPostSummary> topPosts;
   final List<DailyCount> viewsByDay;
-  final double avgEngagementRate;
+  /// Реакции к просмотрам по всем постам за период, 0–100.
+  final double engagementRatePercent;
   final Map<String, dynamic>? demographics;
-  
+
   ProfileAnalyticsResponse({
     required this.userId,
+    required this.periodDays,
     required this.totalViews,
     required this.totalLikes,
     required this.totalComments,
@@ -197,108 +258,69 @@ class ProfileAnalyticsResponse {
     required this.followersCount,
     required this.topPosts,
     required this.viewsByDay,
-    required this.avgEngagementRate,
+    required this.engagementRatePercent,
     this.demographics,
   });
-  
+
   factory ProfileAnalyticsResponse.fromJson(Map<String, dynamic> json) {
     try {
-      // Поддержка двух форматов: новый (из backend) и старый (для совместимости)
-      if (json.containsKey('total_views') && !json.containsKey('total_engagement')) {
-        // Новый формат (с отдельными полями)
-        return ProfileAnalyticsResponse(
-          userId: json['user_id'] as int,
-          totalViews: json['total_views'] as int? ?? 0,
-          totalLikes: json['total_likes'] as int? ?? 0,
-          totalComments: json['total_comments'] as int? ?? 0,
-          totalSaves: json['total_saves'] as int? ?? 0,
-          totalReposts: json['total_reposts'] as int? ?? 0,
-          postsCount: json['posts_count'] as int? ?? 0,
-          channelsCount: json['channels_count'] as int? ?? 0,
-          followersCount: json['followers_count'] as int? ?? 0,
-          topPosts: (json['top_posts'] as List<dynamic>?)
-                  ?.map((item) {
-                    // Преобразуем упрощенную версию топ поста в PostAnalyticsResponse
-                    final itemMap = item as Map<String, dynamic>;
-                    return PostAnalyticsResponse(
-                      postId: itemMap['post_id'] as int,
-                      viewsTotal: itemMap['views_total'] as int? ?? 0,
-                      viewsUnique: itemMap['views_unique'] as int? ?? 0,
-                      viewsByDay: [],
-                      likesCount: itemMap['likes_count'] as int? ?? 0,
-                      commentsCount: itemMap['comments_count'] as int? ?? 0,
-                      savesCount: itemMap['saves_count'] as int? ?? 0,
-                      repostsCount: itemMap['reposts_count'] as int? ?? 0,
-                      ctr: (itemMap['ctr'] as num?)?.toDouble() ?? 0.0,
-                      engagementRate: (itemMap['engagement_rate'] as num?)?.toDouble() ?? 0.0,
-                      avgViewDurationSec: null,
-                      demographics: null,
-                    );
-                  })
-                  .toList() ??
-              [],
-          viewsByDay: (json['views_by_day'] as List<dynamic>?)
-                  ?.map((item) => DailyCount.fromJson(item as Map<String, dynamic>))
-                  .toList() ??
-              [],
-          avgEngagementRate: (json['avg_engagement_rate'] as num?)?.toDouble() ?? 0.0,
-          demographics: json['demographics'] as Map<String, dynamic>?,
-        );
-      } else {
-        // Старый формат (с total_engagement как словарь)
-        final totalEngagement = json['total_engagement'] as Map<String, dynamic>? ?? {};
-        return ProfileAnalyticsResponse(
-          userId: json['user_id'] as int,
-          totalViews: json['total_views'] as int? ?? 0,
-          totalLikes: totalEngagement['likes'] as int? ?? 0,
-          totalComments: totalEngagement['comments'] as int? ?? 0,
-          totalSaves: totalEngagement['saves'] as int? ?? 0,
-          totalReposts: totalEngagement['reposts'] as int? ?? 0,
-          postsCount: json['posts_count'] as int? ?? 0,
-          channelsCount: json['channels_count'] as int? ?? 0,
-          followersCount: json['followers_count'] as int? ?? 0,
-          topPosts: (json['top_posts'] as List<dynamic>?)
-                  ?.map((item) {
-                    final itemMap = item as Map<String, dynamic>;
-                    return PostAnalyticsResponse(
-                      postId: itemMap['post_id'] as int,
-                      viewsTotal: itemMap['views'] as int? ?? itemMap['views_total'] as int? ?? 0,
-                      viewsUnique: itemMap['views_unique'] as int? ?? 0,
-                      viewsByDay: [],
-                      likesCount: itemMap['likes'] as int? ?? itemMap['likes_count'] as int? ?? 0,
-                      commentsCount: itemMap['comments'] as int? ?? itemMap['comments_count'] as int? ?? 0,
-                      savesCount: itemMap['saves'] as int? ?? itemMap['saves_count'] as int? ?? 0,
-                      repostsCount: itemMap['reposts'] as int? ?? itemMap['reposts_count'] as int? ?? 0,
-                      ctr: (itemMap['ctr'] as num?)?.toDouble() ?? 0.0,
-                      engagementRate: (itemMap['engagement_rate'] as num?)?.toDouble() ?? 0.0,
-                      avgViewDurationSec: null,
-                      demographics: null,
-                    );
-                  })
-                  .toList() ??
-              [],
-          viewsByDay: (json['by_day'] as List<dynamic>?)
-                  ?.map((item) {
-                    final itemMap = item as Map<String, dynamic>;
-                    return DailyCount(
-                      date: itemMap['date'] != null
-                          ? DateTime.parse(itemMap['date'] as String)
-                          : DateTime.now(),
-                      count: itemMap['count'] as int? ?? 0,
-                    );
-                  })
-                  .toList() ??
-              [],
-          avgEngagementRate: 0.0,
-          demographics: null,
-        );
-      }
-    } catch (e) {
-      // Если произошла ошибка парсинга, возвращаем пустой ответ
-      print('Ошибка парсинга аналитики профиля: $e');
-      print('JSON: $json');
+      final totalEngagement =
+          json['total_engagement'] as Map<String, dynamic>? ?? {};
+      int readInt(dynamic v) => (v as num?)?.toInt() ?? 0;
+
+      final topRaw = json['top_posts'] as List<dynamic>? ?? [];
+      final topPosts = topRaw
+          .map((item) =>
+              ProfileTopPostSummary.fromJson(item as Map<String, dynamic>))
+          .toList();
+
+      final byDayRaw = json['by_day'] as List<dynamic>? ??
+          json['views_by_day'] as List<dynamic>? ??
+          [];
+
+      final totalViews = readInt(json['total_views']);
+      final totalLikes = readInt(totalEngagement['likes']);
+      final totalComments = readInt(totalEngagement['comments']);
+      final totalSaves = readInt(totalEngagement['saves']);
+      final totalReposts = readInt(totalEngagement['reposts']);
+      final reactionsSum =
+          totalLikes + totalComments + totalSaves + totalReposts;
+      final periodDays = readInt(json['period_days']);
+      final rawEr = json['engagement_rate'];
+      final engagementRate = rawEr is num
+          ? rawEr.toDouble()
+          : (totalViews > 0 ? (reactionsSum / totalViews * 100) : 0.0);
+
       return ProfileAnalyticsResponse(
-        userId: json['user_id'] as int? ?? 0,
+        userId: readInt(json['user_id']),
+        periodDays: periodDays > 0 ? periodDays : 30,
+        totalViews: totalViews,
+        totalLikes: totalLikes,
+        totalComments: totalComments,
+        totalSaves: totalSaves,
+        totalReposts: totalReposts,
+        postsCount: readInt(json['posts_count']),
+        channelsCount: readInt(json['channels_count']),
+        followersCount: readInt(json['followers_count']),
+        topPosts: topPosts,
+        viewsByDay: byDayRaw.map((item) {
+          final itemMap = item as Map<String, dynamic>;
+          return DailyCount(
+            date: itemMap['date'] != null
+                ? DateTime.parse(itemMap['date'] as String)
+                : DateTime.now(),
+            count: readInt(itemMap['count']),
+          );
+        }).toList(),
+        engagementRatePercent: engagementRate,
+        demographics: json['demographics'] as Map<String, dynamic>?,
+      );
+    } catch (e) {
+      debugPrint('Ошибка парсинга аналитики профиля: $e');
+      debugPrint('JSON: $json');
+      return ProfileAnalyticsResponse(
+        userId: readIntSafe(json['user_id']),
+        periodDays: 30,
         totalViews: 0,
         totalLikes: 0,
         totalComments: 0,
@@ -309,12 +331,14 @@ class ProfileAnalyticsResponse {
         followersCount: 0,
         topPosts: [],
         viewsByDay: [],
-        avgEngagementRate: 0.0,
+        engagementRatePercent: 0.0,
         demographics: null,
       );
     }
   }
 }
+
+int readIntSafe(dynamic v) => (v as num?)?.toInt() ?? 0;
 
 class DailyCount {
   final DateTime date;

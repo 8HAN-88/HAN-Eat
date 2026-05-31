@@ -4,58 +4,140 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
 import '../../../models/recipe.dart';
+import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
-import '../../../services/report_service.dart';
+import '../../../widgets/report_content_dialog.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/favorites_service.dart';
+import '../../../services/recipe_comments_service.dart';
+import '../../../services/comment_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../screens/detail_page.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/inline_video_player.dart';
-import '../../../services/api_service.dart';
 import '../../../services/server_config.dart';
+import '../../../widgets/share_action_sheet.dart';
+import '../../../widgets/post_poll_section.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
+import '../../../services/api_service.dart';
+import '../../../services/post_service.dart';
+import '../../../services/feed_cache_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
+  final raw = body?['repost_original_post_id'];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  return null;
+}
+
+String? _channelRepostUserCommentFromPost(PostModel post) {
+  final body = post.body;
+  final fromBody = body?['repost_to_channel_comment'];
+  if (fromBody is String && fromBody.trim().isNotEmpty) return fromBody.trim();
+  final desc = post.description;
+  if (desc == null || desc.trim().isEmpty) return null;
+  final blocks = desc.split(RegExp(r'\n\n+', multiLine: true));
+  if (blocks.isEmpty) return null;
+  final first = blocks.first.trim();
+  if (first.isEmpty || first.startsWith('Репост:')) return null;
+  return first;
+}
+
+bool _isMeaningfulPostTitle(String? s) {
+  if (s == null) return false;
+  final t = s.trim();
+  return t.isNotEmpty && t != '.' && t != '…' && t != '...';
+}
 
 class NewPostCard extends StatefulWidget {
   final PostModel post;
-  final VoidCallback? onCommentTap;
+  final Future<void> Function()? onCommentTap;
   final VoidCallback? onAuthorTap;
-  
+  /// После удаления поста (обновить список родителя).
+  final VoidCallback? onPostDeleted;
+  /// Без шапки (аватар, имя, ⋯ сверху) — как карточки в канале; меню переносится в нижний ряд.
+  final bool hideFeedHeader;
+
   const NewPostCard({
-    Key? key,
+    super.key,
     required this.post,
     this.onCommentTap,
     this.onAuthorTap,
-  }) : super(key: key);
+    this.onPostDeleted,
+    this.hideFeedHeader = false,
+  });
   
   @override
   State<NewPostCard> createState() => _NewPostCardState();
 }
 
 class _NewPostCardState extends State<NewPostCard> {
+  late PostModel _displayPost;
   bool _isLiked = false;
   int _likesCount = 0;
   bool _isSaved = false;
   bool _isReposted = false;
   int _repostsCount = 0;
+  int _displayCommentsCount = 0;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isReposting = false;
   int? _currentUserId;
-  
+
+  int? _feedChannelRepostOrigIdCache;
+  Future<PostModel?>? _feedChannelRepostOrigFuture;
+
+  void _syncFeedChannelRepostFuture() {
+    final id = _repostOriginalPostIdFromBody(widget.post.body);
+    if (id == null) {
+      _feedChannelRepostOrigIdCache = null;
+      _feedChannelRepostOrigFuture = null;
+      return;
+    }
+    if (_feedChannelRepostOrigIdCache != id) {
+      _feedChannelRepostOrigIdCache = id;
+      _feedChannelRepostOrigFuture = ApiService.getPostById(id);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _displayPost = widget.post;
     _isLiked = widget.post.isLiked;
     _likesCount = widget.post.likesCount;
     _isSaved = widget.post.isSaved ?? false;
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
+    _displayCommentsCount = widget.post.commentsCount;
     _loadCurrentUserId();
+    _hydrateSpoonacularCommentsCount();
+    _syncFeedChannelRepostFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant NewPostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id) {
+      _feedChannelRepostOrigIdCache = null;
+      _feedChannelRepostOrigFuture = null;
+      _displayPost = widget.post;
+    } else if (oldWidget.post != widget.post) {
+      _displayPost = widget.post;
+    }
+    _isLiked = widget.post.isLiked;
+    _likesCount = widget.post.likesCount;
+    _isSaved = widget.post.isSaved ?? false;
+    _isReposted = widget.post.isReposted ?? false;
+    _repostsCount = widget.post.repostsCount;
+    _displayCommentsCount = widget.post.commentsCount;
+    _syncFeedChannelRepostFuture();
   }
   
   Future<void> _loadCurrentUserId() async {
@@ -69,13 +151,192 @@ class _NewPostCardState extends State<NewPostCard> {
     }
   }
   
-  bool get _isAuthor => _currentUserId != null && _currentUserId == widget.post.userId;
+  bool get _isAuthor =>
+      _currentUserId != null && _currentUserId == _displayPost.userId;
+
+  Future<void> _reloadDisplayPost() async {
+    try {
+      final fresh = await ApiService.getPostById(widget.post.id);
+      if (fresh != null && mounted) {
+        setState(() {
+          _displayPost = fresh;
+          _displayCommentsCount = fresh.commentsCount;
+          _isLiked = fresh.isLiked;
+          _likesCount = fresh.likesCount;
+          _isSaved = fresh.isSaved ?? false;
+          _isReposted = fresh.isReposted ?? false;
+          _repostsCount = fresh.repostsCount;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _onPollUpdated(PollData poll) {
+    final body = Map<String, dynamic>.from(_displayPost.body ?? {});
+    body['poll'] = poll.toJson();
+    setState(() {
+      _displayPost = _displayPost.copyWith(body: body);
+    });
+  }
+
+  bool get _isSpoonacularRecipePost {
+    if (_displayPost.type != 'recipe') return false;
+    final body = _displayPost.body;
+    if (body == null) return false;
+    final source = body['source']?.toString().trim().toLowerCase();
+    final nestedRecipe = body['recipe'];
+    final nestedSource = nestedRecipe is Map<String, dynamic>
+        ? nestedRecipe['source']?.toString().trim().toLowerCase()
+        : null;
+    return body['spoonacular_recipe_id'] != null ||
+        source == 'spoonacular' ||
+        nestedSource == 'spoonacular';
+  }
+
+  Future<void> _openLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось открыть ссылку')),
+      );
+    }
+  }
+
+  int get _spoonacularRecipeIdFromPost {
+    final body = widget.post.body;
+    if (body == null) return widget.post.id;
+    final spoonacularId = body['spoonacular_recipe_id'];
+    if (spoonacularId is int) return spoonacularId;
+    if (spoonacularId is String) return int.tryParse(spoonacularId) ?? widget.post.id;
+    return widget.post.id;
+  }
+
+  Future<void> _refreshCommentsCount() async {
+    if (_isSpoonacularRecipePost) return;
+    try {
+      final total = await CommentService.getCommentsTotal(widget.post.id);
+      if (mounted) {
+        setState(() => _displayCommentsCount = total);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _hydrateSpoonacularCommentsCount() async {
+    if (!_isSpoonacularRecipePost) return;
+    try {
+      final recipeId = _spoonacularRecipeIdFromPost;
+      final comments = await RecipeCommentsService.getComments(recipeId.toString());
+      if (!mounted) return;
+      setState(() {
+        _displayCommentsCount = comments.length;
+      });
+    } catch (_) {
+      // keep existing counter value
+    }
+  }
+
+  Future<void> _openRecipeFromPost() async {
+    final post = widget.post;
+    final body = post.body;
+    if (body == null) return;
+    try {
+      int recipeId = post.id;
+      if (body['spoonacular_recipe_id'] != null) {
+        final spoonacularId = body['spoonacular_recipe_id'];
+        final extractedId = spoonacularId is int ? spoonacularId : int.tryParse(spoonacularId.toString());
+        if (extractedId != null && extractedId != 0) {
+          recipeId = extractedId;
+        }
+      }
+
+      String? imageUrl = _extractRecipeImageUrl(body);
+      if (imageUrl == null || imageUrl.isEmpty) {
+        final media = body['media'] as List<dynamic>?;
+        if (media != null) {
+          for (final m in media) {
+            if (m is Map<String, dynamic> && m['type'] == 'image') {
+              imageUrl = m['url'] as String?;
+              if (imageUrl != null && imageUrl.isNotEmpty) break;
+            }
+          }
+        }
+      }
+
+      final ingredients = (body['translated_ingredients'] as List<dynamic>?) ??
+          (body['ingredients'] as List<dynamic>?) ??
+          [];
+      final steps = (body['translated_steps'] as List<dynamic>?) ??
+          (body['steps'] as List<dynamic>?) ??
+          [];
+
+      final sourceFromBody = body['source']?.toString().trim();
+      final nestedRecipe = body['recipe'];
+      final nestedSource = nestedRecipe is Map<String, dynamic>
+          ? nestedRecipe['source']?.toString().trim()
+          : null;
+      final hasSpoonacularId = body['spoonacular_recipe_id'] != null;
+      final recipeSource = (sourceFromBody?.isNotEmpty == true
+              ? sourceFromBody
+              : (nestedSource?.isNotEmpty == true ? nestedSource : null)) ??
+          (hasSpoonacularId
+              ? 'spoonacular'
+              : (post.channelId != null || post.communityId != null ? 'channel' : 'user'));
+
+      final recipeData = <String, dynamic>{
+        'id': recipeId,
+        'title': _recipeTitle(post),
+        'image': imageUrl,
+        'source_image': body['source_image'] as String? ?? imageUrl,
+        'ingredients': ingredients,
+        'steps': steps,
+        'translated_title': body['translated_title'],
+        'translated_ingredients': body['translated_ingredients'],
+        'translated_steps': body['translated_steps'],
+        'usedIngredientCount': ingredients.length,
+        'calories': body['calories'],
+        'nutrition': body['nutrition'],
+        'source': recipeSource,
+      };
+
+      final recipe = Recipe.fromJson(recipeData);
+      final isFavorite = FavoritesService.instance.isFavorite(recipe.id.toString());
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => DetailPage(
+            recipe: recipe,
+            isFavorite: isFavorite,
+            onToggle: () async {
+              await FavoritesService.instance.toggleFavorite(recipe.id.toString());
+            },
+          ),
+        ),
+      );
+      await _hydrateSpoonacularCommentsCount();
+    } catch (_) {
+      // ignore navigation parse errors
+    }
+  }
   
   Future<void> _toggleLike() async {
     if (_isLoading) return;
+
+    if (_isSpoonacularRecipePost) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Лайки для Spoonacular-рецептов пока недоступны'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
     
     // Проверяем авторизацию
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -110,13 +371,15 @@ class _NewPostCardState extends State<NewPostCard> {
       });
       
       if (mounted) {
-        final errorMessage = e.toString().contains('Not authenticated') || 
-                            e.toString().contains('401')
-            ? 'Войдите, чтобы поставить лайк'
-            : 'Ошибка при установке лайка: ${e.toString().replaceAll('Exception: ', '')}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
+            content: Text(
+              userVisibleAuthError(
+                e,
+                fallback: 'Не удалось поставить лайк',
+                authFallback: 'Войдите, чтобы поставить лайк',
+              ),
+            ),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -150,7 +413,7 @@ class _NewPostCardState extends State<NewPostCard> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     } finally {
@@ -164,7 +427,7 @@ class _NewPostCardState extends State<NewPostCard> {
     if (_isReposting) return;
     
     // Проверяем авторизацию
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -195,13 +458,15 @@ class _NewPostCardState extends State<NewPostCard> {
         });
         
         if (mounted) {
-          final errorMessage = e.toString().contains('Not authenticated') || 
-                              e.toString().contains('401')
-              ? 'Войдите, чтобы убрать репост'
-              : 'Ошибка при удалении репоста: ${e.toString().replaceAll('Exception: ', '')}';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(errorMessage),
+              content: Text(
+                userVisibleAuthError(
+                  e,
+                  fallback: 'Не удалось убрать репост',
+                  authFallback: 'Войдите, чтобы убрать репост',
+                ),
+              ),
               duration: const Duration(seconds: 3),
             ),
           );
@@ -243,17 +508,15 @@ class _NewPostCardState extends State<NewPostCard> {
       });
       
       if (mounted) {
-        final errorMessage = e.toString().contains('Not authenticated') || 
-                            e.toString().contains('401')
-            ? 'Войдите, чтобы сделать репост'
-            : e.toString().contains('already reposted')
-                ? 'Вы уже репостнули этот пост'
-                : e.toString().contains('Cannot repost your own')
-                    ? 'Нельзя репостнуть свой пост'
-                    : 'Ошибка при репосте: ${e.toString().replaceAll('Exception: ', '')}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
+            content: Text(
+              userVisibleAuthError(
+                e,
+                fallback: 'Не удалось сделать репост',
+                authFallback: 'Войдите, чтобы сделать репост',
+              ),
+            ),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -264,36 +527,314 @@ class _NewPostCardState extends State<NewPostCard> {
       }
     }
   }
-  
-  Future<void> _showReportDialog() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _ReportDialog(),
+
+  Future<void> _openShareSheet() async {
+    await ShareActionSheet.showForPost(
+      context,
+      post: widget.post,
+      onRepostToWall: _toggleRepost,
     );
-    
-    if (result == null) return;
-    
-    try {
-      await ReportService.reportPost(
-        postId: widget.post.id,
-        reason: result['reason'] as String,
-        comment: result['comment'] as String?,
-      );
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Жалоба отправлена')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
-      }
-    }
   }
   
+  Future<void> _showReportDialog() async {
+    await reportPostWithDialog(context, widget.post.id);
+  }
+  
+  Future<void> _onOverflowMenuSelected(String value) async {
+    if (value == 'report') {
+      _showReportDialog();
+    } else if (value == 'edit') {
+      if (widget.post.channelId == null) {
+        final updated = await context.push<bool>(
+          EditProfilePostRoute.pathFor(widget.post.id),
+        );
+        if (updated == true) await _reloadDisplayPost();
+      } else {
+        await context.push(
+          '/channel/${widget.post.channelId}/post/${widget.post.id}/edit',
+          extra: widget.post.toJson(),
+        );
+        await _reloadDisplayPost();
+      }
+    } else if (value == 'delete') {
+      await _confirmAndDeletePost();
+    }
+  }
+
+  Future<void> _confirmAndDeletePost() async {
+    if (widget.post.channelId != null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить пост?'),
+        content: const Text(
+          'Вы уверены, что хотите удалить этот пост? Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await PostService.deletePost(widget.post.id);
+      try {
+        await FeedCacheService.instance
+            .removePostFromCache(widget.post.id.toString());
+      } catch (_) {}
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пост удалён')),
+      );
+      widget.onPostDeleted?.call();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось удалить пост'),
+          ),
+        ),
+      );
+    }
+  }
+
+  List<PopupMenuEntry<String>> _overflowMenuEntries() {
+    return [
+      if (_isAuthor && widget.post.channelId == null) ...[
+        const PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 20),
+              SizedBox(width: 8),
+              Text('Редактировать'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline, size: 20, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Удалить', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+      if (!_isAuthor)
+        const PopupMenuItem(
+          value: 'report',
+          child: Row(
+            children: [
+              Icon(Icons.flag_outlined, size: 20),
+              SizedBox(width: 8),
+              Text('Пожаловаться'),
+            ],
+          ),
+        ),
+    ];
+  }
+
+  Widget _buildOverflowMenuButton({required double iconSize}) {
+    final entries = _overflowMenuEntries();
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_horiz, size: iconSize),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      onSelected: _onOverflowMenuSelected,
+      itemBuilder: (context) => entries,
+    );
+  }
+
+  /// Репост в канал в ленте: обёртка с [repost_original_post_id] — показываем оригинал.
+  Widget _buildFeedChannelRepostBody(PostModel wrapper) {
+    final scheme = Theme.of(context).colorScheme;
+    final comment = _channelRepostUserCommentFromPost(wrapper);
+
+    return FutureBuilder<PostModel?>(
+      future: _feedChannelRepostOrigFuture,
+      builder: (context, snap) {
+        final orig = snap.data;
+        final loading =
+            snap.connectionState == ConnectionState.waiting && !snap.hasData;
+
+        String sourceName(PostModel? o) {
+          if (o == null) return '';
+          return o.channel?.name ?? o.author?.name ?? 'Пост';
+        }
+
+        String? sourceAvatar(PostModel? o) {
+          if (o == null) return null;
+          final u = o.channel?.avatarUrl ?? o.author?.avatarUrl;
+          if (u == null || u.isEmpty) return null;
+          return u;
+        }
+
+        void openSource(PostModel? o) {
+          if (o == null) return;
+          if (o.channel != null) {
+            context.push('/channel/${o.channel!.id}');
+          } else {
+            context.push('/profile?userId=${o.userId}');
+          }
+        }
+
+        final name = sourceName(orig);
+        final url = sourceAvatar(orig);
+        final initial =
+            name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child:
+                        Icon(Icons.repeat, size: 18, color: scheme.primary),
+                  ),
+                  const SizedBox(width: 8),
+                  if (loading)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (orig != null) ...[
+                    GestureDetector(
+                      onTap: () => openSource(orig),
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        backgroundImage: url != null
+                            ? CachedNetworkImageProvider(url)
+                            : null,
+                        child: url == null
+                            ? Text(
+                                initial,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Репост',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (!loading && orig != null) ...[
+                          const SizedBox(height: 2),
+                          GestureDetector(
+                            onTap: () => openSource(orig),
+                            child: Text(
+                              name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (comment != null && comment.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Text(
+                  comment,
+                  style: const TextStyle(fontSize: 14, height: 1.35),
+                ),
+              ),
+            const SizedBox(height: 6),
+            if (!loading && orig == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Builder(
+                  builder: (context) {
+                    final id = _repostOriginalPostIdFromBody(wrapper.body);
+                    if (id == null) return const SizedBox.shrink();
+                    return OutlinedButton.icon(
+                      onPressed: () => context.push('/post/$id'),
+                      icon: const Icon(Icons.open_in_new, size: 18),
+                      label: const Text('Открыть оригинал'),
+                    );
+                  },
+                ),
+              )
+            else if (orig != null) ...[
+              _buildMedia(orig),
+              if (orig.type == 'recipe' || _isMeaningfulPostTitle(orig.title))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Text(
+                    orig.type == 'recipe' ? _recipeTitle(orig) : orig.title!,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              if (orig.description != null &&
+                  orig.description!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                  child: Text(
+                    orig.description!,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
@@ -321,8 +862,7 @@ class _NewPostCardState extends State<NewPostCard> {
   
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final post = widget.post;
+    final post = _displayPost;
     final author = post.author;  // Автор оригинального поста
     final repostedBy = post.repostedBy;  // Тот, кто репостнул
     final channel = post.channel;
@@ -333,6 +873,8 @@ class _NewPostCardState extends State<NewPostCard> {
     // 3. Иначе - показываем автора поста
     final isRepost = repostedBy != null;
     final isFromChannel = post.channelId != null || post.communityId != null;
+    final isFeedChannelRepostWrapper =
+        _repostOriginalPostIdFromBody(post.body) != null;
     
     // Определяем оригинального автора поста (канал или пользователь)
     String? originalAuthorName;
@@ -373,7 +915,7 @@ class _NewPostCardState extends State<NewPostCard> {
     
     // Логирование для отладки постов из каналов
     if (post.communityId != null) {
-      print('🔍 [POST CARD] Rendering channel post ${post.id}, communityId=${post.communityId}, channel=${channel?.name}, repostedBy=${repostedBy?.name}');
+      debugPrint('🔍 [POST CARD] Rendering channel post ${post.id}, communityId=${post.communityId}, channel=${channel?.name}, repostedBy=${repostedBy?.name}');
     }
     
     // Красивая карточка с тенью и скруглениями
@@ -382,27 +924,132 @@ class _NewPostCardState extends State<NewPostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Шапка поста (Instagram-стиль: компактная)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                // Аватар (того, кто репостнул, или канала, или автора)
-                GestureDetector(
-                  onTap: widget.onAuthorTap,
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundImage: displayAvatar != null
-                        ? CachedNetworkImageProvider(displayAvatar)
-                        : null,
-                    child: displayAvatar == null
-                        ? Text(
-                            displayInitial,
-                            style: const TextStyle(fontSize: 18),
-                          )
-                        : null,
+          // Компактная метка репоста (шапка скрыта — иначе репост неотличим от обычного поста)
+          if (widget.hideFeedHeader && isRepost)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Icon(
+                          Icons.repeat,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () {
+                          if (originalAuthorIsChannel &&
+                              post.channelId != null) {
+                            context.push('/channel/${post.channelId}');
+                          } else {
+                            context.push('/profile?userId=${post.userId}');
+                          }
+                        },
+                        child: CircleAvatar(
+                          radius: 16,
+                          backgroundImage:
+                              originalAuthorAvatar != null &&
+                                      originalAuthorAvatar.isNotEmpty
+                                  ? CachedNetworkImageProvider(
+                                      originalAuthorAvatar,
+                                    )
+                                  : null,
+                          child:
+                              originalAuthorAvatar == null ||
+                                      originalAuthorAvatar.isEmpty
+                                  ? Text(
+                                      (originalAuthorName != null &&
+                                              originalAuthorName.isNotEmpty)
+                                          ? originalAuthorName[0]
+                                              .toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    )
+                                  : null,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                context.push(
+                                    '/profile?userId=${repostedBy.id}');
+                              },
+                              child: Text.rich(
+                                TextSpan(
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'Репост · '),
+                                    TextSpan(
+                                      text: repostedBy.name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (repostedBy.comment != null &&
+                                repostedBy.comment!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                repostedBy.comment!.trim(),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.35,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ],
+              ),
+            ),
+          if (!widget.hideFeedHeader)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  // Аватар (того, кто репостнул, или канала, или автора)
+                  GestureDetector(
+                    onTap: widget.onAuthorTap,
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundImage: displayAvatar != null
+                          ? CachedNetworkImageProvider(displayAvatar)
+                          : null,
+                      child: displayAvatar == null
+                          ? Text(
+                              displayInitial,
+                              style: const TextStyle(fontSize: 18),
+                            )
+                          : null,
+                    ),
+                  ),
                 const SizedBox(width: 12),
                 // Имя и время
                 Expanded(
@@ -427,7 +1074,7 @@ class _NewPostCardState extends State<NewPostCard> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.blue.withOpacity(0.1),
+                                color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -460,7 +1107,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                 // Если оригинальный автор - канал, открываем канал
                                 if (originalAuthorIsChannel && post.channelId != null) {
                                   context.push('/channel/${post.channelId}');
-                                } else if (!originalAuthorIsChannel && post.userId != null) {
+                                } else if (!originalAuthorIsChannel) {
                                   // Если оригинальный автор - пользователь, открываем профиль
                                   context.push('/profile?userId=${post.userId}');
                                 }
@@ -470,8 +1117,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                       radius: 10,
                                       backgroundImage: CachedNetworkImageProvider(originalAuthorAvatar),
                                     )
-                                  : originalAuthorName != null
-                                      ? CircleAvatar(
+                                  : CircleAvatar(
                                           radius: 10,
                                           backgroundColor: Colors.grey[400],
                                           child: Text(
@@ -481,8 +1127,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                               color: Colors.white,
                                             ),
                                           ),
-                                        )
-                                      : const SizedBox.shrink(),
+                                        ),
                             ),
                             const SizedBox(width: 6),
                             // Имя оригинального автора (кликабельное)
@@ -491,7 +1136,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                 // Если оригинальный автор - канал, открываем канал
                                 if (originalAuthorIsChannel && post.channelId != null) {
                                   context.push('/channel/${post.channelId}');
-                                } else if (!originalAuthorIsChannel && post.userId != null) {
+                                } else if (!originalAuthorIsChannel) {
                                   // Если оригинальный автор - пользователь, открываем профиль
                                   context.push('/profile?userId=${post.userId}');
                                 }
@@ -510,7 +1155,7 @@ class _NewPostCardState extends State<NewPostCard> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
+                                  color: Colors.blue.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(3),
                                 ),
                                 child: const Text(
@@ -525,9 +1170,21 @@ class _NewPostCardState extends State<NewPostCard> {
                             ],
                           ],
                         ),
+                        if (repostedBy.comment != null &&
+                            repostedBy.comment!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            repostedBy.comment!.trim(),
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.35,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ]
                       // Для постов из каналов показываем описание канала или "Канал"
-                      else if (isFromChannel)
+                      else if (isFromChannel && !isFeedChannelRepostWrapper)
                         Text(
                           channel?.description ?? 'Канал',
                           style: TextStyle(
@@ -546,147 +1203,146 @@ class _NewPostCardState extends State<NewPostCard> {
                             fontSize: 12,
                           ),
                         ),
-                      Text(
-                        _formatDate(post.publishedAt ?? post.createdAt),
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 12,
-                        ),
-                      ),
                     ],
                   ),
                 ),
-                // Меню (3 точки) - справа в шапке
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, size: 24),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                  onSelected: (value) async {
-                    if (value == 'analytics') {
-                      context.push('/analytics?postId=${widget.post.id}');
-                    } else if (value == 'report') {
-                      _showReportDialog();
-                    } else if (value == 'edit') {
-                      if (widget.post.channelId == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Редактирование постов профиля будет доступно в следующем обновлении')),
-                        );
-                      } else {
-                        context.push(
-                          '/channel/${widget.post.channelId}/post/${widget.post.id}/edit',
-                          extra: widget.post,
-                        );
-                      }
-                    } else if (value == 'delete') {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Удалить пост?'),
-                          content: const Text('Вы уверены, что хотите удалить этот пост? Это действие нельзя отменить.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('Отмена'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
+                _buildOverflowMenuButton(iconSize: 24),
+              ],
+            ),
+          ),
+          if (isFeedChannelRepostWrapper)
+            _buildFeedChannelRepostBody(post)
+          else ...[
+            _buildMedia(post),
+            if (post.type == 'recipe' || _isMeaningfulPostTitle(post.title))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Text(
+                  post.type == 'recipe' ? _recipeTitle(post) : post.title!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            if (post.description != null && post.description!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                child: Text(
+                  post.description!,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            if (post.linkUrl != null && post.linkUrl!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: InkWell(
+                  onTap: () => _openLink(post.linkUrl!),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (post.linkImage != null && post.linkImage!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: CachedNetworkImage(
+                                imageUrl: post.linkImage!,
+                                height: 150,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
                               ),
-                              child: const Text('Удалить'),
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            const Icon(Icons.link, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                post.linkTitle ?? post.linkUrl!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ],
                         ),
-                      );
-                      if (confirmed == true && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Удаление постов профиля будет доступно в следующем обновлении')),
-                        );
-                      }
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    if (_isAuthor && widget.post.channelId == null) ...[
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Редактировать'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('Удалить', style: TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'analytics',
-                        child: Row(
-                          children: [
-                            Icon(Icons.analytics_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Аналитика'),
-                          ],
-                        ),
-                      ),
-                    ] else if (_isAuthor) ...[
-                      const PopupMenuItem(
-                        value: 'analytics',
-                        child: Row(
-                          children: [
-                            Icon(Icons.analytics_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Аналитика'),
-                          ],
-                        ),
-                      ),
-                    ],
-                    if (!_isAuthor)
-                      const PopupMenuItem(
-                        value: 'report',
-                        child: Row(
-                          children: [
-                            Icon(Icons.flag_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Пожаловаться'),
-                          ],
-                        ),
-                      ),
-                  ],
+                        if (post.linkDescription != null &&
+                            post.linkDescription!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              post.linkDescription!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        if (post.linkDomain != null && post.linkDomain!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              post.linkDomain!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (post.poll != null)
+              PostPollSection(
+                postId: post.id,
+                poll: post.poll!,
+                canClose: _isAuthor,
+                onPollUpdated: _onPollUpdated,
+              ),
+          ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(
+                  _formatDate(post.publishedAt ?? post.createdAt),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.visibility_outlined,
+                    size: 14, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text(
+                  _formatCount(post.viewsCount),
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
-          // Медиа (изображения/видео) - сначала фото как в Instagram
-          _buildMedia(post),
-          // Контент (текст после фото)
-          if (post.title != null && post.title!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              child: Text(
-                post.title!,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          if (post.description != null && post.description!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              child: Text(
-                post.description!,
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
           // Действия (Instagram-стиль: кнопки снизу)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -709,16 +1365,14 @@ class _NewPostCardState extends State<NewPostCard> {
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
-                        if (_likesCount > 0) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatCount(_likesCount),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatCount(_likesCount),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                     const SizedBox(width: 8),
@@ -729,7 +1383,11 @@ class _NewPostCardState extends State<NewPostCard> {
                         IconButton(
                           icon: const Icon(Icons.comment_outlined, size: 28),
                           onPressed: () async {
-                            final token = await AuthService.getAccessToken();
+                            if (_isSpoonacularRecipePost) {
+                              await _openRecipeFromPost();
+                              return;
+                            }
+                            final token = await AuthService.getAccessTokenForApi();
                             if (token == null && widget.onCommentTap != null) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -741,21 +1399,20 @@ class _NewPostCardState extends State<NewPostCard> {
                               }
                               return;
                             }
-                            widget.onCommentTap?.call();
+                            await widget.onCommentTap?.call();
+                            await _refreshCommentsCount();
                           },
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
-                        if (post.commentsCount > 0) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatCount(post.commentsCount),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatCount(_displayCommentsCount),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                     const SizedBox(width: 8),
@@ -765,23 +1422,25 @@ class _NewPostCardState extends State<NewPostCard> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.send_outlined, size: 28),
-                          onPressed: _isReposting ? null : _toggleRepost,
+                          onPressed: _isReposting ? null : _openShareSheet,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
-                        if (_repostsCount > 0) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            _formatCount(_repostsCount),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatCount(_repostsCount),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
-                        ],
+                        ),
                       ],
                     ),
                     const Spacer(),
+                    if (widget.hideFeedHeader) ...[
+                      _buildOverflowMenuButton(iconSize: 28),
+                      const SizedBox(width: 4),
+                    ],
                     // Сохранить
                     IconButton(
                       icon: Icon(
@@ -805,22 +1464,32 @@ class _NewPostCardState extends State<NewPostCard> {
   
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
+
+  String _recipeTitle(PostModel post) {
+    final body = post.body;
+    final nestedRecipe = body?['recipe'];
+    final postTitle = post.title?.trim();
+    final bodyTitle = body?['title']?.toString().trim();
+    final translated = body?['translated_title']?.toString().trim();
+    final bodyName = body?['name']?.toString().trim();
+    String? nestedTitle;
+    if (nestedRecipe is Map<String, dynamic>) {
+      nestedTitle = nestedRecipe['title']?.toString().trim();
+    }
+
+    if (postTitle != null && postTitle.isNotEmpty) return postTitle;
+    if (bodyTitle != null && bodyTitle.isNotEmpty) return bodyTitle;
+    if (translated != null && translated.isNotEmpty) return translated;
+    if (bodyName != null && bodyName.isNotEmpty) return bodyName;
+    if (nestedTitle != null && nestedTitle.isNotEmpty) return nestedTitle;
+    return 'Рецепт';
+  }
   
   /// Получить прокси URL для изображений Spoonacular (для обхода CORS на веб)
   String _getProxyUrl(String originalUrl) {
-    // Для Flutter Web используем прокси через бэкенд для обхода CORS
-    // Для других платформ используем оригинальный URL
-    if (originalUrl.startsWith('https://img.spoonacular.com') || 
-        originalUrl.startsWith('https://spoonacular.com')) {
-      // Используем прокси только для Spoonacular изображений
-      final baseUrl = '${ApiService.baseUrl}/api/v1';
-      final encodedUrl = Uri.encodeComponent(originalUrl);
-      final proxyUrl = '$baseUrl/recipes/image-proxy?url=$encodedUrl';
-      debugPrint('🖼️ Using proxy URL for Spoonacular image: $proxyUrl');
-      return proxyUrl;
-    }
-    // Для других URL возвращаем оригинал
-    return originalUrl;
+    // Для Spoonacular на iOS/Android используем прямой URL (надежнее),
+    // а на Web ServerConfig сам переведет на proxy.
+    return ServerConfig.resolveRecipeImageUrl(originalUrl);
   }
   
   /// Построить виджет для отображения медиа поста
@@ -831,10 +1500,10 @@ class _NewPostCardState extends State<NewPostCard> {
     
     final media = body['media'] as List<dynamic>?;
     
-    // Если media пустой, но есть image в body (для рецептов Spoonacular), создаем media
+    // Если media пустой, пытаемся собрать превью из известных полей рецепта.
     List<dynamic>? effectiveMedia = media;
-    if ((media == null || media.isEmpty) && (body['image'] != null || body['source_image'] != null)) {
-      final imageUrl = body['image'] as String? ?? body['source_image'] as String?;
+    if (media == null || media.isEmpty) {
+      final imageUrl = _extractRecipeImageUrl(body);
       if (imageUrl != null && imageUrl.isNotEmpty) {
         effectiveMedia = [
           {
@@ -872,11 +1541,8 @@ class _NewPostCardState extends State<NewPostCard> {
           debugPrint('🔍 body keys: ${body.keys.toList()}');
           debugPrint('🔍 post.id type: ${post.id.runtimeType}');
           
-          // Получаем изображение из media или body
-          String? imageUrl;
-          
-          // Сначала пробуем из body (для рецептов Spoonacular)
-          imageUrl = body['image'] as String? ?? body['source_image'] as String?;
+          // Получаем изображение из body (включая nested recipe) или media.
+          String? imageUrl = _extractRecipeImageUrl(body);
           
           // Если не найдено, пробуем из media
           if (imageUrl == null || imageUrl.isEmpty) {
@@ -915,7 +1581,7 @@ class _NewPostCardState extends State<NewPostCard> {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Ошибка: не удалось определить ID рецепта'),
+                  content: Text('Не удалось открыть рецепт'),
                   duration: Duration(seconds: 2),
                 ),
               );
@@ -926,7 +1592,7 @@ class _NewPostCardState extends State<NewPostCard> {
           debugPrint('✅ Используем recipeId: $recipeId');
           
           // Используем переведенные данные, если они есть
-          final title = body['translated_title'] as String? ?? post.title ?? 'Рецепт';
+          final title = _recipeTitle(post);
           final ingredients = (body['translated_ingredients'] as List<dynamic>?) ?? 
                               (body['ingredients'] as List<dynamic>?) ?? [];
           final steps = (body['translated_steps'] as List<dynamic>?) ?? 
@@ -935,6 +1601,21 @@ class _NewPostCardState extends State<NewPostCard> {
           debugPrint('🔍 title: $title, ingredients: ${ingredients.length}, steps: ${steps.length}');
           
           // Собираем данные рецепта из body
+          final sourceFromBody = body['source']?.toString().trim();
+          final nestedRecipe = body['recipe'];
+          final nestedSource = nestedRecipe is Map<String, dynamic>
+              ? nestedRecipe['source']?.toString().trim()
+              : null;
+          final hasSpoonacularId = body['spoonacular_recipe_id'] != null;
+          final recipeSource = (sourceFromBody?.isNotEmpty == true
+                  ? sourceFromBody
+                  : (nestedSource?.isNotEmpty == true ? nestedSource : null)) ??
+              (hasSpoonacularId
+                  ? 'spoonacular'
+                  : (post.channelId != null || post.communityId != null
+                      ? 'channel'
+                      : 'user'));
+
           final recipeData = <String, dynamic>{
             'id': recipeId,
             'title': title,
@@ -948,7 +1629,7 @@ class _NewPostCardState extends State<NewPostCard> {
             'usedIngredientCount': ingredients.length,
             'calories': body['calories'],
             'nutrition': body['nutrition'],
-            'source': 'spoonacular',
+            'source': recipeSource,
           };
           
           debugPrint('🔍 Создаем Recipe с id=$recipeId');
@@ -978,7 +1659,9 @@ class _NewPostCardState extends State<NewPostCard> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Ошибка при открытии рецепта: $e'),
+                content: Text(
+                  userVisibleError(e, fallback: 'Не удалось открыть рецепт'),
+                ),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -1011,7 +1694,7 @@ class _NewPostCardState extends State<NewPostCard> {
     }
     
     // Показываем видео для всех типов постов, если они есть (Instagram-style inline autoplay)
-    final videos = effectiveMedia?.where((m) => m['type'] == 'video').toList() ?? [];
+    final videos = effectiveMedia.where((m) => m['type'] == 'video').toList();
     if (videos.isNotEmpty) {
       final rawVideoUrl = videos[0]['url'] as String;
       final rawThumbnailUrl = videos[0]['thumbnail_url'] as String? ?? body['thumbnail_url'] as String?;
@@ -1028,6 +1711,33 @@ class _NewPostCardState extends State<NewPostCard> {
     }
     
     return const SizedBox.shrink();
+  }
+
+  String? _extractRecipeImageUrl(Map<String, dynamic> body) {
+    final directImage = body['image']?.toString();
+    if (directImage != null && directImage.trim().isNotEmpty) {
+      return directImage.trim();
+    }
+
+    final sourceImage = body['source_image']?.toString();
+    if (sourceImage != null && sourceImage.trim().isNotEmpty) {
+      return sourceImage.trim();
+    }
+
+    final nestedRecipe = body['recipe'];
+    if (nestedRecipe is Map<String, dynamic>) {
+      final nestedImage = nestedRecipe['image']?.toString();
+      if (nestedImage != null && nestedImage.trim().isNotEmpty) {
+        return nestedImage.trim();
+      }
+
+      final nestedSourceImage = nestedRecipe['source_image']?.toString();
+      if (nestedSourceImage != null && nestedSourceImage.trim().isNotEmpty) {
+        return nestedSourceImage.trim();
+      }
+    }
+
+    return null;
   }
 }
 
@@ -1085,82 +1795,4 @@ class _RepostDialogState extends State<_RepostDialog> {
     );
   }
 }
-
-class _ReportDialog extends StatefulWidget {
-  const _ReportDialog();
-  
-  @override
-  State<_ReportDialog> createState() => _ReportDialogState();
-}
-
-class _ReportDialogState extends State<_ReportDialog> {
-  String _selectedReason = 'spam';
-  final _commentController = TextEditingController();
-  
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Пожаловаться на пост'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Причина жалобы:'),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: _selectedReason,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'spam', child: Text('Спам')),
-              DropdownMenuItem(value: 'inappropriate', child: Text('Неподходящий контент')),
-              DropdownMenuItem(value: 'copyright', child: Text('Нарушение авторских прав')),
-              DropdownMenuItem(value: 'other', child: Text('Другое')),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _selectedReason = value);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _commentController,
-            decoration: const InputDecoration(
-              labelText: 'Комментарий (опционально)',
-              hintText: 'Опишите проблему...',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            Navigator.of(context).pop({
-              'reason': _selectedReason,
-              'comment': _commentController.text.trim().isEmpty
-                  ? null
-                  : _commentController.text.trim(),
-            });
-          },
-          child: const Text('Отправить'),
-        ),
-      ],
-    );
-  }
-}
-
 

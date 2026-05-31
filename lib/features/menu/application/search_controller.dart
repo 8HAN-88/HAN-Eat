@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/recipe.dart';
 import '../../../services/api_service.dart';
 import '../../../services/history_storage.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../settings/application/analysis_mode_controller.dart';
 
 class SearchState {
@@ -25,16 +26,19 @@ class SearchState {
   final String? error;
   final bool hasSearched;
 
+  /// Значение по умолчанию для [copyWith]: не менять поле [error].
+  static const Object _errorUnset = Object();
+
   SearchState copyWith({
     List<Recipe>? recipes,
     bool? loading,
-    String? error,
+    Object? error = _errorUnset,
     bool? hasSearched,
   }) {
     return SearchState(
       recipes: recipes ?? this.recipes,
       loading: loading ?? this.loading,
-      error: error,
+      error: identical(error, _errorUnset) ? this.error : error as String?,
       hasSearched: hasSearched ?? this.hasSearched,
     );
   }
@@ -73,13 +77,14 @@ class SearchController extends StateNotifier<SearchState> {
       state = state.copyWith(
         recipes: recipes,
         loading: false,
+        error: null,
         hasSearched: true,
       );
       await HistoryStorage.addQuery(trimmed, settings.mode);
     } catch (e) {
       state = state.copyWith(
         loading: false,
-        error: 'Ошибка поиска: $e',
+        error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),
         hasSearched: true,
       );
     }
@@ -96,7 +101,8 @@ class SearchController extends StateNotifier<SearchState> {
   }
 
   /// Быстрый поиск по тегу (например «Быстро», тег quick-and-easy).
-  Future<void> searchByTag(String query, String tag, {int? maxReadyTime}) async {
+  Future<void> searchByTag(String query, String tag,
+      {int? maxReadyTime}) async {
     final settings = _ref.read(analysisSettingsProvider);
     state = state.copyWith(loading: true, error: null);
     try {
@@ -110,13 +116,15 @@ class SearchController extends StateNotifier<SearchState> {
       state = state.copyWith(
         recipes: recipes,
         loading: false,
+        error: null,
         hasSearched: true,
       );
-      await HistoryStorage.addQuery(query.trim().isEmpty ? tag : query, settings.mode);
+      await HistoryStorage.addQuery(
+          query.trim().isEmpty ? tag : query, settings.mode);
     } catch (e) {
       state = state.copyWith(
         loading: false,
-        error: 'Ошибка поиска: $e',
+        error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),
         hasSearched: true,
       );
     }
@@ -124,4 +132,3 @@ class SearchController extends StateNotifier<SearchState> {
 
   bool get hasResults => state.recipes.isNotEmpty;
 }
-

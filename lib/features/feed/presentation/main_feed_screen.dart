@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'subscriptions_feed_screen.dart';
-import '../../community/presentation/reels_feed_screen.dart';
+import '../../reels/presentation/reels_feed_screen.dart';
 import 'new_feed_screen.dart';
 import '../../../app/app_router.dart';
-import '../../../services/notification_service.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/notification_bell_button.dart';
+import '../../../core/layout/long_label_tab_bar.dart';
 
 /// Главный экран ленты с табами: Подписки, Рекомендации, Рилсы
 class MainFeedScreen extends ConsumerStatefulWidget {
-  const MainFeedScreen({Key? key}) : super(key: key);
-  
+  const MainFeedScreen({super.key});
+
   @override
   ConsumerState<MainFeedScreen> createState() => _MainFeedScreenState();
 }
@@ -19,25 +21,24 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  /// Тип ленты для таба «Рекомендации» ([NewFeedScreen] с [externalFeedType]).
+  String _recFeedType = 'all';
+
   @override
   void initState() {
     super.initState();
-    // Начинаем с таба "Рекомендации" (индекс 1)
     _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
-    // Добавляем слушатель для загрузки данных при переключении вкладок
-    _tabController.addListener(_onTabChanged);
+    _tabController.addListener(_onTabUi);
   }
 
-  void _onTabChanged() {
-    if (!_tabController.indexIsChanging) {
-      // Вкладка полностью переключена, можно загружать данные
-      // Это сработает и при первой загрузке, если вкладка уже активна
-    }
+  void _onTabUi() {
+    if (_tabController.indexIsChanging) return;
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_onTabChanged);
+    _tabController.removeListener(_onTabUi);
     _tabController.dispose();
     super.dispose();
   }
@@ -46,8 +47,8 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HAN Eat'),
-        bottom: TabBar(
+        title: const Text('Главная'),
+        bottom: longLabelTabBar(
           controller: _tabController,
           tabs: const [
             Tab(text: 'Подписки'),
@@ -58,69 +59,78 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              context.push(SearchRoute.path);
-            },
+            onPressed: () => context.push(SearchRoute.path),
             tooltip: 'Поиск',
           ),
-          // Кнопка уведомлений с badge
-          Consumer(
-            builder: (context, ref, child) {
-              return FutureBuilder<int>(
-                future: NotificationService.getUnreadCount(),
-                builder: (context, snapshot) {
-                  final unreadCount = snapshot.data ?? 0;
-                  return Stack(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_outlined),
-                        onPressed: () {
-                          context.push(NotificationsRoute.path);
-                        },
-                        tooltip: 'Уведомления',
-                      ),
-                      if (unreadCount > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              unreadCount > 99 ? '99+' : '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
+          if (_tabController.index == 1)
+            PopupMenuButton<String>(
+              tooltip: 'Фильтр ленты',
+              onSelected: (value) {
+                setState(() => _recFeedType = value);
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  value: 'all',
+                  child: Text(
+                    'Все',
+                    style: TextStyle(
+                      fontWeight:
+                          _recFeedType == 'all' ? FontWeight.bold : null,
+                    ),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'photos',
+                  child: Text(
+                    'Фото',
+                    style: TextStyle(
+                      fontWeight:
+                          _recFeedType == 'photos' ? FontWeight.bold : null,
+                    ),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'recipes',
+                  child: Text(
+                    'Рецепты',
+                    style: TextStyle(
+                      fontWeight:
+                          _recFeedType == 'recipes' ? FontWeight.bold : null,
+                    ),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'reels',
+                  child: Text(
+                    'Рилсы',
+                    style: TextStyle(
+                      fontWeight:
+                          _recFeedType == 'reels' ? FontWeight.bold : null,
+                    ),
+                  ),
+                ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Icon(Icons.filter_list),
+              ),
+            ),
+          const NotificationBellButton(),
         ],
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          SubscriptionsFeedScreen(), // Подписки (слева)
-          NewFeedScreen(hideScaffold: true), // Рекомендации (центр)
-          ReelsFeedScreen(), // Рилсы (справа)
-        ],
+      body: AppGradientBackground(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            const SubscriptionsFeedScreen(),
+            NewFeedScreen(
+              hideScaffold: true,
+              externalFeedType: _recFeedType,
+            ),
+            const ReelsFeedScreen(hideScaffold: true),
+          ],
+        ),
       ),
     );
   }
 }
-

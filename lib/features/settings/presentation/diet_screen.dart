@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class DietScreen extends StatefulWidget {
+import '../../../core/layout/floating_bottom_padding.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../subscription/presentation/widgets/nutrition_upsell.dart';
+
+class DietScreen extends ConsumerStatefulWidget {
   const DietScreen({super.key});
 
   @override
-  State<DietScreen> createState() => _DietScreenState();
+  ConsumerState<DietScreen> createState() => _DietScreenState();
 }
 
-class _DietScreenState extends State<DietScreen> {
+class _DietScreenState extends ConsumerState<DietScreen> {
   final Map<String, bool> _diets = {
     'Вегетарианская': false,
     'Веганская': false,
@@ -28,7 +34,15 @@ class _DietScreenState extends State<DietScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAccess());
     _loadSettings();
+  }
+
+  Future<void> _checkAccess() async {
+    if (!mounted) return;
+    if (ref.read(canViewRecipeNutritionProvider)) return;
+    await showNutritionUpsellSheet(context);
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -73,8 +87,11 @@ class _DietScreenState extends State<DietScreen> {
       final calText = _calorieController.text.trim();
       if (calText.isNotEmpty) {
         final v = int.tryParse(calText);
-        if (v != null && v > 0) await prefs.setInt('calorie_limit', v);
-        else await prefs.remove('calorie_limit');
+        if (v != null && v > 0) {
+          await prefs.setInt('calorie_limit', v);
+        } else {
+          await prefs.remove('calorie_limit');
+        }
       } else {
         await prefs.remove('calorie_limit');
       }
@@ -90,7 +107,7 @@ class _DietScreenState extends State<DietScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     } finally {
@@ -116,7 +133,12 @@ class _DietScreenState extends State<DietScreen> {
       body: _loading && _diets.values.every((v) => !v)
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                16 + floatingBottomPadding(context),
+              ),
               children: [
                 Card(
                   child: Padding(

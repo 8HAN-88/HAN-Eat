@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import '../../../models/community.dart';
 import '../../../services/community_management_service.dart';
-import '../../../services/auth_service.dart';
 
 /// Экран создания канала
 class CreateCommunityScreen extends StatefulWidget {
@@ -28,8 +28,6 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
   String? _selectedCategory;
   File? _avatarFile;
   File? _coverFile;
-  XFile? _avatarXFile;
-  XFile? _coverXFile;
   Uint8List? _avatarBytes;
   Uint8List? _coverBytes;
   bool _commentsEnabled = true;
@@ -69,7 +67,6 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
     if (image != null) {
       setState(() {
         if (isAvatar) {
-          _avatarXFile = image;
           if (kIsWeb) {
             // На вебе используем bytes
             image.readAsBytes().then((bytes) {
@@ -79,7 +76,6 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
             _avatarFile = File(image.path);
           }
         } else {
-          _coverXFile = image;
           if (kIsWeb) {
             // На вебе используем bytes
             image.readAsBytes().then((bytes) {
@@ -133,7 +129,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     } finally {
@@ -236,7 +232,7 @@ class _CreateCommunityScreenState extends State<CreateCommunityScreen> {
 
             // Тематика
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Тематика *',
                 border: OutlineInputBorder(),

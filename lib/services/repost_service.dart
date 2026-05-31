@@ -1,8 +1,29 @@
 // Сервис для работы с репостами
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
+
+String _repostErrorMessage(dynamic detail, {required String fallback}) {
+  final msg = parseApiErrorMessage(detail, fallback: fallback);
+  switch (msg) {
+    case 'Post already reposted':
+      return 'Вы уже репостнули этот пост';
+    case 'Cannot repost your own post':
+      return 'Нельзя репостнуть свой пост';
+    case 'Post not found':
+      return 'Пост не найден';
+    case 'Channel not found':
+      return 'Канал не найден';
+    case 'Not authenticated':
+      return 'Войдите, чтобы сделать репост';
+    case 'Only channel owner, admins and moderators can repost to channel':
+      return 'Нет прав публиковать репост в этот канал';
+    default:
+      return msg;
+  }
+}
 
 class RepostService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
@@ -12,7 +33,7 @@ class RepostService {
     required int postId,
     String? comment,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -32,20 +53,28 @@ class RepostService {
     if (response.statusCode == 201) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return RepostResponse.fromJson(data);
-    } else {
-      try {
-        final error = jsonDecode(response.body) as Map<String, dynamic>;
-        throw Exception(error['detail'] ?? 'Failed to create repost');
-      } catch (e) {
-        if (e is Exception) rethrow;
-        throw Exception('Failed to create repost: ${response.statusCode}');
-      }
+    }
+    try {
+      final error = jsonDecode(response.body) as Map<String, dynamic>;
+      throw ApiClientException(
+        statusCode: response.statusCode,
+        message: _repostErrorMessage(
+          error['detail'],
+          fallback: 'Не удалось сделать репост',
+        ),
+      );
+    } catch (e) {
+      if (e is ApiClientException) rethrow;
+      throw ApiClientException(
+        statusCode: response.statusCode,
+        message: 'Не удалось сделать репост',
+      );
     }
   }
   
   /// Удалить репост
   static Future<void> deleteRepost(int postId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -61,15 +90,28 @@ class RepostService {
     
     if (response.statusCode == 200) {
       return;
-    } else {
+    }
+    try {
       final error = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(error['detail'] ?? 'Failed to delete repost');
+      throw ApiClientException(
+        statusCode: response.statusCode,
+        message: _repostErrorMessage(
+          error['detail'],
+          fallback: 'Не удалось убрать репост',
+        ),
+      );
+    } catch (e) {
+      if (e is ApiClientException) rethrow;
+      throw ApiClientException(
+        statusCode: response.statusCode,
+        message: 'Не удалось убрать репост',
+      );
     }
   }
   
   /// Проверить, репостнул ли пользователь пост
   static Future<bool> isPostReposted(int postId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       return false;
     }
@@ -104,6 +146,50 @@ class RepostService {
     if (postIdInt == null) throw Exception('Invalid post ID');
     await deleteRepost(postIdInt);
   }
+
+  /// One-click репост в канал.
+  static Future<void> repostToChannel({
+    required int postId,
+    required int channelId,
+    String? comment,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final uri = Uri.parse('$baseUrl/posts/$postId/repost-to-channel');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'channel_id': channelId,
+        if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+      }),
+    );
+
+    if (response.statusCode != 201) {
+      try {
+        final error = jsonDecode(response.body) as Map<String, dynamic>;
+        throw ApiClientException(
+          statusCode: response.statusCode,
+          message: _repostErrorMessage(
+            error['detail'] ?? error['message'],
+            fallback: 'Не удалось репостнуть в канал',
+          ),
+        );
+      } catch (e) {
+        if (e is ApiClientException) rethrow;
+        throw ApiClientException(
+          statusCode: response.statusCode,
+          message: 'Не удалось репостнуть в канал',
+        );
+      }
+    }
+  }
   
   /// Получить список репостов поста
   static Future<RepostsListResponse> getReposts({
@@ -111,7 +197,7 @@ class RepostService {
     int limit = 20,
     int offset = 0,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     
     final uri = Uri.parse('$baseUrl/posts/$postId/reposts').replace(
       queryParameters: {

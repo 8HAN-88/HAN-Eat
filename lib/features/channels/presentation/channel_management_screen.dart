@@ -1,5 +1,6 @@
 // Экран управления каналом (для владельца и админов)
 import 'dart:io';
+import '../../../utils/api_error_parser.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,15 +8,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../services/channel_service.dart';
+import '../../../services/channel_cache_service.dart';
 import '../../../services/media_upload_service.dart';
+import '../../../app/app_router.dart';
+import '../application/channels_list_refresh_provider.dart';
+import '../../../core/layout/long_label_tab_bar.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../subscription/subscription_copy.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class ChannelManagementScreen extends ConsumerStatefulWidget {
   final int channelId;
 
   const ChannelManagementScreen({
-    Key? key,
+    super.key,
     required this.channelId,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<ChannelManagementScreen> createState() =>
@@ -32,17 +40,18 @@ class _ChannelManagementScreenState
   final _tagsController = TextEditingController();
 
   ChannelDetail? _channel;
+  Object? _channelLoadError;
   bool _isLoading = true;
   bool _isSaving = false;
 
   // Настройки
   bool _isPublic = true;
   bool _autoPublishToFeed = true;
-  bool _autoPublishToMenu = true;
   bool _autoPublishReels = true;
   bool _allowComments = true;
   bool _allowLikes = true;
   bool _allowReposts = true;
+  String _recipeVisibilityMode = 'mixed';
 
   // Медиа
   final ImagePicker _imagePicker = ImagePicker();
@@ -55,12 +64,15 @@ class _ChannelManagementScreenState
   // Участники
   List<Map<String, dynamic>> _members = [];
   bool _loadingMembers = false;
+  List<ChannelJoinRequest> _joinRequests = [];
+  bool _loadingJoinRequests = false;
 
   @override
   void initState() {
     super.initState();
     _loadChannel();
     _loadMembers();
+    _loadJoinRequests();
   }
 
   @override
@@ -74,13 +86,17 @@ class _ChannelManagementScreenState
   }
 
   Future<void> _loadChannel() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _channelLoadError = null;
+    });
 
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
 
       setState(() {
         _channel = channel;
+        _channelLoadError = null;
         _nameController.text = channel.name;
         _slugController.text = channel.slug;
         _descriptionController.text = channel.description ?? '';
@@ -88,21 +104,87 @@ class _ChannelManagementScreenState
         _tagsController.text = channel.tags?.join(', ') ?? '';
         _isPublic = channel.isPublic;
         _autoPublishToFeed = channel.autoPublishToFeed ?? true;
-        _autoPublishToMenu = channel.autoPublishToMenu ?? true;
         _autoPublishReels = channel.autoPublishReels;
         _allowComments = channel.allowComments ?? true;
         _allowLikes = channel.allowLikes ?? true;
         _allowReposts = channel.allowReposts ?? true;
+        _recipeVisibilityMode =
+            channel.recipeVisibilityMode ?? 'mixed';
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки канала: $e')),
-        );
+        setState(() => _channelLoadError = e);
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadJoinRequests() async {
+    setState(() => _loadingJoinRequests = true);
+    try {
+      final response = await ChannelService.getChannelJoinRequests(
+        widget.channelId,
+      );
+      if (mounted) {
+        setState(() => _joinRequests = response.items);
+      }
+    } catch (e) {
+      if (mounted && _channel != null) {
+        final isStaff = _channel!.isOwner ||
+            _channel!.isAdmin ||
+            _channel!.isModerator;
+        if (isStaff) {
+          debugPrint('Join requests load: $e');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loadingJoinRequests = false);
+    }
+  }
+
+  Future<void> _approveJoinRequest(ChannelJoinRequest request) async {
+    try {
+      await ChannelService.approveChannelJoinRequest(
+        widget.channelId,
+        request.userId,
+      );
+      await _loadJoinRequests();
+      await _loadMembers();
+      await _loadChannel();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заявка одобрена')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectJoinRequest(ChannelJoinRequest request) async {
+    try {
+      await ChannelService.rejectChannelJoinRequest(
+        widget.channelId,
+        request.userId,
+      );
+      await _loadJoinRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заявка отклонена')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
       }
     }
   }
@@ -125,7 +207,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки участников: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников'))),
         );
       }
     } finally {
@@ -168,7 +250,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора аватара: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать аватар'))),
         );
       }
     }
@@ -198,7 +280,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора обложки: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
         );
       }
     }
@@ -232,11 +314,11 @@ class _ChannelManagementScreenState
             ? _rulesController.text.trim()
             : null,
         autoPublishToFeed: _autoPublishToFeed,
-        autoPublishToMenu: _autoPublishToMenu,
         autoPublishReels: _autoPublishReels,
         allowComments: _allowComments,
         allowLikes: _allowLikes,
         allowReposts: _allowReposts,
+        recipeVisibilityMode: _recipeVisibilityMode,
       );
 
       if (mounted) {
@@ -248,7 +330,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка сохранения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     } finally {
@@ -286,17 +368,19 @@ class _ChannelManagementScreenState
 
     try {
       await ChannelService.deleteChannel(widget.channelId);
+      await ChannelCacheService.invalidateChannelCache(widget.channelId);
+      ref.read(channelsMainListRefreshProvider.notifier).state++;
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Канал удален')),
         );
-        context.go('/channels');
+        context.go(ChannelsListRoute.path);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка удаления: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
         );
       }
     }
@@ -312,14 +396,37 @@ class _ChannelManagementScreenState
     }
 
     if (_channel == null) {
+      if (_channelLoadError != null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Управление каналом')),
+          body: AppEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Не удалось загрузить',
+            subtitle: userVisibleError(
+              _channelLoadError!,
+              fallback: 'Проверьте сеть',
+            ),
+            action: FilledButton(
+              onPressed: _loadChannel,
+              child: const Text('Повторить'),
+            ),
+          ),
+        );
+      }
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
-        body: const Center(child: Text('Канал не найден')),
+        body: const AppEmptyState(
+          icon: Icons.group_off_outlined,
+          title: 'Канал не найден',
+          subtitle: 'Возможно, он удалён или у вас нет доступа',
+        ),
       );
     }
 
     // Проверяем права доступа
-    if (!_channel!.isOwner && !_channel!.isAdmin) {
+    if (!_channel!.isOwner &&
+        !_channel!.isAdmin &&
+        !_channel!.isModerator) {
       return Scaffold(
         appBar: AppBar(title: const Text('Управление каналом')),
         body: const Center(
@@ -332,9 +439,30 @@ class _ChannelManagementScreenState
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Управление каналом'),
-          bottom: const TabBar(
-            tabs: [
+          title: Row(
+            children: [
+              const Expanded(child: Text('Управление каналом')),
+              if ((_channel?.pendingJoinRequestsCount ?? 0) > 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_channel!.pendingJoinRequestsCount}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onError,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          bottom: longLabelTabBar(
+            tabs: const [
               Tab(text: 'Основное'),
               Tab(text: 'Настройки'),
               Tab(text: 'Участники'),
@@ -499,6 +627,69 @@ class _ChannelManagementScreenState
     );
   }
 
+  Widget _buildRecipeVisibilityModeSection() {
+    final hasCreator = ref.watch(subscriptionStatusProvider).asData?.value
+            ?.hasCreator ??
+        false;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          SubscriptionCopy.channelVisibilityModeTitle,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        _visibilityModeTile(
+          value: 'public',
+          title: SubscriptionCopy.channelVisibilityModePublic,
+          subtitle: SubscriptionCopy.channelVisibilityModePublicHint,
+          enabled: hasCreator || _recipeVisibilityMode == 'public',
+        ),
+        _visibilityModeTile(
+          value: 'private',
+          title: SubscriptionCopy.channelVisibilityModePrivate,
+          subtitle: SubscriptionCopy.channelVisibilityModePrivateHint,
+          enabled: hasCreator,
+        ),
+        _visibilityModeTile(
+          value: 'mixed',
+          title: SubscriptionCopy.channelVisibilityModeMixed,
+          subtitle: SubscriptionCopy.channelVisibilityModeMixedHint,
+          enabled: hasCreator,
+        ),
+        if (!hasCreator)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Режимы приватности и смешанный режим — в тарифе Creator или Pro.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _visibilityModeTile({
+    required String value,
+    required String title,
+    required String subtitle,
+    required bool enabled,
+  }) {
+    return RadioListTile<String>(
+      value: value,
+      groupValue: _recipeVisibilityMode,
+      onChanged: enabled
+          ? (v) {
+              if (v != null) setState(() => _recipeVisibilityMode = v);
+            }
+          : null,
+      title: Text(title),
+      subtitle: Text(subtitle),
+    );
+  }
+
   Widget _buildSettingsTab() {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -514,12 +705,7 @@ class _ChannelManagementScreenState
           value: _autoPublishToFeed,
           onChanged: (value) => setState(() => _autoPublishToFeed = value),
         ),
-        SwitchListTile(
-          title: const Text('Автоматически публиковать рецепты в Menu'),
-          subtitle: const Text('Рецепты будут доступны в разделе Menu'),
-          value: _autoPublishToMenu,
-          onChanged: (value) => setState(() => _autoPublishToMenu = value),
-        ),
+        _buildRecipeVisibilityModeSection(),
         SwitchListTile(
           title: const Text('Автоматически публиковать рилсы'),
           subtitle: const Text('Короткие видео сразу попадают в раздел Reels'),
@@ -564,19 +750,74 @@ class _ChannelManagementScreenState
   }
 
   Widget _buildMembersTab() {
-    if (_loadingMembers) {
+    if (_loadingMembers && _loadingJoinRequests) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final isStaff = _channel != null &&
+        (_channel!.isOwner || _channel!.isAdmin || _channel!.isModerator);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (isStaff && _joinRequests.isNotEmpty) ...[
+          Text(
+            'Заявки на вступление (${_joinRequests.length})',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          ..._joinRequests.map((request) {
+            final user = request.user;
+            final name = user?['name'] as String? ??
+                user?['username'] as String? ??
+                'Пользователь';
+            final avatar = user?['avatar_url'] as String?;
+            return Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundImage:
+                      avatar != null ? NetworkImage(avatar) : null,
+                  child: avatar == null
+                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?')
+                      : null,
+                ),
+                title: Text(name),
+                subtitle: Text(user?['username'] as String? ?? ''),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Одобрить',
+                      icon: const Icon(Icons.check_circle_outline),
+                      color: Colors.green,
+                      onPressed: () => _approveJoinRequest(request),
+                    ),
+                    IconButton(
+                      tooltip: 'Отклонить',
+                      icon: const Icon(Icons.cancel_outlined),
+                      color: Colors.red,
+                      onPressed: () => _rejectJoinRequest(request),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          const Divider(height: 32),
+        ],
         Text(
           'Участники (${_members.length})',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 16),
-        ..._members.map((member) {
+        if (_members.isEmpty)
+          const AppEmptyState(
+            icon: Icons.people_outline_rounded,
+            title: 'Нет участников',
+            subtitle: 'Подписчики канала появятся здесь',
+          )
+        else
+          ..._members.map((member) {
           return ListTile(
             leading: CircleAvatar(
               backgroundImage: member['avatar_url'] != null
@@ -689,7 +930,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка обновления роли: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось обновить роль'))),
         );
       }
     }
@@ -733,7 +974,7 @@ class _ChannelManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка удаления: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось удалить'))),
         );
       }
     }

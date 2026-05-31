@@ -7,9 +7,12 @@ import 'dart:io' if (dart.library.html) 'dart:html' as io;
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../app/app_router.dart';
+import '../../../services/auth_service.dart';
 import '../application/community_controller.dart';
 import '../application/community_upload_controller.dart';
 
@@ -24,7 +27,7 @@ class CommunityUploadScreen extends ConsumerStatefulWidget {
 class _CommunityUploadScreenState
     extends ConsumerState<CommunityUploadScreen> {
   final _titleCtrl = TextEditingController();
-  final _authorCtrl = TextEditingController(text: 'Гость H.A.N.');
+  final _authorCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
   final _tagsCtrl = TextEditingController(text: 'боул,здоровье');
   final _formKey = GlobalKey<FormState>();
@@ -54,6 +57,26 @@ class _CommunityUploadScreenState
       _videoBytes != null &&
       _titleCtrl.text.trim().isNotEmpty &&
       _authorCtrl.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = AuthService.instance.currentUser;
+    if (user != null) {
+      final name = user.name.trim();
+      _authorCtrl.text = name.isNotEmpty
+          ? name
+          : (user.username?.trim().isNotEmpty == true
+              ? user.username!.trim()
+              : user.email);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (AuthService.instance.currentUser == null) {
+        context.go(LoginRoute.path);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -170,7 +193,7 @@ class _CommunityUploadScreenState
       ref.read(communityControllerProvider.notifier).load();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Видео отправлено на модерацию!'),
+          content: Text('Видео опубликовано!'),
         ),
       );
       Navigator.of(context).pop(true);
@@ -213,11 +236,11 @@ class _CommunityUploadScreenState
             const SizedBox(height: 12),
             TextFormField(
               controller: _authorCtrl,
+              readOnly: true,
               decoration: const InputDecoration(
                 labelText: 'Автор',
+                helperText: 'Имя из вашего профиля',
               ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? 'Введите имя автора' : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -239,7 +262,7 @@ class _CommunityUploadScreenState
             const SizedBox(height: 12),
             // Выбор категории
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Категория',
                 helperText: 'Выберите категорию для вашего видео',
@@ -350,7 +373,7 @@ class _VideoPickerState extends State<_VideoPicker> {
                           IgnorePointer(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.3),
+                                color: Colors.black.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Center(

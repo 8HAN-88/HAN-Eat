@@ -13,6 +13,7 @@ class CreateChannelRequest(BaseModel):
     cover_url: Optional[str] = None
     avatar_url: Optional[str] = None
     is_public: bool = True
+    recipe_visibility_mode: str = "mixed"  # public | private | mixed
     category: Optional[str] = None  # Категория канала (итальянская, азиатская, веган и т.д.)
     tags: Optional[List[str]] = None  # Теги канала (#выпечка, #здоровое)
     auto_publish_reels: bool = True
@@ -28,6 +29,7 @@ class UpdateChannelRequest(BaseModel):
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     rules: Optional[str] = None  # Правила канала
+    recipe_visibility_mode: Optional[str] = None
     auto_publish_to_feed: Optional[bool] = None
     auto_publish_to_menu: Optional[bool] = None
     auto_publish_reels: Optional[bool] = None
@@ -51,7 +53,9 @@ class ChannelResponse(BaseModel):
     posts_count: int
     created_at: datetime
     auto_publish_reels: bool = True
-    
+    membership_status: Optional[str] = None
+    pending_join_requests_count: Optional[int] = None
+
     class Config:
         from_attributes = True
 
@@ -62,11 +66,15 @@ class ChannelDetailResponse(ChannelResponse):
     is_admin: bool = False
     is_owner: bool = False  # Владелец канала
     is_moderator: bool = False  # Модератор канала
+    membership_status: str = "none"  # none | pending | active
+    can_view_posts: bool = True
+    pending_join_requests_count: Optional[int] = None
     # Участник: включены ли уведомления о канале; не участник — null
     channel_notifications_enabled: Optional[bool] = None
     rules: Optional[str] = None
+    recipe_visibility_mode: str = "mixed"
     auto_publish_to_feed: bool = True
-    auto_publish_to_menu: bool = True
+    auto_publish_to_menu: bool = False
     auto_publish_reels: bool = True
     allow_comments: bool = True
     allow_likes: bool = True
@@ -75,7 +83,9 @@ class ChannelDetailResponse(ChannelResponse):
 
 class JoinChannelResponse(BaseModel):
     joined: bool
+    pending: bool = False
     members_count: int
+    membership_status: str = "none"
 
 
 class ChannelNotificationsPatchRequest(BaseModel):
@@ -87,9 +97,21 @@ class ChannelMemberResponse(BaseModel):
     user_id: int
     channel_id: int
     role: str  # owner | admin | moderator | member
+    status: str = "active"
     joined_at: datetime
     user: Optional[dict] = None  # Информация о пользователе
     
+    class Config:
+        from_attributes = True
+
+
+class ChannelJoinRequestResponse(BaseModel):
+    id: int
+    user_id: int
+    channel_id: int
+    joined_at: datetime
+    user: Optional[dict] = None
+
     class Config:
         from_attributes = True
 

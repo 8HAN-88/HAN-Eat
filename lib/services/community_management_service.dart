@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
 import '../models/community.dart';
 import '../models/post.dart';
 import 'auth_service.dart';
+import 'legacy_firestore_guard.dart';
 
 /// Сервис для управления сообществами
 class CommunityManagementService {
@@ -24,6 +24,7 @@ class CommunityManagementService {
     Uint8List? coverBytes,
     CommunitySettings? settings,
   }) async {
+    LegacyFirestoreGuard.ensureEnabled();
     final currentUser = AuthService.instance.currentUser;
     if (currentUser == null) {
       throw Exception('User not authenticated');
@@ -82,7 +83,7 @@ class CommunityManagementService {
 
       return community;
     } catch (e) {
-      print('Error creating community: $e');
+      debugPrint('Error creating community: $e');
       rethrow;
     }
   }
@@ -118,7 +119,7 @@ class CommunityManagementService {
       
       return await ref.getDownloadURL();
     } catch (e) {
-      print('Error uploading image: $e');
+      debugPrint('Error uploading image: $e');
       rethrow;
     }
   }
@@ -207,7 +208,7 @@ class CommunityManagementService {
       if (!doc.exists) return null;
       return Community.fromFirestore(doc);
     } catch (e) {
-      print('Error getting community: $e');
+      debugPrint('Error getting community: $e');
       return null;
     }
   }
@@ -225,7 +226,7 @@ class CommunityManagementService {
       if (!doc.exists) return null;
       return CommunityMember.fromFirestore(doc);
     } catch (e) {
-      print('Error getting community member: $e');
+      debugPrint('Error getting community member: $e');
       return null;
     }
   }
@@ -367,7 +368,7 @@ class CommunityManagementService {
 
       return communities;
     } catch (e) {
-      print('Error getting user communities: $e');
+      debugPrint('Error getting user communities: $e');
       return [];
     }
   }
@@ -399,7 +400,7 @@ class CommunityManagementService {
 
       return snapshot.docs.map((doc) => Community.fromFirestore(doc)).toList();
     } catch (e) {
-      print('Error searching communities: $e');
+      debugPrint('Error searching communities: $e');
       return [];
     }
   }

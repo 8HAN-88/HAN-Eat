@@ -1,10 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:intl/intl.dart';
 
 import '../../../models/analysis_mode.dart';
@@ -12,16 +13,70 @@ import '../../../models/recipe.dart';
 import '../../../models/search_history_entry.dart';
 import '../../../models/recipe_category.dart';
 import '../../../screens/detail_page.dart';
+import '../../../services/recipe_interaction_stats.dart';
+import '../../../services/ai_scan_image.dart';
+import '../../../services/ai_scan_gate.dart';
 import '../../../services/api_service.dart';
+import '../../../services/auth_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../services/history_storage.dart';
 import '../../../services/category_service.dart';
 import '../../../widgets/modern_recipe_card.dart';
+import '../../../widgets/recipe_network_image.dart';
 import '../../../widgets/skeleton_loader.dart';
-import '../../../utils/image_url_helper.dart';
 import '../../settings/application/analysis_mode_controller.dart';
-import '../application/search_controller.dart';
-import '../../categories/presentation/categories_screen.dart';
+import '../application/menu_recommendations_refresh_provider.dart';
+import '../../settings/application/analysis_mode_controller.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../../core/subscription/recipe_translation_access.dart';
 import '../../../app/app_router.dart';
+import '../../subscription/presentation/widgets/nutrition_upsell.dart';
+import '../../../core/subscription/recipe_nutrition_access.dart';
+import '../application/search_controller.dart';
+import '../../../app/app_router.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
+
+/// Боковой зазор контента «Меню» от края экрана (единый для поиска, чипов и сетки).
+const double _kMenuScreenEdgeGutter = 10.0;
+
+/// Зазор между колонками карточек в сетке.
+const double _kMenuGridCrossAxisSpacing = 10.0;
+
+/// Оценка высоты блока под превью для сетки «Меню» ([ModernRecipeCard] с `compact: true`).
+/// Завышение даёт «пустой» низ карточки; занижение — риск overflow на 2 строках заголовка.
+const double _kMenuRecipeCardTextEstimate = 208;
+
+double _menuGridCellWidth(double viewportWidth) {
+  final edge = _kMenuScreenEdgeGutter * 2;
+  return (viewportWidth - edge - _kMenuGridCrossAxisSpacing) / 2;
+}
+
+/// Соотношение сторон ячейки сетки (ширина / высота), чтобы высота совпадала с карточкой
+/// и не оставалась серая полоса снизу при широком окне.
+double _menuRecipeGridChildAspectRatio(
+  double viewportWidth, {
+  required double imageAspectRatio,
+  double textBlockHeight = _kMenuRecipeCardTextEstimate,
+}) {
+  final w = _menuGridCellWidth(viewportWidth);
+  if (w <= 0) return 0.5;
+  final imageH = w / imageAspectRatio;
+  final totalH = imageH + textBlockHeight;
+  // Не ограничивать сверху жёстко: на широком окне формула даёт ratio > 0.82, иначе ячейка
+  // выше контента — серая полоса снизу внутри [Card].
+  return (w / totalH).clamp(0.35, 1.25);
+}
+
+/// Превью шире, чем квадрат (4:3) — ниже по высоте, меньше пустого поля под фото.
+const double _kMenuCardImageAspect = 4 / 3;
+
+double _menuRecipeTextBlockHeight(BuildContext context) {
+  final factor =
+      (MediaQuery.textScalerOf(context).scale(12) / 12.0).clamp(0.85, 1.2);
+  return _kMenuRecipeCardTextEstimate * factor;
+}
 
 class MenuScreen extends ConsumerStatefulWidget {
   const MenuScreen({super.key});
@@ -33,24 +88,81 @@ class MenuScreen extends ConsumerStatefulWidget {
 class _MenuScreenState extends ConsumerState<MenuScreen> {
   final TextEditingController _controller = TextEditingController();
   final ImagePicker _picker = ImagePicker();
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  late Future<List<Recipe>> _recommendationsFuture;
+  late Future<RecommendationsResult> _recommendationsFuture;
   List<Recipe> _cachedRecommendations = []; // Кэш последних рекомендаций
   DateTime? _cacheTimestamp;
-  static const _cacheDuration = Duration(minutes: 15); // Кэш на 15 минут для ускорения
+  static const _cacheDuration =
+      Duration(minutes: 15); // Кэш на 15 минут для ускорения
+  static const int _kMinRecommendationsToCache = 3;
+  static List<Recipe> _sharedRecommendationsCache = [];
+  static DateTime? _sharedCacheTimestamp;
+
+  /// Последние флаги из GET /recommendations (для кэша карточек без повторного запроса).
+  bool _lastSpoonacularQuotaExhausted = false;
+  bool _lastSuggestPlusUpgrade = false;
+  bool _lastViewerIsPlus = false;
+  bool _recommendationsLoadFailed = false;
+  List<int>? _imageWarmRecipeIds;
+
+  void _warmImagesForRecipes(List<Recipe> recipes) {
+    if (recipes.isEmpty) return;
+    final ids = recipes.map((r) => r.id).toList();
+    if (_imageWarmRecipeIds != null &&
+        _imageWarmRecipeIds!.length == ids.length &&
+        _listEqualsIds(_imageWarmRecipeIds!, ids)) {
+      return;
+    }
+    _imageWarmRecipeIds = ids;
+    final urls = recipes
+        .map((r) => r.image ?? r.sourceImage ?? r.videoThumbnail ?? '')
+        .where((u) => u.isNotEmpty)
+        .take(6);
+    unawaited(warmRecipeImageCache(urls));
+  }
+
+  static bool _listEqualsIds(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  RecommendationsResult _recommendationsFromCacheOnly() {
+    return RecommendationsResult(
+      recipes: _cachedRecommendations,
+      spoonacularQuotaExhausted: _lastSpoonacularQuotaExhausted,
+      suggestPlusUpgrade: _lastSuggestPlusUpgrade,
+      viewerIsPlus: _lastViewerIsPlus,
+    );
+  }
+
+  bool _shouldPersistRecommendationsCache(RecommendationsResult result) {
+    return result.recipes.length >= _kMinRecommendationsToCache;
+  }
+
+  /// Увеличить при изменении состава полей в `/recommendations` (например author / author_avatar).
+  static const int _kRecommendationsPayloadVersion = 11;
+  static int _appliedRecommendationsPayloadVersion = 0;
   List<Recipe> _favorites = [];
   bool _favoritesLoading = false;
-  bool _isListening = false;
+  bool _favoritesEnabled = true;
   String? _selectedTags;
   String? _selectedIngredients;
-  String? _activeFilterLabel;
   int? _selectedMaxReadyTime; // Фильтр по времени готовки (мин)
   bool _hideMenuButtons = false;
   static const _scrollThreshold = 60.0;
-
   @override
   void initState() {
     super.initState();
+    if (_appliedRecommendationsPayloadVersion <
+        _kRecommendationsPayloadVersion) {
+      _cachedRecommendations = [];
+      _cacheTimestamp = null;
+      _sharedRecommendationsCache = [];
+      _sharedCacheTimestamp = null;
+      _appliedRecommendationsPayloadVersion = _kRecommendationsPayloadVersion;
+    }
     _controller.addListener(() {
       if (mounted) {
         setState(() {}); // Обновляем UI при изменении текста
@@ -62,29 +174,24 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     });
     // Предзагружаем рецепты сразу при инициализации
     final settings = ref.read(analysisSettingsProvider);
-    
-    // Если есть кэш, показываем его сразу (синхронно)
-    if (_cachedRecommendations.isNotEmpty && 
-        _cacheTimestamp != null && 
-        DateTime.now().difference(_cacheTimestamp!) < _cacheDuration) {
-      _recommendationsFuture = Future.value(_cachedRecommendations);
-    } else {
-      // Иначе начинаем загрузку
-      _recommendationsFuture = _fetchRecommendationsImmediate(settings);
+
+    // Поднимаем кэш из общего статического хранилища между открытиями экрана.
+    if (_sharedRecommendationsCache.isNotEmpty &&
+        _sharedCacheTimestamp != null) {
+      _cachedRecommendations = List<Recipe>.from(_sharedRecommendationsCache);
+      _cacheTimestamp = _sharedCacheTimestamp;
     }
-    
+
+  _recommendationsFuture = _fetchRecommendationsImmediate(settings);
+
     // Загружаем избранное параллельно (не блокируем UI)
     _loadFavorites();
+    unawaited(ApiService.touchAiScanCreditsSilently());
+
   }
-  
-  Future<List<Recipe>> _fetchRecommendationsImmediate(AnalysisSettingsState settings) async {
-    // Если есть кэш и он еще актуален, возвращаем его сразу
-    if (_cachedRecommendations.isNotEmpty && 
-        _cacheTimestamp != null && 
-        DateTime.now().difference(_cacheTimestamp!) < _cacheDuration) {
-      return _cachedRecommendations;
-    }
-    
+
+  Future<RecommendationsResult> _fetchRecommendationsImmediate(
+      AnalysisSettingsState settings) async {
     // Загружаем теги асинхронно, чтобы не блокировать основной поток
     final tagsFuture = Future(() {
       try {
@@ -93,40 +200,64 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         return <String>[];
       }
     });
-    
+
     // Параллельно загружаем теги и делаем запрос
     final activeTags = await tagsFuture;
-    final tagsString = activeTags.isNotEmpty 
-        ? activeTags.join(',') 
-        : (_selectedTags ?? '');
-    
+    final tagsString =
+        activeTags.isNotEmpty ? activeTags.join(',') : (_selectedTags ?? '');
+
     try {
-      final recipes = await ApiService.fetchRecommendations(
+      final result = await ApiService.fetchRecommendations(
         limit: 8,
         tags: tagsString.isNotEmpty ? tagsString : null,
         ingredients: _selectedIngredients,
         mode: settings.mode,
         language: settings.language,
       );
-      
-      // Сохраняем в кэш
-      if (mounted) {
-        _cachedRecommendations = recipes;
+
+      // Не кэшируем «бедный» ответ (1 карточка при исчерпании квоты Spoonacular)
+      if (mounted && _shouldPersistRecommendationsCache(result)) {
+        _cachedRecommendations = result.recipes;
         _cacheTimestamp = DateTime.now();
+        _sharedRecommendationsCache = List<Recipe>.from(result.recipes);
+        _sharedCacheTimestamp = _cacheTimestamp;
       }
-      
-      return recipes;
+      _lastSpoonacularQuotaExhausted = result.spoonacularQuotaExhausted;
+      _lastSuggestPlusUpgrade = result.suggestPlusUpgrade;
+      _lastViewerIsPlus = result.viewerIsPlus;
+      if (mounted) {
+        setState(() => _recommendationsLoadFailed = false);
+      }
+
+      if (result.recipes.isNotEmpty) {
+        _warmImagesForRecipes(result.recipes);
+      }
+
+      return result;
     } catch (e) {
-      // При ошибке подключения к серверу возвращаем пустой список или кэш
       if (kDebugMode) {
         debugPrint('Error fetching recommendations: $e');
       }
-      // Если есть кэш, возвращаем его
       if (_cachedRecommendations.isNotEmpty) {
-        return _cachedRecommendations;
+        if (mounted) {
+          setState(() => _recommendationsLoadFailed = false);
+        }
+        return _recommendationsFromCacheOnly();
       }
-      // Иначе возвращаем пустой список
-      return [];
+      if (mounted) {
+        setState(() => _recommendationsLoadFailed = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(
+                e,
+                fallback: 'Не удалось загрузить рекомендации',
+              ),
+            ),
+          ),
+        );
+      }
+      return const RecommendationsResult(recipes: []);
     }
   }
 
@@ -137,8 +268,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _loadFavorites() async {
-    // Не показываем индикатор загрузки для избранного, чтобы не блокировать UI
-    // Загружаем в фоне
+    if (!mounted) return;
+    setState(() => _favoritesLoading = true);
     try {
       final favs = await ApiService.getFavorites().timeout(
         const Duration(seconds: 5),
@@ -147,10 +278,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       if (!mounted) return;
       setState(() {
         _favorites = favs;
-        _favoritesLoading = false;
+        _favoritesEnabled = true;
       });
     } catch (e) {
-      // Игнорируем ошибки загрузки избранного, чтобы не блокировать основной UI
+      if (!mounted) return;
+      if (isAuthRelatedError(e)) {
+        setState(() => _favoritesEnabled = false);
+      }
+    } finally {
       if (mounted) {
         setState(() => _favoritesLoading = false);
       }
@@ -160,12 +295,27 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   bool _isFavorite(int id) => _favorites.any((r) => r.id == id);
 
   Future<void> _toggleFavorite(Recipe recipe) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Войдите, чтобы сохранять рецепты в избранное'),
+        ),
+      );
+      await context.push(LoginRoute.path);
+      if (mounted) {
+        await _loadFavorites();
+      }
+      return;
+    }
+
     // Проверяем, что у рецепта есть ID
     if (recipe.id == 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ошибка: у рецепта отсутствует ID'),
+            content: Text('Не удалось сохранить рецепт. Обновите страницу.'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -203,29 +353,51 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       if (!mounted) return;
 
       final errorMsg = e.toString().toLowerCase();
-      String userMessage = 'Ошибка при добавлении в избранное: $e';
+      String userMessage =
+          userVisibleError(e, fallback: 'Не удалось добавить в избранное');
 
       // Обработка различных типов ошибок
       if (errorMsg.contains('recipe has no id') || errorMsg.contains('no id')) {
-        userMessage = 'Ошибка: у рецепта отсутствует ID. Попробуйте обновить страницу.';
+        userMessage =
+            'Не удалось сохранить рецепт. Попробуйте обновить страницу.';
       } else if (errorMsg.contains('daily points limit') ||
           errorMsg.contains('points limit') ||
-          errorMsg.contains('402') ||
-          errorMsg.contains('unauthorized') ||
+          errorMsg.contains('402')) {
+        userMessage =
+            'Лимит каталога рецептов на сегодня исчерпан. Повторите позже или оформите H.A.N. AI (от 199 ₽/мес).';
+      } else if (errorMsg.contains('unauthorized') ||
           errorMsg.contains('401')) {
-        userMessage = 'Ошибка доступа. Проверьте подключение к серверу.';
-      } else if (errorMsg.contains('network') || errorMsg.contains('connection')) {
+        userMessage =
+            'Требуется вход в аккаунт или сессия истекла. Войдите снова и повторите.';
+      } else if (errorMsg.contains('network') ||
+          errorMsg.contains('connection')) {
         userMessage = 'Ошибка сети. Проверьте подключение к интернету.';
       } else if (errorMsg.contains('timeout')) {
         userMessage = 'Превышено время ожидания. Попробуйте позже.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(userMessage),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      final isQuotaLike = errorMsg.contains('daily points') ||
+          errorMsg.contains('points limit') ||
+          errorMsg.contains('402');
+      if (isQuotaLike) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userMessage),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Подписка',
+              onPressed: () => context.push(SubscriptionRoute.path),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userMessage),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
       setState(() {});
     }
   }
@@ -235,23 +407,27 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     if (query.isEmpty) return;
     List<String> activeTags = [];
     try {
-      activeTags = CategoryService.instance.getSpoonacularTagsForActiveCategories();
+      activeTags =
+          CategoryService.instance.getSpoonacularTagsForActiveCategories();
     } catch (e) {
       // CategoryService not initialized, continue without tags
     }
     await ref.read(searchControllerProvider.notifier).search(
-      query,
-      tags: activeTags.isNotEmpty ? activeTags : null,
-      maxReadyTime: _selectedMaxReadyTime,
-    );
+          query,
+          tags: activeTags.isNotEmpty ? activeTags : null,
+          maxReadyTime: _selectedMaxReadyTime,
+        );
   }
 
   Future<void> _fetchRecommendations(AnalysisSettingsState settings) async {
     // Сбрасываем кэш при явном обновлении
     _cachedRecommendations = [];
     _cacheTimestamp = null;
-    
+    _sharedRecommendationsCache = [];
+    _sharedCacheTimestamp = null;
+
     setState(() {
+      _recommendationsLoadFailed = false;
       _recommendationsFuture = _fetchRecommendationsImmediate(settings);
     });
   }
@@ -261,96 +437,88 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     await _runSearch();
   }
 
-  void _applyQuickFilter(String label, String tag, AnalysisSettingsState settings) {
+  void _applyQuickFilter(
+    String label,
+    String tag,
+    AnalysisSettingsState settings, {
+    required bool canViewNutrition,
+  }) {
+    if (RecipeNutritionAccess.isNutritionFilterTag(tag) && !canViewNutrition) {
+      unawaited(showNutritionUpsellSheet(context));
+      return;
+    }
     _controller.text = label;
     final maxMin = label == 'Быстро' ? 15 : _selectedMaxReadyTime;
-    ref.read(searchControllerProvider.notifier).searchByTag(label, tag, maxReadyTime: maxMin);
+    ref
+        .read(searchControllerProvider.notifier)
+        .searchByTag(label, tag, maxReadyTime: maxMin);
   }
 
   Future<void> _openMediaPicker(AnalysisSettingsState settings) async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Сделать снимок'),
-              onTap: () => Navigator.of(context).pop(ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Выбрать из галереи'),
-              onTap: () => Navigator.of(context).pop(ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (source == null) return;
-    final image = await _picker.pickImage(
-      source: source,
-      maxWidth: 1440,
-      imageQuality: 85,
-    );
-    if (image == null || !mounted) return;
-    final bytes = await image.readAsBytes();
     if (!mounted) return;
-    context.push(ScanResultRoute.path, extra: bytes);
-  }
+    try {
+      // Проверка лимитов параллельно — bottom sheet не ждёт ответ API.
+      final gateFuture = AiScanGate.ensureCanOpenScanner(context);
 
-  Future<void> _toggleVoice(AnalysisSettingsState settings) async {
-    if (_isListening) {
-      await _speech.stop();
-      if (mounted) setState(() => _isListening = false);
-      return;
-    }
-    final available = await _speech.initialize(
-      onStatus: (status) {
-        if (status == 'done' && mounted) {
-          setState(() => _isListening = false);
-        }
-      },
-      onError: (error) {
-        if (mounted) {
-          setState(() => _isListening = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка распознавания речи: ${error.errorMsg}')),
-          );
-        }
-      },
-    );
-    if (!available) {
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+
+      final source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined),
+                title: const Text('Сделать снимок'),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Выбрать из галереи'),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (source == null || !mounted) return;
+
+      final ok = await gateFuture;
+      if (!ok || !mounted) return;
+
+      final image = await _picker.pickImage(
+        source: source,
+        maxWidth: 1080,
+        imageQuality: 78,
+      );
+      if (image == null || !mounted) return;
+      final raw = await image.readAsBytes();
+      if (!mounted) return;
+      final bytes = await prepareImageForAiScan(raw);
+      if (!mounted) return;
+      await context.push(ScanResultRoute.path, extra: bytes);
+      AiScanGate.invalidateCache();
+      if (mounted) {
+        setState(() => _hideMenuButtons = false);
+      }
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Микрофон недоступен')),
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть камеру или галерею'),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
       );
-      return;
     }
-    final locale = _speechLocale(settings.language);
-    setState(() => _isListening = true);
-    await _speech.listen(
-      localeId: locale,
-      listenOptions: stt.SpeechListenOptions(
-        listenMode: stt.ListenMode.dictation,
-      ),
-      onResult: (result) {
-        if (!mounted) return;
-        setState(() {
-          _controller.text = result.recognizedWords;
-        });
-        if (result.finalResult) {
-          _speech.stop();
-          setState(() => _isListening = false);
-          _runSearch();
-        }
-      },
-    );
   }
 
-  void _openDetails(Recipe recipe) {
-    Navigator.of(context).push(
+  Future<void> _openDetails(Recipe recipe) async {
+    final result = await Navigator.of(context, rootNavigator: true).push<RecipeDetailPopResult>(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => DetailPage(
           recipe: recipe,
@@ -377,14 +545,26 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         transitionDuration: const Duration(milliseconds: 300),
       ),
     );
+    if (result != null && mounted) {
+      RecipeInteractionStats.apply(result);
+      setState(() {});
+    }
   }
 
   Future<void> _refreshRecommendations(AnalysisSettingsState settings) async {
     _cachedRecommendations = [];
     _cacheTimestamp = null;
+    _sharedRecommendationsCache = [];
+    _sharedCacheTimestamp = null;
+    _lastSpoonacularQuotaExhausted = false;
     setState(() {
-      _recommendationsFuture = _fetchRecommendationsImmediate(settings);
+      _recommendationsLoadFailed = false;
     });
+    final future = _fetchRecommendationsImmediate(settings);
+    setState(() {
+      _recommendationsFuture = future;
+    });
+    await future;
   }
 
   void _showIngredientsSearchDialog(AnalysisSettingsState settings) {
@@ -398,7 +578,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           autofocus: true,
           maxLines: 3,
           decoration: const InputDecoration(
-            hintText: 'Введите продукты через запятую\nнапример: яйца, мука, молоко',
+            hintText:
+                'Введите продукты через запятую\nнапример: яйца, мука, молоко',
             border: OutlineInputBorder(),
           ),
         ),
@@ -413,7 +594,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               Navigator.pop(ctx);
               if (q.isEmpty) return;
               _controller.text = q;
-              ref.read(searchControllerProvider.notifier).search(q, maxReadyTime: _selectedMaxReadyTime);
+              ref
+                  .read(searchControllerProvider.notifier)
+                  .search(q, maxReadyTime: _selectedMaxReadyTime);
             },
             child: const Text('Искать'),
           ),
@@ -473,11 +656,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
                                   child: const Text('Отмена'),
                                 ),
                                 FilledButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
                                   child: const Text('Очистить'),
                                 ),
                               ],
@@ -489,7 +674,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                             if (context.mounted) {
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('История очищена')),
+                                const SnackBar(
+                                    content: Text('История очищена')),
                               );
                             }
                           }
@@ -520,7 +706,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         if (entries.isEmpty) {
                           return Center(
                             child: Text(
-                              'Запросов пока нет. Найдите блюдо в разделе "Menu".',
+                              'Запросов пока нет. Найдите блюдо в разделе «Меню».',
                               style: Theme.of(context).textTheme.bodyLarge,
                               textAlign: TextAlign.center,
                             ),
@@ -530,7 +716,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                           controller: scrollController,
                           padding: const EdgeInsets.all(16),
                           itemCount: entries.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             final entry = entries[index];
                             return ListTile(
@@ -538,7 +725,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                                 side: BorderSide(
-                                  color: Theme.of(context).colorScheme.outlineVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant,
                                 ),
                               ),
                               title: Text(entry.query),
@@ -558,10 +747,34 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     );
                   } catch (e) {
                     return Center(
-                      child: Text(
-                        'История не инициализирована: $e',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                        textAlign: TextAlign.center,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              userVisibleError(
+                                e,
+                                fallback: 'История поиска недоступна',
+                              ),
+                              style: Theme.of(context).textTheme.bodyLarge,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  if (mounted) {
+                                    _showHistoryDrawer(this.context);
+                                  }
+                                });
+                              },
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }
@@ -574,12 +787,21 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(menuRecommendationsRefreshProvider, (prev, next) {
+      if (!mounted || next == 0 || prev == next) return;
+      unawaited(_refreshRecommendations(ref.read(analysisSettingsProvider)));
+    });
+
     final searchState = ref.watch(searchControllerProvider);
     final settings = ref.watch(analysisSettingsProvider);
-    
+    final subscriptionStatus = ref.watch(subscriptionStatusProvider);
+    final canViewNutrition = RecipeNutritionAccess.resolve(
+      subscription: subscriptionStatus.valueOrNull,
+      viewerIsPlus: _lastViewerIsPlus,
+    );
+
     // Listen to analysis settings changes
     ref.listen<AnalysisSettingsState>(
       analysisSettingsProvider,
@@ -591,299 +813,468 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       },
     );
 
+    ref.listen(subscriptionStatusProvider, (previous, next) {
+      final hadAi = RecipeTranslationAccess.fromSubscription(
+        previous?.asData?.value,
+      );
+      final hasAi = RecipeTranslationAccess.fromSubscription(next.asData?.value);
+      if (!hadAi && hasAi && mounted) {
+        unawaited(_refreshRecommendations(settings));
+      }
+    });
+
     return Scaffold(
-      body: SafeArea(
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (ScrollNotification n) {
-            if (n is ScrollUpdateNotification) {
-              final hide = n.metrics.pixels > _scrollThreshold;
-              if (hide != _hideMenuButtons && mounted) {
-                setState(() => _hideMenuButtons = hide);
+      extendBody: true,
+      body: AppGradientBackground(
+        child: SafeArea(
+          bottom: false,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification n) {
+              if (n is ScrollUpdateNotification) {
+                final hide = n.metrics.pixels > _scrollThreshold;
+                if (hide != _hideMenuButtons && mounted) {
+                  // Нельзя вызывать setState из уведомления прокрутки во время layout
+                  // (внутри GridView это ломает _RenderLayoutBuilder).
+                  SchedulerBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    if (hide != _hideMenuButtons) {
+                      setState(() => _hideMenuButtons = hide);
+                    }
+                  });
+                }
               }
-            }
-            return false;
-          },
-          child: Column(
-            children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              return false;
+            },
+            child: Column(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.history),
-                  tooltip: 'История запросов',
-                  onPressed: () => _showHistoryDrawer(context),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: TextField(
-                      controller: _controller,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: (_) => _runSearch(),
-                      decoration: InputDecoration(
-                        hintText: 'Это поле для ввода запроса',
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
-                                color: _isListening
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    _kMenuScreenEdgeGutter,
+                    16,
+                    _kMenuScreenEdgeGutter,
+                    8,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.history),
+                        tooltip: 'История запросов',
+                        onPressed: () => _showHistoryDrawer(context),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: TextField(
+                            controller: _controller,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _runSearch(),
+                            decoration: InputDecoration(
+                              hintText: 'Название блюда или ингредиенты',
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
                               ),
-                              onPressed: () => _toggleVoice(settings),
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _controller.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () {
+                                        _controller.clear();
+                                        ref
+                                            .read(searchControllerProvider
+                                                .notifier)
+                                            .reset();
+                                      },
+                                    )
+                                  : null,
                             ),
-                            if (_controller.text.isNotEmpty)
-                              IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _controller.clear();
-                                  ref.read(searchControllerProvider.notifier).reset();
-                                },
-                              ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.category_outlined),
+                        tooltip: 'Категории',
+                        onPressed: () => context.push(CategoriesRoute.path),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.category_outlined),
-                  tooltip: 'Категории',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CategoriesScreen(),
-                    ),
-                  ),
+                // Кнопки скрываются при прокрутке вниз (duration всегда константа —
+                // смена Duration.zero ↔ animated ломает RenderAnimatedSize при layout).
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  clipBehavior: Clip.hardEdge,
+                  child: _hideMenuButtons
+                      ? const SizedBox(width: double.infinity, height: 0)
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            _kMenuScreenEdgeGutter,
+                            4,
+                            _kMenuScreenEdgeGutter,
+                            8,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _MenuActionCard(
+                                  icon: Icons.calendar_today_outlined,
+                                  label: 'План питания',
+                                  onTap: () => context.push(MealPlanRoute.path),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _MenuActionCard(
+                                  icon: Icons.shopping_cart_outlined,
+                                  label: 'Список покупок',
+                                  onTap: () =>
+                                      context.push(ShoppingListRoute.path),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _MenuActionCard(
+                                  icon: Icons.camera_alt_outlined,
+                                  label: 'Сканировать',
+                                  onTap: () => _openMediaPicker(settings),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
-              ],
-            ),
-          ),
-          // Кнопки скрываются при прокрутке вниз
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            child: _hideMenuButtons
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _MenuActionCard(
-                            icon: Icons.calendar_today_outlined,
-                            label: 'План питания',
-                            onTap: () => context.push(MealPlanRoute.path),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _MenuActionCard(
-                            icon: Icons.shopping_cart_outlined,
-                            label: 'Список покупок',
-                            onTap: () => context.push(ShoppingListRoute.path),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: _MenuActionCard(
-                            icon: Icons.camera_alt_outlined,
-                            label: 'Сканировать',
-                            onTap: () => _openMediaPicker(settings),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-          // Активные категории
-          Builder(
-            builder: (context) {
-              try {
-                return ValueListenableBuilder<List<CategoryFilter>>(
-                  valueListenable: CategoryService.instance.filters,
-                  builder: (context, filters, _) {
+                // Активные категории
+                Builder(
+                  builder: (context) {
                     try {
-                      final activeCategories = CategoryService.instance.getActiveCategories();
-                      if (activeCategories.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
-                      return Container(
-                        height: 50,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: activeCategories.map((category) {
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Chip(
-                                label: Text(category.displayName),
-                                onDeleted: () {
-                                  try {
-                                    CategoryService.instance.toggleCategory(category, false);
-                                  } catch (_) {
-                                    // Ignore errors
-                                  }
-                                },
-                                deleteIcon: const Icon(Icons.close, size: 18),
+                      return ValueListenableBuilder<List<CategoryFilter>>(
+                        valueListenable: CategoryService.instance.filters,
+                        builder: (context, filters, _) {
+                          try {
+                            final activeCategories =
+                                CategoryService.instance.getActiveCategories();
+                            if (activeCategories.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Container(
+                              height: 50,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: _kMenuScreenEdgeGutter,
+                              ),
+                              child: ListView(
+                                scrollDirection: Axis.horizontal,
+                                children: activeCategories.map((category) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Chip(
+                                      label: Text(category.displayName),
+                                      onDeleted: () {
+                                        try {
+                                          CategoryService.instance
+                                              .toggleCategory(category, false);
+                                        } catch (_) {
+                                          // Ignore errors
+                                        }
+                                      },
+                                      deleteIcon:
+                                          const Icon(Icons.close, size: 18),
+                                    ),
+                                  );
+                                }).toList(),
                               ),
                             );
-                          }).toList(),
-                        ),
+                          } catch (e) {
+                            return const SizedBox.shrink();
+                          }
+                        },
                       );
                     } catch (e) {
                       return const SizedBox.shrink();
                     }
                   },
-                );
-              } catch (e) {
-                return const SizedBox.shrink();
-              }
-            },
-          ),
-          // Фильтр по времени готовки
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _TimeFilterChip(
-                    label: 'До 15 мин',
-                    minutes: 15,
-                    selected: _selectedMaxReadyTime == 15,
-                    onTap: () => setState(() {
-                      _selectedMaxReadyTime = _selectedMaxReadyTime == 15 ? null : 15;
-                    }),
-                  ),
-                  const SizedBox(width: 8),
-                  _TimeFilterChip(
-                    label: 'До 30 мин',
-                    minutes: 30,
-                    selected: _selectedMaxReadyTime == 30,
-                    onTap: () => setState(() {
-                      _selectedMaxReadyTime = _selectedMaxReadyTime == 30 ? null : 30;
-                    }),
-                  ),
-                  const SizedBox(width: 8),
-                  _TimeFilterChip(
-                    label: 'До 60 мин',
-                    minutes: 60,
-                    selected: _selectedMaxReadyTime == 60,
-                    onTap: () => setState(() {
-                      _selectedMaxReadyTime = _selectedMaxReadyTime == 60 ? null : 60;
-                    }),
-                  ),
-                  if (_selectedMaxReadyTime != null) ...[
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      label: const Text('Сбросить время'),
-                      onSelected: (_) => setState(() => _selectedMaxReadyTime = null),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          // Быстрые фильтры (теги поиска)
-          if (!searchState.hasSearched && _controller.text.isEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _QuickFilterChip(label: 'Быстро', tags: 'quick-and-easy', onTap: () => _applyQuickFilter('Быстро', 'quick-and-easy', settings)),
-                    const SizedBox(width: 8),
-                    _QuickFilterChip(label: 'ЗОЖ', tags: 'vegetarian', onTap: () => _applyQuickFilter('ЗОЖ', 'vegetarian', settings)),
-                    const SizedBox(width: 8),
-                    _QuickFilterChip(label: 'Низкокалорийное', tags: 'low-calorie', onTap: () => _applyQuickFilter('Низкокалорийное', 'low-calorie', settings)),
-                    const SizedBox(width: 8),
-                    _QuickFilterChip(label: 'Высокий белок', tags: 'high-protein', onTap: () => _applyQuickFilter('Высокий белок', 'high-protein', settings)),
-                    const SizedBox(width: 8),
-                    _QuickFilterChip(
-                      label: 'По ингредиентам',
-                      tags: '',
-                      onTap: () => _showIngredientsSearchDialog(settings),
-                    ),
-                  ],
                 ),
-              ),
-            ),
-          if (searchState.loading) const LinearProgressIndicator(),
-          if (searchState.error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      searchState.error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                // Фильтр по времени готовки (только для поиска)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    _kMenuScreenEdgeGutter,
+                    4,
+                    _kMenuScreenEdgeGutter,
+                    4,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Время готовки · для поиска',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                        _TimeFilterChip(
+                          label: 'До 15 мин',
+                          minutes: 15,
+                          selected: _selectedMaxReadyTime == 15,
+                          onTap: () => setState(() {
+                            _selectedMaxReadyTime =
+                                _selectedMaxReadyTime == 15 ? null : 15;
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        _TimeFilterChip(
+                          label: 'До 30 мин',
+                          minutes: 30,
+                          selected: _selectedMaxReadyTime == 30,
+                          onTap: () => setState(() {
+                            _selectedMaxReadyTime =
+                                _selectedMaxReadyTime == 30 ? null : 30;
+                          }),
+                        ),
+                        const SizedBox(width: 8),
+                        _TimeFilterChip(
+                          label: 'До 60 мин',
+                          minutes: 60,
+                          selected: _selectedMaxReadyTime == 60,
+                          onTap: () => setState(() {
+                            _selectedMaxReadyTime =
+                                _selectedMaxReadyTime == 60 ? null : 60;
+                          }),
+                        ),
+                        if (_selectedMaxReadyTime != null) ...[
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: const Text('Сбросить время'),
+                            onSelected: (_) =>
+                                setState(() => _selectedMaxReadyTime = null),
+                          ),
+                        ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Быстрые фильтры (теги поиска)
+                if (!searchState.hasSearched && _controller.text.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      _kMenuScreenEdgeGutter,
+                      0,
+                      _kMenuScreenEdgeGutter,
+                      8,
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _QuickFilterChip(
+                              label: 'Быстро',
+                              tags: 'quick-and-easy',
+                              onTap: () => _applyQuickFilter(
+                                'Быстро',
+                                'quick-and-easy',
+                                settings,
+                                canViewNutrition: canViewNutrition,
+                              )),
+                          const SizedBox(width: 8),
+                          _QuickFilterChip(
+                              label: 'ЗОЖ',
+                              tags: 'vegetarian',
+                              onTap: () => _applyQuickFilter(
+                                'ЗОЖ',
+                                'vegetarian',
+                                settings,
+                                canViewNutrition: canViewNutrition,
+                              )),
+                          const SizedBox(width: 8),
+                          _QuickFilterChip(
+                              label: 'Низкокалорийное',
+                              tags: 'low-calorie',
+                              isNutritionFilter: true,
+                              onTap: () => _applyQuickFilter(
+                                'Низкокалорийное',
+                                'low-calorie',
+                                settings,
+                                canViewNutrition: canViewNutrition,
+                              )),
+                          const SizedBox(width: 8),
+                          _QuickFilterChip(
+                              label: 'Высокий белок',
+                              tags: 'high-protein',
+                              isNutritionFilter: true,
+                              onTap: () => _applyQuickFilter(
+                                'Высокий белок',
+                                'high-protein',
+                                settings,
+                                canViewNutrition: canViewNutrition,
+                              )),
+                          const SizedBox(width: 8),
+                          _QuickFilterChip(
+                            label: 'По ингредиентам',
+                            tags: '',
+                            onTap: () => _showIngredientsSearchDialog(settings),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      ref.read(searchControllerProvider.notifier).resetError();
-                      _runSearch();
-                    },
-                    child: const Text('Повторить'),
+                if (searchState.loading) const LinearProgressIndicator(),
+                if (searchState.error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: _kMenuScreenEdgeGutter,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            searchState.error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            ref
+                                .read(searchControllerProvider.notifier)
+                                .resetError();
+                            _runSearch();
+                          },
+                          child: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                Expanded(
+                  child: _buildMainList(
+                    settings: settings,
+                    searchState: searchState,
+                    canViewNutrition: canViewNutrition,
+                  ),
+                ),
+              ],
             ),
-          Expanded(
-            child: searchState.recipes.isNotEmpty
-                ? _RecipesGrid(
-                    recipes: searchState.recipes,
-                    isFavorite: _isFavorite,
-                    onFavoriteTap: _toggleFavorite,
-                    onTap: _openDetails,
-                    favoritesLoading: _favoritesLoading,
-                  )
-                : _buildRecommendations(settings),
           ),
-        ],
         ),
-      ),
       ),
     );
   }
 
-  Widget _buildRecommendations(AnalysisSettingsState settings) {
+  void _clearSearch() {
+    _controller.clear();
+    ref.read(searchControllerProvider.notifier).reset();
+  }
+
+  Widget _buildMainList({
+    required AnalysisSettingsState settings,
+    required SearchState searchState,
+    required bool canViewNutrition,
+  }) {
+    if (searchState.loading &&
+        searchState.hasSearched &&
+        searchState.recipes.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (searchState.recipes.isNotEmpty) {
+      return RefreshIndicator(
+        onRefresh: () async => _runSearch(),
+        child: _RecipesGrid(
+          recipes: searchState.recipes,
+          isFavorite: _isFavorite,
+          onFavoriteTap: _toggleFavorite,
+          onTap: _openDetails,
+          favoritesLoading: _favoritesLoading,
+          showNutritionValues: canViewNutrition,
+          showFavoriteButton: _favoritesEnabled,
+        ),
+      );
+    }
+
+    if (searchState.hasSearched &&
+        !searchState.loading &&
+        searchState.error == null) {
+      return RefreshIndicator(
+        onRefresh: () async => _runSearch(),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: AppEmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'Ничего не найдено',
+                subtitle: _selectedMaxReadyTime != null
+                    ? 'Попробуйте другой запрос или сбросьте фильтр по времени'
+                    : 'Попробуйте другие слова или ингредиенты',
+                action: TextButton(
+                  onPressed: _clearSearch,
+                  child: const Text('Сбросить поиск'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildRecommendations(
+      settings,
+      showNutritionValues: canViewNutrition,
+    );
+  }
+
+  Widget _buildRecommendations(
+    AnalysisSettingsState settings, {
+    required bool showNutritionValues,
+  }) {
     return RefreshIndicator(
       onRefresh: () => _refreshRecommendations(settings),
-      child: FutureBuilder<List<Recipe>>(
+      child: FutureBuilder<RecommendationsResult>(
         future: _recommendationsFuture,
         builder: (context, snapshot) {
+          final bottomInset = floatingBottomPadding(context);
           // Показываем кэш сразу, если есть, пока загружаются новые данные
-          final recipes = snapshot.hasData 
-              ? snapshot.data! 
-              : (_cachedRecommendations.isNotEmpty 
-                  ? _cachedRecommendations 
-                  : <Recipe>[]);
-          
+          final RecommendationsResult effective;
+          if (snapshot.hasData) {
+            effective = snapshot.data!;
+          } else if (_cachedRecommendations.isNotEmpty) {
+            effective = _recommendationsFromCacheOnly();
+          } else {
+            effective = const RecommendationsResult(recipes: []);
+          }
+          final recipes = effective.recipes;
+          if (recipes.isNotEmpty) {
+            _warmImagesForRecipes(recipes);
+          }
+          final quotaExhausted = effective.spoonacularQuotaExhausted;
+          final suggestPlusUpgrade = effective.suggestPlusUpgrade;
+
           // Если загрузка и нет кэша, показываем скелетон
-          if (snapshot.connectionState == ConnectionState.waiting && recipes.isEmpty) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              recipes.isEmpty) {
             return const ListSkeletonLoader(itemCount: 5);
           }
-          
+
           if (snapshot.hasError && recipes.isEmpty) {
             // Проверяем, является ли ошибка ошибкой подключения к серверу
             final errorStr = snapshot.error.toString();
@@ -892,94 +1283,188 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                 errorStr.contains('Failed to fetch') ||
                 errorStr.contains('TimeoutException') ||
                 errorStr.contains('SocketException');
-            
+
             // Для ошибок подключения к серверу не показываем ошибку, просто пустой список
             if (isConnectionError) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: [
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.wifi_off,
-                          size: 48,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Сервер недоступен',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Рекомендации будут доступны после подключения к серверу',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  _kMenuScreenEdgeGutter,
+                  16,
+                  _kMenuScreenEdgeGutter,
+                  24 + bottomInset,
+                ),
+                children: [
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.wifi_off,
+                            size: 48,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.5),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          Text(
+                            'Сервер недоступен',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Рекомендации будут доступны после подключения к серверу',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            );
+                ],
+              );
             }
-            
-            // Для других ошибок показываем сообщение
+
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
               children: [
-                Text(
-                  'Не удалось загрузить рекомендации: ${snapshot.error}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(color: Theme.of(context).colorScheme.error),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton(
-                  onPressed: () => _refreshRecommendations(settings),
-                  child: const Text('Повторить'),
+                AppEmptyState(
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Не удалось загрузить',
+                  subtitle: userVisibleError(
+                    snapshot.error!,
+                    fallback: 'Проверьте подключение',
+                  ),
+                  action: FilledButton(
+                    onPressed: () => _refreshRecommendations(settings),
+                    child: const Text('Повторить'),
+                  ),
                 ),
               ],
             );
           }
           if (recipes.isEmpty) {
+            if (_recommendationsLoadFailed) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  _kMenuScreenEdgeGutter,
+                  16,
+                  _kMenuScreenEdgeGutter,
+                  24 + bottomInset,
+                ),
+                children: [
+                  AppEmptyState(
+                    icon: Icons.cloud_off_rounded,
+                    title: 'Не удалось загрузить рекомендации',
+                    subtitle: 'Проверьте сеть и потяните вниз для обновления',
+                    action: FilledButton(
+                      onPressed: () => _refreshRecommendations(settings),
+                      child: const Text('Повторить'),
+                    ),
+                  ),
+                ],
+              );
+            }
+            final emptyText = quotaExhausted
+                ? 'Лимит каталога на сегодня исчерпан. Тренды обновятся завтра; поиск по ингредиентам может быть недоступен.'
+                : 'Пока тренды не найдены. Попробуйте поиск или быстрые фильтры выше.';
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: EdgeInsets.fromLTRB(
+                _kMenuScreenEdgeGutter,
+                16,
+                _kMenuScreenEdgeGutter,
+                24 + bottomInset,
+              ),
               children: [
                 Text(
-                  'Пока тренды не найдены. Попробуйте выбрать другой фильтр или выполнить поиск.',
+                  emptyText,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
+                if (suggestPlusUpgrade) ...[
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => context.push(
+                        SubscriptionRoute.pathWithProduct('ai'),
+                      ),
+                    icon: const Icon(Icons.workspace_premium_outlined),
+                    label: const Text('Выбрать тариф'),
+                  ),
+                ],
               ],
             );
           }
+          final showTranslationUpsell = effective.recipeTranslationRequiresAi &&
+              !RecipeTranslationAccess.fromSubscription(
+                ref.watch(subscriptionStatusProvider).valueOrNull,
+              );
+
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              if (showTranslationUpsell)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      _kMenuScreenEdgeGutter,
+                      8,
+                      _kMenuScreenEdgeGutter,
+                      0,
+                    ),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: ListTile(
+                        title: const Text('Перевод рецептов — в тарифе AI'),
+                        subtitle: Text(
+                          'Названия и ингредиенты на '
+                          '${languageDisplayName(settings.language)} без ручного перевода',
+                        ),
+                        trailing: FilledButton.tonal(
+                          onPressed: () => context.push(
+                            SubscriptionRoute.pathWithProduct('ai'),
+                          ),
+                          child: const Text('AI'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                padding: EdgeInsets.fromLTRB(
+                  _kMenuScreenEdgeGutter,
+                  16,
+                  _kMenuScreenEdgeGutter,
+                  24 + bottomInset,
+                ),
                 sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.80,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                    childAspectRatio: _menuRecipeGridChildAspectRatio(
+                      MediaQuery.sizeOf(context).width,
+                      imageAspectRatio: _kMenuCardImageAspect,
+                      textBlockHeight: _menuRecipeTextBlockHeight(context),
+                    ),
+                    crossAxisSpacing: _kMenuGridCrossAxisSpacing,
+                    mainAxisSpacing: _kMenuGridCrossAxisSpacing,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final recipe = recipes[index];
                       return TweenAnimationBuilder<double>(
                         tween: Tween(begin: 0.0, end: 1.0),
-                        duration: Duration(milliseconds: 300 + (index * 50)),
+                        duration: const Duration(milliseconds: 280),
                         curve: Curves.easeOut,
                         builder: (context, value, child) {
                           return Opacity(
@@ -992,10 +1477,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         },
                         child: ModernRecipeCard(
                           recipe: recipe,
+                          imageAspectRatio: _kMenuCardImageAspect,
+                          compact: true,
+                          showNutritionValues: showNutritionValues,
                           isFavorite: _isFavorite(recipe.id),
                           onFavoriteTap: () => _toggleFavorite(recipe),
                           onTap: () => _openDetails(recipe),
                           favoritesLoading: _favoritesLoading,
+                          showFavoriteButton: _favoritesEnabled,
                         ),
                       );
                     },
@@ -1017,11 +1506,13 @@ class _MenuActionCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.badge,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -1033,22 +1524,54 @@ class _MenuActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          height: 48,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          height: 56,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Icon(icon, size: 20, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w500,
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 20, color: theme.colorScheme.primary),
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+              if (badge != null)
+                Positioned(
+                  top: 4,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onPrimary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1084,15 +1607,31 @@ class _QuickFilterChip extends StatelessWidget {
     required this.label,
     required this.tags,
     required this.onTap,
+    this.isNutritionFilter = false,
   });
   final String label;
   final String tags;
   final VoidCallback onTap;
+  final bool isNutritionFilter;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return FilterChip(
-      label: Text(label),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (isNutritionFilter) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.workspace_premium_outlined,
+              size: 16,
+              color: scheme.primary,
+            ),
+          ],
+        ],
+      ),
       onSelected: (_) => onTap(),
     );
   }
@@ -1105,6 +1644,8 @@ class _RecipesGrid extends StatelessWidget {
     required this.onFavoriteTap,
     required this.onTap,
     this.favoritesLoading = false,
+    this.showNutritionValues = true,
+    this.showFavoriteButton = true,
   });
 
   final List<Recipe> recipes;
@@ -1112,16 +1653,21 @@ class _RecipesGrid extends StatelessWidget {
   final Future<void> Function(Recipe) onFavoriteTap;
   final void Function(Recipe) onTap;
   final bool favoritesLoading;
+  final bool showNutritionValues;
+  final bool showFavoriteButton;
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = floatingBottomPadding(context);
     if (recipes.isEmpty) {
       return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(bottom: bottomInset),
         children: [
           Padding(
             padding: const EdgeInsets.all(24),
             child: Text(
-              'История пустая. Найдите рецепт по ингредиентам или воспользуйтесь рекомендациями.',
+              'Список рецептов пуст. Попробуйте другой запрос.',
               style: Theme.of(context).textTheme.bodyLarge,
             ),
           ),
@@ -1130,19 +1676,29 @@ class _RecipesGrid extends StatelessWidget {
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        _kMenuScreenEdgeGutter,
+        16,
+        _kMenuScreenEdgeGutter,
+        16 + bottomInset,
+      ),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.80,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        childAspectRatio: _menuRecipeGridChildAspectRatio(
+          MediaQuery.sizeOf(context).width,
+          imageAspectRatio: _kMenuCardImageAspect,
+          textBlockHeight: _menuRecipeTextBlockHeight(context),
+        ),
+        crossAxisSpacing: _kMenuGridCrossAxisSpacing,
+        mainAxisSpacing: _kMenuGridCrossAxisSpacing,
       ),
       itemCount: recipes.length,
       itemBuilder: (context, index) {
         final recipe = recipes[index];
         return TweenAnimationBuilder<double>(
           tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: 300 + (index * 50)),
+          duration: const Duration(milliseconds: 280),
           curve: Curves.easeOut,
           builder: (context, value, child) {
             return Opacity(
@@ -1155,307 +1711,17 @@ class _RecipesGrid extends StatelessWidget {
           },
           child: ModernRecipeCard(
             recipe: recipe,
+            imageAspectRatio: _kMenuCardImageAspect,
+            compact: true,
+            showNutritionValues: showNutritionValues,
             isFavorite: isFavorite(recipe.id),
             onFavoriteTap: () => onFavoriteTap(recipe),
             onTap: () => onTap(recipe),
             favoritesLoading: favoritesLoading,
+            showFavoriteButton: showFavoriteButton,
           ),
         );
       },
     );
-  }
-}
-
-class _RecipeCard extends StatelessWidget {
-  const _RecipeCard({
-    required this.recipe,
-    required this.isFavorite,
-    required this.onFavoriteTap,
-    required this.onTap,
-    required this.favoritesLoading,
-  });
-
-  final Recipe recipe;
-  final bool isFavorite;
-  final VoidCallback onFavoriteTap;
-  final VoidCallback onTap;
-  final bool favoritesLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Всегда используем перевод если он есть (из настроек)
-    final title = recipe.translatedTitle?.isNotEmpty == true
-        ? recipe.translatedTitle!
-        : recipe.title;
-    final ingredients = recipe.translatedIngredients?.isNotEmpty == true
-        ? recipe.translatedIngredients!
-        : recipe.ingredients;
-    final subtitle = recipe.summary?.isNotEmpty == true
-        ? recipe.summary!
-        : '${ingredients.take(3).join(', ')}...';
-
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: recipe.image == null
-                    ? Container(
-                        width: 88,
-                        height: 88,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Icon(Icons.image_not_supported),
-                      )
-                    : Image.network(
-                        getOptimizedImageUrl(recipe.image!),
-                        width: 88,
-                        height: 88,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            width: 88,
-                            height: 88,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                              ),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 88,
-                            height: 88,
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: const Icon(Icons.error_outline),
-                          );
-                        },
-                      ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        if (recipe.calories != null)
-                          Chip(
-                            label: Text('${recipe.calories} ккал'),
-                            avatar: const Icon(Icons.local_fire_department),
-                          ),
-                        if (_getProtein(recipe) != null)
-                          Chip(
-                            label: Text('${_getProtein(recipe)!.toStringAsFixed(1)} г белков'),
-                            avatar: const Icon(Icons.fitness_center),
-                          ),
-                        if (_getFat(recipe) != null)
-                          Chip(
-                            label: Text('${_getFat(recipe)!.toStringAsFixed(1)} г жиров'),
-                            avatar: const Icon(Icons.opacity),
-                          ),
-                        if (_getCarbs(recipe) != null)
-                          Chip(
-                            label: Text('${_getCarbs(recipe)!.toStringAsFixed(1)} г углеводов'),
-                            avatar: const Icon(Icons.eco),
-                          ),
-                        Chip(
-                          label:
-                              Text('Ингредиентов: ${ingredients.length}'),
-                          avatar: const Icon(Icons.shopping_basket_outlined),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: favoritesLoading ? null : onFavoriteTap,
-                icon: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: isFavorite
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  double? _getProtein(Recipe recipe) {
-    final nutrition = recipe.nutrition;
-    if (nutrition == null) return null;
-    
-    // Сначала пробуем прямые ключи
-    var protein = nutrition['protein'] ?? nutrition['proteins'];
-    
-    // Если нет, пробуем извлечь из массива nutrients
-    if (protein == null) {
-      final nutrients = nutrition['nutrients'];
-      if (nutrients is List) {
-        for (var n in nutrients) {
-          if (n is Map) {
-            final name = (n['name']?.toString() ?? '').toLowerCase();
-            final title = (n['title']?.toString() ?? '').toLowerCase();
-            final searchName = title.isNotEmpty ? title : name;
-            if (searchName.contains('protein')) {
-              final amount = n['amount'];
-              if (amount != null) {
-                if (amount is num) {
-                  protein = amount.toDouble();
-                  break;
-                } else if (amount is String) {
-                  protein = double.tryParse(amount);
-                  if (protein != null) break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if (protein == null) return null;
-    
-    if (protein is num) return protein.toDouble();
-    if (protein is String) {
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(protein);
-      if (match != null) return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
-
-  double? _getFat(Recipe recipe) {
-    final nutrition = recipe.nutrition;
-    if (nutrition == null) return null;
-    
-    // Сначала пробуем прямые ключи
-    var fat = nutrition['fat'] ?? nutrition['fats'];
-    
-    // Если нет, пробуем извлечь из массива nutrients
-    if (fat == null) {
-      final nutrients = nutrition['nutrients'];
-      if (nutrients is List) {
-        for (var n in nutrients) {
-          if (n is Map) {
-            final name = (n['name']?.toString() ?? '').toLowerCase();
-            final title = (n['title']?.toString() ?? '').toLowerCase();
-            final searchName = title.isNotEmpty ? title : name;
-            if (searchName.contains('fat') && searchName.contains('total')) {
-              final amount = n['amount'];
-              if (amount != null) {
-                if (amount is num) {
-                  fat = amount.toDouble();
-                  break;
-                } else if (amount is String) {
-                  fat = double.tryParse(amount);
-                  if (fat != null) break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if (fat == null) return null;
-    
-    if (fat is num) return fat.toDouble();
-    if (fat is String) {
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(fat);
-      if (match != null) return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
-
-  double? _getCarbs(Recipe recipe) {
-    final nutrition = recipe.nutrition;
-    if (nutrition == null) return null;
-    
-    // Сначала пробуем прямые ключи
-    var carbs = nutrition['carbs'] ?? nutrition['carbohydrates'] ?? nutrition['carb'];
-    
-    // Если нет, пробуем извлечь из массива nutrients
-    if (carbs == null) {
-      final nutrients = nutrition['nutrients'];
-      if (nutrients is List) {
-        for (var n in nutrients) {
-          if (n is Map) {
-            final name = (n['name']?.toString() ?? '').toLowerCase();
-            final title = (n['title']?.toString() ?? '').toLowerCase();
-            final searchName = title.isNotEmpty ? title : name;
-            if ((searchName.contains('carbohydrate') || searchName.contains('carbs') || searchName.contains('carb')) 
-                && !searchName.contains('net')) {
-              final amount = n['amount'];
-              if (amount != null) {
-                if (amount is num) {
-                  carbs = amount.toDouble();
-                  break;
-                } else if (amount is String) {
-                  carbs = double.tryParse(amount);
-                  if (carbs != null) break;
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if (carbs == null) return null;
-    
-    if (carbs is num) return carbs.toDouble();
-    if (carbs is String) {
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(carbs);
-      if (match != null) return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
-}
-
-String _speechLocale(String languageCode) {
-  switch (languageCode.toLowerCase()) {
-    case 'ru':
-      return 'ru_RU';
-    case 'es':
-      return 'es_ES';
-    case 'de':
-      return 'de_DE';
-    case 'fr':
-      return 'fr_FR';
-    case 'en':
-    default:
-      return 'en_US';
   }
 }

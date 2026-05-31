@@ -50,6 +50,22 @@ class MealPlanPersonalizationService:
         elif daily >= 2400:
             rec = "Рекомендуется равномерно распределить калории между основными приёмами пищи."
 
+        goal = preferences.primary_goal or ""
+        if goal == "weight_loss":
+            rec = "Умеренный дефицит калорий, белок в каждом приёме и регулярные перекусы помогут снизить вес без срывов."
+        elif goal == "muscle_gain":
+            rec = "Достаточный белок и калории после тренировок — основа набора мышечной массы."
+        elif goal == "family":
+            rec = "Универсальные блюда с понятными порциями удобны для всей семьи."
+        elif goal == "more_energy":
+            rec = "Сбалансированные углеводы и белок утром и днём поддержат стабильную энергию."
+        elif goal == "health":
+            rec = "Акцент на цельные продукты, овощи и умеренные порции улучшит самочувствие."
+
+        targets = preferences.goal_targets or []
+        if targets:
+            rec = f"{rec} Учитываем ваши подцели: {', '.join(_goal_target_labels(targets))}."
+
         return {
             "ai_recommendation": rec,
             "daily_calorie_target": daily,
@@ -75,6 +91,16 @@ class MealPlanPersonalizationService:
             "budget_level": preferences.budget_level,
             "meal_preferences": preferences.meal_preferences,
             "family_size": preferences.family_size,
+            "primary_goal": preferences.primary_goal,
+            "activity_level": preferences.activity_level,
+            "meals_per_day": preferences.meals_per_day,
+            "cooking_time": preferences.cooking_time,
+            "cooking_skill": preferences.cooking_skill,
+            "weight_pace": preferences.weight_pace,
+            "health_focus": preferences.health_focus,
+            "energy_habit": preferences.energy_habit,
+            "high_protein_focus": preferences.high_protein_focus,
+            "goal_targets": preferences.goal_targets,
             "tier": tier,
         }
         system = (
@@ -121,3 +147,36 @@ class MealPlanPersonalizationService:
         except Exception as e:
             logger.warning("meal plan GPT failed: %s", e)
             return None
+
+
+_GOAL_TARGET_LABELS: Dict[str, str] = {
+    "lose_3_5kg": "сброс 3–5 кг",
+    "lose_5_10kg": "сброс 5–10 кг",
+    "lose_10plus": "сброс более 10 кг",
+    "stable_appetite": "стабильный аппетит",
+    "less_snacking": "меньше перекусов",
+    "visible_abs": "рельеф/пресс",
+    "gain_2_4kg": "набор 2–4 кг",
+    "gain_5plus": "набор 5+ кг",
+    "strength": "сила и выносливость",
+    "morning_energy": "энергия с утра",
+    "no_afternoon_slump": "без спада днём",
+    "better_sleep": "лучший сон",
+    "kids_variety": "разнообразие для детей",
+    "quick_dinners": "быстрые ужины",
+    "budget_family": "бюджет на семью",
+    "less_sugar": "меньше сахара",
+    "more_veggies": "больше овощей",
+    "gut_health": "здоровье ЖКТ",
+    "maintain_habits": "закрепить привычки",
+    "flexible_weekends": "гибкость на выходных",
+    "high_protein_meals": "больше белка в приёмах",
+    "less_caffeine": "меньше кофеина",
+    "one_pot_meals": "блюда в одной кастрюле",
+    "hydration": "режим воды",
+    "meal_prep": "заготовки на неделю",
+}
+
+
+def _goal_target_labels(ids: List[str]) -> List[str]:
+    return [_GOAL_TARGET_LABELS.get(i, i) for i in ids]

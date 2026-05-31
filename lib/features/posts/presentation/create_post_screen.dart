@@ -1,18 +1,25 @@
 // Экран создания поста
-import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/recipe/recipe_nutrition_input.dart';
+import '../../../../features/settings/application/subscription_status_provider.dart';
 import '../../../../services/post_service.dart';
+import '../../../../utils/api_error_parser.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../services/media_upload_service.dart';
 import '../../../../utils/file_helper.dart';
+import '../../../../widgets/recipe_nutrition_form_section.dart';
+import '../../../../widgets/recipe_visibility_selector.dart';
 import '../../../../widgets/telegram_photo_grid.dart';
+import '../../../../widgets/create_poll_form_section.dart';
+import '../../../../utils/url_validator.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
-  const CreatePostScreen({Key? key}) : super(key: key);
+  const CreatePostScreen({super.key});
   
   static const routeName = '/create-post';
   
@@ -26,13 +33,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _descriptionController = TextEditingController();
   String _selectedType = 'text'; // По умолчанию обычный пост, рецепт нужно выбрать явно
   bool _isLoading = false;
+  String? _loadingStatus;
   int? _selectedChannelId;
-  List<Channel> _userChannels = [];
-  bool _loadingChannels = false;
+  final List<Channel> _userChannels = [];
+  String _recipeVisibility = 'public';
+  String? _channelVisibilityMode;
   
   // Медиа файлы
   final ImagePicker _imagePicker = ImagePicker();
-  List<XFile> _selectedImages = []; // Список выбранных изображений (как в Telegram)
+  final List<XFile> _selectedImages = []; // Список выбранных изображений (как в Telegram)
   XFile? _selectedVideo;
   double _uploadProgress = 0.0;
   bool _isUploading = false;
@@ -46,11 +55,34 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _cookTimeController = TextEditingController();
   final _servingsController = TextEditingController();
   final _caloriesController = TextEditingController();
+  final _proteinController = TextEditingController();
+  final _carbsController = TextEditingController();
+  final _fatController = TextEditingController();
+  final _fiberController = TextEditingController();
   final _tagsController = TextEditingController();
-  
+  final _linkUrlController = TextEditingController();
+  final _linkPreviewController = TextEditingController();
+  final _pollQuestionController = TextEditingController();
+  final List<TextEditingController> _pollOptionControllers = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
+
+  bool get _isPollMode => _selectedType == 'poll';
+  bool get _isLinkMode => _selectedType == 'link';
+  Timer? _linkPreviewDebounce;
+  bool _isLoadingLinkPreview = false;
+  Map<String, dynamic>? _linkPreviewMeta;
+  bool _linkPreviewFailed = false;
+
   @override
   void initState() {
     super.initState();
+    _linkUrlController.addListener(_scheduleLinkPreviewLoad);
+    _linkPreviewController.addListener(() {
+      if (!mounted) return;
+      setState(() {});
+    });
     // Добавляем начальные поля для рецепта, если это рецепт
     if (_selectedType == 'recipe') {
       _addIngredientField();
@@ -66,9 +98,25 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     _cookTimeController.dispose();
     _servingsController.dispose();
     _caloriesController.dispose();
+    _proteinController.dispose();
+    _carbsController.dispose();
+    _fatController.dispose();
+    _fiberController.dispose();
     _tagsController.dispose();
-    for (var ctrl in _ingredientControllers) ctrl.dispose();
-    for (var ctrl in _stepControllers) ctrl.dispose();
+    _linkPreviewDebounce?.cancel();
+    _linkUrlController.removeListener(_scheduleLinkPreviewLoad);
+    _linkUrlController.dispose();
+    _linkPreviewController.dispose();
+    _pollQuestionController.dispose();
+    for (var ctrl in _pollOptionControllers) {
+      ctrl.dispose();
+    }
+    for (var ctrl in _ingredientControllers) {
+      ctrl.dispose();
+    }
+    for (var ctrl in _stepControllers) {
+      ctrl.dispose();
+    }
     super.dispose();
   }
   
@@ -121,7 +169,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора изображения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
@@ -209,7 +257,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       } catch (e2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка выбора изображения: $e2')),
+            SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
           );
         }
       }
@@ -232,12 +280,64 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора видео: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
         );
       }
     }
   }
   
+  Future<String?> _uploadImageFile(XFile file) async {
+    final response = await MediaUploadService.uploadMediaFile(
+      file: file,
+      fileType: 'image',
+    );
+    final url = response.url;
+    if (url == null || url.isEmpty) return null;
+    return url;
+  }
+
+  Future<List<String>> _uploadImagesParallel(List<XFile> files) async {
+    if (files.isEmpty) return [];
+    var completed = 0;
+    final urls = await Future.wait(
+      files.map((file) async {
+        final url = await _uploadImageFile(file);
+        completed++;
+        if (mounted) {
+          setState(() {
+            _loadingStatus = 'Загрузка фото $completed/${files.length}…';
+          });
+        }
+        return url;
+      }),
+    );
+    return urls.whereType<String>().toList();
+  }
+
+  Future<void> _loadChannelVisibilityMode(int? channelId) async {
+    if (channelId == null) {
+      setState(() {
+        _channelVisibilityMode = null;
+        _recipeVisibility = 'public';
+      });
+      return;
+    }
+    try {
+      final channel = await ChannelService.getChannel(channelId);
+      if (!mounted) return;
+      final hasCreator =
+          ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
+              false;
+      setState(() {
+        _channelVisibilityMode = channel.recipeVisibilityMode;
+        _recipeVisibility = RecipeVisibilitySelector.defaultForChannel(
+          _channelVisibilityMode,
+          hasCreator: hasCreator,
+        );
+      });
+    } catch (_) {}
+  }
+
   Future<void> _uploadMedia() async {
     if (_selectedImages.isEmpty && _selectedVideo == null) return;
     
@@ -284,10 +384,144 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (mounted) {
         setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки медиа: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
         );
       }
     }
+  }
+
+  void _scheduleLinkPreviewLoad() {
+    if (!_isLinkMode) return;
+    _linkPreviewDebounce?.cancel();
+    _linkPreviewDebounce = Timer(const Duration(milliseconds: 550), () {
+      _loadLinkPreview();
+    });
+  }
+
+  Future<void> _loadLinkPreview() async {
+    final normalized = normalizeHttpUrl(_linkUrlController.text);
+    if (normalized == null) {
+      if (mounted) {
+        setState(() {
+          _linkPreviewMeta = null;
+          _isLoadingLinkPreview = false;
+          _linkPreviewFailed = false;
+        });
+      }
+      return;
+    }
+    setState(() => _isLoadingLinkPreview = true);
+    try {
+      final meta = await PostService.fetchLinkPreview(normalized);
+      if (!mounted) return;
+      setState(() {
+        _linkPreviewMeta = meta;
+        _linkPreviewFailed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _linkPreviewMeta = null;
+        _linkPreviewFailed = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLinkPreview = false);
+      }
+    }
+  }
+
+  Widget _buildLinkLivePreviewCard() {
+    final meta = _linkPreviewMeta;
+    final title =
+        _linkPreviewController.text.trim().isNotEmpty
+            ? _linkPreviewController.text.trim()
+            : (meta?['title']?.toString());
+    final description = meta?['description']?.toString();
+    final image = meta?['image']?.toString();
+    final domain = meta?['domain']?.toString();
+    final url = _linkUrlController.text.trim();
+
+    if (_isLoadingLinkPreview) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+    if (title == null &&
+        (description == null || description.isEmpty) &&
+        (image == null || image.isEmpty) &&
+        url.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (image != null && image.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  image,
+                  height: 130,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            if (image != null && image.isNotEmpty) const SizedBox(height: 8),
+            Text(
+              title ?? url,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (description != null && description.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            if (domain != null && domain.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  domain,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            if (_linkPreviewFailed && url.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Не удалось получить превью, ссылка всё равно будет сохранена.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
   
   Future<void> _handlePublish() async {
@@ -320,104 +554,137 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     }
     
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadingStatus = 'Публикация…';
+    });
     
     try {
       // Сохраняем информацию о видео ДО загрузки
       final wasVideoSelected = _selectedVideo != null;
-      
-      // Загружаем медиа, если оно выбрано
-      if ((_selectedImages.isNotEmpty || _selectedVideo != null) && 
-          _uploadedMediaUrls.isEmpty) {
-        await _uploadMedia();
-      }
-      
-      if (_selectedType == 'recipe') {
-        // Создаем рецепт
+
+      if (_isPollMode) {
+        final question = _pollQuestionController.text.trim();
+        if (question.isEmpty) {
+          throw Exception('Введите вопрос опроса');
+        }
+        final options =
+            CreatePollFormSection.collectOptions(_pollOptionControllers);
+        if (options == null) {
+          throw Exception('Добавьте минимум 2 варианта ответа');
+        }
+        await PostService.createPoll(
+          question: question,
+          options: options,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          channelId: _selectedChannelId,
+        );
+      } else if (_isLinkMode) {
+        final linkUrl = normalizeHttpUrl(_linkUrlController.text);
+        if (linkUrl == null) {
+          throw Exception('Введите корректную ссылку (http:// или https://)');
+        }
+        final linkPreview = _linkPreviewController.text.trim().isEmpty
+            ? (_linkPreviewMeta?['title'])?.toString()
+            : _linkPreviewController.text.trim();
+        await PostService.createPost(
+          type: 'link',
+          title: _titleController.text.trim().isEmpty
+              ? null
+              : _titleController.text.trim(),
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          channelId: _selectedChannelId,
+          linkUrl: linkUrl,
+          linkPreview: linkPreview,
+        );
+      } else if (_selectedType == 'recipe') {
         final ingredients = _ingredientControllers
             .map((c) => c.text.trim())
             .where((s) => s.isNotEmpty)
             .toList();
-        
-        // Загружаем изображения для шагов, если есть
+
+        final stepImageUrls = List<String?>.filled(_stepControllers.length, null);
+        final stepUploads = <Future<void>>[];
+        for (var i = 0; i < _stepImages.length; i++) {
+          final file = _stepImages[i];
+          if (file == null) continue;
+          final index = i;
+          stepUploads.add(() async {
+            try {
+              stepImageUrls[index] = await _uploadImageFile(file);
+            } catch (e) {
+              debugPrint('Ошибка загрузки фото шага ${index + 1}: $e');
+            }
+          }());
+        }
+
+        final mainUpload = _selectedImages.isEmpty
+            ? Future<List<String>>.value([])
+            : _uploadImagesParallel(_selectedImages);
+
+        await Future.wait([mainUpload, ...stepUploads]);
+        final mainUrls = await mainUpload;
+
         final steps = <Map<String, dynamic>>[];
-        for (int i = 0; i < _stepControllers.length; i++) {
-          final controller = _stepControllers[i];
-          final text = controller.text.trim();
+        for (var i = 0; i < _stepControllers.length; i++) {
+          final text = _stepControllers[i].text.trim();
           if (text.isEmpty) continue;
-          
           final stepData = <String, dynamic>{
             'number': steps.length + 1,
             'text': text,
-            'step': text, // Дублируем для совместимости
+            'step': text,
           };
-          
-          // Проверяем, есть ли изображение для шага
-          if (i < _stepImages.length && _stepImages[i] != null) {
-            // Загружаем изображение
-            try {
-              final imageResponse = await MediaUploadService.uploadMediaFile(
-                file: _stepImages[i]!,
-                fileType: 'image',
-              );
-              final imageUrl = imageResponse.url;
-              if (imageUrl != null && imageUrl.isNotEmpty) {
-                stepData['image'] = imageUrl;
-                stepData['image_url'] = imageUrl; // Дублируем для совместимости
-              }
-            } catch (e) {
-              // Если не удалось загрузить изображение, продолжаем без него
-              debugPrint('Ошибка загрузки изображения для шага ${i + 1}: $e');
-            }
+          final imageUrl =
+              i < stepImageUrls.length ? stepImageUrls[i] : null;
+          if (imageUrl != null && imageUrl.isNotEmpty) {
+            stepData['image'] = imageUrl;
+            stepData['image_url'] = imageUrl;
           }
-          
           steps.add(stepData);
         }
-        
-        // Загружаем все фотографии рецепта (как в Telegram)
+
         List<Map<String, dynamic>>? media;
-        if (_selectedImages.isNotEmpty) {
-          media = [];
-          for (final image in _selectedImages) {
-            final imageResponse = await MediaUploadService.uploadMediaFile(
-              file: image,
-              fileType: 'image',
-            );
-            final imageUrl = imageResponse.url;
-            if (imageUrl != null && imageUrl.isNotEmpty) {
-              media.add({'type': 'image', 'url': imageUrl});
-            }
-          }
+        if (mainUrls.isNotEmpty) {
+          media = mainUrls.map((url) => {'type': 'image', 'url': url}).toList();
         }
-        
+
         final tags = _tagsController.text
             .split(',')
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)
             .toList();
-        
+
+        if (mounted) {
+          setState(() => _loadingStatus = 'Сохранение рецепта…');
+        }
+
         await PostService.createRecipe(
           title: _titleController.text.trim(),
           description: _descriptionController.text.trim(),
           ingredients: ingredients,
           steps: steps,
           media: media,
-          prepTimeMin: _prepTimeController.text.isNotEmpty 
-              ? int.tryParse(_prepTimeController.text) 
-              : null,
-          cookTimeMin: _cookTimeController.text.isNotEmpty 
-              ? int.tryParse(_cookTimeController.text) 
-              : null,
-          servings: _servingsController.text.isNotEmpty 
-              ? int.tryParse(_servingsController.text) 
-              : null,
-          calories: _caloriesController.text.isNotEmpty 
-              ? int.tryParse(_caloriesController.text) 
-              : null,
+          prepTimeMin: parseIntField(_prepTimeController.text),
+          cookTimeMin: parseIntField(_cookTimeController.text),
+          servings: parseIntField(_servingsController.text),
+          calories: parseIntField(_caloriesController.text),
+          proteinG: parseDoubleField(_proteinController.text),
+          carbsG: parseDoubleField(_carbsController.text),
+          fatG: parseDoubleField(_fatController.text),
+          fiberG: parseDoubleField(_fiberController.text),
           tags: tags.isNotEmpty ? tags : null,
+          visibility: _recipeVisibility,
           channelId: _selectedChannelId,
         );
       } else {
+        if ((_selectedImages.isNotEmpty || _selectedVideo != null) &&
+            _uploadedMediaUrls.isEmpty) {
+          await _uploadMedia();
+        }
         // Создаем обычный пост
         // Автоматически определяем тип поста на основе загруженного медиа
         String finalType = 'text';
@@ -472,27 +739,49 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           const SnackBar(content: Text('Пост опубликован')),
         );
       }
+    } on ApiClientException catch (e) {
+      if (mounted) {
+        final text = e.isContentBlocked
+            ? 'Контент не прошёл модерацию и не будет опубликован.'
+            : e.isRateLimited
+                ? e.message
+                : 'Ошибка публикации: ${e.message}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(text)),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка публикации: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось опубликовать'))),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _loadingStatus = null;
+        });
       }
     }
   }
   
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Пост'),
         actions: [
+          if (_isLoading && _loadingStatus != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  _loadingStatus!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
           TextButton(
             onPressed: _isLoading ? null : _handlePublish,
             child: _isLoading
@@ -527,6 +816,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   ),
                   maxLines: 2,
                   validator: (value) {
+                    if (_isPollMode || _isLinkMode) return null;
                     if (value == null || value.trim().isEmpty) {
                       return 'Введите заголовок';
                     }
@@ -534,19 +824,65 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                if (_isPollMode) ...[
+                  CreatePollFormSection(
+                    questionController: _pollQuestionController,
+                    optionControllers: _pollOptionControllers,
+                    onAddOption: () {
+                      setState(() {
+                        _pollOptionControllers.add(TextEditingController());
+                      });
+                    },
+                    onRemoveOption: (index) {
+                      setState(() {
+                        _pollOptionControllers[index].dispose();
+                        _pollOptionControllers.removeAt(index);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_isLinkMode) ...[
+                  TextFormField(
+                    controller: _linkUrlController,
+                    decoration: const InputDecoration(
+                      labelText: 'Ссылка',
+                      hintText: 'https://example.com',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.url,
+                    validator: (value) {
+                      if (!_isLinkMode) return null;
+                      return validateHttpUrl(value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _linkPreviewController,
+                    decoration: const InputDecoration(
+                      labelText: 'Подпись к ссылке (необязательно)',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
+                  ),
+                  _buildLinkLivePreviewCard(),
+                  const SizedBox(height: 16),
+                ],
                 // Описание
                 TextFormField(
                   controller: _descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Описание',
-                    hintText: 'Расскажите о вашем посте...',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: _isPollMode ? 'Комментарий (необязательно)' : 'Описание',
+                    hintText: _isPollMode
+                        ? 'Дополнительный текст к опросу'
+                        : 'Расскажите о вашем посте...',
+                    border: const OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),
                   maxLines: 5,
                   validator: (value) {
-                    // Описание обязательно только для рецептов
-                    if (_selectedType == 'recipe' && (value == null || value.trim().isEmpty)) {
+                    if (_selectedType == 'recipe' &&
+                        (value == null || value.trim().isEmpty)) {
                       return 'Введите описание рецепта';
                     }
                     return null;
@@ -557,8 +893,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 // Контент в зависимости от типа
                 if (_selectedType == 'recipe') _buildRecipeSection(),
                 
-                // Кнопки для добавления медиа (для всех типов постов, кроме рецепта)
-                if (_selectedType != 'recipe') ...[
+                // Кнопки для добавления медиа (не для рецепта и опроса)
+                if (_selectedType != 'recipe' && !_isPollMode && !_isLinkMode) ...[
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -635,7 +971,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 // Выбор канала (если есть доступные)
                 if (_userChannels.isNotEmpty) ...[
                   DropdownButtonFormField<int>(
-                    value: _selectedChannelId,
+                    initialValue: _selectedChannelId,
                     decoration: const InputDecoration(
                       labelText: 'Опубликовать от канала (опционально)',
                       prefixIcon: Icon(Icons.cable_outlined),
@@ -655,38 +991,31 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     ],
                     onChanged: (value) {
                       setState(() => _selectedChannelId = value);
+                      _loadChannelVisibilityMode(value);
                     },
                   ),
                   const SizedBox(height: 16),
                 ],
-                // Выбор канала (если есть доступные)
-                if (_userChannels.isNotEmpty) ...[
-                  DropdownButtonFormField<int>(
-                    value: _selectedChannelId,
-                    decoration: const InputDecoration(
-                      labelText: 'Опубликовать от канала (опционально)',
-                      prefixIcon: Icon(Icons.cable_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: [
-                      const DropdownMenuItem<int>(
-                        value: null,
-                        child: Text('От своего имени'),
-                      ),
-                      ..._userChannels.map((channel) {
-                        return DropdownMenuItem<int>(
-                          value: channel.id,
-                          child: Text(channel.name),
-                        );
-                      }),
-                    ],
-                    onChanged: (value) {
-                      setState(() => _selectedChannelId = value);
+                if (_selectedType == 'recipe') ...[
+                  Builder(
+                    builder: (context) {
+                      final hasCreator = ref
+                              .watch(subscriptionStatusProvider)
+                              .asData
+                              ?.value
+                              ?.hasCreator ??
+                          false;
+                      return RecipeVisibilitySelector(
+                        value: _recipeVisibility,
+                        hasCreator: hasCreator,
+                        channelMode: _channelVisibilityMode,
+                        onChanged: (v) =>
+                            setState(() => _recipeVisibility = v),
+                      );
                     },
                   ),
                   const SizedBox(height: 16),
                 ],
-                // Информация о пользователе
                 FutureBuilder(
                   future: AuthService.getCurrentUser(),
                   builder: (context, snapshot) {
@@ -744,6 +1073,32 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     );
   }
   
+  void _setContentType(String type) {
+    setState(() {
+      if (_selectedType == 'recipe' && type != 'recipe') {
+        for (var ctrl in _ingredientControllers) {
+          ctrl.dispose();
+        }
+        for (var ctrl in _stepControllers) {
+          ctrl.dispose();
+        }
+        _ingredientControllers.clear();
+        _stepControllers.clear();
+        _stepImages.clear();
+      }
+      if (type != 'link') {
+        _linkPreviewDebounce?.cancel();
+        _linkPreviewMeta = null;
+        _isLoadingLinkPreview = false;
+      }
+      _selectedType = type;
+      if (type == 'recipe') {
+        if (_ingredientControllers.isEmpty) _addIngredientField();
+        if (_stepControllers.isEmpty) _addStepField();
+      }
+    });
+  }
+
   Widget _buildPostTypeSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -758,25 +1113,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           runSpacing: 8,
           children: [
             _PostTypeChip(
+              label: 'Ссылка',
+              icon: Icons.link,
+              isSelected: _isLinkMode,
+              onTap: () => _setContentType(_isLinkMode ? 'text' : 'link'),
+            ),
+            _PostTypeChip(
+              label: 'Опрос',
+              icon: Icons.poll_outlined,
+              isSelected: _isPollMode,
+              onTap: () => _setContentType(_isPollMode ? 'text' : 'poll'),
+            ),
+            _PostTypeChip(
               label: 'Рецепт',
               icon: Icons.restaurant_menu,
               isSelected: _selectedType == 'recipe',
-              onTap: () => setState(() {
-                if (_selectedType == 'recipe') {
-                  _selectedType = 'text';
-                  // Очищаем поля рецепта
-                  for (var ctrl in _ingredientControllers) ctrl.dispose();
-                  for (var ctrl in _stepControllers) ctrl.dispose();
-                  _ingredientControllers.clear();
-                  _stepControllers.clear();
-                  _stepImages.clear();
-                } else {
-                  _selectedType = 'recipe';
-                  // Добавляем начальные поля для рецепта
-                  if (_ingredientControllers.isEmpty) _addIngredientField();
-                  if (_stepControllers.isEmpty) _addStepField();
-                }
-              }),
+              onTap: () => _setContentType(_selectedType == 'recipe' ? 'text' : 'recipe'),
             ),
           ],
         ),
@@ -1023,30 +1375,32 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _servingsController,
-                decoration: const InputDecoration(
-                  labelText: 'Порций',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextFormField(
-                controller: _caloriesController,
-                decoration: const InputDecoration(
-                  labelText: 'Калорий',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-            ),
-          ],
+        TextFormField(
+          controller: _servingsController,
+          decoration: const InputDecoration(
+            labelText: 'Порций',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        RecipeNutritionFormSection(
+          caloriesController: _caloriesController,
+          proteinController: _proteinController,
+          carbsController: _carbsController,
+          fatController: _fatController,
+          fiberController: _fiberController,
+          getTitle: () => _titleController.text,
+          getIngredients: () => _ingredientControllers
+              .map((c) => c.text.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
+          getStepTexts: () => _stepControllers
+              .map((c) => c.text.trim())
+              .where((s) => s.isNotEmpty)
+              .toList(),
+          getServings: () => parseIntField(_servingsController.text),
+          getDescription: () => _descriptionController.text,
         ),
       ],
     );

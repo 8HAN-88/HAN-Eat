@@ -32,6 +32,11 @@ class Post {
   final int? repostsCount;
   @JsonKey(name: 'is_liked')
   final bool isLiked;
+  @JsonKey(name: 'is_saved', defaultValue: false)
+  final bool isSaved;
+  /// Серверное продвижение в ленте (Firestore может дублировать в body).
+  @JsonKey(name: 'is_promoted')
+  final bool isPromotedFromApi;
   final PostAuthor? author;
   
   Post({
@@ -51,6 +56,8 @@ class Post {
     required this.commentsCount,
     this.repostsCount,
     required this.isLiked,
+    required this.isSaved,
+    this.isPromotedFromApi = false,
     this.author,
   });
   
@@ -118,6 +125,16 @@ class Post {
   }
   String? get linkUrl => body?['link_url'] as String?;
   String? get linkPreview => body?['link_preview'] as String?;
+  Map<String, dynamic>? get linkMeta {
+    final raw = body?['link_meta'];
+    return raw is Map<String, dynamic> ? raw : null;
+  }
+
+  String? get linkTitle => linkMeta?['title'] as String? ?? linkPreview;
+  String? get linkDescription => linkMeta?['description'] as String?;
+  String? get linkImage => linkMeta?['image'] as String?;
+  String? get linkDomain => linkMeta?['domain'] as String?;
+
   PollData? get poll {
     final pollData = body?['poll'];
     if (pollData is Map<String, dynamic>) {
@@ -149,7 +166,11 @@ class Post {
   );
   bool get isAd => body?['is_ad'] as bool? ?? false;
   bool get isPinned => body?['is_pinned'] as bool? ?? false;
-  
+
+  /// Продвижение: REST-поле и/или legacy в body (Firestore).
+  bool get isPromoted =>
+      isPromotedFromApi || (body?['is_promoted'] as bool? ?? false);
+
   // Геттеры для автора
   String? get authorId => author?.id.toString() ?? userId.toString();
   String? get authorName => author?.name;
@@ -159,8 +180,7 @@ class Post {
   String? get groupAvatar => body?['group_avatar'] as String?;
   String? get location => body?['location'] as String?;
   String? get language => body?['language'] as String?;
-  bool get isPromoted => body?['is_promoted'] as bool? ?? false;
-  
+
   // Геттер для строкового id (для совместимости)
   String get idString => id.toString();
   
@@ -203,19 +223,47 @@ class PostReactions {
 class PollData {
   final String question;
   final List<PollOption> options;
-  
+  /// Индекс варианта, за который проголосовал текущий пользователь (если есть).
+  final int? votedOptionIndex;
+  final bool isClosed;
+
   PollData({
     required this.question,
     required this.options,
+    this.votedOptionIndex,
+    this.isClosed = false,
   });
-  
+
+  bool get hasVoted => votedOptionIndex != null;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'question': question,
+      'options': options
+          .map(
+            (o) => {
+              'text': o.text,
+              'votes': o.votes,
+              'percentage': o.percentage,
+              'index': o.index,
+            },
+          )
+          .toList(),
+      'is_closed': isClosed,
+      if (votedOptionIndex != null) 'voted_option_index': votedOptionIndex,
+    };
+  }
+
   factory PollData.fromJson(Map<String, dynamic> json) {
     final options = (json['options'] as List<dynamic>?)
-        ?.map((e) => PollOption.fromJson(e as Map<String, dynamic>))
-        .toList() ?? [];
+            ?.map((e) => PollOption.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [];
     return PollData(
       question: json['question'] as String? ?? '',
       options: options,
+      votedOptionIndex: json['voted_option_index'] as int?,
+      isClosed: json['is_closed'] as bool? ?? false,
     );
   }
 }
@@ -225,18 +273,89 @@ class PollOption {
   final String text;
   final int votes;
   final double percentage;
-  
+  final int index;
+
   PollOption({
     required this.text,
     required this.votes,
     required this.percentage,
+    this.index = 0,
   });
-  
+
   factory PollOption.fromJson(Map<String, dynamic> json) {
     return PollOption(
       text: json['text'] as String? ?? '',
       votes: json['votes'] as int? ?? 0,
       percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
+      index: json['index'] as int? ?? 0,
+    );
+  }
+}
+
+class PollVoter {
+  final int id;
+  final String name;
+  final String? username;
+  final String? avatarUrl;
+
+  PollVoter({
+    required this.id,
+    required this.name,
+    this.username,
+    this.avatarUrl,
+  });
+
+  factory PollVoter.fromJson(Map<String, dynamic> json) {
+    return PollVoter(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      username: json['username'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+}
+
+class PollVotersOption {
+  final int index;
+  final String text;
+  final List<PollVoter> voters;
+
+  PollVotersOption({
+    required this.index,
+    required this.text,
+    required this.voters,
+  });
+
+  factory PollVotersOption.fromJson(Map<String, dynamic> json) {
+    final voters = (json['voters'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(PollVoter.fromJson)
+        .toList();
+    return PollVotersOption(
+      index: (json['index'] as num?)?.toInt() ?? 0,
+      text: json['text'] as String? ?? '',
+      voters: voters,
+    );
+  }
+}
+
+class PollVotersResponse {
+  final List<PollVotersOption> options;
+  final int total;
+
+  PollVotersResponse({
+    required this.options,
+    required this.total,
+  });
+
+  factory PollVotersResponse.fromJson(Map<String, dynamic> json) {
+    final options = (json['options'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(PollVotersOption.fromJson)
+        .toList();
+    return PollVotersResponse(
+      options: options,
+      total: (json['total'] as num?)?.toInt() ?? 0,
     );
   }
 }

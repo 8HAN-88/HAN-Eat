@@ -195,11 +195,18 @@ async def repost_to_channel(
 
     is_owner = channel.admin_user_id == current_user.id
     if not is_owner:
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
+
         member = db.query(ChannelMember).filter(
             ChannelMember.channel_id == channel.id,
-            ChannelMember.user_id == current_user.id
+            ChannelMember.user_id == current_user.id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
         ).first()
-        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
+        is_admin_or_moderator = member and member.role in [
+            "admin",
+            "moderator",
+            "owner",
+        ]
         if not is_admin_or_moderator:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

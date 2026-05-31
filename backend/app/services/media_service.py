@@ -1,6 +1,7 @@
 """
 Сервис для работы с медиа (S3, обработка, транс-кодинг)
 """
+import logging
 import boto3
 import uuid
 import hashlib
@@ -11,34 +12,53 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class MediaService:
     """Сервис для работы с медиа файлами"""
     
     def __init__(self):
-        self.s3_client = self._init_s3_client()
         self.bucket = settings.S3_BUCKET
         self.cdn_url = settings.CDN_URL
+        self.s3_client = self._init_s3_client()
     
     def _init_s3_client(self):
-        """Инициализация S3 клиента"""
+        """Инициализация S3 клиента; при неверных ключах — загрузка через API (mock)."""
         config = Config(
             region_name=settings.S3_REGION,
             signature_version='s3v4'
         )
         
-        if settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY:
-            return boto3.client(
-                's3',
-                endpoint_url=settings.S3_ENDPOINT_URL,
-                aws_access_key_id=settings.S3_ACCESS_KEY,
-                aws_secret_access_key=settings.S3_SECRET_KEY,
-                config=config
-            )
-        else:
-            # Для локальной разработки без реального S3
-            # В продакшене должны быть настроены credentials
+        if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
             return None
+
+        client = boto3.client(
+            's3',
+            endpoint_url=settings.S3_ENDPOINT_URL or None,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            config=config,
+        )
+        try:
+            client.head_bucket(Bucket=self.bucket)
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            logger.warning(
+                "S3 недоступен (%s): %s — загрузки пойдут через API /uploads/mock",
+                code,
+                e.response.get("Error", {}).get("Message", str(e)),
+            )
+            return None
+        except Exception as e:
+            logger.warning("S3 head_bucket failed: %s — using API upload", e)
+            return None
+        return client
+
+    @property
+    def uses_api_upload(self) -> bool:
+        """Файлы принимаются на бэкенд, а не по presigned URL в S3."""
+        return self.s3_client is None
     
     def generate_presigned_url(
         self,
@@ -88,7 +108,7 @@ class MediaService:
         timestamp = datetime.utcnow().strftime("%Y/%m/%d")
         file_key = f"uploads/user_{user_id}/{timestamp}/{upload_id}.{file_extension}"
         
-        # Если S3 не настроен (локальная разработка), возвращаем mock URL
+        # S3 не настроен или ключи невалидны — загрузка через API (диск + /uploads/file/…)
         if not self.s3_client:
             base = settings.API_PUBLIC_BASE_URL.rstrip("/")
             return {
@@ -96,7 +116,8 @@ class MediaService:
                 "upload_url": f"{base}/api/v1/uploads/mock/{upload_id}",
                 "file_key": file_key,
                 "expires_in": 3600,
-                "cdn_url": f"{self.cdn_url}/{file_key}"
+                "cdn_url": f"{self.cdn_url}/{file_key}",
+                "upload_via": "api",
             }
         
         # Генерируем presigned URL
@@ -117,10 +138,20 @@ class MediaService:
                 "upload_url": presigned_url,
                 "file_key": file_key,
                 "expires_in": 3600,
-                "cdn_url": f"{self.cdn_url}/{file_key}"
+                "cdn_url": f"{self.cdn_url}/{file_key}",
+                "upload_via": "s3",
             }
         except ClientError as e:
-            raise Exception(f"Failed to generate presigned URL: {str(e)}")
+            logger.warning("presigned URL failed, fallback to API upload: %s", e)
+            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
+            return {
+                "upload_id": upload_id,
+                "upload_url": f"{base}/api/v1/uploads/mock/{upload_id}",
+                "file_key": file_key,
+                "expires_in": 3600,
+                "cdn_url": f"{self.cdn_url}/{file_key}",
+                "upload_via": "api",
+            }
 
     @staticmethod
     def _user_id_from_file_key(file_key: str) -> Optional[int]:

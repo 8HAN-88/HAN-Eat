@@ -1,8 +1,7 @@
 // Fullscreen Reels при тапе на видео в ленте — вертикальный свайп, возврат на то же место
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -12,16 +11,18 @@ import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../services/server_config.dart';
-import 'package:share_plus/share_plus.dart';
+import '../../../widgets/share_action_sheet.dart';
+import '../../../widgets/report_content_dialog.dart';
+import '../../../app/app_router.dart';
 import 'reels_feed_screen.dart';
 
 class ReelsFullscreenScreen extends StatefulWidget {
   final PostModel initialPost;
 
   const ReelsFullscreenScreen({
-    Key? key,
+    super.key,
     required this.initialPost,
-  }) : super(key: key);
+  });
 
   @override
   State<ReelsFullscreenScreen> createState() => _ReelsFullscreenScreenState();
@@ -189,7 +190,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       _updateReelAt(reel.id, (r) => _copyReelWith(r, likesCount: response.likesCount, isLiked: !r.isLiked));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userVisibleError(e))));
       }
     }
   }
@@ -205,7 +206,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       _updateReelAt(reel.id, (r) => _copyReelWith(r, isSaved: !isSaved));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userVisibleError(e))));
       }
     }
   }
@@ -230,9 +231,13 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
         final msg = e.toString().toLowerCase();
         final text = msg.contains('own post') || msg.contains('свой пост')
             ? 'Нельзя репостнуть свой пост'
-            : 'Ошибка при репосте: $e';
+            : userVisibleAuthError(
+                e,
+                fallback: 'Не удалось сделать репост',
+                authFallback: 'Войдите, чтобы сделать репост',
+              );
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text), backgroundColor: Colors.red),
+          SnackBar(content: Text(text)),
         );
       }
     }
@@ -261,6 +266,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       commentsCount: r.commentsCount,
       repostsCount: r.repostsCount,
       viewsCount: r.viewsCount,
+      isPromoted: r.isPromoted,
       isLiked: isLiked ?? r.isLiked,
       isSaved: isSaved ?? r.isSaved,
       isReposted: isReposted ?? r.isReposted,
@@ -281,38 +287,11 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
 
   Future<void> _shareReel(PostModel reel) async {
     if (!mounted) return;
-    try {
-      final videoUrl = _getVideoUrl(reel);
-      final text = reel.description ?? 'Посмотрите этот рилс!';
-      final fullText = '$text\n${videoUrl ?? ''}';
-      // На web Share API часто не работает — сразу копируем в буфер
-      if (kIsWeb) {
-        await Clipboard.setData(ClipboardData(text: fullText));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ссылка скопирована в буфер обмена')),
-          );
-        }
-        return;
-      }
-      await Share.share(fullText, subject: reel.title);
-    } catch (e) {
-      if (mounted) {
-        try {
-          final videoUrl = _getVideoUrl(reel);
-          final text = reel.description ?? 'Посмотрите этот рилс!';
-          final fullText = '$text\n${videoUrl ?? ''}';
-          await Clipboard.setData(ClipboardData(text: fullText));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ссылка скопирована в буфер обмена')),
-          );
-        } catch (_) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка при шаринге: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
+    await ShareActionSheet.showForReel(
+      context,
+      reel: reel,
+      onRepostToWall: () => _toggleRepost(reel),
+    );
   }
 
   @override
@@ -349,6 +328,26 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
                 onSave: () => _toggleSave(reel),
                 onRepost: () => _toggleRepost(reel),
                 onAuthorTap: () => context.push('/profile?userId=${reel.userId}'),
+                onHashtagTap: (tag) {
+                  final q = tag.startsWith('#') ? tag : '#$tag';
+                  context.push(
+                    '${SearchRoute.path}?q=${Uri.encodeQueryComponent(q)}',
+                  );
+                },
+                onMentionTap: (username, r) {
+                  final uname = username.trim();
+                  if (uname.isEmpty) return;
+                  final author = r.author;
+                  if (author?.username != null &&
+                      author!.username!.toLowerCase() == uname.toLowerCase()) {
+                    context.push('${ProfileRoute.path}?userId=${r.userId}');
+                  } else {
+                    context.push(
+                      '${SearchRoute.path}?q=${Uri.encodeQueryComponent('@$uname')}',
+                    );
+                  }
+                },
+                onReport: () => reportPostWithDialog(context, reel.id),
               );
             },
           ),

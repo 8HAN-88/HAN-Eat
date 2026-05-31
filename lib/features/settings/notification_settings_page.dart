@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../utils/api_error_parser.dart';
 import '../../services/notification_preferences_service.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
-  const NotificationSettingsPage({Key? key}) : super(key: key);
+  const NotificationSettingsPage({super.key});
 
   @override
   State<NotificationSettingsPage> createState() =>
@@ -31,7 +32,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки настроек: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить настройки'))),
         );
         setState(() => _isLoading = false);
       }
@@ -64,7 +65,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка сохранения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
         setState(() => _isSaving = false);
       }
@@ -82,8 +83,33 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
     if (_preferences == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Уведомления')),
-        body: const Center(child: Text('Не удалось загрузить настройки')),
+        appBar: AppBar(
+          title: const Text('Уведомления'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Повторить',
+              onPressed: _loadPreferences,
+            ),
+          ],
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Не удалось загрузить настройки'),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _loadPreferences,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Повторить'),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

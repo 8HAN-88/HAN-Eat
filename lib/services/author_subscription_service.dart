@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthorSubscriptionService {
   static Future<bool> subscribe(String subscriber, String author) async {
@@ -16,7 +17,7 @@ class AuthorSubscriptionService {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['subscribed'] as bool? ?? false;
     } catch (e) {
-      print('Error subscribing: $e');
+      debugPrint('Error subscribing: $e');
       return false;
     }
   }
@@ -29,7 +30,7 @@ class AuthorSubscriptionService {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return !(data['subscribed'] as bool? ?? true);
     } catch (e) {
-      print('Error unsubscribing: $e');
+      debugPrint('Error unsubscribing: $e');
       return false;
     }
   }
@@ -42,7 +43,7 @@ class AuthorSubscriptionService {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       return data['subscribed'] as bool? ?? false;
     } catch (e) {
-      print('Error checking subscription: $e');
+      debugPrint('Error checking subscription: $e');
       return false;
     }
   }
@@ -56,7 +57,7 @@ class AuthorSubscriptionService {
       final subscriptions = data['subscriptions'] as List<dynamic>? ?? [];
       return subscriptions.map((e) => e.toString()).toList();
     } catch (e) {
-      print('Error fetching subscriptions: $e');
+      debugPrint('Error fetching subscriptions: $e');
       return [];
     }
   }

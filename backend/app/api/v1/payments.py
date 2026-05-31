@@ -87,8 +87,9 @@ class CheckoutSessionResponse(BaseModel):
     payment_id: Optional[str] = None
     url: str
     customer_email: str
-    provider: str  # "stripe" | "yookassa"
+    provider: str  # "stripe" | "yookassa" | "sbp" (sbp = ЮKassa, только СБП)
     currency: str = "USD"
+    payment_method: Optional[str] = None
 
 
 @router.post("/checkout", response_model=CheckoutSessionResponse)
@@ -203,12 +204,18 @@ async def create_checkout_session(
             )
             db.commit()
 
+            checkout_provider = (
+                "sbp"
+                if (settings.YOOKASSA_PAYMENT_METHOD or "sbp").strip().lower() == "sbp"
+                else "yookassa"
+            )
             return CheckoutSessionResponse(
                 payment_id=result["payment_id"],
                 url=result["confirmation_url"],
                 customer_email=current_user.email,
-                provider="yookassa",
-                currency="RUB"
+                provider=checkout_provider,
+                currency="RUB",
+                payment_method=settings.YOOKASSA_PAYMENT_METHOD,
             )
         
         elif provider == "stripe":
@@ -682,8 +689,14 @@ async def get_subscription_prices(
     provider = CountryService.get_payment_provider_for_country(country_code)
     
     if provider == "yookassa":
+        prices_provider = (
+            "sbp"
+            if (settings.YOOKASSA_PAYMENT_METHOD or "sbp").strip().lower() == "sbp"
+            else "yookassa"
+        )
         return {
-            "provider": "yookassa",
+            "provider": prices_provider,
+            "payment_method": settings.YOOKASSA_PAYMENT_METHOD,
             "country": country_code,
             "currency": "RUB",
             "trial_days": settings.SUBSCRIPTION_TRIAL_DAYS,

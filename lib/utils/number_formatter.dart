@@ -19,7 +19,7 @@ class NumberFormatter {
     } else if (count < 1000000) {
       // Для чисел от 10000 до 999999 показываем как "10к", "100к" и т.д.
       final thousands = (count / 1000).round();
-      return '${thousands}к';
+      return '$thousandsк';
     } else {
       // Для чисел >= 1000000 показываем как "1м", "1,1м" и т.д.
       final millions = count / 1000000;

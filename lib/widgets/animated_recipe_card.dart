@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/recipe.dart';
 import '../utils/image_url_helper.dart';
+import '../utils/recipe_nutrition.dart';
 
 class AnimatedRecipeCard extends StatefulWidget {
   final Recipe recipe;
@@ -117,7 +118,7 @@ class _AnimatedRecipeCardState extends State<AnimatedRecipeCard>
                     end: Alignment.bottomRight,
                     colors: [
                       theme.colorScheme.surface,
-                      theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                     ],
                   ),
                 ),
@@ -136,7 +137,7 @@ class _AnimatedRecipeCardState extends State<AnimatedRecipeCard>
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -309,18 +310,7 @@ class _AnimatedRecipeCardState extends State<AnimatedRecipeCard>
     return null;
   }
 
-  double? _getFat() {
-    final nutrition = widget.recipe.nutrition;
-    if (nutrition == null) return null;
-    final fat = nutrition['fat'] ?? nutrition['fats'];
-    if (fat == null) return null;
-    if (fat is num) return fat.toDouble();
-    if (fat is String) {
-      final match = RegExp(r'(\d+\.?\d*)').firstMatch(fat);
-      if (match != null) return double.tryParse(match.group(1)!);
-    }
-    return null;
-  }
+  double? _getFat() => parseNutritionFat(widget.recipe.nutrition);
 
   double? _getCarbs() {
     final nutrition = widget.recipe.nutrition;
@@ -352,7 +342,7 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(

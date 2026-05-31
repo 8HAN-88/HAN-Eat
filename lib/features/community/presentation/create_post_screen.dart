@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:typed_data';
-import '../../../models/post.dart';
 import '../../../models/post_types.dart';
 import '../../../services/post_publication_service.dart';
-import '../../../services/auth_service.dart';
 
 /// Экран создания поста
 class CreatePostScreen extends StatefulWidget {
@@ -71,10 +70,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Загрузить изображения в Firebase Storage и получить URLs
       List<String>? photoUrls;
-      if ((kIsWeb ? _selectedImageBytes : _selectedImages).isNotEmpty) {
-        photoUrls = []; // TODO: Загрузить и получить URLs
+      if (kIsWeb) {
+        if (_selectedImageBytes.isNotEmpty) {
+          photoUrls = await PostPublicationService.uploadPostImages(
+            imageBytes: _selectedImageBytes,
+          );
+        }
+      } else {
+        if (_selectedImages.isNotEmpty) {
+          photoUrls = await PostPublicationService.uploadPostImages(
+            files: _selectedImages,
+          );
+        }
       }
 
       await PostPublicationService.publishPost(
@@ -92,7 +100,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     } finally {

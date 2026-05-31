@@ -18,6 +18,7 @@ class AnalysisResult {
     required this.calories,
     required this.nutrition,
     required this.recipes,
+    this.portionGrams,
   });
 
   final String? label;
@@ -26,6 +27,8 @@ class AnalysisResult {
   final num? calories;
   final Map<String, dynamic>? nutrition;
   final List<Recipe> recipes;
+  /// Оценка веса порции на фото (г); КБЖУ — на эту порцию.
+  final num? portionGrams;
 
   factory AnalysisResult.fromJson(Map<String, dynamic> json) {
     final recipesJson = json['recipes'] as List<dynamic>? ?? [];
@@ -40,9 +43,13 @@ class AnalysisResult {
         if (n == null) continue;
         final k = e.key.toString().toLowerCase();
         String normKey = e.key.toString();
-        if (k == 'proteins') normKey = 'protein';
-        else if (k == 'fats') normKey = 'fat';
-        else if (k == 'carb' || k == 'carbs') normKey = 'carbohydrates';
+        if (k == 'proteins') {
+          normKey = 'protein';
+        } else if (k == 'fats') {
+          normKey = 'fat';
+        } else if (k == 'carb' || k == 'carbs') {
+          normKey = 'carbohydrates';
+        }
         nutrition[normKey] = n;
       }
     }
@@ -55,7 +62,20 @@ class AnalysisResult {
       recipes: recipesJson
           .map((e) => Recipe.fromJson(e as Map<String, dynamic>))
           .toList(),
+      portionGrams: _parseNutritionValue(
+        json['portion_grams'] ?? json['portionGrams'],
+      ),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'label': label,
+        'translated_label': translatedLabel,
+        'confidence': confidence,
+        'calories': calories,
+        'nutrition': nutrition,
+        'portion_grams': portionGrams,
+        'recipes': recipes.map((r) => r.toJson()).toList(),
+      };
 }
 

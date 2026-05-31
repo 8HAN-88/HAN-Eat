@@ -4,10 +4,12 @@ import 'dart:io';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import '../models/reel.dart';
-import '../models/feed_delivery.dart';
 import 'auth_service.dart';
 import 'feed_delivery_service.dart';
 import 'community_management_service.dart';
+import 'package:flutter/foundation.dart';
+
+import 'legacy_firestore_guard.dart';
 
 /// Сервис для публикации постов и рилсов
 class PostPublicationService {
@@ -28,6 +30,7 @@ class PostPublicationService {
     List<String>? tags,
     String? location,
   }) async {
+    LegacyFirestoreGuard.ensureEnabled();
     final currentUser = AuthService.instance.currentUser;
     if (currentUser == null) {
       throw Exception('User not authenticated');
@@ -79,27 +82,6 @@ class PostPublicationService {
       if (communityName != null) body['group_name'] = communityName;
       if (communityAvatar != null) body['group_avatar'] = communityAvatar;
       
-      // Создаём Post объект
-      final post = Post(
-        id: postId,
-        type: type.value,
-        description: text,
-        status: PostStatus.published.value,
-        createdAt: DateTime.now(),
-        userId: int.tryParse(currentUser.uid) ?? 0, // Временное преобразование
-        communityId: communityId != null ? int.tryParse(communityId) : null,
-        body: body,
-        tags: tags,
-        likesCount: 0,
-        commentsCount: 0,
-        isLiked: false,
-        author: PostAuthor(
-          id: int.tryParse(currentUser.uid) ?? 0,
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl,
-        ),
-      );
-
       // Сохраняем в Firestore
       await postRef.set({
         'id': postId,
@@ -140,9 +122,55 @@ class PostPublicationService {
 
       return postRef.id;
     } catch (e) {
-      print('Error publishing post: $e');
+      debugPrint('Error publishing post: $e');
       rethrow;
     }
+  }
+
+  /// Загрузить фото поста в Firebase Storage (порядок сохраняется).
+  static Future<List<String>> uploadPostImages({
+    List<File>? files,
+    List<Uint8List>? imageBytes,
+  }) async {
+    final currentUser = AuthService.instance.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    final uid = currentUser.uid;
+    final urls = <String>[];
+    final baseMs = DateTime.now().millisecondsSinceEpoch;
+
+    if (files != null && files.isNotEmpty) {
+      var i = 0;
+      for (final file in files) {
+        if (!await file.exists()) continue;
+        final ref = _storage.ref().child('posts/$uid/${baseMs}_$i.jpg');
+        await ref.putFile(
+          file,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        urls.add(await ref.getDownloadURL());
+        i++;
+      }
+    } else if (imageBytes != null && imageBytes.isNotEmpty) {
+      var i = 0;
+      for (final bytes in imageBytes) {
+        if (bytes.isEmpty) continue;
+        final ref = _storage.ref().child('posts/$uid/${baseMs}_$i.jpg');
+        await ref.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+        urls.add(await ref.getDownloadURL());
+        i++;
+      }
+    }
+
+    if (urls.isEmpty &&
+        ((files?.isNotEmpty ?? false) || (imageBytes?.isNotEmpty ?? false))) {
+      throw Exception('Не удалось загрузить изображения');
+    }
+    return urls;
   }
 
   /// Опубликовать рилс
@@ -197,26 +225,6 @@ class PostPublicationService {
       if (community?.name != null) body['group_name'] = community!.name;
       if (community?.avatar != null) body['group_avatar'] = community!.avatar;
       
-      final post = Post(
-        id: postId,
-        type: PostType.reel.value,
-        description: description,
-        status: PostStatus.published.value,
-        createdAt: DateTime.now(),
-        userId: int.tryParse(currentUser.uid) ?? 0,
-        communityId: int.tryParse(communityId),
-        body: body,
-        tags: tags,
-        likesCount: 0,
-        commentsCount: 0,
-        isLiked: false,
-        author: PostAuthor(
-          id: int.tryParse(currentUser.uid) ?? 0,
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl,
-        ),
-      );
-
       await postRef.set({
         'id': postId,
         'type': PostType.reel.value,
@@ -265,7 +273,7 @@ class PostPublicationService {
 
       return reelRef.id;
     } catch (e) {
-      print('Error publishing reel: $e');
+      debugPrint('Error publishing reel: $e');
       rethrow;
     }
   }
@@ -289,7 +297,7 @@ class PostPublicationService {
         'transcoded': transcodedUrl,
       };
     } catch (e) {
-      print('Error uploading video: $e');
+      debugPrint('Error uploading video: $e');
       rethrow;
     }
   }

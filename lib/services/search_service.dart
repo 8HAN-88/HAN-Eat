@@ -6,7 +6,7 @@ import '../models/post_model.dart';
 
 /// Сервис для полнотекстового поиска постов и рецептов
 class SearchService {
-  static String get baseUrl => ApiService.baseUrl + '/api/v1';
+  static String get baseUrl => '${ApiService.baseUrl}/api/v1';
 
   /// Поиск постов
   static Future<SearchPostsResponse> searchPosts({
@@ -23,7 +23,7 @@ class SearchService {
     int limit = 20,
     int offset = 0,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     
     final uri = Uri.parse('$baseUrl/search/posts').replace(queryParameters: {
       'q': query,
@@ -70,7 +70,7 @@ class SearchService {
     int limit = 20,
     int offset = 0,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     
     final uri = Uri.parse('$baseUrl/search/recipes').replace(queryParameters: {
       'q': query,

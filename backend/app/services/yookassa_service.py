@@ -70,6 +70,7 @@ class YooKassaService:
         product: str = "pro",
         receipt_description: Optional[str] = None,
         metadata_extra: Optional[Dict[str, str]] = None,
+        payment_method: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Создать платеж через ЮKassa с поддержкой СБП
@@ -136,10 +137,19 @@ class YooKassaService:
                     ]
                 }
             }
-            
+            if method == "sbp":
+                payment_dict["payment_method_data"] = {"type": "sbp"}
+            elif method not in ("", "any", "all"):
+                payment_dict["payment_method_data"] = {"type": method}
+
             payment = Payment.create(payment_dict, idempotence_key)
-            
-            logger.info(f"Created YooKassa payment {payment.id} for user {user_id}")
+
+            logger.info(
+                "Created YooKassa payment %s for user %s (method=%s)",
+                payment.id,
+                user_id,
+                method,
+            )
             
             return {
                 "payment_id": payment.id,

@@ -1,4 +1,4 @@
-/// Сервис для работы с сохраненными постами (с offline поддержкой)
+// Сервис для работы с сохраненными постами (с offline поддержкой)
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
@@ -7,9 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import '../models/post_model.dart';
+import '../utils/api_error_parser.dart';
 
 class SavedPostsService {
-  static String get baseUrl => ApiService.baseUrl + '/api/v1';
+  static String get baseUrl => '${ApiService.baseUrl}/api/v1';
   
   static const String _boxName = 'saved_posts';
   static Box<String>? _box;
@@ -26,7 +27,7 @@ class SavedPostsService {
   static Future<bool> _isOnline() async {
     final connectivity = Connectivity();
     final result = await connectivity.checkConnectivity();
-    return result != ConnectivityResult.none;
+    return !result.contains(ConnectivityResult.none);
   }
   
   /// Сохранить пост (с синхронизацией)
@@ -39,38 +40,48 @@ class SavedPostsService {
   /// Сохранить пост по ID (внутренний метод)
   static Future<void> savePostById(int postId) async {
     await init();
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw const ApiClientException(message: 'Войдите, чтобы сохранить пост');
     }
-    
-    // Сохраняем локально сразу
+
     final post = await _getPostById(postId);
     if (post != null) {
       await _savePostLocally(post);
     }
-    
-    // Пытаемся синхронизировать с сервером
+
     final isOnline = await _isOnline();
-    if (isOnline) {
-      try {
-        final uri = Uri.parse('$baseUrl/posts/$postId/save');
-        final response = await http.post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        
-        if (response.statusCode != 201) {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw Exception(error['detail'] ?? 'Failed to save post');
-        }
-      } catch (e) {
-        // Если ошибка сети, пост уже сохранен локально
-        debugPrint('Failed to sync save post to server: $e');
+    if (!isOnline) {
+      return;
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/posts/$postId/save');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 201) {
+        return;
       }
+      await _removePostLocally(postId);
+      final error = jsonDecode(response.body) as Map<String, dynamic>;
+      throw apiExceptionFromResponse(
+        response.statusCode,
+        error,
+        fallback: 'Не удалось сохранить пост',
+      );
+    } on ApiClientException {
+      await _removePostLocally(postId);
+      rethrow;
+    } catch (e) {
+      await _removePostLocally(postId);
+      debugPrint('Failed to sync save post to server: $e');
+      throw ApiClientException(message: userVisibleError(e, fallback: 'Не удалось сохранить пост'));
     }
   }
   
@@ -79,7 +90,7 @@ class SavedPostsService {
     final isOnline = await _isOnline();
     if (isOnline) {
       try {
-        final token = await AuthService.getAccessToken();
+        final token = await AuthService.getAccessTokenForApi();
         final uri = Uri.parse('$baseUrl/posts/$postId');
         final response = await http.get(
           uri,
@@ -134,35 +145,54 @@ class SavedPostsService {
   /// Удалить пост из сохраненных по ID (внутренний метод)
   static Future<void> unsavePostById(int postId) async {
     await init();
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
-      throw Exception('Not authenticated');
+      throw const ApiClientException(message: 'Войдите, чтобы убрать из сохранённых');
     }
-    
-    // Удаляем локально сразу
+
+    final cached = _getPostFromLocalCache(postId);
     await _removePostLocally(postId);
-    
-    // Пытаемся синхронизировать с сервером
+
     final isOnline = await _isOnline();
-    if (isOnline) {
-      try {
-        final uri = Uri.parse('$baseUrl/posts/$postId/save');
-        final response = await http.delete(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-        
-        if (response.statusCode != 200) {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw Exception(error['detail'] ?? 'Failed to unsave post');
-        }
-      } catch (e) {
-        // Если ошибка сети, пост уже удален локально
-        debugPrint('Failed to sync unsave post to server: $e');
+    if (!isOnline) {
+      return;
+    }
+
+    try {
+      final uri = Uri.parse('$baseUrl/posts/$postId/save');
+      final response = await http.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return;
       }
+      if (cached != null) {
+        await _savePostLocally(cached);
+      }
+      final error = jsonDecode(response.body) as Map<String, dynamic>;
+      throw apiExceptionFromResponse(
+        response.statusCode,
+        error,
+        fallback: 'Не удалось убрать из сохранённых',
+      );
+    } on ApiClientException {
+      if (cached != null) {
+        await _savePostLocally(cached);
+      }
+      rethrow;
+    } catch (e) {
+      if (cached != null) {
+        await _savePostLocally(cached);
+      }
+      debugPrint('Failed to sync unsave post to server: $e');
+      throw ApiClientException(
+        message: userVisibleError(e, fallback: 'Не удалось убрать из сохранённых'),
+      );
     }
   }
   
@@ -175,7 +205,7 @@ class SavedPostsService {
   
   /// Проверить, сохранен ли пост
   static Future<bool> isPostSaved(int postId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       return false;
     }
@@ -200,7 +230,7 @@ class SavedPostsService {
   /// Сохранить рецепт Spoonacular
   static Future<void> saveRecipe(dynamic recipe) async {
     await init();
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -242,7 +272,7 @@ class SavedPostsService {
   /// Удалить рецепт Spoonacular из сохраненных
   static Future<void> unsaveRecipe(int recipeId) async {
     await init();
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -273,7 +303,7 @@ class SavedPostsService {
 
   /// Проверить, сохранен ли рецепт Spoonacular
   static Future<bool> isRecipeSaved(int recipeId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       return false;
     }
@@ -309,7 +339,7 @@ class SavedPostsService {
     // Пытаемся получить с сервера, если онлайн
     if (isOnline && !forceOnline) {
       try {
-        final token = await AuthService.getAccessToken();
+        final token = await AuthService.getAccessTokenForApi();
         
         final queryParams = {
           'limit': limit.toString(),
@@ -409,7 +439,7 @@ class SavedPostsService {
     final isOnline = await _isOnline();
     if (!isOnline) return;
     
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) return;
     
     final currentUser = await AuthService.getCurrentUser();

@@ -1,6 +1,6 @@
 // Экран сохраненных постов
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../models/post_model.dart';
@@ -9,14 +9,18 @@ import '../../../services/auth_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/post_card_skeleton.dart';
+import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class SavedPostsScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, то текущий пользователь
+  final bool embedded; // true: использовать внутри другого экрана (без Scaffold/AppBar)
   
   const SavedPostsScreen({
-    Key? key,
+    super.key,
     this.userId,
-  }) : super(key: key);
+    this.embedded = false,
+  });
   
   @override
   ConsumerState<SavedPostsScreen> createState() => _SavedPostsScreenState();
@@ -25,11 +29,11 @@ class SavedPostsScreen extends ConsumerStatefulWidget {
 class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     with SingleTickerProviderStateMixin {
   List<PostModel> _posts = [];
+  Object? _loadError;
   bool _isLoading = false;
   bool _hasMore = true;
   int _offset = 0;
   int? _currentUserId;
-  final ScrollController _scrollController = ScrollController();
   bool _isOffline = false;
   late TabController _tabController;
   String? _currentPostType; // null = все, 'post' = посты, 'reel' = рилсы
@@ -43,11 +47,10 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     _loadCurrentUserId();
     _checkConnectivity();
     _loadPosts();
-    _scrollController.addListener(_onScroll);
     
     // Слушаем изменения подключения
     Connectivity().onConnectivityChanged.listen((result) {
-      final isOffline = result == ConnectivityResult.none;
+      final isOffline = result.contains(ConnectivityResult.none);
       if (mounted) {
         setState(() => _isOffline = isOffline);
         // Синхронизируем при подключении
@@ -81,7 +84,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     final connectivity = Connectivity();
     final result = await connectivity.checkConnectivity();
     if (mounted) {
-      setState(() => _isOffline = result == ConnectivityResult.none);
+      setState(() => _isOffline = result.contains(ConnectivityResult.none));
     }
   }
   
@@ -100,7 +103,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   void dispose() {
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
   
@@ -108,15 +110,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     final user = await AuthService.getCurrentUser();
     if (user != null) {
       setState(() => _currentUserId = user.id);
-    }
-  }
-  
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_isLoading && _hasMore) {
-        _loadMore();
-      }
     }
   }
   
@@ -135,6 +128,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
         _posts = [];
         _offset = 0;
         _hasMore = true;
+        _loadError = null;
       }
     });
     
@@ -145,21 +139,24 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
         offset: refresh ? 0 : _offset,
         postType: _currentPostType,
       );
+
+      final filteredPosts = _currentPostType == 'reel'
+          ? response.posts.where((p) => p.type == 'reel').toList()
+          : response.posts;
       
       setState(() {
         if (refresh) {
-          _posts = response.posts;
+          _posts = filteredPosts;
         } else {
-          _posts.addAll(response.posts);
+          _posts.addAll(filteredPosts);
         }
         _offset = _posts.length;
         _hasMore = _posts.length < response.total;
+        _loadError = null;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
-        );
+        setState(() => _loadError = e);
       }
     } finally {
       if (mounted) {
@@ -178,52 +175,70 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     }
     
     if (_posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.bookmark_border, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Нет сохраненных постов',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ],
-        ),
+      if (_loadError != null) {
+        return AppEmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: 'Не удалось загрузить',
+          subtitle: userVisibleError(_loadError!, fallback: 'Проверьте сеть'),
+          action: FilledButton(
+            onPressed: () => _loadPosts(refresh: true),
+            child: const Text('Повторить'),
+          ),
+        );
+      }
+      return const AppEmptyState(
+        icon: Icons.bookmark_border,
+        title: 'Нет сохранённых постов',
+        subtitle: 'Сохраняйте рецепты и посты — они появятся здесь',
       );
     }
     
     return RefreshIndicator(
       onRefresh: () => _loadPosts(refresh: true),
-      child: ListView.builder(
-        controller: _scrollController,
-        itemCount: _posts.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _posts.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.pixels >=
+                  notification.metrics.maxScrollExtent * 0.8 &&
+              !_isLoading &&
+              _hasMore) {
+            _loadMore();
           }
-          
-          final post = _posts[index];
-          return NewPostCard(
-            post: post,
-            onCommentTap: () {
-              context.push('/post/${post.id}/comments');
-            },
-            onAuthorTap: () {
-              // Если пост из канала - открываем канал, иначе профиль автора
-              if (post.channelId != null || post.communityId != null) {
-                context.push('/channel/${post.channelId ?? post.communityId}');
-              } else {
-                context.push('/profile?userId=${post.userId}');
-              }
-            },
-          );
+          return false;
         },
+        child: ListView.builder(
+          primary: true,
+          itemCount: _posts.length + (_hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _posts.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
+            
+            final post = _posts[index];
+            return NewPostCard(
+              post: post,
+              onCommentTap: () =>
+                  context.push('/post/${post.id}/comments'),
+              onPostDeleted: () {
+                setState(() {
+                  _posts.removeWhere((p) => p.id == post.id);
+                });
+              },
+              onAuthorTap: () {
+                // Если пост из канала - открываем канал, иначе профиль автора
+                if (post.channelId != null || post.communityId != null) {
+                  context.push('/channel/${post.channelId ?? post.communityId}');
+                } else {
+                  context.push('/profile?userId=${post.userId}');
+                }
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -233,18 +248,38 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     final userId = widget.userId ?? _currentUserId;
     
     if (userId == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Сохраненные')),
-        body: const Center(
-          child: Text('Войдите, чтобы видеть сохраненные посты'),
-        ),
+      return const Center(
+        child: Text('Войдите, чтобы видеть сохраненные посты'),
       );
     }
-    
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Избранное'),
-        bottom: TabBar(
+
+    final content = Column(
+      children: [
+        if (widget.embedded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Избранное',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_isOffline)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(Icons.cloud_off, color: Colors.orange, size: 20),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.sync),
+                  onPressed: _isOffline ? null : () => _syncWithServer(),
+                  tooltip: 'Синхронизировать',
+                ),
+              ],
+            ),
+          ),
+        longLabelTabBar(
           controller: _tabController,
           tabs: const [
             Tab(text: 'Общее'),
@@ -252,15 +287,29 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             Tab(text: 'Рилсы'),
           ],
         ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildPostsList(),
+              _buildPostsList(),
+              _buildPostsList(),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) return content;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Избранное'),
         actions: [
           if (_isOffline)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Icon(
-                Icons.cloud_off,
-                color: Colors.orange,
-                size: 20,
-              ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Icon(Icons.cloud_off, color: Colors.orange, size: 20),
             ),
           IconButton(
             icon: const Icon(Icons.sync),
@@ -269,14 +318,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           ),
         ],
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildPostsList(),
-          _buildPostsList(),
-          _buildPostsList(),
-        ],
-      ),
+      body: content,
     );
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../utils/image_url_helper.dart';
+import 'recipe_network_image.dart';
 
 /// Полноэкранный просмотрщик изображений с возможностью листания (как в Telegram)
 class FullscreenImageViewer extends StatefulWidget {
@@ -9,11 +8,11 @@ class FullscreenImageViewer extends StatefulWidget {
   final String? heroTag;
 
   const FullscreenImageViewer({
-    Key? key,
+    super.key,
     required this.imageUrls,
     this.initialIndex = 0,
     this.heroTag,
-  }) : super(key: key);
+  });
 
   @override
   State<FullscreenImageViewer> createState() => _FullscreenImageViewerState();
@@ -60,12 +59,9 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
               });
             },
             itemBuilder: (context, index) {
-              final imageUrl = widget.imageUrls[index];
-              final optimizedUrl = getOptimizedImageUrl(imageUrl);
-              
               return _ZoomableImage(
                 key: ValueKey(index),
-                imageUrl: optimizedUrl,
+                rawUrl: widget.imageUrls[index],
                 onTap: _toggleControls,
               );
             },
@@ -113,7 +109,7 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
                       shape: BoxShape.circle,
                       color: _currentIndex == index
                           ? Colors.white
-                          : Colors.white.withOpacity(0.4),
+                          : Colors.white.withValues(alpha: 0.4),
                     ),
                   ),
                 ),
@@ -128,14 +124,14 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
 /// Виджет для отображения изображения с возможностью масштабирования
 /// который не блокирует горизонтальные свайпы PageView
 class _ZoomableImage extends StatefulWidget {
-  final String imageUrl;
+  final String rawUrl;
   final VoidCallback onTap;
 
   const _ZoomableImage({
-    Key? key,
-    required this.imageUrl,
+    super.key,
+    required this.rawUrl,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<_ZoomableImage> createState() => _ZoomableImageState();
@@ -182,9 +178,9 @@ class _ZoomableImageState extends State<_ZoomableImage> {
         final size = box.size;
         final position = Offset(size.width / 2, size.height / 2);
         _transformationController?.value = Matrix4.identity()
-          ..translate(-position.dx, -position.dy)
-          ..scale(2.0)
-          ..translate(position.dx, position.dy);
+          ..translateByDouble(-position.dx, -position.dy, 0, 1)
+          ..scaleByDouble(2.0, 2.0, 1, 1)
+          ..translateByDouble(position.dx, position.dy, 0, 1);
       }
     }
   }
@@ -203,20 +199,17 @@ class _ZoomableImageState extends State<_ZoomableImage> {
         panEnabled: false, // Отключаем панорамирование полностью
         boundaryMargin: const EdgeInsets.all(double.infinity),
         child: Center(
-          child: CachedNetworkImage(
-            imageUrl: widget.imageUrl,
+          child: RecipeNetworkImage(
+            rawUrl: widget.rawUrl,
+            profile: RecipeImageProfile.fullscreen,
             fit: BoxFit.contain,
-            placeholder: (context, url) => const Center(
-              child: CircularProgressIndicator(
-                color: Colors.white,
-              ),
+            placeholder: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
             ),
-            errorWidget: (context, url, error) => const Center(
-              child: Icon(
-                Icons.error,
-                color: Colors.white,
-                size: 48,
-              ),
+            errorWidget: const Icon(
+              Icons.error,
+              color: Colors.white,
+              size: 48,
             ),
           ),
         ),
@@ -232,7 +225,7 @@ void showFullscreenImageViewer(
   int initialIndex = 0,
   String? heroTag,
 }) {
-  Navigator.of(context).push(
+  Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute(
       builder: (context) => FullscreenImageViewer(
         imageUrls: imageUrls,

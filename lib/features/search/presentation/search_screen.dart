@@ -5,9 +5,13 @@ import '../../../../services/search_service.dart';
 import '../../../../models/post_model.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../../widgets/post_card_skeleton.dart';
+import '../../../../app/app_router.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.initialQuery});
+
+  /// Подставляется из `?q=` (например из рилсов по хештегу).
+  final String? initialQuery;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -45,6 +49,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
+    final q = widget.initialQuery?.trim();
+    if (q != null && q.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _searchController.text = q;
+        _performSearch();
+      });
+    }
   }
 
   @override
@@ -177,84 +189,97 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Поисковая строка
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Поиск постов, рецептов...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _posts = [];
-                                _total = 0;
-                                _error = null;
-                              });
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  onSubmitted: (_) => _performSearch(),
-                  onTap: () {
-                    if (_searchController.text.length >= 2) {
-                      setState(() => _showSuggestions = true);
-                    }
-                  },
-                ),
-                // Автодополнение
-                if (_showSuggestions && _suggestions.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Column(
+            children: [
+              // Поисковая строка
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Поиск постов, рецептов...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _posts = [];
+                                    _total = 0;
+                                    _error = null;
+                                  });
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _suggestions.length,
-                      itemBuilder: (context, index) {
-                        final suggestion = _suggestions[index];
-                        return ListTile(
-                          leading: const Icon(Icons.search, size: 20),
-                          title: Text(suggestion),
-                          onTap: () {
-                            _searchController.text = suggestion;
-                            setState(() => _showSuggestions = false);
-                            _performSearch();
-                          },
-                        );
+                      ),
+                      onSubmitted: (_) => _performSearch(),
+                      onTap: () {
+                        if (_searchController.text.length >= 2) {
+                          setState(() => _showSuggestions = true);
+                        }
                       },
                     ),
+                    // Автодополнение
+                    if (_showSuggestions && _suggestions.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _suggestions.length,
+                          itemBuilder: (context, index) {
+                            final suggestion = _suggestions[index];
+                            return ListTile(
+                              leading: const Icon(Icons.search, size: 20),
+                              title: Text(suggestion),
+                              onTap: () {
+                                _searchController.text = suggestion;
+                                setState(() => _showSuggestions = false);
+                                _performSearch();
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (_showFilters)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: (constraints.maxHeight * 0.48).clamp(120.0, 420.0),
                   ),
-              ],
-            ),
-          ),
-          // Фильтры
-          if (_showFilters) _buildFilters(),
-          // Результаты
-          Expanded(
-            child: _buildResults(),
-          ),
-        ],
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.paddingOf(context).bottom + 8,
+                    ),
+                    child: _buildFilters(),
+                  ),
+                ),
+              Expanded(
+                child: _buildResults(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -328,37 +353,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          // Сортировка
-          Row(
-            children: [
-              Text(
-                'Сортировка: ',
-                style: Theme.of(context).textTheme.bodyMedium,
+          // Сортировка (отдельная строка + сегменты на всю ширину — без переноса «Релевантность» столбиком)
+          Text(
+            'Сортировка',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(
+                value: 'relevance',
+                label: Text(
+                  'Релевантность',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
               ),
-              Expanded(
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(
-                      value: 'relevance',
-                      label: Text('Релевантность'),
-                    ),
-                    ButtonSegment(
-                      value: 'date',
-                      label: Text('Дата'),
-                    ),
-                    ButtonSegment(
-                      value: 'popularity',
-                      label: Text('Популярность'),
-                    ),
-                  ],
-                  selected: {_selectedSortBy!},
-                  onSelectionChanged: (selection) {
-                    setState(() => _selectedSortBy = selection.first);
-                    _performSearch();
-                  },
+              ButtonSegment(
+                value: 'date',
+                label: Text('Дата'),
+              ),
+              ButtonSegment(
+                value: 'popularity',
+                label: Text(
+                  'Популярность',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ],
+            selected: {_selectedSortBy!},
+            onSelectionChanged: (selection) {
+              setState(() => _selectedSortBy = selection.first);
+              _performSearch();
+            },
           ),
           const SizedBox(height: 12),
           // Дополнительные фильтры
@@ -542,11 +572,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             padding: const EdgeInsets.only(bottom: 16),
             child: NewPostCard(
               post: post,
-              onCommentTap: () {
-                context.push('/post/${post.id}/comments');
+              onCommentTap: () =>
+                  context.push(PostCommentsRoute.pathFor(post.id)),
+              onPostDeleted: () {
+                setState(() {
+                  _posts.removeWhere((p) => p.id == post.id);
+                });
               },
               onAuthorTap: () {
-                context.push('/profile?userId=${post.userId}');
+                context.push(ProfileRoute.withUserId(post.userId));
               },
             ),
           );

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/config/legacy_firestore_config.dart';
 import 'auth_service.dart';
 
 class NotificationSettings {
@@ -57,7 +58,7 @@ class NotificationSettingsService {
       NotificationSettings(likes: true, comments: true, uploads: true));
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  StreamSubscription<User?>? _authSub;
+  void Function(User?)? _onSessionChanged;
 
   NotificationSettingsService._internal();
 
@@ -89,23 +90,31 @@ class NotificationSettingsService {
       } catch (_) {}
     }
 
-    // listen auth changes to load remote and merge
-    _authSub = AuthService.instance.authStateChanges().listen((user) async {
+    _onSessionChanged = (User? user) {
       if (user != null) {
-        await _loadAndMergeRemote(user.uid);
-      } else {
-        // not authenticated: keep local settings
+        unawaited(_loadAndMergeRemote(user.uid));
       }
-    });
+    };
+    AuthService.registerSessionListener(_onSessionChanged!);
 
-    // if already signed in, load remote now
+    // Уже залогинен — подтягиваем Firestore после старта UI, чтобы не конкурировать с вторым процессом
+    // и не блокировать первый кадр (меню / рекомендации).
     final current = AuthService.instance.currentUser;
     if (current != null) {
-      await _loadAndMergeRemote(current.uid);
+      Future<void>.delayed(const Duration(milliseconds: 800), () async {
+        try {
+          await _loadAndMergeRemote(current.uid);
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('NotificationSettings deferred remote load: $e');
+          }
+        }
+      });
     }
   }
 
   Future<void> _loadAndMergeRemote(String uid) async {
+    if (LegacyFirestoreConfig.disabled) return;
     try {
       final doc = await _firestore
           .collection('users')
@@ -142,7 +151,7 @@ class NotificationSettingsService {
 
     // persist remote if user signed in
     final user = AuthService.instance.currentUser;
-    if (user != null) {
+    if (LegacyFirestoreConfig.enabled && user != null) {
       try {
         await _firestore
             .collection('users')
@@ -151,8 +160,9 @@ class NotificationSettingsService {
             .doc('notifications')
             .set(newSettings.toMap());
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('Failed to save notification settings remote: $e');
+        }
       }
     }
   }
@@ -168,7 +178,10 @@ class NotificationSettingsService {
   }
 
   void dispose() {
-    _authSub?.cancel();
+    if (_onSessionChanged != null) {
+      AuthService.unregisterSessionListener(_onSessionChanged!);
+      _onSessionChanged = null;
+    }
     settings.dispose();
   }
 }

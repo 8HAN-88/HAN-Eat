@@ -1,12 +1,29 @@
 // Экран поддержки для создания обращений
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../services/support_service.dart';
-import '../../../../services/subscription_service.dart';
+import 'widgets/subscription_cancel_survey_sheet.dart';
+
+const _supportTicketTypes = {
+  'cancel_subscription',
+  'technical_issue',
+  'billing',
+  'other',
+};
 
 class SupportScreen extends ConsumerStatefulWidget {
-  const SupportScreen({Key? key}) : super(key: key);
-  
+  const SupportScreen({
+    super.key,
+    this.initialSubject,
+    this.initialMessage,
+    this.initialType,
+  });
+
+  final String? initialSubject;
+  final String? initialMessage;
+  final String? initialType;
+
   @override
   ConsumerState<SupportScreen> createState() => _SupportScreenState();
 }
@@ -18,6 +35,23 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   String _selectedType = 'other';
   bool _isSubmitting = false;
   
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.initialSubject?.trim();
+    final m = widget.initialMessage?.trim();
+    if (s != null && s.isNotEmpty) {
+      _subjectController.text = s;
+    }
+    if (m != null && m.isNotEmpty) {
+      _messageController.text = m;
+    }
+    final type = widget.initialType?.trim();
+    if (type != null && _supportTicketTypes.contains(type)) {
+      _selectedType = type;
+    }
+  }
+
   @override
   void dispose() {
     _subjectController.dispose();
@@ -54,7 +88,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка: $e'),
+            content: Text(userVisibleError(e)),
             backgroundColor: Colors.red,
           ),
         );
@@ -67,52 +101,9 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   }
   
   Future<void> _requestCancelSubscription() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Отменить подписку?'),
-        content: const Text(
-          'Ваш запрос на отмену подписки будет отправлен в поддержку. '
-          'Подписка останется активной до даты истечения после обработки запроса.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Отправить запрос'),
-          ),
-        ],
-      ),
-    );
-    
-    if (confirmed != true) return;
-    
     setState(() => _isSubmitting = true);
-    
     try {
-      final response = await SubscriptionService.requestCancelSubscription();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(response.message),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      await runSubscriptionCancelFlow(context);
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);

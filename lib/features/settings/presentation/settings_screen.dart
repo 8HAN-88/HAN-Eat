@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../meal_plan/presentation/nutrition_survey_screen.dart';
+import '../../meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../app/theme_mode_controller.dart';
@@ -106,10 +106,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push('/subscription'),
       ),
       _SettingsItem(
-        title: 'Опрос питания',
+        title: 'Настройки питания',
         icon: Icons.monitor_heart_outlined,
-        subtitle: 'Калории, диета, бюджет — для AI-плана',
-        onTap: () => context.push(NutritionSurveyRoute.path),
+        subtitle: 'Цель, калории, повторы — для AI-плана',
+        onTap: () => context.push(MealPlanNutritionSettingsRoute.path),
       ),
       _SettingsItem(
         title: 'Поддержка и безопасность',

@@ -1,15 +1,69 @@
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../services/api_service.dart';
+import '../services/account_session_service.dart';
+import '../services/auth_service.dart';
+import '../features/settings/application/subscription_status_provider.dart';
 
-class HanEatApp extends ConsumerWidget {
-  const HanEatApp({Key? key}) : super(key: key);
+class HanEatApp extends ConsumerStatefulWidget {
+  const HanEatApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HanEatApp> createState() => _HanEatAppState();
+}
+
+class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserver {
+  StreamSubscription<Uri>? _deepLinkSubscription;
+  late final void Function(User?) _onAccountSessionChanged;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _onAccountSessionChanged = (_) {
+      if (!mounted) return;
+      ref.read(subscriptionStatusRefreshProvider.notifier).state++;
+    };
+    AccountSessionService.registerListener(_onAccountSessionChanged);
+    if (!kIsWeb) {
+      _deepLinkSubscription = AppLinks().uriLinkStream.listen(
+        (uri) {
+          final path = parseDeepLinkToGoPath(uri.toString());
+          if (path != null) {
+            ref.read(appRouterProvider).go(path);
+          }
+        },
+        onError: (Object e) => debugPrint('uriLinkStream: $e'),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    AccountSessionService.unregisterListener(_onAccountSessionChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _deepLinkSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ApiService.touchAiScanCreditsSilently());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     try {
       final router = ref.watch(appRouterProvider);
       final themeMode = ref.watch(themeModeProvider);
@@ -32,21 +86,26 @@ class HanEatApp extends ConsumerWidget {
         ],
         locale: const Locale('ru', 'RU'),
         builder: (context, child) {
-          // Обработка ошибок при построении UI
+          final theme = Theme.of(context);
+          final defaultBody = theme.textTheme.bodyMedium ?? const TextStyle();
           return MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-            child: child ?? Scaffold(
-              backgroundColor: Colors.white,
-              body: const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Загрузка приложения...'),
-                  ],
-                ),
-              ),
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
+            child: DefaultTextStyle(
+              style: defaultBody,
+              child: child ??
+                  Scaffold(
+                    backgroundColor: theme.scaffoldBackgroundColor,
+                    body: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Загрузка приложения...'),
+                        ],
+                      ),
+                    ),
+                  ),
             ),
           );
         },
@@ -64,13 +123,15 @@ class HanEatApp extends ConsumerWidget {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
-                Text('Ошибка инициализации: $e'),
+                const Text(
+                  'Не удалось запустить приложение. '
+                  'Перезапустите или переустановите HAN Eat.',
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () {
-                    // Попытка перезапуска
-                  },
-                  child: const Text('Перезагрузить'),
+                  onPressed: () => SystemNavigator.pop(),
+                  child: const Text('Закрыть приложение'),
                 ),
               ],
             ),

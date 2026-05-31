@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import '../core/config/legacy_firestore_config.dart';
 import 'moderation_log_service.dart';
 
+/// Legacy Firestore community videos — не используется в основном V2 flow.
+@Deprecated('Community reels use Postgres API (ApiService.fetchCommunityVideos)')
 class CommunityService {
   static bool _isFirebaseInitialized() {
     try {
@@ -14,8 +17,11 @@ class CommunityService {
     }
   }
 
+  static bool get _useFirestore =>
+      LegacyFirestoreConfig.enabled && _isFirebaseInitialized();
+
   static Stream<int> likeCountStream(String videoDocId) {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       return Stream.value(0);
     }
     return FirebaseFirestore.instance
@@ -31,7 +37,7 @@ class CommunityService {
   }
 
   static Stream<int> commentsCountStream(String videoDocId) {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       return Stream.value(0);
     }
     return FirebaseFirestore.instance
@@ -47,7 +53,7 @@ class CommunityService {
   }
 
   static Stream<bool> isLikedStream(String videoDocId, String? uid) {
-    if (uid == null || !_isFirebaseInitialized()) return Stream.value(false);
+    if (uid == null || !_useFirestore) return Stream.value(false);
     return FirebaseFirestore.instance
         .collection('community_videos')
         .doc(videoDocId)
@@ -62,7 +68,7 @@ class CommunityService {
   }
 
   static Future<void> toggleLike(String videoDocId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot toggle like');
       return;
     }
@@ -140,7 +146,7 @@ class CommunityService {
 
   static Future<void> addComment(String videoDocId, String uid, String text,
       {String status = 'published', String? parentCommentId}) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot add comment');
       return;
     }
@@ -152,7 +158,9 @@ class CommunityService {
           .add({
         'authorId': uid,
         'text': text,
-        'createdAt': FieldValue.serverTimestamp(),
+        // Локальный timestamp помогает увидеть комментарий сразу в UI
+        // (без задержки, пока сервер подтвердит serverTimestamp).
+        'createdAt': Timestamp.fromDate(DateTime.now()),
         'status': status,
         if (parentCommentId != null) 'parentCommentId': parentCommentId,
       });
@@ -164,7 +172,7 @@ class CommunityService {
 
   // Лайки комментариев
   static Stream<int> commentLikesStream(String videoDocId, String commentId) {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       return Stream.value(0);
     }
     return FirebaseFirestore.instance
@@ -183,7 +191,7 @@ class CommunityService {
 
   static Stream<bool> isCommentLikedStream(
       String videoDocId, String commentId, String? uid) {
-    if (uid == null || !_isFirebaseInitialized()) return Stream.value(false);
+    if (uid == null || !_useFirestore) return Stream.value(false);
     return FirebaseFirestore.instance
         .collection('community_videos')
         .doc(videoDocId)
@@ -201,7 +209,7 @@ class CommunityService {
 
   static Future<void> toggleCommentLike(
       String videoDocId, String commentId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot toggle comment like');
       return;
     }
@@ -281,10 +289,15 @@ class CommunityService {
     }
   }
 
-  // Репорт комментария
+  // Репорт комментария (Firestore community)
   static Future<void> reportComment(
-      String videoDocId, String commentId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+    String videoDocId,
+    String commentId,
+    String uid, {
+    String reason = 'other',
+    String? comment,
+  }) async {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot report comment');
       return;
     }
@@ -297,15 +310,18 @@ class CommunityService {
           .collection('reports')
           .doc(uid)
           .set({
+        'reason': reason,
+        if (comment != null && comment.isNotEmpty) 'comment': comment,
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('Error reporting comment: $e');
+      rethrow;
     }
   }
 
   static Future<void> setVideoStatus(String videoDocId, String status) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot set video status');
       return;
     }
@@ -323,7 +339,7 @@ class CommunityService {
 
   // Soft delete (mark as deleted)
   static Future<void> softDeleteVideo(String videoDocId) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot soft delete video');
       return;
     }
@@ -343,7 +359,7 @@ class CommunityService {
 
   // Restore a soft-deleted video back to published
   static Future<void> restoreVideo(String videoDocId) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot restore video');
       return;
     }
@@ -363,7 +379,7 @@ class CommunityService {
 
   // Permanently delete the video and its subcollections
   static Future<void> permanentlyDeleteVideo(String videoDocId) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot permanently delete video');
       return;
     }
@@ -393,7 +409,7 @@ class CommunityService {
 
   static Future<void> setCommentStatus(
       String videoDocId, String commentDocId, String status) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot set comment status');
       return;
     }
@@ -413,7 +429,7 @@ class CommunityService {
 
   static Future<void> deleteComment(
       String videoDocId, String commentDocId) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot delete comment');
       return;
     }
@@ -431,9 +447,14 @@ class CommunityService {
     }
   }
 
-  // Репорт видео
-  static Future<void> reportVideo(String videoDocId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+  // Репорт видео (Firestore community; для API-рилсов используйте ReportService)
+  static Future<void> reportVideo(
+    String videoDocId,
+    String uid, {
+    String reason = 'other',
+    String? comment,
+  }) async {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot report video');
       return;
     }
@@ -444,18 +465,25 @@ class CommunityService {
           .collection('reports')
           .doc(uid)
           .set({
+        'reason': reason,
+        if (comment != null && comment.isNotEmpty) 'comment': comment,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      await ModerationLogService.log(
-          'reportVideo', {'videoId': videoDocId, 'reporterUid': uid});
+      await ModerationLogService.log('reportVideo', {
+        'videoId': videoDocId,
+        'reporterUid': uid,
+        'reason': reason,
+        if (comment != null) 'comment': comment,
+      });
     } catch (e) {
       debugPrint('Error reporting video: $e');
+      rethrow;
     }
   }
 
   // Репосты видео
   static Stream<int> repostCountStream(String videoDocId) {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       return Stream.value(0);
     }
     return FirebaseFirestore.instance
@@ -471,7 +499,7 @@ class CommunityService {
   }
 
   static Stream<bool> isRepostedStream(String videoDocId, String? uid) {
-    if (uid == null || !_isFirebaseInitialized()) return Stream.value(false);
+    if (uid == null || !_useFirestore) return Stream.value(false);
     return FirebaseFirestore.instance
         .collection('community_videos')
         .doc(videoDocId)
@@ -486,7 +514,7 @@ class CommunityService {
   }
 
   static Future<void> toggleRepost(String videoDocId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot toggle repost');
       return;
     }
@@ -509,7 +537,7 @@ class CommunityService {
 
   // Сохранение видео (bookmark)
   static Stream<int> saveCountStream(String videoDocId) {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       return Stream.value(0);
     }
     return FirebaseFirestore.instance
@@ -525,7 +553,7 @@ class CommunityService {
   }
 
   static Stream<bool> isSavedStream(String videoDocId, String? uid) {
-    if (uid == null || !_isFirebaseInitialized()) return Stream.value(false);
+    if (uid == null || !_useFirestore) return Stream.value(false);
     return FirebaseFirestore.instance
         .collection('community_videos')
         .doc(videoDocId)
@@ -540,7 +568,7 @@ class CommunityService {
   }
 
   static Future<void> toggleSave(String videoDocId, String uid) async {
-    if (!_isFirebaseInitialized()) {
+    if (!_useFirestore) {
       debugPrint('Firebase not initialized, cannot toggle save');
       return;
     }

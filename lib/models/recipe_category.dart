@@ -373,7 +373,7 @@ extension RecipeCategoryX on RecipeCategory {
   }
 
   String get color {
-    switch (this.type) {
+    switch (type) {
       case CategoryType.practical:
         return 'blue';
       case CategoryType.dietary:

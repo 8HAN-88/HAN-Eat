@@ -6,6 +6,7 @@ class CommunityVideo {
     required this.description,
     required this.videoUrl,
     required this.likes,
+    this.commentsCount = 0,
     required this.tags,
     required this.createdAt,
     required this.status,
@@ -21,6 +22,7 @@ class CommunityVideo {
   final String videoUrl;
   final String? thumbnail;
   final int likes;
+  final int commentsCount;
   final List<String> tags;
   final DateTime createdAt;
   final String status;
@@ -41,7 +43,8 @@ class CommunityVideo {
       description: json['description']?.toString() ?? '',
       videoUrl: json['video_url']?.toString() ?? '',
       thumbnail: json['thumbnail']?.toString(),
-      likes: json['likes'] as int? ?? 0,
+      likes: (json['likes'] as num?)?.toInt() ?? 0,
+      commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       tags: tags,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (json['created_at'] as int? ?? 0) * 1000,
@@ -53,6 +56,7 @@ class CommunityVideo {
 
   CommunityVideo copyWith({
     int? likes,
+    int? commentsCount,
     String? status,
   }) {
     return CommunityVideo(
@@ -64,6 +68,7 @@ class CommunityVideo {
       videoUrl: videoUrl,
       thumbnail: thumbnail,
       likes: likes ?? this.likes,
+      commentsCount: commentsCount ?? this.commentsCount,
       tags: tags,
       createdAt: createdAt,
       status: status ?? this.status,

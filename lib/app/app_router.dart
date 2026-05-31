@@ -1,4 +1,5 @@
 import 'guest_routes.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +26,8 @@ import '../features/settings/backup_page.dart';
 import '../features/meal_plan/presentation/meal_plan_screen.dart';
 import '../features/meal_plan/presentation/ai_meal_plan_screen.dart';
 import '../features/meal_plan/presentation/meal_plan_analytics_screen.dart';
-import '../features/meal_plan/presentation/nutrition_survey_screen.dart';
+import '../features/meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
+import '../features/meal_plan/presentation/meal_plan_survey_flow_screen.dart';
 import '../features/shopping/shopping_page.dart';
 import '../features/categories/presentation/categories_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -36,6 +38,8 @@ import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
+import '../features/posts/presentation/edit_profile_post_screen.dart';
+import '../models/post_model.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/feed/presentation/main_feed_screen.dart';
 import '../features/comments/presentation/comments_screen.dart';
@@ -66,6 +70,8 @@ import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../services/auth_service.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
+import 'invalid_link_screen.dart';
+import '../widgets/app_empty_state.dart';
 
 /// Преобразует `haneat://...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
@@ -122,11 +128,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       initialDeepLink = null;
       if (path != null) return path;
     }
+    if (AuthService.instance.currentUser == null) {
+      return LoginRoute.path;
+    }
     return FeedRoute.path;
   }();
   return GoRouter(
     navigatorKey: hanEatRootNavigatorKey,
     initialLocation: initialLoc,
+    refreshListenable: AuthService.sessionRevision,
     redirect: (context, state) {
       final loc = state.matchedLocation;
       if (loc == '/shopping') {
@@ -151,7 +161,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           loc.startsWith(VerifyEmailRoute.path) ||
           loc.startsWith(ConfirmEmailChangeRoute.path);
       if (isAuthRoute) return null;
-      return ProfileAuthRoute.path;
+      return LoginRoute.path;
     },
     routes: [
       StatefulShellRoute.indexedStack(
@@ -236,8 +246,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: NutritionSurveyRoute.path,
         name: NutritionSurveyRoute.name,
+        pageBuilder: (context, state) => MaterialPage(
+          child: MealPlanSurveyFlowScreen(
+            skipWelcome: state.extra == true,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: MealPlanNutritionSettingsRoute.path,
+        name: MealPlanNutritionSettingsRoute.name,
         pageBuilder: (context, state) =>
-            const MaterialPage(child: NutritionSurveyScreen()),
+            const MaterialPage(child: MealPlanNutritionSettingsScreen()),
       ),
       // Результат сканирования блюда (фото → питательность и рецепты)
       GoRoute(
@@ -266,10 +285,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final recipe = state.extra is Recipe ? state.extra as Recipe : null;
           if (recipe == null) {
-            return MaterialPage(
-              child: Scaffold(
-                appBar: AppBar(title: const Text('Режим готовки')),
-                body: const Center(child: Text('Рецепт не передан')),
+            return const MaterialPage(
+              child: InvalidLinkScreen(
+                title: 'Режим готовки',
+                message: 'Рецепт не передан',
               ),
             );
           }
@@ -283,10 +302,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final idStr = state.pathParameters['id'];
           final id = int.tryParse(idStr ?? '');
           if (id == null || id < 1) {
-            return MaterialPage(
-              child: Scaffold(
-                appBar: AppBar(title: const Text('Рецепт')),
-                body: const Center(child: Text('Неверная ссылка на рецепт')),
+            return const MaterialPage(
+              child: InvalidLinkScreen(
+                title: 'Рецепт',
+                message: 'Неверная ссылка на рецепт',
               ),
             );
           }
@@ -483,12 +502,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: CreatePostScreen()),
       ),
+      GoRoute(
+        path: '/post/:postId/edit',
+        name: 'edit_profile_post',
+        pageBuilder: (context, state) {
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Пост'),
+            );
+          }
+          return MaterialPage(
+            child: EditProfilePostScreen(postId: postId),
+          );
+        },
+      ),
       // Comments
       GoRoute(
         path: '/post/:postId/comments',
         name: 'post_comments',
         pageBuilder: (context, state) {
-          final postId = int.parse(state.pathParameters['postId']!);
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Комментарии'),
+            );
+          }
           return MaterialPage(child: CommentsScreen(postId: postId));
         },
       ),
@@ -497,12 +536,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'post_by_id',
         pageBuilder: (context, state) {
           final postId = int.tryParse(state.pathParameters['postId'] ?? '');
-          if (postId == null || postId < 1) {
-            return MaterialPage(
-              child: Scaffold(
-                appBar: AppBar(title: const Text('Пост')),
-                body: const Center(child: Text('Неверная ссылка на пост')),
-              ),
+          if (postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Пост'),
             );
           }
           return MaterialPage(child: PostByIdScreen(postId: postId));
@@ -513,7 +549,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId',
         name: 'channel_page',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Канал'),
+            );
+          }
           return MaterialPage(child: ChannelDetailScreen(channelId: channelId));
         },
       ),
@@ -521,7 +562,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/info',
         name: 'channel_info',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Канал'),
+            );
+          }
           return MaterialPage<void>(
             child: ChannelInfoScreen(channelId: channelId),
           );
@@ -531,8 +577,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/post/:postId',
         name: 'channel_post_detail',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
-          final postId = int.parse(state.pathParameters['postId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (channelId == null || postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Пост канала'),
+            );
+          }
           return MaterialPage(
             child: ChannelPostDetailScreen(
               channelId: channelId,
@@ -557,7 +608,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/create-recipe',
         name: 'create_channel_recipe',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Канал'),
+            );
+          }
           final channelName =
               state.uri.queryParameters['channelName'] ?? 'канал';
           return MaterialPage(
@@ -572,7 +628,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/create-post',
         name: 'create_channel_post',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Канал'),
+            );
+          }
           final postType = state.uri.queryParameters['type'] ?? 'text';
           return MaterialPage(
             child: CreateChannelPostScreen(
@@ -586,9 +647,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/post/:postId/edit',
         name: 'edit_channel_post',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
-          final postId = int.parse(state.pathParameters['postId']!);
-          final postData = state.extra as Map<String, dynamic>?;
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final postId = parseRoutePositiveId(state.pathParameters['postId']);
+          if (channelId == null || postId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Редактирование поста'),
+            );
+          }
+          final extra = state.extra;
+          final Map<String, dynamic>? postData = extra is Map<String, dynamic>
+              ? extra
+              : extra is PostModel
+                  ? extra.toJson()
+                  : null;
           return MaterialPage(
             child: CreateChannelPostScreen(
               channelId: channelId,
@@ -603,7 +674,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/settings',
         name: 'channel_settings',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Настройки канала'),
+            );
+          }
           final channelName =
               state.uri.queryParameters['channelName'] ?? 'канал';
           return MaterialPage(
@@ -618,7 +694,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/management',
         name: 'channel_management',
         pageBuilder: (context, state) {
-          final channelId = int.parse(state.pathParameters['channelId']!);
+          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Управление каналом'),
+            );
+          }
           return MaterialPage(
             child: ChannelManagementScreen(channelId: channelId),
           );
@@ -715,19 +796,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: ReelsFullscreenRoute.path,
         name: ReelsFullscreenRoute.name,
         pageBuilder: (context, state) {
-          final post = state.extra as dynamic;
+          final extra = state.extra;
+          if (extra is! PostModel) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Рилс'),
+            );
+          }
           return MaterialPage(
-            child: ReelsFullscreenScreen(initialPost: post),
+            child: ReelsFullscreenScreen(initialPost: extra),
           );
         },
       ),
     ],
     errorPageBuilder: (context, state) => MaterialPage(
       child: Scaffold(
-        body: Center(
-          child: Text(
-            'Хьюстон, у нас ошибка маршрута: ${state.error}',
-            textAlign: TextAlign.center,
+        appBar: AppBar(title: const Text('Ошибка')),
+        body: AppEmptyState(
+          icon: Icons.error_outline_rounded,
+          title: 'Не удалось открыть страницу',
+          subtitle: kDebugMode ? '${state.error}' : 'Попробуйте вернуться на главную',
+          action: FilledButton(
+            onPressed: () => context.go(FeedRoute.path),
+            child: const Text('На главную'),
           ),
         ),
       ),
@@ -963,6 +1053,13 @@ class PostCommentsRoute {
   static const name = 'post_comments';
 
   static String pathFor(int postId) => '/post/$postId/comments';
+}
+
+/// Редактирование поста профиля (GoRoute `edit_profile_post`).
+class EditProfilePostRoute {
+  static const name = 'edit_profile_post';
+
+  static String pathFor(int postId) => '/post/$postId/edit';
 }
 
 /// Карточка канала и вложенные пути (совпадают с GoRouter).

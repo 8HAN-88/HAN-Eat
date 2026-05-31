@@ -1,7 +1,54 @@
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:video_player/video_player.dart';
+
 import '../../../models/post.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/saved_posts_service.dart';
+import '../../../services/share_link_service.dart';
+import '../../../widgets/report_content_dialog.dart';
+
+Future<void> _feedSyncBookmark(
+  BuildContext context,
+  Post post, {
+  Future<void> Function(String postId)? onBookmarkChanged,
+}) async {
+  final wasSaved = post.isSaved;
+  try {
+    if (wasSaved) {
+      await SavedPostsService.unsavePost(post.id);
+    } else {
+      await SavedPostsService.savePost(post.id);
+    }
+    await onBookmarkChanged?.call(post.idString);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          wasSaved ? 'Удалено из сохранённых' : 'Пост сохранён',
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось обновить сохранённые'))),
+    );
+  }
+}
+
+Future<void> _feedCopyPostLink(BuildContext context, Post post) async {
+  final link = post.type == 'reel'
+      ? ShareLinkService.reelLink(post.id)
+      : ShareLinkService.postLink(post.id);
+  await Clipboard.setData(ClipboardData(text: link));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Ссылка скопирована')),
+  );
+}
 
 /// Карточка поста в ленте
 class PostCard extends StatelessWidget {
@@ -13,6 +60,8 @@ class PostCard extends StatelessWidget {
     required this.onShare,
     required this.onHide,
     required this.onReport,
+    this.onBlockAuthor,
+    this.onBookmarkChanged,
   });
 
   final Post post;
@@ -21,6 +70,10 @@ class PostCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onHide;
   final VoidCallback onReport;
+  /// Локально скрыть автора в ленте; для вложенного репоста обычно `null`.
+  final VoidCallback? onBlockAuthor;
+  /// После save/unsync — обновить пост в ленте (например [FeedController.refreshPost]).
+  final Future<void> Function(String postId)? onBookmarkChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +139,12 @@ class PostCard extends StatelessWidget {
                 onComment: () {},
                 onShare: () {},
                 onHide: () {},
-                onReport: () {},
+                onReport: () => reportPostWithDialog(
+                  context,
+                  post.repostedPost!.id,
+                ),
+                onBlockAuthor: null,
+                onBookmarkChanged: null,
               ),
             ),
 
@@ -133,57 +191,69 @@ class PostCard extends StatelessWidget {
             onLike: onLike,
             onComment: onComment,
             onShare: onShare,
+            onBookmarkChanged: onBookmarkChanged,
           ),
         ],
       ),
     );
   }
 
-  void _showMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
+  void _showMenu(BuildContext cardContext) {
+    final me = AuthService.instance.currentUser?.id;
+    final canBlockAuthor =
+        onBlockAuthor != null && me != null && post.userId != me;
+
+    showModalBottomSheet<void>(
+      context: cardContext,
+      builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.bookmark_border),
-              title: const Text('Сохранить'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement save
+              leading: Icon(
+                post.isSaved ? Icons.bookmark_remove : Icons.bookmark_border,
+              ),
+              title: Text(post.isSaved ? 'Убрать из сохранённых' : 'Сохранить'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await _feedSyncBookmark(
+                  cardContext,
+                  post,
+                  onBookmarkChanged: onBookmarkChanged,
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.visibility_off),
               title: const Text('Скрыть'),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 onHide();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.block),
-              title: const Text('Не показывать от автора'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement block author
-              },
-            ),
+            if (canBlockAuthor)
+              ListTile(
+                leading: const Icon(Icons.block),
+                title: const Text('Не показывать от автора'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onBlockAuthor!();
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.flag_outlined),
               title: const Text('Пожаловаться'),
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetContext);
                 onReport();
               },
             ),
             ListTile(
               leading: const Icon(Icons.copy),
               title: const Text('Скопировать ссылку'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement copy link
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await _feedCopyPostLink(cardContext, post);
               },
             ),
           ],
@@ -210,11 +280,11 @@ class _PostHeader extends StatelessWidget {
     // Используем имя пользователя из author, если доступно, иначе из userId
     final authorName = post.groupName ?? 
                        post.authorName ?? 
-                       (post.author != null ? post.author!.name : null) ??
+                       (post.author?.name) ??
                        'Неизвестный';
     final authorAvatar = post.groupAvatar ?? 
                         post.authorAvatar ?? 
-                        (post.author != null ? post.author!.avatarUrl : null);
+                        (post.author?.avatarUrl);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -377,7 +447,7 @@ class _PostPhotos extends StatelessWidget {
                 fit: BoxFit.cover,
               ),
               Container(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 child: Center(
                   child: Text(
                     '+${photos.length - 4}',
@@ -560,7 +630,7 @@ class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
                           if (_isPaused)
                             IgnorePointer(
                               child: Container(
-                                color: Colors.black.withOpacity(0.3),
+                                color: Colors.black.withValues(alpha: 0.3),
                                 child: const Center(
                                   child: Icon(
                                     Icons.pause_circle_filled,
@@ -662,38 +732,123 @@ class _PostPoll extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final totalVotes = poll.options.fold<int>(0, (sum, o) => sum + o.votes);
+
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            poll.question,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
           ),
-          const SizedBox(height: 12),
-          ...poll.options.map((option) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Expanded(
-                    child: LinearProgressIndicator(
-                      value: option.percentage / 100,
-                    ),
+                  Icon(
+                    Icons.poll_outlined,
+                    size: 20,
+                    color: theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
-                  Text('${option.percentage.toStringAsFixed(0)}%'),
-                  const SizedBox(width: 8),
-                  Text('(${option.votes})'),
+                  Text(
+                    'Опрос',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (totalVotes > 0)
+                    Text(
+                      '$totalVotes ${_votesLabel(totalVotes)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                 ],
               ),
-            );
-          }),
-        ],
+              const SizedBox(height: 10),
+              Text(
+                poll.question,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ...poll.options.map((option) {
+                final fraction = (option.percentage / 100).clamp(0.0, 1.0);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              option.text,
+                              style: theme.textTheme.bodyMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${option.percentage.toStringAsFixed(0)}%',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: fraction,
+                          minHeight: 6,
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHigh,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      if (option.votes > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${option.votes} ${_votesLabel(option.votes)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
       ),
     );
   }
+}
+
+String _votesLabel(int n) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'голосов';
+  if (mod10 == 1) return 'голос';
+  if (mod10 >= 2 && mod10 <= 4) return 'голоса';
+  return 'голосов';
 }
 
 /// Действия с постом (лайк, комментарий, репост)
@@ -703,20 +858,20 @@ class _PostActions extends StatefulWidget {
     required this.onLike,
     required this.onComment,
     required this.onShare,
+    this.onBookmarkChanged,
   });
 
   final Post post;
   final VoidCallback onLike;
   final VoidCallback onComment;
   final VoidCallback onShare;
+  final Future<void> Function(String postId)? onBookmarkChanged;
 
   @override
   State<_PostActions> createState() => _PostActionsState();
 }
 
 class _PostActionsState extends State<_PostActions> {
-  bool _isLiked = false;
-
   @override
   Widget build(BuildContext context) {
     final reactions = widget.post.reactions;
@@ -737,16 +892,11 @@ class _PostActionsState extends State<_PostActions> {
             children: [
               IconButton(
                 icon: Icon(
-                  _isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: _isLiked ? Colors.red : Colors.black,
+                  widget.post.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: widget.post.isLiked ? Colors.red : Colors.black,
                   size: 28,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _isLiked = !_isLiked;
-                  });
-                  widget.onLike();
-                },
+                onPressed: widget.onLike,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
@@ -766,10 +916,15 @@ class _PostActionsState extends State<_PostActions> {
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.bookmark_border, size: 28),
-                onPressed: () {
-                  // TODO: Save post
-                },
+                icon: Icon(
+                  widget.post.isSaved ? Icons.bookmark : Icons.bookmark_border,
+                  size: 28,
+                ),
+                onPressed: () => _feedSyncBookmark(
+                  context,
+                  widget.post,
+                  onBookmarkChanged: widget.onBookmarkChanged,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
@@ -787,7 +942,7 @@ class _PostActionsState extends State<_PostActions> {
           if (widget.post.text == null || widget.post.text!.isEmpty) ...[
             const SizedBox(height: 4),
             Text(
-              dateFormat?.format(widget.post.createdAt) ?? widget.post.createdAt.toString(),
+              dateFormat.format(widget.post.createdAt),
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,

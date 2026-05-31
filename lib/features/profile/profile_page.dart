@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../utils/api_error_parser.dart';
+import 'package:go_router/go_router.dart';
+import '../../app/app_router.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
+import '../auth/sign_out_helper.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({Key? key}) : super(key: key);
+  const ProfilePage({super.key});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -46,16 +50,22 @@ class _ProfilePageState extends State<ProfilePage> {
       await UserService.instance.updateAvatarFromXFile(picked, onProgress: (p) {
         setState(() => _uploadProgress = p);
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Avatar updated')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Аватар обновлён')),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Avatar upload failed: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
+      );
     } finally {
-      setState(() {
-        _loading = false;
-        _uploadProgress = 0.0;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _uploadProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -64,13 +74,19 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _loading = true);
     try {
       await UserService.instance.updateDisplayName(name);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Profile updated')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Профиль сохранён')),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Update failed: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+      );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -78,14 +94,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final profile = UserService.instance.profile.value;
     final currentUser = AuthService.instance.currentUser;
-    
+
     // Если профиль null, но пользователь авторизован - показываем базовый профиль
     if (profile == null && currentUser != null) {
       // Пытаемся загрузить профиль
       UserService.instance.ensureProfileLoaded();
       // Показываем базовый профиль с данными из Auth
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: const Text('Профиль')),
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -104,26 +120,27 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 16),
               TextField(
                 controller: _nameCtl,
-                decoration: const InputDecoration(labelText: 'Display name'),
+                decoration:
+                    const InputDecoration(labelText: 'Отображаемое имя'),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: _saveName,
-                child: _loading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save')),
+                  onPressed: _saveName,
+                  child: _loading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Сохранить')),
             ],
           ),
         ),
       );
     }
-    
+
     if (profile == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: const Text('Профиль')),
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -137,7 +154,7 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: const Text('Профиль')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -182,13 +199,14 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 8),
             TextButton.icon(
               icon: const Icon(Icons.photo_camera),
-              label: const Text('Change avatar'),
+              label: const Text('Сменить аватар'),
               onPressed: _pickAndUploadAvatar,
             ),
             const SizedBox(height: 16),
             TextField(
                 controller: _nameCtl,
-                decoration: const InputDecoration(labelText: 'Display name')),
+                decoration:
+                    const InputDecoration(labelText: 'Отображаемое имя')),
             const SizedBox(height: 12),
             ElevatedButton(
                 onPressed: _saveName,
@@ -197,27 +215,23 @@ class _ProfilePageState extends State<ProfilePage> {
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save')),
+                    : const Text('Сохранить')),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: () async {
-                await AuthService.instance.signOut();
-                Navigator.of(context)
-                    .pushNamedAndRemoveUntil('/login', (_) => false);
-              },
-              child: const Text('Sign out'),
+              onPressed: () => confirmAndSignOut(context),
+              child: const Text('Выйти'),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               icon: const Icon(Icons.backup),
-              label: const Text('Backup & Restore'),
-              onPressed: () => Navigator.pushNamed(context, '/backup'),
+              label: const Text('Резервная копия'),
+              onPressed: () => context.push(BackupRoute.path),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
               icon: const Icon(Icons.notifications),
-              label: const Text('Notification Settings'),
-              onPressed: () => Navigator.pushNamed(context, '/notifications'),
+              label: const Text('Уведомления'),
+              onPressed: () => context.push(NotificationsRoute.path),
             ),
           ],
         ),

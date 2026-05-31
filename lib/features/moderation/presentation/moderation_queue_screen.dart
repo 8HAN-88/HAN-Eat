@@ -1,9 +1,12 @@
 // Экран очереди модерации для админов
 import 'package:flutter/material.dart';
+import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../services/moderation_service.dart';
 import 'package:intl/intl.dart';
+import '../../../app/app_router.dart';
+import '../../../../services/moderation_service.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class ModerationQueueScreen extends ConsumerStatefulWidget {
   const ModerationQueueScreen({super.key});
@@ -14,10 +17,12 @@ class ModerationQueueScreen extends ConsumerStatefulWidget {
 
 class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
   List<ModerationItem> _items = [];
+  final Map<int, List<ModerationReport>> _reportsByItemId = {};
   bool _isLoading = false;
   bool _hasMore = true;
-  String? _nextCursor;
-  String? _selectedContentType; // post | comment | user_profile
+  int _offset = 0;
+  Object? _loadError;
+  String? _selectedContentType; // post | comment
   final ScrollController _scrollController = ScrollController();
   
   @override
@@ -49,32 +54,45 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       _isLoading = true;
       if (refresh) {
         _items = [];
-        _nextCursor = null;
+        _offset = 0;
         _hasMore = true;
+        _loadError = null;
       }
     });
-    
+
     try {
       final response = await ModerationService.getPendingItems(
         limit: 20,
-        cursor: refresh ? null : _nextCursor,
+        offset: refresh ? 0 : _offset,
         contentType: _selectedContentType,
       );
-      
+
+      final merged = refresh
+          ? response.items
+          : [..._items, ...response.items];
+
       setState(() {
         if (refresh) {
-          _items = response.items;
-        } else {
-          _items.addAll(response.items);
+          _reportsByItemId.clear();
         }
-        _nextCursor = response.nextCursor;
+        _items = merged;
+        _offset = response.offset + response.items.length;
         _hasMore = response.hasMore;
       });
+
+      await _hydrateReportsForItems(response.items);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки: $e')),
-        );
+        setState(() => _loadError = e);
+        if (_items.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                userVisibleError(e, fallback: 'Не удалось загрузить'),
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -86,28 +104,60 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
   Future<void> _loadMore() async {
     await _loadItems();
   }
+
+  Future<void> _hydrateReportsForItems(List<ModerationItem> items) async {
+    final toFetch = items.where((item) {
+      if (item.recentReports.isNotEmpty) return false;
+      if (_reportsByItemId.containsKey(item.id)) return false;
+      return item.reportsCount24h > 0 || item.reason == 'reported';
+    }).toList();
+
+    if (toFetch.isEmpty) return;
+
+    await Future.wait(
+      toFetch.map((item) async {
+        try {
+          final reports = await ModerationService.fetchContentReports(
+            contentType: item.contentType,
+            contentId: item.contentId,
+          );
+          if (!mounted) return;
+          if (reports.isNotEmpty) {
+            setState(() => _reportsByItemId[item.id] = reports);
+          }
+        } catch (_) {
+          // Старый API без /content-reports — используем fallback из pending.
+        }
+      }),
+    );
+  }
   
+  bool _isUserReport(ModerationItem item) => item.reason == 'reported';
+
   Future<void> _approveItem(ModerationItem item) async {
     final comment = await _showCommentDialog(
-      title: 'Одобрить контент',
+      title: _isUserReport(item)
+          ? 'Оставить пост в ленте'
+          : 'Одобрить контент',
       hint: 'Комментарий (опционально)',
     );
     
-    if (comment == null && mounted) {
-      // Пользователь отменил
-      return;
-    }
-    
+    if (comment == null || !mounted) return;
+
     try {
       await ModerationService.approveItem(
         itemId: item.id,
-        comment: comment,
+        comment: comment.isEmpty ? null : comment,
       );
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Контент одобрен'),
+          SnackBar(
+            content: Text(
+              _isUserReport(item)
+                  ? 'Жалоба отклонена, пост остаётся в ленте'
+                  : 'Контент одобрен',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -116,16 +166,106 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
   }
   
+  int? _authorId(ModerationItem item) => item.userId ?? item.author?.id;
+
+  Future<void> _warnAuthor(ModerationItem item) async {
+    final userId = _authorId(item);
+    if (userId == null) return;
+
+    final message = await _showCommentDialog(
+      title: 'Предупреждение автору',
+      hint: 'Текст предупреждения (опционально)',
+    );
+    if (!mounted || message == null) return;
+
+    try {
+      await ModerationService.warnUser(
+        userId: userId,
+        message: message.isEmpty ? null : message,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Предупреждение отправлено')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _banAuthor(ModerationItem item) async {
+    final userId = _authorId(item);
+    if (userId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Заблокировать пользователя?'),
+        content: Text('Пользователь #$userId будет заблокирован.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Заблокировать'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ModerationService.banUser(userId: userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пользователь заблокирован')),
+        );
+        _loadItems(refresh: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _hideFromRecommendations(ModerationItem item) async {
+    try {
+      await ModerationService.hideContent(itemId: item.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Скрыто из рекомендаций')),
+        );
+        _loadItems(refresh: true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }
+  }
+
   Future<void> _rejectItem(ModerationItem item) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => _RejectDialog(),
+      builder: (context) => _RejectDialog(isUserReport: _isUserReport(item)),
     );
     
     if (result == null) return;
@@ -139,8 +279,12 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Контент отклонен'),
+          SnackBar(
+            content: Text(
+              _isUserReport(item)
+                  ? 'Пост убран из ленты (нарушение подтверждено)'
+                  : 'Контент отклонён',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -149,49 +293,24 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          SnackBar(content: Text(userVisibleError(e))),
         );
       }
     }
   }
   
+  /// `null` — отмена, `''` — отправить без текста, иначе текст сообщения.
   Future<String?> _showCommentDialog({
     required String title,
     required String hint,
-  }) async {
-    final controller = TextEditingController();
-    
-    final result = await showDialog<String>(
+  }) {
+    return showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: const OutlineInputBorder(),
-          ),
-          maxLines: 3,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final text = controller.text.trim();
-              Navigator.of(context).pop(text.isEmpty ? null : text);
-            },
-            child: const Text('ОК'),
-          ),
-        ],
+      builder: (dialogContext) => _ModeratorMessageDialog(
+        title: title,
+        hint: hint,
       ),
     );
-    
-    controller.dispose();
-    return result;
   }
   
   String _formatDate(DateTime date) {
@@ -225,8 +344,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return 'Пост';
       case 'comment':
         return 'Комментарий';
-      case 'user_profile':
-        return 'Профиль';
+      case 'channel':
+        return 'Канал';
       default:
         return type;
     }
@@ -261,6 +380,21 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
     }
   }
   
+  bool _hasAiScores(ModerationItem item) {
+    return item.toxicityScore != null ||
+        item.spamScore != null ||
+        item.nsfwScore != null ||
+        item.dangerScore != null;
+  }
+
+  Widget _scoreChip(String label, double value) {
+    return Chip(
+      label: Text('$label ${(value * 100).toStringAsFixed(0)}%'),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+    );
+  }
+
   String _getReasonLabel(String? reason) {
     if (reason == null) return 'Не указана';
     switch (reason) {
@@ -272,9 +406,178 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return 'Неподходящий контент';
       case 'copyright':
         return 'Нарушение авторских прав';
+      case 'reported':
+        return 'Жалоба пользователя';
       default:
         return reason;
     }
+  }
+
+  void _openContent(ModerationItem item) {
+    switch (item.contentType) {
+      case 'post':
+        context.push(PostFeedRoute.pathFor(item.contentId));
+        return;
+      case 'comment':
+        final postId = item.contentPreview?['post_id'];
+        if (postId is int) {
+          context.push(PostCommentsRoute.pathFor(postId));
+        } else if (postId is num) {
+          context.push(PostCommentsRoute.pathFor(postId.toInt()));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось определить пост комментария')),
+          );
+        }
+        return;
+      case 'channel':
+        context.push(ChannelDetailRoute.pathFor(item.contentId));
+        return;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Просмотр недоступен для типа «${item.contentType}»')),
+        );
+    }
+  }
+
+  String _openContentLabel(String contentType) {
+    switch (contentType) {
+      case 'post':
+        return 'Открыть пост';
+      case 'comment':
+        return 'Открыть комментарий';
+      case 'channel':
+        return 'Открыть канал';
+      default:
+        return 'Открыть контент';
+    }
+  }
+
+  List<ModerationReport> _reportsForItem(ModerationItem item) {
+    if (item.recentReports.isNotEmpty) {
+      return item.recentReports;
+    }
+    final cached = _reportsByItemId[item.id];
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    if (item.reason != 'reported' && item.reportsCount24h <= 0) {
+      return const [];
+    }
+
+    final reporterLine = item.flaggedByUser?.displayLine ??
+        (item.flaggedBy != null
+            ? 'Пользователь #${item.flaggedBy}'
+            : 'Неизвестный пользователь');
+
+    return [
+      ModerationReport(
+        id: 0,
+        reason: item.reportCategory ?? 'other',
+        reasonLabel: _reportCategoryLabel(item.reportCategory),
+        comment: item.reportComment,
+        reporter: item.flaggedByUser,
+        reporterDisplayName: reporterLine,
+        createdAt: item.createdAt,
+      ),
+    ];
+  }
+
+  String _reportCategoryLabel(String? category) {
+    if (category == null || category.isEmpty) return 'Жалоба пользователя';
+    const labels = {
+      'spam': 'Спам',
+      'harassment': 'Оскорбления',
+      'nsfw': 'NSFW',
+      'violence': 'Насилие',
+      'misinformation': 'Ложная информация',
+      'scam': 'Мошенничество',
+      'inappropriate': 'Неподходящий контент',
+      'copyright': 'Авторские права',
+      'other': 'Другое',
+    };
+    return labels[category] ?? category;
+  }
+
+  Widget _buildReportDetailLines(ModerationReport report) {
+    final when = report.createdAt != null
+        ? _formatDate(report.createdAt!)
+        : '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Жалобу отправил: ${report.reporterLine}',
+          style: const TextStyle(fontSize: 13),
+        ),
+        if (when.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              when,
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ),
+        if (report.hasComment)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 13),
+                children: [
+                  const TextSpan(
+                    text: 'Комментарий: ',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(text: report.comment),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildReportsSection(ModerationItem item) {
+    final reports = _reportsForItem(item);
+    if (reports.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Жалобы (${reports.length})',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          ...reports.map((report) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Причина: ${report.reasonLabel}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildReportDetailLines(report),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
   
   @override
@@ -306,8 +609,8 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                 child: Text('Комментарии'),
               ),
               const PopupMenuItem(
-                value: 'user_profile',
-                child: Text('Профили'),
+                value: 'channel',
+                child: Text('Каналы'),
               ),
             ],
             child: Padding(
@@ -327,25 +630,31 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       body: RefreshIndicator(
         onRefresh: () => _loadItems(refresh: true),
         child: _items.isEmpty && !_isLoading
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Нет элементов на модерации',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.55,
+                    child: _loadError != null
+                        ? AppEmptyState(
+                            icon: Icons.cloud_off_rounded,
+                            title: 'Не удалось загрузить очередь',
+                            subtitle: userVisibleError(
+                              _loadError!,
+                              fallback: 'Проверьте сеть',
+                            ),
+                            action: FilledButton(
+                              onPressed: () => _loadItems(refresh: true),
+                              child: const Text('Повторить'),
+                            ),
+                          )
+                        : const AppEmptyState(
+                            icon: Icons.check_circle_outline,
+                            title: 'Очередь пуста',
+                            subtitle: 'Нет элементов на модерации',
+                          ),
+                  ),
+                ],
               )
             : ListView.builder(
                 controller: _scrollController,
@@ -388,7 +697,7 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                                 style: const TextStyle(fontSize: 11),
                               ),
                               backgroundColor: _getReasonColor(item.reason)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               padding: EdgeInsets.zero,
                               visualDensity: VisualDensity.compact,
                             ),
@@ -399,9 +708,49 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               fontSize: 12,
                             ),
                           ),
+                          if (item.reportsCount24h > 0)
+                            Text(
+                              'Жалоб за 24ч: ${item.reportsCount24h}',
+                              style: TextStyle(
+                                color: Colors.orange[800],
+                                fontSize: 12,
+                              ),
+                            ),
+                          if (item.aiDecision != null)
+                            Text(
+                              'AI: ${item.aiDecision}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
                         ],
                       ),
                       children: [
+                        _buildReportsSection(item),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: FilledButton.tonalIcon(
+                            onPressed: () => _openContent(item),
+                            icon: const Icon(Icons.open_in_new),
+                            label: Text(_openContentLabel(item.contentType)),
+                          ),
+                        ),
+                        if (_hasAiScores(item))
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                if (item.toxicityScore != null)
+                                  _scoreChip('Токс.', item.toxicityScore!),
+                                if (item.spamScore != null)
+                                  _scoreChip('Спам', item.spamScore!),
+                                if (item.nsfwScore != null)
+                                  _scoreChip('NSFW', item.nsfwScore!),
+                                if (item.dangerScore != null)
+                                  _scoreChip('Опасн.', item.dangerScore!),
+                              ],
+                            ),
+                          ),
                         // Предпросмотр контента
                         if (item.contentPreview != null)
                           Padding(
@@ -435,7 +784,35 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               ],
                             ),
                           ),
-                        // Действия
+                        if (_authorId(item) != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () => _warnAuthor(item),
+                                  icon: const Icon(Icons.warning_amber_outlined, size: 18),
+                                  label: const Text('Предупредить'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: () => _banAuthor(item),
+                                  icon: const Icon(Icons.block, size: 18),
+                                  label: const Text('Бан'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                ),
+                                if (item.contentType == 'post')
+                                  OutlinedButton.icon(
+                                    onPressed: () => _hideFromRecommendations(item),
+                                    icon: const Icon(Icons.visibility_off, size: 18),
+                                    label: const Text('Скрыть из ленты'),
+                                  ),
+                              ],
+                            ),
+                          ),
                         Padding(
                           padding: const EdgeInsets.all(8),
                           child: Row(
@@ -444,7 +821,11 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               OutlinedButton.icon(
                                 onPressed: () => _rejectItem(item),
                                 icon: const Icon(Icons.close, size: 18),
-                                label: const Text('Отклонить'),
+                                label: Text(
+                                  _isUserReport(item)
+                                      ? 'Удалить пост'
+                                      : 'Отклонить',
+                                ),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.red,
                                 ),
@@ -453,7 +834,11 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
                               FilledButton.icon(
                                 onPressed: () => _approveItem(item),
                                 icon: const Icon(Icons.check, size: 18),
-                                label: const Text('Одобрить'),
+                                label: Text(
+                                  _isUserReport(item)
+                                      ? 'Оставить пост'
+                                      : 'Одобрить',
+                                ),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: Colors.green,
                                 ),
@@ -471,9 +856,67 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
   }
 }
 
+class _ModeratorMessageDialog extends StatefulWidget {
+  const _ModeratorMessageDialog({
+    required this.title,
+    required this.hint,
+  });
+
+  final String title;
+  final String hint;
+
+  @override
+  State<_ModeratorMessageDialog> createState() => _ModeratorMessageDialogState();
+}
+
+class _ModeratorMessageDialogState extends State<_ModeratorMessageDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        decoration: InputDecoration(
+          hintText: widget.hint,
+          border: const OutlineInputBorder(),
+        ),
+        maxLines: 3,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Отправить'),
+        ),
+      ],
+    );
+  }
+}
+
 class _RejectDialog extends StatefulWidget {
-  const _RejectDialog();
-  
+  const _RejectDialog({this.isUserReport = false});
+
+  final bool isUserReport;
+
   @override
   State<_RejectDialog> createState() => _RejectDialogState();
 }
@@ -490,48 +933,74 @@ class _RejectDialogState extends State<_RejectDialog> {
   
   @override
   Widget build(BuildContext context) {
+    final dialogWidth = MediaQuery.sizeOf(context).width * 0.88;
+
     return AlertDialog(
-      title: const Text('Отклонить контент'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Причина отклонения:'),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            value: _selectedReason,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'spam', child: Text('Спам')),
-              DropdownMenuItem(
-                value: 'inappropriate',
-                child: Text('Неподходящий контент'),
+      title: Text(
+        widget.isUserReport
+            ? 'Удалить пост из ленты'
+            : 'Отклонить контент',
+      ),
+      content: SizedBox(
+        width: dialogWidth.clamp(280.0, 400.0),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Причина отклонения:'),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: _selectedReason,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'spam',
+                    child: Text('Спам', overflow: TextOverflow.ellipsis),
+                  ),
+                  DropdownMenuItem(
+                    value: 'inappropriate',
+                    child: Text(
+                      'Неподходящий контент',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'copyright',
+                    child: Text(
+                      'Нарушение авторских прав',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'other',
+                    child: Text('Другое', overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedReason = value);
+                  }
+                },
               ),
-              DropdownMenuItem(
-                value: 'copyright',
-                child: Text('Нарушение авторских прав'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _commentController,
+                decoration: const InputDecoration(
+                  labelText: 'Комментарий (опционально)',
+                  hintText: 'Добавьте комментарий...',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                maxLines: 3,
               ),
-              DropdownMenuItem(value: 'other', child: Text('Другое')),
             ],
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _selectedReason = value);
-              }
-            },
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _commentController,
-            decoration: const InputDecoration(
-              labelText: 'Комментарий (опционально)',
-              hintText: 'Добавьте комментарий...',
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-          ),
-        ],
+        ),
       ),
       actions: [
         TextButton(
@@ -548,7 +1017,7 @@ class _RejectDialogState extends State<_RejectDialog> {
             });
           },
           style: FilledButton.styleFrom(backgroundColor: Colors.red),
-          child: const Text('Отклонить'),
+          child: Text(widget.isUserReport ? 'Удалить пост' : 'Отклонить'),
         ),
       ],
     );

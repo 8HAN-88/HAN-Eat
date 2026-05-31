@@ -33,6 +33,9 @@ class AuthService {
 
   static final List<void Function(User?)> _sessionListeners = [];
 
+  /// Смена входа/выхода — пересчёт redirect в [GoRouter].
+  static final ValueNotifier<int> sessionRevision = ValueNotifier(0);
+
   /// Подписка на смену аккаунта (вход/выход). Не вызывается при обновлении профиля (PATCH /users/me).
   static void registerSessionListener(void Function(User?) listener) {
     _sessionListeners.add(listener);
@@ -43,6 +46,7 @@ class AuthService {
   }
 
   static void _dispatchSessionChanged(User? user) {
+    sessionRevision.value++;
     unawaited(AccountSessionService.applySessionChange(user));
     for (final listener in List<void Function(User?)>.from(_sessionListeners)) {
       try {
@@ -228,7 +232,7 @@ class AuthService {
       
       if (googleUser == null) {
         // Пользователь отменил вход
-        throw AuthException('Google sign in cancelled');
+        throw AuthException('Вход через Google отменён');
       }
       
       // Получаем authentication details
@@ -238,7 +242,7 @@ class AuthService {
       final String? idToken = googleAuthData.idToken;
       
       if (idToken == null) {
-        throw AuthException('Failed to get Google ID token');
+        throw AuthException('Не удалось получить токен Google');
       }
       
       // Отправляем id_token на backend
@@ -256,7 +260,7 @@ class AuthService {
       if (e is AuthException) {
         rethrow;
       }
-      throw AuthException('Google sign in failed: $e');
+      throw AuthException('Не удалось войти через Google');
     }
   }
   
@@ -284,9 +288,9 @@ class AuthService {
       } else {
         try {
           final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw AuthException(error['detail'] ?? 'Google authentication failed');
+          throw AuthException(error['detail']?.toString() ?? 'Ошибка входа через Google');
         } catch (e) {
-          throw AuthException('Google authentication failed: ${response.statusCode}');
+          throw AuthException('Ошибка входа через Google (${response.statusCode})');
         }
       }
     } catch (e) {
@@ -294,7 +298,7 @@ class AuthService {
         rethrow;
       }
       if (_apiUnreachable(e)) {
-        throw AuthException('Backend сервер не запущен. Пожалуйста, запустите backend сервер (см. BACKEND_START_INSTRUCTIONS.md)');
+        throw AuthException('Сервер недоступен. Проверьте подключение к интернету.');
       }
       throw AuthException('Ошибка входа через Google: $e');
     }
@@ -370,7 +374,7 @@ class AuthService {
         rethrow;
       }
       if (_apiUnreachable(e)) {
-        throw AuthException('Backend сервер не запущен. Пожалуйста, запустите backend сервер (см. BACKEND_START_INSTRUCTIONS.md)');
+        throw AuthException('Сервер недоступен. Проверьте подключение к интернету.');
       }
       throw AuthException('Ошибка регистрации: $e');
     }
@@ -608,7 +612,8 @@ class AuthService {
       final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
       return nowSec >= exp.toInt() - skew.inSeconds;
     } catch (_) {
-      return true;
+      // Не считаем токен просроченным при ошибке decode — иначе лишний refresh/logout.
+      return false;
     }
   }
 
@@ -658,15 +663,34 @@ class AuthService {
         (refresh != null && refresh.isNotEmpty);
   }
   
+  /// Один refresh за раз: бэкенд выдаёт новый refresh_token, параллельные
+  /// запросы со старым токеном получали 401 и вызывали logout().
+  static Future<String>? _refreshInFlight;
+
   /// Обновить токен
   static Future<String> refreshToken() async {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _refreshTokenOnce();
+    _refreshInFlight = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_refreshInFlight, future)) {
+        _refreshInFlight = null;
+      }
+    }
+  }
+
+  static Future<String> _refreshTokenOnce() async {
     final prefs = await SharedPreferences.getInstance();
     final refreshToken = prefs.getString(_refreshTokenKey);
-    
+
     if (refreshToken == null) {
       throw AuthException('No refresh token available');
     }
-    
+
     final uri = Uri.parse('$baseUrl/auth/refresh');
     try {
       final response = await http.post(
@@ -679,12 +703,12 @@ class AuthService {
           throw AuthException('Превышено время ожидания ответа от сервера');
         },
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final newAccessToken = data['token'] as String;
         final newRefreshToken = data['refresh_token'] as String;
-        
+
         await _saveTokens(newAccessToken, newRefreshToken);
         return newAccessToken;
       }

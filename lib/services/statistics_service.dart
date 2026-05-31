@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/post.dart';
 import '../models/community.dart';
-import 'auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Статистика поста
 class PostStatistics {
@@ -94,15 +94,6 @@ class StatisticsService {
       final post = Post.fromFirestore(postDoc);
       final reactions = post.reactions;
 
-      // Получаем количество сохранений
-      final savesSnapshot = await _firestore
-          .collection('users')
-          .doc('_') // Заглушка, нужно использовать другой подход
-          .collection('savedPosts')
-          .where('postId', isEqualTo: postId)
-          .count()
-          .get();
-
       // Альтернативный способ - подсчитать через все пользователи
       int saves = 0;
       try {
@@ -144,7 +135,7 @@ class StatisticsService {
             : 0.0,
       );
     } catch (e) {
-      print('Error getting post statistics: $e');
+      debugPrint('Error getting post statistics: $e');
       rethrow;
     }
   }
@@ -216,7 +207,7 @@ class StatisticsService {
         topPosts: topPosts,
       );
     } catch (e) {
-      print('Error getting community statistics: $e');
+      debugPrint('Error getting community statistics: $e');
       rethrow;
     }
   }
@@ -228,7 +219,7 @@ class StatisticsService {
         'reactions.views': FieldValue.increment(1),
       });
     } catch (e) {
-      print('Error incrementing views: $e');
+      debugPrint('Error incrementing views: $e');
     }
   }
 
@@ -263,14 +254,6 @@ class StatisticsService {
       // Количество подписчиков
       int followersCount = 0;
       try {
-        final followersSnapshot = await _firestore
-            .collection('users')
-            .doc('_') // Заглушка
-            .collection('following')
-            .where(FieldPath.documentId, isEqualTo: userId)
-            .count()
-            .get();
-        
         // Альтернативный способ
         final allUsers = await _firestore.collection('users').limit(1000).get();
         for (final userDoc in allUsers.docs) {
@@ -293,7 +276,7 @@ class StatisticsService {
         'followersCount': followersCount,
       };
     } catch (e) {
-      print('Error getting user statistics: $e');
+      debugPrint('Error getting user statistics: $e');
       return {};
     }
   }

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
     # Vision для AI-скана (КБЖУ): дешевле и быстрее gpt-4o-mini
-    OPENAI_FOOD_SCAN_MODEL: str = "gpt-4.1-nano"
+    OPENAI_FOOD_SCAN_MODEL: str = "gpt-4o-mini"
     
     # Анализ фото (/analyze): авторизация обязательна; доступ по JWT ai_scan_ticket после POST /ai-scan/reserve.
     # Флаг ниже больше не используется в analyze_photo (оставлен для совместимости .env).
@@ -95,10 +95,12 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ID_MONTHLY: str = ""  # Price ID для месячной подписки
     STRIPE_PRICE_ID_YEARLY: str = ""  # Price ID для годовой подписки
     
-    # ЮKassa (для платежей в России, Беларуси, Казахстане - СБП, карты)
+    # ЮKassa (эквайринг для RU/BY/KZ; по умолчанию только СБП)
     YOOKASSA_ENABLED: bool = False
     YOOKASSA_SHOP_ID: str = ""  # Shop ID из личного кабинета ЮKassa
     YOOKASSA_SECRET_KEY: str = ""  # Secret Key из личного кабинета ЮKassa
+    # sbp — только СБП; any — страница ЮKassa со всеми способами (карты, кошельки)
+    YOOKASSA_PAYMENT_METHOD: str = "sbp"
     
     FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
 

@@ -1,3 +1,12 @@
+# 💳 Оплата подписки через СБП (ЮKassa)
+
+По умолчанию в checkout передаётся **только СБП** (`YOOKASSA_PAYMENT_METHOD=sbp`).
+Эквайринг остаётся в **ЮKassa** (ключи Shop ID / Secret Key те же); меняется способ оплаты на странице.
+
+Чтобы снова показывать карты и кошельки: `YOOKASSA_PAYMENT_METHOD=any`.
+
+---
+
 # 💳 Настройка ЮKassa с поддержкой СБП для России
 
 ## ✅ Что реализовано
@@ -45,7 +54,10 @@
 YOOKASSA_ENABLED=true
 YOOKASSA_SHOP_ID=ваш_shop_id
 YOOKASSA_SECRET_KEY=ваш_secret_key
+YOOKASSA_PAYMENT_METHOD=sbp
 ```
+
+В личном кабинете ЮKassa включите приём **СБП** (Настройки → Способы оплаты).
 
 ### 3. Установка зависимостей
 

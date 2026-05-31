@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
@@ -8,12 +9,52 @@ import 'moderation_service.dart';
 class PostModerationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// Статусы для ручной модерации
-  static const List<String> moderatorUserIds = [
-    // TODO: Загрузить из настроек/конфигурации
-    // 'moderator1@example.com',
-    // 'moderator2@example.com',
-  ];
+  /// Дополнительные uid модераторов (Firestore + `--dart-define=HANEAT_POST_MODERATOR_UIDS=id1,id2`).
+  static List<String> _extraModeratorUids = _uidsFromEnvironment();
+
+  static List<String> _uidsFromEnvironment() {
+    const raw = String.fromEnvironment(
+      'HANEAT_POST_MODERATOR_UIDS',
+      defaultValue: '',
+    );
+    if (raw.isEmpty) return [];
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  /// Текущий список (после [refreshModeratorUidsFromRemote] включает Firestore `config/post_moderation`).
+  static List<String> get extraModeratorUids =>
+      List<String>.unmodifiable(_extraModeratorUids);
+
+  /// Подтянуть `moderator_uids` из `config/post_moderation` и объединить с env.
+  static Future<void> refreshModeratorUidsFromRemote() async {
+    if (Firebase.apps.isEmpty) return;
+    final merged = <String>{..._uidsFromEnvironment()};
+    try {
+      final snap = await _firestore
+          .collection('config')
+          .doc('post_moderation')
+          .get(const GetOptions(source: Source.serverAndCache));
+      final data = snap.data();
+      final raw = data?['moderator_uids'] ?? data?['moderator_ids'];
+      if (raw is List) {
+        for (final e in raw) {
+          if (e == null) continue;
+          final s = e.toString().trim();
+          if (s.isNotEmpty) merged.add(s);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('PostModerationService.refreshModeratorUidsFromRemote: $e');
+      }
+    }
+    final list = merged.toList()..sort();
+    _extraModeratorUids = list;
+  }
 
   /// Автоматическая модерация поста при создании
   static Future<PostStatus> moderatePost(Post post) async {
@@ -48,7 +89,8 @@ class PostModerationService {
   /// Проверить, является ли пользователь модератором
   static bool isModerator(String? userId) {
     if (userId == null) return false;
-    return moderatorUserIds.contains(userId);
+    if (_extraModeratorUids.contains(userId)) return true;
+    return ModerationService.isModerator(userId);
   }
 
   /// Получить очередь постов на модерацию
@@ -252,7 +294,7 @@ class PostModerationService {
       final post = Post.fromFirestore(doc);
       final newStatus = await moderatePost(post);
 
-      if (newStatus != post.status) {
+      if (newStatus.name != post.status) {
         await _firestore.collection('posts').doc(postId).update({
           'status': newStatus.name,
           'remoderatedAt': FieldValue.serverTimestamp(),

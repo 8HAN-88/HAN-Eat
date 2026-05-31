@@ -11,6 +11,18 @@ import 'server_config.dart';
 class FeedService {
   // Используем общий конфиг для определения базового URL
   static String get baseUrl => ServerConfig.apiBaseUrl;
+
+  // Бэкенд принимает feed_type: all|reels|recipes|photos.
+  // UI-режимы (personalized/recent/popular/trending) пока маппим в all.
+  static String _toBackendFeedType(FeedSortMode mode) {
+    switch (mode) {
+      case FeedSortMode.personalized:
+      case FeedSortMode.recent:
+      case FeedSortMode.popular:
+      case FeedSortMode.trending:
+        return 'all';
+    }
+  }
   
   /// Получить ленту постов
   static Future<FeedResponse> getFeed({
@@ -20,9 +32,9 @@ class FeedService {
     bool followingOnly = false,
   }) async {
     try {
-      var token = await AuthService.getAccessToken();
+      var token = await AuthService.getAccessTokenForApi();
       if (token == null) {
-        throw Exception('Not authenticated');
+        throw Exception('Сессия истекла. Войдите снова.');
       }
 
       final uri = Uri.parse('$baseUrl/feed').replace(queryParameters: {
@@ -38,41 +50,31 @@ class FeedService {
       };
 
       var response = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 25),
         onTimeout: () => throw TimeoutException('Превышено время ожидания ответа от сервера'),
       );
 
       // При 401 пробуем обновить токен и повторить запрос
       if (response.statusCode == 401) {
-        try {
-          token = await AuthService.refreshToken();
-          headers['Authorization'] = 'Bearer $token';
-          response = await http.get(uri, headers: headers).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw TimeoutException('Превышено время ожидания ответа от сервера'),
-          );
-        } catch (_) {
-          throw Exception('Сессия истекла. Войдите снова.');
-        }
+        token = await AuthService.refreshToken();
+        headers['Authorization'] = 'Bearer $token';
+        response = await http.get(uri, headers: headers).timeout(
+          const Duration(seconds: 25),
+          onTimeout: () => throw TimeoutException('Превышено время ожидания ответа от сервера'),
+        );
       }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return FeedResponse.fromJson(data);
       } else {
-        throw Exception('Failed to load feed: ${response.statusCode}');
+        throw Exception('Не удалось загрузить ленту (${response.statusCode})');
       }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error in getFeed: $e');
       }
-      // При ошибке подключения возвращаем пустой ответ
-      if (e is TimeoutException || 
-          e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('Failed to fetch')) {
-        return FeedResponse(items: [], nextCursor: null, hasMore: false);
-      }
+      // Не подменяем сеть/таймаут пустой лентой — иначе кажется, что «просто нет постов».
       rethrow;
     }
   }
@@ -83,44 +85,111 @@ class FeedService {
     int limit = 20,
     String? lastPostId,
   }) async {
-    try {
-      final response = await getFeed(
-        cursor: lastPostId,
-        limit: limit,
-        feedType: mode.value,
-      );
-      return response.items;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error in getMainFeed: $e');
-      }
-      // При ошибке возвращаем пустой список
-      return [];
-    }
+    final response = await getFeed(
+      cursor: lastPostId,
+      limit: limit,
+      feedType: _toBackendFeedType(mode),
+    );
+    return response.items;
   }
   
-  /// Лайкнуть пост
+  /// Лайкнуть пост (`POST /posts/{id}/like`).
   static Future<void> likePost(int postId, String userId) async {
-    // TODO: Реализовать через API
-    throw UnimplementedError('likePost not implemented');
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Войдите в аккаунт, чтобы ставить лайки');
+    }
+    final uri = Uri.parse('$baseUrl/posts/$postId/like');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 201) return;
+    // Уже лайкнут — считаем успехом (идемпотентность UI).
+    if (response.statusCode == 400) return;
+    throw Exception('Не удалось поставить лайк: ${response.statusCode}');
   }
-  
-  /// Убрать лайк с поста
+
+  /// Убрать лайк (`DELETE /posts/{id}/like`).
   static Future<void> unlikePost(int postId, String userId) async {
-    // TODO: Реализовать через API
-    throw UnimplementedError('unlikePost not implemented');
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Войдите в аккаунт');
+    }
+    final uri = Uri.parse('$baseUrl/posts/$postId/like');
+    final response = await http.delete(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) return;
+    if (response.statusCode == 404) return;
+    throw Exception('Не удалось убрать лайк: ${response.statusCode}');
   }
-  
-  /// Скрыть пост
+
+  /// Скрыть пост в ленте: `POST /feed/dismiss` (аналитика + штраф в персональном скоринге).
   static Future<void> hidePost(String postId, String userId) async {
-    // TODO: Реализовать через API
-    throw UnimplementedError('hidePost not implemented');
+    final id = int.tryParse(postId);
+    if (id == null) {
+      throw Exception('Некорректный id поста');
+    }
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Войдите в аккаунт');
+    }
+    final uri = Uri.parse('$baseUrl/feed/dismiss');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'post_id': id}),
+    );
+    if (response.statusCode == 204 || response.statusCode == 200) return;
+    if (response.statusCode == 404) {
+      throw Exception('Пост не найден');
+    }
+    throw Exception('Не удалось скрыть пост: ${response.statusCode}');
   }
-  
-  /// Пожаловаться на пост
+
+  /// Пожаловаться на пост (`POST /posts/{id}/report`).
   static Future<void> reportPost(String postId, String userId, String reason) async {
-    // TODO: Реализовать через API
-    throw UnimplementedError('reportPost not implemented');
+    final id = int.tryParse(postId);
+    if (id == null) throw Exception('Некорректный id поста');
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Войдите в аккаунт');
+    }
+    final uri = Uri.parse('$baseUrl/posts/$id/report');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'reason': reason}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) return;
+    if (response.statusCode == 400) {
+      final detail = _tryDetail(response.body);
+      throw Exception(detail ?? 'Жалоба не принята');
+    }
+    throw Exception('Не удалось отправить жалобу: ${response.statusCode}');
+  }
+
+  static String? _tryDetail(String body) {
+    try {
+      final m = jsonDecode(body) as Map<String, dynamic>?;
+      return m?['detail']?.toString();
+    } catch (_) {
+      return null;
+    }
   }
 }
 

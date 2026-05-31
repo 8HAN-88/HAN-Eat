@@ -1,15 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../app/app_router.dart';
+import '../../../core/config/legal_urls.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
 
 class SupportSecurityScreen extends StatelessWidget {
   const SupportSecurityScreen({super.key});
 
-  Future<void> _launchEmail() async {
-    // Простая реализация без url_launcher
-    // В реальном приложении можно использовать url_launcher
-    // final uri = Uri.parse('mailto:support@haneat.app');
-    // if (await canLaunchUrl(uri)) {
-    //   await launchUrl(uri);
-    // }
+  Future<void> _openUrl(BuildContext context, String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть: $url')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchEmail(BuildContext context) async {
+    await _openUrl(context, LegalUrls.supportEmail);
   }
 
   @override
@@ -17,48 +29,36 @@ class SupportSecurityScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Поддержка и безопасность')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + floatingBottomPadding(context),
+        ),
         children: [
-          // GDPR и конфиденциальность
           Card(
             child: Column(
               children: [
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Конфиденциальность и GDPR'),
-                  subtitle: const Text('Политика конфиденциальности и обработка данных'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Конфиденциальность и GDPR'),
-                        content: const SingleChildScrollView(
-                          child: Text(
-                            'HAN Eat соблюдает все требования GDPR и защищает ваши персональные данные.\n\n'
-                            'Мы собираем только необходимую информацию для работы приложения:\n'
-                            '• Данные профиля (имя, аватар)\n'
-                            '• История поиска (локально)\n'
-                            '• Настройки приложения\n\n'
-                            'Ваши данные не передаются третьим лицам без вашего согласия.\n\n'
-                            'Вы можете запросить удаление всех ваших данных в любое время.',
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Понятно'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                  title: const Text('Политика конфиденциальности'),
+                  subtitle: const Text('На сайте haneat.app'),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => _openUrl(context, LegalUrls.privacyPolicy),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text('Пользовательское соглашение'),
+                  subtitle: const Text('Условия использования сервиса'),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => _openUrl(context, LegalUrls.termsOfService),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.security),
                   title: const Text('Безопасность данных'),
-                  subtitle: const Text('Как мы защищаем вашу информацию'),
+                  subtitle: const Text('Как мы защищаем информацию'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     showDialog(
@@ -67,12 +67,12 @@ class SupportSecurityScreen extends StatelessWidget {
                         title: const Text('Безопасность данных'),
                         content: const SingleChildScrollView(
                           child: Text(
-                            'Мы используем современные методы защиты:\n\n'
-                            '• Шифрование данных при передаче (HTTPS)\n'
-                            '• Безопасное хранение в Firebase\n'
-                            '• Регулярные обновления безопасности\n'
-                            '• Аутентификация через Firebase Auth\n\n'
-                            'Ваши пароли никогда не хранятся в открытом виде.',
+                            'HAN Eat использует:\n\n'
+                            '• HTTPS при передаче данных\n'
+                            '• JWT-авторизацию на наших серверах\n'
+                            '• Хранение данных в защищённой базе (PostgreSQL)\n'
+                            '• Хэширование паролей (не храним пароль в открытом виде)\n\n'
+                            'Push-уведомления могут обрабатываться через Firebase Cloud Messaging.',
                           ),
                         ),
                         actions: [
@@ -89,14 +89,13 @@ class SupportSecurityScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Модерация
           Card(
             child: Column(
               children: [
                 ListTile(
                   leading: const Icon(Icons.shield_outlined),
                   title: const Text('Модерация контента'),
-                  subtitle: const Text('Правила сообщества и модерация'),
+                  subtitle: const Text('Правила сообщества'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     showDialog(
@@ -106,11 +105,10 @@ class SupportSecurityScreen extends StatelessWidget {
                         content: const SingleChildScrollView(
                           child: Text(
                             'Правила сообщества:\n\n'
-                            '• Запрещено публиковать оскорбительный контент\n'
-                            '• Запрещено спамить или рекламировать\n'
+                            '• Запрещён оскорбительный контент и спам\n'
                             '• Уважайте других пользователей\n'
                             '• Контент должен быть связан с кулинарией\n\n'
-                            'Нарушение правил может привести к блокировке аккаунта.',
+                            'Нарушение правил может привести к ограничению аккаунта.',
                           ),
                         ),
                         actions: [
@@ -127,34 +125,13 @@ class SupportSecurityScreen extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.flag_outlined),
                   title: const Text('Пожаловаться на контент'),
-                  subtitle: const Text('Сообщить о нарушении правил'),
+                  subtitle: const Text('Сообщить о нарушении'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Пожаловаться'),
-                        content: const Text(
-                          'Если вы обнаружили контент, нарушающий правила сообщества, '
-                          'пожалуйста, сообщите нам об этом.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Отмена'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Жалоба отправлена. Спасибо!'),
-                                ),
-                              );
-                            },
-                            child: const Text('Отправить жалобу'),
-                          ),
-                        ],
+                    context.push(
+                      SupportContactRoute.withSubjectMessage(
+                        'Жалоба на контент',
+                        'Опишите ссылку на пост/канал и суть нарушения.',
                       ),
                     );
                   },
@@ -163,37 +140,15 @@ class SupportSecurityScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Поддержка
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.help_outline),
-                  title: const Text('Помощь и поддержка'),
-                  subtitle: const Text('Часто задаваемые вопросы'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('FAQ будет доступен в ближайшее время'),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.email_outlined),
                   title: const Text('Связаться с нами'),
                   subtitle: const Text('support@haneat.app'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Email: support@haneat.app'),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  },
+                  onTap: () => _launchEmail(context),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -201,36 +156,17 @@ class SupportSecurityScreen extends StatelessWidget {
                   title: const Text('Сообщить об ошибке'),
                   subtitle: const Text('Помогите улучшить приложение'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Форма отправки ошибок будет доступна в ближайшее время'),
-                      ),
-                    );
-                  },
+                  onTap: () => context.push(SupportContactRoute.bugReport()),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          // О приложении
           Card(
             child: ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('О приложении'),
-              subtitle: const Text('Версия 1.0.0'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'HAN Eat',
-                  applicationVersion: '1.0.0',
-                  applicationIcon: const Icon(Icons.restaurant_menu, size: 48),
-                  children: [
-                    const Text('Приложение для поиска рецептов и планирования питания.'),
-                  ],
-                );
-              },
+              subtitle: const Text('H.A.N. Eat'),
             ),
           ),
         ],
@@ -238,4 +174,3 @@ class SupportSecurityScreen extends StatelessWidget {
     );
   }
 }
-

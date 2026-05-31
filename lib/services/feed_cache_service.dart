@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/post.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
-import 'feed_service.dart';
 
 /// Сервис для кеширования ленты оффлайн
 class FeedCacheService {
@@ -108,11 +107,19 @@ class FeedCacheService {
     return DateTime.now().difference(lastSync) > maxAgeDuration;
   }
 
-  /// Обновить один пост в кеше
+  /// Обновить один пост в кеше (если он есть в сохранённой ленте).
   Future<void> updatePostInCache(Post updatedPost) async {
-    // Преобразуем Post в PostModel для кеша
-    // TODO: Реализовать преобразование Post -> PostModel
-    // Пока просто игнорируем
+    await upsertPostModelInCache(PostModel.fromPost(updatedPost));
+  }
+
+  /// Подставить свежий [PostModel] вместо существующего с тем же `id`.
+  Future<void> upsertPostModelInCache(PostModel pm) async {
+    if (cachedPosts.value.isEmpty) return;
+    final cached = List<PostModel>.from(cachedPosts.value);
+    final idx = cached.indexWhere((p) => p.id == pm.id);
+    if (idx < 0) return;
+    cached[idx] = pm;
+    await cachePosts(cached);
   }
 
   /// Удалить пост из кеша

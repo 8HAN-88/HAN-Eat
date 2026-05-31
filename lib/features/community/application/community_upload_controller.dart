@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/api_service.dart';
+import '../../../services/product_analytics.dart';
+import '../../../utils/api_error_parser.dart';
 
 class CommunityUploadState {
   const CommunityUploadState({
@@ -59,7 +61,7 @@ class CommunityUploadController
       final videoBase64 = base64Encode(videoBytes);
       final thumbnailBase64 =
           thumbnailBytes != null ? base64Encode(thumbnailBytes) : null;
-      await ApiService.uploadCommunityVideo(
+      final video = await ApiService.uploadCommunityVideo(
         title: title,
         author: author,
         description: description,
@@ -68,12 +70,25 @@ class CommunityUploadController
         thumbnailBase64: thumbnailBase64,
         avatar: avatar,
       );
+      await ProductAnalytics.logEvent(
+        eventType: 'community_reel_upload',
+        entityType: 'post',
+        entityId: video.id,
+        metadata: {'tags': tags},
+      );
       state = state.copyWith(uploading: false, success: true, error: null);
       return true;
+    } on ApiClientException catch (e) {
+      state = state.copyWith(
+        uploading: false,
+        error: e.message,
+        success: false,
+      );
+      return false;
     } catch (e) {
       state = state.copyWith(
         uploading: false,
-        error: 'Не удалось загрузить ролик: $e',
+        error: userVisibleError(e, fallback: 'Не удалось загрузить ролик'),
         success: false,
       );
       return false;

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.community import Channel
 from app.models.community_member import ChannelMember
+from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
 from app.models.notification import Notification
 from app.models.user import User
 from app.services.push_service import get_push_service
@@ -69,7 +70,8 @@ def send_channel_post_notification(
 
     subscribers = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id != author_id
+        ChannelMember.status == MEMBER_STATUS_ACTIVE,
+        ChannelMember.user_id != author_id,
     ).all()
 
     if not subscribers:
@@ -131,7 +133,8 @@ def send_channel_announcement(
 
     subscribers = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id != author_id
+        ChannelMember.status == MEMBER_STATUS_ACTIVE,
+        ChannelMember.user_id != author_id,
     ).all()
 
     if not subscribers:

@@ -81,7 +81,7 @@ class CountryService:
         country_code = country_code.upper()
         
         if country_code in ["RU", "BY", "KZ"]:
-            return "yookassa"  # ЮKassa с поддержкой СБП
+            return "yookassa"  # ЮKassa (по умолчанию checkout только СБП)
         elif country_code in ["US", "GB", "CA", "AU", "NZ", "IE"]:
             return "stripe"  # Stripe для западных стран (пока отключено)
         else:

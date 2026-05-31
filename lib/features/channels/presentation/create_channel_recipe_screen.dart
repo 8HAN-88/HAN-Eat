@@ -1,27 +1,34 @@
 // Экран создания рецепта в канале
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../services/channel_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../services/media_upload_service.dart';
+import '../../settings/application/subscription_status_provider.dart';
+import '../../../core/recipe/recipe_nutrition_input.dart';
+import '../../../widgets/recipe_nutrition_form_section.dart';
+import '../../../widgets/recipe_visibility_selector.dart';
+import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
 
 class CreateChannelRecipeScreen extends ConsumerStatefulWidget {
   final int channelId;
   final String channelName;
-  
+
   const CreateChannelRecipeScreen({
-    Key? key,
+    super.key,
     required this.channelId,
     required this.channelName,
-  }) : super(key: key);
-  
+  });
+
   @override
-  ConsumerState<CreateChannelRecipeScreen> createState() => _CreateChannelRecipeScreenState();
+  ConsumerState<CreateChannelRecipeScreen> createState() =>
+      _CreateChannelRecipeScreenState();
 }
 
-class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeScreen> {
+class _CreateChannelRecipeScreenState
+    extends ConsumerState<CreateChannelRecipeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -31,14 +38,43 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
   final _cookTimeController = TextEditingController();
   final _servingsController = TextEditingController();
   final _caloriesController = TextEditingController();
-  
-  List<String> _ingredients = [];
-  List<RecipeStep> _steps = [];
-  List<String> _tags = [];
+  final _proteinController = TextEditingController();
+  final _carbsController = TextEditingController();
+  final _fatController = TextEditingController();
+  final _fiberController = TextEditingController();
+
+  final List<String> _ingredients = [];
+  final List<RecipeStep> _steps = [];
+  final List<String> _tags = [];
   String? _mainImageUrl;
   bool _isLoading = false;
+  String _recipeVisibility = 'public';
+  String? _channelVisibilityMode;
   final ImagePicker _picker = ImagePicker();
-  
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChannelMode();
+  }
+
+  Future<void> _loadChannelMode() async {
+    try {
+      final channel = await ChannelService.getChannel(widget.channelId);
+      if (!mounted) return;
+      final hasCreator = ref.read(subscriptionStatusProvider).asData?.value
+              ?.hasCreator ??
+          false;
+      setState(() {
+        _channelVisibilityMode = channel.recipeVisibilityMode;
+        _recipeVisibility = RecipeVisibilitySelector.defaultForChannel(
+          _channelVisibilityMode,
+          hasCreator: hasCreator,
+        );
+      });
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -49,9 +85,13 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
     _cookTimeController.dispose();
     _servingsController.dispose();
     _caloriesController.dispose();
+    _proteinController.dispose();
+    _carbsController.dispose();
+    _fatController.dispose();
+    _fiberController.dispose();
     super.dispose();
   }
-  
+
   void _addIngredient() {
     final text = _ingredientController.text.trim();
     if (text.isNotEmpty) {
@@ -61,13 +101,13 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
       });
     }
   }
-  
+
   void _removeIngredient(int index) {
     setState(() {
       _ingredients.removeAt(index);
     });
   }
-  
+
   void _addStep() {
     final text = _stepController.text.trim();
     if (text.isNotEmpty) {
@@ -81,7 +121,7 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
       });
     }
   }
-  
+
   void _removeStep(int index) {
     setState(() {
       _steps.removeAt(index);
@@ -95,26 +135,26 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
       }
     });
   }
-  
+
   Future<void> _pickMainImage() async {
     try {
       final image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
-          setState(() => _isLoading = true);
-          try {
-            // Загружаем изображение
-            final uploadResult = await MediaUploadService.uploadMediaFile(
-              file: image,
-              fileType: 'image',
-            );
-            setState(() {
-              _mainImageUrl = uploadResult.url;
-              _isLoading = false;
-            });
+        setState(() => _isLoading = true);
+        try {
+          // Загружаем изображение
+          final uploadResult = await MediaUploadService.uploadMediaFile(
+            file: image,
+            fileType: 'image',
+          );
+          setState(() {
+            _mainImageUrl = uploadResult.url;
+            _isLoading = false;
+          });
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка загрузки изображения: $e')),
+              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить изображение'))),
             );
           }
           setState(() => _isLoading = false);
@@ -123,34 +163,34 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора изображения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
   }
-  
+
   Future<void> _addStepImage(int stepIndex) async {
     try {
       final image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
-          setState(() => _isLoading = true);
-          try {
-            final uploadResult = await MediaUploadService.uploadMediaFile(
-              file: image,
-              fileType: 'image',
+        setState(() => _isLoading = true);
+        try {
+          final uploadResult = await MediaUploadService.uploadMediaFile(
+            file: image,
+            fileType: 'image',
+          );
+          setState(() {
+            _steps[stepIndex] = RecipeStep(
+              number: _steps[stepIndex].number,
+              text: _steps[stepIndex].text,
+              imageUrl: uploadResult.url,
             );
-            setState(() {
-              _steps[stepIndex] = RecipeStep(
-                number: _steps[stepIndex].number,
-                text: _steps[stepIndex].text,
-                imageUrl: uploadResult.url,
-              );
-              _isLoading = false;
-            });
+            _isLoading = false;
+          });
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка загрузки изображения: $e')),
+              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить изображение'))),
             );
           }
           setState(() => _isLoading = false);
@@ -159,31 +199,31 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка выбора изображения: $e')),
+          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
   }
-  
+
   Future<void> _handlePublish() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_ingredients.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Добавьте хотя бы один ингредиент')),
       );
       return;
     }
-    
+
     if (_steps.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Добавьте хотя бы один шаг')),
       );
       return;
     }
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       // Формируем медиа
       List<Map<String, dynamic>> media = [];
@@ -193,16 +233,19 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
           'url': _mainImageUrl,
         });
       }
-      
+
       // Формируем шаги
-      List<Map<String, dynamic>> stepsData = _steps.map((step) => {
-        'number': step.number,
-        'text': step.text,
-        if (step.imageUrl != null) 'image_url': step.imageUrl,
-      }).toList();
-      
-      final result = await ChannelService.createChannelRecipe(
+      List<Map<String, dynamic>> stepsData = _steps
+          .map((step) => {
+                'number': step.number,
+                'text': step.text,
+                if (step.imageUrl != null) 'image_url': step.imageUrl,
+              })
+          .toList();
+
+      await ChannelService.createChannelRecipe(
         channelId: widget.channelId,
+        visibility: _recipeVisibility,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim().isEmpty
             ? null
@@ -219,24 +262,43 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
         servings: _servingsController.text.trim().isEmpty
             ? null
             : int.tryParse(_servingsController.text.trim()),
-        calories: _caloriesController.text.trim().isEmpty
-            ? null
-            : int.tryParse(_caloriesController.text.trim()),
+        calories: parseIntField(_caloriesController.text),
+        proteinG: parseDoubleField(_proteinController.text),
+        carbsG: parseDoubleField(_carbsController.text),
+        fatG: parseDoubleField(_fatController.text),
+        fiberG: parseDoubleField(_fiberController.text),
         tags: _tags.isNotEmpty ? _tags : null,
       );
-      
+
       if (mounted) {
         context.pop(true); // Возвращаемся с успехом
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Рецепт опубликован')),
         );
       }
+    } on ApiClientException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'HAN_CREATOR_REQUIRED') {
+        await showCreatorRecipeUpsellSheet(context);
+        return;
+      }
+      final text = e.isContentBlocked
+          ? 'Рецепт не прошёл модерацию и не будет опубликован.'
+          : e.message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(text),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     } catch (e) {
       if (mounted) {
-        final errorMessage = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка публикации: $errorMessage'),
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось опубликовать рецепт'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 5),
           ),
@@ -249,11 +311,17 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+    final status = ref.watch(subscriptionStatusProvider);
+    final hasCreator = status.when(
+      data: (s) => s?.hasCreator ?? false,
+      loading: () => false,
+      error: (_, __) => false,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Новый рецепт в ${widget.channelName}'),
@@ -281,6 +349,13 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              RecipeVisibilitySelector(
+                value: _recipeVisibility,
+                hasCreator: hasCreator,
+                channelMode: _channelVisibilityMode,
+                onChanged: (v) => setState(() => _recipeVisibility = v),
+              ),
+              const SizedBox(height: 16),
               // Название
               TextFormField(
                 controller: _titleController,
@@ -297,7 +372,7 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 },
               ),
               const SizedBox(height: 16),
-              
+
               // Описание
               TextFormField(
                 controller: _descriptionController,
@@ -309,7 +384,7 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              
+
               // Главное изображение
               Card(
                 child: InkWell(
@@ -329,10 +404,13 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                             ),
                           )
                         else
-                          Icon(Icons.add_photo_alternate, size: 64, color: theme.colorScheme.primary),
+                          Icon(Icons.add_photo_alternate,
+                              size: 64, color: theme.colorScheme.primary),
                         const SizedBox(height: 8),
                         Text(
-                          _mainImageUrl != null ? 'Изменить изображение' : 'Добавить главное изображение',
+                          _mainImageUrl != null
+                              ? 'Изменить изображение'
+                              : 'Добавить главное изображение',
                           style: theme.textTheme.bodyMedium,
                         ),
                       ],
@@ -341,7 +419,7 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Ингредиенты
               Text('Ингредиенты *', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -380,7 +458,7 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 }),
               ],
               const SizedBox(height: 16),
-              
+
               // Шаги
               Text('Шаги приготовления *', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -415,7 +493,8 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                       ),
                       title: Text(step.text),
                       subtitle: step.imageUrl != null
-                          ? Image.network(step.imageUrl!, height: 100, fit: BoxFit.cover)
+                          ? Image.network(step.imageUrl!,
+                              height: 100, fit: BoxFit.cover)
                           : null,
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -436,9 +515,10 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 }),
               ],
               const SizedBox(height: 16),
-              
+
               // Дополнительная информация
-              Text('Дополнительная информация', style: theme.textTheme.titleMedium),
+              Text('Дополнительная информация',
+                  style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -466,30 +546,30 @@ class _CreateChannelRecipeScreenState extends ConsumerState<CreateChannelRecipeS
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _servingsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Порций',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _caloriesController,
-                      decoration: const InputDecoration(
-                        labelText: 'Калории',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
+              TextFormField(
+                controller: _servingsController,
+                decoration: const InputDecoration(
+                  labelText: 'Порций',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              RecipeNutritionFormSection(
+                caloriesController: _caloriesController,
+                proteinController: _proteinController,
+                carbsController: _carbsController,
+                fatController: _fatController,
+                fiberController: _fiberController,
+                getTitle: () => _titleController.text,
+                getDescription: () => _descriptionController.text,
+                getIngredients: () => _ingredients,
+                getStepTexts: () =>
+                    _steps.map((s) => s.text).where((t) => t.isNotEmpty).toList(),
+                getServings: () {
+                  final t = _servingsController.text.trim();
+                  return int.tryParse(t) ?? 1;
+                },
               ),
               const SizedBox(height: 32),
             ],
@@ -504,11 +584,10 @@ class RecipeStep {
   final int number;
   final String text;
   final String? imageUrl;
-  
+
   RecipeStep({
     required this.number,
     required this.text,
     this.imageUrl,
   });
 }
-

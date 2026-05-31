@@ -2,9 +2,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'server_config.dart';
 
 class SupportService {
-  static const String baseUrl = 'http://localhost:5000/api/v1';
+  static String get baseUrl => ServerConfig.apiBaseUrl;
   
   /// Создать обращение в поддержку
   static Future<CreateTicketResponse> createTicket({
@@ -12,7 +13,7 @@ class SupportService {
     required String subject,
     required String message,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -46,7 +47,7 @@ class SupportService {
     int limit = 20,
     int offset = 0,
   }) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
@@ -82,7 +83,7 @@ class SupportService {
   
   /// Получить детали обращения
   static Future<SupportTicket> getTicket(int ticketId) async {
-    final token = await AuthService.getAccessToken();
+    final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }

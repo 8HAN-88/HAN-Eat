@@ -13,6 +13,17 @@ from app.core.production_startup import collect_production_issues
 router = APIRouter()
 
 
+def _s3_fully_configured() -> bool:
+    if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
+        return False
+    try:
+        from app.services.media_service import MediaService
+
+        return not MediaService().uses_api_upload
+    except Exception:
+        return False
+
+
 @router.get("/readiness")
 async def system_readiness():
     """Агрегированная проверка перед production (без секретов)."""
@@ -31,7 +42,7 @@ async def system_readiness():
             "issues": payments,
         },
         "media": {
-            "s3_configured": bool(settings.S3_ACCESS_KEY and settings.S3_SECRET_KEY),
+            "s3_configured": _s3_fully_configured(),
             "cdn_url": settings.CDN_URL,
             "issues": media,
         },

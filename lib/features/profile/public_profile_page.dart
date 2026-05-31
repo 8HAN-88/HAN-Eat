@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../utils/api_error_parser.dart';
 import '../../services/user_service.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String uid;
-  const PublicProfilePage({required this.uid, Key? key}) : super(key: key);
+  const PublicProfilePage({required this.uid, super.key});
 
   @override
   State<PublicProfilePage> createState() => _PublicProfilePageState();
@@ -23,6 +24,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   Future<void> _load() async {
     final p = await UserService.instance.loadPublicProfile(widget.uid);
     final following = await UserService.instance.isFollowing(widget.uid);
+    if (!mounted) return;
     setState(() {
       _profile = p;
       _isFollowing = following;
@@ -38,14 +40,19 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
         await UserService.followUser(widget.uid);
       }
       final following = await UserService.instance.isFollowing(widget.uid);
+      if (!mounted) return;
       setState(() {
         _isFollowing = following;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Action failed: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выполнить действие'))),
+      );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -53,7 +60,7 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
   Widget build(BuildContext context) {
     final profile = _profile;
     return Scaffold(
-      appBar: AppBar(title: Text(profile?.displayName ?? 'Profile')),
+      appBar: AppBar(title: Text(profile?.displayName ?? 'Профиль')),
       body: profile == null
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -66,19 +73,25 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
                           ? NetworkImage(profile.avatarUrl!)
                           : null,
                       child: profile.avatarUrl == null
-                          ? Text((profile.displayName ?? '?')[0].toUpperCase())
+                          ? Text(_initialForName(profile.displayName))
                           : null),
                   const SizedBox(height: 12),
-                  Text(profile.displayName ?? 'No name',
+                  Text(profile.displayName,
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
                   ElevatedButton(
                     onPressed: _loading ? null : _toggleFollow,
-                    child: Text(_isFollowing ? 'Unfollow' : 'Follow'),
+                    child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
                   ),
                 ],
               ),
             ),
     );
+  }
+
+  String _initialForName(String name) {
+    final t = name.trim();
+    if (t.isEmpty) return '?';
+    return t[0].toUpperCase();
   }
 }

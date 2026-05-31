@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/feed_delivery.dart';
+import 'package:flutter/foundation.dart';
 
 /// Сервис для управления доставкой контента в ленты
 class FeedDeliveryService {
@@ -29,7 +30,7 @@ class FeedDeliveryService {
 
       await deliveryRef.set(delivery.toFirestore());
     } catch (e) {
-      print('Error creating feed delivery: $e');
+      debugPrint('Error creating feed delivery: $e');
       rethrow;
     }
   }
@@ -68,7 +69,7 @@ class FeedDeliveryService {
 
       await deliverySnapshot.docs.first.reference.update(updates);
     } catch (e) {
-      print('Error updating feed delivery: $e');
+      debugPrint('Error updating feed delivery: $e');
       rethrow;
     }
   }
@@ -85,7 +86,7 @@ class FeedDeliveryService {
       if (snapshot.docs.isEmpty) return null;
       return FeedDelivery.fromFirestore(snapshot.docs.first);
     } catch (e) {
-      print('Error getting feed delivery: $e');
+      debugPrint('Error getting feed delivery: $e');
       return null;
     }
   }

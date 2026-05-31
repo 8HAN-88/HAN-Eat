@@ -41,24 +41,10 @@ class RecipeService {
   Future<void> _startConnectivityMonitor() async {
     final conn = Connectivity();
     final initial = await conn.checkConnectivity();
-    online.value = initial != ConnectivityResult.none;
+    online.value = !initial.contains(ConnectivityResult.none);
 
     _connectivitySub = conn.onConnectivityChanged.listen((result) {
-      bool isOnline = true;
-      try {
-        if (result is List) {
-          // Some implementations may emit List<ConnectivityResult>
-          isOnline = result.isNotEmpty
-              ? result.first != ConnectivityResult.none
-              : false;
-        } else if (result is ConnectivityResult) {
-          isOnline = result != ConnectivityResult.none;
-        } else {
-          isOnline = true;
-        }
-      } catch (_) {
-        isOnline = true;
-      }
+      final isOnline = !result.contains(ConnectivityResult.none);
       final prev = online.value;
       online.value = isOnline;
       if (!prev && isOnline) {
@@ -101,9 +87,10 @@ class RecipeService {
         if (kDebugMode) debugPrint('remote fetch error: $e');
       }
     }
-    // fallback to mock models
-    final remote = getMockRecipeModels();
-    return remote;
+    if (kReleaseMode) {
+      return [];
+    }
+    return getMockRecipeModels();
   }
 
   Future<void> _mergeRemote(List<RecipeModel> remote) async {

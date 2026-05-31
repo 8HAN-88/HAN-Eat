@@ -13,12 +13,12 @@ class InlineVideoPlayer extends StatefulWidget {
   final VoidCallback? onTap;
 
   const InlineVideoPlayer({
-    Key? key,
+    super.key,
     required this.videoUrl,
     this.thumbnailUrl,
     this.aspectRatio = 16 / 9,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   State<InlineVideoPlayer> createState() => _InlineVideoPlayerState();

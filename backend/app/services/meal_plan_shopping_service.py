@@ -1,9 +1,8 @@
 """Список покупок из плана: объединение ингредиентов и категории."""
 from __future__ import annotations
 
-import re
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from app.schemas.meal_plan import (
     DayPlan,
@@ -11,6 +10,7 @@ from app.schemas.meal_plan import (
     ShoppingListItem,
     ShoppingListPayload,
 )
+from app.services.ingredient_quantity import merge_ingredient_lines
 
 CATEGORY_RULES: List[Tuple[str, str, List[str]]] = [
     ("vegetables", "Овощи", ["овощ", "салат", "помидор", "огурец", "морков", "лук", "перец", "брокколи", "шпинат", "кабачок", "авокадо", "картоф", "чеснок", "зелень", "ягод"]),
@@ -23,20 +23,25 @@ CATEGORY_RULES: List[Tuple[str, str, List[str]]] = [
 
 
 class MealPlanShoppingService:
-    def build_from_days(self, days: List[DayPlan]) -> ShoppingListPayload:
-        merged: Dict[str, int] = defaultdict(int)
+    def build_from_days(
+        self,
+        days: List[DayPlan],
+        *,
+        family_size: int = 1,
+    ) -> ShoppingListPayload:
+        lines: List[str] = []
         for day in days:
             for meal in day.meals:
-                for ing in meal.ingredients:
-                    key = self._normalize(ing)
-                    if key:
-                        merged[key] += 1
+                lines.extend(meal.ingredients)
+
+        merged = merge_ingredient_lines(lines, portions=max(1, family_size))
 
         by_cat: Dict[str, List[ShoppingListItem]] = defaultdict(list)
-        for name, count in sorted(merged.items()):
-            cat_id, cat_name = self._categorize(name)
-            qty = f"×{count}" if count > 1 else None
-            by_cat[cat_id].append(ShoppingListItem(name=name.capitalize(), quantity=qty))
+        for parsed in merged.values():
+            cat_id, _cat_name = self._categorize(parsed.name)
+            display_name = parsed.name[:1].upper() + parsed.name[1:] if parsed.name else parsed.name
+            qty = parsed.display_quantity() or "по вкусу"
+            by_cat[cat_id].append(ShoppingListItem(name=display_name, quantity=qty))
 
         categories: List[ShoppingCategory] = []
         order = [r[0] for r in CATEGORY_RULES] + ["other"]
@@ -50,13 +55,9 @@ class MealPlanShoppingService:
                 )
         return ShoppingListPayload(categories=categories)
 
-    @staticmethod
-    def _normalize(name: str) -> str:
-        s = re.sub(r"\s+", " ", name.strip().lower())
-        return s
-
     def _categorize(self, name: str) -> Tuple[str, str]:
+        low = name.lower()
         for cat_id, cat_name, keywords in CATEGORY_RULES:
-            if any(kw in name for kw in keywords):
+            if any(kw in low for kw in keywords):
                 return cat_id, cat_name
         return "other", "Другое"

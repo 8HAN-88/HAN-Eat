@@ -1,41 +1,89 @@
-// Утилита для оптимизации URL изображений
-// Помогает использовать обработанные (resized) версии изображений, как в Telegram
+import 'package:flutter/foundation.dart';
+
+import '../services/server_config.dart';
+
+// Утилита для оптимизации URL изображений рецептов.
+
+/// Превью Spoonacular: большие размеры (556x370) из РФ грузятся десятки секунд.
+String shrinkSpoonacularImageUrl(
+  String url, {
+  String dimensions = '312x231',
+}) {
+  if (!url.contains('spoonacular.com')) return url;
+  return url.replaceFirst(
+    RegExp(r'-\d+x\d+(?=\.(jpg|jpeg|png|webp)$)', caseSensitive: false),
+    '-$dimensions',
+  );
+}
+
+/// URL для сетки карточек «Меню» (баланс скорости и чёткости на Retina).
+String getRecipeCardImageUrl(String raw) =>
+    getRecipeImageUrl(raw, spoonacularDimensions: '240x150');
+
+/// URL для полноэкранного просмотра.
+String getRecipeDetailImageUrl(String raw) =>
+    getRecipeImageUrl(raw, spoonacularDimensions: '556x370');
+
+/// Общая сборка URL изображения рецепта.
+String getRecipeImageUrl(
+  String raw, {
+  String spoonacularDimensions = '312x231',
+}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return trimmed;
+
+  var url = trimmed;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://$url';
+  }
+
+  if (url.contains('img.spoonacular.com') || url.contains('spoonacular.com')) {
+    return ServerConfig.resolveRecipeImageUrl(
+      shrinkSpoonacularImageUrl(url, dimensions: spoonacularDimensions),
+    );
+  }
+
+  return getOptimizedImageUrl(
+    ServerConfig.resolveRecipeImageUrl(ServerConfig.resolveMediaUrl(trimmed)),
+  );
+}
 
 /// Получить оптимизированный URL изображения (medium версия если доступна)
-/// Это помогает избежать размытия изображений при отображении
 String getOptimizedImageUrl(String originalUrl) {
-  // Если URL уже содержит _medium, используем его
+  if (originalUrl.contains('spoonacular.com')) {
+    return originalUrl;
+  }
+
   if (originalUrl.contains('_medium.')) {
     return originalUrl;
   }
-  
-  // Пытаемся получить medium версию, заменяя расширение на _medium.jpg
-  // Например: uploads/user_1/2025/01/15/uuid.jpg -> uploads/user_1/2025/01/15/uuid_medium.jpg
+
   try {
     final uri = Uri.parse(originalUrl);
     final path = uri.path;
-    
-    // Если это локальный URL или URL из uploads, пытаемся получить medium версию
+    final host = uri.host.toLowerCase();
+
+    if (path.contains('/uploads/file/') ||
+        path.contains('/api/v1/uploads/file/') ||
+        host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1') {
+      return originalUrl;
+    }
+
     if (path.contains('/uploads/') || originalUrl.contains('localhost')) {
-      // Заменяем расширение на _medium.jpg
       final mediumPath = path.replaceAllMapped(
         RegExp(r'\.(jpg|jpeg|png|webp)$', caseSensitive: false),
         (match) => '_medium.jpg',
       );
-      
-      // Если путь изменился, создаем новый URL
+
       if (mediumPath != path) {
-        final newUri = uri.replace(path: mediumPath);
-        return newUri.toString();
+        return uri.replace(path: mediumPath).toString();
       }
     }
   } catch (e) {
-    // Если не удалось распарсить URL, возвращаем оригинал
-    // ignore: avoid_print
-    print('Error optimizing image URL: $e');
+    debugPrint('Error optimizing image URL: $e');
   }
-  
-  // Возвращаем оригинальный URL если не удалось оптимизировать
+
   return originalUrl;
 }
-

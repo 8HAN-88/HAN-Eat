@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/post.dart';
-import 'feed_service.dart';
 
 /// Сервис бизнес-правил для ленты (в стиле VK)
 /// Реализует ограничения и оптимизацию для улучшения UX
+@Deprecated('Legacy Firestore feed rules; production feed uses API FeedService')
 class FeedBusinessRulesService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -295,7 +295,7 @@ class FeedBusinessRulesService {
       final hiddenAuthors = <String>{};
       for (final postId in hiddenPostIds) {
         try {
-          final post = posts.firstWhere((p) => p.id == postId);
+          final post = posts.firstWhere((p) => p.id.toString() == postId);
           final authorId = post.authorId ?? '';
           if (authorId.isNotEmpty) {
             hiddenAuthors.add(authorId);
@@ -316,7 +316,7 @@ class FeedBusinessRulesService {
       final reportedAuthors = <String>{};
       for (final postId in reportedPostIds) {
         try {
-          final post = posts.firstWhere((p) => p.id == postId);
+          final post = posts.firstWhere((p) => p.id.toString() == postId);
           final authorId = post.authorId ?? '';
           if (authorId.isNotEmpty) {
             reportedAuthors.add(authorId);
@@ -344,11 +344,12 @@ class FeedBusinessRulesService {
 
       // Фильтруем посты
       final filtered = posts.where((post) {
+        final postId = post.id.toString();
         // Убираем скрытые посты
-        if (hiddenPostIds.contains(post.id)) return false;
+        if (hiddenPostIds.contains(postId)) return false;
 
         // Убираем жалобы
-        if (reportedPostIds.contains(post.id)) return false;
+        if (reportedPostIds.contains(postId)) return false;
 
         // Штраф за авторов скрытых постов (убираем на 24-48 часов)
         final authorId = post.authorId ?? '';
@@ -357,7 +358,7 @@ class FeedBusinessRulesService {
           DateTime? lastHiddenTime;
           for (final doc in hiddenSnapshot.docs) {
             try {
-              final hiddenPost = posts.firstWhere((p) => p.id == doc.id);
+              final hiddenPost = posts.firstWhere((p) => p.id.toString() == doc.id);
               final hiddenAuthorId = hiddenPost.authorId ?? '';
               if (hiddenAuthorId == authorId) {
                 final hiddenTime = doc.data()['createdAt'] as Timestamp?;

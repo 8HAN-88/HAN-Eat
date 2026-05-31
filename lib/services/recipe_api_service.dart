@@ -1,22 +1,76 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import '../core/config/dotenv_safe.dart';
+import '../models/analysis_mode.dart';
+import '../models/recipe.dart';
 import '../models/recipe_model.dart';
+import 'api_service.dart';
 
 class RecipeApiService {
   static final _base = 'https://api.spoonacular.com';
 
-  static String? get _apiKey => dotenv.env['SPOONACULAR_API_KEY'];
+  static String? get _apiKey => dotenvString('SPOONACULAR_API_KEY');
+
+  static bool get _useBackendOnly =>
+      kReleaseMode || _apiKey == null || _apiKey!.isEmpty;
+
+  static RecipeModel _fromApiRecipe(Recipe r) {
+    final stepTexts = r.steps
+        .map((s) => (s['step'] as String?)?.trim() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return RecipeModel(
+      id: r.id.toString(),
+      title: r.title,
+      cookTime: 30,
+      ingredients: r.ingredients,
+      steps: stepTexts,
+      image: r.image ?? r.sourceImage,
+      updatedAt: DateTime.now(),
+      calories: r.calories?.toDouble(),
+      proteinG: r.nutrientGrams('protein'),
+      carbsG: r.nutrientGrams('carbohydrates'),
+      fatG: r.nutrientGrams('fat'),
+    );
+  }
+
+  static Future<List<RecipeModel>> _searchViaBackend(
+    String query, {
+    required int number,
+  }) async {
+    if (query.trim().isEmpty) {
+      final rec = await ApiService.fetchRecommendations(limit: number);
+      return rec.recipes.map(_fromApiRecipe).toList();
+    }
+    final list = await ApiService.searchRecipes(
+      query,
+      mode: AnalysisMode.all,
+      language: 'ru',
+    );
+    return list.take(number).map(_fromApiRecipe).toList();
+  }
+
+  static Future<RecipeModel?> _detailsViaBackend(String id) async {
+    final numericId = int.tryParse(id);
+    if (numericId == null) return null;
+    final recipe = await ApiService.getRecipeById(numericId, language: 'ru');
+    if (recipe == null) return null;
+    return _fromApiRecipe(recipe);
+  }
 
   // Search recipes by query. Returns List<RecipeModel>.
   static Future<List<RecipeModel>> searchRecipes(String query,
       {int number = 10}) async {
-    if (_apiKey == null || _apiKey!.isEmpty) {
-      if (kDebugMode) debugPrint('SPOONACULAR_API_KEY not set');
-      return [];
+    if (_useBackendOnly) {
+      try {
+        return await _searchViaBackend(query, number: number);
+      } catch (e) {
+        if (kDebugMode) debugPrint('RecipeApiService backend search: $e');
+        return [];
+      }
     }
+
     final uri =
         Uri.parse('$_base/recipes/complexSearch').replace(queryParameters: {
       'query': query,
@@ -28,8 +82,9 @@ class RecipeApiService {
     try {
       final res = await http.get(uri);
       if (res.statusCode != 200) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('Recipe API error: ${res.statusCode} ${res.body}');
+        }
         return [];
       }
       final Map<String, dynamic> jsonBody =
@@ -46,7 +101,6 @@ class RecipeApiService {
                 ? int.tryParse(m['readyInMinutes'].toString()) ?? 0
                 : 0);
         final image = m['image'] as String?;
-        // ingredients: try extendedIngredients -> originalString
         final List<String> ingredients = [];
         if (m['extendedIngredients'] is List) {
           for (final ing in (m['extendedIngredients'] as List)) {
@@ -58,7 +112,6 @@ class RecipeApiService {
             } catch (_) {}
           }
         }
-        // steps: try analyzedInstructions[0].steps[].step
         final List<String> steps = [];
         if (m['analyzedInstructions'] is List) {
           try {
@@ -92,23 +145,32 @@ class RecipeApiService {
     }
   }
 
-  // Get detailed recipe information by id
   static Future<RecipeModel?> getRecipeDetails(String id) async {
+    if (_useBackendOnly) {
+      try {
+        return await _detailsViaBackend(id);
+      } catch (e) {
+        if (kDebugMode) debugPrint('RecipeApiService backend details: $e');
+        return null;
+      }
+    }
+
     if (_apiKey == null || _apiKey!.isEmpty) {
       if (kDebugMode) debugPrint('SPOONACULAR_API_KEY not set');
       return null;
     }
     final uri =
         Uri.parse('$_base/recipes/$id/information').replace(queryParameters: {
-      'includeNutrition': 'false',
+      'includeNutrition': 'true',
       'apiKey': _apiKey!,
     });
 
     try {
       final res = await http.get(uri);
       if (res.statusCode != 200) {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('Recipe details API error: ${res.statusCode} ${res.body}');
+        }
         return null;
       }
       final Map<String, dynamic> m =
@@ -134,7 +196,6 @@ class RecipeApiService {
       }
 
       final List<String> steps = [];
-      // Try analyzedInstructions first
       if (m['analyzedInstructions'] is List) {
         try {
           final instrList = (m['analyzedInstructions'] as List);
@@ -152,14 +213,37 @@ class RecipeApiService {
           }
         } catch (_) {}
       }
-      // Fallback to 'instructions' string (may contain HTML)
       if (steps.isEmpty && m['instructions'] is String) {
         final instr = (m['instructions'] as String).trim();
         if (instr.isNotEmpty) {
-          // naive split by sentences/newlines
           final parts = instr.split(RegExp(r'\. |\n'));
           steps.addAll(
               parts.where((p) => p.trim().isNotEmpty).map((s) => s.trim()));
+        }
+      }
+
+      double? calories;
+      double? proteinG;
+      double? carbsG;
+      double? fatG;
+      final nut = m['nutrition'];
+      if (nut is Map && nut['nutrients'] is List) {
+        for (final raw in nut['nutrients'] as List<dynamic>) {
+          if (raw is! Map) continue;
+          final nm = Map<String, dynamic>.from(raw);
+          final name = '${nm['name']}'.toLowerCase();
+          final amt = nm['amount'];
+          final v = amt is num ? amt.toDouble() : double.tryParse('$amt');
+          if (v == null) continue;
+          if (name == 'calories') {
+            calories = v;
+          } else if (name == 'protein') {
+            proteinG = v;
+          } else if (name == 'carbohydrates') {
+            carbsG = v;
+          } else if (name == 'fat') {
+            fatG = v;
+          }
         }
       }
 
@@ -172,6 +256,10 @@ class RecipeApiService {
         steps: steps,
         image: image,
         updatedAt: now,
+        calories: calories,
+        proteinG: proteinG,
+        carbsG: carbsG,
+        fatG: fatG,
       );
     } catch (e) {
       if (kDebugMode) debugPrint('getRecipeDetails exception: $e');

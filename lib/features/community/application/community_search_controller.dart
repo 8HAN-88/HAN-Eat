@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/community_video.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/api_error_parser.dart';
 
 enum SearchType {
   best, // Лучшее - поиск по всему
@@ -78,11 +79,18 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     );
 
     try {
-      // В реальном приложении здесь будет вызов API с параметрами поиска
-      // Пока используем существующий метод, но можно расширить API
-      final allVideos = await ApiService.fetchCommunityVideos();
-      
-      // Фильтруем результаты в зависимости от типа поиска
+      String? serverTag = state.filters['tag'] as String?;
+      if (serverTag == null || serverTag.isEmpty) {
+        if (state.searchType == SearchType.hashtag) {
+          var h = query.trim().toLowerCase();
+          if (h.startsWith('#')) h = h.substring(1);
+          serverTag = h.isEmpty ? null : h;
+        }
+      }
+      final allVideos =
+          await ApiService.fetchCommunityVideos(tag: serverTag);
+
+      // Дополнительная фильтрация на клиенте по типу поиска
       List<CommunityVideo> filteredVideos = [];
       final queryLower = query.toLowerCase();
 
@@ -155,7 +163,7 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     } catch (e) {
       state = state.copyWith(
         loading: false,
-        error: 'Ошибка поиска: $e',
+        error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),
       );
     }
   }

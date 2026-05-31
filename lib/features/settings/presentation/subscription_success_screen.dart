@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../services/subscription_service.dart';
+
+import '../../../app/app_router.dart';
+import '../../../services/ai_scan_gate.dart';
+import '../../../services/subscription_service.dart';
+import '../application/subscription_status_provider.dart';
 
 /// Экран успешной оплаты подписки
-class SubscriptionSuccessScreen extends StatefulWidget {
+class SubscriptionSuccessScreen extends ConsumerStatefulWidget {
   final String? sessionId;
 
   const SubscriptionSuccessScreen({
@@ -12,12 +17,17 @@ class SubscriptionSuccessScreen extends StatefulWidget {
   });
 
   @override
-  State<SubscriptionSuccessScreen> createState() => _SubscriptionSuccessScreenState();
+  ConsumerState<SubscriptionSuccessScreen> createState() =>
+      _SubscriptionSuccessScreenState();
 }
 
-class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
+class _SubscriptionSuccessScreenState
+    extends ConsumerState<SubscriptionSuccessScreen> {
   bool _isLoading = true;
   bool _subscriptionActive = false;
+  int _attemptsDone = 0;
+  static const int _maxAttempts = 10;
+  static const Duration _delayBetweenAttempts = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -26,23 +36,52 @@ class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
   }
 
   Future<void> _checkSubscriptionStatus() async {
-    // Ждем немного, чтобы webhook успел обработать платеж
-    await Future.delayed(const Duration(seconds: 2));
+    setState(() {
+      _isLoading = true;
+    });
 
-    try {
-      final status = await SubscriptionService.getSubscriptionStatus();
-      if (mounted) {
-        setState(() {
-          _subscriptionActive = status.isPlus;
-          _isLoading = false;
-        });
+    refreshSubscriptionStatus(ref);
+    await Future<void>.delayed(const Duration(seconds: 1));
+
+    for (var i = 0; i < _maxAttempts; i++) {
+      if (i > 0) {
+        await Future<void>.delayed(_delayBetweenAttempts);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      if (!mounted) return;
+
+      try {
+        final status = await SubscriptionService.getSubscriptionStatus();
+        if (mounted) {
+          setState(() {
+            _attemptsDone = i + 1;
+          });
+        }
+        final paid = status.hasAnyPaid;
+        if (paid) {
+          refreshSubscriptionStatus(ref);
+          AiScanGate.invalidateCache();
+          if (mounted) {
+            setState(() {
+              _subscriptionActive = true;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _attemptsDone = i + 1;
+          });
+        }
       }
+    }
+
+    if (mounted) {
+      setState(() {
+        _subscriptionActive = false;
+        _isLoading = false;
+      });
     }
   }
 
@@ -62,7 +101,13 @@ class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
               if (_isLoading) ...[
                 const CircularProgressIndicator(),
                 const SizedBox(height: 24),
-                const Text('Проверка статуса подписки...'),
+                const Text('Проверка статуса подписки…'),
+                const SizedBox(height: 8),
+                Text(
+                  'Попытка $_attemptsDone из $_maxAttempts (webhook может задержаться)',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ] else if (_subscriptionActive) ...[
                 Icon(
                   Icons.check_circle,
@@ -79,14 +124,14 @@ class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Спасибо за подписку на H.A.N. Plus! '
-                  'Теперь вы можете пользоваться всеми преимуществами подписки.',
+                  'Спасибо за подписку! '
+                  'Теперь вам доступны возможности выбранного тарифа.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
                 FilledButton(
                   onPressed: () {
-                    context.go('/subscription');
+                    context.go(SubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),
@@ -111,15 +156,13 @@ class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
                 ),
                 const SizedBox(height: 32),
                 FilledButton(
-                  onPressed: () {
-                    _checkSubscriptionStatus();
-                  },
+                  onPressed: _checkSubscriptionStatus,
                   child: const Text('Проверить снова'),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
-                    context.go('/subscription');
+                    context.go(SubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),
@@ -131,4 +174,3 @@ class _SubscriptionSuccessScreenState extends State<SubscriptionSuccessScreen> {
     );
   }
 }
-

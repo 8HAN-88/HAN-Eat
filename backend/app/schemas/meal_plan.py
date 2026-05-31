@@ -23,6 +23,20 @@ class NutritionPreferences(BaseModel):
     family_size: int = Field(1, ge=1, le=8)
     allow_meal_repeats: bool = True
     meal_repeat_interval_days: int = Field(4, ge=1, le=21)
+    primary_goal: Optional[str] = None
+    activity_level: Optional[str] = None
+    sex: Optional[str] = None
+    age: Optional[int] = Field(None, ge=10, le=120)
+    height_cm: Optional[int] = Field(None, ge=100, le=250)
+    weight_kg: Optional[int] = Field(None, ge=30, le=300)
+    meals_per_day: Optional[int] = Field(None, ge=2, le=6)
+    cooking_time: Optional[str] = None
+    cooking_skill: Optional[str] = None
+    weight_pace: Optional[str] = None
+    health_focus: Optional[str] = None
+    energy_habit: Optional[str] = None
+    high_protein_focus: bool = False
+    goal_targets: List[str] = Field(default_factory=list)
 
 
 class GenerateMealPlanRequest(BaseModel):

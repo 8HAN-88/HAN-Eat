@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../widgets/main_shell.dart';
+
+import '../../app/app_router.dart';
 
 class OnboardingPage extends StatefulWidget {
   final SharedPreferences prefs;
-  const OnboardingPage({required this.prefs, Key? key}) : super(key: key);
+  const OnboardingPage({required this.prefs, super.key});
 
   @override
   State<OnboardingPage> createState() => _OnboardingPageState();
@@ -16,8 +18,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   void _complete() {
     widget.prefs.setBool('seenOnboarding', true);
-    Navigator.of(context)
-        .pushReplacement(MaterialPageRoute(builder: (_) => const MainShell()));
+    if (!mounted) return;
+    context.go(FeedRoute.path);
   }
 
   @override
@@ -67,7 +69,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                                 color: _page == i
                                     ? theme.colorScheme.primary
                                     : theme.colorScheme.primary
-                                        .withOpacity(0.3),
+                                        .withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             )),

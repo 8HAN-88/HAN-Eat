@@ -1,16 +1,21 @@
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../app/app_router.dart';
 import '../../../models/community_video.dart';
+import '../../../widgets/report_content_dialog.dart';
 import '../application/community_controller.dart';
 import '../application/community_search_controller.dart';
 import 'community_upload_screen.dart';
-import 'reels_feed_screen.dart';
-import 'subscriptions_feed.dart';
 import '../../feed/presentation/feed_screen.dart';
+import '../../feed/presentation/subscriptions_feed_screen.dart';
+import '../../reels/presentation/reels_feed_screen.dart' as api_reels;
+import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../widgets/app_empty_state.dart';
 
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
@@ -27,8 +32,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    // Начинаем с таба "Рилсы" (индекс 2) для лучшего удержания пользователя
-    _tabController = TabController(length: 3, vsync: this, initialIndex: 2);
+    // Начинаем с таба «Рилсы» для лучшего удержания пользователя
+    _tabController = TabController(length: 4, vsync: this, initialIndex: 3);
   }
 
   @override
@@ -104,14 +109,22 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
             : Row(
                 children: [
                   Expanded(
-                    child: TabBar(
+                    child: longLabelTabBar(
                       controller: _tabController,
+                      tabAlignment: TabAlignment.start,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
                       tabs: const [
                         Tab(text: 'Подписки'),
                         Tab(text: 'Лента'),
+                        Tab(text: 'Видео'),
                         Tab(text: 'Рилсы'),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    tooltip: 'Инструменты автора',
+                    onPressed: () => context.push(CreatorToolsRoute.path),
                   ),
                   IconButton(
                     icon: const Icon(Icons.search),
@@ -130,9 +143,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
           : TabBarView(
               controller: _tabController,
               children: [
-                _buildSubscriptionsTab(context), // Подписки
-                const FeedScreen(hideScaffold: true), // Лента постов
-                const ReelsFeedScreen(), // TikTok-style лента
+                _buildSubscriptionsTab(context),
+                const FeedScreen(hideScaffold: true),
+                _buildRecommendationsTab(context, state, controller),
+                const api_reels.ReelsFeedScreen(),
               ],
             ),
       floatingActionButton: _isSearchMode
@@ -220,36 +234,30 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
             child: searchState.loading
                 ? const Center(child: CircularProgressIndicator())
                 : searchState.error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              searchState.error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton(
-                              onPressed: () {
-                                if (searchState.searchQuery.isNotEmpty) {
-                                  searchController.search(searchState.searchQuery);
-                                }
-                              },
-                              child: const Text('Повторить'),
-                            ),
-                          ],
+                    ? AppEmptyState(
+                        icon: Icons.cloud_off_rounded,
+                        title: 'Ошибка поиска',
+                        subtitle: searchState.error,
+                        action: OutlinedButton(
+                          onPressed: () {
+                            if (searchState.searchQuery.isNotEmpty) {
+                              searchController.search(searchState.searchQuery);
+                            }
+                          },
+                          child: const Text('Повторить'),
                         ),
                       )
                     : searchState.videos.isEmpty
-                        ? Center(
-                            child: Text(
-                              searchState.searchQuery.isEmpty
-                                  ? 'Введите запрос для поиска'
-                                  : 'Ничего не найдено',
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
+                        ? AppEmptyState(
+                            icon: searchState.searchQuery.isEmpty
+                                ? Icons.search_rounded
+                                : Icons.video_library_outlined,
+                            title: searchState.searchQuery.isEmpty
+                                ? 'Поиск по видео'
+                                : 'Ничего не найдено',
+                            subtitle: searchState.searchQuery.isEmpty
+                                ? 'Введите запрос в строке выше'
+                                : 'Попробуйте другие слова или фильтр',
                           )
                         : ListView(
                             padding: const EdgeInsets.all(16),
@@ -298,33 +306,20 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
               ),
             )
           else if (state.error != null && state.error!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Column(
-                children: [
-                  Text(
-                    state.error!,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: () => controller.load(tag: state.activeTag),
-                    child: const Text('Повторить'),
-                  ),
-                ],
+            AppEmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Не удалось загрузить',
+              subtitle: state.error,
+              action: OutlinedButton(
+                onPressed: () => controller.load(tag: state.activeTag),
+                child: const Text('Повторить'),
               ),
             )
           else if (state.videos.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                'Пока нет видео по выбранному тегу. Попробуйте другой фильтр.',
-                style: Theme.of(context).textTheme.bodyLarge,
-                textAlign: TextAlign.center,
-              ),
+            const AppEmptyState(
+              icon: Icons.video_library_outlined,
+              title: 'Пока нет видео',
+              subtitle: 'Смените фильтр или загрузите своё видео',
             )
           else
             ...state.videos.map(
@@ -342,7 +337,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
   }
 
   Widget _buildSubscriptionsTab(BuildContext context) {
-    return const SubscriptionsFeed();
+    return const SubscriptionsFeedScreen();
   }
 }
 
@@ -618,7 +613,7 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                   if (_isPaused)
                     IgnorePointer(
                       child: Container(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         child: const Center(
                           child: Icon(
                             Icons.pause_circle_filled,
@@ -664,7 +659,7 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                             style: theme.textTheme.titleMedium,
                           ),
                           Text(
-                            dateFormat?.format(widget.video.createdAt) ?? widget.video.createdAt.toString(),
+                            dateFormat.format(widget.video.createdAt),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -672,11 +667,46 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                         ],
                       ),
                     ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) {
+                        if (value == 'report' && widget.video.id > 0) {
+                          reportPostWithDialog(context, widget.video.id);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'report',
+                          child: ListTile(
+                            leading: Icon(Icons.flag_outlined),
+                            title: Text('Пожаловаться'),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
                     IconButton(
                       onPressed: widget.onLike,
                       icon: const Icon(Icons.favorite_border),
+                      tooltip: 'Нравится',
                     ),
                     Text('$likes'),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      onPressed: widget.video.id > 0
+                          ? () => context.push(
+                                PostCommentsRoute.pathFor(widget.video.id),
+                              )
+                          : null,
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      tooltip: 'Комментарии',
+                    ),
+                    Text('${widget.video.commentsCount}'),
                   ],
                 ),
                 const SizedBox(height: 12),
