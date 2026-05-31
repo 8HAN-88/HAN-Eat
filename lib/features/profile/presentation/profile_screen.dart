@@ -14,6 +14,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../widgets/app_empty_state.dart';
+import '../../content/create_content_actions.dart';
 
 /// Минимальный профиль из данных [AuthService], пока не пришёл ответ API.
 user_service.UserProfile _userProfileFromAuthUser(User u) {
@@ -285,9 +286,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 IconButton(
                   icon: const Icon(Icons.add),
                   tooltip: 'Создать пост',
-                  onPressed: () {
-                    context.push(CreatePostRoute.path);
-                  },
+                  onPressed: () => showCreateContentSheet(context, ref: ref),
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),

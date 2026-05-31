@@ -258,6 +258,21 @@ async def upload_community_video(
     db.commit()
     db.refresh(post)
 
+    try:
+        from app.core.redis_client import get_redis
+        from app.models.follower import Follower
+
+        redis_client = get_redis()
+        feed_service = FeedService(db, redis_client)
+        followers = db.query(Follower.follower_id).filter(
+            Follower.followee_id == current_user.id
+        ).all()
+        for row in followers:
+            feed_service.invalidate_feed_cache(row[0])
+        feed_service.invalidate_feed_cache(current_user.id)
+    except Exception as e:
+        logger.warning("Failed to invalidate feed cache after community reel upload: %s", e)
+
     created_at_ts = int(post.created_at.timestamp()) if post.created_at else 0
 
     return {

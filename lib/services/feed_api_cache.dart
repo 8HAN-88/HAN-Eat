@@ -26,6 +26,15 @@ class FeedApiCache {
     }
   }
 
+  static Future<void> clear(String variant) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsKey(variant));
+    } catch (e) {
+      if (kDebugMode) debugPrint('FeedApiCache.clear: $e');
+    }
+  }
+
   static Future<List<PostModel>> load(String variant) async {
     try {
       final prefs = await SharedPreferences.getInstance();

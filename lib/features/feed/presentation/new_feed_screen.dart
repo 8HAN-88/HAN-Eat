@@ -14,6 +14,7 @@ import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../content/create_content_actions.dart';
 
 class NewFeedScreen extends ConsumerStatefulWidget {
   const NewFeedScreen({
@@ -390,7 +391,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       ),
       body: bodyContent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push(CreatePostRoute.path),
+        onPressed: () => showCreateContentSheet(context, ref: ref),
         child: const Icon(Icons.add),
       ),
     );

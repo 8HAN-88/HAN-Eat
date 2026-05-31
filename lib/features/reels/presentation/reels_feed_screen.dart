@@ -23,12 +23,20 @@ import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../app/app_router.dart';
+import '../application/reels_feed_refresh_provider.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
-  const ReelsFeedScreen({super.key, this.hideScaffold = false});
+  const ReelsFeedScreen({
+    super.key,
+    this.hideScaffold = false,
+    this.onCreateReel,
+  });
 
   /// Без вложенного Scaffold (вкладка «Рилсы» в [MainFeedScreen]).
   final bool hideScaffold;
+
+  /// Кнопка «Создать рилс» в пустой ленте (если null — кнопки нет).
+  final Future<void> Function()? onCreateReel;
 
   @override
   ConsumerState<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
@@ -290,14 +298,23 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
                   ? 'Не удалось загрузить рилсы'
                   : 'Пока нет рилсов',
               subtitle: _lastLoadError ??
-                  'Обновите ленту или зайдите позже — новые рилсы появятся здесь.',
+                  'Снимите короткое видео — оно появится в ленте рилсов.',
               action: _lastLoadError != null
                   ? FilledButton.icon(
                       onPressed: () => _loadReels(refresh: true),
                       icon: const Icon(Icons.refresh),
                       label: const Text('Повторить'),
                     )
-                  : null,
+                  : widget.onCreateReel != null
+                      ? FilledButton.icon(
+                          onPressed: () async {
+                            await widget.onCreateReel!();
+                            if (mounted) _loadReels(refresh: true);
+                          },
+                          icon: const Icon(Icons.videocam_outlined),
+                          label: const Text('Создать рилс'),
+                        )
+                      : null,
             ),
           ),
         ],
@@ -314,6 +331,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(reelsFeedRefreshProvider, (prev, next) {
+      if (prev != null && prev != next) {
+        _loadReels(refresh: true);
+      }
+    });
+
     if (_reels.isEmpty && (_isLoading || !_loadKickoff)) {
       final loading = const Center(child: CircularProgressIndicator());
       if (widget.hideScaffold) return loading;

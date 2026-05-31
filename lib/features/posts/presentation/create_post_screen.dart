@@ -17,6 +17,7 @@ import '../../../../widgets/recipe_visibility_selector.dart';
 import '../../../../widgets/telegram_photo_grid.dart';
 import '../../../../widgets/create_poll_form_section.dart';
 import '../../../../utils/url_validator.dart';
+import '../../content/create_content_actions.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({super.key});
@@ -1129,6 +1130,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               icon: Icons.restaurant_menu,
               isSelected: _selectedType == 'recipe',
               onTap: () => _setContentType(_selectedType == 'recipe' ? 'text' : 'recipe'),
+            ),
+            _PostTypeChip(
+              label: 'Рилс',
+              icon: Icons.videocam_outlined,
+              isSelected: false,
+              onTap: () async {
+                final created = await openCreateReel(context, ref: ref);
+                if (created == true && mounted) {
+                  Navigator.of(context).pop(true);
+                }
+              },
             ),
           ],
         ),

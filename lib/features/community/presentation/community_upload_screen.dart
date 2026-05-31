@@ -210,7 +210,7 @@ class _CommunityUploadScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Загрузить видео'),
+        title: const Text('Новый рилс'),
       ),
       body: Form(
         key: _formKey,

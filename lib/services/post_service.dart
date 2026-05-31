@@ -18,6 +18,7 @@ class PostService {
     String? visibility,
     int? channelId,
     List<Map<String, String>>? media,
+    List<String>? publishTo,
     String? linkUrl,
     String? linkPreview,
   }) async {
@@ -41,6 +42,7 @@ class PostService {
         if (visibility != null) 'visibility': visibility,
         if (channelId != null) 'channel_id': channelId,
         if (media != null) 'media': media,
+        if (publishTo != null) 'publish_to': publishTo,
         if (type == 'link' && linkUrl != null)
           'link': {
             'url': linkUrl,

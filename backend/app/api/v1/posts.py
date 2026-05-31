@@ -180,13 +180,17 @@ async def create_post(
             body = {}
         body["media"] = media_items
     
+    publish_to = request.publish_to
+    if publish_to is None:
+        publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
+
     post = Post(
         user_id=current_user.id,
         type=request.type,
         title=request.title,
         description=request.description,
         body=body,
-        publish_to=request.publish_to or ["feed"],
+        publish_to=publish_to,
         visibility=request.visibility or "public",
         tags=request.tags or [],
     )

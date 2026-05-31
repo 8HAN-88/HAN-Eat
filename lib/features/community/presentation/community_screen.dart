@@ -10,7 +10,7 @@ import '../../../models/community_video.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../application/community_controller.dart';
 import '../application/community_search_controller.dart';
-import 'community_upload_screen.dart';
+import '../../content/create_content_actions.dart';
 import '../../feed/presentation/feed_screen.dart';
 import '../../feed/presentation/subscriptions_feed_screen.dart';
 import '../../reels/presentation/reels_feed_screen.dart' as api_reels;
@@ -34,6 +34,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
     super.initState();
     // Начинаем с таба «Рилсы» для лучшего удержания пользователя
     _tabController = TabController(length: 4, vsync: this, initialIndex: 3);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -146,24 +150,33 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
                 _buildSubscriptionsTab(context),
                 const FeedScreen(hideScaffold: true),
                 _buildRecommendationsTab(context, state, controller),
-                const api_reels.ReelsFeedScreen(),
+                api_reels.ReelsFeedScreen(
+                  onCreateReel: () => openCreateReel(context, ref: ref),
+                ),
               ],
             ),
       floatingActionButton: _isSearchMode
           ? null
           : FloatingActionButton.extended(
               onPressed: () async {
-                final created = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => const CommunityUploadScreen(),
-                  ),
-                );
-                if (created == true) {
+                if (_tabController.index == 3) {
+                  final created = await openCreateReel(context, ref: ref);
+                  if (created == true) {
+                    controller.load(tag: state.activeTag);
+                  }
+                } else {
+                  await showCreateContentSheet(context, ref: ref);
                   controller.load(tag: state.activeTag);
                 }
               },
-              icon: const Icon(Icons.cloud_upload_outlined),
-              label: const Text('Загрузить'),
+              icon: Icon(
+                _tabController.index == 3
+                    ? Icons.videocam_outlined
+                    : Icons.add,
+              ),
+              label: Text(
+                _tabController.index == 3 ? 'Создать рилс' : 'Создать',
+              ),
             ),
     );
   }
