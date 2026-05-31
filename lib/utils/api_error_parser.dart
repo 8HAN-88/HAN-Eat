@@ -1,3 +1,5 @@
+import 'dart:async';
+
 /// Разбор ошибок FastAPI (`detail` как строка, объект или список).
 class ApiClientException implements Exception {
   const ApiClientException({
@@ -66,6 +68,9 @@ ApiClientException apiExceptionFromResponse(
 /// Текст ошибки для SnackBar / диалогов.
 String userVisibleError(Object e, {String fallback = 'Произошла ошибка'}) {
   if (e is ApiClientException) return e.message;
+  if (e is TimeoutException) {
+    return 'Превышено время ожидания ответа от сервера';
+  }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
   if (raw == 'Not authenticated') return 'Войдите в аккаунт';

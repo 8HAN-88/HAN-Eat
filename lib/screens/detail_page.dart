@@ -20,10 +20,13 @@ import 'cooking_mode_screen.dart';
 import '../services/recipe_notes_service.dart';
 import '../utils/recipe_nutrition.dart';
 import '../core/layout/floating_bottom_padding.dart';
+import '../core/subscription/recipe_translation_access.dart';
+import '../features/settings/application/analysis_mode_controller.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 import '../features/subscription/presentation/widgets/nutrition_upsell.dart';
+import '../services/api_service.dart';
 
-class DetailPage extends StatefulWidget {
+class DetailPage extends ConsumerStatefulWidget {
   final Recipe recipe;
   final bool isFavorite;
   final VoidCallback onToggle;
@@ -36,10 +39,12 @@ class DetailPage extends StatefulWidget {
   });
 
   @override
-  State<DetailPage> createState() => _DetailPageState();
+  ConsumerState<DetailPage> createState() => _DetailPageState();
 }
 
-class _DetailPageState extends State<DetailPage> {
+class _DetailPageState extends ConsumerState<DetailPage> {
+  late Recipe _recipe;
+  bool _hydratingFullRecipe = false;
   late bool fav;
   bool _isSaved = false;
   bool _isSavedLoading = false;
@@ -62,7 +67,7 @@ class _DetailPageState extends State<DetailPage> {
   final Set<int> _expandedReplyThreads = <int>{};
   bool _statsDirty = false;
 
-  String get _recipeStatsSource => widget.recipe.source ?? 'spoonacular';
+  String get _recipeStatsSource => _recipe.source ?? 'spoonacular';
 
   void _markStatsDirty() => _statsDirty = true;
 
@@ -70,7 +75,7 @@ class _DetailPageState extends State<DetailPage> {
     if (_statsDirty) {
       Navigator.of(context).pop(
         RecipeDetailPopResult(
-          recipeId: widget.recipe.id,
+          recipeId: _recipe.id,
           source: _recipeStatsSource,
           commentCount: _comments.length,
           avgRating: _avgRating,
@@ -99,16 +104,39 @@ class _DetailPageState extends State<DetailPage> {
   @override
   void initState() {
     super.initState();
+    _recipe = widget.recipe;
     fav = widget.isFavorite;
-    _selectedServings = widget.recipe.servings ?? 1;
+    _selectedServings = _recipe.servings ?? 1;
     if (_selectedServings < 1) _selectedServings = 1;
     _loadNote();
     _loadComments();
     _loadRecipeRating();
     _loadSavedStatus();
-    if (widget.recipe.author != null && widget.recipe.author!.isNotEmpty) {
+    if (_recipe.author != null && _recipe.author!.isNotEmpty) {
       _checkSubscription();
     }
+    if (_isSpoonacularRecipe) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _hydrateFullRecipeFromApi();
+      });
+    }
+  }
+
+  Future<void> _hydrateFullRecipeFromApi() async {
+    if (!mounted) return;
+    setState(() => _hydratingFullRecipe = true);
+    final lang = ref.read(analysisSettingsProvider).language;
+    final result = await ApiService.loadRecipeById(_recipe.id, language: lang);
+    if (!mounted) return;
+    if (result.recipe == null && result.errorMessage != null) {
+      _showNotice(result.errorMessage!);
+    }
+    setState(() {
+      _hydratingFullRecipe = false;
+      if (result.recipe != null) {
+        _recipe = result.recipe!;
+      }
+    });
   }
 
   bool get _canSaveRecipe {
@@ -117,15 +145,15 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   bool get _isSpoonacularRecipe {
-    final source = widget.recipe.source?.trim().toLowerCase();
+    final source = _recipe.source?.trim().toLowerCase();
     if (source == 'user' || source == 'channel') return false;
     if (source == 'spoonacular') return true;
 
     // Надежный fallback: по домену изображений Spoonacular.
     final mediaCandidates = <String?>[
-      widget.recipe.image,
-      widget.recipe.sourceImage,
-      widget.recipe.videoThumbnail,
+      _recipe.image,
+      _recipe.sourceImage,
+      _recipe.videoThumbnail,
     ];
     final hasSpoonacularMedia = mediaCandidates.any((url) {
       final u = url?.trim().toLowerCase();
@@ -135,10 +163,10 @@ class _DetailPageState extends State<DetailPage> {
     if (hasSpoonacularMedia) return true;
 
     // Spoonacular IDs обычно шестизначные/семизначные; у локальных постов обычно маленькие.
-    if (widget.recipe.id >= 100000) return true;
+    if (_recipe.id >= 100000) return true;
 
     // Последний fallback: если автора нет — считаем внешним (Spoonacular) рецептом.
-    final hasAuthor = (widget.recipe.author ?? '').trim().isNotEmpty;
+    final hasAuthor = (_recipe.author ?? '').trim().isNotEmpty;
     return !hasAuthor;
   }
 
@@ -146,12 +174,12 @@ class _DetailPageState extends State<DetailPage> {
     setState(() => _isSavedLoading = true);
     try {
       if (_isSpoonacularRecipe) {
-        final saved = await SavedPostsService.isRecipeSaved(widget.recipe.id);
+        final saved = await SavedPostsService.isRecipeSaved(_recipe.id);
         if (mounted) {
           setState(() => _isSaved = saved);
         }
       } else {
-        final saved = await SavedPostsService.isPostSaved(widget.recipe.id);
+        final saved = await SavedPostsService.isPostSaved(_recipe.id);
         if (mounted) {
           setState(() => _isSaved = saved);
         }
@@ -164,7 +192,7 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _loadNote() async {
-    final note = await RecipeNotesService.getNote(widget.recipe.id);
+    final note = await RecipeNotesService.getNote(_recipe.id);
     if (mounted) {
       _recipeNote = note ?? '';
       _noteController.text = _recipeNote;
@@ -183,11 +211,11 @@ class _DetailPageState extends State<DetailPage> {
     setState(() => _commentsLoading = true);
     try {
       debugPrint(
-        '🧵 Load comments for recipe=${widget.recipe.id}, source=${widget.recipe.source}, spoonacular=$_isSpoonacularRecipe',
+        '🧵 Load comments for recipe=${_recipe.id}, source=${_recipe.source}, spoonacular=$_isSpoonacularRecipe',
       );
       if (_isSpoonacularRecipe) {
         final comments =
-            await RecipeCommentsService.getComments(widget.recipe.id.toString());
+            await RecipeCommentsService.getComments(_recipe.id.toString());
         setState(() {
           _comments = comments;
           _commentsLoading = false;
@@ -196,7 +224,7 @@ class _DetailPageState extends State<DetailPage> {
       }
 
       final response = await CommentService.getComments(
-        widget.recipe.id,
+        _recipe.id,
         limit: 100,
         offset: 0,
       );
@@ -229,8 +257,8 @@ class _DetailPageState extends State<DetailPage> {
   Future<void> _loadRecipeRating() async {
     try {
       final data = _isSpoonacularRecipe
-          ? await RecipeCommentsService.getRecipeRating(widget.recipe.id.toString())
-          : await CommentService.getPostRating(widget.recipe.id);
+          ? await RecipeCommentsService.getRecipeRating(_recipe.id.toString())
+          : await CommentService.getPostRating(_recipe.id);
       if (!mounted) return;
       setState(() {
         _avgRating = (data['rating'] as num?)?.toDouble() ?? 0;
@@ -242,23 +270,23 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _checkSubscription() async {
-    if (widget.recipe.author == null) return;
+    if (_recipe.author == null) return;
     // Используем временный идентификатор пользователя (в реальном приложении из AuthService)
     final subscriber = 'user_${DateTime.now().millisecondsSinceEpoch}';
     final isSub = await AuthorSubscriptionService.isSubscribed(
       subscriber,
-      widget.recipe.author!,
+      _recipe.author!,
     );
     setState(() => _isSubscribed = isSub);
   }
 
   Future<void> _toggleSubscription() async {
-    if (widget.recipe.author == null) return;
+    if (_recipe.author == null) return;
     setState(() => _subscriptionLoading = true);
     final subscriber = 'user_${DateTime.now().millisecondsSinceEpoch}';
     final success = _isSubscribed
-        ? await AuthorSubscriptionService.unsubscribe(subscriber, widget.recipe.author!)
-        : await AuthorSubscriptionService.subscribe(subscriber, widget.recipe.author!);
+        ? await AuthorSubscriptionService.unsubscribe(subscriber, _recipe.author!)
+        : await AuthorSubscriptionService.subscribe(subscriber, _recipe.author!);
     if (success) {
       setState(() {
         _isSubscribed = !_isSubscribed;
@@ -329,7 +357,7 @@ class _DetailPageState extends State<DetailPage> {
       if (_isSpoonacularRecipe) {
         final selectedRating = _selectedRating;
         final comment = await RecipeCommentsService.addComment(
-          widget.recipe.id.toString(),
+          _recipe.id.toString(),
           author,
           text,
           authorAvatar: authorAvatar,
@@ -362,7 +390,7 @@ class _DetailPageState extends State<DetailPage> {
       }
 
       final created = await CommentService.createComment(
-        widget.recipe.id,
+        _recipe.id,
         text,
         parentId: _replyToCommentId,
         rating: _selectedRating,
@@ -410,7 +438,7 @@ class _DetailPageState extends State<DetailPage> {
     bool success;
     if (_isSpoonacularRecipe) {
       success = await RecipeCommentsService.deleteComment(
-        widget.recipe.id.toString(),
+        _recipe.id.toString(),
         comment.id,
         authorId: authorId,
       );
@@ -468,16 +496,16 @@ class _DetailPageState extends State<DetailPage> {
       if (_isSpoonacularRecipe) {
         // Сохраняем рецепт Spoonacular
         if (_isSaved) {
-          await SavedPostsService.unsaveRecipe(widget.recipe.id);
+          await SavedPostsService.unsaveRecipe(_recipe.id);
         } else {
-          await SavedPostsService.saveRecipe(widget.recipe);
+          await SavedPostsService.saveRecipe(_recipe);
         }
       } else {
         // Сохраняем пост пользователя/канала
         if (_isSaved) {
-          await SavedPostsService.unsavePostById(widget.recipe.id);
+          await SavedPostsService.unsavePostById(_recipe.id);
         } else {
-          await SavedPostsService.savePostById(widget.recipe.id);
+          await SavedPostsService.savePostById(_recipe.id);
         }
       }
       if (mounted) {
@@ -590,24 +618,39 @@ class _DetailPageState extends State<DetailPage> {
     required String label,
     required Color tint,
   }) {
+    final theme = Theme.of(context);
     final locked = !canViewNutrition;
+    final scheme = theme.colorScheme;
     return ActionChip(
-      avatar: Icon(icon, size: 18, color: tint),
+      avatar: Icon(icon, size: 18, color: locked ? scheme.onSurfaceVariant : tint),
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: locked ? scheme.onSurfaceVariant : const Color(0xFF1C1C1E),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           if (locked) ...[
             const SizedBox(width: 4),
             Icon(
               Icons.lock_outline,
               size: 16,
-              color: Theme.of(context).colorScheme.primary,
+              color: scheme.primary,
             ),
           ],
         ],
       ),
-      backgroundColor: tint.withValues(alpha: 0.1),
+      backgroundColor: locked
+          ? scheme.surfaceContainerHigh
+          : Color.alphaBlend(tint.withValues(alpha: 0.22), scheme.surface),
+      side: BorderSide(
+        color: locked
+            ? scheme.outlineVariant.withValues(alpha: 0.6)
+            : tint.withValues(alpha: 0.45),
+      ),
       onPressed: locked
           ? () => showNutritionUpsellSheet(context)
           : null,
@@ -616,7 +659,7 @@ class _DetailPageState extends State<DetailPage> {
 
   Future<void> _addToMealPlan() async {
     try {
-      final recipeModel = _convertToRecipeModel(widget.recipe);
+      final recipeModel = _convertToRecipeModel(_recipe);
       await Navigator.of(context).push<DateTime>(
         MaterialPageRoute(
           builder: (_) => AddToMealPlanScreen(recipe: recipeModel),
@@ -632,7 +675,7 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   Future<void> _addToShoppingList() async {
-    final r = widget.recipe;
+    final r = _recipe;
     final list = r.translatedIngredients?.isNotEmpty == true
         ? r.translatedIngredients!
         : r.ingredients;
@@ -663,7 +706,7 @@ class _DetailPageState extends State<DetailPage> {
 
   /// Поделиться рецептом: только название и ссылка на открытие в приложении (без полного текста).
   void _shareRecipe() {
-    ShareActionSheet.showForRecipe(context, recipe: widget.recipe);
+    ShareActionSheet.showForRecipe(context, recipe: _recipe);
   }
 
   /// Масштабирует количество в строке ингредиента (например "200 г муки" -> при factor 2 "400 г муки").
@@ -708,9 +751,16 @@ class _DetailPageState extends State<DetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final r = widget.recipe;
+    final r = _recipe;
     // Всегда используем перевод если он есть (из настроек)
-    final ingredientsRaw = r.translatedIngredients?.isNotEmpty == true
+    final lang = ref.watch(analysisSettingsProvider).language;
+    final useTranslatedIngredients = r.translatedIngredients != null &&
+        r.translatedIngredients!.isNotEmpty &&
+        !RecipeTranslationAccess.ingredientsLookUntranslated(
+          r.translatedIngredients!,
+          lang,
+        );
+    final ingredientsRaw = useTranslatedIngredients
         ? r.translatedIngredients!
         : r.ingredients;
     final baseServings = r.servings ?? 1;
@@ -718,9 +768,10 @@ class _DetailPageState extends State<DetailPage> {
     final ingredients = factor == 1.0
         ? ingredientsRaw
         : ingredientsRaw.map((s) => _scaleIngredient(s, factor)).toList();
-    final steps = r.translatedSteps?.isNotEmpty == true
-        ? r.translatedSteps!
-        : r.steps;
+    final useTranslatedSteps = r.translatedSteps != null &&
+        r.translatedSteps!.isNotEmpty &&
+        !RecipeTranslationAccess.stepsLookUntranslated(r.translatedSteps!, lang);
+    final steps = useTranslatedSteps ? r.translatedSteps! : r.steps;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -1066,7 +1117,7 @@ class _DetailPageState extends State<DetailPage> {
                           ),
                           onChanged: (value) {
                             _recipeNote = value;
-                            RecipeNotesService.setNote(widget.recipe.id, value);
+                            RecipeNotesService.setNote(_recipe.id, value);
                           },
                         ),
                       ],
@@ -1176,7 +1227,12 @@ class _DetailPageState extends State<DetailPage> {
                               ),
                         ),
                         const SizedBox(height: 16),
-                        if (steps.isNotEmpty)
+                        if (_hydratingFullRecipe)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (steps.isNotEmpty)
                           ...steps.asMap().entries.map((entry) {
                             final step = entry.value;
                             final num = step['number'] ?? entry.key + 1;
@@ -1536,7 +1592,7 @@ class _DetailPageState extends State<DetailPage> {
                     fontWeight: FontWeight.bold,
                   ),
             ),
-            if (widget.recipe.author != null && widget.recipe.author!.isNotEmpty)
+            if (_recipe.author != null && _recipe.author!.isNotEmpty)
               TextButton.icon(
                 onPressed: _subscriptionLoading ? null : _toggleSubscription,
                 icon: _subscriptionLoading

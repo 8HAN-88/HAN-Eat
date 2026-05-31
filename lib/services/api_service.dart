@@ -148,6 +148,8 @@ class RecommendationsResult {
   /// В ленте есть EN-рецепты, перевод доступен только с AI.
   final bool recipeTranslationRequiresAi;
   final String? recipeTranslationLanguage;
+  /// В meta есть поля локализации (старый API без них перевод не отдаёт).
+  final bool recipeTranslationApiSupported;
 
   const RecommendationsResult({
     required this.recipes,
@@ -157,6 +159,7 @@ class RecommendationsResult {
     this.recipeTranslationEnabled = false,
     this.recipeTranslationRequiresAi = false,
     this.recipeTranslationLanguage,
+    this.recipeTranslationApiSupported = false,
   });
 }
 
@@ -238,7 +241,8 @@ class ApiService {
     String? ingredients,
     AnalysisMode? mode,
     String? language,
-    Duration timeout = const Duration(seconds: 25),
+    bool forceRefresh = false,
+    Duration timeout = const Duration(seconds: 90),
   }) async {
     Future<RecommendationsResult> doFetch({
       required int limit,
@@ -246,11 +250,13 @@ class ApiService {
       String? ingredients,
       String? modeVal,
       String? language,
+      bool skipServerCache = false,
     }) async {
       final query = <String, String>{
         'limit': '$limit',
         'quick': 'true', // быстрый путь на бэкенде (без N+1 и без онлайн-перевода)
       };
+      if (skipServerCache) query['refresh'] = 'true';
       if (tags != null && tags.isNotEmpty) query['tags'] = tags;
       if (ingredients != null && ingredients.isNotEmpty) query['ingredients'] = ingredients;
       if (modeVal != null && modeVal.isNotEmpty) query['mode'] = modeVal;
@@ -275,6 +281,8 @@ class ApiService {
           meta?['recipe_translation_requires_ai'] == true;
       final translationLanguage =
           meta?['recipe_translation_language'] as String?;
+      final translationApiSupported =
+          meta != null && meta.containsKey('recipe_translation_language');
       final out = <Recipe>[];
       for (final item in list) {
         try {
@@ -293,6 +301,7 @@ class ApiService {
         recipeTranslationEnabled: translationEnabled,
         recipeTranslationRequiresAi: translationRequiresAi,
         recipeTranslationLanguage: translationLanguage,
+        recipeTranslationApiSupported: translationApiSupported,
       );
     }
 
@@ -317,11 +326,15 @@ class ApiService {
         ingredients: ingredients,
         modeVal: mode?.apiValue,
         language: language,
+        skipServerCache: forceRefresh,
       );
       if (kDebugMode) {
         debugPrint(
           'fetchRecommendations: ${first.recipes.length} recipes, '
-          'quota=${first.spoonacularQuotaExhausted}',
+          'quota=${first.spoonacularQuotaExhausted}, '
+          'translated=${first.recipeTranslationEnabled}, '
+          'needsAi=${first.recipeTranslationRequiresAi}, '
+          'api=${first.recipeTranslationApiSupported}',
         );
       }
       final needsBroaderFetch = first.recipes.length < minUsefulCount ||
@@ -335,6 +348,7 @@ class ApiService {
         ingredients: null,
         modeVal: mode?.apiValue,
         language: language ?? 'ru',
+        skipServerCache: forceRefresh,
       );
       if (kDebugMode) {
         debugPrint(
@@ -351,11 +365,32 @@ class ApiService {
             first.suggestPlusUpgrade || fallback.suggestPlusUpgrade,
         recipeTranslationEnabled:
             first.recipeTranslationEnabled || fallback.recipeTranslationEnabled,
-        recipeTranslationRequiresAi: first.recipeTranslationRequiresAi &&
+        recipeTranslationRequiresAi: first.recipeTranslationRequiresAi ||
             fallback.recipeTranslationRequiresAi,
         recipeTranslationLanguage:
             fallback.recipeTranslationLanguage ?? first.recipeTranslationLanguage,
+        recipeTranslationApiSupported: first.recipeTranslationApiSupported ||
+            fallback.recipeTranslationApiSupported,
       );
+    } on TimeoutException {
+      if (kDebugMode) {
+        debugPrint('fetchRecommendations: timeout, retry without tags');
+      }
+      if (tags != null && tags.isNotEmpty) {
+        try {
+          return await doFetch(
+            limit: limit,
+            tags: null,
+            ingredients: ingredients,
+            modeVal: mode?.apiValue,
+            language: language,
+            skipServerCache: forceRefresh,
+          );
+        } on TimeoutException {
+          rethrow;
+        }
+      }
+      rethrow;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error in fetchRecommendations: $e');
@@ -490,7 +525,9 @@ class ApiService {
       final uri = (language != null && language.isNotEmpty)
           ? _uri(path, {'language': language})
           : _uri(path);
-      final resp = await http.get(uri).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .get(uri, headers: await authHeaders())
+          .timeout(const Duration(seconds: 60));
       if (resp.statusCode == 404) {
         return const RecipeLoadResult(notFound: true);
       }

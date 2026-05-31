@@ -656,7 +656,7 @@ def _recommendations_response(
 
     lang = (language or "ru").lower()
     localized, loc_meta = apply_recipe_localization_to_cards(
-        recipes, lang, db, current_user, full=False
+        recipes, lang, db, current_user, full=False, titles_only=True
     )
     merged_meta = dict(meta or {})
     merged_meta.update(loc_meta)
@@ -976,6 +976,10 @@ async def get_recommendations(
         True,
         description="Быстрый ответ: без N+1 запросов за калориями и без онлайн-перевода (меню)",
     ),
+    refresh: bool = Query(
+        False,
+        description="Пропустить Redis-кэш (pull-to-refresh в меню)",
+    ),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
@@ -1009,9 +1013,9 @@ async def get_recommendations(
     # Ключ кэша: при изменении состава полей (например author/author_avatar) — поднять версию.
     cache_key = f"recommendations:v9:{limit}:{tags or 'none'}:{language or 'ru'}:q{int(quick)}"
     
-    # Проверяем кэш
+    # Проверяем кэш (pull-to-refresh передаёт refresh=true)
     try:
-        cached = redis_client.get(cache_key)
+        cached = None if refresh else redis_client.get(cache_key)
         if cached:
             payload = json.loads(cached)
             if _recommendations_cache_usable(payload):
@@ -1912,6 +1916,7 @@ async def get_recipe_by_id(
     recipe_id: int,
     language: Optional[str] = Query(None, description="Язык перевода (ru, en, ...)"),
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """
     Получить один рецепт по ID (для открытия по ссылке из шаринга).
@@ -1963,9 +1968,17 @@ async def get_recipe_by_id(
         simplified_nutrition["fat"] = fat
     if carbs is not None:
         simplified_nutrition["carbohydrates"] = carbs
-    translated_title = translate_text(title, lang)
-    translated_ingredients = translate_list(ingredients_list, lang)
-    translated_steps = translate_steps(steps, lang)
+    from app.services.recipe_localization_service import viewer_can_localize_recipes
+
+    can_translate = viewer_can_localize_recipes(db, current_user, lang)
+    if can_translate:
+        translated_title = translate_text(title, lang)
+        translated_ingredients = translate_list(ingredients_list, lang)
+        translated_steps = translate_steps(steps, lang)
+    else:
+        translated_title = title
+        translated_ingredients = ingredients_list
+        translated_steps = steps
     likes_count = 0
     meal_plan_count = 0
     try:

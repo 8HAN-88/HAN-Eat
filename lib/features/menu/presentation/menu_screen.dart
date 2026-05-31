@@ -101,7 +101,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   bool _lastSpoonacularQuotaExhausted = false;
   bool _lastSuggestPlusUpgrade = false;
   bool _lastViewerIsPlus = false;
+  bool _lastRecipeTranslationEnabled = false;
+  bool _lastRecipeTranslationRequiresAi = false;
+  bool _lastRecipeTranslationApiSupported = false;
   bool _recommendationsLoadFailed = false;
+  bool _isRefreshingRecommendations = false;
+  int _recommendationsRequestId = 0;
   List<int>? _imageWarmRecipeIds;
 
   void _warmImagesForRecipes(List<Recipe> recipes) {
@@ -134,6 +139,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       spoonacularQuotaExhausted: _lastSpoonacularQuotaExhausted,
       suggestPlusUpgrade: _lastSuggestPlusUpgrade,
       viewerIsPlus: _lastViewerIsPlus,
+      recipeTranslationEnabled: _lastRecipeTranslationEnabled,
+      recipeTranslationRequiresAi: _lastRecipeTranslationRequiresAi,
+      recipeTranslationApiSupported: _lastRecipeTranslationApiSupported,
     );
   }
 
@@ -191,7 +199,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<RecommendationsResult> _fetchRecommendationsImmediate(
-      AnalysisSettingsState settings) async {
+    AnalysisSettingsState settings, {
+    bool forceRefresh = false,
+  }) async {
     // Загружаем теги асинхронно, чтобы не блокировать основной поток
     final tagsFuture = Future(() {
       try {
@@ -208,11 +218,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
     try {
       final result = await ApiService.fetchRecommendations(
-        limit: 8,
+        limit: 6,
         tags: tagsString.isNotEmpty ? tagsString : null,
         ingredients: _selectedIngredients,
         mode: settings.mode,
         language: settings.language,
+        forceRefresh: forceRefresh,
       );
 
       // Не кэшируем «бедный» ответ (1 карточка при исчерпании квоты Spoonacular)
@@ -225,6 +236,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       _lastSpoonacularQuotaExhausted = result.spoonacularQuotaExhausted;
       _lastSuggestPlusUpgrade = result.suggestPlusUpgrade;
       _lastViewerIsPlus = result.viewerIsPlus;
+      _lastRecipeTranslationEnabled = result.recipeTranslationEnabled;
+      _lastRecipeTranslationRequiresAi = result.recipeTranslationRequiresAi;
+      _lastRecipeTranslationApiSupported = result.recipeTranslationApiSupported;
       if (mounted) {
         setState(() => _recommendationsLoadFailed = false);
       }
@@ -420,16 +434,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _fetchRecommendations(AnalysisSettingsState settings) async {
-    // Сбрасываем кэш при явном обновлении
-    _cachedRecommendations = [];
-    _cacheTimestamp = null;
-    _sharedRecommendationsCache = [];
-    _sharedCacheTimestamp = null;
-
-    setState(() {
-      _recommendationsLoadFailed = false;
-      _recommendationsFuture = _fetchRecommendationsImmediate(settings);
-    });
+    await _refreshRecommendations(settings);
   }
 
   Future<void> _runSearchFromHistory(String query) async {
@@ -552,19 +557,37 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _refreshRecommendations(AnalysisSettingsState settings) async {
+    final requestId = ++_recommendationsRequestId;
     _cachedRecommendations = [];
     _cacheTimestamp = null;
     _sharedRecommendationsCache = [];
     _sharedCacheTimestamp = null;
     _lastSpoonacularQuotaExhausted = false;
+    _lastRecipeTranslationEnabled = false;
+    _lastRecipeTranslationRequiresAi = false;
+    _lastRecipeTranslationApiSupported = false;
+
+    if (!mounted) return;
     setState(() {
       _recommendationsLoadFailed = false;
+      _isRefreshingRecommendations = true;
     });
-    final future = _fetchRecommendationsImmediate(settings);
+
+    final future = _fetchRecommendationsImmediate(
+      settings,
+      forceRefresh: true,
+    );
     setState(() {
       _recommendationsFuture = future;
     });
-    await future;
+
+    try {
+      await future;
+    } finally {
+      if (mounted && requestId == _recommendationsRequestId) {
+        setState(() => _isRefreshingRecommendations = false);
+      }
+    }
   }
 
   void _showIngredientsSearchDialog(AnalysisSettingsState settings) {
@@ -1250,12 +1273,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     return RefreshIndicator(
       onRefresh: () => _refreshRecommendations(settings),
       child: FutureBuilder<RecommendationsResult>(
+        key: ValueKey<int>(_recommendationsRequestId),
         future: _recommendationsFuture,
         builder: (context, snapshot) {
           final bottomInset = floatingBottomPadding(context);
-          // Показываем кэш сразу, если есть, пока загружаются новые данные
           final RecommendationsResult effective;
-          if (snapshot.hasData) {
+          final refreshing = _isRefreshingRecommendations &&
+              snapshot.connectionState != ConnectionState.done;
+
+          if (refreshing) {
+            effective = const RecommendationsResult(recipes: []);
+          } else if (snapshot.hasData) {
             effective = snapshot.data!;
           } else if (_cachedRecommendations.isNotEmpty) {
             effective = _recommendationsFromCacheOnly();
@@ -1269,9 +1297,9 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           final quotaExhausted = effective.spoonacularQuotaExhausted;
           final suggestPlusUpgrade = effective.suggestPlusUpgrade;
 
-          // Если загрузка и нет кэша, показываем скелетон
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              recipes.isEmpty) {
+          if (refreshing ||
+              (snapshot.connectionState == ConnectionState.waiting &&
+                  recipes.isEmpty)) {
             return const ListSkeletonLoader(itemCount: 5);
           }
 
@@ -1406,14 +1434,53 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               ],
             );
           }
-          final showTranslationUpsell = effective.recipeTranslationRequiresAi &&
-              !RecipeTranslationAccess.fromSubscription(
-                ref.watch(subscriptionStatusProvider).valueOrNull,
-              );
+          final hasAiSubscription = RecipeTranslationAccess.fromSubscription(
+            ref.watch(subscriptionStatusProvider).valueOrNull,
+          );
+          final looksUntranslated =
+              RecipeTranslationAccess.recipesLookUntranslated(
+            recipes,
+            settings.language,
+          );
+          final showTranslationUpsell = looksUntranslated &&
+              !hasAiSubscription &&
+              (effective.recipeTranslationRequiresAi ||
+                  !effective.recipeTranslationApiSupported);
+          final showTranslationPending = looksUntranslated &&
+              hasAiSubscription &&
+              (!effective.recipeTranslationApiSupported ||
+                  !effective.recipeTranslationEnabled);
 
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              if (showTranslationPending)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      _kMenuScreenEdgeGutter,
+                      8,
+                      _kMenuScreenEdgeGutter,
+                      0,
+                    ),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .secondaryContainer
+                          .withValues(alpha: 0.35),
+                      child: ListTile(
+                        leading: const Icon(Icons.translate_outlined),
+                        title: const Text('Перевод временно недоступен'),
+                        subtitle: Text(
+                          effective.recipeTranslationApiSupported
+                              ? 'Потяните список вниз, чтобы обновить. Если не помогло — проверьте интернет.'
+                              : 'Сервер ещё не обновлён: на Timeweb в папке HAN-Eat выполните git pull и sudo systemctl restart haneat-api.',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (showTranslationUpsell)
                 SliverToBoxAdapter(
                   child: Padding(

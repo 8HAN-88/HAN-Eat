@@ -49,23 +49,28 @@ def viewer_can_localize_recipes(db, user, target_lang: str) -> bool:
 
 
 def _localize_one_card(
-    card: Dict[str, Any], target_lang: str, *, full: bool
+    card: Dict[str, Any],
+    target_lang: str,
+    *,
+    full: bool,
+    titles_only: bool = False,
 ) -> Dict[str, Any]:
     from app.api.v1.recipes import translate_list, translate_steps, translate_text
 
     out = dict(card)
     title = out.get("title") or ""
     out["translated_title"] = translate_text(title, target_lang)
-    ingredients = out.get("ingredients") or []
-    if ingredients:
-        capped = ingredients if full else ingredients[:12]
-        out["translated_ingredients"] = translate_list(capped, target_lang)
-    else:
-        out["translated_ingredients"] = []
-    if full:
+    if full and not titles_only:
+        ingredients = out.get("ingredients") or []
+        if ingredients:
+            out["translated_ingredients"] = translate_list(ingredients, target_lang)
+        else:
+            out["translated_ingredients"] = []
         out["translated_steps"] = translate_steps(out.get("steps") or [], target_lang)
     else:
-        out["translated_steps"] = out.get("translated_steps") or out.get("steps") or []
+        # Меню / lite: только заголовок (шаги и ингредиенты — GET /recipes/{id}).
+        out["translated_ingredients"] = []
+        out["translated_steps"] = []
     out["target_language"] = target_lang
     return out
 
@@ -75,7 +80,8 @@ def localize_recipe_cards(
     target_lang: str,
     *,
     full: bool = False,
-    max_workers: int = 6,
+    titles_only: bool = False,
+    max_workers: int = 4,
 ) -> List[Dict[str, Any]]:
     """Параллельный перевод карточек (заголовок + ингредиенты; шаги при full=True)."""
     target_lang = (target_lang or "ru").lower()
@@ -102,7 +108,9 @@ def localize_recipe_cards(
 
         def _work(item: Tuple[int, Dict[str, Any]]) -> Tuple[int, Dict[str, Any]]:
             i, c = item
-            return i, _localize_one_card(c, target_lang, full=full)
+            return i, _localize_one_card(
+                c, target_lang, full=full, titles_only=titles_only
+            )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
             for pair in pool.map(_work, pending):
@@ -119,6 +127,7 @@ def apply_recipe_localization_to_cards(
     user,
     *,
     full: bool = False,
+    titles_only: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     lang = (target_lang or "ru").lower()
     meta: Dict[str, Any] = {
@@ -139,7 +148,9 @@ def apply_recipe_localization_to_cards(
         return cards, meta
 
     try:
-        localized = localize_recipe_cards(cards, lang, full=full)
+        localized = localize_recipe_cards(
+            cards, lang, full=full, titles_only=titles_only or not full
+        )
         meta["recipe_translation_enabled"] = True
         return localized, meta
     except Exception as exc:
