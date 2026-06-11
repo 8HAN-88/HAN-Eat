@@ -1,15 +1,18 @@
 // Bottom sheet с настройками канала
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/theme/app_tokens.dart';
+import '../application/channels_list_refresh_provider.dart';
 import '../../../services/channel_notification_prefs.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
 import '../../../widgets/report_content_dialog.dart';
 
-class ChannelSettingsBottomSheet extends StatefulWidget {
+class ChannelSettingsBottomSheet extends ConsumerStatefulWidget {
   final ChannelDetail channel;
   final int channelId;
   final VoidCallback? onShare;
@@ -30,12 +33,12 @@ class ChannelSettingsBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<ChannelSettingsBottomSheet> createState() =>
+  ConsumerState<ChannelSettingsBottomSheet> createState() =>
       _ChannelSettingsBottomSheetState();
 }
 
 class _ChannelSettingsBottomSheetState
-    extends State<ChannelSettingsBottomSheet> {
+    extends ConsumerState<ChannelSettingsBottomSheet> {
   bool _notificationsEnabled = true;
   bool _showInFeed = true;
   bool _isFavorite = false;
@@ -68,12 +71,16 @@ class _ChannelSettingsBottomSheetState
     final mq = MediaQuery.of(context);
     final maxSheetHeight = mq.size.height * 0.92;
     final bottomInset = mq.padding.bottom;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxSheetHeight),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppRadius.sheet),
+        ),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -88,9 +95,8 @@ class _ChannelSettingsBottomSheetState
                   Expanded(
                     child: Text(
                       widget.channel.name,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -180,11 +186,11 @@ class _ChannelSettingsBottomSheetState
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                   content: Text(
-                                    userVisibleError(
-                                      e,
-                                      fallback: 'Не удалось сохранить',
-                                    ),
-                                  )),
+                                userVisibleError(
+                                  e,
+                                  fallback: 'Не удалось сохранить',
+                                ),
+                              )),
                             );
                           }
                         }
@@ -205,7 +211,9 @@ class _ChannelSettingsBottomSheetState
                   } catch (e) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+                        SnackBar(
+                            content: Text(userVisibleError(e,
+                                fallback: 'Не удалось сохранить'))),
                       );
                     }
                   }
@@ -217,17 +225,30 @@ class _ChannelSettingsBottomSheetState
               title: Text(_isFavorite ? 'В избранном' : 'Добавить в избранное'),
               trailing: Icon(
                 _isFavorite ? Icons.star : Icons.star_border,
-                color: _isFavorite ? Colors.amber : null,
+                color: _isFavorite ? scheme.secondary : null,
               ),
               onTap: () async {
                 final next = !_isFavorite;
                 try {
                   await ChannelSheetPrefs.setFavorite(widget.channelId, next);
-                  if (mounted) setState(() => _isFavorite = next);
+                  if (!mounted) return;
+                  setState(() => _isFavorite = next);
+                  ref.read(channelFavoritesRefreshProvider.notifier).state++;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        next
+                            ? 'Канал в избранном — раздел «Каналы»'
+                            : 'Убрано из избранного',
+                      ),
+                    ),
+                  );
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+                      SnackBar(
+                          content: Text(userVisibleError(e,
+                              fallback: 'Не удалось сохранить'))),
                     );
                   }
                 }
@@ -266,10 +287,10 @@ class _ChannelSettingsBottomSheetState
             if (widget.channel.isMember) ...[
               const Divider(),
               ListTile(
-                leading: Icon(Icons.exit_to_app, color: Colors.red),
+                leading: Icon(Icons.exit_to_app, color: scheme.error),
                 title: Text(
                   'Отписаться',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: scheme.error),
                 ),
                 onTap: () async {
                   Navigator.of(context).pop();

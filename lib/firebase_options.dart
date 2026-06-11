@@ -60,20 +60,20 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyA2YEEwYD36C_34Bq6Cb1AnDHuCSkV2tIg',
-    appId: '1:834367201092:ios:0cf7c173a623be05cf0111',
+    appId: '1:834367201092:ios:297f6b4e449dc345cf0111',
     messagingSenderId: '834367201092',
     projectId: 'han-eat',
     storageBucket: 'han-eat.firebasestorage.app',
-    iosBundleId: 'com.example.hanEat',
+    iosBundleId: 'com.haneat.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyA2YEEwYD36C_34Bq6Cb1AnDHuCSkV2tIg',
-    appId: '1:834367201092:ios:0cf7c173a623be05cf0111',
+    appId: '1:834367201092:ios:297f6b4e449dc345cf0111',
     messagingSenderId: '834367201092',
     projectId: 'han-eat',
     storageBucket: 'han-eat.firebasestorage.app',
-    iosBundleId: 'com.example.hanEat',
+    iosBundleId: 'com.haneat.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

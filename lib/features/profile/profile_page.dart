@@ -29,6 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void _onProfileChanged() {
     final p = UserService.instance.profile.value;
     _nameCtl.text = p?.displayName ?? '';
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -48,6 +49,7 @@ class _ProfilePageState extends State<ProfilePage> {
     });
     try {
       await UserService.instance.updateAvatarFromXFile(picked, onProgress: (p) {
+        if (!mounted) return;
         setState(() => _uploadProgress = p);
       });
       if (!mounted) return;
@@ -57,7 +59,9 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
+        SnackBar(
+            content: Text(
+                userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
       );
     } finally {
       if (mounted) {
@@ -81,7 +85,9 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+        SnackBar(
+            content:
+                Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
       );
     } finally {
       if (mounted) {

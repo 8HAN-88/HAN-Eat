@@ -74,6 +74,13 @@ async def like_post(
     )
     
     db.commit()
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
     
     # Получаем количество лайков
     likes_count = db.query(func.count(Like.id)).filter(
@@ -107,6 +114,13 @@ async def unlike_post(
     
     db.delete(like)
     db.commit()
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
     
     # Получаем количество лайков
     likes_count = db.query(func.count(Like.id)).filter(

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -73,10 +72,17 @@ class GptAnalyzeService {
     final base64Image = base64Encode(imageBytes);
 
     final prompt = '''
-Food photo. Reply in $lang. JSON only.
-Pick ONE most likely dish with a specific stable name (not generic "food").
-Estimate portion_grams (visible serving on the plate). calories and nutrition must match THAT portion, not per 100g. Round calories to nearest 10.
-{"dish_name":"...","portion_grams":number,"calories":number,"confidence":0-1,"nutrition":{"protein":g,"fat":g,"carbohydrates":g,"fiber":g or null,"sugar":g or null,"sodium":mg or null}}
+You are a careful food-recognition dietitian. Reply in $lang. Return JSON only, no markdown.
+Analyze the visible serving in the photo, not a generic recipe and not per 100g.
+Infer the most likely dish, visible ingredients, cooking method, and portion size.
+If there are several foods, name the main plate as a combined dish. If the photo is unclear, choose the safest broad dish name and lower confidence.
+Do not invent hidden ingredients, sauces, oil, sugar, cheese, or drinks unless they are visible or strongly implied by the dish.
+Estimate restaurant-style portions realistically: small snack 80-180g, normal single serving 250-450g, large plate 500-800g.
+Calories and macros must be internally consistent with portion_grams and visible ingredients.
+Use kcal for calories, grams for protein/fat/carbohydrates/fiber/sugar, mg for sodium.
+Round calories to nearest 10, portion_grams to nearest 5, macros to 0.1g.
+Confidence: 0.85+ only when dish and portion are clear; 0.55-0.75 for likely but uncertain; below 0.55 when blurry/partial.
+{"dish_name":"specific stable dish name","portion_grams":number,"calories":number,"confidence":0-1,"nutrition":{"protein":g,"fat":g,"carbohydrates":g,"fiber":g or null,"sugar":g or null,"sodium":mg or null}}
 ''';
 
     final body = {
@@ -93,7 +99,7 @@ Estimate portion_grams (visible serving on the plate). calories and nutrition mu
               'type': 'image_url',
               'image_url': {
                 'url': 'data:image/jpeg;base64,$base64Image',
-                'detail': 'low',
+                'detail': 'high',
               },
             },
           ],

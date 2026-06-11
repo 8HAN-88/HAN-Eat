@@ -3,73 +3,32 @@ import 'dart:io' show HttpOverrides;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'app/bootstrap.dart';
-import 'core/network/haneat_http_overrides.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'app/app_bootstrap_state.dart';
 import 'app/startup_shell.dart';
-import 'core/crash_reporting.dart';
+import 'core/app_stability_guard.dart';
+import 'core/network/haneat_http_overrides.dart';
 
-Future<void> main() async {
-  // Настройка глобального обработчика ошибок Flutter
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    debugPrint('❌ Flutter Error: ${details.exception}');
-    if (details.stack != null) {
-      debugPrint('Stack trace: ${details.stack}');
-    }
-  };
-
-  // run inside zone to catch uncaught async errors
-  runZonedGuarded(() async {
+void main() {
+  runZonedGuarded(() {
     WidgetsFlutterBinding.ensureInitialized();
+    GoogleFonts.config.allowRuntimeFetching = false;
+    AppStabilityGuard.install();
 
     if (!kIsWeb) {
       HttpOverrides.global = HanEatHttpOverrides();
     }
 
-    // В release при падении build часто «пустой» экран — показываем текст ошибки.
-    ErrorWidget.builder = (FlutterErrorDetails details) {
-      return Material(
-        color: Colors.white,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: SelectableText(
-              'Ошибка интерфейса:\n${details.exceptionAsString()}',
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-            ),
-          ),
-        ),
-      );
-    };
+    AppBootstrapState.authReady.value = false;
+    AppBootstrapState.hiveReady.value = true;
 
-    try {
-      await bootstrapEarly();
-      runHanEatApp();
-    } catch (e, st) {
-      debugPrint('❌ bootstrapEarly failed: $e\n$st');
-      runApp(
-        MaterialApp(
-          debugShowCheckedModeBanner: false,
-          home: Scaffold(
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: SelectableText(
-                    'Не удалось запустить приложение.\n\n$e',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 15),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-  }, (error, stack) {
-    debugPrint('❌ Uncaught zone error: $error');
-    debugPrint('Stack trace: $stack');
-    unawaited(CrashReporting.recordError(error, stack, fatal: true));
-  });
+    // Лёгкий первый кадр (StartupShell), затем HanEatApp + GoRouter — иначе белый Launch Screen на iOS 26.
+    runApp(
+      const ProviderScope(
+        child: StartupShell(),
+      ),
+    );
+  }, AppStabilityGuard.handleZoneError);
 }

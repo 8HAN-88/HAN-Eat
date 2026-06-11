@@ -43,6 +43,21 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     return plan.canRegenerateUnlimited;
   }
 
+  AiDayPlan? get _selectedDay {
+    final plan = _plan;
+    if (plan == null || plan.days.isEmpty) return null;
+    if (_selectedDayIndex < 0 || _selectedDayIndex >= plan.days.length) {
+      return plan.days.first;
+    }
+    return plan.days[_selectedDayIndex];
+  }
+
+  Map<String, dynamic>? _asJsonMap(Object? value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
+  }
+
   bool _handleMealPlanError(Object e) {
     if (!mounted) return true;
     if (e is HanMealPlanCooldownException) {
@@ -58,7 +73,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(userVisibleError(e, fallback: 'Не удалось выполнить действие')),
+        content: Text(
+            userVisibleError(e, fallback: 'Не удалось выполнить действие')),
       ),
     );
     return true;
@@ -96,8 +112,7 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     });
     try {
       final limits = await _service.fetchLimits();
-      final surveyDone =
-          await NutritionPrefsService.isMealPlanSurveyComplete();
+      final surveyDone = await NutritionPrefsService.isMealPlanSurveyComplete();
 
       if (_service.activePlan != null) {
         setState(() {
@@ -138,7 +153,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
         return;
       }
       setState(() {
-        _error = userVisibleError(e, fallback: 'Не удалось загрузить план питания');
+        _error =
+            userVisibleError(e, fallback: 'Не удалось загрузить план питания');
         _loading = false;
       });
     }
@@ -209,7 +225,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                     ),
                     if (limits.familyMealPlans) ...[
                       const SizedBox(height: 16),
-                      Text('Семейный план (Pro)', style: Theme.of(ctx).textTheme.titleSmall),
+                      Text('Семейный план (Pro)',
+                          style: Theme.of(ctx).textTheme.titleSmall),
                       Row(
                         children: [
                           IconButton(
@@ -218,7 +235,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                                 : null,
                             icon: const Icon(Icons.remove_circle_outline),
                           ),
-                          Text('$familySize чел.', style: Theme.of(ctx).textTheme.titleMedium),
+                          Text('$familySize чел.',
+                              style: Theme.of(ctx).textTheme.titleMedium),
                           IconButton(
                             onPressed: familySize < 8
                                 ? () => setModalState(() => familySize++)
@@ -238,7 +256,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(16),
                             onTap: () async {
-                              await NutritionPrefsService.saveFamilySize(familySize);
+                              await NutritionPrefsService.saveFamilySize(
+                                  familySize);
                               if (ctx.mounted) {
                                 Navigator.pop(ctx, _PlanPick(d, familySize));
                               }
@@ -253,7 +272,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.12),
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Icon(
@@ -265,7 +285,10 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                                   Expanded(
                                     child: Text(
                                       '$d ${_dayLabel(d)}',
-                                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                      style: Theme.of(ctx)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
                                             fontWeight: FontWeight.w600,
                                           ),
                                     ),
@@ -273,7 +296,9 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                                   Icon(
                                     Icons.arrow_forward_ios_rounded,
                                     size: 16,
-                                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(ctx)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                   ),
                                 ],
                               ),
@@ -316,7 +341,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     );
     if (replace == null) return;
     try {
-      final n = await _service.applyActivePlanToCalendar(replaceExisting: replace);
+      final n =
+          await _service.applyActivePlanToCalendar(replaceExisting: replace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Добавлено блюд в календарь: $n')),
@@ -354,19 +380,44 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     String? modifier,
     int? mealIndex,
   }) async {
+    final day = _selectedDay;
+    if (day == null || day.meals.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('В плане пока нет блюд для замены')),
+      );
+      return;
+    }
+    if (scope == 'meal') {
+      final idx = mealIndex ?? 0;
+      if (idx < 0 || idx >= day.meals.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось выбрать блюдо для замены')),
+        );
+        return;
+      }
+    }
     setState(() => _regeneratingMealIndex = mealIndex);
     try {
-      final prevTitle = _plan?.days[_selectedDayIndex].meals[mealIndex ?? 0].title;
+      final safeMealIndex = mealIndex ?? 0;
+      final prevTitle = scope == 'meal' ? day.meals[safeMealIndex].title : null;
       final plan = await _service.regenerate(
         scope: scope,
         dayIndex: _selectedDayIndex,
-        mealIndex: mealIndex ?? 0,
+        mealIndex: safeMealIndex,
         modifier: modifier,
       );
       if (!mounted) return;
-      setState(() => _plan = plan);
-      if (scope == 'meal' && mealIndex != null) {
-        final newTitle = plan.days[_selectedDayIndex].meals[mealIndex].title;
+      final nextIndex =
+          _selectedDayIndex.clamp(0, plan.days.length - 1).toInt();
+      setState(() {
+        _plan = plan;
+        _selectedDayIndex = nextIndex;
+      });
+      if (scope == 'meal' &&
+          mealIndex != null &&
+          nextIndex < plan.days.length &&
+          mealIndex < plan.days[nextIndex].meals.length) {
+        final newTitle = plan.days[nextIndex].meals[mealIndex].title;
         if (newTitle != prevTitle) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Новое блюдо: $newTitle')),
@@ -413,7 +464,6 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
     if (picked == null || !mounted) return;
     setState(() => _loading = true);
     try {
-      _service.clear();
       final plan = await _service.generate(durationDays: picked.duration);
       if (!mounted) return;
       setState(() {
@@ -484,7 +534,7 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
   }
 
   Future<void> _openSavedPlanRow(Map<String, dynamic> row) async {
-    var planJson = row['plan'] as Map<String, dynamic>?;
+    var planJson = _asJsonMap(row['plan']);
     final hasDays = planJson != null &&
         planJson['days'] is List &&
         (planJson['days'] as List).isNotEmpty;
@@ -517,12 +567,28 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
       }
     }
     if (!mounted) return;
-    setState(() {
-      _plan = AiMealPlan.fromJson(planJson!);
-      _service.setActivePlan(_plan!);
-      _selectedDayIndex = 0;
-      _loading = false;
-    });
+    try {
+      final parsed = AiMealPlan.fromJson(planJson);
+      if (parsed.days.isEmpty) {
+        throw StateError('План пустой');
+      }
+      setState(() {
+        _plan = parsed;
+        _service.setActivePlan(_plan!);
+        _selectedDayIndex = 0;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e,
+                fallback: 'Не удалось открыть сохранённый план'),
+          ),
+        ),
+      );
+    }
   }
 
   void _previewShoppingList() {
@@ -533,7 +599,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
       );
       return;
     }
-    final smartShopping = plan.smartShopping || (_limits?.smartShopping ?? false);
+    final smartShopping =
+        plan.smartShopping || (_limits?.smartShopping ?? false);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -553,7 +620,9 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          smartShopping ? 'Список покупок' : 'Ингредиенты по плану',
+                          smartShopping
+                              ? 'Список покупок'
+                              : 'Ингредиенты по плану',
                           style: Theme.of(ctx).textTheme.titleLarge,
                         ),
                       ),
@@ -587,10 +656,10 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                             dense: true,
                             contentPadding: EdgeInsets.zero,
                             title: Text(i.name),
-                            subtitle: i.quantity != null &&
-                                    i.quantity!.isNotEmpty
-                                ? Text(i.quantity!)
-                                : null,
+                            subtitle:
+                                i.quantity != null && i.quantity!.isNotEmpty
+                                    ? Text(i.quantity!)
+                                    : null,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -600,7 +669,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                         Text(
                           'Умный список покупок с категориями — в H.A.N. AI',
                           style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                                color:
+                                    Theme.of(ctx).colorScheme.onSurfaceVariant,
                               ),
                         ),
                       ],
@@ -618,21 +688,35 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
   Future<void> _applyShoppingList() async {
     final plan = _plan;
     if (plan == null) return;
-    for (final cat in plan.shoppingList) {
-      final catalog = cat.items
-          .map((i) => (name: i.name, quantity: i.quantity))
-          .toList();
-      await ShoppingService.instance.addCatalogItems(
-        catalog,
-        group: cat.name,
+    try {
+      final shopping = await ShoppingService.ensureInitialized();
+      for (final cat in plan.shoppingList) {
+        final catalog = cat.items
+            .where((i) => i.name.trim().isNotEmpty)
+            .map((i) => (name: i.name, quantity: i.quantity))
+            .toList();
+        if (catalog.isEmpty) continue;
+        await shopping.addCatalogItems(
+          catalog,
+          group: cat.name,
+        );
+      }
+      await ApiService.logMealPlanShoppingApplied();
+      await ProductAnalytics.logEvent(eventType: 'meal_plan_shopping_applied');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Список покупок обновлён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось обновить список покупок'),
+          ),
+        ),
       );
     }
-    await ApiService.logMealPlanShoppingApplied();
-    await ProductAnalytics.logEvent(eventType: 'meal_plan_shopping_applied');
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Список покупок обновлён')),
-    );
   }
 
   Future<void> _showPlanActionsMenu() async {
@@ -862,7 +946,8 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                    color: theme.colorScheme.primaryContainer
+                        .withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -881,10 +966,12 @@ class _AiMealPlanScreenState extends State<AiMealPlanScreen> {
                   onTap: _openNutritionSettings,
                   borderRadius: BorderRadius.circular(14),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     child: Row(
                       children: [
-                        Icon(Icons.tune_rounded, color: AppColors.primary, size: 22),
+                        Icon(Icons.tune_rounded,
+                            color: AppColors.primary, size: 22),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(

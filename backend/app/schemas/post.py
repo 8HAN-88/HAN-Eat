@@ -54,6 +54,8 @@ class CreatePostRequest(BaseModel):
     carbs_g: Optional[float] = None
     fat_g: Optional[float] = None
     fiber_g: Optional[float] = None
+    origin_country_code: Optional[str] = None  # ISO 3166-1 alpha-2, кухня/страна блюда
+    origin_country_name: Optional[str] = None
     scheduled_publish_at: Optional[datetime] = None
     poll: Optional[PollCreate] = None
     link: Optional[LinkCreate] = None
@@ -82,6 +84,8 @@ class UpdatePostRequest(BaseModel):
     carbs_g: Optional[float] = None
     fat_g: Optional[float] = None
     fiber_g: Optional[float] = None
+    origin_country_code: Optional[str] = None
+    origin_country_name: Optional[str] = None
     poll: Optional[PollCreate] = None
 
 
@@ -91,6 +95,17 @@ class PostAuthorResponse(BaseModel):
     username: Optional[str] = None
     avatar_url: Optional[str] = None
     
+    class Config:
+        from_attributes = True
+
+
+class PostChannelResponse(BaseModel):
+    id: int
+    name: str
+    slug: Optional[str] = None
+    avatar_url: Optional[str] = None
+    description: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -113,12 +128,15 @@ class PostResponse(BaseModel):
     community_id: Optional[int] = None
     # Данные автора
     author: Optional[PostAuthorResponse] = None
+    channel: Optional[PostChannelResponse] = None
     # Метаданные
     likes_count: int = 0
     comments_count: int = 0
     reposts_count: Optional[int] = None
     views_count: int = 0  # Счетчик просмотров
     is_promoted: bool = False
+    is_pinned: bool = False
+    is_exclusive: bool = False
     is_liked: bool = False
     is_saved: bool = False
     published_at: Optional[datetime] = None
@@ -153,6 +171,8 @@ class PostResponse(BaseModel):
             'reposts_count': getattr(obj, 'reposts_count', None),
             'views_count': getattr(obj, 'views_count', 0) or 0,
             'is_promoted': bool(getattr(obj, 'is_promoted', False)),
+            'is_pinned': bool(getattr(obj, 'is_pinned', False)),
+            'is_exclusive': bool(getattr(obj, 'is_exclusive', False)),
             'is_liked': getattr(obj, 'is_liked', False),
             'is_saved': getattr(obj, 'is_saved', False),
         }
@@ -167,6 +187,18 @@ class PostResponse(BaseModel):
             )
         else:
             data['author'] = None
+
+        channel_obj = getattr(obj, 'channel', None)
+        if channel_obj is not None:
+            data['channel'] = PostChannelResponse(
+                id=channel_obj.id,
+                name=channel_obj.name,
+                slug=getattr(channel_obj, 'slug', None),
+                avatar_url=getattr(channel_obj, 'avatar_url', None),
+                description=getattr(channel_obj, 'description', None),
+            )
+        else:
+            data['channel'] = None
         
         return cls(**data)
 

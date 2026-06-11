@@ -7,6 +7,7 @@ import 'dart:async';
 import '../../../models/meal_plan.dart';
 import '../../../services/meal_plan_service.dart';
 import '../../../services/shopping_service.dart';
+import '../../../widgets/services_ready_gate.dart';
 import '../../../services/server_config.dart';
 import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -201,19 +202,23 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildWeekHeader(),
-          Expanded(
-            child: ValueListenableBuilder<List<MealPlanEntry>>(
-              valueListenable: MealPlanService.instance.allEntries,
-              builder: (context, allEntries, _) {
-                final dailyPlan = MealPlanService.instance.getPlanForDate(_selectedDate);
-                return _buildDayPlan(dailyPlan);
-              },
+      body: ServicesReadyGate(
+        services: const [DeferredLocalService.mealPlan],
+        child: Column(
+          children: [
+            _buildWeekHeader(),
+            Expanded(
+              child: ValueListenableBuilder<List<MealPlanEntry>>(
+                valueListenable: MealPlanService.instance.allEntries,
+                builder: (context, allEntries, _) {
+                  final dailyPlan =
+                      MealPlanService.instance.getPlanForDate(_selectedDate);
+                  return _buildDayPlan(dailyPlan);
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -513,7 +518,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   }
 
   Future<void> _addDayToShoppingList() async {
-    final plan = MealPlanService.instance.getPlanForDate(_selectedDate);
+    final mealPlan = await MealPlanService.ensureInitialized();
+    final plan = mealPlan.getPlanForDate(_selectedDate);
     if (plan.entries.isEmpty) {
       _showNotice('На выбранный день нет блюд в плане');
       return;
@@ -530,8 +536,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     for (final item in selectedIngredients) {
       byRecipe.putIfAbsent(item.recipeTitle, () => []).add(item.ingredient);
     }
+    final shopping = await ShoppingService.ensureInitialized();
     for (final row in byRecipe.entries) {
-      await ShoppingService.instance.addItemsFromRecipe(
+      await shopping.addItemsFromRecipe(
         row.value,
         group: row.key,
       );
@@ -756,7 +763,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
 
     if (confirmed == true) {
-      await MealPlanService.instance.removeFromPlan(entry.id);
+      final mealPlan = await MealPlanService.ensureInitialized();
+      await mealPlan.removeFromPlan(entry.id);
       _showNotice('Удалено из плана');
     }
   }
@@ -768,7 +776,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   }
 
   Future<void> _shareWeekPlan() async {
-    final entries = MealPlanService.instance.allEntries.value;
+    final mealPlan = await MealPlanService.ensureInitialized();
+    final entries = mealPlan.allEntries.value;
     if (entries.isEmpty) {
       _showNotice('План питания пуст');
       return;

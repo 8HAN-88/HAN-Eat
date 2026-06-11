@@ -70,13 +70,26 @@ def analyze_recipe_nutrition_gpt(
     ) or "-"
 
     prompt = (
-        f"You are a nutritionist. Reply in {lang_name}. JSON only.\n"
-        f"Estimate nutrition PER ONE SERVING (recipe yields {servings_n} servings total).\n"
+        f"You are a careful recipe nutrition analyst. Reply in {lang_name}. "
+        "Return JSON only, no markdown.\n"
+        f"Estimate nutrition PER ONE SERVING. The whole recipe yields {servings_n} "
+        "servings total, so divide the full recipe by servings.\n"
         f"Title: {title.strip()}\n"
         f"Description: {(description or '').strip() or '-'}\n"
         f"Ingredients:\n{ing_text}\n"
         f"Steps:\n{steps_text}\n"
-        "Return realistic estimates for cooked dish per serving:\n"
+        "Rules for quality:\n"
+        "- Use only listed ingredients and clearly implied cooking losses/gains. "
+        "Do not invent hidden oil, sugar, cheese, sauces, garnish, or drinks.\n"
+        "- If ingredient quantities are missing, estimate typical home-cooking amounts "
+        "for the named dish and reduce confidence.\n"
+        "- Calories and macros must be internally consistent: protein/carbs 4 kcal/g, "
+        "fat 9 kcal/g. Cooked water loss changes weight, not calories.\n"
+        "- Account for edible portions and oil absorption realistically.\n"
+        "- Values are per serving, not per 100g and not for the whole recipe.\n"
+        "- Round calories to nearest 10, macros/fiber to 0.1g. "
+        "Confidence: 0.85+ only when quantities are clear, 0.55-0.75 when estimated, "
+        "below 0.55 when ingredients are vague.\n"
         '{"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,'
         '"fiber_g":number or null,"confidence":0-1}'
     )
@@ -91,7 +104,9 @@ def analyze_recipe_nutrition_gpt(
                 },
                 json={
                     "model": (settings.OPENAI_FOOD_SCAN_MODEL or "gpt-4.1-nano").strip(),
-                    "max_tokens": 200,
+                    "max_tokens": 300,
+                    "temperature": 0,
+                    "seed": 42,
                     "messages": [{"role": "user", "content": prompt}],
                 },
             )
@@ -112,11 +127,19 @@ def analyze_recipe_nutrition_gpt(
         if not isinstance(data, dict):
             return None
 
-        calories = _parse_num(data.get("calories"))
-        protein = _parse_num(data.get("protein_g") or data.get("protein"))
-        carbs = _parse_num(data.get("carbs_g") or data.get("carbohydrates") or data.get("carbs"))
-        fat = _parse_num(data.get("fat_g") or data.get("fat"))
-        fiber = _parse_num(data.get("fiber_g") or data.get("fiber"))
+        calories = _bounded(_parse_num(data.get("calories")), 20, 2500)
+        protein = _bounded(_parse_num(data.get("protein_g") or data.get("protein")), 0, 180)
+        carbs = _bounded(
+            _parse_num(data.get("carbs_g") or data.get("carbohydrates") or data.get("carbs")),
+            0,
+            300,
+        )
+        fat = _bounded(_parse_num(data.get("fat_g") or data.get("fat")), 0, 180)
+        fiber = _bounded(_parse_num(data.get("fiber_g") or data.get("fiber")), 0, 80)
+        if calories is None and any(v is not None for v in (protein, carbs, fat)):
+            calories = round(
+                float(protein or 0) * 4 + float(carbs or 0) * 4 + float(fat or 0) * 9
+            )
 
         nutrition: Dict[str, Any] = {}
         if protein is not None:
@@ -147,3 +170,9 @@ def analyze_recipe_nutrition_gpt(
     except Exception as exc:
         logger.warning("recipe nutrition GPT failed: %s", exc)
         return None
+
+
+def _bounded(value: Optional[float], minimum: float, maximum: float) -> Optional[float]:
+    if value is None:
+        return None
+    return max(minimum, min(maximum, float(value)))

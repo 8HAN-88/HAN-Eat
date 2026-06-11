@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/firebase/lazy_firebase.dart';
 import '../models/feed_delivery.dart';
 import 'package:flutter/foundation.dart';
 
 /// Сервис для управления доставкой контента в ленты
 class FeedDeliveryService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Создать запись доставки
   static Future<void> createDelivery({

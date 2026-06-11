@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,7 @@ import '../../services/server_config.dart';
 import '../../core/layout/long_label_tab_bar.dart';
 import '../../utils/api_error_parser.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/services_ready_gate.dart';
 
 class _RecipeSourceItem {
   final RecipeModel recipe;
@@ -46,8 +48,10 @@ class _ShoppingPageState extends State<ShoppingPage> {
   @override
   void initState() {
     super.initState();
-    // При открытии экрана подгружаем список из хранилища (сохраняется между сессиями и выходом).
-    ShoppingService.instance.reloadFromStorage();
+    unawaited(() async {
+      final svc = await ShoppingService.ensureInitialized();
+      await svc.reloadFromStorage();
+    }());
   }
 
   @override
@@ -120,7 +124,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
       }
       return;
     }
-    await ShoppingService.instance.addItemsFromRecipe(
+    final shopping = await ShoppingService.ensureInitialized();
+    await shopping.addItemsFromRecipe(
       ingredients,
       group: (group != null && group.trim().isNotEmpty) ? group.trim() : null,
     );
@@ -134,7 +139,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
   Future<List<_RecipeSourceItem>> _loadRecipeSources() async {
     final merged = <String, _RecipeSourceItem>{};
 
-    for (final entry in MealPlanService.instance.allEntries.value) {
+    final mealPlan = await MealPlanService.ensureInitialized();
+    for (final entry in mealPlan.allEntries.value) {
       final recipe = entry.recipe;
       final key = 'plan:${entry.id}:${recipe.id}';
       merged[key] = _RecipeSourceItem(
@@ -409,6 +415,13 @@ class _ShoppingPageState extends State<ShoppingPage> {
 
   @override
   Widget build(BuildContext context) {
+    return ServicesReadyGate(
+      services: const [DeferredLocalService.shopping],
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final navBottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       appBar: AppBar(

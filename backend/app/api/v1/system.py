@@ -6,7 +6,12 @@ from app.core.infrastructure_startup import (
     collect_infrastructure_issues,
     infrastructure_status,
 )
-from app.core.media_startup import collect_media_issues
+from app.core.media_startup import (
+    collect_media_issues,
+    ffmpeg_available,
+    media_upload_mode,
+    video_queue_depth,
+)
 from app.core.payments_startup import collect_payments_issues
 from app.core.production_startup import collect_production_issues
 
@@ -43,7 +48,12 @@ async def system_readiness():
         },
         "media": {
             "s3_configured": _s3_fully_configured(),
+            "upload_mode": media_upload_mode(),
             "cdn_url": settings.CDN_URL,
+            "bucket": settings.S3_BUCKET,
+            "ffmpeg_available": ffmpeg_available(),
+            "video_queue_depth": video_queue_depth(),
+            "max_video_size_mb": settings.MAX_VIDEO_SIZE_MB,
             "issues": media,
         },
         "infrastructure": infrastructure_status(),

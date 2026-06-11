@@ -1,6 +1,8 @@
 // Модель поста для нового API
 import 'package:json_annotation/json_annotation.dart';
 
+import '../services/server_config.dart';
+
 part 'post.g.dart';
 
 @JsonSerializable()
@@ -92,15 +94,19 @@ class Post {
   }
   String? get videoUrl {
     // Сначала проверяем старый формат
-    if (body?['video_url'] != null) {
-      return body!['video_url'] as String?;
+    final direct = body?['video_url'];
+    if (direct is String && direct.trim().isNotEmpty) {
+      return ServerConfig.resolveMediaUrl(direct.trim());
     }
     // Затем проверяем новый формат в media массиве
     final media = body?['media'];
     if (media is List) {
       for (final item in media) {
         if (item is Map<String, dynamic> && item['type'] == 'video') {
-          return item['url'] as String?;
+          final u = item['url'];
+          if (u is String && u.trim().isNotEmpty) {
+            return ServerConfig.resolveMediaUrl(u.trim());
+          }
         }
       }
     }
@@ -109,15 +115,19 @@ class Post {
   
   String? get videoThumbnail {
     // Сначала проверяем старый формат
-    if (body?['video_thumbnail'] != null) {
-      return body!['video_thumbnail'] as String?;
+    final direct = body?['video_thumbnail'];
+    if (direct is String && direct.trim().isNotEmpty) {
+      return ServerConfig.resolveMediaUrl(direct.trim());
     }
     // Затем проверяем новый формат в media массиве
     final media = body?['media'];
     if (media is List) {
       for (final item in media) {
         if (item is Map<String, dynamic> && item['type'] == 'video') {
-          return item['thumbnail_url'] as String?;
+          final t = item['thumbnail_url'] ?? item['thumbnail'];
+          if (t is String && t.trim().isNotEmpty) {
+            return ServerConfig.resolveMediaUrl(t.trim());
+          }
         }
       }
     }

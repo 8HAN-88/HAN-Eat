@@ -39,7 +39,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
 
     setState(() => _loading = true);
-    final detailed = await RecipeService.instance.fetchDetailsAndCache(id);
+    final recipeSvc = await RecipeService.ensureInitialized();
+    final detailed = await recipeSvc.fetchDetailsAndCache(id);
     setState(() {
       _recipe = detailed;
       _loading = false;
@@ -61,7 +62,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     }
 
     final recipe = _recipe!;
-    final isFav = FavoritesService.instance.isFavorite(recipe.id);
+    final isFav = FavoritesService.safeIsFavorite(recipe.id);
 
     return Scaffold(
       appBar: AppBar(
@@ -70,8 +71,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           IconButton(
             icon: Icon(isFav ? Icons.favorite : Icons.favorite_border,
                 color: isFav ? Colors.red : null),
-            onPressed: () =>
-                FavoritesService.instance.toggleFavorite(recipe.id),
+            onPressed: () => FavoritesService.safeToggleFavorite(recipe.id),
           ),
         ],
       ),

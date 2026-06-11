@@ -24,6 +24,8 @@ class PostModel {
   final int repostsCount;
   final int viewsCount;  // Счетчик просмотров
   final bool isPromoted;
+  final bool isPinned;
+  final bool isExclusive;
   final bool isLiked;
   final bool? isSaved;
   final bool? isReposted;
@@ -57,7 +59,46 @@ class PostModel {
   String? get linkDescription => linkMeta?['description'] as String?;
   String? get linkImage => linkMeta?['image'] as String?;
   String? get linkDomain => linkMeta?['domain'] as String?;
-  
+
+  /// URL видео для рилса (media[] или legacy video_url).
+  String? get videoUrl {
+    final direct = body?['video_url'];
+    if (direct is String && direct.trim().isNotEmpty) {
+      return ServerConfig.resolveMediaUrl(direct.trim());
+    }
+    final media = body?['media'];
+    if (media is List) {
+      for (final item in media) {
+        if (item is Map<String, dynamic> && item['type'] == 'video') {
+          final u = item['url'];
+          if (u is String && u.trim().isNotEmpty) {
+            return ServerConfig.resolveMediaUrl(u.trim());
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  String? get videoThumbnail {
+    final direct = body?['video_thumbnail'];
+    if (direct is String && direct.trim().isNotEmpty) {
+      return ServerConfig.resolveMediaUrl(direct.trim());
+    }
+    final media = body?['media'];
+    if (media is List) {
+      for (final item in media) {
+        if (item is Map<String, dynamic> && item['type'] == 'video') {
+          final t = item['thumbnail_url'] ?? item['thumbnail'];
+          if (t is String && t.trim().isNotEmpty) {
+            return ServerConfig.resolveMediaUrl(t.trim());
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   PostModel({
     required this.id,
     required this.type,
@@ -75,6 +116,8 @@ class PostModel {
     required this.repostsCount,
     required this.viewsCount,
     this.isPromoted = false,
+    this.isPinned = false,
+    this.isExclusive = false,
     required this.isLiked,
     this.isSaved,
     this.isReposted,
@@ -116,7 +159,17 @@ class PostModel {
             )
           : null,
       repostedBy: null,
-      channel: null,
+      channel: p.channelId != null
+          ? ChannelModel(
+              id: p.channelId!,
+              name: (p.body?['channel_name'] as String?)?.trim().isNotEmpty ==
+                      true
+                  ? (p.body!['channel_name'] as String).trim()
+                  : 'Канал',
+              slug: '',
+              avatarUrl: p.body?['channel_avatar'] as String?,
+            )
+          : null,
     );
   }
 
@@ -204,6 +257,8 @@ class PostModel {
       'reposts_count': repostsCount,
       'views_count': viewsCount,
       'is_promoted': isPromoted,
+      'is_pinned': isPinned,
+      'is_exclusive': isExclusive,
       'is_liked': isLiked,
       'is_saved': isSaved,
       'is_reposted': isReposted,
@@ -214,7 +269,16 @@ class PostModel {
     };
   }
 
-  PostModel copyWith({String? visibility, Map<String, dynamic>? body}) {
+  PostModel copyWith({
+    String? visibility,
+    Map<String, dynamic>? body,
+    int? likesCount,
+    int? commentsCount,
+    int? repostsCount,
+    bool? isLiked,
+    bool? isSaved,
+    bool? isReposted,
+  }) {
     return PostModel(
       id: id,
       type: type,
@@ -227,14 +291,16 @@ class PostModel {
       communityId: communityId,
       body: body ?? this.body,
       tags: tags,
-      likesCount: likesCount,
-      commentsCount: commentsCount,
-      repostsCount: repostsCount,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      repostsCount: repostsCount ?? this.repostsCount,
       viewsCount: viewsCount,
       isPromoted: isPromoted,
-      isLiked: isLiked,
-      isSaved: isSaved,
-      isReposted: isReposted,
+      isPinned: isPinned,
+      isExclusive: isExclusive,
+      isLiked: isLiked ?? this.isLiked,
+      isSaved: isSaved ?? this.isSaved,
+      isReposted: isReposted ?? this.isReposted,
       author: author,
       repostedBy: repostedBy,
       channel: channel,

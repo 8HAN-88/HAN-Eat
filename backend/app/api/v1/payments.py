@@ -26,7 +26,10 @@ from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.support_ticket import SupportTicket
 from app.services.payment_service import get_payment_service
+from app.services.ru_payment_provider import get_active_ru_gateway
 from app.services.yookassa_service import get_yookassa_service
+from app.services.tbank_service import get_tbank_service
+from app.services.payment_success_handler import process_payment_succeeded
 from app.services.country_service import CountryService
 from app.services.subscription_service import SubscriptionService
 from datetime import datetime, timedelta
@@ -50,6 +53,104 @@ def _tier_label(tier: Optional[str]) -> str:
     if not tier:
         return "тариф"
     return _TIER_LABELS.get(str(tier).lower(), str(tier))
+
+
+def _ru_subscription_prices_response(
+    *,
+    country_code: Optional[str],
+    prices_provider: str,
+    payment_backend: str,
+    payment_method: Optional[str],
+    checkout_available: bool,
+    checkout_message: Optional[str] = None,
+) -> dict:
+    """Каталог тарифов RU/BY/KZ (с ценами и флагом доступности оплаты)."""
+    payload = {
+        "provider": prices_provider,
+        "payment_method": payment_method,
+        "payment_backend": payment_backend,
+        "country": country_code,
+        "currency": "RUB",
+        "trial_days": settings.SUBSCRIPTION_TRIAL_DAYS,
+        "checkout_available": checkout_available,
+        "tiers": {
+            "ai": {
+                "name": "H.A.N. AI",
+                "monthly": {
+                    "price": settings.AI_MONTHLY_PRICE_RUB,
+                    "currency": "RUB",
+                    "interval": "month",
+                },
+                "trial_eligible": True,
+                "benefits": [
+                    "Больше AI-сканов блюд",
+                    "Калории и БЖУ на карточках и в рецепте",
+                    "Фильтры «низкокалорийное» и «высокий белок»",
+                    "Лимиты калорий и БЖУ в настройках диеты",
+                    "AI-планы питания на 7, 14, 21 и 30 дней",
+                    "Обновление блюд и дней в плане без лимита",
+                    "Умный список покупок к плану питания",
+                    "Расширенная персонализация питания",
+                    "Умные рекомендации блюд",
+                    "Ускоренная работа AI",
+                    "Сохранённые рецепты и посты офлайн",
+                    "Без рекламы (когда появится в приложении)",
+                ],
+            },
+            "creator": {
+                "name": "H.A.N. Creator",
+                "monthly": {
+                    "price": settings.CREATOR_MONTHLY_PRICE_RUB,
+                    "currency": "RUB",
+                    "interval": "month",
+                },
+                "trial_eligible": False,
+                "benefits": [
+                    "Приватные рецепты в канале (не в общем Menu)",
+                    "Режимы видимости: публичные, приватные, смешанные",
+                    "AI-расчёт калорий и БЖУ по ингредиентам",
+                    "Аналитика канала и контента",
+                    "Продвижение постов и рецептов",
+                    "Закрепление важных публикаций",
+                    "Отложенная публикация",
+                    "Оформление и бейдж канала",
+                    "Инструменты для авторов",
+                    "Без рекламы (когда появится в приложении)",
+                ],
+            },
+            "pro": {
+                "name": "H.A.N. Pro",
+                "monthly": {
+                    "price": settings.PRO_MONTHLY_PRICE_RUB,
+                    "currency": "RUB",
+                    "interval": "month",
+                },
+                "trial_eligible": True,
+                "recommended": True,
+                "benefits": [
+                    "Всё из тарифа H.A.N. AI",
+                    "Всё из тарифа H.A.N. Creator",
+                    "Семейные AI-планы питания",
+                    "Приоритетная поддержка",
+                    "Сохранённые рецепты и посты офлайн",
+                    "Максимальный доступ ко всем функциям",
+                ],
+            },
+        },
+        "monthly": {
+            "price": settings.PRO_MONTHLY_PRICE_RUB,
+            "currency": "RUB",
+            "interval": "month",
+        },
+        "yearly": {
+            "price": settings.PLUS_YEARLY_PRICE_RUB,
+            "currency": "RUB",
+            "interval": "year",
+        },
+    }
+    if checkout_message:
+        payload["checkout_message"] = checkout_message
+    return payload
 
 
 class CreateCheckoutSessionRequest(BaseModel):
@@ -87,7 +188,7 @@ class CheckoutSessionResponse(BaseModel):
     payment_id: Optional[str] = None
     url: str
     customer_email: str
-    provider: str  # "stripe" | "yookassa" | "sbp" (sbp = ЮKassa, только СБП)
+    provider: str  # "stripe" | "tbank" | "yookassa" | "sbp"
     currency: str = "USD"
     payment_method: Optional[str] = None
 
@@ -103,11 +204,25 @@ async def create_checkout_session(
     Создать платежную сессию для покупки подписки
     
     Автоматически определяет страну пользователя и выбирает платежный провайдер:
-    - Россия, Беларусь, Казахстан → ЮKassa (СБП, карты)
+    - Россия, Беларусь, Казахстан → Т-Банк или ЮKassa (СБП)
     - Другие страны → пока не поддерживается (можно добавить Stripe позже)
     
     Возвращает URL для редиректа пользователя на страницу оплаты
     """
+    from app.services.legal_consent_service import consent_required
+
+    if consent_required(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "LEGAL_CONSENT_REQUIRED",
+                "message": (
+                    "Примите политику конфиденциальности и пользовательское "
+                    "соглашение перед оплатой подписки"
+                ),
+            },
+        )
+
     # Определяем страну пользователя
     country_code = current_user.country_code
     if not country_code:
@@ -119,6 +234,18 @@ async def create_checkout_session(
     
     # Определяем платежный провайдер
     provider = CountryService.get_payment_provider_for_country(country_code)
+
+    if provider == "none" and (country_code or "").upper() in ("RU", "BY", "KZ"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "PAYMENTS_UNAVAILABLE",
+                "message": (
+                    "Оплата подписок временно недоступна. "
+                    "Подключим после публикации приложения в App Store."
+                ),
+            },
+        )
     
     if request.plan not in ["monthly", "yearly"]:
         raise HTTPException(
@@ -140,8 +267,82 @@ async def create_checkout_session(
     amount = float(estimate["amount_due"])
 
     try:
-        if provider == "yookassa":
-            # Используем ЮKassa для России и стран СНГ
+        if provider == "tbank":
+            tbank_service = get_tbank_service()
+            if not tbank_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Payment service (T-Bank) is not available",
+                )
+
+            tier_names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+            description = f"Подписка {tier_names.get(product, product)} (месяц)"
+            if estimate.get("is_upgrade"):
+                description += (
+                    f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
+                    f"скидка {estimate.get('credit_rub', 0):.0f} ₽"
+                )
+
+            receipt_line = tbank_service.receipt_item_description(product, request.plan)
+            if estimate.get("is_upgrade"):
+                receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
+
+            metadata_extra = {}
+            if estimate.get("is_upgrade"):
+                metadata_extra = {
+                    "is_upgrade": "1",
+                    "upgrade_from": str(estimate.get("from_tier") or ""),
+                    "credit_rub": f"{estimate.get('credit_rub', 0):.2f}",
+                    "full_price_rub": f"{estimate.get('full_price', amount):.2f}",
+                }
+
+            success_url = (
+                request.success_url or f"{settings.FRONTEND_URL}/subscription/success"
+            )
+            fail_url = request.cancel_url or f"{settings.FRONTEND_URL}/subscription/cancel"
+
+            result = tbank_service.create_payment(
+                user_id=current_user.id,
+                amount=amount,
+                plan=request.plan,
+                description=description,
+                success_url=success_url,
+                fail_url=fail_url,
+                product=product,
+                metadata_extra=metadata_extra,
+            )
+
+            tier_before, active_before = subscription_service.effective_tier(
+                current_user.id
+            )
+            AnalyticsService(db).log_event(
+                event_type="subscription_checkout_start",
+                entity_type="user",
+                entity_id=current_user.id,
+                user_id=current_user.id,
+                metadata={
+                    "product": product,
+                    "plan": request.plan,
+                    "amount": amount,
+                    "provider": "tbank",
+                    "upgrade_from": tier_before if active_before else "free",
+                    "is_upgrade": bool(estimate.get("is_upgrade")),
+                    "credit_rub": estimate.get("credit_rub", 0),
+                    "full_price": estimate.get("full_price", amount),
+                },
+            )
+            db.commit()
+
+            return CheckoutSessionResponse(
+                payment_id=result["payment_id"],
+                url=result["confirmation_url"],
+                customer_email=current_user.email,
+                provider="sbp",
+                currency="RUB",
+                payment_method="sbp",
+            )
+
+        elif provider == "yookassa":
             yookassa_service = get_yookassa_service()
             
             if not yookassa_service.enabled:
@@ -334,94 +535,41 @@ async def yookassa_webhook(
             if not payment_id:
                 logger.warning("YooKassa payment_succeeded without payment_id")
             else:
-                existing = subscription_service.get_subscription_by_provider_payment_id(
-                    payment_id, "yookassa"
+                info = yookassa_service.get_payment_status(payment_id)
+                process_payment_succeeded(
+                    db,
+                    payment_provider="yookassa",
+                    payment_id=payment_id,
+                    payment_info=info or {},
                 )
-                if existing:
-                    subscription_service.refresh_receipt_url(existing)
-                    logger.info(
-                        "YooKassa payment %s already linked to subscription %s",
-                        payment_id,
-                        existing.id,
+                try:
+                    info = yookassa_service.get_payment_status(payment_id)
+                    uid = int((info or {}).get("metadata", {}).get("user_id") or 0)
+                    if uid:
+                        from app.core.redis_client import get_redis
+                        from app.services.feed_service import FeedService
+
+                        FeedService(db, get_redis()).invalidate_feed_cache(uid)
+                except Exception as inv_err:
+                    logger.warning(
+                        "Feed cache invalidate after payment: %s", inv_err
                     )
-                else:
-                    payment_info = yookassa_service.get_payment_status(payment_id)
-
-                    if not payment_info or not payment_info.get("paid"):
-                        logger.warning(
-                            "YooKassa webhook: payment %s not paid or not found",
-                            payment_id,
-                        )
-                    else:
-                        metadata = payment_info.get("metadata") or {}
-                        try:
-                            user_id = int(metadata.get("user_id") or 0)
-                        except (TypeError, ValueError):
-                            user_id = 0
-                        plan = metadata.get("plan") or "monthly"
-                        product = metadata.get("product") or "pro"
-
-                        if not user_id:
-                            logger.error(
-                                "YooKassa payment %s missing user_id in verified metadata",
-                                payment_id,
-                            )
-                        else:
-                            amount = float(payment_info.get("amount") or 0)
-                            if amount <= 0:
-                                amount = float(
-                                    subscription_service.price_for_product(product, plan)
-                                )
-
-                            subscription = subscription_service.create_subscription(
-                                user_id=user_id,
-                                plan=plan,
-                                product=product,
-                                payment_provider="yookassa",
-                                payment_provider_subscription_id=payment_id,
-                                amount=amount,
-                                currency=payment_info.get("currency") or "RUB",
-                                platform="yookassa",
-                                receipt_url=payment_info.get("receipt_url"),
-                            )
-
-                            pay_meta = payment_info.get("metadata") or {}
-                            AnalyticsService(db).log_event(
-                                event_type="subscription_payment_success",
-                                entity_type="subscription",
-                                entity_id=subscription.id,
-                                user_id=user_id,
-                                metadata={
-                                    "product": product,
-                                    "plan": plan,
-                                    "amount": amount,
-                                    "provider": "yookassa",
-                                    "is_upgrade": pay_meta.get("is_upgrade") == "1",
-                                },
-                            )
-
-                            logger.info(
-                                "Subscription created for user %s: %s",
-                                user_id,
-                                subscription.id,
-                            )
-                            try:
-                                from app.core.redis_client import get_redis
-                                from app.services.feed_service import FeedService
-
-                                FeedService(db, get_redis()).invalidate_feed_cache(
-                                    user_id
-                                )
-                            except Exception as inv_err:
-                                logger.warning(
-                                    "Feed cache invalidate after payment: %s",
-                                    inv_err,
-                                )
 
         elif result.get("action") == "payment_canceled":
             payment_id = result.get("payment_id")
             if payment_id:
                 logger.info("YooKassa payment canceled: %s", payment_id)
+                pending = (
+                    db.query(Subscription)
+                    .filter(Subscription.pending_renewal_payment_id == payment_id)
+                    .first()
+                )
+                if pending:
+                    subscription_service.clear_renewal_payment_pending(pending)
+                    if pending.expires_at and pending.expires_at < datetime.utcnow():
+                        subscription_service.disable_auto_renew_after_failed_payment(
+                            pending
+                        )
         
         db.commit()
         
@@ -433,6 +581,99 @@ async def yookassa_webhook(
         
     except Exception as e:
         logger.error(f"Error processing YooKassa webhook: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process webhook",
+        )
+
+
+@router.post("/webhook/tbank")
+async def tbank_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Webhook Т-Банка (эквайринг v2): CONFIRMED — активация/продление подписки.
+    """
+    tbank_service = get_tbank_service()
+    if not tbank_service.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="T-Bank service is not available",
+        )
+
+    try:
+        payload = await request.json()
+    except Exception as e:
+        logger.error("Invalid JSON in T-Bank webhook: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid webhook payload",
+        )
+
+    if not tbank_service.verify_notification_token(payload):
+        logger.warning("T-Bank webhook: invalid Token signature")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid notification signature",
+        )
+
+    result = tbank_service.parse_notification(payload)
+    subscription_service = SubscriptionService(db)
+
+    try:
+        if result.get("paid") and result.get("payment_id"):
+            payment_id = result["payment_id"]
+            info = tbank_service.get_payment_state(payment_id) or {
+                "paid": True,
+                "metadata": result.get("metadata") or {},
+                "user_id": result.get("user_id"),
+                "amount": result.get("amount"),
+                "rebill_id": result.get("rebill_id"),
+            }
+            if result.get("rebill_id") and not info.get("rebill_id"):
+                info["rebill_id"] = result.get("rebill_id")
+            process_payment_succeeded(
+                db,
+                payment_provider="tbank",
+                payment_id=payment_id,
+                payment_info=info,
+            )
+            try:
+                uid = int(
+                    (info.get("metadata") or {}).get("user_id")
+                    or info.get("user_id")
+                    or 0
+                )
+                if uid:
+                    from app.core.redis_client import get_redis
+                    from app.services.feed_service import FeedService
+
+                    FeedService(db, get_redis()).invalidate_feed_cache(uid)
+            except Exception as inv_err:
+                logger.warning("Feed cache invalidate after T-Bank payment: %s", inv_err)
+
+        elif result.get("status") in ("CANCELED", "REJECTED", "REVERSED"):
+            payment_id = result.get("payment_id")
+            if payment_id:
+                pending = (
+                    db.query(Subscription)
+                    .filter(Subscription.pending_renewal_payment_id == payment_id)
+                    .first()
+                )
+                if pending:
+                    subscription_service.clear_renewal_payment_pending(pending)
+                    if pending.expires_at and pending.expires_at < datetime.utcnow():
+                        subscription_service.disable_auto_renew_after_failed_payment(
+                            pending
+                        )
+
+        db.commit()
+        return {"success": True, "processed": result.get("processed", False)}
+
+    except Exception as e:
+        logger.error("Error processing T-Bank webhook: %s", e, exc_info=True)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -687,74 +928,40 @@ async def get_subscription_prices(
         country_code = CountryService.get_country_from_request(http_request)
     
     provider = CountryService.get_payment_provider_for_country(country_code)
-    
-    if provider == "yookassa":
-        prices_provider = (
-            "sbp"
-            if (settings.YOOKASSA_PAYMENT_METHOD or "sbp").strip().lower() == "sbp"
-            else "yookassa"
+
+    if provider == "none" and (country_code or "").upper() in ("RU", "BY", "KZ"):
+        return _ru_subscription_prices_response(
+            country_code=country_code,
+            prices_provider="none",
+            payment_backend="none",
+            payment_method=None,
+            checkout_available=False,
+            checkout_message=(
+                "Оплата появится после публикации в App Store. "
+                "Пока доступен пробный период, если вы его ещё не использовали."
+            ),
         )
-        return {
-            "provider": prices_provider,
-            "payment_method": settings.YOOKASSA_PAYMENT_METHOD,
-            "country": country_code,
-            "currency": "RUB",
-            "trial_days": settings.SUBSCRIPTION_TRIAL_DAYS,
-            "tiers": {
-                "ai": {
-                    "name": "H.A.N. AI",
-                    "monthly": {
-                        "price": settings.AI_MONTHLY_PRICE_RUB,
-                        "currency": "RUB",
-                        "interval": "month",
-                    },
-                    "trial_eligible": True,
-                    "benefits": [
-                        "Больше AI-сканов",
-                        "Расширенный анализ питания",
-                        "Планы питания",
-                        "Умные рекомендации",
-                    ],
-                },
-                "creator": {
-                    "name": "H.A.N. Creator",
-                    "monthly": {
-                        "price": settings.CREATOR_MONTHLY_PRICE_RUB,
-                        "currency": "RUB",
-                        "interval": "month",
-                    },
-                    "trial_eligible": False,
-                    "benefits": [
-                        "Аналитика канала",
-                        "Продвижение контента",
-                        "Инструменты для авторов",
-                        "Оформление канала",
-                    ],
-                },
-                "pro": {
-                    "name": "H.A.N. Pro",
-                    "monthly": {
-                        "price": settings.PRO_MONTHLY_PRICE_RUB,
-                        "currency": "RUB",
-                        "interval": "month",
-                    },
-                    "trial_eligible": True,
-                    "recommended": True,
-                    "benefits": ["полный доступ ко всем функциям"],
-                },
-            },
-            # legacy
-            "monthly": {
-                "price": settings.PRO_MONTHLY_PRICE_RUB,
-                "currency": "RUB",
-                "interval": "month",
-            },
-            "yearly": {
-                "price": settings.PLUS_YEARLY_PRICE_RUB,
-                "currency": "RUB",
-                "interval": "year",
-            },
-        }
+    
+    if provider in ("tbank", "yookassa"):
+        if provider == "tbank":
+            prices_provider = "sbp"
+            payment_method = "sbp"
+        else:
+            prices_provider = (
+                "sbp"
+                if (settings.YOOKASSA_PAYMENT_METHOD or "sbp").strip().lower() == "sbp"
+                else "yookassa"
+            )
+            payment_method = settings.YOOKASSA_PAYMENT_METHOD
+        gateway = get_active_ru_gateway()
+        checkout_available = gateway is not None and bool(getattr(gateway, "enabled", False))
+        return _ru_subscription_prices_response(
+            country_code=country_code,
+            prices_provider=prices_provider,
+            payment_backend=provider,
+            payment_method=payment_method,
+            checkout_available=checkout_available,
+        )
     
     # Цены в долларах для Stripe (пока не поддерживается)
     elif provider == "stripe":
@@ -830,7 +1037,7 @@ def _can_request_refund(s: Subscription) -> bool:
     refund_status = getattr(s, "refund_status", None) or "none"
     if refund_status not in ("none", "rejected"):
         return False
-    if s.payment_provider != "yookassa":
+    if s.payment_provider not in ("yookassa", "tbank"):
         return False
     pid = s.payment_provider_subscription_id or ""
     if not pid or pid.startswith("trial-"):
@@ -847,20 +1054,15 @@ def _can_request_refund(s: Subscription) -> bool:
 @router.get("/readiness")
 async def payments_readiness():
     """
-    Публичная проверка готовности ЮKassa (без секретов).
-    Для деплоя: убедитесь, что issues пуст и webhook URL доступен из интернета.
+    Публичная проверка готовности платежей (без секретов).
     """
-    from app.services.yookassa_service import get_yookassa_service
-
     issues = collect_payments_issues()
-    yk = get_yookassa_service()
     base = settings.API_PUBLIC_BASE_URL.rstrip("/")
-    return {
+    payload = {
+        "tbank_enabled": settings.TBANK_ENABLED,
         "yookassa_enabled": settings.YOOKASSA_ENABLED,
-        "yookassa_ready": yk.enabled,
         "app_env": settings.APP_ENV,
         "frontend_url": settings.FRONTEND_URL,
-        "webhook_url": f"{base}/api/v1/payments/webhook/yookassa",
         "return_url_hint": f"{settings.FRONTEND_URL.rstrip('/')}/subscription/success",
         "tiers_rub": {
             "ai": settings.AI_MONTHLY_PRICE_RUB,
@@ -871,6 +1073,21 @@ async def payments_readiness():
         "issues": issues,
         "ready": len(issues) == 0,
     }
+    if settings.TBANK_ENABLED:
+        from app.services.tbank_service import get_tbank_service
+
+        tb = get_tbank_service()
+        payload["tbank_ready"] = tb.enabled
+        payload["sbp_recurring"] = settings.TBANK_SBP_RECURRING_ENABLED
+        payload["webhook_url"] = f"{base}/api/v1/payments/webhook/tbank"
+    else:
+        from app.services.yookassa_service import get_yookassa_service
+
+        yk = get_yookassa_service()
+        payload["yookassa_ready"] = yk.enabled
+        payload["sbp_recurring"] = settings.YOOKASSA_SBP_RECURRING_ENABLED
+        payload["webhook_url"] = f"{base}/api/v1/payments/webhook/yookassa"
+    return payload
 
 
 @router.get("/history")
@@ -948,7 +1165,7 @@ async def admin_process_refund(
     current_user: User = Depends(get_current_admin_required),
     db: Session = Depends(get_db),
 ):
-    """Провести возврат через ЮKassa (только админ)."""
+    """Провести возврат через Т-Банк или ЮKassa (только админ)."""
     sub = db.query(Subscription).filter(Subscription.id == body.subscription_id).first()
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
@@ -960,11 +1177,18 @@ async def admin_process_refund(
 
     svc = SubscriptionService(db)
     try:
-        result = svc.apply_yookassa_refund(
-            sub,
-            amount=body.amount,
-            reason=body.reason or "Возврат одобрен поддержкой",
-        )
+        if sub.payment_provider == "tbank":
+            result = svc.apply_tbank_refund(
+                sub,
+                amount=body.amount,
+                reason=body.reason or "Возврат одобрен поддержкой",
+            )
+        else:
+            result = svc.apply_yookassa_refund(
+                sub,
+                amount=body.amount,
+                reason=body.reason or "Возврат одобрен поддержкой",
+            )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

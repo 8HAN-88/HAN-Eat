@@ -24,6 +24,12 @@ class User(Base):
     subscription_expires_at = Column(DateTime, nullable=True)
     subscription_platform = Column(String(20), nullable=True)  # ios | android | yookassa | stripe
     subscription_auto_renew = Column(Boolean, default=False, nullable=False)
+    # Сохранённый способ оплаты ЮKassa (СБП) для безакцептных продлений (legacy)
+    yookassa_payment_method_id = Column(String(64), nullable=True)
+    # RebillId Т-Банк для рекуррентных списаний (СБП / карта)
+    tbank_rebill_id = Column(String(64), nullable=True)
+    legal_consent_version = Column(String(32), nullable=True)
+    legal_consent_at = Column(DateTime, nullable=True)
     # AI scan (мягкие лимиты): банк кредитов и момент последнего начисления «суток»
     scan_credits = Column(Integer, default=5, nullable=False)
     last_scan_credit_at = Column(DateTime, nullable=True)
@@ -39,6 +45,9 @@ class User(Base):
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token (для Android и iOS)
     device_platform = Column(String(20), nullable=True)  # android | ios | web
     country_code = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2 код страны (RU, US, etc.)
+    last_seen_at = Column(DateTime, nullable=True)
+    phone_hash = Column(String(64), nullable=True, unique=True, index=True)
+    phone_linked_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)

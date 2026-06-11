@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../core/config/google_auth_config.dart';
+import '../core/network/haneat_http_client.dart';
 import 'account_session_service.dart';
 import 'server_config.dart';
 
@@ -30,6 +31,16 @@ bool _isDefinitiveSessionLoss(AuthException e) {
 
 class AuthService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
+
+  /// Ошибка при отсутствии access token: не путаем офлайн/сеть с выходом из аккаунта.
+  static AuthException tokenUnavailableException() {
+    if (instance.currentUser != null) {
+      return AuthException(
+        'Сервер недоступен. Проверьте подключение к серверу.',
+      );
+    }
+    return AuthException('Сессия истекла. Войдите снова.');
+  }
 
   static final List<void Function(User?)> _sessionListeners = [];
 
@@ -98,6 +109,11 @@ class AuthService {
     }
   }
 
+  Future<void> updateStoredUser(User user) async {
+    setUserAfterAuth(user, notifySessionListeners: true);
+    await AuthService._saveUser(user);
+  }
+
   /// Счётчик обновлений профиля (scan_credits и т.д.) — для перерисовки UI.
   static final ValueNotifier<int> profileVersion = ValueNotifier(0);
 
@@ -106,6 +122,32 @@ class AuthService {
     instance.setUserAfterAuth(user);
     await _saveUser(user);
     profileVersion.value++;
+  }
+
+  /// Привязать номер телефона — друзья из адресной книги смогут вас найти.
+  static Future<void> linkPhone(String phone) async {
+    final token = await getAccessTokenForApi();
+    if (token == null) throw AuthException('Войдите в аккаунт');
+    final uri = Uri.parse('$baseUrl/users/me/phone');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'phone': phone}),
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final detail = body?['detail'];
+      throw AuthException(
+        detail is String ? detail : 'Не удалось привязать номер',
+      );
+    }
+    final user = instance.currentUser;
+    if (user != null) {
+      await persistUpdatedUser(user.copyWith(phoneLinked: true));
+    }
   }
   
   /// Проверить, инициализирован ли сервис
@@ -117,63 +159,36 @@ class AuthService {
   static const String _userKey = 'user';
   
   /// Инициализация сервиса
-  static Future<void> init() async {
-    // Загружаем пользователя из SharedPreferences
+  /// [deferTokenRefresh] — не ждать сеть при старте (быстрый показ UI), refresh в фоне.
+  static Future<void> init({bool deferTokenRefresh = false}) async {
     try {
-      // На веб-платформе перезагружаем SharedPreferences перед чтением
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.reload();
-        debugPrint('🔄 SharedPreferences перезагружен при инициализации');
       } catch (e) {
         debugPrint('⚠️ Не удалось перезагрузить SharedPreferences: $e');
       }
-      
+
       final user = await getCurrentUser();
       final token = await getAccessToken();
-      
+
       if (user != null && token != null) {
         instance._cachedUser = user;
         AccountSessionService.restoreCachedUser(user);
-        debugPrint('✅ AuthService: Пользователь загружен из SharedPreferences: ${user.email} (id: ${user.id})');
-        if (kDebugMode) {
-          debugPrint('✅ AuthService: Токен найден: ${token.substring(0, 20)}...');
+        debugPrint(
+          '✅ AuthService: сессия из кэша (${user.email}), deferRefresh=$deferTokenRefresh',
+        );
+        if (deferTokenRefresh) {
+          unawaited(_refreshSessionOnStartup());
+        } else {
+          await _refreshSessionOnStartup();
         }
-        
-        // Обновляем access token, если истёк; выход только при невалидной сессии (не при сети).
-        try {
-          final fresh = await getAccessTokenForApi();
-          if (fresh == null || fresh.isEmpty) {
-            debugPrint('⚠️ AuthService: нет валидного access token после init');
-            await logout();
-          } else {
-            debugPrint('✅ AuthService: access token готов к запросам API');
-          }
-        } on AuthException catch (e) {
-          if (_isDefinitiveSessionLoss(e)) {
-            debugPrint('⚠️ AuthService: сессия недействительна при init: $e');
-            await logout();
-          } else {
-            debugPrint(
-              '⚠️ AuthService: refresh при init не удался (сеть?), сессия сохранена: $e',
-            );
-          }
-        } catch (e) {
-          debugPrint('⚠️ AuthService: не удалось обновить сессию при init: $e');
-        }
-      } else {
-        if (user == null) {
-          debugPrint('⚠️ AuthService: Пользователь не найден в SharedPreferences');
-        }
-        if (token == null) {
-          debugPrint('⚠️ AuthService: Токен не найден в SharedPreferences');
-        }
-        // Очищаем кэш, если нет пользователя или токена
-        instance._cachedUser = null;
-        
-        // Дополнительная проверка - может быть данные еще не загрузились
-        // Попробуем еще раз через небольшую задержку с перезагрузкой
-        await Future.delayed(const Duration(milliseconds: 200));
+        return;
+      }
+
+      instance._cachedUser = null;
+      if (!deferTokenRefresh) {
+        await Future.delayed(const Duration(milliseconds: 100));
         try {
           final prefs = await SharedPreferences.getInstance();
           await prefs.reload();
@@ -182,23 +197,50 @@ class AuthService {
           if (retryUser != null && retryToken != null) {
             instance._cachedUser = retryUser;
             AccountSessionService.restoreCachedUser(retryUser);
-            debugPrint('✅ AuthService: Пользователь найден при повторной проверке: ${retryUser.email}');
-            try {
-              await getAccessTokenForApi();
-            } catch (e) {
-              debugPrint('⚠️ AuthService: refresh после retry: $e');
-            }
-          } else {
-            debugPrint('⚠️ AuthService: Повторная проверка не дала результатов');
+            await _refreshSessionOnStartup();
           }
         } catch (e) {
-          debugPrint('⚠️ AuthService: Ошибка при повторной проверке: $e');
+          debugPrint('⚠️ AuthService: повторная проверка: $e');
         }
       }
     } catch (e) {
       debugPrint('❌ AuthService: Ошибка при загрузке пользователя: $e');
-      // Игнорируем ошибки при инициализации
       instance._cachedUser = null;
+    }
+  }
+
+  static Future<void> _refreshSessionOnStartup() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasAccess = prefs.getString(_accessTokenKey)?.isNotEmpty == true;
+      final hasRefresh = prefs.getString(_refreshTokenKey)?.isNotEmpty == true;
+      if (!hasAccess && !hasRefresh) {
+        if (instance._cachedUser != null) {
+          debugPrint(
+            '⚠️ AuthService: токены недоступны, остаёмся в аккаунте (кэш)',
+          );
+          return;
+        }
+        debugPrint('⚠️ AuthService: нет токенов и сессии — выход');
+        await logout();
+        return;
+      }
+
+      final fresh = await getAccessTokenForApi();
+      if (fresh == null || fresh.isEmpty) {
+        debugPrint(
+          '⚠️ AuthService: access token недоступен, остаёмся в аккаунте (офлайн/сеть)',
+        );
+      }
+    } on AuthException catch (e) {
+      if (_isDefinitiveSessionLoss(e)) {
+        debugPrint('⚠️ AuthService: сессия недействительна: $e');
+        await logout();
+      } else {
+        debugPrint('⚠️ AuthService: refresh (сеть?), сессия сохранена: $e');
+      }
+    } catch (e) {
+      debugPrint('⚠️ AuthService: refresh при init: $e');
     }
   }
   
@@ -215,17 +257,23 @@ class AuthService {
   }
   
   /// Регистрация по email и паролю
-  Future<void> createUserWithEmail(String email, String password, {String? name}) async {
+  Future<void> createUserWithEmail(
+    String email,
+    String password, {
+    String? name,
+    required bool acceptLegal,
+  }) async {
     final response = await register(
       email: email,
       password: password,
       name: name ?? email.split('@').first,
+      acceptLegal: acceptLegal,
     );
     setUserAfterAuth(response.user, notifySessionListeners: false);
   }
   
   /// Вход через Google
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle({bool acceptLegal = false}) async {
     try {
       final GoogleSignIn googleSignIn = _googleSignInInstance();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -246,7 +294,10 @@ class AuthService {
       }
       
       // Отправляем id_token на backend
-      final response = await googleAuth(idToken: idToken);
+      final response = await googleAuth(
+        idToken: idToken,
+        acceptLegal: acceptLegal,
+      );
       setUserAfterAuth(response.user, notifySessionListeners: true);
       // Проверяем, что токен и пользователь сохранены
       final savedToken = await getAccessToken();
@@ -265,7 +316,10 @@ class AuthService {
   }
   
   /// Вход через Google (внутренний метод)
-  static Future<AuthResponse> googleAuth({required String idToken}) async {
+  static Future<AuthResponse> googleAuth({
+    required String idToken,
+    bool acceptLegal = false,
+  }) async {
     final uri = Uri.parse('$baseUrl/auth/google');
     try {
       final response = await http.post(
@@ -273,6 +327,7 @@ class AuthService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'id_token': idToken,
+          'accept_legal': acceptLegal,
         }),
       ).timeout(const Duration(seconds: 10));
       
@@ -336,6 +391,7 @@ class AuthService {
     required String password,
     required String name,
     String? username,
+    required bool acceptLegal,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/register');
     try {
@@ -346,6 +402,7 @@ class AuthService {
           'email': email,
           'password': password,
           'name': name,
+          'accept_legal': acceptLegal,
           if (username != null) 'username': username,
         }),
       ).timeout(const Duration(seconds: 10));
@@ -380,56 +437,104 @@ class AuthService {
     }
   }
   
+  static const Duration _authRequestTimeout = Duration(seconds: 60);
+
+  static AuthException _loginTimeoutException() => AuthException(
+        'Сервер ${ServerConfig.apiBaseUrl} не ответил вовремя. '
+        'Проверьте Wi‑Fi или мобильный интернет; отключите VPN и попробуйте снова.',
+      );
+
+  static AuthException _loginConnectionException() => AuthException(
+        'Не удалось подключиться к ${ServerConfig.apiBaseUrl}. '
+        'Проверьте интернет или попробуйте через Wi‑Fi.',
+      );
+
   /// Вход пользователя
   static Future<AuthResponse> login({
     required String email,
     required String password,
   }) async {
     final uri = Uri.parse('$baseUrl/auth/login');
-    try {
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw AuthException('Превышено время ожидания ответа от сервера. Проверьте, что сервер запущен и доступен.');
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final authResponse = AuthResponse.fromJson(data);
-        
-        // Сохраняем токены и пользователя
-        await _saveTokens(authResponse.token, authResponse.refreshToken);
-        await _saveUser(authResponse.user);
-        instance.setUserAfterAuth(
-          authResponse.user,
-          notifySessionListeners: true,
+    if (kDebugMode) {
+      debugPrint('🔐 POST $uri');
+    }
+
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await _loginOnce(uri, email, password);
+      } on AuthException catch (e) {
+        lastError = e;
+        final retryable = e.message.contains('время ожидания') ||
+            e.message.contains('подключиться');
+        if (attempt == 0 && retryable) {
+          if (kDebugMode) debugPrint('🔐 login retry (${attempt + 2}/2)');
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        rethrow;
+      } on TimeoutException catch (e) {
+        lastError = e;
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        throw _loginTimeoutException();
+      } catch (e) {
+        lastError = e;
+        if (attempt == 0 &&
+            (e is http.ClientException || _apiUnreachable(e))) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        if (e is http.ClientException || _apiUnreachable(e)) {
+          throw _loginConnectionException();
+        }
+        throw AuthException('Ошибка входа: $e');
+      }
+    }
+    if (lastError is AuthException) throw lastError;
+    throw _loginTimeoutException();
+  }
+
+  static Future<AuthResponse> _loginOnce(
+    Uri uri,
+    String email,
+    String password,
+  ) async {
+    final response = await HanEatHttpClient.shared
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+          }),
+        )
+        .timeout(
+          _authRequestTimeout,
+          onTimeout: () {
+            throw _loginTimeoutException();
+          },
         );
 
-        return authResponse;
-      } else {
-        throw _authExceptionFromResponse(
-          response,
-          'Ошибка входа: ${response.statusCode}',
-        );
-      }
-    } catch (e) {
-      if (e is AuthException) {
-        rethrow;
-      } else if (e is TimeoutException) {
-        throw AuthException('Превышено время ожидания ответа от сервера. Проверьте, что backend запущен: ${ServerConfig.baseUrl}');
-      } else if (e is http.ClientException || _apiUnreachable(e)) {
-        throw AuthException('Не удалось подключиться к серверу. Проверьте, что backend запущен: ${ServerConfig.baseUrl}');
-      }
-      throw AuthException('Ошибка входа: $e');
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final authResponse = AuthResponse.fromJson(data);
+
+      await _saveTokens(authResponse.token, authResponse.refreshToken);
+      await _saveUser(authResponse.user);
+      instance.setUserAfterAuth(
+        authResponse.user,
+        notifySessionListeners: true,
+      );
+
+      return authResponse;
     }
+    throw _authExceptionFromResponse(
+      response,
+      'Ошибка входа: ${response.statusCode}',
+    );
   }
   
   static Future<MessageResponse> forgotPassword({required String email}) async {
@@ -619,8 +724,23 @@ class AuthService {
 
   /// Access для запросов к API: при истёкшем JWT обновляет через refresh (если он есть).
   static Future<String?> getAccessTokenForApi() async {
-    final token = await getAccessToken();
-    if (token == null || token.isEmpty) return null;
+    var token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_refreshTokenKey) == null) {
+        return null;
+      }
+      try {
+        return await refreshToken();
+      } on AuthException catch (e) {
+        if (_isDefinitiveSessionLoss(e)) {
+          await logout();
+        } else {
+          debugPrint('⚠️ getAccessTokenForApi: $e');
+        }
+        return null;
+      }
+    }
     if (!_accessTokenLooksExpired(token)) return token;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -634,22 +754,29 @@ class AuthService {
         await logout();
         return null;
       }
-      rethrow;
+      debugPrint('⚠️ getAccessTokenForApi: $e');
+      return _accessTokenLooksExpired(token) ? null : token;
     } catch (e) {
       debugPrint('⚠️ getAccessTokenForApi: refresh failed: $e');
-      if (_accessTokenLooksExpired(token)) {
-        throw AuthException('Сервер недоступен. Проверьте подключение к серверу.');
-      }
-      return token;
+      return _accessTokenLooksExpired(token) ? null : token;
     }
   }
   
   /// Получить текущего пользователя
   static Future<User?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJson = prefs.getString(_userKey);
-    if (userJson == null) return null;
-    return User.fromJson(jsonDecode(userJson));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userJson = prefs.getString(_userKey);
+      if (userJson == null) return null;
+      return User.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+    } catch (e, st) {
+      debugPrint('getCurrentUser: повреждённые данные сессии, сброс: $e\n$st');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_userKey);
+      } catch (_) {}
+      return null;
+    }
   }
   
   /// Проверить, авторизован ли пользователь (есть пользователь и хотя бы один токен).
@@ -841,6 +968,9 @@ class User {
   final int? scanCredits;
   final String? subscriptionType;
   final bool emailVerified;
+  final bool legalConsentRequired;
+  final String? legalConsentVersion;
+  final bool phoneLinked;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -859,6 +989,9 @@ class User {
     this.scanCredits,
     this.subscriptionType,
     this.emailVerified = true,
+    this.legalConsentRequired = false,
+    this.legalConsentVersion,
+    this.phoneLinked = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -876,6 +1009,9 @@ class User {
       scanCredits: (json['scan_credits'] as num?)?.toInt(),
       subscriptionType: json['subscription_type'] as String?,
       emailVerified: json['email_verified'] as bool? ?? true,
+      legalConsentRequired: json['legal_consent_required'] as bool? ?? false,
+      legalConsentVersion: json['legal_consent_version'] as String?,
+      phoneLinked: json['phone_linked'] as bool? ?? false,
     );
   }
 
@@ -894,6 +1030,9 @@ class User {
       'email_verified': emailVerified,
       if (scanCredits != null) 'scan_credits': scanCredits,
       if (subscriptionType != null) 'subscription_type': subscriptionType,
+      'legal_consent_required': legalConsentRequired,
+      if (legalConsentVersion != null)
+        'legal_consent_version': legalConsentVersion,
     };
   }
 
@@ -902,6 +1041,9 @@ class User {
     String? subscriptionType,
     bool? emailVerified,
     String? email,
+    bool? legalConsentRequired,
+    String? legalConsentVersion,
+    bool? phoneLinked,
   }) {
     return User(
       id: id,
@@ -917,6 +1059,11 @@ class User {
       scanCredits: scanCredits ?? this.scanCredits,
       subscriptionType: subscriptionType ?? this.subscriptionType,
       emailVerified: emailVerified ?? this.emailVerified,
+      legalConsentRequired:
+          legalConsentRequired ?? this.legalConsentRequired,
+      legalConsentVersion:
+          legalConsentVersion ?? this.legalConsentVersion,
+      phoneLinked: phoneLinked ?? this.phoneLinked,
     );
   }
 }

@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
-/// Firebase Crashlytics (release). В debug только лог в консоль.
+/// Firebase Crashlytics (release). Ошибки логируются, но не роняют процесс.
 class CrashReporting {
   static bool _ready = false;
 
@@ -19,20 +19,9 @@ class CrashReporting {
         kReleaseMode,
       );
 
-      final defaultOnError = FlutterError.onError;
-      FlutterError.onError = (FlutterErrorDetails details) {
-        defaultOnError?.call(details);
-        unawaited(recordFlutterError(details));
-      };
-
-      PlatformDispatcher.instance.onError = (error, stack) {
-        unawaited(recordError(error, stack, fatal: true));
-        return true;
-      };
-
       _ready = true;
       if (kDebugMode) {
-        debugPrint('Crashlytics: готов (сбор в release)');
+        debugPrint('Crashlytics: готов (сбор в release, без fatal)');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Crashlytics init skipped: $e');
@@ -42,7 +31,7 @@ class CrashReporting {
   static Future<void> recordFlutterError(FlutterErrorDetails details) async {
     if (!_ready) return;
     try {
-      await FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      await FirebaseCrashlytics.instance.recordFlutterError(details);
     } catch (_) {}
   }
 
@@ -61,7 +50,7 @@ class CrashReporting {
       await FirebaseCrashlytics.instance.recordError(
         error,
         stack,
-        fatal: fatal,
+        fatal: false,
       );
     } catch (_) {}
   }

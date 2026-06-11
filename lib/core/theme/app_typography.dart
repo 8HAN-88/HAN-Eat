@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-/// Единая типографика (Manrope: Latin + Cyrillic + extended Latin) для всех языков.
+/// Единая типографика (Manrope в assets, без загрузки из сети).
 class AppTypography {
   AppTypography._();
 
-  /// Один шрифт для ru/en/es/de/fr — DM Sans не содержит кириллицу, из‑за этого
-  /// русский текст рендерился системным шрифтом.
-  static String? get fontFamily => GoogleFonts.manrope().fontFamily;
+  static const String fontFamily = 'Manrope';
+
+  static String? get fontFamilyNullable => fontFamily;
 
   static TextTheme textTheme(ColorScheme scheme, Brightness brightness) {
     final base = brightness == Brightness.light
         ? ThemeData.light(useMaterial3: true).textTheme
         : ThemeData.dark(useMaterial3: true).textTheme;
 
-    final manrope = GoogleFonts.manropeTextTheme(base).apply(
+    final manrope = base.apply(
+      fontFamily: fontFamily,
       bodyColor: scheme.onSurface,
       displayColor: scheme.onSurface,
     );

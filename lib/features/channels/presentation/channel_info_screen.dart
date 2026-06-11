@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../core/format/russian_count_labels.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
 import '../../../services/channel_notification_prefs.dart';
@@ -108,15 +109,6 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     }
   }
 
-  String _membersLabel(int n) {
-    final mod10 = n % 10;
-    final mod100 = n % 100;
-    if (mod100 >= 11 && mod100 <= 14) return '$n подписчиков';
-    if (mod10 == 1) return '$n подписчик';
-    if (mod10 >= 2 && mod10 <= 4) return '$n подписчика';
-    return '$n подписчиков';
-  }
-
   String get _publicLink => 'https://han-eat.app/channel/${widget.channelId}';
 
   Future<void> _toggleSubscribe() async {
@@ -184,7 +176,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
   Future<void> _toggleSoundUi() async {
     if (_channel != null && !_channel!.isMember) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сначала вступите в канал')),
+        const SnackBar(content: Text('Сначала подпишитесь на канал')),
       );
       return;
     }
@@ -209,7 +201,9 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+          SnackBar(
+              content:
+                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     }
@@ -225,6 +219,16 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
           initialQuery: '',
           channel: _channel!,
         ),
+      ),
+    );
+  }
+
+  void _openSubscribers() {
+    if (_channel == null) return;
+    context.push<void>(
+      ChannelDetailRoute.subscribers(
+        widget.channelId,
+        channelName: _channel!.name,
       ),
     );
   }
@@ -250,9 +254,9 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
           Navigator.of(ctx).pop();
           _openSearch();
         },
-        onManage: (_channel!.isOwner ||
-            _channel!.isAdmin ||
-            _channel!.isModerator)
+        onManage: (_channel!.canManageChannelSettings ||
+                _channel!.canManageSubscribers ||
+                _channel!.canManageJoinRequests)
             ? () {
                 Navigator.of(ctx).pop();
                 context.push(ChannelDetailRoute.management(widget.channelId));
@@ -372,7 +376,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(ChannelsListRoute.path);
+              context.go(ChatsRoute.path);
             }
           },
         ),
@@ -416,11 +420,22 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        _membersLabel(c.membersCount),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _openSubscribers,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            formatChannelMembersCount(c.membersCount),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -445,14 +460,13 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                   onTap: _openSearch,
                 ),
                 _telegramActionTile(
-                  icon: (c.isMember || c.isPending)
-                      ? Icons.logout
-                      : Icons.login,
+                  icon:
+                      (c.isMember || c.isPending) ? Icons.logout : Icons.login,
                   label: c.isMember
                       ? 'покинуть'
                       : c.isPending
                           ? 'ожидание'
-                          : (!c.isPublic ? 'запрос' : 'вступить'),
+                          : (!c.isPublic ? 'запрос' : 'подписаться'),
                   onTap: () {
                     if (_isJoining) return;
                     _onLeaveOrJoinTap();

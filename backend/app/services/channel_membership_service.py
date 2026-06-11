@@ -3,7 +3,8 @@
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from copy import deepcopy
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,35 @@ MEMBER_STATUS_PENDING = "pending"
 MEMBER_STATUS_REJECTED = "rejected"
 
 STAFF_ROLES = frozenset({"owner", "admin", "moderator"})
+CHANNEL_PERMISSION_KEYS = frozenset(
+    {
+        "manage_channel_settings",
+        "manage_subscribers",
+        "manage_join_requests",
+        "create_posts",
+        "edit_any_post",
+        "delete_any_post",
+    }
+)
+
+DEFAULT_ROLE_PERMISSIONS = {
+    "admin": {
+        "manage_channel_settings": True,
+        "manage_subscribers": True,
+        "manage_join_requests": True,
+        "create_posts": True,
+        "edit_any_post": True,
+        "delete_any_post": True,
+    },
+    "moderator": {
+        "manage_channel_settings": False,
+        "manage_subscribers": False,
+        "manage_join_requests": True,
+        "create_posts": True,
+        "edit_any_post": True,
+        "delete_any_post": True,
+    },
+}
 
 
 def get_membership(
@@ -41,6 +71,48 @@ def is_staff_member(member: Optional[ChannelMember], channel: Channel, user: Opt
     if not member or member.status != MEMBER_STATUS_ACTIVE:
         return False
     return member.role in STAFF_ROLES
+
+
+def default_role_permissions() -> dict:
+    return deepcopy(DEFAULT_ROLE_PERMISSIONS)
+
+
+def normalize_role_permissions(raw: Optional[dict]) -> dict:
+    normalized = default_role_permissions()
+    if not isinstance(raw, dict):
+        return normalized
+    for role in ("admin", "moderator"):
+        role_raw = raw.get(role)
+        if not isinstance(role_raw, dict):
+            continue
+        for permission in CHANNEL_PERMISSION_KEYS:
+            if permission in role_raw:
+                normalized[role][permission] = bool(role_raw[permission])
+    return normalized
+
+
+def channel_role_permissions(channel: Channel) -> dict:
+    return normalize_role_permissions(getattr(channel, "role_permissions", None))
+
+
+def has_channel_permission(
+    channel: Channel,
+    member: Optional[ChannelMember],
+    user: Optional[User],
+    permission: str,
+) -> bool:
+    if permission not in CHANNEL_PERMISSION_KEYS:
+        return False
+    if is_channel_owner(channel, user):
+        return True
+    if not member or member.status != MEMBER_STATUS_ACTIVE:
+        return False
+    if member.role == "owner":
+        return True
+    if member.role not in ("admin", "moderator"):
+        return False
+    permissions = channel_role_permissions(channel)
+    return bool(permissions.get(member.role, {}).get(permission, False))
 
 
 def is_active_member(member: Optional[ChannelMember], channel: Channel, user: Optional[User]) -> bool:

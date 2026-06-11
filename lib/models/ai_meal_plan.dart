@@ -24,6 +24,20 @@ class AiMealPlanRecipe {
   }
 }
 
+Map<String, dynamic>? _asJsonMap(Object? value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return null;
+}
+
+List<Map<String, dynamic>> _jsonMapList(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .map(_asJsonMap)
+      .whereType<Map<String, dynamic>>()
+      .toList(growable: false);
+}
+
 class AiMealBlock {
   const AiMealBlock({
     required this.mealType,
@@ -69,10 +83,9 @@ class AiMealBlock {
       nutrition: nut.map(
         (k, v) => MapEntry(k, (v as num?)?.toDouble() ?? 0),
       ),
-      recommendedRecipes: (json['recommended_recipes'] as List<dynamic>?)
-              ?.map((e) => AiMealPlanRecipe.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      recommendedRecipes: _jsonMapList(json['recommended_recipes'])
+          .map(AiMealPlanRecipe.fromJson)
+          .toList(),
     );
   }
 }
@@ -95,10 +108,7 @@ class AiDayPlan {
     return AiDayPlan(
       date: json['date'] as String? ?? '',
       dayIndex: (json['day_index'] as num?)?.toInt() ?? 0,
-      meals: (json['meals'] as List<dynamic>?)
-              ?.map((e) => AiMealBlock.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      meals: _jsonMapList(json['meals']).map(AiMealBlock.fromJson).toList(),
       dayTotals: totals.map(
         (k, v) => MapEntry(k, (v as num?)?.toDouble() ?? 0),
       ),
@@ -135,10 +145,7 @@ class AiShoppingCategory {
     return AiShoppingCategory(
       id: json['id'] as String? ?? 'other',
       name: json['name'] as String? ?? 'Другое',
-      items: (json['items'] as List<dynamic>?)
-              ?.map((e) => AiShoppingItem.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
+      items: _jsonMapList(json['items']).map(AiShoppingItem.fromJson).toList(),
     );
   }
 }
@@ -169,7 +176,7 @@ class AiMealPlan {
   final int regenerationCount;
 
   factory AiMealPlan.fromJson(Map<String, dynamic> json) {
-    final shop = json['shopping_list'] as Map<String, dynamic>? ?? {};
+    final shop = _asJsonMap(json['shopping_list']) ?? {};
     return AiMealPlan(
       planId: json['plan_id'] as String? ?? '',
       durationDays: (json['duration_days'] as num?)?.toInt() ?? 3,
@@ -177,15 +184,12 @@ class AiMealPlan {
       aiRecommendation: json['ai_recommendation'] as String? ?? '',
       nutritionStrategy:
           (json['nutrition_strategy'] as Map<String, dynamic>?) ?? {},
-      days: (json['days'] as List<dynamic>?)
-              ?.map((e) => AiDayPlan.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      shoppingList: (shop['categories'] as List<dynamic>?)
-              ?.map((e) => AiShoppingCategory.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      canRegenerateUnlimited: json['can_regenerate_unlimited'] as bool? ?? false,
+      days: _jsonMapList(json['days']).map(AiDayPlan.fromJson).toList(),
+      shoppingList: _jsonMapList(shop['categories'])
+          .map(AiShoppingCategory.fromJson)
+          .toList(),
+      canRegenerateUnlimited:
+          json['can_regenerate_unlimited'] as bool? ?? false,
       smartShopping: json['smart_shopping'] as bool? ?? false,
       regenerationCount: (json['regeneration_count'] as num?)?.toInt() ?? 0,
     );

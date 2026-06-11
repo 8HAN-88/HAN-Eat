@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../features/feed/presentation/main_feed_screen.dart';
 import '../features/community/presentation/community_screen.dart';
-import '../features/community/presentation/community_upload_screen.dart';
+import 'package:go_router/go_router.dart';
+import '../app/app_router.dart';
 import '../features/favorites/favorites_page.dart';
 import '../features/shopping/shopping_page.dart';
 
@@ -38,11 +39,7 @@ class _MainShellState extends State<MainShell> with TickerProviderStateMixin {
       floatingActionButton: _index == 1
           ? FloatingActionButton(
               heroTag: 'main_shell_upload',
-              onPressed: () => Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  builder: (_) => const CommunityUploadScreen(),
-                ),
-              ),
+              onPressed: () => context.push(CreateReelRoute.path),
               child: const Icon(Icons.cloud_upload),
             )
           : null,

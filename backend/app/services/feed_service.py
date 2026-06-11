@@ -20,6 +20,8 @@ class FeedService:
     """
     Сервис для работы с лентой постов
     """
+    VIEW_EVENT_TYPES = ("view", "feed_impression", "feed_dwell", "feed_reel_progress")
+    GOOD_VIEW_EVENT_TYPES = ("view", "feed_dwell", "feed_reel_progress")
 
     @staticmethod
     def _recommendation_post_filters():
@@ -126,7 +128,11 @@ class FeedService:
         logger.debug(f"Found {len(posts)} posts for user {user_id}, following_only={following_only}")
 
         # Ранжируем
-        ranked_posts = self._rank_posts(posts, user_id)
+        ranked_posts = self._rank_posts(
+            posts,
+            user_id,
+            following_only=following_only,
+        )
         if dismissed_ids:
             ranked_posts = [p for p in ranked_posts if p.id not in dismissed_ids]
 
@@ -365,7 +371,12 @@ class FeedService:
         
         return original_posts[:100]  # Ограничиваем общее количество
     
-    def _rank_posts(self, posts: List[Post], user_id: int) -> List[Post]:
+    def _rank_posts(
+        self,
+        posts: List[Post],
+        user_id: int,
+        following_only: bool = False,
+    ) -> List[Post]:
         """
         Ранжирование постов по релевантности с персонализацией
         
@@ -380,7 +391,12 @@ class FeedService:
         scored_posts = []
         for post in posts:
             # Базовый score
-            score = self._calculate_score(post, user, now)
+            score = self._calculate_score(
+                post,
+                user,
+                now,
+                following_only=following_only,
+            )
             
             # Персонализация на основе истории просмотров
             personalization_boost = self._calculate_personalization_boost(
@@ -393,7 +409,55 @@ class FeedService:
         # Сортируем по score (убывание)
         scored_posts.sort(key=lambda x: x[0], reverse=True)
         
-        return [post for _, post in scored_posts]
+        return self._apply_diversity_guard(scored_posts, following_only=following_only)
+
+    def _apply_diversity_guard(
+        self,
+        scored_posts: List[tuple],
+        following_only: bool = False,
+    ) -> List[Post]:
+        """Не даем одной выдаче залипнуть на одном авторе/канале/типе подряд."""
+        author_limit = 2 if following_only else 1
+        channel_limit = 2 if following_only else 1
+        type_limit = 3 if following_only else 2
+
+        result: List[Post] = []
+        deferred: List[Post] = []
+
+        def would_repeat(post: Post) -> bool:
+            if not result:
+                return False
+            same_author = 0
+            same_channel = 0
+            same_type = 0
+            for prev in reversed(result):
+                if prev.user_id == post.user_id:
+                    same_author += 1
+                else:
+                    break
+            for prev in reversed(result):
+                if prev.channel_id and prev.channel_id == post.channel_id:
+                    same_channel += 1
+                else:
+                    break
+            for prev in reversed(result):
+                if prev.type == post.type:
+                    same_type += 1
+                else:
+                    break
+            return (
+                same_author >= author_limit
+                or same_channel >= channel_limit
+                or same_type >= type_limit
+            )
+
+        for _, post in scored_posts:
+            if would_repeat(post):
+                deferred.append(post)
+            else:
+                result.append(post)
+
+        return result + deferred
     
     def _calculate_personalization_boost(
         self,
@@ -461,11 +525,16 @@ class FeedService:
         for view_event in self.db.query(AnalyticsEvent).join(Post, and_(AnalyticsEvent.entity_id == Post.id, AnalyticsEvent.entity_type == "post")).filter(
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(FeedService.GOOD_VIEW_EVENT_TYPES),
             Post.user_id == author_id,
             AnalyticsEvent.created_at >= recent_date
         ).limit(50).all():
-            duration = view_event.event_metadata.get("duration_seconds") if view_event.event_metadata else 0
+            metadata = view_event.event_metadata or {}
+            duration = (
+                metadata.get("duration_seconds")
+                or metadata.get("watched_seconds")
+                or 0
+            )
             if duration and duration >= 3.0:
                 good_views_count += 1
         
@@ -493,7 +562,7 @@ class FeedService:
         views = self.db.query(AnalyticsEvent).join(Post, and_(AnalyticsEvent.entity_id == Post.id, AnalyticsEvent.entity_type == "post")).filter(
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(("feed_skip", *FeedService.VIEW_EVENT_TYPES)),
             Post.user_id == author_id,
             AnalyticsEvent.created_at >= recent_date
         ).limit(20).all()
@@ -504,8 +573,13 @@ class FeedService:
         # Считаем пропуски
         skipped = 0
         for view in views:
-            duration = view.event_metadata.get("duration_seconds") if view.event_metadata else 0
-            if duration and duration < 0.5:
+            metadata = view.event_metadata or {}
+            duration = (
+                metadata.get("duration_seconds")
+                or metadata.get("watched_seconds")
+                or 0
+            )
+            if view.event_type == "feed_skip" or (duration and duration < 1.2):
                 skipped += 1
         
         # Если больше 50% просмотров были пропусками
@@ -519,7 +593,7 @@ class FeedService:
         return self.db.query(AnalyticsEvent).join(Post, and_(AnalyticsEvent.entity_id == Post.id, AnalyticsEvent.entity_type == "post")).filter(
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(FeedService.VIEW_EVENT_TYPES),
             Post.user_id == author_id
         ).first() is not None
     
@@ -527,7 +601,8 @@ class FeedService:
         self,
         post: Post,
         user: User,
-        now: datetime
+        now: datetime,
+        following_only: bool = False,
     ) -> float:
         """
         Вычислить score поста для пользователя
@@ -604,13 +679,31 @@ class FeedService:
         time_boost = self._calculate_time_based_boost(user.id, post)
         additional_signals *= time_boost
         
-        # Final score
+        if following_only:
+            # Подписки должны оставаться предсказуемыми: свежесть и важные авторы важнее exploration.
+            weights = {
+                "similarity": 0.18,
+                "recency": 0.34,
+                "engagement": 0.22,
+                "author": 0.16,
+                "signals": 0.10,
+            }
+        else:
+            # Рекомендации агрессивнее персонализируются по темам/типам и сильным реакциям.
+            weights = {
+                "similarity": 0.34,
+                "recency": 0.16,
+                "engagement": 0.25,
+                "author": 0.15,
+                "signals": 0.10,
+            }
+
         score = (
-            0.3 * similarity +
-            0.2 * recency +
-            0.3 * engagement +
-            0.15 * author_score +
-            0.05 * additional_signals  # Небольшой вес для дополнительных сигналов
+            weights["similarity"] * similarity +
+            weights["recency"] * recency +
+            weights["engagement"] * engagement +
+            weights["author"] * author_score +
+            weights["signals"] * additional_signals
         ) * boost * additional_signals
         
         return score
@@ -622,7 +715,7 @@ class FeedService:
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
             AnalyticsEvent.entity_id == post_id,
-            AnalyticsEvent.event_type == "view"
+            AnalyticsEvent.event_type.in_(FeedService.VIEW_EVENT_TYPES),
         ).first() is not None
     
     def _get_view_duration(self, user_id: int, post_id: int) -> Optional[float]:
@@ -632,11 +725,14 @@ class FeedService:
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
             AnalyticsEvent.entity_id == post_id,
-            AnalyticsEvent.event_type == "view"
+            AnalyticsEvent.event_type.in_(FeedService.GOOD_VIEW_EVENT_TYPES),
         ).order_by(AnalyticsEvent.created_at.desc()).first()
         
         if event and event.event_metadata:
-            return event.event_metadata.get("duration_seconds")
+            return (
+                event.event_metadata.get("duration_seconds")
+                or event.event_metadata.get("watched_seconds")
+            )
         return None
     
     def _calculate_view_engagement(self, user_id: int, post_id: int) -> float:
@@ -670,12 +766,22 @@ class FeedService:
     
     def _has_user_skipped_post(self, user_id: int, post_id: int) -> bool:
         """Проверить, пропустил ли пользователь этот пост (быстрый скролл)"""
+        from app.models.analytics_event import AnalyticsEvent
+
+        explicit_skip = self.db.query(AnalyticsEvent).filter(
+            AnalyticsEvent.user_id == user_id,
+            AnalyticsEvent.entity_type == "post",
+            AnalyticsEvent.entity_id == post_id,
+            AnalyticsEvent.event_type == "feed_skip",
+        ).first()
+        if explicit_skip:
+            return True
+
         duration = self._get_view_duration(user_id, post_id)
         if duration is None:
             return False
         
-        # Если просмотр был меньше 0.5 секунды, считаем пропуском
-        return duration < 0.5
+        return duration < 1.2
 
     def _has_user_dismissed_post(self, user_id: int, post_id: int) -> bool:
         """Пользователь явно скрыл пост (POST /feed/dismiss)."""
@@ -721,7 +827,7 @@ class FeedService:
         # Получаем все просмотры за последние 30 дней
         views = self.db.query(AnalyticsEvent).filter(
             AnalyticsEvent.user_id == user_id,
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(("feed_skip", *FeedService.VIEW_EVENT_TYPES)),
             AnalyticsEvent.entity_type == "post",
             AnalyticsEvent.created_at >= recent_date
         ).all()
@@ -740,9 +846,12 @@ class FeedService:
         hour_counts = {}
         
         for view in views:
-            duration = view.event_metadata.get("duration_seconds") if view.event_metadata else None
-            if duration:
-                if duration < 0.5:
+            metadata = view.event_metadata or {}
+            duration = metadata.get("duration_seconds") or metadata.get("watched_seconds")
+            if view.event_type == "feed_skip":
+                skipped += 1
+            elif duration:
+                if duration < 1.2:
                     skipped += 1
                 else:
                     durations.append(duration)
@@ -891,6 +1000,7 @@ class FeedService:
         """Получить предпочтения пользователя по типам постов"""
         from app.models.like import Like
         from app.models.saved_post import SavedPost
+        from app.models.analytics_event import AnalyticsEvent
         from sqlalchemy import func
         from datetime import datetime, timedelta
         
@@ -921,15 +1031,53 @@ class FeedService:
         for post_type, count in saved_posts:
             if total_saves > 0:
                 saved_by_type[post_type] = count / total_saves
+
+        engagement_by_type = {}
+        engagement_events = (
+            self.db.query(Post.type, AnalyticsEvent.event_type, AnalyticsEvent.event_metadata)
+            .join(Post, and_(AnalyticsEvent.entity_id == Post.id, AnalyticsEvent.entity_type == "post"))
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.event_type.in_(
+                    ("feed_dwell", "feed_open_detail", "feed_reel_progress")
+                ),
+                AnalyticsEvent.created_at >= recent_date,
+            )
+            .limit(300)
+            .all()
+        )
+        for post_type, event_type, metadata in engagement_events:
+            metadata = metadata or {}
+            weight = 1.0
+            if event_type == "feed_dwell":
+                weight = min((metadata.get("duration_seconds") or 3) / 6.0, 2.0)
+            elif event_type == "feed_reel_progress":
+                weight = min((metadata.get("watch_percent") or 0) / 50.0, 2.0)
+            elif event_type == "feed_open_detail":
+                weight = 1.25
+            engagement_by_type[post_type] = engagement_by_type.get(post_type, 0) + weight
+
+        total_engagement = sum(engagement_by_type.values())
+        if total_engagement > 0:
+            engagement_by_type = {
+                post_type: value / total_engagement
+                for post_type, value in engagement_by_type.items()
+            }
         
-        # Объединяем (лайки важнее сохранений)
+        # Объединяем: сохранения и осмысленные просмотры сильнее лайков.
         preferences = {}
-        all_types = set(liked_by_type.keys()) | set(saved_by_type.keys())
+        all_types = (
+            set(liked_by_type.keys())
+            | set(saved_by_type.keys())
+            | set(engagement_by_type.keys())
+        )
         
         for post_type in all_types:
-            like_score = liked_by_type.get(post_type, 0) * 0.7
-            save_score = saved_by_type.get(post_type, 0) * 0.3
-            preferences[post_type] = like_score + save_score
+            like_score = liked_by_type.get(post_type, 0) * 0.25
+            save_score = saved_by_type.get(post_type, 0) * 0.4
+            engagement_score = engagement_by_type.get(post_type, 0) * 0.35
+            preferences[post_type] = like_score + save_score + engagement_score
         
         return preferences
     
@@ -971,7 +1119,7 @@ class FeedService:
         views_count = self.db.query(func.count(AnalyticsEvent.id)).filter(
             AnalyticsEvent.entity_type == "post",
             AnalyticsEvent.entity_id == post.id,
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(FeedService.VIEW_EVENT_TYPES),
             AnalyticsEvent.created_at >= recent_date
         ).scalar() or 1  # Минимум 1, чтобы избежать деления на 0
         
@@ -1094,12 +1242,17 @@ class FeedService:
         viewed_events = self.db.query(AnalyticsEvent).filter(
             AnalyticsEvent.user_id == user_id,
             AnalyticsEvent.entity_type == "post",
-            AnalyticsEvent.event_type == "view",
+            AnalyticsEvent.event_type.in_(FeedService.GOOD_VIEW_EVENT_TYPES),
             AnalyticsEvent.created_at >= recent_date
         ).limit(200).all()
         
         for event in viewed_events:
-            duration = event.event_metadata.get("duration_seconds") if event.event_metadata else 0
+            metadata = event.event_metadata or {}
+            duration = (
+                metadata.get("duration_seconds")
+                or metadata.get("watched_seconds")
+                or 0
+            )
             if duration and duration >= 3.0:  # Только хорошие просмотры (3+ секунды)
                 post = self.db.query(Post).filter(Post.id == event.entity_id).first()
                 if post and post.tags:
@@ -1331,7 +1484,9 @@ class FeedService:
         for post in posts:
             author = authors_dict.get(post.user_id)
             channel = channels_dict.get(post.channel_id) if post.channel_id else None
-            post_body = poll_bodies.get(post.id, post.body)
+            from app.core.media_urls import normalize_post_body_media
+
+            post_body = normalize_post_body_media(poll_bodies.get(post.id, post.body))
 
             enriched.append({
                 "id": post.id,

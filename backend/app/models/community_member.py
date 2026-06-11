@@ -19,6 +19,8 @@ class ChannelMember(Base):
     is_favorite = Column(Boolean, default=False, nullable=False)  # Избранный канал
     # Push / in-app уведомления о постах канала (false = «без звука»)
     notifications_enabled = Column(Boolean, default=True, nullable=False)
+    # Сколько постов пользователь «видел» в inbox (синхронизация между устройствами)
+    last_seen_posts_count = Column(Integer, default=0, nullable=False)
     joined_at = Column(DateTime, server_default=func.now())
     
     # Уникальный индекс: один пользователь может быть только один раз в канале

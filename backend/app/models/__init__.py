@@ -18,6 +18,8 @@ from app.models.ai_meal_plan_record import AiMealPlanRecord
 from app.models.notification_preferences import NotificationPreferences
 from app.models.video_processing import VideoProcessing
 from app.models.image_processing import ImageProcessing
+from app.models.conversation import Conversation, ConversationMember, Message, Contact, MessageReaction
+from app.models.user_block import UserBlock
 
 # Для обратной совместимости
 Community = Channel

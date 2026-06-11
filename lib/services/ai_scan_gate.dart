@@ -7,13 +7,14 @@ import '../app/app_router.dart';
 import '../features/subscription/presentation/widgets/subscription_visuals.dart';
 import '../features/subscription/subscription_copy.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 import 'product_analytics.dart';
 
 /// Проверка AI scan перед камерой: soft warning / paywall без счётчиков.
 class AiScanGate {
   static AiScanStatus? _cachedStatus;
   static DateTime? _cachedAt;
-  static const Duration _cacheTtl = Duration(seconds: 30);
+  static const Duration _cacheTtl = Duration(seconds: 5);
 
   /// Сбросить кэш после успешного скана (лимиты могли измениться).
   static void invalidateCache() {
@@ -40,6 +41,23 @@ class AiScanGate {
   }
 
   static Future<bool> _refreshStatus(BuildContext context) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null || token.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                const Text('Войдите в аккаунт, чтобы использовать AI-скан.'),
+            action: SnackBarAction(
+              label: 'Войти',
+              onPressed: () => context.push(LoginRoute.path),
+            ),
+          ),
+        );
+      }
+      return false;
+    }
+
     final status = await ApiService.touchAiScanCreditsSilently();
     if (status == null) {
       if (context.mounted) {

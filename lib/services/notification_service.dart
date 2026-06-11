@@ -174,34 +174,15 @@ class NotificationService {
 
   static void _configureDeviceLocalTimezone() {
     try {
-      final offset = DateTime.now().timeZoneOffset;
-      final totalMinutes = offset.inMinutes;
-      final hours = totalMinutes ~/ 60;
-      final remainder = totalMinutes.abs() % 60;
-      if (remainder != 0) {
-        tz.setLocalLocation(tz.UTC);
-        return;
-      }
-      // Etc/GMT знак инвертирован: UTC+3 → Etc/GMT-3
-      final sign = hours >= 0 ? '-' : '+';
-      final absH = hours.abs();
-      tz.setLocalLocation(tz.getLocation('Etc/GMT$sign$absH'));
+      tz.setLocalLocation(tz.UTC);
     } catch (e) {
       debugPrint('NotificationService timezone: $e');
-      tz.setLocalLocation(tz.UTC);
     }
   }
 
+  /// [scheduledTime] — локальное время устройства; конвертируем в UTC для zonedSchedule.
   static tz.TZDateTime _localScheduledTime(DateTime scheduledTime) {
-    return tz.TZDateTime(
-      tz.local,
-      scheduledTime.year,
-      scheduledTime.month,
-      scheduledTime.day,
-      scheduledTime.hour,
-      scheduledTime.minute,
-      scheduledTime.second,
-    );
+    return tz.TZDateTime.from(scheduledTime.toUtc(), tz.UTC);
   }
 
   Future<void> scheduleNotification({

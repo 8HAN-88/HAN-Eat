@@ -25,6 +25,7 @@ async def search_posts(
     min_likes: Optional[int] = Query(None, ge=0, description="Минимальное количество лайков"),
     min_comments: Optional[int] = Query(None, ge=0, description="Минимальное количество комментариев"),
     sort_by: str = Query("relevance", description="Сортировка (relevance, date, popularity)"),
+    following_only: bool = Query(False, description="Только посты от подписок и каналов"),
     limit: int = Query(20, ge=1, le=100, description="Количество результатов"),
     offset: int = Query(0, ge=0, description="Смещение для пагинации"),
     current_user: Optional[User] = Depends(get_current_user),
@@ -78,6 +79,12 @@ async def search_posts(
                 detail="sort_by must be one of: relevance, date, popularity"
             )
         
+        if following_only and user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required for following_only search",
+            )
+
         results = search_service.search_posts(
             query=q,
             user_id=user_id,
@@ -90,6 +97,7 @@ async def search_posts(
             min_likes=min_likes,
             min_comments=min_comments,
             sort_by=sort_by,
+            following_only=following_only,
             limit=limit,
             offset=offset
         )

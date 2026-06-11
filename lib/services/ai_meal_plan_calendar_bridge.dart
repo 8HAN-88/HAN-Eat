@@ -50,10 +50,14 @@ class AiMealPlanCalendarBridge {
     AiMealPlan plan, {
     bool replaceExisting = true,
   }) async {
+    final validDates = plan.days
+        .map((day) => DateTime.tryParse(day.date))
+        .whereType<DateTime>()
+        .toList(growable: false);
+
+    final mealPlan = await MealPlanService.ensureInitialized();
     if (replaceExisting) {
-      await MealPlanService.instance.removeEntriesForDates(
-        plan.days.map((d) => DateTime.parse(d.date)).toList(),
-      );
+      await mealPlan.removeEntriesForDates(validDates);
     }
 
     var count = 0;
@@ -62,7 +66,7 @@ class AiMealPlanCalendarBridge {
       final date = DateTime.tryParse(day.date);
       if (date == null) continue;
       for (final meal in day.meals) {
-        await MealPlanService.instance.addRecipeToPlan(
+        await mealPlan.addRecipeToPlan(
           recipe: recipeFromMealBlock(meal),
           mealType: mealTypeFromString(meal.mealType),
           date: date,

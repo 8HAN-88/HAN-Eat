@@ -23,7 +23,10 @@ nano /root/HAN-Eat/backend/.env
 systemctl restart haneat-api
 ```
 
-5. Cloudflare: `A api → IP сервера` (**DNS only**, серое облако)
+5. DNS у регистратора домена `haneat.app`:
+   - `A api` → **IP сервера** (сейчас `89.19.216.60`)
+   - Проверка с Mac: `dig +short api.haneat.app` должен вернуть IP сервера, не сторонний (например `15.197.x`)
+   - Cloudflare (если используете): `A api → IP сервера` (**DNS only**, серое облако)
 
 6. SSL:
 

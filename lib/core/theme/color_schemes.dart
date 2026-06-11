@@ -9,22 +9,24 @@ class AppColors {
   static const secondary = Color(0xFFFFB347);
   static const secondaryDark = Color(0xFFFF9A1F);
 
-  /// Единый фон светлой темы: холодный серо-синий (не бежевый / не коричневатый).
-  static const backgroundLight = Color(0xFFF3F5F8);
+  /// База светлой темы — ровный нейтральный белый без тёплого градиента.
+  static const backgroundLight = Color(0xFFF7F8FA);
+
   /// Единый фон тёмной темы: холодный графит.
   static const backgroundDark = Color(0xFF0E1116);
 
   /// Карточки и «поднятые» блоки в светлой теме.
   static const surface = Color(0xFFFFFFFF);
   static const surfaceDark = Color(0xFF171B22);
+
   /// Приглушённые блоки (чипы, подложки) — нейтральный серый.
-  static const surfaceVariant = Color(0xFFE9ECF1);
-  
+  static const surfaceVariant = Color(0xFFF2F3F5);
+
   // Акцентные цвета
   static const success = Color(0xFF4CAF50); // Зелёный (свежесть, здоровье)
   static const warning = Color(0xFFFFC107); // Тёплый жёлтый
   static const danger = Color(0xFFE53935); // Красный
-  
+
   // Градиенты для декоративных элементов
   static const gradientStart = Color(0xFFFF6B35);
   static const gradientEnd = Color(0xFFFFB347);
@@ -39,12 +41,12 @@ ColorScheme buildLightColorScheme() {
   return base.copyWith(
     primary: AppColors.primary,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFFFE8E0),
-    onPrimaryContainer: const Color(0xFF6B2F1A),
+    primaryContainer: const Color(0xFFFFF0EB),
+    onPrimaryContainer: const Color(0xFF5C3828),
     secondary: AppColors.secondary,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFFFF4E0),
-    onSecondaryContainer: const Color(0xFF6B4A1F),
+    secondaryContainer: const Color(0xFFFFF6E8),
+    onSecondaryContainer: const Color(0xFF5C4520),
     tertiary: const Color(0xFF66BB6A),
     onTertiary: Colors.white,
     tertiaryContainer: const Color(0xFFE8F5E9),
@@ -55,18 +57,18 @@ ColorScheme buildLightColorScheme() {
     onErrorContainer: const Color(0xFF6B1F1F),
     surface: AppColors.surface,
     surfaceContainerLowest: AppColors.backgroundLight,
-    surfaceContainerLow: const Color(0xFFF0F2F6),
-    surfaceContainer: const Color(0xFFEBEEF3),
-    surfaceContainerHigh: const Color(0xFFE5E9EF),
-    surfaceContainerHighest: AppColors.surfaceVariant,
+    surfaceContainerLow: const Color(0xFFF7F8FA),
+    surfaceContainer: const Color(0xFFF0F2F5),
+    surfaceContainerHigh: const Color(0xFFE8EBF0),
+    surfaceContainerHighest: const Color(0xFFE0E4EA),
     onSurface: const Color(0xFF16181D),
     onSurfaceVariant: const Color(0xFF5E6670),
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFF2A2D35),
     onInverseSurface: const Color(0xFFF1F3F6),
     inversePrimary: AppColors.primaryLight,
-    outline: const Color(0xFFD0D6DE),
-    outlineVariant: const Color(0xFFE4E8EF),
+    outline: const Color(0xFFD8DCE3),
+    outlineVariant: const Color(0xFFE8ECF2),
     shadow: Colors.black.withValues(alpha: 0.1),
     scrim: Colors.black.withValues(alpha: 0.4),
   );

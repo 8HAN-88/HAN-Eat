@@ -2,10 +2,37 @@
 from __future__ import annotations
 
 import logging
+import shutil
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def ffmpeg_available() -> bool:
+    return shutil.which("ffmpeg") is not None
+
+
+def video_queue_depth() -> int | None:
+    try:
+        from app.core.redis_client import redis_client
+        from app.services.video_queue_service import VideoQueueService
+
+        return int(redis_client.llen(VideoQueueService.QUEUE_KEY))
+    except Exception:
+        return None
+
+
+def media_upload_mode() -> str:
+    """s3 — прямая загрузка в объектное хранилище; api — через диск VPS."""
+    if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
+        return "api"
+    try:
+        from app.services.media_service import MediaService
+
+        return "api" if MediaService().uses_api_upload else "s3"
+    except Exception:
+        return "api"
 
 
 def collect_media_issues() -> list[str]:
@@ -29,6 +56,10 @@ def collect_media_issues() -> list[str]:
             issues.append("API_PUBLIC_BASE_URL localhost — публичные URL медиа недоступны извне")
         if settings.CDN_URL.startswith("https://cdn.haneat.com") and not settings.S3_ACCESS_KEY:
             issues.append("CDN_URL задан, но S3 не настроен")
+        if media_upload_mode() == "s3" and not ffmpeg_available():
+            issues.append(
+                "FFmpeg не установлен — видео сохраняются в S3, но без транскодинга 720p/480p"
+            )
     return issues
 
 

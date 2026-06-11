@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../app/app_router.dart';
+import '../../settings/application/subscription_status_provider.dart';
 import '../../../../services/support_service.dart';
 import 'widgets/subscription_cancel_survey_sheet.dart';
 
@@ -113,6 +116,8 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
   
   @override
   Widget build(BuildContext context) {
+    final hasPro = ref.watch(hasProSubscriptionProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Поддержка'),
@@ -124,6 +129,46 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (hasPro)
+                Card(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.45),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.bolt_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'H.A.N. Pro: ваши обращения обрабатываются в приоритетной очереди.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (hasPro) const SizedBox(height: 16),
+              if (!hasPro)
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.workspace_premium_outlined),
+                    title: const Text('Приоритетная поддержка'),
+                    subtitle: const Text(
+                      'С H.A.N. Pro обращения обрабатываются быстрее.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () =>
+                        context.push(SubscriptionRoute.pathWithProduct('pro')),
+                  ),
+                ),
+              if (!hasPro) const SizedBox(height: 16),
               // Быстрое действие: отмена подписки
               Card(
                 child: Padding(

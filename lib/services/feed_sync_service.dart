@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import 'api_service.dart';
+import 'auth_service.dart';
 import 'feed_service.dart';
 import 'feed_cache_service.dart';
+import 'saved_posts_service.dart';
 
 /// Сервис синхронизации ленты (онлайн/оффлайн)
 class FeedSyncService {
@@ -25,7 +29,30 @@ class FeedSyncService {
     _instance!._initConnectivity();
   }
 
+  /// Если UI открылся до [bootstrapServicesDeferred].
+  static Future<FeedSyncService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  static ValueListenable<bool> get onlineListenable {
+    try {
+      return instance.isOnline;
+    } catch (_) {
+      return ValueNotifier<bool>(true);
+    }
+  }
+
   FeedSyncService._internal();
+
+  static bool _shouldSyncInBackground() {
+    try {
+      return AuthService.instance.currentUser != null;
+    } catch (_) {
+      return false;
+    }
+  }
 
   final Connectivity _connectivity = Connectivity();
   final ValueNotifier<bool> isOnline = ValueNotifier(true);
@@ -39,9 +66,17 @@ class FeedSyncService {
         debugPrint('Connectivity changed: ${online ? "online" : "offline"}');
       }
 
-      // При появлении интернета - автоматическая синхронизация
       if (online) {
-        syncFeedInBackground();
+        unawaited(
+          SavedPostsService.processPendingOps().catchError((Object e) {
+            if (kDebugMode) {
+              debugPrint('FeedSyncService.processPendingOps: $e');
+            }
+          }),
+        );
+        if (_shouldSyncInBackground()) {
+          syncFeedInBackground();
+        }
       }
     });
 

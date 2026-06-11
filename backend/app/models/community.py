@@ -1,7 +1,7 @@
 """
 Модель канала
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, ARRAY
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, ARRAY, JSON
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -31,6 +31,9 @@ class Channel(Base):
     allow_comments = Column(Boolean, default=True, nullable=False)  # Разрешить комментарии
     allow_likes = Column(Boolean, default=True, nullable=False)  # Разрешить лайки
     allow_reposts = Column(Boolean, default=True, nullable=False)  # Разрешить репосты
+    # Гибкие права ролей admin/moderator внутри канала
+    role_permissions = Column(JSON, nullable=True)
+    accent_color = Column(String(16), nullable=True)  # Акцент оформления канала (Creator)
     auto_publish_reels = Column(Boolean, default=True, nullable=False)  # Автопубликация рилсов
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -20,6 +20,7 @@ class SearchService {
     int? minLikes,
     int? minComments,
     String sortBy = 'relevance', // relevance | date | popularity
+    bool followingOnly = false,
     int limit = 20,
     int offset = 0,
   }) async {
@@ -36,6 +37,7 @@ class SearchService {
       if (minLikes != null) 'min_likes': minLikes.toString(),
       if (minComments != null) 'min_comments': minComments.toString(),
       'sort_by': sortBy,
+      if (followingOnly) 'following_only': 'true',
       'limit': limit.toString(),
       'offset': offset.toString(),
     });

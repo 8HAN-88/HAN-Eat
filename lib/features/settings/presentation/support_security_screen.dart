@@ -42,7 +42,7 @@ class SupportSecurityScreen extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: const Text('Политика конфиденциальности'),
-                  subtitle: const Text('На сайте haneat.app'),
+                  subtitle: const Text('Открыть в браузере'),
                   trailing: const Icon(Icons.open_in_new),
                   onTap: () => _openUrl(context, LegalUrls.privacyPolicy),
                 ),

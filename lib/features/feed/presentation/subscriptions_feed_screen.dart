@@ -8,6 +8,7 @@ import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
 import '../../../services/feed_api_cache.dart';
+import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
 import 'new_post_card.dart';
 import '../../../app/app_router.dart';
@@ -15,10 +16,17 @@ import '../../../widgets/post_card_skeleton.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../navigation/application/feed_scroll_chrome.dart';
 
 /// Лента постов от подписанных пользователей
 class SubscriptionsFeedScreen extends ConsumerStatefulWidget {
-  const SubscriptionsFeedScreen({super.key});
+  const SubscriptionsFeedScreen({
+    super.key,
+    this.externalFeedType,
+  });
+
+  /// Тип контента с родителя ([MainFeedScreen]).
+  final String? externalFeedType;
 
   @override
   ConsumerState<SubscriptionsFeedScreen> createState() =>
@@ -38,17 +46,30 @@ class _SubscriptionsFeedScreenState
   bool _servingFromCache = false;
   Object? _cacheLoadError;
 
-  static const _cacheVariant = 'following';
+  String _feedType = 'all';
+
+  String get _cacheVariant => 'following_$_feedType';
 
   @override
   void initState() {
     super.initState();
+    _feedType = widget.externalFeedType ?? 'all';
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _loadKickoff = true);
       _loadFeed(refresh: true);
     });
+  }
+
+  @override
+  void didUpdateWidget(SubscriptionsFeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final ext = widget.externalFeedType;
+    if (ext != null && ext != oldWidget.externalFeedType && ext != _feedType) {
+      _feedType = ext;
+      _loadFeed(refresh: true);
+    }
   }
 
   @override
@@ -116,13 +137,13 @@ class _SubscriptionsFeedScreenState
       final response = await FeedService.getFeed(
         cursor: refresh ? null : _nextCursor,
         limit: 20,
-        feedType: 'all',
-        followingOnly: true, // Только посты от подписок
+        feedType: _feedType,
+        followingOnly: true,
       );
 
-      final nextPosts = refresh
-          ? response.items
-          : <PostModel>[..._posts, ...response.items];
+      if (!mounted) return;
+      final nextPosts =
+          refresh ? response.items : <PostModel>[..._posts, ...response.items];
       setState(() {
         _posts = nextPosts;
         _nextCursor = response.nextCursor;
@@ -143,6 +164,7 @@ class _SubscriptionsFeedScreenState
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
+        if (!mounted) return;
         if (cached.isNotEmpty) {
           setState(() {
             _posts = cached;
@@ -177,6 +199,12 @@ class _SubscriptionsFeedScreenState
     await _loadFeed(refresh: false);
   }
 
+  double _listBottomPadding(BuildContext context, bool chromeHidden) {
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    if (chromeHidden) return safeBottom + 12;
+    return floatingBottomPadding(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = AuthService.instance.currentUser;
@@ -194,47 +222,65 @@ class _SubscriptionsFeedScreenState
     }
 
     if (_posts.isEmpty && !_isLoading) {
-      return RefreshIndicator(
+      return FeedScrollChromeListener(
+        child: RefreshIndicator(
         onRefresh: () => _loadFeed(refresh: true),
-        child: CustomScrollView(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: feedScrollChromeHidden,
+          builder: (context, chromeHidden, _) {
+            return CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: AppEmptyState(
-                icon: _lastLoadError != null
-                    ? Icons.cloud_off_outlined
-                    : Icons.subscriptions_outlined,
-                title: _lastLoadError != null
-                    ? 'Не удалось загрузить ленту'
-                    : 'Подписки',
-                subtitle: _lastLoadError ??
-                    'Подпишитесь на авторов, чтобы видеть их посты здесь.',
-                action: _lastLoadError != null
-                    ? FilledButton.icon(
-                        onPressed: () => _loadFeed(refresh: true),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Повторить'),
-                      )
-                    : FilledButton.icon(
-                        onPressed: () => context.push(SearchRoute.path),
-                        icon: const Icon(Icons.search),
-                        label: const Text('Найти авторов'),
-                      ),
+            SliverPadding(
+              padding: EdgeInsets.only(
+                bottom: _listBottomPadding(context, chromeHidden),
+              ),
+              sliver: SliverFillRemaining(
+                hasScrollBody: false,
+                child: AppEmptyState(
+                  icon: _lastLoadError != null
+                      ? Icons.cloud_off_outlined
+                      : Icons.subscriptions_outlined,
+                  title: _lastLoadError != null
+                      ? 'Не удалось загрузить ленту'
+                      : 'Подписки',
+                  subtitle: _lastLoadError ??
+                      'Подпишитесь на авторов, чтобы видеть их посты здесь.',
+                  action: _lastLoadError != null
+                      ? FilledButton.icon(
+                          onPressed: () => _loadFeed(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Повторить'),
+                        )
+                      : FilledButton.icon(
+                          onPressed: () => context.push(SearchRoute.path),
+                          icon: const Icon(Icons.search),
+                          label: const Text('Найти авторов'),
+                        ),
+                ),
               ),
             ),
           ],
+        );
+          },
         ),
+      ),
       );
     }
 
-    return RefreshIndicator(
+    return FeedScrollChromeListener(
+      child: RefreshIndicator(
       onRefresh: () => _loadFeed(refresh: true),
       child: _posts.isEmpty && _isLoading
           ? const PostListSkeletonLoader(itemCount: 5)
-          : ListView.builder(
+          : ValueListenableBuilder<bool>(
+              valueListenable: feedScrollChromeHidden,
+              builder: (context, chromeHidden, _) {
+                return ListView.builder(
               controller: _scrollController,
-              padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
+              padding: EdgeInsets.only(
+                bottom: _listBottomPadding(context, chromeHidden),
+              ),
               itemCount: (_servingFromCache ? 1 : 0) +
                   _posts.length +
                   (_hasMore ? 1 : 0),
@@ -245,8 +291,7 @@ class _SubscriptionsFeedScreenState
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                     child: Material(
-                      color:
-                          scheme.secondaryContainer.withValues(alpha: 0.95),
+                      color: scheme.secondaryContainer.withValues(alpha: 0.95),
                       borderRadius: BorderRadius.circular(12),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -283,26 +328,37 @@ class _SubscriptionsFeedScreenState
                 final postIndex = index - banner;
                 if (postIndex >= 0 && postIndex < _posts.length) {
                   final post = _posts[postIndex];
-                  return NewPostCard(
+                  return FeedExposureTracker(
                     post: post,
-                    onCommentTap: () =>
-                        context.push(PostCommentsRoute.pathFor(post.id)),
-                    onPostDeleted: () {
-                      setState(() {
-                        _posts.removeWhere((p) => p.id == post.id);
-                      });
-                    },
-                    onAuthorTap: () {
-                      if (post.repostedBy != null) {
-                        context
-                            .push(ProfileRoute.withUserId(post.repostedBy!.id));
-                      } else if (post.communityId != null) {
-                        context.push(
-                            ChannelDetailRoute.pathFor(post.communityId!));
-                      } else {
-                        context.push(ProfileRoute.withUserId(post.userId));
-                      }
-                    },
+                    feedSurface: 'following',
+                    position: postIndex,
+                    child: NewPostCard(
+                      post: post,
+                      onCommentTap: () {
+                        FeedAnalyticsService.openDetail(
+                          post,
+                          source: 'following',
+                          target: 'comments',
+                        );
+                        return context.push(PostCommentsRoute.pathFor(post.id));
+                      },
+                      onPostDeleted: () {
+                        setState(() {
+                          _posts.removeWhere((p) => p.id == post.id);
+                        });
+                      },
+                      onAuthorTap: () {
+                        if (post.repostedBy != null) {
+                          context.push(
+                              ProfileRoute.withUserId(post.repostedBy!.id));
+                        } else if (post.communityId != null) {
+                          context.push(
+                              ChannelDetailRoute.pathFor(post.communityId!));
+                        } else {
+                          context.push(ProfileRoute.withUserId(post.userId));
+                        }
+                      },
+                    ),
                   );
                 }
                 if (_hasMore && index == banner + _posts.length) {
@@ -317,7 +373,10 @@ class _SubscriptionsFeedScreenState
                 }
                 return const SizedBox.shrink();
               },
+            );
+              },
             ),
+    ),
     );
   }
 }

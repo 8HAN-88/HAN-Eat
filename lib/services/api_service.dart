@@ -20,7 +20,8 @@ import '../utils/api_error_parser.dart';
 typedef HanAiRequiredException = HanPlusRequiredException;
 
 class HanPlusRequiredException implements Exception {
-  const HanPlusRequiredException([this.message = 'Требуется подписка H.A.N. AI или Pro']);
+  const HanPlusRequiredException(
+      [this.message = 'Требуется подписка H.A.N. AI или Pro']);
   final String message;
   @override
   String toString() => message;
@@ -73,7 +74,8 @@ class AiScansExhaustedException implements Exception {
 
 /// Нужен шаг резерва перед /analyze.
 class AiScanReserveRequiredException implements Exception {
-  const AiScanReserveRequiredException([this.message = 'Сначала забронируйте AI scan']);
+  const AiScanReserveRequiredException(
+      [this.message = 'Сначала забронируйте AI scan']);
   final String message;
   @override
   String toString() => message;
@@ -106,7 +108,8 @@ class AiScanStatus {
   factory AiScanStatus.fromJson(Map<String, dynamic> json) {
     final credits = (json['scan_credits'] as num?)?.toInt();
     return AiScanStatus(
-      canScan: json['can_scan'] as bool? ?? (credits != null ? credits > 0 : true),
+      canScan:
+          json['can_scan'] as bool? ?? (credits != null ? credits > 0 : true),
       softWarning: json['soft_warning'] as bool? ??
           json['last_free_warning'] as bool? ??
           false,
@@ -137,17 +140,23 @@ class AiScanReserveResult {
 /// Ответ GET /recommendations: список рецептов и признаки от бэкенда.
 class RecommendationsResult {
   final List<Recipe> recipes;
+
   /// Бэкенд: Spoonacular вернул 402 (дневной лимит бесплатного тарифа).
   final bool spoonacularQuotaExhausted;
+
   /// Зритель с доступом к AI (если передан JWT в запросе).
   final bool viewerIsPlus;
+
   /// Показать оффер подписки (квота исчерпана и у зрителя нет AI).
   final bool suggestPlusUpgrade;
+
   /// Бэкенд перевёл карточки на [recipeTranslationLanguage].
   final bool recipeTranslationEnabled;
+
   /// В ленте есть EN-рецепты, перевод доступен только с AI.
   final bool recipeTranslationRequiresAi;
   final String? recipeTranslationLanguage;
+
   /// В meta есть поля локализации (старый API без них перевод не отдаёт).
   final bool recipeTranslationApiSupported;
 
@@ -163,25 +172,48 @@ class RecommendationsResult {
   });
 }
 
+/// Ответ POST /recipes: список рецептов и meta для честных состояний Menu.
+class SearchRecipesResult {
+  final List<Recipe> recipes;
+  final bool recipeTranslationEnabled;
+  final bool recipeTranslationRequiresAi;
+  final String? recipeTranslationLanguage;
+  final bool recipeTranslationApiSupported;
+  final String? source;
+  final int? menuCardsContractVersion;
+
+  const SearchRecipesResult({
+    required this.recipes,
+    this.recipeTranslationEnabled = false,
+    this.recipeTranslationRequiresAi = false,
+    this.recipeTranslationLanguage,
+    this.recipeTranslationApiSupported = false,
+    this.source,
+    this.menuCardsContractVersion,
+  });
+}
+
 class ApiService {
   // Используем общий конфиг для определения базового URL
   static String get baseUrl => ServerConfig.baseUrl;
-  
+
   // Для реальных устройств можно использовать переменную окружения
   // или настройку в приложении. По умолчанию используем автоматическое определение.
   static String? _customBaseUrl;
   static void setBaseUrl(String? url) => _customBaseUrl = url;
-  
+
   static String get _effectiveBaseUrl => _customBaseUrl ?? baseUrl;
 
   static Uri _uri(String path, [Map<String, dynamic>? query]) {
     // Убеждаемся, что путь начинается с /api/v1
     final fullPath = path.startsWith('/api/v1') ? path : '/api/v1$path';
-    return Uri.parse('$_effectiveBaseUrl$fullPath').replace(queryParameters: query);
+    return Uri.parse('$_effectiveBaseUrl$fullPath')
+        .replace(queryParameters: query);
   }
-  
+
   // Публичные методы для использования в других сервисах
-  static Uri uri(String path, [Map<String, dynamic>? query]) => _uri(path, query);
+  static Uri uri(String path, [Map<String, dynamic>? query]) =>
+      _uri(path, query);
   static Map<String, String> get jsonHeaders => _jsonHeaders;
 
   static Map<String, String> get _jsonHeaders => {
@@ -204,7 +236,28 @@ class ApiService {
     Map<String, dynamic>? filters,
     List<String>? tags, // Теги категорий для Spoonacular
     int? maxReadyTime, // Макс. время готовки в минутах (фильтр)
-    Duration timeout = const Duration(seconds: 60),
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    final result = await searchRecipesResult(
+      ingredients,
+      mode: mode,
+      language: language,
+      filters: filters,
+      tags: tags,
+      maxReadyTime: maxReadyTime,
+      timeout: timeout,
+    );
+    return result.recipes;
+  }
+
+  static Future<SearchRecipesResult> searchRecipesResult(
+    String ingredients, {
+    required AnalysisMode mode,
+    required String language,
+    Map<String, dynamic>? filters,
+    List<String>? tags,
+    int? maxReadyTime,
+    Duration timeout = const Duration(seconds: 25),
   }) async {
     try {
       final body = <String, dynamic>{
@@ -213,20 +266,39 @@ class ApiService {
         'language': language,
         if (filters != null) 'filters': filters,
         if (tags != null && tags.isNotEmpty) 'tags': tags.join(','),
-        if (maxReadyTime != null && maxReadyTime > 0) 'max_ready_time': maxReadyTime,
+        if (maxReadyTime != null && maxReadyTime > 0)
+          'max_ready_time': maxReadyTime,
       };
-      
-      final resp = await http.post(
+
+      final resp = await http
+          .post(
         _uri('/recipes'),
         headers: await authHeaders(),
         body: jsonEncode(body),
-      ).timeout(timeout, onTimeout: () {
+      )
+          .timeout(timeout, onTimeout: () {
         throw TimeoutException('Превышено время ожидания ответа от сервера');
       });
       _ensureSuccess(resp);
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final list = data['recipes'] as List<dynamic>? ?? [];
-      return list.map((e) => Recipe.fromJson(e as Map<String, dynamic>)).toList();
+      final meta = data['meta'] as Map<String, dynamic>?;
+      final recipes =
+          list.map((e) => Recipe.fromJson(e as Map<String, dynamic>)).toList();
+      return SearchRecipesResult(
+        recipes: recipes,
+        recipeTranslationEnabled: meta?['recipe_translation_enabled'] == true,
+        recipeTranslationRequiresAi:
+            meta?['recipe_translation_requires_ai'] == true,
+        recipeTranslationLanguage:
+            meta?['recipe_translation_language'] as String?,
+        recipeTranslationApiSupported:
+            meta != null && meta.containsKey('menu_cards_contract_version'),
+        source: meta?['source'] as String?,
+        menuCardsContractVersion: meta?['menu_cards_contract_version'] is int
+            ? meta!['menu_cards_contract_version'] as int
+            : int.tryParse('${meta?['menu_cards_contract_version'] ?? ''}'),
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Error in searchRecipes: $e');
@@ -254,15 +326,19 @@ class ApiService {
     }) async {
       final query = <String, String>{
         'limit': '$limit',
-        'quick': 'true', // быстрый путь на бэкенде (без N+1 и без онлайн-перевода)
+        'quick':
+            'true', // быстрый путь на бэкенде (без N+1 и без онлайн-перевода)
       };
       if (skipServerCache) query['refresh'] = 'true';
       if (tags != null && tags.isNotEmpty) query['tags'] = tags;
-      if (ingredients != null && ingredients.isNotEmpty) query['ingredients'] = ingredients;
+      if (ingredients != null && ingredients.isNotEmpty) {
+        query['ingredients'] = ingredients;
+      }
       if (modeVal != null && modeVal.isNotEmpty) query['mode'] = modeVal;
       if (language != null && language.isNotEmpty) query['language'] = language;
       // Таймаут запасной: при quick обычно < нескольких секунд.
-      final resp = await http.get(
+      final resp = await http
+          .get(
         _uri('/recommendations', query),
         headers: await authHeaders(),
       )
@@ -286,11 +362,15 @@ class ApiService {
       final out = <Recipe>[];
       for (final item in list) {
         try {
-          final map = item is Map<String, dynamic> ? item : (item is Map ? Map<String, dynamic>.from(item) : null);
+          final map = item is Map<String, dynamic>
+              ? item
+              : (item is Map ? Map<String, dynamic>.from(item) : null);
           if (map == null) continue;
           out.add(Recipe.fromJson(map));
         } catch (parseError) {
-          if (kDebugMode) debugPrint('fetchRecommendations skip recipe: $parseError');
+          if (kDebugMode) {
+            debugPrint('fetchRecommendations skip recipe: $parseError');
+          }
         }
       }
       return RecommendationsResult(
@@ -358,8 +438,8 @@ class ApiService {
       final merged = mergeRecipes(first.recipes, fallback.recipes);
       return RecommendationsResult(
         recipes: merged,
-        spoonacularQuotaExhausted:
-            first.spoonacularQuotaExhausted || fallback.spoonacularQuotaExhausted,
+        spoonacularQuotaExhausted: first.spoonacularQuotaExhausted ||
+            fallback.spoonacularQuotaExhausted,
         viewerIsPlus: fallback.viewerIsPlus,
         suggestPlusUpgrade:
             first.suggestPlusUpgrade || fallback.suggestPlusUpgrade,
@@ -367,8 +447,8 @@ class ApiService {
             first.recipeTranslationEnabled || fallback.recipeTranslationEnabled,
         recipeTranslationRequiresAi: first.recipeTranslationRequiresAi ||
             fallback.recipeTranslationRequiresAi,
-        recipeTranslationLanguage:
-            fallback.recipeTranslationLanguage ?? first.recipeTranslationLanguage,
+        recipeTranslationLanguage: fallback.recipeTranslationLanguage ??
+            first.recipeTranslationLanguage,
         recipeTranslationApiSupported: first.recipeTranslationApiSupported ||
             fallback.recipeTranslationApiSupported,
       );
@@ -427,9 +507,25 @@ class ApiService {
           ),
         );
     _ensureSuccess(resp);
-    final data = jsonDecode(resp.body) as Map<String, dynamic>;
-    final analysis = data['analysis'] as Map<String, dynamic>;
-    return AnalysisResult.fromJson(analysis);
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Некорректный ответ сервера анализа');
+    }
+    final analysisRaw = decoded['analysis'];
+    if (analysisRaw is! Map) {
+      throw const FormatException('Сервер не вернул результат анализа');
+    }
+    final analysis = Map<String, dynamic>.from(analysisRaw);
+    final result = AnalysisResult.fromJson(analysis);
+    if (kDebugMode) {
+      debugPrint(
+        'AI scan result: label="${result.translatedLabel ?? result.label}", '
+        'calories=${result.calories}, '
+        'nutritionKeys=${result.nutrition?.keys.toList() ?? const []}, '
+        'recipes=${result.recipes.length}',
+      );
+    }
+    return result;
   }
 
   /// Резервирует один AI scan на бэкенде (списание кредита) и возвращает JWT для POST /analyze.
@@ -441,8 +537,8 @@ class ApiService {
         )
         .timeout(
           const Duration(seconds: 25),
-          onTimeout: () =>
-              throw TimeoutException('Превышено время ожидания резерва AI scan'),
+          onTimeout: () => throw TimeoutException(
+              'Превышено время ожидания резерва AI scan'),
         );
     if (resp.statusCode == 404) {
       throw const AiScanBackendMissingException();
@@ -519,7 +615,8 @@ class ApiService {
     return result.recipe;
   }
 
-  static Future<RecipeLoadResult> loadRecipeById(int id, {String? language}) async {
+  static Future<RecipeLoadResult> loadRecipeById(int id,
+      {String? language}) async {
     try {
       final path = '/recipes/$id';
       final uri = (language != null && language.isNotEmpty)
@@ -557,8 +654,8 @@ class ApiService {
       final uri = _uri('/posts/$id');
       var headers = await authHeaders();
       var resp = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 15),
-      );
+            const Duration(seconds: 15),
+          );
       if (resp.statusCode == 401) {
         final token = await AuthService.refreshToken();
         headers = {
@@ -566,8 +663,8 @@ class ApiService {
           'Authorization': 'Bearer $token',
         };
         resp = await http.get(uri, headers: headers).timeout(
-          const Duration(seconds: 15),
-        );
+              const Duration(seconds: 15),
+            );
       }
       if (resp.statusCode != 200) {
         if (kDebugMode) {
@@ -633,13 +730,15 @@ class ApiService {
     }).toList();
   }
 
-  static Future<List<CommunityVideo>> fetchCommunityVideos({String? tag}) async {
+  static Future<List<CommunityVideo>> fetchCommunityVideos(
+      {String? tag}) async {
     try {
       final query = <String, String>{};
       if (tag != null && tag.isNotEmpty) {
         query['tag'] = tag;
       }
-      final resp = await http.get(_uri('/community', query))
+      final resp = await http
+          .get(_uri('/community', query))
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException('Превышено время ожидания ответа от сервера');
       });
@@ -654,7 +753,7 @@ class ApiService {
         debugPrint('Error in fetchCommunityVideos: $e');
       }
       // Возвращаем пустой список при ошибке подключения к серверу
-      if (e is TimeoutException || 
+      if (e is TimeoutException ||
           e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
           e.toString().contains('Failed to fetch') ||
@@ -691,10 +790,14 @@ class ApiService {
     required String author,
     required String description,
     required List<String> tags,
-    required String videoBase64,
-    String? thumbnailBase64,
+    String? videoUrl,
+    String? thumbnailUrl,
     String? avatar,
+    int? channelId,
   }) async {
+    if (videoUrl == null || videoUrl.trim().isEmpty) {
+      throw Exception('Не удалось получить URL загруженного видео');
+    }
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Войдите в аккаунт, чтобы загрузить видео');
@@ -703,7 +806,8 @@ class ApiService {
       ..._jsonHeaders,
       'Authorization': 'Bearer $token',
     };
-    final resp = await http.post(
+    final resp = await http
+        .post(
       _uri('/community'),
       headers: headers,
       body: jsonEncode({
@@ -711,12 +815,17 @@ class ApiService {
         'author': author,
         'description': description,
         'tags': tags,
-        'video_base64': videoBase64,
-        'thumbnail_base64': thumbnailBase64,
+        'video_url': videoUrl,
+        if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+          'thumbnail_url': thumbnailUrl,
         'avatar': avatar,
         'status': 'pending',
+        if (channelId != null) 'channel_id': channelId,
       }),
-    );
+    )
+        .timeout(const Duration(minutes: 2), onTimeout: () {
+      throw TimeoutException('Превышено время ожидания ответа от сервера');
+    });
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       final root = _tryParseJsonObject(resp.body);
       if (root != null) {
@@ -760,7 +869,9 @@ class ApiService {
         final msg = (detail['message'] as String?) ?? '';
         if (code == 'HAN_MEAL_PLAN_COOLDOWN') {
           throw HanMealPlanCooldownException(
-            msg.isNotEmpty ? msg : 'Следующий AI meal plan будет доступен позже',
+            msg.isNotEmpty
+                ? msg
+                : 'Следующий AI meal plan будет доступен позже',
           );
         }
         if (code == 'HAN_PLUS_REQUIRED' ||
@@ -797,7 +908,8 @@ class ApiService {
       // Special handling for Spoonacular API limit errors
       if (resp.statusCode == 402) {
         final body = resp.body;
-        if (body.contains('daily points limit') || body.contains('points limit')) {
+        if (body.contains('daily points limit') ||
+            body.contains('points limit')) {
           throw Exception(
             'Достигнут дневной лимит запросов к API Spoonacular (50 запросов). '
             'Пожалуйста, обновите план подписки или попробуйте позже.',
@@ -807,7 +919,7 @@ class ApiService {
       throw Exception('API error ${resp.statusCode}: ${resp.body}');
     }
   }
-  
+
   // Публичный метод для использования в других сервисах
   static void ensureSuccess(http.Response resp) => _ensureSuccess(resp);
 
@@ -828,16 +940,18 @@ class ApiService {
     String? startDate,
     int? variationSeed,
   }) async {
-    final resp = await http.post(
-      _uri('/meal-plans/generate'),
-      headers: await authHeaders(),
-      body: jsonEncode({
-        'duration_days': durationDays,
-        'preferences': preferences,
-        if (startDate != null) 'start_date': startDate,
-        if (variationSeed != null) 'variation_seed': variationSeed,
-      }),
-    ).timeout(const Duration(seconds: 45));
+    final resp = await http
+        .post(
+          _uri('/meal-plans/generate'),
+          headers: await authHeaders(),
+          body: jsonEncode({
+            'duration_days': durationDays,
+            'preferences': preferences,
+            if (startDate != null) 'start_date': startDate,
+            if (variationSeed != null) 'variation_seed': variationSeed,
+          }),
+        )
+        .timeout(const Duration(seconds: 45));
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
@@ -852,19 +966,21 @@ class ApiService {
     Map<String, dynamic>? preferences,
     int? variationSeed,
   }) async {
-    final resp = await http.post(
-      _uri('/meal-plans/regenerate'),
-      headers: await authHeaders(),
-      body: jsonEncode({
-        'plan': plan,
-        'scope': scope,
-        'day_index': dayIndex,
-        'meal_index': mealIndex,
-        if (modifier != null) 'modifier': modifier,
-        if (preferences != null) 'preferences': preferences,
-        if (variationSeed != null) 'variation_seed': variationSeed,
-      }),
-    ).timeout(const Duration(seconds: 45));
+    final resp = await http
+        .post(
+          _uri('/meal-plans/regenerate'),
+          headers: await authHeaders(),
+          body: jsonEncode({
+            'plan': plan,
+            'scope': scope,
+            'day_index': dayIndex,
+            'meal_index': mealIndex,
+            if (modifier != null) 'modifier': modifier,
+            if (preferences != null) 'preferences': preferences,
+            if (variationSeed != null) 'variation_seed': variationSeed,
+          }),
+        )
+        .timeout(const Duration(seconds: 45));
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
@@ -878,7 +994,8 @@ class ApiService {
     } catch (_) {}
   }
 
-  static Future<Map<String, dynamic>?> getSavedMealPlanById(String planId) async {
+  static Future<Map<String, dynamic>?> getSavedMealPlanById(
+      String planId) async {
     final resp = await http.get(
       _uri('/meal-plans/saved/$planId'),
       headers: await authHeaders(),
@@ -888,7 +1005,8 @@ class ApiService {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  static Future<List<Map<String, dynamic>>> listSavedMealPlans({int limit = 10}) async {
+  static Future<List<Map<String, dynamic>>> listSavedMealPlans(
+      {int limit = 10}) async {
     final resp = await http.get(
       _uri('/meal-plans/saved', {'limit': '$limit'}),
       headers: await authHeaders(),
@@ -896,9 +1014,7 @@ class ApiService {
     _ensureSuccess(resp);
     final res = jsonDecode(resp.body) as Map<String, dynamic>;
     final plans = res['plans'] as List<dynamic>? ?? [];
-    return plans
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    return plans.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
   static Future<Map<String, dynamic>?> getLatestMealPlan() async {
@@ -911,7 +1027,8 @@ class ApiService {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> getMealPlanAnalytics({int days = 30}) async {
+  static Future<Map<String, dynamic>> getMealPlanAnalytics(
+      {int days = 30}) async {
     final resp = await http.get(
       _uri('/meal-plans/analytics', {'days': '$days'}),
       headers: await authHeaders(),

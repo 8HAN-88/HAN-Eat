@@ -9,6 +9,7 @@ class NotificationPreferencesResponse(BaseModel):
     """Ответ с настройками уведомлений"""
     likes_enabled: bool
     comments_enabled: bool
+    messages_enabled: bool
     follows_enabled: bool
     reposts_enabled: bool
     mentions_enabled: bool
@@ -23,6 +24,7 @@ class UpdateNotificationPreferencesRequest(BaseModel):
     """Запрос на обновление настроек уведомлений"""
     likes_enabled: Optional[bool] = None
     comments_enabled: Optional[bool] = None
+    messages_enabled: Optional[bool] = None
     follows_enabled: Optional[bool] = None
     reposts_enabled: Optional[bool] = None
     mentions_enabled: Optional[bool] = None

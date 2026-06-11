@@ -11,6 +11,7 @@ import '../../../services/post_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/url_validator.dart';
 import '../../../widgets/recipe_nutrition_form_section.dart';
+import '../../../widgets/recipe_origin_country_field.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../widgets/app_empty_state.dart';
 
@@ -54,6 +55,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
   bool _isLoadingLinkPreview = false;
   Map<String, dynamic>? _linkPreviewMeta;
   bool _linkPreviewFailed = false;
+  String? _originCountryCode;
 
   bool get _isLink => _post?.type == 'link';
   bool get _isRecipe => _post?.type == 'recipe';
@@ -159,6 +161,10 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
         _carbsController.text = _nutritionText(body, 'carbs');
         _fatController.text = _nutritionText(body, 'fat');
         _fiberController.text = _nutritionText(body, 'fiber');
+        final rawOrigin = body['origin_country_code'];
+        if (rawOrigin is String && rawOrigin.isNotEmpty) {
+          _originCountryCode = rawOrigin.toUpperCase();
+        }
         final ingredients = body['ingredients'] as List<dynamic>?;
         if (ingredients != null && ingredients.isNotEmpty) {
           for (final ing in ingredients) {
@@ -175,7 +181,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
               _stepControllers.add(TextEditingController(
                   text: step['text'] ?? step['step'] ?? ''));
             } else {
-              _stepControllers.add(TextEditingController(text: step.toString()));
+              _stepControllers
+                  .add(TextEditingController(text: step.toString()));
             }
           }
         } else {
@@ -231,14 +238,16 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
     Object? v;
     switch (kind) {
       case 'protein':
-        v = body['protein_g'] ?? (nut is Map ? nut['protein_g'] ?? nut['protein'] : null);
+        v = body['protein_g'] ??
+            (nut is Map ? nut['protein_g'] ?? nut['protein'] : null);
       case 'carbs':
         v = body['carbs_g'] ??
             (nut is Map ? nut['carbs_g'] ?? nut['carbohydrates'] : null);
       case 'fat':
         v = body['fat_g'] ?? (nut is Map ? nut['fat_g'] ?? nut['fat'] : null);
       case 'fiber':
-        v = body['fiber_g'] ?? (nut is Map ? nut['fiber_g'] ?? nut['fiber'] : null);
+        v = body['fiber_g'] ??
+            (nut is Map ? nut['fiber_g'] ?? nut['fiber'] : null);
       default:
         return '';
     }
@@ -248,7 +257,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
   void _scheduleLinkPreviewLoad() {
     if (!_isLink) return;
     _linkPreviewDebounce?.cancel();
-    _linkPreviewDebounce = Timer(const Duration(milliseconds: 550), _loadLinkPreview);
+    _linkPreviewDebounce =
+        Timer(const Duration(milliseconds: 550), _loadLinkPreview);
   }
 
   Future<void> _loadLinkPreview() async {
@@ -366,6 +376,7 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
           cookTimeMin: parseIntField(_cookTimeController.text),
           servings: parseIntField(_servingsController.text),
           calories: parseIntField(_caloriesController.text),
+          originCountryCode: _originCountryCode ?? '',
         );
       } else {
         await PostService.updatePost(
@@ -478,8 +489,9 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
                 labelText: _isRecipe ? 'Название рецепта *' : 'Заголовок',
               ),
               validator: _isRecipe
-                  ? (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Введите название' : null
+                  ? (v) => (v == null || v.trim().isEmpty)
+                      ? 'Введите название'
+                      : null
                   : null,
             ),
             const SizedBox(height: 12),
@@ -528,7 +540,13 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
           ],
           if (_isRecipe) ...[
             const SizedBox(height: 16),
-            const Text('Ингредиенты', style: TextStyle(fontWeight: FontWeight.w600)),
+            RecipeOriginCountryField(
+              selectedCode: _originCountryCode,
+              onChanged: (code) => setState(() => _originCountryCode = code),
+            ),
+            const SizedBox(height: 16),
+            const Text('Ингредиенты',
+                style: TextStyle(fontWeight: FontWeight.w600)),
             ..._ingredientControllers.asMap().entries.map((e) {
               return Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -610,7 +628,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _prepTimeController,
-                    decoration: const InputDecoration(labelText: 'Подготовка (мин)'),
+                    decoration:
+                        const InputDecoration(labelText: 'Подготовка (мин)'),
                     keyboardType: TextInputType.number,
                   ),
                 ),
@@ -618,7 +637,8 @@ class _EditProfilePostScreenState extends ConsumerState<EditProfilePostScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _cookTimeController,
-                    decoration: const InputDecoration(labelText: 'Готовка (мин)'),
+                    decoration:
+                        const InputDecoration(labelText: 'Готовка (мин)'),
                     keyboardType: TextInputType.number,
                   ),
                 ),

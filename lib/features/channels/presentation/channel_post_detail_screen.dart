@@ -364,6 +364,7 @@ class _ChannelPostDetailScreenState
   }
 
   Widget _buildImageHeader() {
+    final scheme = Theme.of(context).colorScheme;
     final body = _displayPost.body;
     final media = body?['media'] as List<dynamic>?;
     final imageUrls = <String>[];
@@ -385,8 +386,8 @@ class _ChannelPostDetailScreenState
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Theme.of(context).colorScheme.primaryContainer,
-              Theme.of(context).colorScheme.secondaryContainer,
+              scheme.primaryContainer,
+              scheme.secondaryContainer,
             ],
           ),
         ),
@@ -394,7 +395,7 @@ class _ChannelPostDetailScreenState
           child: Icon(
             Icons.article_outlined,
             size: 80,
-            color: Colors.grey[400],
+            color: scheme.outline,
           ),
         ),
       );
@@ -402,7 +403,7 @@ class _ChannelPostDetailScreenState
 
     if (imageUrls.length > 1) {
       return ColoredBox(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: scheme.surfaceContainerHighest,
         child: SafeArea(
           bottom: false,
           child: Padding(
@@ -422,18 +423,19 @@ class _ChannelPostDetailScreenState
       imageUrl: optimizedUrl,
       fit: BoxFit.cover,
       placeholder: (context, url) => Container(
-        color: Colors.grey[200],
+        color: scheme.surfaceContainerLow,
         child: const Center(child: CircularProgressIndicator()),
       ),
       errorWidget: (context, url, error) => Container(
-        color: Colors.grey[300],
-        child: const Icon(Icons.error_outline),
+        color: scheme.surfaceContainerHighest,
+        child: Icon(Icons.error_outline, color: scheme.onSurfaceVariant),
       ),
     );
   }
 
   Widget _buildPostContent() {
     final p = _displayPost;
+    final scheme = Theme.of(context).colorScheme;
     final showTitle = p.type == 'recipe' || _isMeaningfulTitle(p.title);
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -461,19 +463,23 @@ class _ChannelPostDetailScreenState
             const SizedBox(height: 24),
           Row(
             children: [
-              Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+              Icon(
+                Icons.access_time,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 4),
               Text(
                 _formatDate(p.publishedAt ?? p.createdAt),
-                style: TextStyle(color: Colors.grey[600]),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
               if (p.tags != null && p.tags!.isNotEmpty) ...[
                 const SizedBox(width: 16),
-                Icon(Icons.tag, size: 16, color: Colors.grey[600]),
+                Icon(Icons.tag, size: 16, color: scheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
                   '${p.tags!.length} тегов',
-                  style: TextStyle(color: Colors.grey[600]),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ],
             ],
@@ -540,21 +546,11 @@ class _ChannelPostDetailScreenState
       }
     }).toList();
 
-    final recipe = Recipe(
-      id: _displayPost.id,
-      title: _recipeTitle(body),
-      image: _getImageUrl(),
-      usedIngredientCount: ingredients.length,
-      ingredients: ingredients,
-      steps: steps,
-      calories: body?['calories'] as int?,
-      author: _displayPost.author?.name,
-      source: 'channel',
-    );
+    final recipe = Recipe.fromPostModel(_displayPost);
 
     // Проверяем, находится ли рецепт в избранном
     final isFavorite =
-        FavoritesService.instance.isFavorite(recipe.id.toString());
+        FavoritesService.safeIsFavorite(recipe.id.toString());
 
     // Открываем экран рецепта
     // Используем push, и при возврате сразу закрываем этот экран, чтобы попасть на канал
@@ -566,7 +562,7 @@ class _ChannelPostDetailScreenState
             recipe: recipe,
             isFavorite: isFavorite,
             onToggle: () {
-              FavoritesService.instance.toggleFavorite(recipe.id.toString());
+              FavoritesService.safeToggleFavorite(recipe.id.toString());
             },
           ),
         ),

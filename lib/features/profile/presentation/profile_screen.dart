@@ -12,9 +12,13 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../services/chat_service.dart';
 import '../../../../core/layout/long_label_tab_bar.dart';
+import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
+import '../../../../widgets/app_gradient_background.dart';
 import '../../content/create_content_actions.dart';
+import '../../../utils/post_publisher_display.dart';
 
 /// Минимальный профиль из данных [AuthService], пока не пришёл ответ API.
 user_service.UserProfile _userProfileFromAuthUser(User u) {
@@ -59,6 +63,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Object? _profileLoadError;
   bool _isLoading = true;
   bool _isFollowing = false;
+  bool _isFollowActionRunning = false;
+  bool _isOpeningChat = false;
   final Set<int> _loadedTabs = {0};
   late final void Function(User?) _onSessionChanged;
   int? _postsListEpoch;
@@ -184,15 +190,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return builder();
   }
 
-  Future<void> _toggleFollow() async {
-    if (_profile == null || widget.userId == null) return;
+  Future<void> _openChat(User user) async {
+    if (_isOpeningChat) return;
+    setState(() => _isOpeningChat = true);
+    try {
+      final conv = await ChatService.openDirectChat(user.id);
+      if (!mounted) return;
+      context.push(
+        ChatThreadRoute.pathFor(conv),
+        extra: conv,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось открыть чат'))),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningChat = false);
+    }
+  }
 
+  Future<void> _toggleFollow() async {
+    if (_profile == null || widget.userId == null || _isFollowActionRunning) {
+      return;
+    }
+
+    setState(() => _isFollowActionRunning = true);
     try {
       if (_isFollowing) {
         await user_service.UserService.unfollow(widget.userId!);
       } else {
         await user_service.UserService.follow(widget.userId!);
       }
+      if (!mounted) return;
       setState(() {
         _isFollowing = !_isFollowing;
         _profile = user_service.UserProfile(
@@ -207,6 +237,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(userVisibleError(e))),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isFollowActionRunning = false);
       }
     }
   }
@@ -299,37 +333,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ]
             : null,
       ),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverToBoxAdapter(
-              child: _buildProfileHeader(user, stats, isOwnProfile),
-            ),
-          ];
-        },
-        body: Column(
-          children: [
-            longLabelTabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: 'Общее'),
-                Tab(text: 'Рецепты'),
-                Tab(text: 'Рилсы'),
-                Tab(text: 'Избранное'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
+      body: AppGradientBackground(
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) {
+            return [
+              SliverToBoxAdapter(
+                child: _buildProfileHeader(user, stats, isOwnProfile),
+              ),
+            ];
+          },
+          body: Column(
+            children: [
+              longLabelTabBar(
                 controller: _tabController,
-                children: [
-                  _buildLazyTab(0, _buildAllTab),
-                  _buildLazyTab(1, _buildRecipesTab),
-                  _buildLazyTab(2, _buildReelsTab),
-                  _buildLazyTab(3, _buildFavoritesTab),
+                tabs: const [
+                  Tab(text: 'Общее'),
+                  Tab(text: 'Рецепты'),
+                  Tab(text: 'Рилсы'),
+                  Tab(text: 'Сохранённые'),
                 ],
               ),
-            ),
-          ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildLazyTab(0, _buildAllTab),
+                    _buildLazyTab(1, _buildRecipesTab),
+                    _buildLazyTab(2, _buildReelsTab),
+                    _buildLazyTab(3, _buildFavoritesTab),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -367,7 +403,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             Text(
               '@${user.username}',
               style: TextStyle(
-                color: Colors.grey[600],
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 16,
               ),
             ),
@@ -379,22 +415,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               textAlign: TextAlign.center,
             ),
           ],
-          const SizedBox(height: 16),
-          // Статистика
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _StatItem(label: 'Посты', value: '${stats.postsCount}'),
-              _StatItem(label: 'Подписчики', value: '${stats.followersCount}'),
-              _StatItem(label: 'Подписки', value: '${stats.followingCount}'),
-            ],
+          const SizedBox(height: 20),
+          _ProfileStatsRow(
+            postsCount: stats.postsCount,
+            followersCount: stats.followersCount,
+            followingCount: stats.followingCount,
+            onFollowersTap: () => context.push(
+              ProfileFollowersRoute.withUserId(_effectiveUserId),
+            ),
+            onFollowingTap: () => context.push(
+              ProfileFollowingRoute.withUserId(_effectiveUserId),
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           // Кнопки действий
           if (!isOwnProfile)
-            FilledButton(
-              onPressed: _toggleFollow,
-              child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _isFollowActionRunning ? null : _toggleFollow,
+                    child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isOpeningChat ? null : () => _openChat(user),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: const Text('Написать'),
+                  ),
+                ),
+              ],
             ),
         ],
       ),
@@ -474,6 +526,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   bool _isLoading = false;
   bool _hasMore = true;
   int _offset = 0;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -495,6 +548,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
 
   Future<void> _loadPosts({bool refresh = false}) async {
     if (_isLoading) return;
+    final requestId = ++_loadGeneration;
 
     setState(() {
       _isLoading = true;
@@ -514,11 +568,15 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         postType: widget.postType,
       );
 
+      if (!mounted || requestId != _loadGeneration) return;
+      final wallPosts = response.posts
+          .where((post) => !PostPublisherDisplay.isChannel(post))
+          .toList();
       setState(() {
         if (refresh) {
-          _posts = response.posts;
+          _posts = wallPosts;
         } else {
-          _posts.addAll(response.posts);
+          _posts.addAll(wallPosts);
         }
         _offset = _posts.length;
         _hasMore = _posts.length < response.total;
@@ -527,7 +585,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          if (refresh) {
+          if (refresh || _posts.isEmpty) {
             _loadError = e;
           }
         });
@@ -588,6 +646,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         onRefresh: () => _loadPosts(refresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
           children: const [
             SizedBox(height: 80),
             AppEmptyState(
@@ -615,6 +674,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         child: ListView.builder(
           physics: const AlwaysScrollableScrollPhysics(),
           primary: true,
+          padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
           itemCount: _posts.length + (_hasMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (index == _posts.length) {
@@ -637,9 +697,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
                   _posts.removeWhere((p) => p.id == post.id);
                 });
               },
-              onAuthorTap: () {
-                context.push(ProfileRoute.withUserId(post.userId));
-              },
+              onAuthorTap: () => PostPublisherDisplay.open(context, post),
             );
           },
         ),
@@ -648,31 +706,140 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   }
 }
 
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
+/// Ровная строка метрик профиля (равные колонки + разделители).
+class _ProfileStatsRow extends StatelessWidget {
+  const _ProfileStatsRow({
+    required this.postsCount,
+    required this.followersCount,
+    required this.followingCount,
+    this.onFollowersTap,
+    this.onFollowingTap,
+  });
 
-  const _StatItem({required this.label, required this.value});
+  final int postsCount;
+  final int followersCount;
+  final int followingCount;
+  final VoidCallback? onFollowersTap;
+  final VoidCallback? onFollowingTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final scheme = Theme.of(context).colorScheme;
+    final dividerColor = scheme.outlineVariant.withValues(alpha: 0.45);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.25),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _ProfileStatCell(
+                value: '$postsCount',
+                label: 'Посты',
+              ),
+            ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: dividerColor,
+            ),
+            Expanded(
+              child: _ProfileStatCell(
+                value: '$followersCount',
+                label: 'Подписчики',
+                onTap: onFollowersTap,
+              ),
+            ),
+            VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: dividerColor,
+            ),
+            Expanded(
+              child: _ProfileStatCell(
+                value: '$followingCount',
+                label: 'Подписки',
+                onTap: onFollowingTap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileStatCell extends StatelessWidget {
+  const _ProfileStatCell({
+    required this.value,
+    required this.label,
+    this.onTap,
+  });
+
+  final String value;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final content = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+          textAlign: TextAlign.center,
+          style: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            height: 1.1,
+            letterSpacing: -0.3,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[600],
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.labelMedium?.copyWith(
+            color: scheme.onSurfaceVariant,
+            height: 1.15,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
+    );
+
+    if (onTap == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: content,
+      );
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: content,
+        ),
+      ),
     );
   }
 }

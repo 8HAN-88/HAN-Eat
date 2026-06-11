@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../core/firebase/lazy_firebase.dart';
 import '../models/community.dart';
 import '../models/post.dart';
 import 'auth_service.dart';
@@ -10,8 +11,8 @@ import 'legacy_firestore_guard.dart';
 
 /// Сервис для управления сообществами
 class CommunityManagementService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseStorage _storage = FirebaseStorage.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
+  static FirebaseStorage get _storage => LazyFirebase.storage;
 
   /// Создать сообщество
   static Future<Community> createCommunity({

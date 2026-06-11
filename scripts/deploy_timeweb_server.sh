@@ -32,7 +32,7 @@ apt-get update -qq
 apt-get upgrade -y -qq
 timedatectl set-timezone Europe/Amsterdam
 apt-get install -y -qq git curl wget nano ufw fail2ban \
-  python3 python3-pip python3-venv nginx certbot python3-certbot-nginx
+  python3 python3-pip python3-venv nginx certbot python3-certbot-nginx ffmpeg
 
 echo "-- 3/8 firewall --"
 ufw allow OpenSSH >/dev/null 2>&1 || true
@@ -133,7 +133,7 @@ YOOKASSA_SHOP_ID=
 YOOKASSA_SECRET_KEY=
 S3_ACCESS_KEY=
 S3_SECRET_KEY=
-CDN_URL=https://cdn.haneat.app
+CDN_URL=https://s3.twcstorage.ru/haneat-media
 FIREBASE_ENABLED=false
 FIREBASE_CREDENTIALS_PATH=
 FIREBASE_PROJECT_ID=
@@ -174,9 +174,28 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+cat > /etc/systemd/system/haneat-video-worker.service << EOF
+[Unit]
+Description=HAN Eat video transcoding worker
+After=network.target docker.service haneat-api.service
+Requires=docker.service
+
+[Service]
+User=root
+WorkingDirectory=${APP_DIR}/backend
+Environment="PATH=${APP_DIR}/backend/venv/bin:/usr/bin"
+ExecStart=${APP_DIR}/backend/venv/bin/python -m app.workers.video_worker
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
-systemctl enable haneat-api
+systemctl enable haneat-api haneat-video-worker
 systemctl restart haneat-api
+systemctl restart haneat-video-worker
 
 echo "-- 8/8 nginx --"
 cat > /etc/nginx/sites-available/haneat-api << EOF
@@ -184,7 +203,7 @@ server {
     listen 80;
     server_name ${API_DOMAIN};
 
-    client_max_body_size 100M;
+    client_max_body_size 1024M;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -193,7 +212,24 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_read_timeout 120s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_request_buffering off;
+    }
+
+    location ~ ^/api/v1/chats/[0-9]+/stream\$ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        chunked_transfer_encoding off;
     }
 }
 EOF

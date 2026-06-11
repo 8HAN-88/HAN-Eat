@@ -16,6 +16,18 @@ class ChannelListBadges extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = <Widget>[];
 
+    if (channel.hasCreatorBadge) {
+      final accent = _parseAccent(channel.accentColor);
+      chips.add(_badge(
+        context,
+        label: 'Creator',
+        icon: Icons.verified_outlined,
+        color: accent?.withValues(alpha: 0.18) ??
+            Theme.of(context).colorScheme.primaryContainer,
+        onColor: accent ?? Theme.of(context).colorScheme.onPrimaryContainer,
+      ));
+    }
+
     if (!channel.isPublic) {
       chips.add(_badge(
         context,
@@ -57,6 +69,15 @@ class ChannelListBadges extends StatelessWidget {
         children: chips,
       ),
     );
+  }
+
+  Color? _parseAccent(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    var value = hex.replaceAll('#', '');
+    if (value.length == 6) value = 'FF$value';
+    final parsed = int.tryParse(value, radix: 16);
+    if (parsed == null) return null;
+    return Color(parsed);
   }
 
   Widget _badge(

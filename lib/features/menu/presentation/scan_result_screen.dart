@@ -1,6 +1,5 @@
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -59,6 +58,10 @@ Map<String, String> _scanResultStrings(String languageCode) {
         'add_to_plan': 'Add to plan',
         'add_to_favorites': 'Add to favorites',
         'retry': 'Retry',
+        'no_similar_recipes':
+            'No similar recipes found. Try searching by dish name in Menu.',
+        'portion': 'Portion',
+        'nutrition_per_portion': 'Nutrition for this portion',
       };
     case 'es':
       return const {
@@ -89,6 +92,10 @@ Map<String, String> _scanResultStrings(String languageCode) {
         'add_to_plan': 'Añadir al plan',
         'add_to_favorites': 'Añadir a favoritos',
         'retry': 'Reintentar',
+        'no_similar_recipes':
+            'No se encontraron recetas similares. Prueba a buscar por nombre del plato en Menú.',
+        'portion': 'Porción',
+        'nutrition_per_portion': 'Nutrición para esta porción',
       };
     case 'de':
       return const {
@@ -119,6 +126,10 @@ Map<String, String> _scanResultStrings(String languageCode) {
         'add_to_plan': 'Zum Plan hinzufügen',
         'add_to_favorites': 'Zu Favoriten',
         'retry': 'Wiederholen',
+        'no_similar_recipes':
+            'Keine ähnlichen Rezepte gefunden. Suche im Menü nach dem Gerichtsnamen.',
+        'portion': 'Portion',
+        'nutrition_per_portion': 'Nährwerte für diese Portion',
       };
     case 'fr':
       return const {
@@ -149,6 +160,10 @@ Map<String, String> _scanResultStrings(String languageCode) {
         'add_to_plan': 'Ajouter au plan',
         'add_to_favorites': 'Ajouter aux favoris',
         'retry': 'Réessayer',
+        'no_similar_recipes':
+            'Aucune recette similaire trouvée. Essayez une recherche par nom de plat dans Menu.',
+        'portion': 'Portion',
+        'nutrition_per_portion': 'Nutrition pour cette portion',
       };
     case 'ru':
     default:
@@ -283,23 +298,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         });
         return;
       }
-      try {
-        final rescue = await _buildRescueAnalysis(settings: settings);
-        if (!mounted) return;
-        setState(() {
-          _analysis = rescue;
-          _loadingCore = false;
-          _loadingRecipes = false;
-          _error = null;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _error = e;
-          _loadingCore = false;
-          _loadingRecipes = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loadingCore = false;
+        _loadingRecipes = false;
+      });
     }
   }
 
@@ -322,8 +326,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 
   bool _hasNutrition(AnalysisResult a) =>
-      _hasMacroNutrition(a) ||
-      (a.calories != null && a.calories! > 0);
+      _hasMacroNutrition(a) || (a.calories != null && a.calories! > 0);
 
   static bool _isWeakDishLabel(String raw) {
     final t = raw.trim().toLowerCase();
@@ -379,8 +382,9 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
 
     return AnalysisResult(
       label: gptLabel.isNotEmpty ? gpt.label ?? gptLabel : api.label,
-      translatedLabel:
-          gptLabel.isNotEmpty ? gptLabel : (apiLabel.isNotEmpty ? apiLabel : null),
+      translatedLabel: gptLabel.isNotEmpty
+          ? gptLabel
+          : (apiLabel.isNotEmpty ? apiLabel : null),
       confidence: gpt.confidence ?? api.confidence,
       calories: gpt.calories ?? api.calories,
       nutrition: nutrition,
@@ -518,40 +522,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     );
   }
 
-  Future<AnalysisResult> _buildRescueAnalysis({
-    required AnalysisSettingsState settings,
-  }) async {
-    try {
-      final rec = await ApiService.fetchRecommendations(
-        limit: 8,
-        mode: settings.mode,
-        language: settings.language,
-      );
-      final rescueRecipes = ScanRecipeRanking.filterForScan(
-        rec.recipes.map((r) => _withNormalizedRecipeTitle(r)).toList(),
-        '',
-      );
-      return AnalysisResult(
-        label: 'Похожие рецепты',
-        translatedLabel: 'Похожие рецепты',
-        confidence: null,
-        calories: null,
-        nutrition: null,
-        recipes: rescueRecipes,
-      );
-    } catch (e) {
-      debugPrint('Rescue recommendations failed: $e');
-      return AnalysisResult(
-        label: 'Похожие рецепты',
-        translatedLabel: 'Похожие рецепты',
-        confidence: null,
-        calories: null,
-        nutrition: null,
-        recipes: const [],
-      );
-    }
-  }
-
   String _humanizeScanError(Object? error, Map<String, String> l10n) {
     if (error is HanPlusRequiredException) {
       return error.message;
@@ -602,7 +572,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     recipes = ScanRecipeRanking.filterForScan(recipes, normalizedLabel);
 
     final hasMacro = _hasMacroNutrition(analysis);
-    final hasCalories = calories != null && calories! > 0;
+    final hasCalories = calories != null && calories > 0;
 
     if (recipes.length >= 2 && hasMacro && hasCalories) {
       return AnalysisResult(
@@ -722,34 +692,82 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
   }
 
   _ScanMacros _extractMacros(AnalysisResult analysis) {
-    final dishLabel =
-        analysis.translatedLabel ?? analysis.label ?? '';
+    final dishLabel = analysis.translatedLabel ?? analysis.label ?? '';
     final nutrition = analysis.nutrition ??
         ScanRecipeRanking.extractNutrition(analysis.recipes, dishLabel);
     final calories = analysis.calories ??
         ScanRecipeRanking.extractCalories(analysis.recipes, dishLabel);
 
-    double? nutrient(String key) {
-      if (nutrition == null) return null;
-      dynamic v = nutrition[key];
-      if (v == null) {
-        for (final e in nutrition.entries) {
-          if (e.key.toLowerCase() == key.toLowerCase()) {
-            v = e.value;
-            break;
-          }
-        }
-      }
+    double? parseNumber(Object? v) {
       if (v is num) return v.toDouble();
-      if (v is String) return double.tryParse(v);
+      if (v is String) {
+        return double.tryParse(
+          v.replaceAll(RegExp(r'[^0-9.,-]'), '').replaceAll(',', '.'),
+        );
+      }
       return null;
     }
 
+    double? nutrientByNames(Set<String> names) {
+      if (nutrition == null) return null;
+
+      final nutrients = nutrition['nutrients'];
+      if (nutrients is List) {
+        for (final raw in nutrients) {
+          if (raw is! Map) continue;
+          final name =
+              '${raw['name'] ?? raw['title'] ?? ''}'.trim().toLowerCase();
+          if (names.contains(name)) {
+            final amount = parseNumber(raw['amount'] ?? raw['value']);
+            if (amount != null) return amount;
+          }
+        }
+      }
+
+      for (final e in nutrition.entries) {
+        final key = e.key.toLowerCase();
+        if (names.contains(key)) {
+          final amount = parseNumber(e.value);
+          if (amount != null) return amount;
+        }
+      }
+
+      return null;
+    }
+
+    final protein = nutrientByNames(const {
+      'protein',
+      'proteins',
+      'protein_g',
+      'белки',
+      'белок',
+    });
+    final fat = nutrientByNames(const {
+      'fat',
+      'fats',
+      'fat_g',
+      'жиры',
+      'жир',
+    });
+    final carbs = nutrientByNames(const {
+      'carbohydrates',
+      'carbs',
+      'carb',
+      'carbs_g',
+      'carbohydrates_g',
+      'углеводы',
+      'углевод',
+    });
+    final estimatedCalories = calories ??
+        (protein != null || fat != null || carbs != null
+            ? (protein ?? 0) * 4 + (carbs ?? 0) * 4 + (fat ?? 0) * 9
+            : null);
+
     return _ScanMacros(
-      calories: calories?.round(),
-      protein: nutrient('protein') ?? nutrient('proteins'),
-      fat: nutrient('fat') ?? nutrient('fats'),
-      carbs: nutrient('carbohydrates') ?? nutrient('carbs') ?? nutrient('carb'),
+      calories: estimatedCalories?.round(),
+      protein: protein,
+      fat: fat,
+      carbs: carbs,
     );
   }
 
@@ -856,7 +874,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                     SelectableText(
                       err.toString(),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                       textAlign: TextAlign.left,
                     ),
@@ -895,19 +914,33 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
             onRefresh: () async {
               final settings = ref.read(analysisSettingsProvider);
               setState(() => _loadingRecipes = true);
-              var updated = await _loadSimilarRecipes(analysis, settings);
-              if (_needsEnhance(updated)) {
-                updated = await _enhanceScanResult(
-                  updated,
-                  settings.language,
-                  settings.mode,
-                );
-              }
-              if (mounted) {
+              try {
+                var updated = await _loadSimilarRecipes(analysis, settings);
+                if (_needsEnhance(updated)) {
+                  updated = await _enhanceScanResult(
+                    updated,
+                    settings.language,
+                    settings.mode,
+                  );
+                }
+                if (!mounted) return;
                 setState(() {
                   _analysis = updated;
                   _loadingRecipes = false;
                 });
+              } catch (e) {
+                if (!mounted) return;
+                setState(() => _loadingRecipes = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      userVisibleError(
+                        e,
+                        fallback: 'Не удалось обновить похожие рецепты',
+                      ),
+                    ),
+                  ),
+                );
               }
             },
             child: CustomScrollView(
@@ -1049,6 +1082,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       title: normalized,
       image: recipe.image,
       sourceImage: recipe.sourceImage,
+      imageUrls: recipe.imageUrls,
       usedIngredientCount: recipe.usedIngredientCount,
       ingredients: recipe.ingredients,
       translatedIngredients: recipe.translatedIngredients,
@@ -1062,8 +1096,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       sourceLanguage: recipe.sourceLanguage,
       targetLanguage: recipe.targetLanguage,
       likesCount: recipe.likesCount,
+      commentsCount: recipe.commentsCount,
       mealPlanCount: recipe.mealPlanCount,
+      ratingCount: recipe.ratingCount,
       author: recipe.author,
+      authorId: recipe.authorId,
       source: recipe.source,
       authorAvatar: recipe.authorAvatar,
       rating: recipe.rating,

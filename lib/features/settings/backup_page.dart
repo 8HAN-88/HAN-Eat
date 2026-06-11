@@ -19,11 +19,13 @@ class _BackupPageState extends State<BackupPage> {
   bool _isImporting = false;
 
   Future<Map<String, dynamic>> _buildExport() async {
+    final fav = await FavoritesService.ensureInitialized();
+    final shop = await ShoppingService.ensureInitialized();
     final Map<String, dynamic> out = {};
     final up = UserService.instance.exportToJson();
     out['profile'] = up;
-    out['favorites'] = FavoritesService.instance.exportToJson();
-    out['shopping'] = ShoppingService.instance.exportToJson();
+    out['favorites'] = fav.exportToJson();
+    out['shopping'] = shop.exportToJson();
     out['recipe_notes'] = await RecipeNotesService.exportToJson();
     out['app'] = {'exportedAt': DateTime.now().toIso8601String()};
     return out;
@@ -158,7 +160,8 @@ class _BackupPageState extends State<BackupPage> {
       if (map.containsKey('favorites')) {
         try {
           final favMap = map['favorites'] as Map<String, dynamic>;
-          await FavoritesService.instance.importFromJson(favMap, merge: merge);
+          final fav = await FavoritesService.ensureInitialized();
+          await fav.importFromJson(favMap, merge: merge);
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -174,7 +177,8 @@ class _BackupPageState extends State<BackupPage> {
       if (map.containsKey('shopping')) {
         try {
           final shopMap = map['shopping'] as Map<String, dynamic>;
-          await ShoppingService.instance.importFromJson(shopMap, merge: merge);
+          final shop = await ShoppingService.ensureInitialized();
+          await shop.importFromJson(shopMap, merge: merge);
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

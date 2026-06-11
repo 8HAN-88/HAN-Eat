@@ -131,6 +131,13 @@ async def create_comment(
     
     db.commit()
     db.refresh(comment)
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
     
     # Возвращаем с информацией об авторе
     return CommentResponse(

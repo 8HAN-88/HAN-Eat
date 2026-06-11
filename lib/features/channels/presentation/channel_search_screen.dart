@@ -127,6 +127,7 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -138,7 +139,9 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
           decoration: InputDecoration(
             hintText: 'Поиск по каналу...',
             border: InputBorder.none,
-            hintStyle: TextStyle(color: Colors.grey[600]),
+            hintStyle: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           style: const TextStyle(fontSize: 16),
           textInputAction: TextInputAction.search,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/recipe.dart';
 import '../services/api_service.dart';
+import '../services/saved_posts_service.dart';
 import '../widgets/app_empty_state.dart';
 import 'detail_page.dart';
 
@@ -35,7 +36,11 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
     });
     final result = await ApiService.loadRecipeById(widget.recipeId);
     if (!mounted) return;
-    if (result.recipe == null) {
+    Recipe? recipe = result.recipe;
+    if (recipe == null) {
+      recipe = await SavedPostsService.getOfflineRecipe(widget.recipeId);
+    }
+    if (recipe == null) {
       setState(() {
         _loading = false;
         _notFound = result.notFound;
@@ -45,11 +50,15 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
       });
       return;
     }
-    final favorites = await ApiService.getFavorites();
+    await SavedPostsService.cacheRecipeForOffline(recipe);
+    var isFav = false;
+    try {
+      final favorites = await ApiService.getFavorites();
+      isFav = favorites.any((r) => r.id == recipe!.id);
+    } catch (_) {}
     if (!mounted) return;
-    final isFav = favorites.any((r) => r.id == result.recipe!.id);
     setState(() {
-      _recipe = result.recipe;
+      _recipe = recipe;
       _isFavorite = isFav;
       _loading = false;
     });

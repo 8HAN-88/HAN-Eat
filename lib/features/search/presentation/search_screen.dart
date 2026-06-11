@@ -6,12 +6,23 @@ import '../../../../models/post_model.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../../widgets/post_card_skeleton.dart';
 import '../../../../app/app_router.dart';
+import '../../../utils/api_error_parser.dart';
+import '../application/search_scope.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
-  const SearchScreen({super.key, this.initialQuery});
+  const SearchScreen({
+    super.key,
+    this.initialQuery,
+    this.scope,
+    this.feedType,
+    this.followingOnly = false,
+  });
 
   /// Подставляется из `?q=` (например из рилсов по хештегу).
   final String? initialQuery;
+  final SearchScope? scope;
+  final String? feedType;
+  final bool followingOnly;
 
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
@@ -44,9 +55,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<String> _suggestions = [];
   bool _showSuggestions = false;
 
+  late final bool _followingOnly;
+  late final bool _recipeSearch;
+  late final bool _lockPostTypeFilter;
+
+  String get _screenTitle =>
+      widget.scope?.title ?? 'Поиск';
+
+  String get _searchHint =>
+      widget.scope?.hint ?? 'Поиск по постам и публикациям...';
+
   @override
   void initState() {
     super.initState();
+    _followingOnly = widget.followingOnly;
+    _recipeSearch = widget.scope?.usesRecipeSearch ?? false;
+    _selectedPostType = feedFilterToPostType(widget.feedType);
+    _lockPostTypeFilter =
+        widget.feedType != null && widget.feedType != 'all';
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
     final q = widget.initialQuery?.trim();
@@ -122,6 +148,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     try {
+      if (_recipeSearch) {
+        final response = await SearchService.searchRecipes(
+          query: query,
+          tags: _selectedTags.isNotEmpty ? _selectedTags : null,
+          dateFrom: _dateFrom,
+          dateTo: _dateTo,
+          minLikes: _minLikes,
+          minComments: _minComments,
+          sortBy: _selectedSortBy!,
+          limit: _limit,
+          offset: _offset,
+        );
+        if (mounted) {
+          setState(() {
+            if (reset) {
+              _posts = response.recipes;
+            } else {
+              _posts.addAll(response.recipes);
+            }
+            _total = response.total;
+            _offset = _offset + response.recipes.length;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
       final response = await SearchService.searchPosts(
         query: query,
         postType: _selectedPostType,
@@ -131,6 +184,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         minLikes: _minLikes,
         minComments: _minComments,
         sortBy: _selectedSortBy!,
+        followingOnly: _followingOnly,
         limit: _limit,
         offset: _offset,
       );
@@ -150,7 +204,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Ошибка поиска: $e';
+          _error = userVisibleError(e, fallback: 'Не удалось выполнить поиск');
           _isLoading = false;
         });
       }
@@ -179,7 +233,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Поиск'),
+        title: Text(_screenTitle),
         actions: [
           IconButton(
             icon: Icon(_showFilters ? Icons.filter_alt : Icons.filter_alt_outlined),
@@ -201,7 +255,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Поиск постов, рецептов...',
+                        hintText: _searchHint,
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
@@ -312,47 +366,51 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Тип поста
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(
-                label: const Text('Все'),
-                selected: _selectedPostType == null,
-                onSelected: (selected) {
-                  setState(() => _selectedPostType = null);
-                  _performSearch();
-                },
-              ),
-              FilterChip(
-                label: const Text('Фото'),
-                selected: _selectedPostType == 'photo',
-                onSelected: (selected) {
-                  setState(() => _selectedPostType = selected ? 'photo' : null);
-                  _performSearch();
-                },
-              ),
-              FilterChip(
-                label: const Text('Рецепты'),
-                selected: _selectedPostType == 'recipe',
-                onSelected: (selected) {
-                  setState(() => _selectedPostType = selected ? 'recipe' : null);
-                  _performSearch();
-                },
-              ),
-              FilterChip(
-                label: const Text('Рилсы'),
-                selected: _selectedPostType == 'reel',
-                onSelected: (selected) {
-                  setState(() => _selectedPostType = selected ? 'reel' : null);
-                  _performSearch();
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          if (!_recipeSearch && !_lockPostTypeFilter) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilterChip(
+                  label: const Text('Все'),
+                  selected: _selectedPostType == null,
+                  onSelected: (selected) {
+                    setState(() => _selectedPostType = null);
+                    _performSearch();
+                  },
+                ),
+                FilterChip(
+                  label: const Text('Фото'),
+                  selected: _selectedPostType == 'photo',
+                  onSelected: (selected) {
+                    setState(
+                        () => _selectedPostType = selected ? 'photo' : null);
+                    _performSearch();
+                  },
+                ),
+                FilterChip(
+                  label: const Text('Рецепты'),
+                  selected: _selectedPostType == 'recipe',
+                  onSelected: (selected) {
+                    setState(
+                        () => _selectedPostType = selected ? 'recipe' : null);
+                    _performSearch();
+                  },
+                ),
+                FilterChip(
+                  label: const Text('Рилсы'),
+                  selected: _selectedPostType == 'reel',
+                  onSelected: (selected) {
+                    setState(
+                        () => _selectedPostType = selected ? 'reel' : null);
+                    _performSearch();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           // Сортировка (отдельная строка + сегменты на всю ширину — без переноса «Релевантность» столбиком)
           Text(
             'Сортировка',
@@ -541,7 +599,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Ищите посты, рецепты, ингредиентам...',
+              _searchHint,
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

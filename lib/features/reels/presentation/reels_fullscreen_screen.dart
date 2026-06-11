@@ -4,16 +4,17 @@ import '../../../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
 import '../../../models/post_model.dart';
 import '../../../services/feed_service.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
-import '../../../services/server_config.dart';
+import '../../../utils/video_player_helper.dart';
+import '../../../services/feed_analytics_service.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../app/app_router.dart';
+import '../../../utils/post_publisher_display.dart';
 import 'reels_feed_screen.dart';
 
 class ReelsFullscreenScreen extends StatefulWidget {
@@ -31,13 +32,14 @@ class ReelsFullscreenScreen extends StatefulWidget {
 class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
   late PageController _pageController;
   final Map<int, VideoPlayerController> _videoControllers = {};
-  final Map<int, ChewieController> _chewieControllers = {};
   final Map<int, bool> _isPaused = {};
   List<PostModel> _reels = [];
   bool _isLoading = false;
   bool _hasMore = true;
   String? _nextCursor;
   int _currentIndex = 0;
+  DateTime? _currentReelStartedAt;
+  final Set<int> _impressedReelIds = {};
 
   @override
   void initState() {
@@ -46,23 +48,23 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     _reels = [widget.initialPost];
     _loadMoreReels();
     _initializeVideos(0, 1);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startReelExposure(0);
+    });
   }
 
   @override
   void dispose() {
+    _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();
     super.dispose();
   }
 
   void _disposeAllControllers() {
-    for (var c in _chewieControllers.values) {
-      c.dispose();
-    }
     for (var c in _videoControllers.values) {
       c.dispose();
     }
-    _chewieControllers.clear();
     _videoControllers.clear();
   }
 
@@ -81,7 +83,8 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       if (!mounted) return;
 
       final existingIds = _reels.map((r) => r.id).toSet();
-      final newReels = response.items.where((r) => !existingIds.contains(r.id)).toList();
+      final newReels =
+          response.items.where((r) => !existingIds.contains(r.id)).toList();
 
       setState(() {
         _reels.addAll(newReels);
@@ -105,34 +108,23 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       if (_videoControllers.containsKey(i)) continue;
 
       final reel = _reels[i];
-      final videoUrl = _getVideoUrl(reel);
-      if (videoUrl == null) continue;
-
-      final resolvedUrl = ServerConfig.resolveMediaUrl(videoUrl);
+      final videoUrl = reel.videoUrl;
+      if (videoUrl == null || videoUrl.isEmpty) continue;
 
       try {
-        final videoController = VideoPlayerController.networkUrl(Uri.parse(resolvedUrl));
-        await videoController.initialize();
+        final shouldPlay = i == _currentIndex;
+        final videoController = await VideoPlayerHelper.createPreparedController(
+          videoUrl,
+          autoPlay: shouldPlay,
+        );
 
         if (!mounted) {
           videoController.dispose();
           return;
         }
 
-        final chewieController = ChewieController(
-          videoPlayerController: videoController,
-          autoPlay: i == _currentIndex,
-          looping: true,
-          allowFullScreen: false,
-          showControls: false,
-          aspectRatio: videoController.value.aspectRatio,
-          allowMuting: false,
-          allowPlaybackSpeedChanging: false,
-        );
-
         setState(() {
           _videoControllers[i] = videoController;
-          _chewieControllers[i] = chewieController;
         });
       } catch (e) {
         debugPrint('ReelsFullscreen init video $i: $e');
@@ -140,39 +132,24 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     }
   }
 
-  String? _getVideoUrl(PostModel post) {
-    final body = post.body;
-    if (body == null) return null;
-
-    final media = body['media'] as List<dynamic>?;
-    if (media == null || media.isEmpty) return null;
-
-    for (final m in media) {
-      if (m is Map<String, dynamic> && m['type'] == 'video') {
-        return m['url'] as String?;
-      }
-    }
-    return null;
-  }
-
   void _onPageChanged(int index) {
-    if (_currentIndex < _chewieControllers.length) {
-      _chewieControllers[_currentIndex]?.pause();
-      setState(() => _isPaused[_currentIndex] = true);
-    }
+    _finishCurrentReelExposure();
+
+    _videoControllers[_currentIndex]?.pause();
+    setState(() => _isPaused[_currentIndex] = true);
 
     setState(() {
       _currentIndex = index;
       _isPaused[index] = false;
     });
+    _startReelExposure(index);
 
-    if (_chewieControllers.containsKey(index)) {
-      _chewieControllers[index]?.play();
+    if (_videoControllers.containsKey(index)) {
+      VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
     } else {
       _initializeVideos(index, 1).then((_) {
-        if (mounted && _chewieControllers.containsKey(index)) {
-          _chewieControllers[index]?.play();
-        }
+        final c = _videoControllers[index];
+        if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
       });
     }
 
@@ -184,9 +161,61 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     }
   }
 
+  void _startReelExposure(int index) {
+    if (index < 0 || index >= _reels.length) return;
+    final reel = _reels[index];
+    _currentReelStartedAt = DateTime.now();
+    if (_impressedReelIds.add(reel.id)) {
+      FeedAnalyticsService.impression(
+        reel,
+        feedSurface: 'reels_fullscreen',
+        position: index,
+      );
+    }
+  }
+
+  void _finishCurrentReelExposure() {
+    final startedAt = _currentReelStartedAt;
+    if (startedAt == null ||
+        _currentIndex < 0 ||
+        _currentIndex >= _reels.length) {
+      return;
+    }
+
+    final reel = _reels[_currentIndex];
+    final watched = DateTime.now().difference(startedAt);
+    final controller = _videoControllers[_currentIndex];
+    final duration = controller != null && controller.value.isInitialized
+        ? controller.value.duration
+        : null;
+
+    FeedAnalyticsService.reelProgress(
+      reel,
+      watched: watched,
+      duration: duration,
+      position: _currentIndex,
+    );
+    if (watched < FeedAnalyticsService.skipThreshold) {
+      FeedAnalyticsService.skip(
+        reel,
+        feedSurface: 'reels_fullscreen',
+        duration: watched,
+        position: _currentIndex,
+      );
+    } else if (watched >= FeedAnalyticsService.dwellThreshold) {
+      FeedAnalyticsService.dwell(
+        reel,
+        feedSurface: 'reels_fullscreen',
+        duration: watched,
+        position: _currentIndex,
+      );
+    }
+    _currentReelStartedAt = null;
+  }
+
   Future<void> _toggleLike(PostModel reel) async {
     try {
-      final wasLiked = reel.isLiked ?? false;
+      final wasLiked = reel.isLiked;
       final response = wasLiked
           ? await LikeService.unlikePost(reel.id)
           : await LikeService.likePost(reel.id);
@@ -200,7 +229,8 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
       }
     }
   }
@@ -216,7 +246,8 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       _updateReelAt(reel.id, (r) => _copyReelWith(r, isSaved: !isSaved));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
       }
     }
   }
@@ -231,9 +262,11 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
         await RepostService.repost(reel.id.toString());
       }
       if (mounted) {
-        _updateReelAt(reel.id, (r) => _copyReelWith(r, isReposted: !isReposted));
+        _updateReelAt(
+            reel.id, (r) => _copyReelWith(r, isReposted: !isReposted));
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isReposted ? 'Репост отменён' : 'Репост выполнен')),
+          SnackBar(
+              content: Text(isReposted ? 'Репост отменён' : 'Репост выполнен')),
         );
       }
     } catch (e) {
@@ -326,18 +359,34 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
               return ReelCard(
                 reel: reel,
                 index: index,
-                videoController: _chewieControllers[index],
+                videoController: _videoControllers[index],
                 isCurrent: index == _currentIndex,
                 isPaused: _isPaused[index] ?? false,
                 onPauseToggle: (paused) {
                   setState(() => _isPaused[index] = paused);
                 },
                 onLike: () => _toggleLike(reel),
-                onComment: () => context.push('/post/${reel.id}/comments'),
+                onComment: () {
+                  FeedAnalyticsService.openDetail(
+                    reel,
+                    source: 'reels_fullscreen',
+                    target: 'comments',
+                  );
+                  context.push('/post/${reel.id}/comments');
+                },
                 onShare: () => _shareReel(reel),
                 onSave: () => _toggleSave(reel),
                 onRepost: () => _toggleRepost(reel),
-                onAuthorTap: () => context.push('/profile?userId=${reel.userId}'),
+                onAuthorTap: () {
+                  FeedAnalyticsService.openDetail(
+                    reel,
+                    source: 'reels_fullscreen',
+                    target: PostPublisherDisplay.isChannel(reel)
+                        ? 'channel'
+                        : 'author',
+                  );
+                  PostPublisherDisplay.open(context, reel);
+                },
                 onHashtagTap: (tag) {
                   final q = tag.startsWith('#') ? tag : '#$tag';
                   context.push(
@@ -366,7 +415,8 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
             left: 8,
             child: SafeArea(
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                icon:
+                    const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                 onPressed: () => context.pop(),
               ),
             ),

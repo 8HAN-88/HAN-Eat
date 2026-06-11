@@ -97,6 +97,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   int _repostsCount = 0;
   int _displayCommentsCount = 0;
   bool _promotedLocally = false;
+  bool _pinnedLocally = false;
   String? _visibilityOverride;
   bool _isLoading = false;
   bool _isSaving = false;
@@ -258,20 +259,21 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     }
   }
 
-  bool get _isAdmin => widget.channel.isAdmin || widget.channel.isOwner;
-
   bool get _isRecipe => widget.post.type == 'recipe';
 
-  String get _recipeVisibility =>
-      _visibilityOverride ?? widget.post.visibility;
+  String get _recipeVisibility => _visibilityOverride ?? widget.post.visibility;
+
+  bool get _isPostAuthor {
+    final uid = AuthService.instance.currentUser?.id;
+    return uid != null && widget.post.userId == uid;
+  }
+
+  bool get _canEditPost => _isPostAuthor || widget.channel.canEditAnyPost;
+
+  bool get _canDeletePost => _isPostAuthor || widget.channel.canDeleteAnyPost;
 
   bool get _canManagePost {
-    final uid = AuthService.instance.currentUser?.id;
-    if (uid == null) return false;
-    if (widget.post.userId == uid) return true;
-    return widget.channel.isAdmin ||
-        widget.channel.isOwner ||
-        widget.channel.isModerator;
+    return _canEditPost || _canDeletePost;
   }
 
   Future<void> _changeRecipeVisibility() async {
@@ -309,12 +311,16 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось изменить видимость'))),
+        SnackBar(
+            content: Text(userVisibleError(e,
+                fallback: 'Не удалось изменить видимость'))),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось изменить видимость'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось изменить видимость'))),
         );
       }
     }
@@ -656,7 +662,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить пост'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить пост'))),
         );
       }
     }
@@ -673,7 +681,57 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось снять продвижение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось снять продвижение'))),
+        );
+      }
+    }
+  }
+
+  Future<void> _pinPost() async {
+    try {
+      final status = await SubscriptionService.getSubscriptionStatus();
+      if (!status.hasCreator) {
+        if (!mounted) return;
+        context.push(SubscriptionRoute.pathWithProduct('creator'));
+        return;
+      }
+      await ChannelService.pinPost(widget.post.id);
+      if (!mounted) return;
+      setState(() => _pinnedLocally = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пост закреплён в канале')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось закрепить пост'),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unpinPost() async {
+    try {
+      await ChannelService.unpinPost(widget.post.id);
+      if (!mounted) return;
+      setState(() => _pinnedLocally = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Закрепление снято')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось открепить пост'),
+            ),
+          ),
         );
       }
     }
@@ -696,7 +754,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось продвинуть'))),
+          SnackBar(
+              content:
+                  Text(userVisibleError(e, fallback: 'Не удалось продвинуть'))),
         );
       }
     }
@@ -717,7 +777,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Удалить'),
           ),
         ],
@@ -736,15 +798,15 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         widget.onPostDeleted?.call();
       }
     } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                userVisibleError(e, fallback: 'Не удалось удалить пост'),
-              ),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              userVisibleError(e, fallback: 'Не удалось удалить пост'),
             ),
-          );
-        }
+          ),
+        );
+      }
     }
   }
 
@@ -760,6 +822,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             await _copyPostLink();
           } else if (value == 'analytics') {
             context.push(AppAnalyticsRoute.pathWithPostId(widget.post.id));
+          } else if (value == 'pin') {
+            await _pinPost();
+          } else if (value == 'unpin') {
+            await _unpinPost();
           } else if (value == 'promote') {
             await _promotePost();
           } else if (value == 'unpromote') {
@@ -796,6 +862,28 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                 ],
               ),
             ),
+            if (!widget.post.isPinned && !_pinnedLocally)
+              const PopupMenuItem(
+                value: 'pin',
+                child: Row(
+                  children: [
+                    Icon(Icons.push_pin_outlined, size: 20),
+                    SizedBox(width: 8),
+                    Text('Закрепить в канале'),
+                  ],
+                ),
+              ),
+            if (widget.post.isPinned || _pinnedLocally)
+              const PopupMenuItem(
+                value: 'unpin',
+                child: Row(
+                  children: [
+                    Icon(Icons.push_pin, size: 20),
+                    SizedBox(width: 8),
+                    Text('Открепить'),
+                  ],
+                ),
+              ),
             if (!widget.post.isPromoted && !_promotedLocally)
               const PopupMenuItem(
                 value: 'promote',
@@ -818,7 +906,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   ],
                 ),
               ),
-            if (widget.post.channelId != null)
+            if (widget.post.channelId != null && _canEditPost)
               const PopupMenuItem(
                 value: 'edit',
                 child: Row(
@@ -829,7 +917,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   ],
                 ),
               ),
-            if (_isRecipe)
+            if (_isRecipe && _canEditPost)
               const PopupMenuItem(
                 value: 'visibility',
                 child: Row(
@@ -840,16 +928,26 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   ],
                 ),
               ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('Удалить', style: TextStyle(color: Colors.red)),
-                ],
+            if (_canDeletePost)
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Удалить',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
             PopupMenuItem(
               value: 'save',
               child: Row(
@@ -1125,7 +1223,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                         compact: true,
                       ),
                     ],
-                    if (post.isPromoted || _promotedLocally) ...[
+                    if (post.isPinned || _pinnedLocally) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1135,7 +1233,42 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                         decoration: BoxDecoration(
                           color: Theme.of(context)
                               .colorScheme
-                              .primaryContainer,
+                              .tertiaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.push_pin,
+                              size: 14,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Закреплён',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onTertiaryContainer,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (post.isPromoted || _promotedLocally) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -1171,12 +1304,14 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (post.linkImage != null && post.linkImage!.isNotEmpty)
+                        if (post.linkImage != null &&
+                            post.linkImage!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: ClipRRect(
@@ -1198,7 +1333,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                                 post.linkTitle ?? post.linkUrl!,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                             ),
                           ],
@@ -1219,7 +1355,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                               ),
                             ),
                           ),
-                        if (post.linkDomain != null && post.linkDomain!.isNotEmpty)
+                        if (post.linkDomain != null &&
+                            post.linkDomain!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
@@ -1248,24 +1385,31 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                Icon(
+                  Icons.access_time,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   _formatFeedDate(post.publishedAt ?? post.createdAt),
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: 12),
-                Icon(Icons.visibility_outlined,
-                    size: 14, color: Colors.grey[600]),
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   _formatCount(post.viewsCount),
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -1281,7 +1425,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                     IconButton(
                       icon: Icon(
                         _isLiked ? Icons.favorite : Icons.favorite_border,
-                        color: _isLiked ? Colors.red : Colors.black,
+                        color: _isLiked
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.onSurface,
                         size: 28,
                       ),
                       onPressed: _isLoading ? null : _toggleLike,
@@ -1401,58 +1547,27 @@ class _ChannelPostCardState extends State<ChannelPostCard>
 
       // Обработчик клика для рецепта - открываем рецепт
       void onRecipeTap() {
-        final body = post.body;
-        if (body == null) return;
-
         try {
-          // Получаем изображение из media
-          final media = body['media'] as List<dynamic>?;
-          String? imageUrl;
-          if (media != null && media.isNotEmpty) {
-            try {
-              final firstImage = media.firstWhere(
-                (m) => m['type'] == 'image',
-              ) as Map<String, dynamic>?;
-              imageUrl = firstImage?['url'] as String?;
-              if (imageUrl != null && imageUrl.isNotEmpty) {
-                imageUrl = ServerConfig.resolveMediaUrl(imageUrl);
-              }
-            } catch (e) {
-              // Изображение не найдено
-            }
-          }
-
-          // Собираем данные рецепта из body
-          final recipeData = <String, dynamic>{
-            'id': post.id, // Используем ID поста как ID рецепта
-            'title': _recipeTitle(post),
-            'image': imageUrl,
-            'ingredients': body['ingredients'] ?? [],
-            'steps': body['steps'] ?? [],
-            'usedIngredientCount': (body['ingredients'] as List?)?.length ?? 0,
-            'calories': body['calories'],
-            'source': body['source']?.toString() ?? 'channel',
-          };
-
-          final recipe = Recipe.fromJson(recipeData);
+          final recipe = Recipe.fromPostModel(post);
           // Получаем информацию о том, является ли рецепт избранным
           final isFavorite =
-              FavoritesService.instance.isFavorite(recipe.id.toString());
+              FavoritesService.safeIsFavorite(recipe.id.toString());
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => DetailPage(
                 recipe: recipe,
                 isFavorite: isFavorite,
                 onToggle: () async {
-                  await FavoritesService.instance
-                      .toggleFavorite(recipe.id.toString());
+                  await FavoritesService.safeToggleFavorite(
+                    recipe.id.toString(),
+                  );
                 },
               ),
             ),
           );
         } catch (e, stackTrace) {
           debugPrint('Error parsing recipe from post: $e');
-          debugPrint('Body: $body');
+          debugPrint('Body: ${post.body}');
           debugPrint('Stack trace: $stackTrace');
         }
       }
@@ -1531,7 +1646,6 @@ class _RepostDialogState extends State<_RepostDialog> {
             decoration: const InputDecoration(
               labelText: 'Комментарий (опционально)',
               hintText: 'Добавьте комментарий к репосту...',
-              border: OutlineInputBorder(),
             ),
             maxLines: 3,
             autofocus: true,

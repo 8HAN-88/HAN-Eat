@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
@@ -7,6 +8,7 @@ import '../../../core/theme/color_schemes.dart';
 import '../../../services/nutrition_prefs_service.dart';
 import '../../../widgets/survey_section_card.dart';
 import '../../../features/subscription/presentation/widgets/subscription_visuals.dart';
+import '../../settings/application/subscription_status_provider.dart';
 
 enum _SurveyStep {
   welcome,
@@ -30,18 +32,19 @@ enum _SurveyStep {
   summary,
 }
 
-class MealPlanSurveyFlowScreen extends StatefulWidget {
+class MealPlanSurveyFlowScreen extends ConsumerStatefulWidget {
   const MealPlanSurveyFlowScreen({super.key, this.skipWelcome = false});
 
   /// Редактирование: сразу к шагам с уже сохранёнными ответами.
   final bool skipWelcome;
 
   @override
-  State<MealPlanSurveyFlowScreen> createState() =>
+  ConsumerState<MealPlanSurveyFlowScreen> createState() =>
       _MealPlanSurveyFlowScreenState();
 }
 
-class _MealPlanSurveyFlowScreenState extends State<MealPlanSurveyFlowScreen> {
+class _MealPlanSurveyFlowScreenState
+    extends ConsumerState<MealPlanSurveyFlowScreen> {
   final _pageController = PageController();
   final _calorieController = TextEditingController();
   final _ageController = TextEditingController();
@@ -632,69 +635,90 @@ class _MealPlanSurveyFlowScreenState extends State<MealPlanSurveyFlowScreen> {
           ),
         );
       case _SurveyStep.familySize:
+        final hasFamilyPlan = ref.watch(hasFamilyMealPlanProvider);
         return SurveySectionCard(
           title: 'Сколько человек за столом?',
-          subtitle: 'Порции и список покупок',
+          subtitle: hasFamilyPlan
+              ? 'Порции и список покупок (семейный план Pro)'
+              : 'Семейные планы от 2 человек — в H.A.N. Pro',
           icon: Icons.groups_rounded,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton.filledTonal(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                  ),
-                  onPressed: _data.familySize > 1
-                      ? () => setState(
-                            () => _data = _data.copyWith(
-                              familySize: _data.familySize - 1,
-                            ),
-                          )
-                      : null,
-                  icon: const Icon(Icons.remove_rounded),
+          child: Column(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: Column(
-                    children: [
-                      Text(
-                        '${_data.familySize}',
-                        style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                            ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
                       ),
-                      Text(
-                        _data.familySize == 1 ? 'человек' : 'человека',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
+                      onPressed: _data.familySize > 1
+                          ? () => setState(
+                                () => _data = _data.copyWith(
+                                  familySize: _data.familySize - 1,
+                                ),
+                              )
+                          : null,
+                      icon: const Icon(Icons.remove_rounded),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        children: [
+                          Text(
+                            '${_data.familySize}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .displaySmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
+                          ),
+                          Text(
+                            _data.familySize == 1 ? 'человек' : 'человека',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: _data.familySize < 8 && hasFamilyPlan
+                          ? () => setState(
+                                () => _data = _data.copyWith(
+                                  familySize: _data.familySize + 1,
+                                ),
+                              )
+                          : null,
+                      icon: const Icon(Icons.add_rounded),
+                    ),
+                  ],
                 ),
-                IconButton.filledTonal(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                  ),
-                  onPressed: _data.familySize < 8
-                      ? () => setState(
-                            () => _data = _data.copyWith(
-                              familySize: _data.familySize + 1,
-                            ),
-                          )
-                      : null,
-                  icon: const Icon(Icons.add_rounded),
+              ),
+              if (!hasFamilyPlan) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () =>
+                      context.push(SubscriptionRoute.pathWithProduct('pro')),
+                  icon: const Icon(Icons.workspace_premium_outlined),
+                  label: const Text('Семейный план — тариф H.A.N. Pro'),
                 ),
               ],
-            ),
+            ],
           ),
         );
       case _SurveyStep.energyHabits:

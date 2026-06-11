@@ -198,3 +198,71 @@ def unpromote_post(db: Session, post_id: int, user_id: int) -> Post:
         )
     post.is_promoted = False
     return post
+
+
+def pin_post(db: Session, post_id: int, user_id: int) -> Post:
+    post = (
+        db.query(Post)
+        .filter(Post.id == post_id, Post.deleted_at.is_(None))
+        .first()
+    )
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    if post.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+    if post.status != "published":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only published posts can be pinned",
+        )
+    if not post.channel_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only channel posts can be pinned",
+        )
+    if not SubscriptionService(db).has_creator_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_CREATOR_REQUIRED_CODE,
+                "message": "Закрепление доступно с тарифом H.A.N. Creator или Pro",
+            },
+        )
+
+    others = (
+        db.query(Post)
+        .filter(
+            Post.channel_id == post.channel_id,
+            Post.is_pinned.is_(True),
+            Post.id != post.id,
+            Post.deleted_at.is_(None),
+        )
+        .all()
+    )
+    for other in others:
+        other.is_pinned = False
+
+    post.is_pinned = True
+    return post
+
+
+def unpin_post(db: Session, post_id: int, user_id: int) -> Post:
+    post = (
+        db.query(Post)
+        .filter(Post.id == post_id, Post.deleted_at.is_(None))
+        .first()
+    )
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+    if post.user_id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your post")
+    if not SubscriptionService(db).has_creator_access(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_CREATOR_REQUIRED_CODE,
+                "message": "Закрепление доступно с тарифом H.A.N. Creator или Pro",
+            },
+        )
+    post.is_pinned = False
+    return post

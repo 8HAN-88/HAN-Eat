@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/config/legacy_firestore_config.dart';
 import 'auth_service.dart';
@@ -56,7 +57,12 @@ class NotificationSettingsService {
   static const _prefsKey = 'notification_settings_v1';
   final ValueNotifier<NotificationSettings> settings = ValueNotifier(
       NotificationSettings(likes: true, comments: true, uploads: true));
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseFirestore get _firestore {
+    if (Firebase.apps.isEmpty) {
+      throw StateError('Firebase not initialized');
+    }
+    return FirebaseFirestore.instance;
+  }
 
   void Function(User?)? _onSessionChanged;
 

@@ -1,4 +1,3 @@
-import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +15,8 @@ import '../../feed/presentation/subscriptions_feed_screen.dart';
 import '../../reels/presentation/reels_feed_screen.dart' as api_reels;
 import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../utils/video_player_helper.dart';
+import '../../../widgets/cover_network_video.dart';
 
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
@@ -32,12 +33,19 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    // Начинаем с таба «Рилсы» для лучшего удержания пользователя
-    _tabController = TabController(length: 4, vsync: this, initialIndex: 3);
+    // Не открываем сразу «Рилсы» — на физическом iPhone автозагрузка видео давала вылеты.
+    _tabController = TabController(length: 4, vsync: this, initialIndex: 1);
+    _tabController.addListener(_onTabUi);
+  }
+
+  void _onTabUi() {
+    if (_tabController.indexIsChanging) return;
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabUi);
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -146,7 +154,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
                 _buildSubscriptionsTab(context),
                 const FeedScreen(hideScaffold: true),
                 _buildRecommendationsTab(context, state, controller),
-                const api_reels.ReelsFeedScreen(),
+                api_reels.ReelsFeedScreen(
+                  hideScaffold: true,
+                  isTabVisible: _tabController.index == 3,
+                ),
               ],
             ),
       floatingActionButton: _isSearchMode
@@ -517,30 +528,25 @@ class _CommunityVideoCard extends StatefulWidget {
 }
 
 class _CommunityVideoCardState extends State<_CommunityVideoCard> {
-  late VideoPlayerController _videoController;
-  ChewieController? _chewieController;
+  VideoPlayerController? _videoController;
   bool _initializing = true;
+  bool _ready = false;
   bool _isPaused = false;
+  bool _isMuted = true;
 
   @override
   void initState() {
     super.initState();
-    _videoController = VideoPlayerController.networkUrl(
-      Uri.parse(widget.video.videoUrl),
-    );
-    _videoController.initialize().then((_) {
+    VideoPlayerHelper.createPreparedController(widget.video.videoUrl).then((c) {
+      if (!mounted) {
+        c.dispose();
+        return;
+      }
+      _videoController = c;
       if (!mounted) return;
-      _chewieController = ChewieController(
-        videoPlayerController: _videoController,
-        autoPlay: false,
-        looping: true,
-        allowFullScreen: true,
-        showControls: false, // Скрываем стандартные контролы для тапа на видео
-        allowMuting: false, // Отключаем звук
-        allowPlaybackSpeedChanging: false,
-      );
       setState(() {
         _initializing = false;
+        _ready = true;
       });
     }).catchError((_) {
       if (!mounted) return;
@@ -550,8 +556,7 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
 
   @override
   void dispose() {
-    _chewieController?.dispose();
-    _videoController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -581,27 +586,24 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                 child: const Center(child: CircularProgressIndicator()),
               ),
             )
-          else if (_chewieController != null)
+          else if (_ready && _videoController != null)
             AspectRatio(
-              aspectRatio: _videoController.value.aspectRatio == 0
+              aspectRatio: _videoController!.value.aspectRatio == 0
                   ? 16 / 9
-                  : _videoController.value.aspectRatio,
+                  : _videoController!.value.aspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isPaused = !_isPaused;
-                      });
-                      if (_isPaused) {
-                        _chewieController!.pause();
-                      } else {
-                        _chewieController!.play();
-                      }
+                    onTap: () async {
+                      final paused = await VideoPlayerHelper.toggleOrStart(
+                        _videoController!,
+                      );
+                      if (!mounted) return;
+                      setState(() => _isPaused = paused);
                     },
                     behavior: HitTestBehavior.opaque,
-                    child: Chewie(controller: _chewieController!),
+                    child: CoverNetworkVideo(controller: _videoController!),
                   ),
                   // Индикатор паузы
                   if (_isPaused)
@@ -617,6 +619,32 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                         ),
                       ),
                     ),
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: () async {
+                        if (_videoController == null) return;
+                        final muted =
+                            await VideoPlayerHelper.toggleMute(_videoController!);
+                        if (!mounted) return;
+                        setState(() => _isMuted = muted);
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          _isMuted ? Icons.volume_off : Icons.volume_up,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             )

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -21,6 +22,11 @@ class SubscriptionMaintenanceService:
         self.db = db
 
     def run(self) -> None:
+        from app.services.sbp_renewal_service import SbpRenewalService
+
+        sbp = SbpRenewalService(self.db)
+        sbp.reconcile_pending_renewals()
+        sbp.run()
         self._expire_after_grace()
         self._notify_expiring()
 
@@ -38,7 +44,16 @@ class SubscriptionMaintenanceService:
                 .filter(
                     User.subscription_type.notin_(("free",)),
                     User.subscription_expires_at.isnot(None),
-                    User.subscription_expires_at < cutoff,
+                    or_(
+                        and_(
+                            User.subscription_status == "trial",
+                            User.subscription_expires_at < now,
+                        ),
+                        and_(
+                            User.subscription_status != "trial",
+                            User.subscription_expires_at < cutoff,
+                        ),
+                    ),
                 )
                 .limit(_BATCH)
                 .all()
@@ -48,6 +63,11 @@ class SubscriptionMaintenanceService:
             for user in users:
                 tier, _active = svc.effective_tier(user.id)
                 if tier == "free":
+                    user.subscription_type = "free"
+                    user.subscription_status = "expired"
+                    user.subscription_expires_at = None
+                    user.subscription_auto_renew = False
+                    expired += 1
                     continue
                 sub = svc.get_user_subscription(user.id)
                 if sub:
@@ -122,14 +142,21 @@ class SubscriptionMaintenanceService:
                     )
                     if self._already_notified(user.id, key):
                         continue
+                    auto = bool(user.subscription_auto_renew and user.yookassa_payment_method_id)
+                    body = (
+                        f"Ваша подписка H.A.N. истекает через {days_left} дн. "
+                        "Списание по СБП пройдёт автоматически."
+                        if auto
+                        else (
+                            f"Ваша подписка H.A.N. истекает через {days_left} дн. "
+                            "Продлите в разделе «Подписка», чтобы сохранить доступ."
+                        )
+                    )
                     NotificationService(self.db).create_notification(
                         user_id=user.id,
                         type="subscription_expiring",
                         title="Подписка скоро закончится",
-                        body=(
-                            f"Ваша подписка H.A.N. истекает через {days_left} дн. "
-                            "Продлите в разделе «Подписка», чтобы сохранить доступ."
-                        ),
+                        body=body,
                         entity_type="subscription",
                         entity_id=0,
                         data={

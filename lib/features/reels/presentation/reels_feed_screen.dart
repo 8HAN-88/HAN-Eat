@@ -6,30 +6,44 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
 import '../../../services/feed_api_cache.dart';
+import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
-import '../../../services/server_config.dart';
+import '../../../utils/video_player_helper.dart';
+import '../../../widgets/cover_network_video.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../app/app_router.dart';
+import '../../../utils/post_publisher_display.dart';
 import '../application/reels_feed_refresh_provider.dart';
+import '../../navigation/application/root_shell_chrome.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
-  const ReelsFeedScreen({super.key, this.hideScaffold = false});
+  const ReelsFeedScreen({
+    super.key,
+    this.hideScaffold = false,
+    this.isTabVisible = true,
+    this.externalFollowingOnly = false,
+  });
 
   /// Без вложенного Scaffold (вкладка «Рилсы» в [MainFeedScreen]).
   final bool hideScaffold;
+
+  /// false на вкладке «Рилсы», пока пользователь на другом табе — не грузим API/видео.
+  final bool isTabVisible;
+
+  /// Фильтр «Подписки» с родителя ([MainFeedScreen]).
+  final bool externalFollowingOnly;
 
   @override
   ConsumerState<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
@@ -38,8 +52,8 @@ class ReelsFeedScreen extends ConsumerStatefulWidget {
 class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   final PageController _pageController = PageController();
   final Map<int, VideoPlayerController> _videoControllers = {};
-  final Map<int, ChewieController> _chewieControllers = {};
   final Map<int, bool> _isPaused = {}; // Состояние паузы для каждого видео
+  final Map<int, bool> _videoInitFailed = {};
   List<PostModel> _reels = [];
   bool _isLoading = false;
   bool _hasMore = true;
@@ -49,40 +63,92 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   bool _loadKickoff = false;
   bool _servingFromCache = false;
   Object? _cacheLoadError;
+  DateTime? _currentReelStartedAt;
+  final Set<int> _impressedReelIds = {};
 
-  static const _cacheVariant = 'rec_reels';
-  
+  bool _followingOnly = false;
+
+  String get _cacheVariant =>
+      _followingOnly ? 'rec_reels_following' : 'rec_reels';
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _loadKickoff = true);
-      _loadReels(refresh: true);
-    });
+    _followingOnly = widget.externalFollowingOnly;
+    _syncRootShellChrome();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startLoadIfNeeded());
   }
-  
+
+  void _syncRootShellChrome() {
+    syncRootShellBottomNavForReels(
+      embeddedInShell: widget.hideScaffold,
+      tabVisible: widget.isTabVisible,
+    );
+  }
+
+  @override
+  void didUpdateWidget(ReelsFeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.externalFollowingOnly != oldWidget.externalFollowingOnly &&
+        widget.externalFollowingOnly != _followingOnly) {
+      _followingOnly = widget.externalFollowingOnly;
+      if (widget.isTabVisible) {
+        _loadReels(refresh: true);
+      }
+    }
+    if (widget.hideScaffold != oldWidget.hideScaffold ||
+        widget.isTabVisible != oldWidget.isTabVisible) {
+      _syncRootShellChrome();
+    }
+    if (widget.isTabVisible && !oldWidget.isTabVisible) {
+      _startLoadIfNeeded();
+      if (_reels.isNotEmpty) {
+        _initializeVideos(
+          _currentIndex,
+          math.min(3, _reels.length - _currentIndex),
+        );
+        final c = _videoControllers[_currentIndex];
+        if (c != null) VideoPlayerHelper.ensurePlaying(c);
+      }
+    } else if (!widget.isTabVisible && oldWidget.isTabVisible) {
+      _pauseAllVideos();
+    }
+  }
+
+  void _startLoadIfNeeded() {
+    if (!mounted || !widget.isTabVisible) return;
+    if (_loadKickoff) return;
+    setState(() => _loadKickoff = true);
+    _loadReels(refresh: true);
+  }
+
+  void _pauseAllVideos() {
+    for (final c in _videoControllers.values) {
+      c.pause();
+    }
+  }
+
   @override
   void dispose() {
+    if (widget.hideScaffold) {
+      clearRootShellBottomNavHide();
+    }
+    _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();
     super.dispose();
   }
-  
+
   void _disposeAllControllers() {
-    for (var controller in _chewieControllers.values) {
-      controller.dispose();
-    }
     for (var controller in _videoControllers.values) {
       controller.dispose();
     }
-    _chewieControllers.clear();
     _videoControllers.clear();
   }
-  
+
   Future<void> _loadReels({bool refresh = false}) async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
       if (refresh) {
@@ -92,6 +158,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _lastLoadError = null;
         _servingFromCache = false;
         _cacheLoadError = null;
+        _currentReelStartedAt = null;
+        _impressedReelIds.clear();
+        _videoInitFailed.clear();
         _disposeAllControllers();
       }
     });
@@ -115,17 +184,18 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         return;
       }
     }
-    
+
     try {
       final response = await FeedService.getFeed(
         cursor: refresh ? null : _nextCursor,
         limit: 20,
         feedType: 'reels',
+        followingOnly: _followingOnly,
       );
-      
-      final nextReels = refresh
-          ? response.items
-          : <PostModel>[..._reels, ...response.items];
+
+      if (!mounted) return;
+      final nextReels =
+          refresh ? response.items : <PostModel>[..._reels, ...response.items];
       setState(() {
         _reels = nextReels;
         _nextCursor = response.nextCursor;
@@ -135,10 +205,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _cacheLoadError = null;
       });
       await FeedApiCache.save(_cacheVariant, nextReels);
-      
+
       // Инициализируем видео для первых 3 рилсов
       if (_reels.isNotEmpty) {
         _initializeVideos(0, math.min(3, _reels.length));
+        _startReelExposure(_currentIndex);
       }
     } catch (e) {
       if (mounted) {
@@ -151,6 +222,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
+        if (!mounted) return;
         if (cached.isNotEmpty) {
           setState(() {
             _reels = cached;
@@ -162,6 +234,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           });
           if (_reels.isNotEmpty) {
             _initializeVideos(0, math.min(3, _reels.length));
+            _startReelExposure(_currentIndex);
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(FeedLoadHelper.cacheSnackMessage(e))),
@@ -182,99 +255,130 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     }
   }
-  
+
   Future<void> _initializeVideos(int startIndex, int count) async {
+    if (!widget.isTabVisible) return;
     for (int i = startIndex; i < startIndex + count && i < _reels.length; i++) {
       final reel = _reels[i];
       if (_videoControllers.containsKey(i)) continue;
-      
-      // Получаем URL видео из body
-      final videoUrl = _getVideoUrl(reel);
-      if (videoUrl == null) continue;
-      final resolvedUrl = ServerConfig.resolveMediaUrl(videoUrl);
 
+      final videoUrl = reel.videoUrl;
+      if (videoUrl == null || videoUrl.isEmpty) {
+        if (mounted) {
+          setState(() => _videoInitFailed[i] = true);
+        }
+        continue;
+      }
       try {
-        final videoController = VideoPlayerController.networkUrl(Uri.parse(resolvedUrl));
-        await videoController.initialize();
-        
+        final shouldPlay = i == _currentIndex && widget.isTabVisible;
+        final videoController = await VideoPlayerHelper.createPreparedController(
+          videoUrl,
+          autoPlay: shouldPlay,
+        );
+
         if (!mounted) {
           videoController.dispose();
           return;
         }
-        
-        final chewieController = ChewieController(
-          videoPlayerController: videoController,
-          autoPlay: i == _currentIndex, // Автоплей только для текущего
-          looping: true,
-          allowFullScreen: false,
-          showControls: false, // Скрываем стандартные контролы
-          aspectRatio: videoController.value.aspectRatio,
-          allowMuting: false, // Отключаем звук, как требовалось
-          allowPlaybackSpeedChanging: false,
-        );
-        
+
         setState(() {
           _videoControllers[i] = videoController;
-          _chewieControllers[i] = chewieController;
+          _videoInitFailed.remove(i);
         });
       } catch (e) {
-        debugPrint('Ошибка инициализации видео $i: $e');
+        debugPrint('Ошибка инициализации видео $i ($videoUrl): $e');
+        if (mounted) {
+          setState(() => _videoInitFailed[i] = true);
+        }
       }
     }
   }
-  
-  String? _getVideoUrl(PostModel post) {
-    final body = post.body;
-    if (body == null) return null;
-    
-    final media = body['media'] as List<dynamic>?;
-    if (media == null || media.isEmpty) return null;
-    
-    final video = media.firstWhere(
-      (m) => m['type'] == 'video',
-      orElse: () => null,
-    );
-    
-    return video?['url'] as String?;
-  }
-  
+
   void _onPageChanged(int index) {
+    _finishCurrentReelExposure();
+
     // Останавливаем предыдущее видео
-    if (_currentIndex < _chewieControllers.length) {
-      _chewieControllers[_currentIndex]?.pause();
-      setState(() {
-        _isPaused[_currentIndex] = true; // Помечаем предыдущее как на паузе
-      });
-    }
-    
+    _videoControllers[_currentIndex]?.pause();
+    setState(() {
+      _isPaused[_currentIndex] = true;
+    });
+
     setState(() {
       _currentIndex = index;
       _isPaused[index] = false; // Сбрасываем состояние паузы для текущего
     });
-    
+    _startReelExposure(index);
+
     // Воспроизводим текущее видео
-    if (_chewieControllers.containsKey(index)) {
-      _chewieControllers[index]?.play();
+    if (_videoControllers.containsKey(index)) {
+      VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
     } else {
-      // Инициализируем видео, если еще не инициализировано
       _initializeVideos(index, 1).then((_) {
-        if (mounted && _chewieControllers.containsKey(index)) {
-          _chewieControllers[index]?.play();
-        }
+        final c = _videoControllers[index];
+        if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
       });
     }
-    
+
     // Загружаем больше, если приближаемся к концу
     if (index >= _reels.length - 3 && _hasMore && !_isLoading) {
       _loadReels();
     }
-    
+
     // Предзагружаем следующие видео
     if (index + 1 < _reels.length) {
       _initializeVideos(index + 1, 2);
     }
   }
-  
+
+  void _startReelExposure(int index) {
+    if (index < 0 || index >= _reels.length) return;
+    final reel = _reels[index];
+    _currentReelStartedAt = DateTime.now();
+    if (_impressedReelIds.add(reel.id)) {
+      FeedAnalyticsService.impression(
+        reel,
+        feedSurface: 'reels',
+        position: index,
+      );
+    }
+  }
+
+  void _finishCurrentReelExposure() {
+    final startedAt = _currentReelStartedAt;
+    if (startedAt == null || _currentIndex < 0 || _currentIndex >= _reels.length) {
+      return;
+    }
+    final reel = _reels[_currentIndex];
+    final watched = DateTime.now().difference(startedAt);
+    final controller = _videoControllers[_currentIndex];
+    final duration =
+        controller != null && controller.value.isInitialized
+            ? controller.value.duration
+            : null;
+    FeedAnalyticsService.reelProgress(
+      reel,
+      watched: watched,
+      duration: duration,
+      position: _currentIndex,
+    );
+    if (watched < FeedAnalyticsService.skipThreshold) {
+      FeedAnalyticsService.skip(
+        reel,
+        feedSurface: 'reels',
+        duration: watched,
+        position: _currentIndex,
+      );
+    } else if (watched >= FeedAnalyticsService.dwellThreshold) {
+      FeedAnalyticsService.dwell(
+        reel,
+        feedSurface: 'reels',
+        duration: watched,
+        position: _currentIndex,
+      );
+    }
+    _currentReelStartedAt = null;
+  }
+
   Widget _buildEmptyState() {
     final empty = RefreshIndicator(
       onRefresh: () => _loadReels(refresh: true),
@@ -321,12 +425,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     });
 
-    if (_reels.isEmpty && (_isLoading || !_loadKickoff)) {
+    if (_reels.isEmpty && _isLoading) {
       final loading = const Center(child: CircularProgressIndicator());
       if (widget.hideScaffold) return loading;
       return Scaffold(body: loading);
     }
-    
+
     if (_reels.isEmpty) {
       return _buildEmptyState();
     }
@@ -352,7 +456,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             return ReelCard(
               reel: reel,
               index: index,
-              videoController: _chewieControllers[index],
+              videoController: _videoControllers[index],
+              videoInitFailed: _videoInitFailed[index] == true,
+              onRetryVideo: () {
+                setState(() => _videoInitFailed.remove(index));
+                _initializeVideos(index, 1);
+              },
               isCurrent: index == _currentIndex,
               isPaused: _isPaused[index] ?? false,
               onPauseToggle: (paused) {
@@ -362,18 +471,30 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
               },
               onLike: () => _toggleLike(reel),
               onComment: () {
+                FeedAnalyticsService.openDetail(
+                  reel,
+                  source: 'reels',
+                  target: 'comments',
+                );
                 context.push('/post/${reel.id}/comments');
               },
               onShare: () => _shareReel(reel),
               onSave: () => _toggleSave(reel),
               onRepost: () => _toggleRepost(reel),
               onAuthorTap: () {
-                context.push('/profile?userId=${reel.userId}');
+                FeedAnalyticsService.openDetail(
+                  reel,
+                  source: 'reels',
+                  target: PostPublisherDisplay.isChannel(reel)
+                      ? 'channel'
+                      : 'author',
+                );
+                PostPublisherDisplay.open(context, reel);
               },
               onHashtagTap: (tag) {
                 final q = tag.startsWith('#') ? tag : '#$tag';
-                context
-                    .push('${SearchRoute.path}?q=${Uri.encodeQueryComponent(q)}');
+                context.push(
+                    '${SearchRoute.path}?q=${Uri.encodeQueryComponent(q)}');
               },
               onMentionTap: (username, r) {
                 final uname = username.trim();
@@ -430,37 +551,19 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       body: pageBody,
     );
   }
-  
+
   Future<void> _toggleLike(PostModel reel) async {
     try {
-      final wasLiked = reel.isLiked ?? false;
+      final wasLiked = reel.isLiked;
       final response = wasLiked
           ? await LikeService.unlikePost(reel.id)
           : await LikeService.likePost(reel.id);
       setState(() {
         final index = _reels.indexWhere((r) => r.id == reel.id);
         if (index != -1) {
-          _reels[index] = PostModel(
-            id: _reels[index].id,
-            type: _reels[index].type,
-            title: _reels[index].title,
-            description: _reels[index].description,
-            status: _reels[index].status,
-            createdAt: _reels[index].createdAt,
-            publishedAt: _reels[index].publishedAt,
-            userId: _reels[index].userId,
-            communityId: _reels[index].communityId,
-            body: _reels[index].body,
-            tags: _reels[index].tags,
+          _reels[index] = _reels[index].copyWith(
             likesCount: response.likesCount,
-            commentsCount: _reels[index].commentsCount,
-            repostsCount: _reels[index].repostsCount,
-            viewsCount: _reels[index].viewsCount,
-            isPromoted: _reels[index].isPromoted,
             isLiked: response.liked,
-            isSaved: _reels[index].isSaved,
-            isReposted: _reels[index].isReposted,
-            author: _reels[index].author,
           );
         }
       });
@@ -472,7 +575,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     }
   }
-  
+
   Future<void> _toggleSave(PostModel reel) async {
     try {
       final isSaved = reel.isSaved ?? false;
@@ -484,28 +587,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       setState(() {
         final index = _reels.indexWhere((r) => r.id == reel.id);
         if (index != -1) {
-          _reels[index] = PostModel(
-            id: _reels[index].id,
-            type: _reels[index].type,
-            title: _reels[index].title,
-            description: _reels[index].description,
-            status: _reels[index].status,
-            createdAt: _reels[index].createdAt,
-            publishedAt: _reels[index].publishedAt,
-            userId: _reels[index].userId,
-            communityId: _reels[index].communityId,
-            body: _reels[index].body,
-            tags: _reels[index].tags,
-            likesCount: _reels[index].likesCount,
-            commentsCount: _reels[index].commentsCount,
-            repostsCount: _reels[index].repostsCount,
-            viewsCount: _reels[index].viewsCount,
-            isPromoted: _reels[index].isPromoted,
-            isLiked: _reels[index].isLiked,
-            isSaved: !isSaved,
-            isReposted: _reels[index].isReposted,
-            author: _reels[index].author,
-          );
+          _reels[index] = _reels[index].copyWith(isSaved: !isSaved);
         }
       });
     } catch (e) {
@@ -516,7 +598,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     }
   }
-  
+
   Future<void> _toggleRepost(PostModel reel) async {
     try {
       final isReposted = reel.isReposted ?? false;
@@ -528,28 +610,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       setState(() {
         final index = _reels.indexWhere((r) => r.id == reel.id);
         if (index != -1) {
-          _reels[index] = PostModel(
-            id: _reels[index].id,
-            type: _reels[index].type,
-            title: _reels[index].title,
-            description: _reels[index].description,
-            status: _reels[index].status,
-            createdAt: _reels[index].createdAt,
-            publishedAt: _reels[index].publishedAt,
-            userId: _reels[index].userId,
-            communityId: _reels[index].communityId,
-            body: _reels[index].body,
-            tags: _reels[index].tags,
-            likesCount: _reels[index].likesCount,
-            commentsCount: _reels[index].commentsCount,
-            repostsCount: _reels[index].repostsCount,
-            viewsCount: _reels[index].viewsCount,
-            isPromoted: _reels[index].isPromoted,
-            isLiked: _reels[index].isLiked,
-            isSaved: _reels[index].isSaved,
-            isReposted: !isReposted,
-            author: _reels[index].author,
-          );
+          _reels[index] = _reels[index].copyWith(isReposted: !isReposted);
         }
       });
     } catch (e) {
@@ -568,7 +629,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     }
   }
-  
+
   Future<void> _shareReel(PostModel reel) async {
     await ShareActionSheet.showForReel(
       context,
@@ -581,7 +642,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 class ReelCard extends StatefulWidget {
   final PostModel reel;
   final int index;
-  final ChewieController? videoController;
+  final VideoPlayerController? videoController;
+  final bool videoInitFailed;
+  final VoidCallback? onRetryVideo;
   final bool isCurrent;
   final bool isPaused;
   final ValueChanged<bool> onPauseToggle;
@@ -600,6 +663,8 @@ class ReelCard extends StatefulWidget {
     required this.reel,
     required this.index,
     this.videoController,
+    this.videoInitFailed = false,
+    this.onRetryVideo,
     required this.isCurrent,
     required this.isPaused,
     required this.onPauseToggle,
@@ -618,8 +683,10 @@ class ReelCard extends StatefulWidget {
   State<ReelCard> createState() => _ReelCardState();
 }
 
-class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin {
+class _ReelCardState extends State<ReelCard>
+    with SingleTickerProviderStateMixin {
   DateTime? _lastTap;
+  bool _isMuted = true;
   bool _showLikeAnimation = false;
   late AnimationController _likeAnimationController;
   late Animation<double> _likeScaleAnimation;
@@ -681,30 +748,44 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
     }
   }
 
+  @override
+  void didUpdateWidget(ReelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final vc = widget.videoController;
+    if (vc != null && vc.value.isInitialized) {
+      _isMuted = vc.value.volume < 0.5;
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final vc = widget.videoController;
+    if (vc == null) return;
+    final muted = await VideoPlayerHelper.toggleMute(vc);
+    if (mounted) setState(() => _isMuted = muted);
+  }
+
   void _handleSingleTap() {
     final now = DateTime.now();
-    if (_lastTap != null && now.difference(_lastTap!) < const Duration(milliseconds: 300)) {
+    if (_lastTap != null &&
+        now.difference(_lastTap!) < const Duration(milliseconds: 300)) {
       _handleDoubleTap();
       _lastTap = null;
     } else {
       _lastTap = now;
-      // Тап на экран для паузы/плей (без задержки для более отзывчивого интерфейса)
       if (widget.videoController != null) {
-        final newPausedState = !widget.isPaused;
-        widget.onPauseToggle(newPausedState);
-        if (newPausedState) {
-          widget.videoController!.pause();
-        } else {
-          widget.videoController!.play();
-        }
+        VideoPlayerHelper.toggleOrStart(widget.videoController!).then((paused) {
+          if (mounted) widget.onPauseToggle(paused);
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final author = widget.reel.author;
-    
+    final reel = widget.reel;
+    final publisherAvatar = PostPublisherDisplay.avatarUrl(reel);
+    final publisherInitial = PostPublisherDisplay.avatarInitial(reel);
+
     return GestureDetector(
       onTap: _handleSingleTap,
       onDoubleTap: _handleDoubleTap,
@@ -714,23 +795,36 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
           // Видео (полноэкранное)
           if (widget.videoController != null)
             SizedBox.expand(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: widget.videoController!.videoPlayerController.value.size.width,
-                  height: widget.videoController!.videoPlayerController.value.size.height,
-                  child: Chewie(controller: widget.videoController!),
-                ),
-              ),
+              child: CoverNetworkVideo(controller: widget.videoController!),
             )
           else
             Container(
               color: Colors.black,
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+              child: Center(
+                child: widget.videoInitFailed
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.videocam_off_outlined,
+                              color: Colors.white70, size: 48),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Не удалось загрузить видео',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          if (widget.onRetryVideo != null) ...[
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: widget.onRetryVideo,
+                              child: const Text('Повторить'),
+                            ),
+                          ],
+                        ],
+                      )
+                    : const CircularProgressIndicator(color: Colors.white),
               ),
             ),
-          
+
           // Индикатор паузы
           if (widget.isPaused)
             Container(
@@ -743,7 +837,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                 ),
               ),
             ),
-          
+
           // Прозрачный overlay для паузы/плей (не закрываем правую колонку — 100px)
           Positioned(
             left: 0,
@@ -756,7 +850,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
               behavior: HitTestBehavior.opaque,
             ),
           ),
-          
+
           // Анимация лайка при двойном тапе
           if (_showLikeAnimation)
             Center(
@@ -777,7 +871,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                 },
               ),
             ),
-          
+
           // Градиент снизу (для читаемости текста)
           Positioned(
             bottom: 0,
@@ -798,7 +892,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
               ),
             ),
           ),
-          
+
           // Контент справа (кнопки) — оборачиваем в Material для надёжного hit-testing на web
           Positioned(
             right: 12,
@@ -806,115 +900,130 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
             child: Material(
               type: MaterialType.transparency,
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Аватар автора (сверху)
-                GestureDetector(
-                  onTap: widget.onAuthorTap,
-                  child: Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2.5),
-                    ),
-                    child: ClipOval(
-                      child: author?.avatarUrl != null
-                          ? CachedNetworkImage(
-                              imageUrl: author!.avatarUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Аватар автора (сверху)
+                  GestureDetector(
+                    onTap: widget.onAuthorTap,
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2.5),
+                      ),
+                      child: ClipOval(
+                        child: publisherAvatar != null
+                            ? CachedNetworkImage(
+                                imageUrl: publisherAvatar,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[800],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[800],
+                                  child: const Icon(Icons.person,
+                                      color: Colors.white),
+                                ),
+                              )
+                            : Container(
                                 color: Colors.grey[800],
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+                                child: Center(
+                                  child: Text(
+                                    publisherInitial,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[800],
-                                child: const Icon(Icons.person, color: Colors.white),
-                              ),
-                            )
-                          : Container(
-                              color: Colors.grey[800],
-                              child: Center(
-                                child: Text(
-                                  author?.name.isNotEmpty == true
-                                      ? author!.name[0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                
-                // Лайк
-                _ActionButton(
-                  icon: widget.reel.isLiked ? Icons.favorite : Icons.favorite_border,
-                  count: widget.reel.likesCount,
-                  onTap: widget.onLike,
-                  color: widget.reel.isLiked ? Colors.red : Colors.white,
-                ),
-                const SizedBox(height: 20),
-                
-                // Комментарий
-                _ActionButton(
-                  icon: Icons.comment_outlined,
-                  count: widget.reel.commentsCount,
-                  onTap: widget.onComment,
-                ),
-                const SizedBox(height: 20),
-                
-                // Репост
-                _ActionButton(
-                  icon: widget.reel.isReposted ?? false
-                      ? Icons.repeat
-                      : Icons.repeat_outlined,
-                  count: widget.reel.repostsCount,
-                  onTap: widget.onRepost,
-                  color: (widget.reel.isReposted ?? false) ? Colors.green : Colors.white,
-                ),
-                const SizedBox(height: 20),
-                
-                // Сохранить
-                _ActionButton(
-                  icon: (widget.reel.isSaved ?? false)
-                      ? Icons.bookmark
-                      : Icons.bookmark_border,
-                  count: 0,
-                  onTap: widget.onSave,
-                  color: (widget.reel.isSaved ?? false) ? Colors.amber : Colors.white,
-                ),
-                const SizedBox(height: 20),
-                
-                // Поделиться
-                _ActionButton(
-                  icon: Icons.share_outlined,
-                  count: 0,
-                  onTap: widget.onShare,
-                ),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // Пожаловаться
-                _ActionButton(
-                  icon: Icons.flag_outlined,
-                  count: 0,
-                  onTap: widget.onReport,
-                ),
-              ],
-            ),
+                  // Лайк
+                  _ActionButton(
+                    icon: widget.reel.isLiked
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    count: widget.reel.likesCount,
+                    onTap: widget.onLike,
+                    color: widget.reel.isLiked ? Colors.red : Colors.white,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Комментарий
+                  _ActionButton(
+                    icon: Icons.comment_outlined,
+                    count: widget.reel.commentsCount,
+                    onTap: widget.onComment,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Репост
+                  _ActionButton(
+                    icon: widget.reel.isReposted ?? false
+                        ? Icons.repeat
+                        : Icons.repeat_outlined,
+                    count: widget.reel.repostsCount,
+                    onTap: widget.onRepost,
+                    color: (widget.reel.isReposted ?? false)
+                        ? Colors.green
+                        : Colors.white,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Сохранить
+                  _ActionButton(
+                    icon: (widget.reel.isSaved ?? false)
+                        ? Icons.bookmark
+                        : Icons.bookmark_border,
+                    count: 0,
+                    onTap: widget.onSave,
+                    color: (widget.reel.isSaved ?? false)
+                        ? Colors.amber
+                        : Colors.white,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Поделиться
+                  _ActionButton(
+                    icon: Icons.share_outlined,
+                    count: 0,
+                    onTap: widget.onShare,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Звук
+                  if (widget.videoController != null)
+                    _ActionButton(
+                      icon: _isMuted ? Icons.volume_off : Icons.volume_up,
+                      count: 0,
+                      onTap: _toggleMute,
+                      showCount: false,
+                    ),
+                  if (widget.videoController != null) const SizedBox(height: 20),
+
+                  // Пожаловаться
+                  _ActionButton(
+                    icon: Icons.flag_outlined,
+                    count: 0,
+                    onTap: widget.onReport,
+                  ),
+                ],
+              ),
             ),
           ),
-          
+
           // Информация об авторе и описание снизу слева - как в Instagram
           Positioned(
             bottom: 0,
@@ -930,7 +1039,7 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                   GestureDetector(
                     onTap: widget.onAuthorTap,
                     child: Text(
-                      '@${author?.username ?? author?.name ?? "unknown"}',
+                      PostPublisherDisplay.atLabel(reel),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -939,13 +1048,15 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 10),
-                  
+
                   // Описание с поддержкой хештегов и упоминаний
-                  if (widget.reel.description != null && widget.reel.description!.isNotEmpty)
+                  if (widget.reel.description != null &&
+                      widget.reel.description!.isNotEmpty)
                     _buildDescription(widget.reel.description!),
-                  
+
                   // Хештеги из tags
-                  if (widget.reel.tags != null && widget.reel.tags!.isNotEmpty) ...[
+                  if (widget.reel.tags != null &&
+                      widget.reel.tags!.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -1003,9 +1114,8 @@ class _ReelCardState extends State<ReelCard> with SingleTickerProviderStateMixin
             );
           }
           if (word.startsWith('@')) {
-            final username = word
-                .substring(1)
-                .replaceAll(RegExp(r'[^\w._]+$'), '');
+            final username =
+                word.substring(1).replaceAll(RegExp(r'[^\w._]+$'), '');
             if (username.isEmpty) {
               return TextSpan(text: '$word ');
             }
@@ -1035,17 +1145,19 @@ class _ActionButton extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
   final Color? color;
-  
+  final bool showCount;
+
   const _ActionButton({
     required this.icon,
     required this.count,
     required this.onTap,
     this.color,
+    this.showCount = true,
   });
-  
+
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
-  
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1063,17 +1175,18 @@ class _ActionButton extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          _formatCount(count),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
+        if (showCount) ...[
+          const SizedBox(height: 4),
+          Text(
+            _formatCount(count),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 }
-

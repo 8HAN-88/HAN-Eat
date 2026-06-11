@@ -15,6 +15,7 @@ class SupportTicket(Base):
     subject = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     status = Column(String(20), default="open", index=True)  # open | in_progress | resolved | closed
+    is_priority = Column(Boolean, default=False, nullable=False, index=True)  # H.A.N. Pro
     resolved_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Кто обработал
     resolution_comment = Column(Text, nullable=True)  # Комментарий при обработке
     created_at = Column(DateTime, server_default=func.now(), index=True)

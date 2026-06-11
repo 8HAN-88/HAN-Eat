@@ -193,6 +193,9 @@ class SubscriptionStatusResponse {
 
   bool get hasAnyPaid => isActive && subscriptionType != 'free';
 
+  bool get hasPro =>
+      isActive && (subscriptionType == 'pro' || entitlements['meal_plan_family'] == true);
+
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;
 
@@ -236,6 +239,22 @@ class SubscriptionStatusResponse {
           const [],
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'is_plus': isPlus,
+        'has_ai': hasAi,
+        'has_creator': hasCreator,
+        'is_active': isActive,
+        'subscription_status': subscriptionStatus,
+        'subscription_type': subscriptionType,
+        if (expiresAt != null)
+          'expires_at': expiresAt!.toIso8601String(),
+        if (platform != null) 'platform': platform,
+        'auto_renew': autoRenew,
+        'entitlements': entitlements,
+        if (trialEligible != null) 'trial_eligible': trialEligible,
+        'in_grace_period': inGracePeriod,
+      };
 }
 
 class SubscriptionUpgradeOption {

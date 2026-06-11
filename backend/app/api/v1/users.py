@@ -5,22 +5,47 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func, or_, and_, exists
+from sqlalchemy import func, or_, and_, exists, case
 from typing import Optional
 from app.core.database import get_db
 from app.services.ai_scan_credits_service import AiScanCreditsService
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
+from app.services.chat_service import ChatService
 from app.models.post import Post
 from app.models.repost import Repost
 from app.models.follower import Follower
 from app.models.saved_post import SavedPost
-from app.schemas.user import UserProfileResponse, UserStats, UpdateUserRequest, UserResponse
+from app.core.phone_hash import hash_phone_raw, normalize_phone_e164
+from app.schemas.user import (
+    LinkPhoneRequest,
+    LinkPhoneResponse,
+    UserProfileResponse,
+    UserStats,
+    UpdateUserRequest,
+    UserResponse,
+)
 from app.schemas.post import PostResponse
 from app.schemas.notification_preferences import NotificationPreferencesResponse, UpdateNotificationPreferencesRequest
 from app.models.notification_preferences import NotificationPreferences
 
 router = APIRouter()
+
+
+def _profile_wall_owned_clause():
+    """
+    Личная стена профиля: исключаем контент каналов.
+    channel_id — основной признак; publish_to с channel: — для старых записей.
+    """
+    return and_(
+        Post.channel_id.is_(None),
+        or_(
+            Post.publish_to.is_(None),
+            func.coalesce(func.array_to_string(Post.publish_to, ","), "").notlike(
+                "%channel:%"
+            ),
+        ),
+    )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -31,6 +56,67 @@ async def get_current_user_profile(
     """Получить профиль текущего пользователя (кредиты AI scan начисляются по суткам)."""
     user = AiScanCreditsService(db).refresh_user(current_user.id)
     return UserResponse.model_validate(user)
+
+
+@router.post("/me/phone", response_model=LinkPhoneResponse)
+async def link_phone(
+    body: LinkPhoneRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Привязать номер телефона — чтобы друзья из адресной книги могли вас найти."""
+    region = (current_user.country_code or "RU").upper()
+    e164 = normalize_phone_e164(body.phone, default_region=region)
+    if not e164:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Некорректный номер телефона",
+        )
+    phone_hash = hash_phone_raw(body.phone, default_region=region)
+    if not phone_hash:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Некорректный номер телефона",
+        )
+    taken = (
+        db.query(User)
+        .filter(User.phone_hash == phone_hash, User.id != current_user.id)
+        .first()
+    )
+    if taken:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Этот номер уже привязан к другому аккаунту",
+        )
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    current_user.phone_hash = phone_hash
+    current_user.phone_linked_at = now
+    db.commit()
+    return LinkPhoneResponse(ok=True, phone_linked=True)
+
+
+@router.delete("/me/phone")
+async def unlink_phone(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Отвязать номер — вас не найдут через синхронизацию контактов."""
+    current_user.phone_hash = None
+    current_user.phone_linked_at = None
+    db.commit()
+    return {"ok": True, "phone_linked": False}
+
+
+@router.post("/me/presence")
+async def ping_presence(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Heartbeat для «был(а) в сети» в чатах."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    current_user.last_seen_at = now
+    db.commit()
+    return {"ok": True, "last_seen_at": now.isoformat()}
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)
@@ -65,7 +151,7 @@ async def get_user_profile(
                 Post.user_id == user_id,
                 Post.status == "published",
                 Post.deleted_at.is_(None),
-                Post.channel_id.is_(None)  # Исключаем посты из каналов
+                _profile_wall_owned_clause(),
             ).scalar() or 0
             
             reels_count = db.query(func.count(Post.id)).filter(
@@ -73,7 +159,7 @@ async def get_user_profile(
                 Post.type == "reel",
                 Post.status == "published",
                 Post.deleted_at.is_(None),
-                Post.channel_id.is_(None)  # Исключаем посты из каналов
+                _profile_wall_owned_clause(),
             ).scalar() or 0
             
             followers_count = db.query(func.count(Follower.id)).filter(
@@ -113,7 +199,7 @@ async def get_user_profile(
             Post.user_id == user_id,
             Post.status == "published",
             Post.deleted_at.is_(None),
-            Post.channel_id.is_(None)  # Исключаем посты из каналов
+            _profile_wall_owned_clause(),
         ).scalar() or 0
         
         reels_count = db.query(func.count(Post.id)).filter(
@@ -121,7 +207,7 @@ async def get_user_profile(
             Post.type == "reel",
             Post.status == "published",
             Post.deleted_at.is_(None),
-            Post.channel_id.is_(None)  # Исключаем посты из каналов
+            _profile_wall_owned_clause(),
         ).scalar() or 0
         
         followers_count = db.query(func.count(Follower.id)).filter(
@@ -246,7 +332,7 @@ async def get_user_posts(
         Post.user_id == user_id,
         Post.status == "published",
         Post.deleted_at.is_(None),
-        Post.channel_id.is_(None),
+        _profile_wall_owned_clause(),
     ]
 
     # Оригиналы репостов: для чужого профиля учитываем видимость; на своей стене — все свои репосты
@@ -420,6 +506,163 @@ async def get_user_posts(
     return {"posts": posts_data, "total": total}
 
 
+def _user_list_item(user: User) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "avatar_url": user.avatar_url,
+        "bio": user.bio,
+        "is_private": user.is_private,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
+
+
+def _invalidate_user_stats_cache(user_ids: list[int]) -> None:
+    from app.services.user_stats_cache import invalidate_user_stats_cache
+
+    invalidate_user_stats_cache(list(set(user_ids)))
+
+
+def _invalidate_follow_caches(follower_id: int, followee_id: int) -> None:
+    _invalidate_user_stats_cache([follower_id, followee_id])
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        redis_client = get_redis()
+        FeedService(None, redis_client).invalidate_feed_cache(follower_id)
+    except Exception:
+        pass
+
+
+@router.post("/{user_id}/follow")
+async def follow_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Подписаться на пользователя."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя подписаться на себя",
+        )
+    target = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    existing = (
+        db.query(Follower)
+        .filter(Follower.follower_id == current_user.id, Follower.followee_id == user_id)
+        .first()
+    )
+    if not existing:
+        db.add(Follower(follower_id=current_user.id, followee_id=user_id))
+        db.commit()
+        _invalidate_follow_caches(current_user.id, user_id)
+    return {"following": True}
+
+
+@router.delete("/{user_id}/follow")
+async def unfollow_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Отписаться от пользователя."""
+    existing = (
+        db.query(Follower)
+        .filter(Follower.follower_id == current_user.id, Follower.followee_id == user_id)
+        .first()
+    )
+    if existing:
+        db.delete(existing)
+        db.commit()
+        _invalidate_follow_caches(current_user.id, user_id)
+    return {"following": False}
+
+
+@router.get("/{user_id}/followers")
+async def get_user_followers(
+    user_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Список подписчиков пользователя."""
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    total = db.query(func.count(Follower.id)).filter(Follower.followee_id == user_id).scalar() or 0
+    rows = (
+        db.query(User)
+        .join(Follower, Follower.follower_id == User.id)
+        .filter(Follower.followee_id == user_id, User.deleted_at.is_(None))
+        .order_by(Follower.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    following_ids = set()
+    if current_user and rows:
+        ids = [u.id for u in rows]
+        following_ids = {
+            row[0]
+            for row in db.query(Follower.followee_id)
+            .filter(Follower.follower_id == current_user.id, Follower.followee_id.in_(ids))
+            .all()
+        }
+    return {
+        "items": [
+            {**_user_list_item(u), "is_following": u.id in following_ids}
+            for u in rows
+        ],
+        "total": int(total),
+    }
+
+
+@router.get("/{user_id}/following")
+async def get_user_following(
+    user_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Список пользователей, на которых подписан пользователь."""
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    total = db.query(func.count(Follower.id)).filter(Follower.follower_id == user_id).scalar() or 0
+    rows = (
+        db.query(User)
+        .join(Follower, Follower.followee_id == User.id)
+        .filter(Follower.follower_id == user_id, User.deleted_at.is_(None))
+        .order_by(Follower.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    following_ids = set()
+    if current_user and rows:
+        ids = [u.id for u in rows]
+        following_ids = {
+            row[0]
+            for row in db.query(Follower.followee_id)
+            .filter(Follower.follower_id == current_user.id, Follower.followee_id.in_(ids))
+            .all()
+        }
+    return {
+        "items": [
+            {**_user_list_item(u), "is_following": u.id in following_ids}
+            for u in rows
+        ],
+        "total": int(total),
+    }
+
+
 @router.get("/me/notification-preferences", response_model=NotificationPreferencesResponse)
 async def get_notification_preferences(
     current_user: User = Depends(get_current_user_required),
@@ -436,6 +679,7 @@ async def get_notification_preferences(
             user_id=current_user.id,
             likes_enabled=True,
             comments_enabled=True,
+            messages_enabled=True,
             follows_enabled=True,
             reposts_enabled=True,
             mentions_enabled=True,
@@ -470,6 +714,8 @@ async def update_notification_preferences(
         prefs.likes_enabled = request.likes_enabled
     if request.comments_enabled is not None:
         prefs.comments_enabled = request.comments_enabled
+    if request.messages_enabled is not None:
+        prefs.messages_enabled = request.messages_enabled
     if request.follows_enabled is not None:
         prefs.follows_enabled = request.follows_enabled
     if request.reposts_enabled is not None:
@@ -485,4 +731,39 @@ async def update_notification_preferences(
     db.refresh(prefs)
     
     return NotificationPreferencesResponse.model_validate(prefs)
+
+
+@router.post("/{user_id}/block")
+async def block_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.block_user(current_user.id, user_id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "user_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        if code == "self_block":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot block yourself")
+        raise
+    return {"ok": True}
+
+
+@router.delete("/{user_id}/block")
+async def unblock_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    ok = svc.unblock_user(current_user.id, user_id)
+    db.commit()
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Block not found")
+    return {"ok": True}
 

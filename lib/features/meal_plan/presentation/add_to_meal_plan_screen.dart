@@ -202,7 +202,8 @@ class _AddToMealPlanScreenState extends State<AddToMealPlanScreen> {
     setState(() => _addingToPlan = true);
 
     try {
-      await MealPlanService.instance.addRecipeToPlan(
+      final mealPlan = await MealPlanService.ensureInitialized();
+      await mealPlan.addRecipeToPlan(
         recipe: recipe,
         mealType: _selectedMealType!,
         date: _selectedDate,

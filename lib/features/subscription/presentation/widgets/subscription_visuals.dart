@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../subscription_copy.dart';
 
@@ -9,7 +10,7 @@ BoxDecoration subscriptionBrandGradientDecoration({
   double opacity = 1,
 }) {
   return BoxDecoration(
-    borderRadius: radius ?? BorderRadius.circular(20),
+    borderRadius: radius ?? BorderRadius.circular(AppRadius.card),
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -53,7 +54,7 @@ class SubscriptionHero extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: const Icon(
                   Icons.workspace_premium_rounded,
@@ -64,10 +65,11 @@ class SubscriptionHero extends StatelessWidget {
               const Spacer(),
               if (trialDays != null && trialDays! > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
                   child: Text(
                     'Пробный период $trialDays дн.',
@@ -144,7 +146,7 @@ class SubscriptionTierCard extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         color: isSelected
             ? cs.primaryContainer.withValues(alpha: 0.55)
             : cs.surface,
@@ -152,7 +154,8 @@ class SubscriptionTierCard extends StatelessWidget {
         boxShadow: [
           if (isSelected || isRecommended)
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: isSelected ? 0.18 : 0.08),
+              color:
+                  AppColors.primary.withValues(alpha: isSelected ? 0.18 : 0.08),
               blurRadius: isSelected ? 16 : 10,
               offset: const Offset(0, 4),
             ),
@@ -162,9 +165,9 @@ class SubscriptionTierCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: AppInsets.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -183,7 +186,7 @@ class SubscriptionTierCard extends StatelessWidget {
                                   cs.surfaceContainerHigh,
                                 ],
                         ),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                       child: Icon(
                         icon,
@@ -226,15 +229,17 @@ class SubscriptionTierCard extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             subtitle,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
                           ),
                         ],
                       ),
                     ),
                     if (isSelected)
-                      Icon(Icons.check_circle_rounded, color: cs.primary, size: 22),
+                      Icon(Icons.check_circle_rounded,
+                          color: cs.primary, size: 22),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -255,33 +260,42 @@ class SubscriptionTierCard extends StatelessWidget {
                       color: cs.primary,
                     ),
                   ),
+                ] else if (!trialEligible && !isOwned && tierId == 'creator') ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Пробный период для Creator недоступен',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 12),
-                ...benefits.take(4).map(
-                      (b) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 18,
-                              color: isSelected ? AppColors.primary : cs.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                b,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ),
-                          ],
+                ...benefits.map(
+                  (b) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: isSelected ? AppColors.primary : cs.primary,
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            b,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -303,7 +317,7 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: filled ? AppColors.primary : const Color(0xFFFFE8E0),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
         label,
@@ -353,7 +367,7 @@ class AiScanExhaustedPaywall extends StatelessWidget {
           width: 88,
           height: 88,
           decoration: subscriptionBrandGradientDecoration(
-            radius: BorderRadius.circular(28),
+            radius: BorderRadius.circular(AppRadius.sheet),
           ),
           child: Icon(
             headerIcon,
@@ -392,7 +406,7 @@ class AiScanExhaustedPaywall extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadius.md),
               border:
                   Border.all(color: cs.outlineVariant.withValues(alpha: 0.6)),
             ),
@@ -419,13 +433,13 @@ class AiScanExhaustedPaywall extends StatelessWidget {
             height: 52,
             child: DecoratedBox(
               decoration: subscriptionBrandGradientDecoration(
-                radius: BorderRadius.circular(14),
+                radius: BorderRadius.circular(AppRadius.md),
               ),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: onChoosePlan,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Center(
                     child: Text(
                       primaryCtaLabel ?? SubscriptionCopy.paywallCta,

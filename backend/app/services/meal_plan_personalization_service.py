@@ -12,6 +12,9 @@ from app.schemas.meal_plan import NutritionPreferences
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_MACRO_SPLIT = {"protein_pct": 30, "fat_pct": 30, "carbs_pct": 40}
+_DEFAULT_MEAL_DISTRIBUTION = {"breakfast": 0.25, "lunch": 0.4, "dinner": 0.35}
+
 
 class MealPlanPersonalizationService:
     def build_strategy(
@@ -69,7 +72,8 @@ class MealPlanPersonalizationService:
         return {
             "ai_recommendation": rec,
             "daily_calorie_target": daily,
-            "macro_split": {"protein_pct": 30, "fat_pct": 30, "carbs_pct": 40},
+            "macro_split": dict(_DEFAULT_MACRO_SPLIT),
+            "meal_calorie_distribution": dict(_DEFAULT_MEAL_DISTRIBUTION),
             "meal_timing_notes": "Завтрак в течение 2 часов после пробуждения, ужин за 3 часа до сна.",
             "duration_days": duration_days,
             "source": "rules",
@@ -93,6 +97,10 @@ class MealPlanPersonalizationService:
             "family_size": preferences.family_size,
             "primary_goal": preferences.primary_goal,
             "activity_level": preferences.activity_level,
+            "sex": preferences.sex,
+            "age": preferences.age,
+            "height_cm": preferences.height_cm,
+            "weight_kg": preferences.weight_kg,
             "meals_per_day": preferences.meals_per_day,
             "cooking_time": preferences.cooking_time,
             "cooking_skill": preferences.cooking_skill,
@@ -104,12 +112,25 @@ class MealPlanPersonalizationService:
             "tier": tier,
         }
         system = (
-            "Ты нутрициолог H.A.N. Eat. Верни ТОЛЬКО JSON без markdown: "
-            '{"ai_recommendation":"одна фраза на русском",'
-            '"daily_calorie_target":число,'
-            '"macro_split":{"protein_pct":30,"fat_pct":30,"carbs_pct":40},'
+            "Ты аккуратный нутрициолог H.A.N. Eat. Твоя задача — составить "
+            "реалистичную стратегию питания, а не медицинский диагноз. Верни ТОЛЬКО "
+            "валидный JSON без markdown и пояснений вне JSON. Не генерируй рецепты, "
+            "не перечисляй блюда по дням и не обещай лечебный эффект.\n"
+            "Правила качества: учитывай цель, активность, аллергию, диеты, бюджет, "
+            "количество людей, время готовки и желаемый темп изменения веса. Если "
+            "рост/вес/возраст/пол указаны, ориентируйся на них, но не ставь "
+            "экстремальные цели. Если daily_calories уже задан, используй его как "
+            "главный лимит и корректируй только если он явно небезопасен. Для похудения "
+            "выбирай умеренный дефицит, для набора — умеренный профицит, для здоровья — "
+            "поддержание. Белок повышай при muscle_gain/high_protein, но держи БЖУ "
+            "реалистичными: сумма процентов должна быть 100.\n"
+            "Верни структуру: "
+            '{"ai_recommendation":"2-3 коротких практичных предложения на русском",'
+            '"daily_calorie_target":число 800-6000,'
+            '"macro_split":{"protein_pct":число,"fat_pct":число,"carbs_pct":число},'
+            '"meal_calorie_distribution":{"breakfast":0.25,"lunch":0.40,"dinner":0.35},'
             '"meal_timing_notes":"кратко на русском"}. '
-            "Не генерируй рецепты и не перечисляй блюда по дням."
+            "meal_calorie_distribution должен суммироваться примерно в 1.0."
         )
         try:
             with httpx.Client(timeout=25.0) as client:
@@ -121,8 +142,8 @@ class MealPlanPersonalizationService:
                     },
                     json={
                         "model": "gpt-4o-mini",
-                        "temperature": 0.4,
-                        "max_tokens": 280,
+                        "temperature": 0.2,
+                        "max_tokens": 420,
                         "messages": [
                             {"role": "system", "content": system},
                             {
@@ -136,13 +157,12 @@ class MealPlanPersonalizationService:
                 logger.warning("meal plan GPT status %s", resp.status_code)
                 return None
             content = resp.json()["choices"][0]["message"]["content"]
-            data = json.loads(content.strip())
+            data = json.loads(_strip_json_fence(content))
             if not isinstance(data, dict):
                 return None
+            data = _normalize_strategy(data, preferences)
             data["source"] = "gpt"
             data["duration_days"] = duration_days
-            if preferences.daily_calories and not data.get("daily_calorie_target"):
-                data["daily_calorie_target"] = preferences.daily_calories
             return data
         except Exception as e:
             logger.warning("meal plan GPT failed: %s", e)
@@ -180,3 +200,79 @@ _GOAL_TARGET_LABELS: Dict[str, str] = {
 
 def _goal_target_labels(ids: List[str]) -> List[str]:
     return [_GOAL_TARGET_LABELS.get(i, i) for i in ids]
+
+
+def _strip_json_fence(content: str) -> str:
+    text = (content or "").strip()
+    if text.startswith("```"):
+        text = text.removeprefix("```json").removeprefix("```").strip()
+        if text.endswith("```"):
+            text = text[:-3].strip()
+    return text
+
+
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_strategy(
+    data: Dict[str, Any],
+    preferences: NutritionPreferences,
+) -> Dict[str, Any]:
+    fallback_daily = int(preferences.daily_calories or 2000)
+    daily = _safe_int(data.get("daily_calorie_target"), fallback_daily)
+    data["daily_calorie_target"] = min(6000, max(800, daily))
+
+    raw_macro = data.get("macro_split")
+    macro = raw_macro if isinstance(raw_macro, dict) else {}
+    protein = max(10, min(45, _safe_int(macro.get("protein_pct"), 30)))
+    fat = max(15, min(45, _safe_int(macro.get("fat_pct"), 30)))
+    carbs = max(10, min(70, _safe_int(macro.get("carbs_pct"), 100 - protein - fat)))
+    total = max(1, protein + fat + carbs)
+    data["macro_split"] = {
+        "protein_pct": round(protein * 100 / total),
+        "fat_pct": round(fat * 100 / total),
+        "carbs_pct": max(
+            0,
+            100 - round(protein * 100 / total) - round(fat * 100 / total),
+        ),
+    }
+
+    raw_dist = data.get("meal_calorie_distribution")
+    dist = raw_dist if isinstance(raw_dist, dict) else {}
+    breakfast = _coerce_ratio(dist.get("breakfast"), 0.25)
+    lunch = _coerce_ratio(dist.get("lunch"), 0.4)
+    dinner = _coerce_ratio(dist.get("dinner"), 0.35)
+    total_dist = breakfast + lunch + dinner
+    if total_dist <= 0:
+        data["meal_calorie_distribution"] = dict(_DEFAULT_MEAL_DISTRIBUTION)
+    else:
+        data["meal_calorie_distribution"] = {
+            "breakfast": round(breakfast / total_dist, 3),
+            "lunch": round(lunch / total_dist, 3),
+            "dinner": round(dinner / total_dist, 3),
+        }
+
+    if not data.get("ai_recommendation"):
+        data["ai_recommendation"] = (
+            "Сбалансируйте каждый день по белку, овощам и контролю порций. "
+            "Корректируйте размер порций по самочувствию и цели."
+        )
+    if not data.get("meal_timing_notes"):
+        data["meal_timing_notes"] = (
+            "Держите основные приёмы пищи регулярными, ужин делайте легче обеда."
+        )
+    return data
+
+
+def _coerce_ratio(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = default
+    if parsed > 1:
+        parsed = parsed / 100
+    return max(0.05, min(0.8, parsed))

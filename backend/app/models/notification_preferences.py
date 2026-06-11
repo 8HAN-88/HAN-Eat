@@ -15,6 +15,7 @@ class NotificationPreferences(Base):
     # Типы уведомлений
     likes_enabled = Column(Boolean, default=True, nullable=False)
     comments_enabled = Column(Boolean, default=True, nullable=False)
+    messages_enabled = Column(Boolean, default=True, nullable=False)
     follows_enabled = Column(Boolean, default=True, nullable=False)
     reposts_enabled = Column(Boolean, default=True, nullable=False)
     mentions_enabled = Column(Boolean, default=True, nullable=False)

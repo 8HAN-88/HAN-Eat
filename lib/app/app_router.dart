@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'dart:typed_data';
-
 import '../features/menu/presentation/menu_screen.dart';
 import '../features/menu/presentation/scan_result_screen.dart';
 import '../screens/cooking_mode_screen.dart';
@@ -35,17 +33,20 @@ import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
+import '../features/legal/presentation/legal_consent_screen.dart';
 import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
+import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
 import '../models/post_model.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/profile/presentation/follow_list_screen.dart';
 import '../features/feed/presentation/main_feed_screen.dart';
 import '../features/comments/presentation/comments_screen.dart';
-import '../features/channels/presentation/channels_main_screen.dart';
 import '../features/channels/presentation/channel_detail_screen.dart';
 import '../features/channels/presentation/channel_info_screen.dart';
+import '../features/channels/presentation/channel_subscribers_screen.dart';
 import '../features/channels/presentation/channel_post_detail_screen.dart';
 import '../features/channels/presentation/channels_management_screen.dart';
 import '../features/channels/presentation/create_channel_screen.dart';
@@ -57,17 +58,24 @@ import '../features/creator/presentation/promoted_posts_screen.dart';
 import '../features/creator/presentation/creator_tools_screen.dart';
 import '../features/channels/presentation/channel_management_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/settings/notification_settings_page.dart';
 import '../features/support/presentation/support_screen.dart';
 import '../features/analytics/presentation/analytics_screen.dart';
 import '../features/moderation/presentation/moderation_dashboard_screen.dart';
 import '../features/admin/presentation/admin_refund_queue_screen.dart';
 import '../features/moderation/presentation/moderation_queue_screen.dart';
+import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/favorites/favorites_page.dart';
 import '../features/profile/user_search_page.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
+import '../features/chat/presentation/chats_hub_screen.dart';
+import '../features/chat/presentation/chat_thread_screen.dart';
+import '../models/chat_models.dart';
 import '../services/auth_service.dart';
+import 'app_bootstrap_state.dart';
+import 'boot_screen.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
 import 'invalid_link_screen.dart';
@@ -94,6 +102,9 @@ String? parseDeepLinkToGoPath(String raw) {
     if (uri.host == 'channel' && uri.pathSegments.isNotEmpty) {
       return '/channel/${uri.pathSegments.first}';
     }
+    if (uri.host == 'chat' && uri.pathSegments.isNotEmpty) {
+      return '/chats/thread/${uri.pathSegments.first}';
+    }
     if (uri.host == 'subscription') {
       if (uri.pathSegments.contains('success')) {
         return SubscriptionSuccessRoute.path;
@@ -101,6 +112,13 @@ String? parseDeepLinkToGoPath(String raw) {
       if (uri.pathSegments.contains('cancel')) {
         return SubscriptionCancelRoute.path;
       }
+    }
+    if (uri.host == 'invite') {
+      final ref = uri.queryParameters['ref'];
+      if (ref != null && ref.isNotEmpty) {
+        return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
+      }
+      return RegisterRoute.path;
     }
     if (uri.host == 'auth' && uri.pathSegments.isNotEmpty) {
       final action = uri.pathSegments.first;
@@ -121,6 +139,28 @@ String? parseDeepLinkToGoPath(String raw) {
   return null;
 }
 
+/// После смены числа вкладок (5→4) старый shell index мог быть вне диапазона → краш IndexedStack.
+Widget _safeShellIndexedStack(
+  BuildContext context,
+  StatefulNavigationShell shell,
+  List<Widget> children,
+) {
+  if (children.isEmpty) return const SizedBox.shrink();
+  final last = children.length - 1;
+  final raw = shell.currentIndex;
+  final idx = raw < 0 || raw > last ? 0 : raw;
+  return IndexedStack(
+    index: idx,
+    sizing: StackFit.expand,
+    children: List.generate(children.length, (i) {
+      return TickerMode(
+        enabled: i == idx,
+        child: children[i],
+      );
+    }),
+  );
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final initialLoc = () {
     if (initialDeepLink != null) {
@@ -128,17 +168,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       initialDeepLink = null;
       if (path != null) return path;
     }
-    if (AuthService.instance.currentUser == null) {
-      return LoginRoute.path;
-    }
-    return FeedRoute.path;
+    return BootScreen.path;
   }();
   return GoRouter(
     navigatorKey: hanEatRootNavigatorKey,
     initialLocation: initialLoc,
-    refreshListenable: AuthService.sessionRevision,
+    refreshListenable: Listenable.merge([
+      AuthService.sessionRevision,
+      AppBootstrapState.authReady,
+      AppBootstrapState.servicesReady,
+    ]),
     redirect: (context, state) {
       final loc = state.matchedLocation;
+      if (!AppBootstrapState.authReady.value) {
+        if (loc == BootScreen.path) return null;
+        return BootScreen.path;
+      }
+      if (loc == BootScreen.path) {
+        if (AuthService.instance.currentUser == null) {
+          return LoginRoute.path;
+        }
+        return FeedRoute.path;
+      }
+      if (loc == ChannelsListRoute.path) {
+        return ChatsRoute.path;
+      }
       if (loc == '/shopping') {
         return ShoppingListRoute.path;
       }
@@ -150,6 +204,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           !loc.startsWith('${VerifyEmailRoute.path}?')) {
         final email = Uri.encodeComponent(user.email);
         return '${VerifyEmailRoute.path}?email=$email';
+      }
+      if (isAuth &&
+          user.legalConsentRequired &&
+          loc != LegalConsentRoute.path) {
+        return LegalConsentRoute.path;
+      }
+      if (isAuth &&
+          (loc == LoginRoute.path || loc == RegisterRoute.path)) {
+        return FeedRoute.path;
       }
       if (isAuth) return null;
       if (routeAllowsGuestAccess(loc)) return null;
@@ -164,7 +227,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return LoginRoute.path;
     },
     routes: [
-      StatefulShellRoute.indexedStack(
+      GoRoute(
+        path: BootScreen.path,
+        name: 'boot',
+        pageBuilder: (context, state) => const NoTransitionPage(
+          key: ValueKey('boot'),
+          child: BootScreen(),
+        ),
+      ),
+      StatefulShellRoute(
+        navigatorContainerBuilder: _safeShellIndexedStack,
         builder: (context, state, navigationShell) =>
             RootShell(navigationShell: navigationShell),
         branches: [
@@ -183,11 +255,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: ChannelsListRoute.path,
-                name: ChannelsListRoute.name,
+                path: ChatsRoute.path,
+                name: ChatsRoute.name,
                 pageBuilder: (context, state) => NoTransitionPage(
-                  key: const ValueKey('channels_branch'),
-                  child: const ChannelsMainScreen(),
+                  key: const ValueKey('chats_branch'),
+                  child: const ChatsHubScreen(),
                 ),
               ),
             ],
@@ -217,6 +289,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: ChannelsListRoute.path,
+        name: ChannelsListRoute.name,
+        redirect: (context, state) => ChatsRoute.path,
       ),
       GoRoute(
         path: SettingsRoute.path,
@@ -367,6 +444,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: NotificationsScreen()),
       ),
       GoRoute(
+        path: NotificationSettingsRoute.path,
+        name: NotificationSettingsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: NotificationSettingsPage()),
+      ),
+      GoRoute(
         path: CreatorToolsRoute.path,
         name: CreatorToolsRoute.name,
         pageBuilder: (context, state) =>
@@ -436,6 +519,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: RegisterScreen()),
       ),
       GoRoute(
+        path: LegalConsentRoute.path,
+        name: LegalConsentRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: LegalConsentScreen()),
+      ),
+      GoRoute(
         path: ForgotPasswordRoute.path,
         name: ForgotPasswordRoute.name,
         pageBuilder: (context, state) {
@@ -495,12 +584,57 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: ProfileFollowersRoute.path,
+        name: ProfileFollowersRoute.name,
+        pageBuilder: (context, state) {
+          final id = parseRoutePositiveId(state.uri.queryParameters['userId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Подписчики'),
+            );
+          }
+          return MaterialPage(
+            child: FollowListScreen(userId: id, type: FollowListType.followers),
+          );
+        },
+      ),
+      GoRoute(
+        path: ProfileFollowingRoute.path,
+        name: ProfileFollowingRoute.name,
+        pageBuilder: (context, state) {
+          final id = parseRoutePositiveId(state.uri.queryParameters['userId']);
+          if (id == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Подписки'),
+            );
+          }
+          return MaterialPage(
+            child: FollowListScreen(userId: id, type: FollowListType.following),
+          );
+        },
+      ),
       // Create Post
       GoRoute(
         path: CreatePostRoute.path,
         name: CreatePostRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: CreatePostScreen()),
+      ),
+      GoRoute(
+        path: CreateReelRoute.path,
+        name: CreateReelRoute.name,
+        pageBuilder: (context, state) {
+          final channelId =
+              parseRoutePositiveId(state.uri.queryParameters['channelId']);
+          final channelName = state.uri.queryParameters['channelName'];
+          return MaterialPage(
+            child: CommunityUploadScreen(
+              channelId: channelId,
+              channelName: channelName,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/post/:postId/edit',
@@ -549,7 +683,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId',
         name: 'channel_page',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Канал'),
@@ -562,7 +697,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/info',
         name: 'channel_info',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Канал'),
@@ -574,10 +710,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/channel/:channelId/subscribers',
+        name: 'channel_subscribers',
+        pageBuilder: (context, state) {
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
+          if (channelId == null) {
+            return const MaterialPage(
+              child: InvalidLinkScreen(title: 'Подписчики канала'),
+            );
+          }
+          return MaterialPage<void>(
+            child: ChannelSubscribersScreen(
+              channelId: channelId,
+              channelName: state.uri.queryParameters['channelName'],
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: '/channel/:channelId/post/:postId',
         name: 'channel_post_detail',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           final postId = parseRoutePositiveId(state.pathParameters['postId']);
           if (channelId == null || postId == null) {
             return const MaterialPage(
@@ -608,7 +764,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/create-recipe',
         name: 'create_channel_recipe',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Канал'),
@@ -628,7 +785,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/create-post',
         name: 'create_channel_post',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Канал'),
@@ -647,7 +805,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/post/:postId/edit',
         name: 'edit_channel_post',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           final postId = parseRoutePositiveId(state.pathParameters['postId']);
           if (channelId == null || postId == null) {
             return const MaterialPage(
@@ -674,7 +833,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/settings',
         name: 'channel_settings',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Настройки канала'),
@@ -694,7 +854,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/channel/:channelId/management',
         name: 'channel_management',
         pageBuilder: (context, state) {
-          final channelId = parseRoutePositiveId(state.pathParameters['channelId']);
+          final channelId =
+              parseRoutePositiveId(state.pathParameters['channelId']);
           if (channelId == null) {
             return const MaterialPage(
               child: InvalidLinkScreen(title: 'Управление каналом'),
@@ -773,14 +934,43 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage<void>(child: UserSearchPage()),
       ),
+      GoRoute(
+        path: '${ChatThreadRoute.path}/:conversationId',
+        name: ChatThreadRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['conversationId'] ?? '');
+          final extra = state.extra;
+          if (id == null) {
+            return const MaterialPage(
+              child: AppEmptyState(
+                icon: Icons.chat_bubble_outline,
+                title: 'Чат не найден',
+              ),
+            );
+          }
+          return MaterialPage(
+            child: ChatThreadLoaderScreen(
+              conversationId: id,
+              initialConversation:
+                  extra is ChatConversation ? extra : null,
+              initialPeer: extra is ChatUserBrief ? extra : null,
+            ),
+          );
+        },
+      ),
       // Search
       GoRoute(
         path: SearchRoute.path,
         name: SearchRoute.name,
         pageBuilder: (context, state) {
-          final q = state.uri.queryParameters['q'];
+          final params = state.uri.queryParameters;
           return MaterialPage<void>(
-            child: SearchScreen(initialQuery: q),
+            child: SearchScreen(
+              initialQuery: params['q'],
+              scope: searchScopeFromQuery(params['scope']),
+              feedType: params['feed_type'],
+              followingOnly: params['following'] == '1',
+            ),
           );
         },
       ),
@@ -814,7 +1004,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         body: AppEmptyState(
           icon: Icons.error_outline_rounded,
           title: 'Не удалось открыть страницу',
-          subtitle: kDebugMode ? '${state.error}' : 'Попробуйте вернуться на главную',
+          subtitle:
+              kDebugMode ? '${state.error}' : 'Попробуйте вернуться на главную',
           action: FilledButton(
             onPressed: () => context.go(FeedRoute.path),
             child: const Text('На главную'),
@@ -873,6 +1064,20 @@ class ChannelsListRoute {
 class FeedRoute {
   static const path = '/feed';
   static const name = 'feed';
+}
+
+class ChatsRoute {
+  static const path = '/chats';
+  static const name = 'chats';
+}
+
+class ChatThreadRoute {
+  static const path = '/chats/thread';
+  static const name = 'chat_thread';
+
+  static String pathFor(ChatConversation conv) => '$path/${conv.id}';
+
+  static String pathForId(int conversationId) => '$path/$conversationId';
 }
 
 /// Вкладка «Профиль» в нижней навигации (хаб, не путать с [ProfileRoute] ленты профиля).
@@ -956,6 +1161,11 @@ class NotificationsRoute {
   static const name = 'notifications';
 }
 
+class NotificationSettingsRoute {
+  static const path = '/settings/notifications';
+  static const name = 'notification_settings';
+}
+
 class CreatorToolsRoute {
   static const path = '/creator/tools';
   static const name = 'creator_tools';
@@ -1009,6 +1219,11 @@ class RegisterRoute {
   static const name = 'register';
 }
 
+class LegalConsentRoute {
+  static const path = LegalConsentScreen.path;
+  static const name = 'legal_consent';
+}
+
 class ForgotPasswordRoute {
   static const path = '/forgot-password';
   static const name = 'forgot_password';
@@ -1048,6 +1263,20 @@ class ProfileRoute {
   static String withUserId(int userId) => '$path?userId=$userId';
 }
 
+class ProfileFollowersRoute {
+  static const path = '/profile/followers';
+  static const name = 'profile_followers';
+
+  static String withUserId(int userId) => '$path?userId=$userId';
+}
+
+class ProfileFollowingRoute {
+  static const path = '/profile/following';
+  static const name = 'profile_following';
+
+  static String withUserId(int userId) => '$path?userId=$userId';
+}
+
 /// Комментарии к посту (совпадает с GoRoute `post_comments`).
 class PostCommentsRoute {
   static const name = 'post_comments';
@@ -1068,6 +1297,12 @@ class ChannelDetailRoute {
 
   static String info(int channelId, {String? channelName}) {
     final base = '${pathFor(channelId)}/info';
+    if (channelName == null || channelName.trim().isEmpty) return base;
+    return '$base?channelName=${Uri.encodeComponent(channelName)}';
+  }
+
+  static String subscribers(int channelId, {String? channelName}) {
+    final base = '${pathFor(channelId)}/subscribers';
     if (channelName == null || channelName.trim().isEmpty) return base;
     return '$base?channelName=${Uri.encodeComponent(channelName)}';
   }
@@ -1166,9 +1401,48 @@ class CreatePostRoute {
   static const name = 'create_post';
 }
 
+class CreateReelRoute {
+  static const path = '/create-reel';
+  static const name = 'create_reel';
+
+  static String uri({int? channelId, String? channelName}) {
+    if (channelId == null) return path;
+    final params = <String, String>{'channelId': '$channelId'};
+    if (channelName != null && channelName.trim().isNotEmpty) {
+      params['channelName'] = channelName.trim();
+    }
+    return '$path?${Uri(queryParameters: params).query}';
+  }
+}
+
 class SearchRoute {
   static const path = '/search';
   static const name = 'search';
+
+  static String pathFor({
+    String? q,
+    SearchScope? scope,
+    String? feedType,
+    bool followingOnly = false,
+  }) {
+    final params = <String, String>{};
+    final query = q?.trim();
+    if (query != null && query.isNotEmpty) {
+      params['q'] = query;
+    }
+    if (scope != null) {
+      params['scope'] = scope.name;
+    }
+    // Опционально для прямых ссылок (хештеги и т.п.), не из нижней панели.
+    if (feedType != null && feedType != 'all') {
+      params['feed_type'] = feedType;
+    }
+    if (followingOnly) {
+      params['following'] = '1';
+    }
+    if (params.isEmpty) return path;
+    return '$path?${Uri(queryParameters: params).query}';
+  }
 }
 
 class ReelsRoute {

@@ -51,7 +51,7 @@ def _lookup_mock_file_key(upload_id: str) -> Optional[str]:
 
 
 class InitUploadRequest(BaseModel):
-    file_type: str  # image | video
+    file_type: str  # image | video | audio
     content_type: str  # image/jpeg, video/mp4, etc.
     file_size: int  # размер в байтах
 
@@ -59,7 +59,7 @@ class InitUploadRequest(BaseModel):
 class CompleteUploadRequest(BaseModel):
     upload_id: str
     file_key: str
-    file_type: str  # image | video
+    file_type: str  # image | video | audio
 
 
 @router.post("/init")
@@ -370,14 +370,16 @@ async def mock_upload(
 
 
 @router.get("/file/{file_path:path}")
-async def get_uploaded_file(file_path: str):
+async def get_uploaded_file(file_path: str, request: Request):
     """
     Получить загруженный файл (для локальной разработки)
     
     В production файлы должны раздаваться через CDN или веб-сервер (nginx).
+    Поддержка HTTP Range (206) обязательна для AVPlayer на iOS.
     """
     import os
-    from fastapi.responses import FileResponse
+
+    from app.core.ranged_file import ranged_file_response
     
     # Безопасность: проверяем, что путь не содержит опасных символов
     if '..' in file_path:
@@ -410,10 +412,8 @@ async def get_uploaded_file(file_path: str):
     elif file_path.endswith('.mp4'):
         content_type = "video/mp4"
     
-    return FileResponse(
+    return ranged_file_response(
         file_path_full,
+        request,
         media_type=content_type,
-        headers={
-            "Cache-Control": "public, max-age=31536000",  # Кэшируем на год
-        }
     )

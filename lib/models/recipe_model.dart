@@ -180,6 +180,7 @@ extension RecipeModelAsRecipe on RecipeModel {
       title: title,
       image: image,
       sourceImage: image,
+      imageUrls: image != null ? [image!] : null,
       usedIngredientCount: ingredients.length,
       ingredients: ingredients,
       steps: stepMaps,

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 /// Разбор ошибок FastAPI (`detail` как строка, объект или список).
 class ApiClientException implements Exception {
@@ -24,7 +26,15 @@ String parseApiErrorMessage(
   String fallback = 'Произошла ошибка',
 }) {
   if (detail == null) return fallback;
-  if (detail is String) return detail;
+  if (detail is String) {
+    return switch (detail) {
+      'network_error' =>
+        'Нет подключения к серверу. Проверьте интернет и попробуйте снова.',
+      'timeout' => 'Превышено время ожидания ответа от сервера',
+      'offline' => 'Войдите в аккаунт',
+      _ => detail,
+    };
+  }
   if (detail is Map) {
     final msg = detail['message'] as String?;
     if (msg != null && msg.isNotEmpty) return msg;
@@ -65,15 +75,87 @@ ApiClientException apiExceptionFromResponse(
   );
 }
 
+/// Сообщение по HTTP-ответу API (для сервисов без ApiClientException).
+ApiClientException apiExceptionFromHttpResponse(
+  int statusCode,
+  String body, {
+  String fallback = 'Произошла ошибка',
+}) {
+  if (statusCode == 503 && body.contains('offline')) {
+    return const ApiClientException(
+      statusCode: 503,
+      message: 'Войдите в аккаунт',
+    );
+  }
+  try {
+    final parsed = jsonDecode(body);
+    if (parsed is Map<String, dynamic>) {
+      return apiExceptionFromResponse(statusCode, parsed, fallback: fallback);
+    }
+  } catch (_) {}
+  return _httpStatusMessage(statusCode, fallback: fallback);
+}
+
+ApiClientException _httpStatusMessage(
+  int statusCode, {
+  String fallback = 'Произошла ошибка',
+}) {
+  final message = switch (statusCode) {
+    401 => 'Войдите в аккаунт',
+    403 => 'Нет доступа',
+    404 => 'Не найдено',
+    429 => 'Слишком много запросов. Подождите немного.',
+    502 || 503 || 504 => 'Сервер временно недоступен',
+    _ => fallback,
+  };
+  return ApiClientException(statusCode: statusCode, message: message);
+}
+
+bool _isNetworkError(Object e) {
+  if (e is SocketException) return true;
+  if (e is HttpException) return true;
+  if (e is HandshakeException) return true;
+  final s = e.toString().toLowerCase();
+  return s.contains('failed host lookup') ||
+      s.contains('network is unreachable') ||
+      s.contains('connection refused') ||
+      s.contains('connection timed out') ||
+      s.contains('no route to host') ||
+      s.contains('tlsv1_alert') ||
+      s.contains('handshakeexception');
+}
+
 /// Текст ошибки для SnackBar / диалогов.
 String userVisibleError(Object e, {String fallback = 'Произошла ошибка'}) {
   if (e is ApiClientException) return e.message;
   if (e is TimeoutException) {
     return 'Превышено время ожидания ответа от сервера';
   }
+  if (_isNetworkError(e)) {
+    return 'Нет подключения к серверу. Проверьте интернет и попробуйте снова.';
+  }
   final raw = e.toString().replaceAll('Exception: ', '').trim();
   if (raw.isEmpty) return fallback;
   if (raw == 'Not authenticated') return 'Войдите в аккаунт';
+  final lower = raw.toLowerCase();
+  if (lower.contains('broken pipe') || lower.contains('socketwrite failed')) {
+    return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова.';
+  }
+  if (lower.contains('connection reset') || lower.contains('connection closed')) {
+    return 'Соединение с сервером оборвалось. Попробуйте ещё раз.';
+  }
+  final statusMatch = RegExp(r'\((\d{3})\)\s*$').firstMatch(raw);
+  if (statusMatch != null) {
+    final code = int.tryParse(statusMatch.group(1)!);
+    if (code != null) {
+      final withoutCode = raw.replaceFirst(RegExp(r'\s*\(\d{3}\)\s*$'), '').trim();
+      if (withoutCode.isNotEmpty &&
+          !RegExp(r'^\S+\s+\(\d{3}\)$').hasMatch(raw)) {
+        return withoutCode;
+      }
+      return _httpStatusMessage(code, fallback: fallback).message;
+    }
+  }
   return raw;
 }
 

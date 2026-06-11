@@ -17,7 +17,14 @@ import '../application/community_controller.dart';
 import '../application/community_upload_controller.dart';
 
 class CommunityUploadScreen extends ConsumerStatefulWidget {
-  const CommunityUploadScreen({super.key});
+  const CommunityUploadScreen({
+    super.key,
+    this.channelId,
+    this.channelName,
+  });
+
+  final int? channelId;
+  final String? channelName;
 
   @override
   ConsumerState<CommunityUploadScreen> createState() =>
@@ -47,6 +54,7 @@ class _CommunityUploadScreenState
   ];
   String? _selectedCategory;
 
+  XFile? _videoFile;
   XFile? _thumbnailFile;
   Uint8List? _videoBytes;
   Uint8List? _thumbnailBytes;
@@ -54,21 +62,25 @@ class _CommunityUploadScreenState
   ChewieController? _chewieController;
 
   bool get _canSubmit =>
-      _videoBytes != null &&
+      _videoFile != null &&
       _titleCtrl.text.trim().isNotEmpty &&
       _authorCtrl.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    final user = AuthService.instance.currentUser;
-    if (user != null) {
-      final name = user.name.trim();
-      _authorCtrl.text = name.isNotEmpty
-          ? name
-          : (user.username?.trim().isNotEmpty == true
-              ? user.username!.trim()
-              : user.email);
+    if (widget.channelName != null && widget.channelName!.trim().isNotEmpty) {
+      _authorCtrl.text = widget.channelName!.trim();
+    } else {
+      final user = AuthService.instance.currentUser;
+      if (user != null) {
+        final name = user.name.trim();
+        _authorCtrl.text = name.isNotEmpty
+            ? name
+            : (user.username?.trim().isNotEmpty == true
+                ? user.username!.trim()
+                : user.email);
+      }
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -97,6 +109,7 @@ class _CommunityUploadScreenState
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     setState(() {
+      _videoFile = picked;
       _videoBytes = bytes;
     });
     // Для веб-платформы превью может не работать, но это нормально
@@ -184,19 +197,24 @@ class _CommunityUploadScreenState
       author: _authorCtrl.text.trim(),
       description: _descriptionCtrl.text.trim(),
       tags: tags,
-      videoBytes: _videoBytes!,
-      thumbnailBytes: _thumbnailBytes,
+      videoFile: _videoFile!,
+      thumbnailFile: _thumbnailFile,
+      channelId: widget.channelId,
     );
     final state = ref.read(communityUploadControllerProvider);
     if (!mounted) return;
     if (success) {
       ref.read(communityControllerProvider.notifier).load();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Видео опубликовано!'),
+        SnackBar(
+          content: Text(
+            widget.channelId != null
+                ? 'Рилс опубликован в канале'
+                : 'Видео опубликовано!',
+          ),
         ),
       );
-      Navigator.of(context).pop(true);
+      context.pop(true);
     } else if (state.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(state.error!)),
@@ -210,12 +228,16 @@ class _CommunityUploadScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Новый рилс'),
+        title: Text(
+          widget.channelName != null && widget.channelName!.trim().isNotEmpty
+              ? 'Рилс в «${widget.channelName!.trim()}»'
+              : 'Новый рилс',
+        ),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
             _VideoPicker(
               chewieController: _chewieController,
@@ -237,9 +259,11 @@ class _CommunityUploadScreenState
             TextFormField(
               controller: _authorCtrl,
               readOnly: true,
-              decoration: const InputDecoration(
-                labelText: 'Автор',
-                helperText: 'Имя из вашего профиля',
+              decoration: InputDecoration(
+                labelText: widget.channelId != null ? 'Канал' : 'Автор',
+                helperText: widget.channelId != null
+                    ? 'Рилс будет опубликован от имени канала'
+                    : 'Имя из вашего профиля',
               ),
             ),
             const SizedBox(height: 12),

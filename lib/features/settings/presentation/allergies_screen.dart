@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../widgets/app_gradient_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AllergiesScreen extends StatefulWidget {
@@ -89,7 +90,8 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
       }
       final valid = <String>[];
       for (final e in _customAllergies.entries) {
-        final t = _customAllergyControllers[e.key]?.text.trim() ?? e.value.trim();
+        final t =
+            _customAllergyControllers[e.key]?.text.trim() ?? e.value.trim();
         if (t.isNotEmpty) {
           valid.add(t);
           _customAllergies[e.key] = t;
@@ -117,91 +119,104 @@ class _AllergiesScreenState extends State<AllergiesScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Аллергии')),
-      body: _loading && _standardAllergies.values.every((v) => !v) && _customAllergies.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + floatingBottomPadding(context),
-              ),
-              children: [
-                Text(
-                  'Исключите продукты, которые вам нельзя',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+      body: AppGradientBackground(
+        child: _loading &&
+                _standardAllergies.values.every((v) => !v) &&
+                _customAllergies.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  16 + floatingBottomPadding(context),
                 ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Column(
-                    children: _standardAllergies.entries.map((e) => SwitchListTile(
-                          title: Text(e.key),
-                          value: e.value,
-                          onChanged: (v) => setState(() => _standardAllergies[e.key] = v),
-                        )).toList(),
+                children: [
+                  Text(
+                    'Исключите продукты, которые вам нельзя',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                if (_customAllergies.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Card(
                     child: Column(
-                      children: [
-                        for (final e in _customAllergies.entries)
-                          Padding(
-                            key: ValueKey(e.key),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: _customAllergyControllers[e.key],
-                                    decoration: const InputDecoration(
-                                      hintText: 'Свой аллерген',
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      isDense: true,
-                                    ),
-                                    onChanged: (v) => _customAllergies[e.key] = v,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  icon: const Icon(Icons.close),
-                                  style: IconButton.styleFrom(
-                                    minimumSize: const Size(36, 36),
-                                    padding: EdgeInsets.zero,
-                                  ),
-                                  color: theme.colorScheme.error,
-                                  onPressed: () => _removeCustomAllergy(e.key),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
+                      children: _standardAllergies.entries
+                          .map((e) => SwitchListTile(
+                                title: Text(e.key),
+                                value: e.value,
+                                onChanged: (v) => setState(
+                                    () => _standardAllergies[e.key] = v),
+                              ))
+                          .toList(),
                     ),
                   ),
+                  if (_customAllergies.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      child: Column(
+                        children: [
+                          for (final e in _customAllergies.entries)
+                            Padding(
+                              key: ValueKey(e.key),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller:
+                                          _customAllergyControllers[e.key],
+                                      decoration: const InputDecoration(
+                                        hintText: 'Свой аллерген',
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        isDense: true,
+                                      ),
+                                      onChanged: (v) =>
+                                          _customAllergies[e.key] = v,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.close),
+                                    style: IconButton.styleFrom(
+                                      minimumSize: const Size(36, 36),
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                    color: theme.colorScheme.error,
+                                    onPressed: () =>
+                                        _removeCustomAllergy(e.key),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('Добавить свой аллерген'),
+                    onPressed: _addCustomAllergy,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _loading ? null : _saveSettings,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Сохранить'),
+                  ),
                 ],
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.add, size: 20),
-                  label: const Text('Добавить свой аллерген'),
-                  onPressed: _addCustomAllergy,
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _loading ? null : _saveSettings,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Сохранить'),
-                ),
-              ],
-            ),
+              ),
+      ),
     );
   }
 }

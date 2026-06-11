@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 /// Русские тексты подписок и AI scan (premium UX, без pressure).
 class SubscriptionCopy {
   // —— Soft paywall (free) ——
-  static const aiScanExhaustedTitle =
-      'Бесплатные AI-сканирования закончились';
+  static const aiScanExhaustedTitle = 'Бесплатные AI-сканирования закончились';
   static const aiScanExhaustedSubtitle =
       'Получите больше AI-возможностей с H.A.N. AI';
 
@@ -13,8 +12,7 @@ class SubscriptionCopy {
       'Скоро закончатся бесплатные AI-сканирования';
 
   // —— Подписчик AI/Pro без сканов (без цифр и таймеров) ——
-  static const aiScanPlusExhaustedTitle =
-      'AI-сканирования временно недоступны';
+  static const aiScanPlusExhaustedTitle = 'AI-сканирования временно недоступны';
   static const aiScanPlusExhaustedSubtitle =
       'Новые сканирования скоро снова будут доступны. '
       'Пока можно пользоваться рецептами и планом питания.';
@@ -45,12 +43,19 @@ class SubscriptionCopy {
   static const paywallCta = 'Оформить подписку';
   static const paywallLater = 'Позже';
 
-  static const nutritionUpsellTitle = 'Калории и БЖУ — в подписке';
+  /// Релиз v1 без ЮKassa (оплата после публикации в сторе).
+  static const paymentsComingSoonTitle = 'Оплата скоро';
+  static const paymentsComingSoonBody =
+      'Подключим оплату по СБП сразу после публикации в App Store. '
+      'Сейчас можно оформить бесплатный пробный период, если он вам доступен.';
+  static const paymentsComingSoonCta = 'Оплата появится после релиза';
+
+  static const nutritionUpsellTitle = 'Калории и БЖУ — в H.A.N. AI';
   static const nutritionUpsellSubtitle =
-      'Оформите H.A.N. AI или Pro, чтобы видеть калории, белки, жиры и углеводы '
+      'Оформите H.A.N. AI, чтобы видеть калории, белки, жиры и углеводы '
       'и фильтровать рецепты по питательности.';
   static const nutritionUpsellCta = 'Оформить подписку';
-  static const nutritionLockedValue = 'Pro';
+  static const nutritionLockedValue = 'AI';
 
   static const List<SubscriptionBenefitItem> nutritionBenefits = [
     SubscriptionBenefitItem(
@@ -79,8 +84,7 @@ class SubscriptionCopy {
   static const mealPlanCooldownCta = 'Попробовать H.A.N. AI';
 
   // —— Приватные рецепты в канале (Creator / Pro) ——
-  static const creatorRecipeUpsellTitle =
-      'Приватные рецепты — тариф Creator';
+  static const creatorRecipeUpsellTitle = 'Приватные рецепты — тариф Creator';
   static const creatorRecipeUpsellSubtitle =
       'Публикуйте индивидуальные рецепты в своём канале. Они не попадают '
       'в общий Menu и доступны только подписчикам канала.';
@@ -135,7 +139,7 @@ class SubscriptionCopy {
     ),
     SubscriptionBenefitItem(
       icon: Icons.groups_outlined,
-      text: 'Эксклюзивный контент для подписчиков',
+      text: 'Контент только для аудитории канала',
     ),
   ];
 
@@ -161,7 +165,8 @@ class SubscriptionCopy {
   static const screenTitle = 'Подписка';
   static const heroTitle = 'Больше возможностей\nдля готовки и творчества';
   static const heroSubtitle =
-      'Оплата через СБП в приложении банка. Отмена подписки в любой момент.';
+      'Разовая оплата через СБП в приложении банка. Доступ на выбранный период; '
+      'продление — снова в этом разделе. Автосписания подключим позже.';
 
   static IconData tierIcon(String id) {
     switch (id) {
@@ -192,11 +197,11 @@ class SubscriptionCopy {
   static String tierSubtitle(String id) {
     switch (id) {
       case 'ai':
-        return 'AI-сканы, питание, планы меню';
+        return 'Сканы, питание, планы меню, рекомендации';
       case 'creator':
-        return 'Аналитика, продвижение, инструменты автора';
+        return 'Канал, приватные рецепты, аналитика, продвижение';
       case 'pro':
-        return 'Полный доступ: AI + Creator';
+        return 'AI + Creator + семейные планы и поддержка';
       default:
         return '';
     }
@@ -211,29 +216,51 @@ class SubscriptionCopy {
   static List<String> tierBenefits(String id) {
     switch (id) {
       case 'ai':
-        return [
-          'Больше AI-сканов',
-          'Расширенный анализ питания',
-          'Планы питания и рекомендации',
-          'Умные рекомендации блюд',
-        ];
+        return List.unmodifiable(_aiBenefits);
       case 'creator':
-        return [
-          'Приватные рецепты в канале (не в общем Menu)',
-          'Аналитика канала',
-          'Продвижение контента',
-          'Инструменты для авторов',
-        ];
+        return List.unmodifiable(_creatorBenefits);
       case 'pro':
-        return [
-          'Всё из H.A.N. AI и Creator',
-          'Приоритетная поддержка',
-          'Эксклюзивные рецепты',
-        ];
+        return List.unmodifiable(_proBenefits);
       default:
         return [];
     }
   }
+
+  static const List<String> _aiBenefits = [
+    'Больше AI-сканов блюд',
+    'Калории и БЖУ на карточках и в рецепте',
+    'Фильтры «низкокалорийное» и «высокий белок»',
+    'Лимиты калорий и БЖУ в настройках диеты',
+    'AI-планы питания на 7, 14, 21 и 30 дней',
+    'Обновление блюд и дней в плане без лимита',
+    'Умный список покупок к плану питания',
+    'Расширенная персонализация питания',
+    'Умные рекомендации блюд',
+    'Ускоренная работа AI',
+    'Сохранённые рецепты и посты офлайн',
+    'Без рекламы (когда появится в приложении)',
+  ];
+
+  static const List<String> _creatorBenefits = [
+    'Приватные рецепты в канале (не в общем Menu)',
+    'Режимы видимости: публичные, приватные, смешанные',
+    'AI-расчёт калорий и БЖУ по ингредиентам',
+    'Аналитика канала и контента',
+    'Продвижение постов и рецептов',
+    'Закрепление важных публикаций',
+    'Отложенная публикация',
+    'Оформление и бейдж канала',
+    'Инструменты для авторов',
+    'Без рекламы (когда появится в приложении)',
+  ];
+
+  static const List<String> _proBenefits = [
+    'Всё из тарифа H.A.N. AI',
+    'Всё из тарифа H.A.N. Creator',
+    'Семейные AI-планы питания',
+    'Приоритетная поддержка',
+    'Максимальный доступ ко всем функциям',
+  ];
 }
 
 class SubscriptionBenefitItem {

@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Синхронизация через Firestore (избранное, локальный meal plan, legacy community).
 ///
 /// В release отключено — источник правды: Hive локально + FastAPI.
@@ -10,7 +8,9 @@ class LegacyFirestoreConfig {
     defaultValue: false,
   );
 
-  static bool get enabled => kDebugMode || _forceEnable;
+  /// Только с `--dart-define=HANEAT_LEGACY_FIRESTORE=true` (не включаем в debug на
+  /// телефоне — Firestore при старте давал нестабильность / вылеты на iOS).
+  static bool get enabled => _forceEnable;
 
   static bool get disabled => !enabled;
 }

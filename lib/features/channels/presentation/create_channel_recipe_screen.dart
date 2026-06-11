@@ -10,6 +10,7 @@ import '../../settings/application/subscription_status_provider.dart';
 import '../../../core/recipe/recipe_nutrition_input.dart';
 import '../../../widgets/recipe_nutrition_form_section.dart';
 import '../../../widgets/recipe_visibility_selector.dart';
+import '../../../widgets/recipe_origin_country_field.dart';
 import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
 
 class CreateChannelRecipeScreen extends ConsumerStatefulWidget {
@@ -50,6 +51,7 @@ class _CreateChannelRecipeScreenState
   bool _isLoading = false;
   String _recipeVisibility = 'public';
   String? _channelVisibilityMode;
+  String? _originCountryCode;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -62,9 +64,9 @@ class _CreateChannelRecipeScreenState
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
       if (!mounted) return;
-      final hasCreator = ref.read(subscriptionStatusProvider).asData?.value
-              ?.hasCreator ??
-          false;
+      final hasCreator =
+          ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
+              false;
       setState(() {
         _channelVisibilityMode = channel.recipeVisibilityMode;
         _recipeVisibility = RecipeVisibilitySelector.defaultForChannel(
@@ -154,7 +156,9 @@ class _CreateChannelRecipeScreenState
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить изображение'))),
+              SnackBar(
+                  content: Text(userVisibleError(e,
+                      fallback: 'Не удалось загрузить изображение'))),
             );
           }
           setState(() => _isLoading = false);
@@ -163,7 +167,9 @@ class _CreateChannelRecipeScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
@@ -190,7 +196,9 @@ class _CreateChannelRecipeScreenState
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить изображение'))),
+              SnackBar(
+                  content: Text(userVisibleError(e,
+                      fallback: 'Не удалось загрузить изображение'))),
             );
           }
           setState(() => _isLoading = false);
@@ -199,7 +207,9 @@ class _CreateChannelRecipeScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
@@ -268,6 +278,7 @@ class _CreateChannelRecipeScreenState
         fatG: parseDoubleField(_fatController.text),
         fiberG: parseDoubleField(_fiberController.text),
         tags: _tags.isNotEmpty ? _tags : null,
+        originCountryCode: _originCountryCode,
       );
 
       if (mounted) {
@@ -321,7 +332,6 @@ class _CreateChannelRecipeScreenState
       loading: () => false,
       error: (_, __) => false,
     );
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Новый рецепт в ${widget.channelName}'),
@@ -362,7 +372,6 @@ class _CreateChannelRecipeScreenState
                 decoration: const InputDecoration(
                   labelText: 'Название рецепта *',
                   hintText: 'Например: Паста карбонара',
-                  border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -379,9 +388,13 @@ class _CreateChannelRecipeScreenState
                 decoration: const InputDecoration(
                   labelText: 'Описание (опционально)',
                   hintText: 'Расскажите о рецепте...',
-                  border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              RecipeOriginCountryField(
+                selectedCode: _originCountryCode,
+                onChanged: (code) => setState(() => _originCountryCode = code),
               ),
               const SizedBox(height: 16),
 
@@ -430,7 +443,6 @@ class _CreateChannelRecipeScreenState
                       controller: _ingredientController,
                       decoration: const InputDecoration(
                         hintText: 'Добавить ингредиент',
-                        border: OutlineInputBorder(),
                       ),
                       onFieldSubmitted: (_) => _addIngredient(),
                     ),
@@ -469,7 +481,6 @@ class _CreateChannelRecipeScreenState
                       controller: _stepController,
                       decoration: const InputDecoration(
                         hintText: 'Добавить шаг',
-                        border: OutlineInputBorder(),
                       ),
                       onFieldSubmitted: (_) => _addStep(),
                     ),
@@ -527,7 +538,6 @@ class _CreateChannelRecipeScreenState
                       controller: _prepTimeController,
                       decoration: const InputDecoration(
                         labelText: 'Время подготовки (мин)',
-                        border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -538,7 +548,6 @@ class _CreateChannelRecipeScreenState
                       controller: _cookTimeController,
                       decoration: const InputDecoration(
                         labelText: 'Время готовки (мин)',
-                        border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -550,7 +559,6 @@ class _CreateChannelRecipeScreenState
                 controller: _servingsController,
                 decoration: const InputDecoration(
                   labelText: 'Порций',
-                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -564,8 +572,10 @@ class _CreateChannelRecipeScreenState
                 getTitle: () => _titleController.text,
                 getDescription: () => _descriptionController.text,
                 getIngredients: () => _ingredients,
-                getStepTexts: () =>
-                    _steps.map((s) => s.text).where((t) => t.isNotEmpty).toList(),
+                getStepTexts: () => _steps
+                    .map((s) => s.text)
+                    .where((t) => t.isNotEmpty)
+                    .toList(),
                 getServings: () {
                   final t = _servingsController.text.trim();
                   return int.tryParse(t) ?? 1;

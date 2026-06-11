@@ -214,6 +214,10 @@ class NotificationService:
                     return
                 elif notification_type == "mention" and not prefs.mentions_enabled:
                     return
+                elif notification_type == "message" and not getattr(
+                    prefs, "messages_enabled", True
+                ):
+                    return
                 elif notification_type in (
                     "system",
                     "subscription_expiring",

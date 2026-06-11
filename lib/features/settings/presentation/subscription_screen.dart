@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../core/config/subscription_checkout_urls.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../widgets/app_gradient_background.dart';
 import '../../../../services/subscription_service.dart';
 import '../../../../services/payment_service.dart';
 import '../../../../services/product_analytics.dart';
@@ -77,6 +78,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   }
 
   Future<void> _openReceipt(PaymentHistoryItem payment) async {
+    final scheme = Theme.of(context).colorScheme;
     try {
       var url = payment.receiptUrl;
       if (url == null || url.isEmpty) {
@@ -89,20 +91,25 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Чек ещё формируется. Попробуйте через несколько минут.'),
+            content:
+                Text('Чек ещё формируется. Попробуйте через несколько минут.'),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            backgroundColor: scheme.error,
+          ),
         );
       }
     }
   }
 
   Future<void> _requestRefund(PaymentHistoryItem payment) async {
+    final scheme = Theme.of(context).colorScheme;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -131,15 +138,18 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       await _loadPaymentHistory();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Запрос на возврат отправлен'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Запрос на возврат отправлен'),
+          backgroundColor: scheme.tertiary,
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            backgroundColor: scheme.error,
+          ),
         );
       }
     } finally {
@@ -148,6 +158,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   }
 
   Future<void> _loadPrices() async {
+    final scheme = Theme.of(context).colorScheme;
     setState(() => _isLoadingPrices = true);
     try {
       final prices = await PaymentService.getPrices();
@@ -161,7 +172,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
             content: Text(
               userVisibleError(e, fallback: 'Не удалось загрузить цены'),
             ),
-            backgroundColor: Colors.orange,
+            backgroundColor: scheme.primary,
           ),
         );
       }
@@ -180,6 +191,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
 
   Future<void> _startTrial() async {
     if (_isLoading) return;
+    final scheme = Theme.of(context).colorScheme;
     setState(() => _isLoading = true);
     try {
       await SubscriptionService.startTrial(product: _selectedProduct);
@@ -190,15 +202,18 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       refreshSubscriptionStatus(ref);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Пробный период активирован'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Пробный период активирован'),
+          backgroundColor: scheme.tertiary,
         ),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e)), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(userVisibleError(e)),
+            backgroundColor: scheme.error,
+          ),
         );
       }
     } finally {
@@ -208,6 +223,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
 
   Future<void> _purchaseSelected() async {
     if (_isLoading) return;
+    final scheme = Theme.of(context).colorScheme;
     setState(() => _isLoading = true);
     try {
       ProductAnalytics.logEvent(
@@ -251,7 +267,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
             content: Text(
               userVisibleError(e, fallback: 'Не удалось создать платёж'),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: scheme.error,
           ),
         );
       }
@@ -267,10 +283,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     ).format(price);
   }
 
-  List<String> _tierBenefits(String id) {
-    final fromApi = _prices?.tier(id)?.benefits;
-    return SubscriptionCopy.normalizeBenefits(id, fromApi ?? []);
-  }
+  List<String> _tierBenefits(String id) => SubscriptionCopy.tierBenefits(id);
 
   double _fallbackPrice(String id) {
     switch (id) {
@@ -285,7 +298,13 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
     }
   }
 
-  String _checkoutButtonLabel(SubscriptionStatusResponse? status, bool hasPaid) {
+  bool get _checkoutAvailable => _prices?.checkoutAvailable ?? false;
+
+  String _checkoutButtonLabel(
+      SubscriptionStatusResponse? status, bool hasPaid) {
+    if (!_checkoutAvailable) {
+      return SubscriptionCopy.paymentsComingSoonCta;
+    }
     if (hasPaid && status != null) {
       final opt = status.upgradeOptions
           .where((o) => o.product == _selectedProduct)
@@ -305,7 +324,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
 
   String _priceLabel(String id) {
     final status = ref.read(subscriptionStatusProvider).asData?.value;
-    final upgrade = status?.upgradeOptions.where((o) => o.product == id).firstOrNull;
+    final upgrade =
+        status?.upgradeOptions.where((o) => o.product == id).firstOrNull;
     if (upgrade != null && upgrade.isUpgrade && upgrade.amountDue > 0) {
       return '${_formatPrice(upgrade.amountDue, 'RUB')} к оплате';
     }
@@ -351,242 +371,319 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          16 + floatingBottomPadding(context),
-        ),
-        children: [
-          SubscriptionHero(trialDays: trialDays),
-          const SizedBox(height: 20),
-          if (status != null && status.upgradeOptions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            ...status.upgradeOptions.map((opt) {
-              return Card(
-                color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
-                child: ListTile(
-                  leading: Icon(
-                    Icons.upgrade,
-                    color: Theme.of(context).colorScheme.primary,
+      body: AppGradientBackground(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16 + floatingBottomPadding(context),
+          ),
+          children: [
+            SubscriptionHero(trialDays: trialDays),
+            const SizedBox(height: 20),
+            if (status != null && status.upgradeOptions.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...status.upgradeOptions.map((opt) {
+                return Card(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withValues(alpha: 0.4),
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.upgrade,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    title: Text('Улучшить до ${opt.name}'),
+                    subtitle: Text(
+                      [
+                        if (opt.reason != null) opt.reason!,
+                        if (opt.isUpgrade && opt.creditRub > 0)
+                          'К оплате: ${opt.amountDue.toStringAsFixed(0)} ₽ '
+                              '(учтено ${opt.creditRub.toStringAsFixed(0)} ₽ за ${opt.remainingDays} дн.)'
+                        else
+                          '${opt.monthlyPrice.toStringAsFixed(0)} ₽/мес · новый период 30 дней',
+                      ].join('\n'),
+                    ),
+                    isThreeLine: opt.reason != null,
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => setState(() => _selectedProduct = opt.product),
                   ),
-                  title: Text('Улучшить до ${opt.name}'),
-                  subtitle: Text(
-                    [
-                      if (opt.reason != null) opt.reason!,
-                      if (opt.isUpgrade && opt.creditRub > 0)
-                        'К оплате: ${opt.amountDue.toStringAsFixed(0)} ₽ '
-                        '(учтено ${opt.creditRub.toStringAsFixed(0)} ₽ за ${opt.remainingDays} дн.)'
-                      else
-                        '${opt.monthlyPrice.toStringAsFixed(0)} ₽/мес · новый период 30 дней',
-                    ].join('\n'),
+                );
+              }),
+            ],
+            const SizedBox(height: 20),
+            if (_isLoadingPrices)
+              const Center(child: CircularProgressIndicator())
+            else
+              ..._tierOrder.map((id) {
+                final selected = _selectedProduct == id;
+                final owned = _tierOwned(id, status);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SubscriptionTierCard(
+                    tierId: id,
+                    title: SubscriptionCopy.tierTitle(id),
+                    subtitle: SubscriptionCopy.tierSubtitle(id),
+                    priceLabel: _priceLabel(id),
+                    benefits: _tierBenefits(id),
+                    isSelected: selected,
+                    isRecommended: id == 'pro',
+                    isOwned: owned,
+                    trialEligible:
+                        _prices?.tier(id)?.trialEligible ?? (id != 'creator'),
+                    onTap: owned
+                        ? null
+                        : () => setState(() => _selectedProduct = id),
                   ),
-                  isThreeLine: opt.reason != null,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => setState(() => _selectedProduct = opt.product),
-                ),
-              );
-            }),
-          ],
-          const SizedBox(height: 20),
-          if (_isLoadingPrices)
-            const Center(child: CircularProgressIndicator())
-          else
-            ..._tierOrder.map((id) {
-              final selected = _selectedProduct == id;
-              final owned = _tierOwned(id, status);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SubscriptionTierCard(
-                  tierId: id,
-                  title: SubscriptionCopy.tierTitle(id),
-                  subtitle: SubscriptionCopy.tierSubtitle(id),
-                  priceLabel: _priceLabel(id),
-                  benefits: _tierBenefits(id),
-                  isSelected: selected,
-                  isRecommended: id == 'pro',
-                  isOwned: owned,
-                  trialEligible: _prices?.tier(id)?.trialEligible ?? (id != 'creator'),
-                  onTap: owned
-                      ? null
-                      : () => setState(() => _selectedProduct = id),
-                ),
-              );
-            }),
-          if (hasPaid) ...[
-            const SizedBox(height: 8),
-            Card(
-              color: Colors.green.withValues(alpha: 0.08),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Активен: ${SubscriptionCopy.tierTitle(status!.subscriptionType)}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  color: Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                );
+              }),
+            if (hasPaid) ...[
+              const SizedBox(height: 8),
+              Card(
+                color: Colors.green.withValues(alpha: 0.08),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Активен: ${SubscriptionCopy.tierTitle(status!.subscriptionType)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (status.inGracePeriod) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Льготный период: доступ сохранён на несколько дней после окончания оплаты',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ],
-                    ),
-                    if (status.inGracePeriod) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'Льготный период: доступ сохранён на несколько дней после окончания оплаты',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).colorScheme.primary,
+                      if (expiresAt != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'До ${expiresAt.day}.${expiresAt.month}.${expiresAt.year}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                      if (status.platform != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Платформа: ${status.platform}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed:
+                            _isLoading ? null : _requestCancelSubscription,
+                        icon: const Icon(Icons.cancel_outlined),
+                        label: const Text('Запросить отмену'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (status?.inGracePeriod == true) ...[
+              Card(
+                color: Theme.of(context)
+                    .colorScheme
+                    .tertiaryContainer
+                    .withValues(alpha: 0.5),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.hourglass_bottom,
+                        color: Theme.of(context).colorScheme.tertiary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Льготный период: продлите подписку, чтобы не потерять доступ.',
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
                     ],
-                    if (expiresAt != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        'До ${expiresAt.day}.${expiresAt.month}.${expiresAt.year}',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                    if (status.platform != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Платформа: ${status.platform}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _requestCancelSubscription,
-                      icon: const Icon(Icons.cancel_outlined),
-                      label: const Text('Запросить отмену'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
-          if (status?.inGracePeriod == true) ...[
-            Card(
-              color: Theme.of(context).colorScheme.tertiaryContainer.withValues(alpha: 0.5),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.hourglass_bottom,
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Льготный период: продлите подписку, чтобы не потерять доступ.',
-                        style: Theme.of(context).textTheme.bodySmall,
+              const SizedBox(height: 12),
+            ],
+            if (ref.watch(subscriptionStatusFromCacheProvider)) ...[
+              Card(
+                color: Theme.of(context)
+                    .colorScheme
+                    .tertiaryContainer
+                    .withValues(alpha: 0.5),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.cloud_off_outlined,
+                        color: Theme.of(context).colorScheme.tertiary,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Не удалось обновить статус подписки. Показаны сохранённые данные.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => refreshSubscriptionStatus(ref),
+                        child: const Text('Обновить'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_canStartTrial(status)) ...[
-            OutlinedButton(
-              onPressed: _isLoading ? null : _startTrial,
-              child: Text(
-                'Попробовать ${SubscriptionCopy.tierTitle(_selectedProduct)} бесплатно',
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: DecoratedBox(
-              decoration: subscriptionBrandGradientDecoration(
-                radius: BorderRadius.circular(14),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: (_isLoading || _tierOwned(_selectedProduct, status))
-                      ? null
-                      : _purchaseSelected,
-                  borderRadius: BorderRadius.circular(14),
-                  child: Center(
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+              const SizedBox(height: 12),
+            ],
+            if (!_checkoutAvailable) ...[
+              Card(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.6),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        SubscriptionCopy.paymentsComingSoonTitle,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
-                          )
-                        : Text(
-                            _checkoutButtonLabel(status, hasPaid),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _prices?.checkoutMessage ??
+                            SubscriptionCopy.paymentsComingSoonBody,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_canStartTrial(status)) ...[
+              OutlinedButton(
+                onPressed: _isLoading ? null : _startTrial,
+                child: Text(
+                  'Попробовать ${SubscriptionCopy.tierTitle(_selectedProduct)} бесплатно',
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: DecoratedBox(
+                decoration: subscriptionBrandGradientDecoration(
+                  radius: BorderRadius.circular(14),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: (_isLoading ||
+                            _tierOwned(_selectedProduct, status) ||
+                            !_checkoutAvailable)
+                        ? null
+                        : _purchaseSelected,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Center(
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              _checkoutButtonLabel(status, hasPaid),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => context.pop(),
-            child: const Text('Позже'),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'История оплат',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.pop(),
+              child: const Text('Позже'),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'История оплат',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            if (_loadingPayments)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_payments.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    _checkoutAvailable
+                        ? 'Пока нет оплат. После оплаты по СБП записи появятся здесь.'
+                        : 'История оплат появится после подключения оплаты по СБП.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
-          ),
-          const SizedBox(height: 8),
-          if (_loadingPayments)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_payments.isEmpty)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Пока нет оплат. После оплаты по СБП записи появятся здесь.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            )
-          else
-            ..._payments.take(10).map((p) => _PaymentHistoryTile(
-                  payment: p,
-                  onOpenReceipt: () => _openReceipt(p),
-                  onRequestRefund: () => _requestRefund(p),
-                )),
-          const SizedBox(height: 16),
-          TextButton.icon(
-            onPressed: () => context.push(SupportContactRoute.path),
-            icon: const Icon(Icons.support_agent),
-            label: const Text('Поддержка'),
-          ),
-        ],
+              )
+            else
+              ..._payments.take(10).map((p) => _PaymentHistoryTile(
+                    payment: p,
+                    onOpenReceipt: () => _openReceipt(p),
+                    onRequestRefund: () => _requestRefund(p),
+                  )),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () => context.push(SupportContactRoute.path),
+              icon: const Icon(Icons.support_agent),
+              label: const Text('Поддержка'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -609,7 +706,8 @@ class _PaymentHistoryTile extends StatelessWidget {
         ? DateFormat('d MMM yyyy', 'ru').format(payment.createdAt!)
         : '';
     final refundLine = payment.refundStatusLabel;
-    final hasYookassa = payment.paymentProvider == 'yookassa' &&
+    final hasYookassa = (payment.paymentProvider == 'yookassa' ||
+            payment.paymentProvider == 'tbank') &&
         payment.paymentId != null &&
         !payment.paymentId!.startsWith('trial-');
 

@@ -89,8 +89,8 @@ class FeedController extends StateNotifier<FeedState> {
     state = state.copyWith(loading: true, error: null);
 
     try {
-      // Используем синхронизацию, которая автоматически работает с кешем
-      final posts = await FeedSyncService.instance.getFeed(
+      final sync = await FeedSyncService.ensureInitialized();
+      final posts = await sync.getFeed(
         sortMode: _currentSortMode,
         useCache: true,
       );
@@ -106,7 +106,7 @@ class FeedController extends StateNotifier<FeedState> {
       );
 
       // Фоновая синхронизация для обновления кеша
-      FeedSyncService.instance.syncFeedInBackground(sortMode: _currentSortMode);
+      sync.syncFeedInBackground(sortMode: _currentSortMode);
     } catch (e) {
       state = state.copyWith(
         loading: false,

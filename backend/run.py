@@ -5,7 +5,8 @@ import os
 import uvicorn
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    # Совпадает с lib/services/server_config.dart (на macOS порт 5000 часто занят AirPlay).
+    port = int(os.environ.get("PORT", "5001"))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

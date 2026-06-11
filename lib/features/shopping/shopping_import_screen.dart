@@ -53,7 +53,8 @@ class _ShoppingImportScreenState extends State<ShoppingImportScreen> {
 
   Future<void> _addToMyList() async {
     if (_items == null || _items!.isEmpty) return;
-    await ShoppingService.instance.importFromJson({
+    final shopping = await ShoppingService.ensureInitialized();
+    await shopping.importFromJson({
       'items': _items!.map((e) => e.toJson()).toList(),
     }, merge: true);
     if (!mounted) return;

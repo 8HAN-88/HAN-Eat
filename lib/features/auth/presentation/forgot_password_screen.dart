@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_brand_logo.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/server_connecting_hint.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key, this.initialEmail});
@@ -76,10 +78,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Забыли пароль?')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: _sent ? _buildSentStep(theme) : _buildRequestStep(theme),
+      body: AppGradientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: _sent ? _buildSentStep(theme) : _buildRequestStep(theme),
+          ),
         ),
       ),
     );
@@ -118,7 +122,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             decoration: const InputDecoration(
               labelText: 'Email',
               prefixIcon: Icon(Icons.email_outlined),
-              border: OutlineInputBorder(),
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Введите email';
@@ -129,9 +132,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _loading ? null : _submit,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
             child: _loading
                 ? const SizedBox(
                     height: 22,
@@ -140,6 +140,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   )
                 : const Text('Отправить письмо'),
           ),
+          if (_loading) ...[
+            const SizedBox(height: 12),
+            const ServerConnectingHint(),
+          ],
           const SizedBox(height: 16),
           Center(
             child: TextButton(

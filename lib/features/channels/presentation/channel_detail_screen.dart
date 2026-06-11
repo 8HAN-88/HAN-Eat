@@ -23,6 +23,7 @@ import 'channel_post_card.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/theme/app_card_decorations.dart';
+import '../../../core/format/russian_count_labels.dart';
 
 /// Получить URL для сетки «Медиа» / галереи: без подмены на `_medium` (иначе мыло на Retina).
 String imageUrlForChannelMediaGrid(String url) {
@@ -250,7 +251,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go(ChannelsListRoute.path);
+              context.go(ChatsRoute.path);
             }
           },
         ),
@@ -289,12 +290,20 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        '${c.membersCount} подписчиков',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _openChannelSubscribersPage,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            formatChannelMembersCount(c.membersCount),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -328,13 +337,18 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               )
             : _PrivateChannelPostsLocked(channel: c),
       ),
-      floatingActionButton: (c.isAdmin || c.isOwner)
+      floatingActionButton: c.canCreatePosts
           ? FloatingActionButton(
-              onPressed: () => showChannelCreateContentSheet(
-                context,
-                channelId: widget.channelId,
-                channelName: c.name,
-              ),
+              onPressed: () async {
+                final created = await showChannelCreateContentSheet(
+                  context,
+                  channelId: widget.channelId,
+                  channelName: c.name,
+                );
+                if (created) {
+                  _postsListKey.currentState?.refreshPosts();
+                }
+              },
               tooltip: 'Создать',
               child: const Icon(Icons.add),
             )
@@ -354,6 +368,16 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
         .then((_) {
       if (mounted) _loadChannel(forceRefresh: true);
     });
+  }
+
+  void _openChannelSubscribersPage() {
+    if (_channel == null) return;
+    context.push<void>(
+      ChannelDetailRoute.subscribers(
+        widget.channelId,
+        channelName: _channel!.name,
+      ),
+    );
   }
 
   void _openSearchFullscreen() {
@@ -390,9 +414,9 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
           Navigator.of(context).pop();
           _openSearchFullscreen();
         },
-        onManage: (_channel!.isOwner ||
-            _channel!.isAdmin ||
-            _channel!.isModerator)
+        onManage: (_channel!.canManageChannelSettings ||
+                _channel!.canManageSubscribers ||
+                _channel!.canManageJoinRequests)
             ? () {
                 Navigator.of(context).pop();
                 context.push(
@@ -400,7 +424,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                 );
               }
             : null,
-        onAnalytics: (_channel!.isOwner || _channel!.isAdmin)
+        onAnalytics: _channel!.canManageChannelSettings
             ? () {
                 Navigator.of(context).pop();
                 context.push(AppAnalyticsRoute.path);
@@ -439,8 +463,8 @@ class _PrivateChannelPostsLocked extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = channel.isPending
-        ? 'Заявка на вступление на рассмотрении. Посты появятся после одобрения.'
-        : 'Это приватный канал. Откройте информацию о канале и запросите вступление.';
+        ? 'Заявка на подписку на рассмотрении. Посты появятся после одобрения.'
+        : 'Это приватный канал. Откройте информацию о канале и запросите подписку.';
 
     return Center(
       child: Padding(
@@ -669,7 +693,8 @@ class ChannelPostsListState extends State<ChannelPostsList> {
         },
       );
 
-      if (mounted && response.posts.isNotEmpty) {
+      if (!mounted) return;
+      if (response.posts.isNotEmpty) {
         setState(() {
           // При reverse: true, элементы массива отображаются в обратном порядке
           // Чтобы старые посты отображались вверху, добавляем их в конец массива
@@ -696,7 +721,9 @@ class ChannelPostsListState extends State<ChannelPostsList> {
       }
     } catch (e) {
       debugPrint('Ошибка загрузки старых постов: $e');
-      setState(() => _hasMoreOld = false);
+      if (mounted) {
+        setState(() => _hasMoreOld = false);
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoadingMore = false);
@@ -1000,7 +1027,8 @@ class ChannelMediaListState extends State<ChannelMediaList> {
         if (refresh) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(userVisibleError(e, fallback: 'Не удалось загрузить медиа')),
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить медиа')),
               duration: const Duration(seconds: 3),
             ),
           );
@@ -1017,6 +1045,7 @@ class ChannelMediaListState extends State<ChannelMediaList> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (_mediaItems.isEmpty && _isLoading) {
       return GridView.builder(
         controller: _scrollController,
@@ -1028,7 +1057,7 @@ class ChannelMediaListState extends State<ChannelMediaList> {
         ),
         itemCount: 9,
         itemBuilder: (context, index) => Container(
-          color: Colors.grey[300],
+          color: scheme.surfaceContainerHighest,
           child: const Center(
             child: CircularProgressIndicator(),
           ),
@@ -1088,7 +1117,7 @@ class ChannelMediaListState extends State<ChannelMediaList> {
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
                   placeholder: (context, url) => Container(
-                    color: Colors.grey[200],
+                    color: scheme.surfaceContainerLow,
                     child: const Center(
                       child: SizedBox(
                         width: 20,
@@ -1098,8 +1127,12 @@ class ChannelMediaListState extends State<ChannelMediaList> {
                     ),
                   ),
                   errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.error_outline, size: 24),
+                    color: scheme.surfaceContainerHighest,
+                    child: Icon(
+                      Icons.error_outline,
+                      size: 24,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
                 if (mediaItem.type == 'video')

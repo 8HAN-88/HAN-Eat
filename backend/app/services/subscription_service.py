@@ -29,6 +29,22 @@ TIER_PRICES_RUB = {
 TIER_ORDER = ("free", "ai", "creator", "pro")
 
 
+def _payment_auto_renew_enabled(payment_provider: str) -> bool:
+    """Автопродление: Stripe — да; Т-Банк/ЮKassa — по флагу рекуррента в настройках."""
+    p = (payment_provider or "").strip().lower()
+    if p == "stripe":
+        return True
+    if p == "tbank":
+        return bool(settings.TBANK_SBP_RECURRING_ENABLED)
+    if p == "yookassa":
+        return bool(settings.YOOKASSA_SBP_RECURRING_ENABLED)
+    return False
+
+
+def _is_trial_status(status: Optional[str]) -> bool:
+    return (status or "").strip().lower() == "trial"
+
+
 def upgrade_options_for_tier(tier: SubscriptionTier, is_active: bool) -> list:
     """Какие тарифы можно оформить поверх текущего (оплата через ЮKassa)."""
     if not is_active:
@@ -128,7 +144,7 @@ class SubscriptionService:
             product = normalize_tier(getattr(sub, "product", None) or user.subscription_type)
             if sub.expires_at > now:
                 return product, True
-            if sub.expires_at + grace > now:
+            if not _is_trial_status(sub.status) and sub.expires_at + grace > now:
                 return product, True
 
         tier = normalize_tier(user.subscription_type)
@@ -137,7 +153,10 @@ class SubscriptionService:
         if user.subscription_expires_at:
             if user.subscription_expires_at > now:
                 return tier, True
-            if user.subscription_expires_at + grace > now:
+            if (
+                not _is_trial_status(user.subscription_status)
+                and user.subscription_expires_at + grace > now
+            ):
                 return tier, True
         return "free", False
 
@@ -150,6 +169,8 @@ class SubscriptionService:
         sub = self.get_user_subscription(user_id)
         expires = sub.expires_at if sub else user.subscription_expires_at
         if not expires or normalize_tier(user.subscription_type) == "free":
+            return False
+        if _is_trial_status(sub.status if sub else user.subscription_status):
             return False
         return expires < now <= expires + grace
 
@@ -256,6 +277,7 @@ class SubscriptionService:
 
         provider_sub_id = stripe_subscription_id or payment_provider_subscription_id
         sub_status = "trial" if is_trial else "active"
+        auto_renew = _payment_auto_renew_enabled(payment_provider)
 
         subscription = Subscription(
             user_id=user_id,
@@ -267,7 +289,7 @@ class SubscriptionService:
             amount=amount,
             currency=currency,
             expires_at=expires_at,
-            auto_renew=True,
+            auto_renew=auto_renew,
             receipt_url=receipt_url,
             refund_status="none",
         )
@@ -278,7 +300,7 @@ class SubscriptionService:
             user.subscription_status = sub_status
             user.subscription_expires_at = expires_at
             user.subscription_platform = platform or payment_provider
-            user.subscription_auto_renew = True
+            user.subscription_auto_renew = auto_renew
 
         self.db.add(subscription)
         self.db.commit()
@@ -313,12 +335,119 @@ class SubscriptionService:
         subscription.status = "cancelled"
         subscription.cancelled_at = datetime.utcnow()
         subscription.auto_renew = False
+        subscription.pending_renewal_payment_id = None
         user = self.db.query(User).filter(User.id == user_id).first()
         if user:
             user.subscription_auto_renew = False
             user.subscription_status = "canceled"
+            user.yookassa_payment_method_id = None
+            user.tbank_rebill_id = None
         self.db.commit()
         return True
+
+    def save_tbank_rebill_id(self, user_id: int, rebill_id: Optional[str]) -> None:
+        if not rebill_id:
+            return
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.tbank_rebill_id = str(rebill_id)
+            self.db.flush()
+
+    def save_yookassa_payment_method(
+        self, user_id: int, payment_method_id: Optional[str]
+    ) -> None:
+        if not payment_method_id:
+            return
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.yookassa_payment_method_id = str(payment_method_id)
+            self.db.flush()
+
+    def apply_renewal_payment(
+        self,
+        subscription: Subscription,
+        payment_id: str,
+        amount: float,
+        *,
+        receipt_url: Optional[str] = None,
+        payment_method_id: Optional[str] = None,
+        rebill_id: Optional[str] = None,
+        payment_provider: Optional[str] = None,
+    ) -> Subscription:
+        """Продление существующей подписки после успешного автоплатежа СБП."""
+        provider = payment_provider or subscription.payment_provider or "tbank"
+        now = datetime.utcnow()
+        base = subscription.expires_at if subscription.expires_at and subscription.expires_at > now else now
+        if subscription.plan == "yearly":
+            subscription.expires_at = base + timedelta(days=365)
+        else:
+            subscription.expires_at = base + timedelta(days=30)
+
+        subscription.status = "active"
+        subscription.auto_renew = _payment_auto_renew_enabled(provider)
+        subscription.amount = amount
+        subscription.payment_provider_subscription_id = payment_id
+        subscription.pending_renewal_payment_id = None
+        if receipt_url:
+            subscription.receipt_url = receipt_url
+
+        user = self.db.query(User).filter(User.id == subscription.user_id).first()
+        if user:
+            product = normalize_tier(getattr(subscription, "product", "pro"))
+            user.subscription_type = product
+            user.subscription_status = "active"
+            user.subscription_expires_at = subscription.expires_at
+            user.subscription_auto_renew = subscription.auto_renew
+            token = rebill_id or payment_method_id
+            if token and _payment_auto_renew_enabled(provider):
+                if provider == "tbank":
+                    user.tbank_rebill_id = str(token)
+                elif provider == "yookassa":
+                    user.yookassa_payment_method_id = str(token)
+
+        self.db.commit()
+        self.db.refresh(subscription)
+        return subscription
+
+    def mark_renewal_payment_pending(
+        self, subscription: Subscription, payment_id: str
+    ) -> None:
+        subscription.pending_renewal_payment_id = payment_id
+        self.db.flush()
+
+    def clear_renewal_payment_pending(self, subscription: Subscription) -> None:
+        subscription.pending_renewal_payment_id = None
+        self.db.flush()
+
+    def disable_auto_renew_after_failed_payment(
+        self, subscription: Subscription, *, notify: bool = True
+    ) -> None:
+        subscription.auto_renew = False
+        subscription.pending_renewal_payment_id = None
+        user = self.db.query(User).filter(User.id == subscription.user_id).first()
+        if user:
+            user.subscription_auto_renew = False
+            user.yookassa_payment_method_id = None
+            user.tbank_rebill_id = None
+        self.db.flush()
+        if notify:
+            try:
+                from app.services.notification_service import NotificationService
+
+                NotificationService(self.db).create_notification(
+                    user_id=subscription.user_id,
+                    type="subscription_renewal_failed",
+                    title="Не удалось продлить подписку",
+                    body=(
+                        "Автоплатёж по СБП (Т-Банк) не прошёл. Продлите подписку вручную "
+                        "в разделе «Подписка»."
+                    ),
+                    entity_type="subscription",
+                    entity_id=subscription.id,
+                    data={"route": "subscription"},
+                )
+            except Exception:
+                pass
 
     def renew_subscription(self, subscription_id: int) -> bool:
         subscription = (
@@ -367,6 +496,51 @@ class SubscriptionService:
             user.subscription_status = "expired"
             user.subscription_expires_at = datetime.utcnow()
             user.subscription_auto_renew = False
+            user.yookassa_payment_method_id = None
+            user.tbank_rebill_id = None
+
+    def apply_tbank_refund(
+        self,
+        subscription: Subscription,
+        *,
+        amount: Optional[float] = None,
+        reason: str = "Возврат по запросу пользователя",  # noqa: ARG002
+    ) -> Dict[str, Any]:
+        """Провести возврат (Cancel) в Т-Банке и обновить подписку."""
+        if getattr(subscription, "refund_status", None) == "refunded":
+            raise ValueError("Subscription already refunded")
+
+        pid = subscription.payment_provider_subscription_id
+        if not pid or str(pid).startswith("trial-"):
+            raise ValueError("No T-Bank payment linked to subscription")
+        if subscription.payment_provider != "tbank":
+            raise ValueError("Refunds only supported for T-Bank payments")
+
+        refund_amount = float(amount) if amount is not None else float(subscription.amount)
+        if refund_amount <= 0:
+            raise ValueError("Refund amount must be positive")
+        if refund_amount > float(subscription.amount) + 0.01:
+            raise ValueError("Refund amount exceeds payment amount")
+
+        from app.services.tbank_service import get_tbank_service
+
+        tb = get_tbank_service()
+        if not tb.enabled:
+            raise ValueError("T-Bank is not enabled")
+
+        amount_kop = int(round(refund_amount * 100))
+        result = tb.cancel_payment(str(pid), amount_kopecks=amount_kop)
+
+        subscription.refund_status = "refunded"
+        subscription.refunded_at = datetime.utcnow()
+        self.revoke_access_after_refund(subscription)
+
+        return {
+            "refund_id": result.get("PaymentId") or pid,
+            "refund_status": result.get("Status"),
+            "amount": refund_amount,
+            "currency": subscription.currency or "RUB",
+        }
 
     def apply_yookassa_refund(
         self,

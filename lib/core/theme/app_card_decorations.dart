@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_tokens.dart';
+
 /// Карточка с единым фоном рамки (лента, меню, каналы).
 class AppElevatedCard extends StatelessWidget {
   const AppElevatedCard({
@@ -71,7 +73,7 @@ class AppElevatedCard extends StatelessWidget {
 class AppCardDecorations {
   AppCardDecorations._();
 
-  static const double defaultRadius = 22;
+  static const double defaultRadius = AppRadius.card;
 
   static BoxDecoration elevated(
     ThemeData theme, {

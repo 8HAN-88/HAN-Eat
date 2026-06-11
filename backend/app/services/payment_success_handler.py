@@ -1,0 +1,185 @@
+"""Общая обработка успешной оплаты подписки (Т-Банк / ЮKassa)."""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, Optional
+
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.models.subscription import Subscription
+from app.services.analytics_service import AnalyticsService
+from app.services.subscription_service import SubscriptionService
+
+logger = logging.getLogger(__name__)
+
+
+def process_payment_succeeded(
+    db: Session,
+    *,
+    payment_provider: str,
+    payment_id: str,
+    payment_info: Dict[str, Any],
+) -> None:
+    """Активировать или продлить подписку после подтверждённого платежа."""
+    subscription_service = SubscriptionService(db)
+    existing = subscription_service.get_subscription_by_provider_payment_id(
+        payment_id, payment_provider
+    )
+    if existing:
+        subscription_service.refresh_receipt_url(existing)
+        logger.info(
+            "%s payment %s already linked to subscription %s",
+            payment_provider,
+            payment_id,
+            existing.id,
+        )
+        return
+
+    if not payment_info or not payment_info.get("paid"):
+        logger.warning("%s payment %s not paid", payment_provider, payment_id)
+        return
+
+    metadata = payment_info.get("metadata") or {}
+    try:
+        user_id = int(metadata.get("user_id") or payment_info.get("user_id") or 0)
+    except (TypeError, ValueError):
+        user_id = 0
+    plan = metadata.get("plan") or "monthly"
+    product = metadata.get("product") or "pro"
+    is_renewal = metadata.get("renewal") == "1"
+
+    if not user_id:
+        logger.error(
+            "%s payment %s missing user_id in metadata", payment_provider, payment_id
+        )
+        return
+
+    amount = float(payment_info.get("amount") or 0)
+    if amount <= 0:
+        amount = float(subscription_service.price_for_product(product, plan))
+
+    rebill_id = payment_info.get("rebill_id") or payment_info.get("payment_method_id")
+    if rebill_id and _should_save_rebill(payment_provider):
+        p = (payment_provider or "").lower()
+        if p == "tbank":
+            subscription_service.save_tbank_rebill_id(user_id, str(rebill_id))
+        elif p == "yookassa" and (
+            payment_info.get("payment_method_saved") is not False
+        ):
+            subscription_service.save_yookassa_payment_method(user_id, str(rebill_id))
+
+    if is_renewal:
+        sub = _find_renewal_subscription(
+            db, user_id, metadata, payment_id, subscription_service
+        )
+        if sub:
+            subscription_service.apply_renewal_payment(
+                sub,
+                payment_id,
+                amount,
+                receipt_url=payment_info.get("receipt_url"),
+                rebill_id=str(rebill_id) if rebill_id else None,
+                payment_provider=payment_provider,
+            )
+            AnalyticsService(db).log_event(
+                event_type="subscription_renewal_success",
+                entity_type="subscription",
+                entity_id=sub.id,
+                user_id=user_id,
+                metadata={
+                    "product": product,
+                    "plan": plan,
+                    "amount": amount,
+                    "provider": "sbp",
+                    "payment_backend": payment_provider,
+                },
+            )
+            logger.info(
+                "Subscription %s renewed for user %s via %s",
+                sub.id,
+                user_id,
+                payment_provider,
+            )
+            return
+        logger.warning(
+            "%s renewal payment %s: subscription not found for user %s",
+            payment_provider,
+            payment_id,
+            user_id,
+        )
+
+    subscription = subscription_service.create_subscription(
+        user_id=user_id,
+        plan=plan,
+        product=product,
+        payment_provider=payment_provider,
+        payment_provider_subscription_id=payment_id,
+        amount=amount,
+        currency=payment_info.get("currency") or "RUB",
+        platform="sbp",
+        receipt_url=payment_info.get("receipt_url"),
+    )
+
+    AnalyticsService(db).log_event(
+        event_type="subscription_payment_success",
+        entity_type="subscription",
+        entity_id=subscription.id,
+        user_id=user_id,
+        metadata={
+            "product": product,
+            "plan": plan,
+            "amount": amount,
+            "provider": "sbp",
+            "payment_backend": payment_provider,
+            "is_upgrade": metadata.get("is_upgrade") == "1",
+            "recurring_enabled": bool(rebill_id),
+        },
+    )
+    logger.info(
+        "Subscription created for user %s via %s: %s",
+        user_id,
+        payment_provider,
+        subscription.id,
+    )
+
+
+def _should_save_rebill(payment_provider: str) -> bool:
+    p = (payment_provider or "").lower()
+    if p == "tbank":
+        return bool(settings.TBANK_SBP_RECURRING_ENABLED)
+    if p == "yookassa":
+        return bool(settings.YOOKASSA_SBP_RECURRING_ENABLED)
+    return False
+
+
+def _find_renewal_subscription(
+    db: Session,
+    user_id: int,
+    metadata: Dict[str, Any],
+    payment_id: str,
+    subscription_service: SubscriptionService,
+) -> Optional[Subscription]:
+    sub_id_raw = metadata.get("subscription_id")
+    if sub_id_raw:
+        try:
+            sub = (
+                db.query(Subscription)
+                .filter(
+                    Subscription.id == int(sub_id_raw),
+                    Subscription.user_id == user_id,
+                )
+                .first()
+            )
+            if sub:
+                return sub
+        except (TypeError, ValueError):
+            pass
+    return (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == user_id,
+            Subscription.pending_renewal_payment_id == payment_id,
+        )
+        .first()
+    )

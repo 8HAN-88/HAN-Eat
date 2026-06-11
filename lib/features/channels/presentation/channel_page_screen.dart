@@ -42,12 +42,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
 
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
-      if (mounted) {
-        setState(() {
-          _channel = channel;
-          _channelLoadError = null;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _channel = channel;
+        _channelLoadError = null;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _channelLoadError = e);
@@ -70,7 +69,8 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
           : await ChannelService.joinChannel(widget.channelId);
 
       await _loadChannel();
-      if (response.pending && mounted) {
+      if (!mounted) return;
+      if (response.pending) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -130,15 +130,9 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
     }
 
     return Scaffold(
-      floatingActionButton: _channel!.canViewPosts &&
-              (_channel!.isAdmin ||
-                  _channel!.isOwner ||
-                  _channel!.isModerator ||
-                  _channel!.isMember)
+      floatingActionButton: _channel!.canViewPosts && _channel!.canCreatePosts
           ? FloatingActionButton(
-              onPressed: () {
-                _showCreateContentMenu(context);
-              },
+              onPressed: () => _showCreateContentMenu(context),
               tooltip: 'Создать контент',
               child: const Icon(Icons.add),
             )
@@ -174,7 +168,7 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
   Widget _buildPostsLockedPlaceholder() {
     final c = _channel!;
     final message = c.isPending
-        ? 'Заявка на вступление на рассмотрении. Посты появятся после одобрения.'
+        ? 'Заявка на подписку на рассмотрении. Посты появятся после одобрения.'
         : !c.isPublic
             ? 'Это приватный канал. Подпишитесь — модератор одобрит доступ к постам.'
             : 'Подпишитесь на канал, чтобы видеть публикации.';
@@ -201,6 +195,13 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
               onPressed: _isJoining ? null : _toggleJoin,
               child: const Text('Отменить заявку'),
             ),
+          ] else if (!c.isMember) ...[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: _isJoining ? null : _toggleJoin,
+              icon: Icon(c.isPublic ? Icons.person_add : Icons.lock_outline),
+              label: Text(_joinButtonLabel(c)),
+            ),
           ],
         ],
       ),
@@ -210,8 +211,8 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
   String _joinButtonLabel(ChannelDetail c) {
     if (c.isMember) return 'Покинуть канал';
     if (c.isPending) return 'Ожидает одобрения';
-    if (!c.isPublic) return 'Запросить вступление';
-    return 'Присоединиться';
+    if (!c.isPublic) return 'Запросить подписку';
+    return 'Подписаться';
   }
 
   Widget _buildChannelHeader() {
@@ -256,26 +257,15 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
             children: [
               InkWell(
                 onTap: _channel!.canViewPosts
-                    ? () {
-                  // Показываем участников
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (context) => DraggableScrollableSheet(
-                      initialChildSize: 0.7,
-                      minChildSize: 0.5,
-                      maxChildSize: 0.95,
-                      builder: (context, scrollController) =>
-                          _ChannelMembersTab(
-                        channelId: widget.channelId,
-                        scrollController: scrollController,
-                      ),
-                    ),
-                  );
-                }
+                    ? () => context.push(
+                          ChannelDetailRoute.subscribers(
+                            widget.channelId,
+                            channelName: _channel!.name,
+                          ),
+                        )
                     : null,
                 child: _StatItem(
-                    label: 'Участники', value: '${_channel!.membersCount}'),
+                    label: 'Подписчики', value: '${_channel!.membersCount}'),
               ),
               _StatItem(label: 'Посты', value: '${_channel!.postsCount}'),
             ],
@@ -285,7 +275,7 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (_channel!.isAdmin)
+              if (_channel!.canManageChannelSettings)
                 OutlinedButton.icon(
                   onPressed: () {
                     context.push(
@@ -298,11 +288,10 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
                   icon: const Icon(Icons.settings_outlined),
                   label: const Text('Настройки'),
                 ),
-              if (_channel!.isAdmin) const SizedBox(width: 8),
+              if (_channel!.canManageChannelSettings) const SizedBox(width: 8),
               FilledButton(
-                onPressed: (_isJoining || _channel!.isPending)
-                    ? null
-                    : _toggleJoin,
+                onPressed:
+                    (_isJoining || _channel!.isPending) ? null : _toggleJoin,
                 child: Text(_joinButtonLabel(_channel!)),
               ),
             ],
@@ -327,13 +316,15 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
     );
   }
 
-  void _showCreateContentMenu(BuildContext context) {
+  Future<void> _showCreateContentMenu(BuildContext context) async {
     if (_channel == null) return;
-    showChannelCreateContentSheet(
+    await showChannelCreateContentSheet(
       context,
       channelId: widget.channelId,
       channelName: _channel!.name,
     );
+    if (!mounted) return;
+    await _loadChannel();
   }
 }
 
@@ -358,7 +349,7 @@ class _StatItem extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -427,6 +418,7 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
 
       final posts = response.posts.map((p) => PostModel.fromJson(p)).toList();
 
+      if (!mounted) return;
       setState(() {
         if (refresh) {
           _posts = posts;
@@ -530,138 +522,6 @@ class _ChannelPostsTabState extends State<_ChannelPostsTab> {
           );
         },
       ),
-    );
-  }
-}
-
-class _ChannelMembersTab extends StatefulWidget {
-  final int channelId;
-  final ScrollController? scrollController;
-
-  const _ChannelMembersTab({
-    required this.channelId,
-    this.scrollController,
-  });
-
-  @override
-  State<_ChannelMembersTab> createState() => _ChannelMembersTabState();
-}
-
-class _ChannelMembersTabState extends State<_ChannelMembersTab> {
-  List<Map<String, dynamic>> _members = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMembers();
-  }
-
-  Future<void> _loadMembers() async {
-    setState(() => _isLoading = true);
-    try {
-      final data = await ChannelService.getChannelMembers(
-        channelId: widget.channelId,
-        limit: 50,
-      );
-      setState(() {
-        _members = (data['members'] as List<dynamic>?)
-                ?.map((m) => m as Map<String, dynamic>)
-                .toList() ??
-            [];
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников'))),
-        );
-      }
-      setState(() => _isLoading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              const Text(
-                'Участники',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Text('${_members.length}'),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _members.isEmpty
-                  ? const AppEmptyState(
-                      icon: Icons.people_outline_rounded,
-                      title: 'Нет участников',
-                      subtitle: 'Пригласите людей в канал',
-                    )
-                  : ListView(
-                      controller: widget.scrollController,
-                      children: _members.map((member) {
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundImage: member['avatar_url'] != null
-                                ? NetworkImage(member['avatar_url'] as String)
-                                : null,
-                            child: member['avatar_url'] == null
-                                ? Text((member['name'] as String? ??
-                                        member['username'] as String? ??
-                                        'U')[0]
-                                    .toUpperCase())
-                                : null,
-                          ),
-                          title: Text(member['name'] as String? ??
-                              member['username'] as String? ??
-                              'Пользователь'),
-                          subtitle: Text(member['username'] as String? ?? ''),
-                          trailing: member['role'] == 'admin'
-                              ? Chip(
-                                  label: const Text('Админ'),
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .primaryContainer,
-                                )
-                              : member['role'] == 'moderator'
-                                  ? Chip(
-                                      label: const Text('Модератор'),
-                                      backgroundColor: Theme.of(context)
-                                          .colorScheme
-                                          .secondaryContainer,
-                                    )
-                                  : null,
-                          onTap: () {
-                            final uid = member['user_id'];
-                            final id = uid is int ? uid : int.tryParse('$uid');
-                            if (id != null) {
-                              context.push(ProfileRoute.withUserId(id));
-                            }
-                            Navigator.of(context).pop();
-                          },
-                        );
-                      }).toList(),
-                    ),
-        ),
-      ],
     );
   }
 }

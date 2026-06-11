@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/firebase/lazy_firebase.dart';
 import 'auth_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -61,7 +62,7 @@ class PostComment {
 
 /// Сервис для работы с комментариями к постам
 class PostCommentsService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Добавить комментарий
   static Future<String> addComment(

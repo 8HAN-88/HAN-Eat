@@ -147,6 +147,7 @@ async def create_post(
     # Формируем body для рецептов
     if request.type == "recipe":
         from app.services.recipe_body_nutrition import apply_nutrition_to_recipe_body
+        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
 
         body = {
             "ingredients": request.ingredients or [],
@@ -162,6 +163,11 @@ async def create_post(
             carbs_g=request.carbs_g,
             fat_g=request.fat_g,
             fiber_g=request.fiber_g,
+        )
+        apply_origin_country_to_recipe_body(
+            body,
+            origin_country_code=request.origin_country_code,
+            origin_country_name=request.origin_country_name,
         )
     
     # Обрабатываем медиа
@@ -180,9 +186,46 @@ async def create_post(
             body = {}
         body["media"] = media_items
     
+    channel_for_visibility = None
+    channel_obj = None
+
+    if request.channel_id:
+        from app.models.community import Channel
+        from app.services.channel_membership_service import (
+            get_membership,
+            has_channel_permission,
+        )
+
+        channel_obj = db.query(Channel).filter(Channel.id == request.channel_id).first()
+        if not channel_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel not found"
+            )
+
+        member = get_membership(db, request.channel_id, current_user.id)
+        if not has_channel_permission(channel_obj, member, current_user, "create_posts"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для публикации в канале",
+            )
+        channel_for_visibility = channel_obj
+        channel_obj.posts_count = (channel_obj.posts_count or 0) + 1
+
     publish_to = request.publish_to
     if publish_to is None:
-        publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
+        if channel_obj is not None:
+            publish_to = [f"channel:{request.channel_id}"]
+            if channel_obj.auto_publish_to_feed:
+                publish_to.insert(0, "feed")
+            if request.type == "reel":
+                publish_to_reels = request.publish_to_reels
+                if publish_to_reels is None:
+                    publish_to_reels = channel_obj.auto_publish_reels
+                if publish_to_reels:
+                    publish_to.append("reels")
+        else:
+            publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
 
     post = Post(
         user_id=current_user.id,
@@ -193,64 +236,8 @@ async def create_post(
         publish_to=publish_to,
         visibility=request.visibility or "public",
         tags=request.tags or [],
+        channel_id=request.channel_id if channel_obj is not None else None,
     )
-
-    channel_for_visibility = None
-    
-    # Если указан канал
-    if request.channel_id:
-        from app.models.community import Channel
-        from app.models.community_member import ChannelMember
-        
-        channel = db.query(Channel).filter(Channel.id == request.channel_id).first()
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Channel not found"
-            )
-        
-        # Проверяем, является ли пользователь владельцем, админом или модератором канала
-        # Владелец канала (admin_user_id) всегда может публиковать
-        is_owner = channel.admin_user_id == current_user.id
-        
-        if is_owner:
-            # Владелец канала всегда может публиковать, пропускаем проверку участников
-            pass
-        else:
-            # Для не-владельцев проверяем роль участника
-            from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
-
-            member = db.query(ChannelMember).filter(
-                ChannelMember.channel_id == request.channel_id,
-                ChannelMember.user_id == current_user.id,
-                ChannelMember.status == MEMBER_STATUS_ACTIVE,
-            ).first()
-
-            is_admin_or_moderator = member and member.role in [
-                "admin",
-                "moderator",
-                "owner",
-            ]
-            
-            if not is_admin_or_moderator:
-                # Логируем для отладки
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    f"User {current_user.id} (username: {current_user.username}) tried to post to channel {request.channel_id}. "
-                    f"Channel owner: {channel.admin_user_id}, Is owner: {is_owner}, "
-                    f"Member found: {member is not None}, Member role: {member.role if member else 'None'}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Only channel owner, admins and moderators can post to channel. "
-                           f"Channel owner ID: {channel.admin_user_id}, Your ID: {current_user.id}"
-                )
-        
-        post.channel_id = request.channel_id
-        channel_for_visibility = channel
-        # Обновляем счетчик постов канала
-        channel.posts_count = (channel.posts_count or 0) + 1
 
     if request.type == "recipe":
         from app.services.subscription_service import SubscriptionService
@@ -295,6 +282,14 @@ async def create_post(
 
     db.commit()
     db.refresh(post)
+
+    if channel_obj is not None:
+        try:
+            from app.services.user_stats_cache import invalidate_user_stats_cache
+
+            invalidate_user_stats_cache([current_user.id])
+        except Exception:
+            pass
 
     # Загружаем пользователя для включения в ответ (eager loading)
     from sqlalchemy.orm import joinedload
@@ -543,6 +538,15 @@ async def update_post(
             fat_g=request.fat_g,
             fiber_g=request.fiber_g,
         )
+        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
+
+        if request.origin_country_code is not None:
+            apply_origin_country_to_recipe_body(
+                body,
+                origin_country_code=request.origin_country_code,
+                origin_country_name=request.origin_country_name,
+                clear_if_empty=request.origin_country_code == "",
+            )
         post.body = body
 
     if request.media is not None:

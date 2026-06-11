@@ -60,8 +60,12 @@ class HistoryScreen extends ConsumerWidget {
       body: Builder(
         builder: (context) {
           try {
+            final listenable = HistoryStorage.listenable();
+            if (listenable == null) {
+              return const Center(child: CircularProgressIndicator());
+            }
             return ValueListenableBuilder(
-              valueListenable: HistoryStorage.listenable(),
+              valueListenable: listenable,
               builder: (context, box, _) {
                 final entries = box.values.toList().cast<SearchHistoryEntry>().reversed.toList();
                 if (entries.isEmpty) {

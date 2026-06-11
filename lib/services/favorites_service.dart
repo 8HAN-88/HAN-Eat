@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../core/config/legacy_firestore_config.dart';
+import '../core/storage/hive_bootstrap.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 
@@ -31,12 +32,44 @@ class FavoritesService {
   }
 
   // Allow re-init for tests: dispose previous and create new.
+  static Future<FavoritesService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  static ValueListenable<Set<String>> get favoritesListenable {
+    try {
+      return instance.favorites;
+    } catch (_) {
+      return ValueNotifier<Set<String>>(<String>{});
+    }
+  }
+
+  static bool safeIsFavorite(String id) {
+    try {
+      return instance.isFavorite(id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> safeToggleFavorite(String id) async {
+    try {
+      final svc = await ensureInitialized();
+      await svc.toggleFavorite(id);
+    } catch (e) {
+      if (kDebugMode) debugPrint('FavoritesService.safeToggleFavorite: $e');
+    }
+  }
+
   static Future<void> init({bool startAuthSync = true}) async {
     if (_instance != null) {
       try {
         await _instance!._disposeInternal();
       } catch (_) {}
     }
+    await ensureHiveReady();
     final box = await Hive.openBox(_boxName);
     _instance = FavoritesService._internal(box);
     if (startAuthSync && AuthService.isInitialized) {

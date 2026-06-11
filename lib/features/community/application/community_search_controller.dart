@@ -11,6 +11,35 @@ enum SearchType {
   category, // Категории - поиск по категориям
 }
 
+String _normalizeSearchText(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll('ё', 'е')
+      .replaceAll(RegExp(r'[#@]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+List<String> _searchTerms(String value) {
+  final normalized = _normalizeSearchText(value);
+  if (normalized.isEmpty) return const [];
+  return normalized
+      .split(' ')
+      .map((term) => term.trim())
+      .where((term) => term.isNotEmpty)
+      .toSet()
+      .toList();
+}
+
+bool _matchesAllTerms(String value, List<String> terms) {
+  final normalized = _normalizeSearchText(value);
+  return terms.every(normalized.contains);
+}
+
+bool _matchesAnyTag(List<String> tags, List<String> terms) {
+  return tags.any((tag) => _matchesAllTerms(tag, terms));
+}
+
 class CommunitySearchState {
   const CommunitySearchState({
     required this.videos,
@@ -64,7 +93,8 @@ final communitySearchControllerProvider =
 class CommunitySearchController extends StateNotifier<CommunitySearchState> {
   CommunitySearchController() : super(CommunitySearchState.initial());
 
-  Future<void> search(String query, {SearchType? type, Map<String, dynamic>? filters}) async {
+  Future<void> search(String query,
+      {SearchType? type, Map<String, dynamic>? filters}) async {
     if (query.trim().isEmpty) {
       state = state.copyWith(videos: [], loading: false, error: null);
       return;
@@ -82,60 +112,49 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
       String? serverTag = state.filters['tag'] as String?;
       if (serverTag == null || serverTag.isEmpty) {
         if (state.searchType == SearchType.hashtag) {
-          var h = query.trim().toLowerCase();
-          if (h.startsWith('#')) h = h.substring(1);
+          final terms = _searchTerms(query);
+          final h = terms.isEmpty ? '' : terms.first;
           serverTag = h.isEmpty ? null : h;
         }
       }
-      final allVideos =
-          await ApiService.fetchCommunityVideos(tag: serverTag);
+      final allVideos = await ApiService.fetchCommunityVideos(tag: serverTag);
 
       // Дополнительная фильтрация на клиенте по типу поиска
       List<CommunityVideo> filteredVideos = [];
-      final queryLower = query.toLowerCase();
+      final terms = _searchTerms(query);
 
       switch (state.searchType) {
         case SearchType.author:
           filteredVideos = allVideos
-              .where((video) => video.author.toLowerCase().contains(queryLower))
+              .where((video) => _matchesAllTerms(video.author, terms))
               .toList();
           break;
         case SearchType.video:
           filteredVideos = allVideos
-              .where((video) => 
-                  video.title.toLowerCase().contains(queryLower) ||
-                  video.description.toLowerCase().contains(queryLower))
+              .where((video) =>
+                  _matchesAllTerms(video.title, terms) ||
+                  _matchesAllTerms(video.description, terms))
               .toList();
           break;
         case SearchType.hashtag:
           // Поиск по хештегам (тегам)
-          final hashtag = queryLower.startsWith('#') 
-              ? queryLower.substring(1) 
-              : queryLower;
           filteredVideos = allVideos
-              .where((video) =>
-                  video.tags.any((tag) => 
-                      tag.toLowerCase().contains(hashtag) ||
-                      tag.toLowerCase() == hashtag))
+              .where((video) => _matchesAnyTag(video.tags, terms))
               .toList();
           break;
         case SearchType.category:
           // Поиск по категориям (в тегах может быть категория)
           filteredVideos = allVideos
-              .where((video) =>
-                  video.tags.any((tag) => 
-                      tag.toLowerCase() == queryLower ||
-                      tag.toLowerCase().contains(queryLower)))
+              .where((video) => _matchesAnyTag(video.tags, terms))
               .toList();
           break;
         case SearchType.best:
-        default:
           filteredVideos = allVideos
               .where((video) =>
-                  video.title.toLowerCase().contains(queryLower) ||
-                  video.description.toLowerCase().contains(queryLower) ||
-                  video.author.toLowerCase().contains(queryLower) ||
-                  video.tags.any((tag) => tag.toLowerCase().contains(queryLower)))
+                  _matchesAllTerms(video.title, terms) ||
+                  _matchesAllTerms(video.description, terms) ||
+                  _matchesAllTerms(video.author, terms) ||
+                  _matchesAnyTag(video.tags, terms))
               .toList();
           break;
       }
@@ -145,14 +164,15 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
         if (state.filters.containsKey('tag') && state.filters['tag'] != null) {
           final tag = state.filters['tag'] as String;
           filteredVideos = filteredVideos
-              .where((video) => video.tags.contains(tag))
+              .where((video) => video.tags.any((videoTag) =>
+                  _normalizeSearchText(videoTag) == _normalizeSearchText(tag)))
               .toList();
         }
-        if (state.filters.containsKey('minLikes') && state.filters['minLikes'] != null) {
+        if (state.filters.containsKey('minLikes') &&
+            state.filters['minLikes'] != null) {
           final minLikes = state.filters['minLikes'] as int;
-          filteredVideos = filteredVideos
-              .where((video) => video.likes >= minLikes)
-              .toList();
+          filteredVideos =
+              filteredVideos.where((video) => video.likes >= minLikes).toList();
         }
       }
 
@@ -188,4 +208,3 @@ class CommunitySearchController extends StateNotifier<CommunitySearchState> {
     state = CommunitySearchState.initial();
   }
 }
-

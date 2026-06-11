@@ -22,7 +22,7 @@ class MediaUploadService {
 
   /// Инициализация загрузки (получение presigned URL)
   static Future<UploadInitResponse> initUpload({
-    required String fileType, // 'image' или 'video'
+    required String fileType, // 'image', 'video', 'audio' or 'document'
     required String contentType, // 'image/jpeg', 'video/mp4', etc.
     required int fileSize,
   }) async {
@@ -179,7 +179,7 @@ class MediaUploadService {
   /// Полный процесс загрузки (init + upload + complete)
   static Future<UploadCompleteResponse> uploadMediaFile({
     required XFile file, // Используем только XFile для кроссплатформенности
-    required String fileType, // 'image' или 'video'
+    required String fileType, // 'image', 'video', 'audio' or 'document'
     Function(double)? onProgress,
   }) async {
     try {
@@ -216,10 +216,60 @@ class MediaUploadService {
       
       if (onProgress != null) onProgress(1.0);
       
+      if (fileType == 'video' && completeResponse.processing) {
+        final uploadId = completeResponse.uploadId;
+        if (uploadId != null && uploadId.isNotEmpty) {
+          return waitForVideoProcessing(
+            uploadId: uploadId,
+            fallbackUrl: completeResponse.url,
+            onProgress: onProgress,
+          );
+        }
+      }
+      
       return completeResponse;
     } catch (e) {
       throw Exception('Upload failed: $e');
     }
+  }
+
+  /// Дождаться транскодинга (720p/480p) после загрузки видео.
+  /// Если обработка не успела или упала — вернёт fallback (оригинал).
+  static Future<UploadCompleteResponse> waitForVideoProcessing({
+    required String uploadId,
+    String? fallbackUrl,
+    Duration timeout = const Duration(minutes: 15),
+    void Function(double)? onProgress,
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final status = await getUploadStatus(uploadId);
+      final progress = status.progress.clamp(0, 100) / 100.0;
+      onProgress?.call(0.9 + progress * 0.1);
+
+      if (status.status == 'completed') {
+        final url = status.url ?? status.mp4_720pUrl ?? fallbackUrl;
+        return UploadCompleteResponse(
+          status: 'completed',
+          url: url,
+          thumbnailUrl: status.thumbnailUrl,
+          processing: false,
+          uploadId: uploadId,
+        );
+      }
+      if (status.status == 'failed') {
+        break;
+      }
+      await Future.delayed(const Duration(seconds: 2));
+    }
+
+    return UploadCompleteResponse(
+      status: 'completed',
+      url: fallbackUrl,
+      thumbnailUrl: null,
+      processing: false,
+      uploadId: uploadId,
+    );
   }
   
   static String _getContentType(String filePath, String fileType) {
@@ -248,8 +298,36 @@ class MediaUploadService {
         default:
           return 'video/mp4';
       }
+    } else if (fileType == 'audio') {
+      switch (extension) {
+        case 'm4a':
+          return 'audio/mp4';
+        case 'aac':
+          return 'audio/aac';
+        case 'mp3':
+          return 'audio/mpeg';
+        case 'caf':
+          return 'audio/x-caf';
+        default:
+          return 'audio/mp4';
+      }
+    } else if (fileType == 'document') {
+      switch (extension) {
+        case 'pdf':
+          return 'application/pdf';
+        case 'txt':
+          return 'text/plain';
+        case 'doc':
+          return 'application/msword';
+        case 'docx':
+          return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        case 'zip':
+          return 'application/zip';
+        default:
+          return 'application/octet-stream';
+      }
     }
-    
+
     return 'application/octet-stream';
   }
 }
@@ -285,12 +363,14 @@ class UploadCompleteResponse {
   final String? url;
   final String? thumbnailUrl;
   final bool processing;
+  final String? uploadId;
   
   UploadCompleteResponse({
     required this.status,
     this.url,
     this.thumbnailUrl,
     required this.processing,
+    this.uploadId,
   });
   
   factory UploadCompleteResponse.fromJson(Map<String, dynamic> json) {
@@ -299,28 +379,34 @@ class UploadCompleteResponse {
       url: json['url'] as String?,
       thumbnailUrl: json['thumbnail_url'] as String?,
       processing: json['processing'] as bool? ?? false,
+      uploadId: json['upload_id'] as String?,
     );
   }
 }
 
 class UploadStatusResponse {
   final String status;
-  final int progress;
+  final double progress;
   final String? url;
+  final String? mp4_720pUrl;
   final String? thumbnailUrl;
   
   UploadStatusResponse({
     required this.status,
     required this.progress,
     this.url,
+    this.mp4_720pUrl,
     this.thumbnailUrl,
   });
   
   factory UploadStatusResponse.fromJson(Map<String, dynamic> json) {
+    final rawProgress = json['progress'];
+    final progress = rawProgress is num ? rawProgress.toDouble() : 0.0;
     return UploadStatusResponse(
       status: json['status'] as String,
-      progress: json['progress'] as int? ?? 0,
+      progress: progress,
       url: json['url'] as String?,
+      mp4_720pUrl: json['mp4_720p_url'] as String?,
       thumbnailUrl: json['thumbnail_url'] as String?,
     );
   }

@@ -8,6 +8,7 @@ import '../services/server_config.dart';
 import '../utils/recipe_nutrition.dart';
 import '../models/meal_plan.dart';
 import '../services/meal_plan_service.dart';
+import '../core/cuisine_countries.dart';
 import '../core/theme/app_card_decorations.dart';
 import '../features/subscription/subscription_copy.dart';
 
@@ -64,7 +65,10 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
 
   bool get _canLoadRemoteRating {
     final src = widget.recipe.source;
-    return src == null || src == 'spoonacular' || src == 'user' || src == 'channel';
+    return src == null ||
+        src == 'spoonacular' ||
+        src == 'user' ||
+        src == 'channel';
   }
 
   @override
@@ -117,8 +121,10 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
     if (_ratingCache.containsKey(key) || _ratingInFlight.contains(key)) return;
     _ratingInFlight.add(key);
     try {
-      final ratingData = (widget.recipe.source == null || widget.recipe.source == 'spoonacular')
-          ? await RecipeCommentsService.getRecipeRating(widget.recipe.id.toString())
+      final ratingData = (widget.recipe.source == null ||
+              widget.recipe.source == 'spoonacular')
+          ? await RecipeCommentsService.getRecipeRating(
+              widget.recipe.id.toString())
           : await CommentService.getPostRating(widget.recipe.id);
       final rating = (ratingData['rating'] as num?)?.toDouble() ?? 0.0;
       final count = (ratingData['count'] as int?) ?? 0;
@@ -140,14 +146,14 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
 
   String _getDifficulty() {
     // Определяем сложность на основе количества шагов и ингредиентов
-    final stepsCount = widget.recipe.translatedSteps?.isNotEmpty == true 
-        ? widget.recipe.translatedSteps!.length 
+    final stepsCount = widget.recipe.translatedSteps?.isNotEmpty == true
+        ? widget.recipe.translatedSteps!.length
         : widget.recipe.steps.length;
     final ingredients = widget.recipe.translatedIngredients?.isNotEmpty == true
         ? widget.recipe.translatedIngredients!
         : widget.recipe.ingredients;
     final ingredientsCount = ingredients.length;
-    
+
     if (stepsCount <= 3 && ingredientsCount <= 5) {
       return 'Легко';
     } else if (stepsCount <= 6 && ingredientsCount <= 10) {
@@ -160,8 +166,9 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
   String _getCookingTime() {
     // Примерное время на основе количества шагов
     final stepsCount = widget.recipe.steps.length;
-    final estimatedMinutes = stepsCount * 5 + 15; // Базовое время + время на шаги
-    
+    final estimatedMinutes =
+        stepsCount * 5 + 15; // Базовое время + время на шаги
+
     if (estimatedMinutes < 30) {
       return '$estimatedMinutes мин';
     } else if (estimatedMinutes < 60) {
@@ -258,7 +265,19 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
   }
 
   /// Превью с оверлеями (аватар, избранное, видео).
+  String? _originCountryBadgeLabel() {
+    final code = widget.recipe.originCountryCode;
+    if (code != null && code.isNotEmpty) {
+      final found = findRecipeOriginCountry(code);
+      if (found != null) return found.displayLabel;
+    }
+    final name = widget.recipe.originCountryName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return widget.recipe.originCountryLabel?.trim();
+  }
+
   Widget _buildPreviewStack(ThemeData theme) {
+    final reason = widget.recipe.reasonLabel?.trim();
     return Stack(
       children: [
         AspectRatio(
@@ -283,10 +302,11 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
             child: _buildPublisherAvatar(theme),
           ),
         ),
-        if (widget.recipe.videoUrl != null && widget.recipe.videoUrl!.isNotEmpty)
+        if (widget.recipe.videoUrl != null &&
+            widget.recipe.videoUrl!.isNotEmpty)
           Positioned(
             bottom: 8,
-            left: 8,
+            right: 8,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -314,6 +334,19 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
               ),
             ),
           ),
+        if (reason != null && reason.isNotEmpty)
+          Positioned(
+            bottom: 8,
+            left: 8,
+            right: widget.recipe.videoUrl != null &&
+                    widget.recipe.videoUrl!.isNotEmpty
+                ? 92
+                : 8,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _buildMenuReasonBadge(theme, reason),
+            ),
+          ),
         if (widget.showFavoriteButton)
           Positioned(
             top: 8,
@@ -336,8 +369,7 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
                           widget.isFavorite
                               ? Icons.favorite
                               : Icons.favorite_border,
-                          color:
-                              widget.isFavorite ? Colors.red : Colors.grey,
+                          color: widget.isFavorite ? Colors.red : Colors.grey,
                           size: 20,
                         ),
                 ),
@@ -348,8 +380,77 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
     );
   }
 
+  Widget _buildOriginCountryChip(ThemeData theme, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.public,
+            size: widget.compact ? 12 : 13,
+            color: theme.colorScheme.onSecondaryContainer,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuReasonBadge(ThemeData theme, String label) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.68),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome_outlined,
+              size: widget.compact ? 12 : 13,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: widget.compact ? 10.5 : 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Текст и метрики; при [fillToCellBottom] нижняя строка прижата к низу ячейки сетки.
-  Widget _buildDetailsPanel(ThemeData theme, String title, {required bool fillToCellBottom}) {
+  Widget _buildDetailsPanel(ThemeData theme, String title,
+      {required bool fillToCellBottom}) {
     final pad = widget.compact
         ? const EdgeInsets.fromLTRB(10, 8, 10, 10)
         : const EdgeInsets.fromLTRB(12, 12, 12, 12);
@@ -364,6 +465,10 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
+      if (_originCountryBadgeLabel() != null) ...[
+        SizedBox(height: widget.compact ? 4 : 6),
+        _buildOriginCountryChip(theme, _originCountryBadgeLabel()!),
+      ],
       SizedBox(height: widget.compact ? 6 : 8),
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,40 +599,43 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
       builder: (context, _) {
         _hydrateRatingFromCache();
         return Container(
-      decoration: AppCardDecorations.elevated(theme, radius: radius),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(radius),
-        child: widget.compact
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  preview,
-                  Expanded(
-                    child: _buildDetailsPanel(theme, title, fillToCellBottom: true),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  preview,
-                  _buildDetailsPanel(theme, title, fillToCellBottom: false),
-                ],
-              ),
-        ),
-      ),
-    );
+          decoration: AppCardDecorations.elevated(theme, radius: radius),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(radius),
+              child: widget.compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        preview,
+                        Expanded(
+                          child: _buildDetailsPanel(theme, title,
+                              fillToCellBottom: true),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        preview,
+                        _buildDetailsPanel(theme, title,
+                            fillToCellBottom: false),
+                      ],
+                    ),
+            ),
+          ),
+        );
       },
     );
   }
 
   Widget _buildBottomStats(ThemeData theme) {
-    final rating = (widget.recipe.rating ?? _resolvedRating ?? 0).clamp(0, 5).toDouble();
+    final rating =
+        (widget.recipe.rating ?? _resolvedRating ?? 0).clamp(0, 5).toDouble();
     final likesCount = widget.recipe.likesCount ?? 0;
     final c = widget.compact;
     final iconS = c ? 13.0 : 14.0;
@@ -647,7 +755,7 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
 
     try {
       return ValueListenableBuilder<List<MealPlanEntry>>(
-        valueListenable: MealPlanService.instance.allEntries,
+        valueListenable: MealPlanService.allEntriesListenable,
         builder: (context, entries, _) {
           final fromPlan = countFromPlan(entries);
           final apiFallback = widget.recipe.mealPlanCount ?? 0;
@@ -662,9 +770,14 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
   }
 
   Widget _buildImageOrVideo(ThemeData theme) {
-    // Приоритет: videoThumbnail > image > sourceImage
-    final imageUrl = widget.recipe.videoThumbnail ?? widget.recipe.image ?? widget.recipe.sourceImage;
-    
+    // Приоритет: videoThumbnail > все фото рецепта > image > sourceImage
+    final imageUrl = widget.recipe.videoThumbnail ??
+        (widget.recipe.imageUrls.isNotEmpty
+            ? widget.recipe.imageUrls.first
+            : null) ??
+        widget.recipe.image ??
+        widget.recipe.sourceImage;
+
     if (imageUrl != null && imageUrl.isNotEmpty && imageUrl.trim().isNotEmpty) {
       return RecipeNetworkImage(
         rawUrl: imageUrl,
@@ -684,7 +797,7 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
         errorWidget: _buildPlaceholderImage(theme),
       );
     }
-    
+
     return _buildPlaceholderImage(theme);
   }
 
@@ -728,9 +841,12 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
     final nutrition = widget.recipe.nutrition!;
     // Проверяем наличие хотя бы одного из БЖУ (теперь они всегда вычисляются)
     // Проверяем не только наличие ключей, но и что значения не null
-    final hasProtein = (nutrition['protein'] != null || nutrition['proteins'] != null);
+    final hasProtein =
+        (nutrition['protein'] != null || nutrition['proteins'] != null);
     final hasFat = (nutrition['fat'] != null || nutrition['fats'] != null);
-    final hasCarbs = (nutrition['carbs'] != null || nutrition['carbohydrates'] != null || nutrition['carb'] != null);
+    final hasCarbs = (nutrition['carbs'] != null ||
+        nutrition['carbohydrates'] != null ||
+        nutrition['carb'] != null);
     return hasProtein || hasFat || hasCarbs;
   }
 
@@ -739,10 +855,10 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
     if (nutrition == null) {
       return null;
     }
-    
+
     // Сначала пробуем прямые ключи
     var protein = nutrition['protein'] ?? nutrition['proteins'];
-    
+
     // Если нет, пробуем извлечь из массива nutrients
     if (protein == null) {
       final nutrients = nutrition['nutrients'];
@@ -768,9 +884,9 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
         }
       }
     }
-    
+
     if (protein == null) return null;
-    
+
     if (protein is num) return protein.toDouble();
     if (protein is String) {
       final match = RegExp(r'(\d+\.?\d*)').firstMatch(protein);
@@ -786,10 +902,11 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
     if (nutrition == null) {
       return null;
     }
-    
+
     // Сначала пробуем прямые ключи
-    var carbs = nutrition['carbs'] ?? nutrition['carbohydrates'] ?? nutrition['carb'];
-    
+    var carbs =
+        nutrition['carbs'] ?? nutrition['carbohydrates'] ?? nutrition['carb'];
+
     // Если нет, пробуем извлечь из массива nutrients
     if (carbs == null) {
       final nutrients = nutrition['nutrients'];
@@ -799,8 +916,10 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
             final name = (n['name']?.toString() ?? '').toLowerCase();
             final title = (n['title']?.toString() ?? '').toLowerCase();
             final searchName = title.isNotEmpty ? title : name;
-            if ((searchName.contains('carbohydrate') || searchName.contains('carbs') || searchName.contains('carb')) 
-                && !searchName.contains('net')) {
+            if ((searchName.contains('carbohydrate') ||
+                    searchName.contains('carbs') ||
+                    searchName.contains('carb')) &&
+                !searchName.contains('net')) {
               final amount = n['amount'];
               if (amount != null) {
                 if (amount is num) {
@@ -816,9 +935,9 @@ class _ModernRecipeCardState extends State<ModernRecipeCard> {
         }
       }
     }
-    
+
     if (carbs == null) return null;
-    
+
     if (carbs is num) return carbs.toDouble();
     if (carbs is String) {
       final match = RegExp(r'(\d+\.?\d*)').firstMatch(carbs);
@@ -896,6 +1015,3 @@ class _DetailItem extends StatelessWidget {
     );
   }
 }
-
-
-

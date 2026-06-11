@@ -219,9 +219,6 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen>
                       },
                     )
                   : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
             ),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _loadChannels(refresh: true),
@@ -305,91 +302,99 @@ class _ChannelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AppElevatedCard(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-        onTap: () {
-          context.push(ChannelDetailRoute.pathFor(channel.id));
-        },
-        borderRadius: BorderRadius.circular(AppCardDecorations.defaultRadius),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              // Аватар
-              CircleAvatar(
-                radius: 30,
-                backgroundImage: channel.avatarUrl != null
-                    ? NetworkImage(channel.avatarUrl!)
-                    : null,
-                child: channel.avatarUrl == null
-                    ? Text(
-                        channel.name[0].toUpperCase(),
-                        style: const TextStyle(fontSize: 24),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              // Информация
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      channel.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    ChannelListBadges(channel: channel),
-                    if (channel.description != null &&
-                        channel.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+          onTap: () {
+            context.push(ChannelDetailRoute.pathFor(channel.id));
+          },
+          borderRadius: BorderRadius.circular(AppCardDecorations.defaultRadius),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Аватар
+                CircleAvatar(
+                  radius: 30,
+                  backgroundImage: channel.avatarUrl != null
+                      ? NetworkImage(channel.avatarUrl!)
+                      : null,
+                  child: channel.avatarUrl == null
+                      ? Text(
+                          channel.name[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 24),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                // Информация
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        channel.description!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                        channel.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.people_outline,
-                            size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
+                      ChannelListBadges(channel: channel),
+                      if (channel.description != null &&
+                          channel.description!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
                         Text(
-                          '${channel.membersCount} участников',
+                          channel.description!,
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                            fontSize: 14,
+                            color: scheme.onSurfaceVariant,
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        Icon(Icons.post_add, size: 16, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${channel.postsCount} постов',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${channel.membersCount} подписчиков',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Icon(
+                            Icons.post_add,
+                            size: 16,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${channel.postsCount} постов',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
+                const Icon(Icons.chevron_right),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

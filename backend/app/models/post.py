@@ -33,6 +33,8 @@ class Post(Base):
     deleted_at = Column(DateTime, nullable=True)
     views_count = Column(Integer, default=0, nullable=False)  # Счетчик просмотров
     is_promoted = Column(Boolean, default=False, nullable=False, index=True)  # Продвижение в ленте
+    is_pinned = Column(Boolean, default=False, nullable=False, index=True)  # Закрепление в канале
+    is_exclusive = Column(Boolean, default=False, nullable=False, index=True)  # Эксклюзив H.A.N. Pro
     hidden_from_recommendations = Column(Boolean, default=False, nullable=False)
 
     # Relationships для оптимизации запросов (eager loading)

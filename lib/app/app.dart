@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -67,7 +67,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
     try {
       final router = ref.watch(appRouterProvider);
       final themeMode = ref.watch(themeModeProvider);
-      
+
       return MaterialApp.router(
         title: 'HAN Eat',
         theme: AppTheme.light(),
@@ -87,25 +87,38 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
         locale: const Locale('ru', 'RU'),
         builder: (context, child) {
           final theme = Theme.of(context);
+          final canvas = theme.scaffoldBackgroundColor;
           final defaultBody = theme.textTheme.bodyMedium ?? const TextStyle();
-          return MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
-            child: DefaultTextStyle(
-              style: defaultBody,
-              child: child ??
-                  Scaffold(
-                    backgroundColor: theme.scaffoldBackgroundColor,
-                    body: const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Загрузка приложения...'),
-                        ],
+          final content = child ??
+              Scaffold(
+                backgroundColor: canvas,
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.restaurant_rounded,
+                        size: 48,
+                        color: theme.colorScheme.primary,
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      CircularProgressIndicator(color: theme.colorScheme.primary),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Загрузка HAN Eat…',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              );
+          return ColoredBox(
+            color: canvas,
+            child: DefaultTextStyle(
+              style: defaultBody.copyWith(color: theme.colorScheme.onSurface),
+              child: content,
             ),
           );
         },

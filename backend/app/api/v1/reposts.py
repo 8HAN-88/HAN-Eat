@@ -13,7 +13,10 @@ from app.models.user import User
 from app.models.post import Post
 from app.models.repost import Repost
 from app.models.community import Channel
-from app.models.community_member import ChannelMember
+from app.services.channel_membership_service import (
+    get_membership,
+    has_channel_permission,
+)
 
 router = APIRouter()
 
@@ -193,25 +196,12 @@ async def repost_to_channel(
             detail="Channel not found"
         )
 
-    is_owner = channel.admin_user_id == current_user.id
-    if not is_owner:
-        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
-
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel.id,
-            ChannelMember.user_id == current_user.id,
-            ChannelMember.status == MEMBER_STATUS_ACTIVE,
-        ).first()
-        is_admin_or_moderator = member and member.role in [
-            "admin",
-            "moderator",
-            "owner",
-        ]
-        if not is_admin_or_moderator:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only channel owner, admins and moderators can repost to channel"
-            )
+    member = get_membership(db, channel.id, current_user.id)
+    if not has_channel_permission(channel, member, current_user, "create_posts"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для репоста в канал",
+        )
 
     source_title = effective_repost_source_title(post)
     deep_link = f"haneat://post/{post.id}"
@@ -242,6 +232,25 @@ async def repost_to_channel(
     channel.posts_count = (channel.posts_count or 0) + 1
     db.commit()
     db.refresh(repost_post)
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
+
+        feed_service = FeedService(db, get_redis())
+        feed_service.invalidate_feed_cache(current_user.id)
+        members = (
+            db.query(ChannelMember.user_id)
+            .filter(
+                ChannelMember.channel_id == channel.id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+            )
+            .all()
+        )
+        for member_user_id, in members:
+            feed_service.invalidate_feed_cache(member_user_id)
+    except Exception:
+        pass
 
     return {
         "ok": True,

@@ -57,14 +57,25 @@ def req(method: str, path: str, headers: dict | None = None, body: dict | None =
         return e.code, payload
 
 
+def _warn_slow_auth(label: str, elapsed: float, threshold: float = 8.0) -> None:
+    if elapsed > threshold:
+        print(
+            f"  WARN {label} took {elapsed:.1f}s (>{threshold:.0f}s) — "
+            "проверьте PostgreSQL, Redis и перезапуск haneat-api"
+        )
+
+
 def login_or_register() -> dict[str, str]:
     global _last_refresh_token
     email = os.environ.get("SMOKE_EMAIL", f"launch{time.time_ns()}@example.com")
     password = os.environ.get("SMOKE_PASSWORD", "password123")
+    t0 = time.perf_counter()
     code, data = req("POST", "/auth/login", body={"email": email, "password": password})
+    _warn_slow_auth("POST /auth/login", time.perf_counter() - t0)
     if code == 200 and data.get("token"):
         _last_refresh_token = data.get("refresh_token")
         return {"Authorization": f"Bearer {data['token']}"}
+    t1 = time.perf_counter()
     code, reg = req(
         "POST",
         "/auth/register",
@@ -73,8 +84,10 @@ def login_or_register() -> dict[str, str]:
             "password": password,
             "name": "Launch Smoke",
             "username": email.split("@")[0][:28],
+            "accept_legal": True,
         },
     )
+    _warn_slow_auth("POST /auth/register", time.perf_counter() - t1)
     if code in (200, 201) and reg.get("token"):
         _last_refresh_token = reg.get("refresh_token")
         return {"Authorization": f"Bearer {reg['token']}"}
@@ -184,6 +197,21 @@ def test_payments_meal_plan(auth: dict) -> None:
         fail(f"meal-plans/limits HTTP {c} {limits}")
 
 
+def test_chats(auth: dict) -> None:
+    section("chats")
+    c, chats = req("GET", "/chats", auth)
+    if c == 200 and "items" in chats:
+        ok("chats list")
+    else:
+        fail(f"chats HTTP {c} {list(chats.keys()) if isinstance(chats, dict) else chats}")
+
+    c, unread = req("GET", "/chats/unread-count", auth)
+    if c == 200 and "count" in unread:
+        ok("chats/unread-count")
+    else:
+        fail(f"chats/unread-count HTTP {c} {unread}")
+
+
 def test_subscriptions(auth: dict) -> None:
     section("subscriptions")
     c, status = req("GET", "/subscriptions/status", auth)
@@ -215,6 +243,7 @@ def main() -> int:
         auth = login_or_register()
         print(f"  user token OK")
         test_auth_feed_post(auth)
+        test_chats(auth)
         test_payments_meal_plan(auth)
         test_subscriptions(auth)
     except Exception as e:

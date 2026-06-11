@@ -1,3 +1,5 @@
+import '../services/server_config.dart';
+
 class CommunityVideo {
   CommunityVideo({
     required this.id,
@@ -41,8 +43,12 @@ class CommunityVideo {
       author: json['author']?.toString() ?? '',
       avatar: json['avatar']?.toString(),
       description: json['description']?.toString() ?? '',
-      videoUrl: json['video_url']?.toString() ?? '',
-      thumbnail: json['thumbnail']?.toString(),
+      videoUrl: ServerConfig.resolveMediaUrl(
+        json['video_url']?.toString() ?? '',
+      ),
+      thumbnail: json['thumbnail'] != null
+          ? ServerConfig.resolveMediaUrl(json['thumbnail']!.toString())
+          : null,
       likes: (json['likes'] as num?)?.toInt() ?? 0,
       commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       tags: tags,

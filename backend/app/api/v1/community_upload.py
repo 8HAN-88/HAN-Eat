@@ -15,11 +15,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user_required
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.post import Post
 from app.models.like import Like
 from app.models.comment import Comment
+from app.core.media_urls import normalize_media_url, public_base_url
 from app.services.feed_service import FeedService
 from app.services.analytics_service import AnalyticsService
 
@@ -94,6 +96,14 @@ async def list_community_videos(
     if not posts:
         return {"videos": []}
 
+    from app.models.community import Channel
+
+    channel_ids = {p.channel_id for p in posts if p.channel_id}
+    channels_by_id = {}
+    if channel_ids:
+        for ch in db.query(Channel).filter(Channel.id.in_(channel_ids)).all():
+            channels_by_id[ch.id] = ch
+
     ids = [p.id for p in posts]
     likes_rows = (
         db.query(Like.post_id, func.count(Like.id))
@@ -116,25 +126,40 @@ async def list_community_videos(
         video_url, thumbnail = _reel_media_urls(post.body)
         if not video_url:
             continue
-        user = post.user
-        author = (user.name or user.username or "").strip() if user else ""
-        avatar = (user.avatar_url or "").strip() if user and user.avatar_url else None
-        videos.append(
-            {
-                "id": post.id,
-                "title": (post.title or "").strip(),
-                "author": author,
-                "avatar": avatar,
-                "description": (post.description or "").strip(),
-                "video_url": video_url,
-                "thumbnail": thumbnail,
-                "likes": likes_map.get(post.id, 0),
-                "comments_count": comments_map.get(post.id, 0),
-                "tags": list(post.tags or []),
-                "created_at": _post_ts_seconds(post),
-                "status": post.status or "published",
-            }
-        )
+        channel = channels_by_id.get(post.channel_id) if post.channel_id else None
+        if channel is not None:
+            author = (channel.name or "").strip()
+            avatar = (channel.avatar_url or "").strip() if channel.avatar_url else None
+        else:
+            user = post.user
+            author = (user.name or user.username or "").strip() if user else ""
+            avatar = (user.avatar_url or "").strip() if user and user.avatar_url else None
+        item = {
+            "id": post.id,
+            "title": (post.title or "").strip(),
+            "author": author,
+            "avatar": avatar,
+            "description": (post.description or "").strip(),
+            "video_url": normalize_media_url(video_url),
+            "thumbnail": normalize_media_url(thumbnail) if thumbnail else None,
+            "likes": likes_map.get(post.id, 0),
+            "comments_count": comments_map.get(post.id, 0),
+            "tags": list(post.tags or []),
+            "created_at": _post_ts_seconds(post),
+            "status": post.status or "published",
+        }
+        if post.channel_id:
+            item["channel_id"] = post.channel_id
+            if channel is not None:
+                item["channel"] = {
+                    "id": channel.id,
+                    "name": channel.name,
+                    "slug": channel.slug,
+                    "avatar_url": normalize_media_url(channel.avatar_url)
+                    if channel.avatar_url
+                    else None,
+                }
+        videos.append(item)
 
     return {"videos": videos}
 
@@ -178,10 +203,13 @@ class CommunityUploadRequest(BaseModel):
     author: str
     description: str = ""
     tags: list[str] = []
-    video_base64: str
+    video_base64: Optional[str] = None
+    video_url: Optional[str] = None
     thumbnail_base64: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     avatar: Optional[str] = None
     status: str = "pending"
+    channel_id: Optional[int] = None
 
 
 @router.post("/community")
@@ -192,55 +220,125 @@ async def upload_community_video(
     db: Session = Depends(get_db),
 ):
     """
-    Загрузить рилс: декодировать base64-видео, сохранить файл, создать пост типа reel.
+    Загрузить рилс: принять video_url (предпочтительно) или base64-видео, создать пост type=reel.
     """
-    try:
-        video_bytes = base64.b64decode(request_body.video_base64)
-    except Exception as e:
-        logger.warning(f"Community upload: invalid base64 video: {e}")
+    video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+
+    if request_body.video_url and request_body.video_url.strip():
+        video_url = normalize_media_url(request_body.video_url.strip())
+    elif request_body.video_base64:
+        try:
+            video_bytes = base64.b64decode(request_body.video_base64)
+        except Exception as e:
+            logger.warning(f"Community upload: invalid base64 video: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Некорректные данные видео (base64)",
+            )
+
+        if len(video_bytes) > 200 * 1024 * 1024:  # 200 MB
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Размер видео не более 200 МБ",
+            )
+
+        uploads_dir = os.path.join(os.getcwd(), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        timestamp = datetime.utcnow().strftime("%Y/%m/%d")
+        upload_id = str(uuid.uuid4())
+        file_key = f"uploads/user_{current_user.id}/{timestamp}/{upload_id}.mp4"
+        file_path = os.path.join(os.getcwd(), file_key)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "wb") as f:
+            f.write(video_bytes)
+
+        base_url = public_base_url()
+        video_url = normalize_media_url(f"{base_url}/api/v1/uploads/file/{file_key}")
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Некорректные данные видео (base64)",
+            detail="Укажите video_url или video_base64",
         )
 
-    if len(video_bytes) > 200 * 1024 * 1024:  # 200 MB
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Размер видео не более 200 МБ",
-        )
+    if request_body.thumbnail_url and request_body.thumbnail_url.strip():
+        thumbnail_url = normalize_media_url(request_body.thumbnail_url.strip())
+    elif request_body.thumbnail_base64:
+        try:
+            thumb_bytes = base64.b64decode(request_body.thumbnail_base64)
+            uploads_dir = os.path.join(os.getcwd(), "uploads")
+            os.makedirs(uploads_dir, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y/%m/%d")
+            thumb_id = str(uuid.uuid4())
+            thumb_key = f"uploads/user_{current_user.id}/{timestamp}/{thumb_id}.jpg"
+            thumb_path = os.path.join(os.getcwd(), thumb_key)
+            os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
+            with open(thumb_path, "wb") as f:
+                f.write(thumb_bytes)
+            base_url = public_base_url()
+            thumbnail_url = normalize_media_url(
+                f"{base_url}/api/v1/uploads/file/{thumb_key}"
+            )
+        except Exception as e:
+            logger.warning(f"Community upload: invalid base64 thumbnail: {e}")
 
-    # Сохраняем видео в uploads (как mock)
-    uploads_dir = os.path.join(os.getcwd(), "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    timestamp = datetime.utcnow().strftime("%Y/%m/%d")
-    upload_id = str(uuid.uuid4())
-    file_key = f"uploads/user_{current_user.id}/{timestamp}/{upload_id}.mp4"
-    file_path = os.path.join(os.getcwd(), file_key)
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    with open(file_path, "wb") as f:
-        f.write(video_bytes)
-
-    base_url = str(request.base_url).rstrip("/")
-    video_url = f"{base_url}/api/v1/uploads/file/{file_key}"
-
+    media_item: dict = {"type": "video", "url": video_url}
+    if thumbnail_url:
+        media_item["thumbnail_url"] = thumbnail_url
     body = {
-        "media": [{"type": "video", "url": video_url}],
+        "media": [media_item],
     }
+
+    channel = None
+    publish_to = ["feed", "reels"]
+    channel_id = request_body.channel_id
+    if channel_id is not None:
+        from app.models.community import Channel
+        from app.services.channel_membership_service import (
+            get_membership,
+            has_channel_permission,
+        )
+
+        channel = db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel not found",
+            )
+        member = get_membership(db, channel_id, current_user.id)
+        if not has_channel_permission(
+            channel,
+            member,
+            current_user,
+            "create_posts",
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для публикации постов в канале",
+            )
+        publish_to = [f"channel:{channel_id}"]
+        if channel.auto_publish_to_feed:
+            publish_to.insert(0, "feed")
+        if channel.auto_publish_reels:
+            publish_to.append("reels")
 
     now = datetime.utcnow()
     post = Post(
         user_id=current_user.id,
+        channel_id=channel_id if channel else None,
         type="reel",
         title=request_body.title,
         description=request_body.description or "",
         body=body,
-        publish_to=["feed", "reels"],
+        publish_to=publish_to,
         visibility="public",
         tags=request_body.tags or [],
         status="published",
         published_at=now,
     )
     db.add(post)
+    if channel is not None:
+        channel.posts_count = (channel.posts_count or 0) + 1
     db.flush()
 
     from app.services.moderation_apply import raise_if_post_rejected, run_post_moderation
@@ -259,11 +357,27 @@ async def upload_community_video(
     db.refresh(post)
 
     try:
+        from app.services.user_stats_cache import invalidate_user_stats_cache
+
+        invalidate_user_stats_cache([current_user.id])
+    except Exception as e:
+        logger.warning("Failed to invalidate user stats after reel upload: %s", e)
+
+    try:
         from app.core.redis_client import get_redis
         from app.models.follower import Follower
+        from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
 
         redis_client = get_redis()
         feed_service = FeedService(db, redis_client)
+        if channel_id is not None:
+            channel_members = db.query(ChannelMember.user_id).filter(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+            ).all()
+            for member_user_id, in channel_members:
+                feed_service.invalidate_feed_cache(member_user_id)
         followers = db.query(Follower.follower_id).filter(
             Follower.followee_id == current_user.id
         ).all()
@@ -273,19 +387,55 @@ async def upload_community_video(
     except Exception as e:
         logger.warning("Failed to invalidate feed cache after community reel upload: %s", e)
 
+    if channel_id is not None:
+        try:
+            from app.services.channel_notification_service import (
+                send_channel_post_notification,
+            )
+
+            send_channel_post_notification(
+                db=db,
+                channel_id=channel_id,
+                post_id=post.id,
+                post_type="reel",
+                post_title=request_body.title,
+                author_id=current_user.id,
+            )
+        except Exception as e:
+            logger.warning("Failed to send channel reel notification: %s", e)
+
     created_at_ts = int(post.created_at.timestamp()) if post.created_at else 0
 
-    return {
-        "video": {
-            "id": post.id,
-            "title": post.title or "",
-            "author": request_body.author,
-            "description": post.description or "",
-            "video_url": video_url,
-            "thumbnail": None,
-            "likes": 0,
-            "tags": post.tags or [],
-            "created_at": created_at_ts,
-            "status": "published",
-        }
+    display_author = request_body.author
+    display_avatar = None
+    if channel is not None:
+        display_author = (channel.name or "").strip() or display_author
+        display_avatar = (
+            normalize_media_url(channel.avatar_url) if channel.avatar_url else None
+        )
+
+    video_payload = {
+        "id": post.id,
+        "title": post.title or "",
+        "author": display_author,
+        "description": post.description or "",
+        "video_url": normalize_media_url(video_url),
+        "thumbnail": normalize_media_url(thumbnail_url) if thumbnail_url else None,
+        "likes": 0,
+        "tags": post.tags or [],
+        "created_at": created_at_ts,
+        "status": "published",
     }
+    if display_avatar:
+        video_payload["avatar"] = display_avatar
+    if channel_id is not None:
+        video_payload["channel_id"] = channel_id
+        if channel is not None:
+            video_payload["channel"] = {
+                "id": channel.id,
+                "name": channel.name,
+                "slug": channel.slug,
+                "avatar_url": display_avatar,
+            }
+
+    return {"video": video_payload}

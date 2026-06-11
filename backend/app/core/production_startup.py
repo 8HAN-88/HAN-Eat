@@ -27,6 +27,15 @@ def collect_production_issues() -> list[str]:
         issues.append("API_PUBLIC_BASE_URL указывает на localhost")
     if not settings.S3_BUCKET:
         issues.append("S3_BUCKET не задан — загрузки медиа через mock")
+    try:
+        from app.api.v1.recipes import TRANSLATOR_AVAILABLE
+
+        if not TRANSLATOR_AVAILABLE:
+            issues.append(
+                "deep-translator не установлен — перевод рецептов для AI не работает"
+            )
+    except Exception:
+        issues.append("модуль recipes недоступен для проверки перевода")
     return issues
 
 

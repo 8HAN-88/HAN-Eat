@@ -4,6 +4,9 @@ import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../utils/video_player_helper.dart';
+import 'cover_network_video.dart';
+
 /// Видеоплеер с inline autoplay: воспроизводит при появлении в viewport,
 /// ставит на паузу при скролле. Muted по умолчанию.
 class InlineVideoPlayer extends StatefulWidget {
@@ -50,9 +53,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
 
   Future<void> _ensurePlaying() async {
     if (_controller != null) {
-      if (!_controller!.value.isPlaying) {
-        await _controller!.play();
-      }
+      await VideoPlayerHelper.ensurePlaying(_controller!);
       return;
     }
 
@@ -60,16 +61,16 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
     _initKey = widget.videoUrl;
 
     try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-      await controller.initialize();
+      final controller = await VideoPlayerHelper.createPreparedController(
+        widget.videoUrl,
+        muted: _isMuted,
+        autoPlay: _isVisible,
+      );
 
       if (!mounted) {
         controller.dispose();
         return;
       }
-
-      controller.setVolume(_isMuted ? 0 : 1);
-      controller.setLooping(true);
 
       setState(() {
         _controller = controller;
@@ -77,7 +78,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       });
 
       if (_isVisible) {
-        await controller.play();
+        await VideoPlayerHelper.ensurePlaying(controller);
       }
     } catch (e) {
       debugPrint('InlineVideoPlayer init error: $e');
@@ -144,16 +145,31 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
                 else
                   _placeholder(),
               ] else if (!_hasError && _controller != null)
-                FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _controller!.value.size.width,
-                    height: _controller!.value.size.height,
-                    child: VideoPlayer(_controller!),
-                  ),
-                ),
+                CoverNetworkVideo(controller: _controller!),
 
-              if (_hasError) _placeholder(),
+              if (_hasError)
+                Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _placeholder(),
+                    Center(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () {
+                          setState(() {
+                            _hasError = false;
+                            _initialized = false;
+                            _initKey = null;
+                            _controller?.dispose();
+                            _controller = null;
+                          });
+                          _ensurePlaying();
+                        },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Повторить'),
+                      ),
+                    ),
+                  ],
+                ),
 
               // Прозрачный overlay для захвата тапов (видео на web перехватывает клики)
               Positioned.fill(

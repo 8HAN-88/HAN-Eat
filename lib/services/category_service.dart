@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/storage/hive_bootstrap.dart';
 import '../models/recipe_category.dart';
 
 class CategoryService {
@@ -25,12 +26,27 @@ class CategoryService {
     _loadFilters();
   }
 
+  static Future<CategoryService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  static ValueListenable<List<CategoryFilter>> get filtersListenable {
+    try {
+      return instance.filters;
+    } catch (_) {
+      return ValueNotifier<List<CategoryFilter>>(<CategoryFilter>[]);
+    }
+  }
+
   static Future<void> init() async {
     if (_instance != null) {
       try {
         await _instance!._disposeInternal();
       } catch (_) {}
     }
+    await ensureHiveReady();
     final box = await Hive.openBox(_boxName);
     _instance = CategoryService._internal(box);
   }

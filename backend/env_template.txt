@@ -61,7 +61,12 @@ ENABLE_AI_MODERATION=true
 SPOONACULAR_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_SPOONACULAR_API_KEY
 
 # ============================================
-# ЮKASSA (для подписок в России) - РЕКОМЕНДУЕТСЯ
+# ПЛАТЕЖИ — см. docs/PAYMENTS_ROADMAP.md
+# Фаза 2: ЮKassa + разовая СБП | Фаза 3: Т-Банк + автосписания
+# ============================================
+
+# ============================================
+# ЮKASSA (фаза 2 — после релиза)
 # ============================================
 # 🔗 Личный кабинет: https://yookassa.ru/my
 # 🔗 Регистрация: https://yookassa.ru/join
@@ -73,11 +78,28 @@ SPOONACULAR_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_SPOONACULAR_API_KEY
 # 3. Настройте webhook URL: https://your-backend-url.com/api/v1/payments/webhook/yookassa
 # 
 # Поддерживает: СБП, банковские карты, электронные кошельки
-YOOKASSA_ENABLED=true
-# 🔗 Получить Shop ID: https://yookassa.ru/my → Настройки → API
+YOOKASSA_ENABLED=false
+# 🔗 Получить Shop ID: https://yookassa.ru/my → Настройки → API (после релиза приложения)
 YOOKASSA_SHOP_ID=ЗАМЕНИТЕ_НА_ВАШ_YOOKASSA_SHOP_ID
 # 🔗 Получить Secret Key: https://yookassa.ru/my → Настройки → API
 YOOKASSA_SECRET_KEY=ЗАМЕНИТЕ_НА_ВАШ_YOOKASSA_SECRET_KEY
+# sbp — только СБП; any — все способы на странице ЮKassa
+YOOKASSA_PAYMENT_METHOD=sbp
+# false до релиза: разовая оплата; true — после подключения рекуррента СБП в ЛК
+YOOKASSA_SBP_RECURRING_ENABLED=false
+
+# ============================================
+# Т-БАНК (основной провайдер СБП + автосписания для RU/BY/KZ)
+# ============================================
+# 🔗 Личный кабинет: https://business.tbank.ru/oplata/main
+# 🔗 Документация API: https://www.tbank.ru/kassa/dev/
+# Webhook в ЛК: https://your-backend-url.com/api/v1/payments/webhook/tbank
+# Фаза 3: включить после ИП и раскрутки (фаза 2: TBANK_ENABLED=false)
+TBANK_ENABLED=false
+TBANK_TERMINAL_KEY=ЗАМЕНИТЕ_НА_TERMINAL_KEY
+TBANK_PASSWORD=ЗАМЕНИТЕ_НА_ПАРОЛЬ_ТЕРМИНАЛА
+TBANK_API_URL=https://securepay.tinkoff.ru/v2
+TBANK_SBP_RECURRING_ENABLED=true
 
 # ============================================
 # STRIPE (для подписок в других странах) - ОПЦИОНАЛЬНО
@@ -96,24 +118,6 @@ STRIPE_WEBHOOK_SECRET=whsec_ЗАМЕНИТЕ_НА_ВАШ_STRIPE_WEBHOOK_SECRET
 STRIPE_PRICE_ID_MONTHLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_МЕСЯЧНОЙ_ПОДПИСКИ
 STRIPE_PRICE_ID_YEARLY=price_ЗАМЕНИТЕ_НА_PRICE_ID_ГОДОВОЙ_ПОДПИСКИ
 FRONTEND_URL=http://localhost:8080
-
-# ============================================
-# EMAIL (регистрация, сброс/смена пароля, смена email)
-# Без SMTP в dev письма пишутся в лог uvicorn
-# ============================================
-REQUIRE_EMAIL_VERIFICATION=true
-AUTH_LINK_BASE_URL=haneat://auth
-AUTH_VERIFY_EMAIL_HOURS=48
-AUTH_RESET_PASSWORD_HOURS=2
-AUTH_CHANGE_EMAIL_HOURS=24
-EMAIL_SMTP_HOST=
-EMAIL_SMTP_PORT=587
-EMAIL_SMTP_USER=
-EMAIL_SMTP_PASSWORD=
-EMAIL_SMTP_USE_TLS=true
-EMAIL_SMTP_USE_SSL=false
-EMAIL_FROM=
-EMAIL_FROM_NAME=HAN Eat
 
 # ============================================
 # FIREBASE (для push уведомлений) - ОПЦИОНАЛЬНО

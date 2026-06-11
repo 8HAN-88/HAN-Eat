@@ -74,6 +74,7 @@ class NotificationPreferencesService {
   static Future<NotificationPreferences> updatePreferences({
     bool? likesEnabled,
     bool? commentsEnabled,
+    bool? messagesEnabled,
     bool? followsEnabled,
     bool? repostsEnabled,
     bool? mentionsEnabled,
@@ -89,6 +90,7 @@ class NotificationPreferencesService {
     final body = <String, dynamic>{};
     if (likesEnabled != null) body['likes_enabled'] = likesEnabled;
     if (commentsEnabled != null) body['comments_enabled'] = commentsEnabled;
+    if (messagesEnabled != null) body['messages_enabled'] = messagesEnabled;
     if (followsEnabled != null) body['follows_enabled'] = followsEnabled;
     if (repostsEnabled != null) body['reposts_enabled'] = repostsEnabled;
     if (mentionsEnabled != null) body['mentions_enabled'] = mentionsEnabled;
@@ -123,6 +125,7 @@ class NotificationPreferencesService {
 class NotificationPreferences {
   final bool likesEnabled;
   final bool commentsEnabled;
+  final bool messagesEnabled;
   final bool followsEnabled;
   final bool repostsEnabled;
   final bool mentionsEnabled;
@@ -132,6 +135,7 @@ class NotificationPreferences {
   NotificationPreferences({
     required this.likesEnabled,
     required this.commentsEnabled,
+    required this.messagesEnabled,
     required this.followsEnabled,
     required this.repostsEnabled,
     required this.mentionsEnabled,
@@ -143,6 +147,7 @@ class NotificationPreferences {
     return NotificationPreferences(
       likesEnabled: _bool(json['likes_enabled']),
       commentsEnabled: _bool(json['comments_enabled']),
+      messagesEnabled: _bool(json['messages_enabled']),
       followsEnabled: _bool(json['follows_enabled']),
       repostsEnabled: _bool(json['reposts_enabled']),
       mentionsEnabled: _bool(json['mentions_enabled']),
@@ -155,6 +160,7 @@ class NotificationPreferences {
     return {
       'likes_enabled': likesEnabled,
       'comments_enabled': commentsEnabled,
+      'messages_enabled': messagesEnabled,
       'follows_enabled': followsEnabled,
       'reposts_enabled': repostsEnabled,
       'mentions_enabled': mentionsEnabled,
@@ -166,6 +172,7 @@ class NotificationPreferences {
   NotificationPreferences copyWith({
     bool? likesEnabled,
     bool? commentsEnabled,
+    bool? messagesEnabled,
     bool? followsEnabled,
     bool? repostsEnabled,
     bool? mentionsEnabled,
@@ -175,6 +182,7 @@ class NotificationPreferences {
     return NotificationPreferences(
       likesEnabled: likesEnabled ?? this.likesEnabled,
       commentsEnabled: commentsEnabled ?? this.commentsEnabled,
+      messagesEnabled: messagesEnabled ?? this.messagesEnabled,
       followsEnabled: followsEnabled ?? this.followsEnabled,
       repostsEnabled: repostsEnabled ?? this.repostsEnabled,
       mentionsEnabled: mentionsEnabled ?? this.mentionsEnabled,

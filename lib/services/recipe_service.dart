@@ -3,12 +3,44 @@ import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import '../core/storage/hive_bootstrap.dart';
 import '../models/recipe_model.dart';
 import '../data/mock_recipes.dart';
 import 'recipe_api_service.dart';
 
 class RecipeService {
-  static late final RecipeService instance;
+  static RecipeService? _instance;
+  static RecipeService get instance {
+    if (_instance == null) {
+      throw StateError(
+        'RecipeService not initialized. Call RecipeService.init() first.',
+      );
+    }
+    return _instance!;
+  }
+
+  static Future<RecipeService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  static ValueListenable<List<RecipeModel>> get recipesListenable {
+    try {
+      return instance.recipes;
+    } catch (_) {
+      return ValueNotifier<List<RecipeModel>>(<RecipeModel>[]);
+    }
+  }
+
+  static ValueListenable<bool> get onlineListenable {
+    try {
+      return instance.online;
+    } catch (_) {
+      return ValueNotifier<bool>(false);
+    }
+  }
+
   static const String _boxName = 'recipes_box';
 
   late final Box _box;
@@ -23,9 +55,10 @@ class RecipeService {
   }
 
   static Future<void> init() async {
-    // ensure adapter registered by bootstrap before calling
+    if (_instance != null) return;
+    await ensureHiveReady();
     final box = await Hive.openBox(_boxName);
-    instance = RecipeService._internal(box);
+    _instance = RecipeService._internal(box);
   }
 
   void _loadFromBox() {

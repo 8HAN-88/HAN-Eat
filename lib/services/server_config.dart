@@ -1,14 +1,14 @@
 import 'dart:io' if (dart.library.html) 'dart:html';
 import 'package:flutter/foundation.dart';
 
-import '../core/config/app_build_config.dart';
+import '../core/network/api_endpoint_resolver.dart';
 
 /// Базовый URL backend API.
 ///
 /// Dev по умолчанию: https://api.haneat.app (Timeweb).
 /// Локальный backend: `--dart-define=HANEAT_API_BASE=http://127.0.0.1:5001`
 class ServerConfig {
-  static String get _configuredRoot => AppBuildConfig.apiBaseRoot;
+  static String get _configuredRoot => ApiEndpointResolver.resolvedRoot;
 
   /// `localhost` часто резолвится в `::1` (IPv6), а uvicorn может слушать только IPv4 —
   /// клиент получает отказ соединения. Явно используем IPv4 loopback.
@@ -60,6 +60,24 @@ class ServerConfig {
   /// Получить базовый URL API (с /api/v1)
   static String get apiBaseUrl => '$baseUrl/api/v1';
 
+  static bool _isHaneatApiHost(String host) {
+    final h = host.toLowerCase();
+    return h == 'api.haneat.app' ||
+        h == 'haneat.app' ||
+        h.endsWith('.haneat.app');
+  }
+
+  /// iOS блокирует http:// для видео (ATS) — поднимаем наш API на https.
+  static String _preferHttpsForApi(String url) {
+    try {
+      final uri = Uri.parse(url);
+      if (uri.scheme == 'http' && _isHaneatApiHost(uri.host)) {
+        return uri.replace(scheme: 'https').toString();
+      }
+    } catch (_) {}
+    return url;
+  }
+
   /// Подставить доступный хост для медиа-URL (для эмулятора: localhost → 10.0.2.2).
   /// Относительные пути (начинающиеся с /) дополняются baseUrl.
   static String resolveMediaUrl(String url) {
@@ -67,7 +85,7 @@ class ServerConfig {
     // Относительный путь с бэкенда (например /media/recipes/xxx.jpg)
     if (url.startsWith('/')) {
       final base = baseUrl.endsWith('/') ? baseUrl : baseUrl;
-      return '$base$url';
+      return _preferHttpsForApi('$base$url');
     }
     // Путь без схемы: media/… или uploads/…
     if (!url.startsWith('http://') &&
@@ -77,7 +95,7 @@ class ServerConfig {
       final base = baseUrl.endsWith('/')
           ? baseUrl.substring(0, baseUrl.length - 1)
           : baseUrl;
-      return '$base/$url';
+      return _preferHttpsForApi('$base/$url');
     }
     try {
       final uri = Uri.parse(url);
@@ -87,10 +105,12 @@ class ServerConfig {
           query: uri.query,
           fragment: uri.fragment,
         );
-        return resolved.toString();
+        return _preferHttpsForApi(resolved.toString());
       }
     } catch (_) {}
-    return url;
+    return ApiEndpointResolver.rewriteProductionHost(
+      _preferHttpsForApi(url),
+    );
   }
 
   static String _recipeImageProxyUrl(String originalUrl) =>

@@ -283,6 +283,8 @@ class SubscriptionPricesResponse {
   final String? country;
   final String currency;
   final int? trialDays;
+  final bool checkoutAvailable;
+  final String? checkoutMessage;
   final Map<String, SubscriptionTierPrice> tiers;
   final PriceInfo? monthly;
   final PriceInfo? yearly;
@@ -292,6 +294,8 @@ class SubscriptionPricesResponse {
     this.country,
     this.currency = 'RUB',
     this.trialDays,
+    this.checkoutAvailable = false,
+    this.checkoutMessage,
     required this.tiers,
     this.monthly,
     this.yearly,
@@ -325,6 +329,8 @@ class SubscriptionPricesResponse {
       country: json['country'] as String?,
       currency: json['currency'] as String? ?? 'RUB',
       trialDays: json['trial_days'] as int?,
+      checkoutAvailable: json['checkout_available'] as bool? ?? false,
+      checkoutMessage: json['checkout_message'] as String?,
       tiers: tiers,
       monthly: monthly,
       yearly: yearly,

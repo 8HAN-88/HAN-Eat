@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../models/meal_plan.dart';
 import '../models/recipe_model.dart';
 import '../core/config/legacy_firestore_config.dart';
+import '../core/storage/hive_bootstrap.dart';
 import 'auth_service.dart';
 import 'notification_service.dart';
 
@@ -43,12 +44,27 @@ class MealPlanService {
     );
   }
 
+  static Future<MealPlanService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  static ValueListenable<List<MealPlanEntry>> get allEntriesListenable {
+    try {
+      return instance.allEntries;
+    } catch (_) {
+      return ValueNotifier<List<MealPlanEntry>>(<MealPlanEntry>[]);
+    }
+  }
+
   static Future<void> init({bool startAuthSync = true}) async {
     if (_instance != null) {
       try {
         await _instance!._disposeInternal();
       } catch (_) {}
     }
+    await ensureHiveReady();
     final box = await Hive.openBox<dynamic>(_boxName);
     _instance = MealPlanService._internal(box);
     if (startAuthSync && AuthService.isInitialized) {

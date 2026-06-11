@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_gradient_background.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key, this.email, this.initialToken});
@@ -117,55 +118,58 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     final email = widget.email ?? '';
     return Scaffold(
       appBar: AppBar(title: const Text('Подтверждение email')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Icon(
-                _verified ? Icons.mark_email_read_outlined : Icons.mark_email_unread_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                _verified
-                    ? 'Email подтверждён'
-                    : 'Мы отправили письмо${email.isNotEmpty ? ' на $email' : ''}. '
-                        'Откройте ссылку в письме или вставьте код ниже.',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _tokenController,
-                decoration: const InputDecoration(
-                  labelText: 'Код из письма',
-                  border: OutlineInputBorder(),
+      body: AppGradientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  _verified
+                      ? Icons.mark_email_read_outlined
+                      : Icons.mark_email_unread_outlined,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _loading ? null : _verifyWithToken,
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Подтвердить'),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: _loading ? null : _resend,
-                child: const Text('Отправить письмо ещё раз'),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => context.go(LoginRoute.path),
-                child: const Text('Ко входу'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  _verified
+                      ? 'Email подтверждён'
+                      : 'Мы отправили письмо${email.isNotEmpty ? ' на $email' : ''}. '
+                          'Откройте ссылку в письме или вставьте код ниже.',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _tokenController,
+                  decoration: const InputDecoration(
+                    labelText: 'Код из письма',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _loading ? null : _verifyWithToken,
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Подтвердить'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: _loading ? null : _resend,
+                  child: const Text('Отправить письмо ещё раз'),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => context.go(LoginRoute.path),
+                  child: const Text('Ко входу'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

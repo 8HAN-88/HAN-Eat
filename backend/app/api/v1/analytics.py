@@ -34,6 +34,7 @@ async def log_client_event(
     """Клиентские продуктовые события (ai_scan_paywall, и т.д.)."""
     allowed_prefixes = (
         "ai_scan_",
+        "feed_",
         "meal_plan_",
         "moderation_",
         "subscription_",
@@ -45,11 +46,24 @@ async def log_client_event(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Event type not allowed",
         )
+    author_id = None
+    if request.entity_type == "post" and request.entity_id > 0:
+        from app.models.post import Post
+
+        post = (
+            db.query(Post)
+            .filter(Post.id == request.entity_id, Post.deleted_at.is_(None))
+            .first()
+        )
+        if post:
+            author_id = post.user_id
+
     AnalyticsService(db).log_event(
         event_type=request.event_type,
         entity_type=request.entity_type,
         entity_id=request.entity_id,
         user_id=current_user.id,
+        author_id=author_id,
         metadata=request.metadata,
     )
     db.commit()

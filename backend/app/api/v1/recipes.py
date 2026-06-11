@@ -25,6 +25,7 @@ from app.models.base_recipe import BaseRecipe
 from app.models.user import User
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.services.analytics_service import AnalyticsService
+from app.services.search_normalization import normalize_search_text, search_terms
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ router = APIRouter()
 
 # Получаем API ключ Spoonacular из настроек
 SPOONACULAR_API_KEY = settings.SPOONACULAR_API_KEY
+SEARCH_SPOONACULAR_TIMEOUT = 6
+SEARCH_SPOONACULAR_DETAIL_TIMEOUT = 5
+SEARCH_LOCAL_FAST_MIN_RESULTS = 3
 
 
 def _inject_viewer_plus_meta(
@@ -117,7 +121,8 @@ def _recipe_author_fields(db: Session, post: Post) -> tuple:
             if not avatar and nb_avatar:
                 avatar = nb_avatar
             return (name, avatar)
-        # Канал мог быть удален/недоступен: фолбэк к автору поста
+
+    # Канал мог быть удален/недоступен или это рецепт профиля: фолбэк к автору поста.
     user = db.query(User).filter(User.id == post.user_id).first()
     if user:
         label = (user.name or user.username or user.email or "").strip() or None
@@ -147,6 +152,110 @@ def _recipe_author_fields(db: Session, post: Post) -> tuple:
             avatar = nb_avatar
         return (label, avatar)
     return (None, None)
+
+
+def _recipe_image_urls_from_body(body: dict) -> List[str]:
+    """Все фото рецепта из старых и новых форматов body."""
+    urls: List[str] = []
+    seen = set()
+
+    def add(value: object) -> None:
+        if value is None:
+            return
+        raw = str(value).strip()
+        if not raw or raw == "null" or raw in seen:
+            return
+        seen.add(raw)
+        urls.append(raw)
+
+    add(body.get("image"))
+    add(body.get("source_image"))
+    add(body.get("image_url"))
+    photos = body.get("photos")
+    if isinstance(photos, list):
+        for item in photos:
+            add(item)
+    media = body.get("media")
+    if isinstance(media, list):
+        for item in media:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") in (None, "image"):
+                add(item.get("url") or item.get("image") or item.get("image_url"))
+    nested = body.get("recipe")
+    if isinstance(nested, dict):
+        for url in _recipe_image_urls_from_body(nested):
+            add(url)
+    return urls
+
+
+def _format_recipe_steps_from_body(body: dict) -> List[Dict[str, Any]]:
+    """Шаги рецепта с сохранением фото шага для Menu/recommendations."""
+    steps = body.get("steps", [])
+    formatted_steps: List[Dict[str, Any]] = []
+    if not isinstance(steps, list):
+        return formatted_steps
+
+    for i, step in enumerate(steps, 1):
+        if isinstance(step, dict):
+            image = (
+                step.get("image")
+                or step.get("image_url")
+                or step.get("photo_url")
+                or step.get("media_url")
+                or step.get("url")
+            )
+            image = image.strip() if isinstance(image, str) and image.strip() else None
+            text = step.get("text") or step.get("step") or step.get("instruction") or ""
+            formatted_steps.append({
+                "number": step.get("number", i),
+                "step": text,
+                "instruction": text,
+                "image": image,
+                "image_url": image,
+            })
+        elif isinstance(step, str):
+            formatted_steps.append({
+                "number": i,
+                "step": step,
+                "instruction": step,
+                "image": None,
+                "image_url": None,
+            })
+    return formatted_steps
+
+
+def _post_recipe_comment_stats(db: Session, post_id: int) -> Dict[str, Any]:
+    """Комментарии и рейтинг для recipe-поста из основной таблицы comments."""
+    try:
+        from app.models.comment import Comment
+        from sqlalchemy import func
+
+        comments_count = (
+            db.query(func.count(Comment.id))
+            .filter(Comment.post_id == post_id, Comment.deleted_at.is_(None))
+            .scalar()
+            or 0
+        )
+        rating_row = (
+            db.query(func.avg(Comment.rating), func.count(Comment.rating))
+            .filter(
+                Comment.post_id == post_id,
+                Comment.deleted_at.is_(None),
+                Comment.rating.isnot(None),
+            )
+            .first()
+        )
+        avg_rating = float(rating_row[0]) if rating_row and rating_row[0] is not None else None
+        rating_count = int(rating_row[1] or 0) if rating_row else 0
+        return {
+            "comments_count": int(comments_count),
+            "rating": round(avg_rating, 1) if avg_rating is not None else None,
+            "rating_count": rating_count,
+        }
+    except Exception as exc:
+        logger.debug("recipe post stats unavailable for %s: %s", post_id, exc)
+        return {"comments_count": 0, "rating": None, "rating_count": 0}
 
 # Константы
 CACHE_TTL = 12 * 3600  # 12 hours cache
@@ -363,6 +472,16 @@ def translate_query_to_english_for_spoonacular(q: str) -> Optional[str]:
     s = (q or "").strip()
     if len(s) < 2:
         return None
+    manual = {
+        "быстро": "quick easy dinner",
+        "зож": "healthy dinner",
+        "низкокалорийное": "low calorie meal",
+        "высокий белок": "high protein meal",
+        "по ингредиентам": "easy meal",
+    }
+    lowered = s.lower()
+    if lowered in manual:
+        return manual[lowered]
     if not any(ord(c) > 127 for c in s):
         return None
     if not TRANSLATOR_AVAILABLE or GoogleTranslator is None:
@@ -474,8 +593,8 @@ def search_base_recipes(
     if not query_text or not query_text.strip():
         return []
     
-    # Нормализуем запрос
-    query_words = [word.strip().lower() for word in query_text.split() if word.strip()]
+    # Нормализуем запрос: пользователи часто вводят #, дефисы, ё/е и несколько ингредиентов.
+    query_words = search_terms(query_text)
     if not query_words:
         return []
     
@@ -488,13 +607,22 @@ def search_base_recipes(
         search_filters.append(
             func.lower(BaseRecipe.title).contains(word)
         )
+        search_filters.append(
+            func.lower(func.coalesce(BaseRecipe.description, "")).contains(word)
+        )
+        search_filters.append(
+            func.lower(cast(BaseRecipe.ingredients, String)).contains(word)
+        )
+        search_filters.append(
+            func.lower(cast(BaseRecipe.steps, String)).contains(word)
+        )
         # Поиск в тегах (JSON поле)
         search_filters.append(
-            cast(BaseRecipe.tags, String).contains(word)
+            func.lower(cast(BaseRecipe.tags, String)).contains(word)
         )
         # Поиск в ключевых словах
         search_filters.append(
-            cast(BaseRecipe.search_keywords, String).contains(word)
+            func.lower(cast(BaseRecipe.search_keywords, String)).contains(word)
         )
     
     if not search_filters:
@@ -511,10 +639,23 @@ def search_base_recipes(
     recipes = []
     for recipe in results:
         matched_count = 0
-        title_lower = (recipe.title or "").lower()
+        title_lower = normalize_search_text(recipe.title or "")
+        blob = normalize_search_text(
+            " ".join(
+                [
+                    recipe.title or "",
+                    recipe.description or "",
+                    json.dumps(recipe.ingredients or [], ensure_ascii=False),
+                    json.dumps(recipe.tags or [], ensure_ascii=False),
+                    json.dumps(recipe.search_keywords or [], ensure_ascii=False),
+                ]
+            )
+        )
         for word in query_words:
             if word in title_lower:
                 matched_count += 2
+            elif word in blob:
+                matched_count += 1
         card = _base_recipe_to_card(recipe, db, relevance_score=matched_count)
         recipes.append(card)
     
@@ -522,7 +663,6 @@ def search_base_recipes(
     recipes.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
     
     return recipes
-
 
 def _base_recipe_to_card(
     recipe: BaseRecipe, db: Session, *, relevance_score: int = 0
@@ -583,6 +723,198 @@ def list_popular_base_recipes(db: Session, limit: int = 8) -> List[Dict[str, Any
     return [_base_recipe_to_card(r, db) for r in results]
 
 
+def _builtin_menu_recipe_cards(query_text: str, tags: Optional[str], limit: int = 8) -> List[Dict[str, Any]]:
+    """Небольшой встроенный каталог, чтобы меню не было пустым при пустой БД/Spoonacular."""
+    tag_set = {
+        t.strip().lower()
+        for t in (tags or "").split(",")
+        if t and t.strip()
+    }
+    q = (query_text or "").strip().lower()
+    cards = [
+        {
+            "id": "builtin_1001",
+            "title": "Омлет с овощами",
+            "ingredients": ["яйца", "помидоры", "зелень", "сыр"],
+            "steps": [
+                {"number": 1, "step": "Взбейте яйца с солью."},
+                {"number": 2, "step": "Добавьте овощи и обжарьте 5-7 минут."},
+            ],
+            "calories": 280,
+            "nutrition": {"protein": 22, "fat": 18, "carbohydrates": 8},
+            "tags": ["quick-and-easy", "high-protein", "breakfast"],
+        },
+        {
+            "id": "builtin_1002",
+            "title": "Куриная грудка с салатом",
+            "ingredients": ["куриная грудка", "огурец", "листовой салат", "йогурт"],
+            "steps": [
+                {"number": 1, "step": "Обжарьте или запеките куриную грудку."},
+                {"number": 2, "step": "Нарежьте овощи и заправьте йогуртом."},
+            ],
+            "calories": 360,
+            "nutrition": {"protein": 42, "fat": 10, "carbohydrates": 14},
+            "tags": ["high-protein", "low-calorie", "healthy"],
+        },
+        {
+            "id": "builtin_1003",
+            "title": "Греческий салат",
+            "ingredients": ["огурец", "помидоры", "фета", "оливки"],
+            "steps": [
+                {"number": 1, "step": "Нарежьте овощи крупными кусочками."},
+                {"number": 2, "step": "Добавьте фету, оливки и оливковое масло."},
+            ],
+            "calories": 310,
+            "nutrition": {"protein": 11, "fat": 24, "carbohydrates": 12},
+            "tags": ["vegetarian", "healthy", "quick-and-easy"],
+        },
+        {
+            "id": "builtin_1004",
+            "title": "Творог с ягодами",
+            "ingredients": ["творог", "ягоды", "мед", "орехи"],
+            "steps": [
+                {"number": 1, "step": "Выложите творог в миску."},
+                {"number": 2, "step": "Добавьте ягоды, немного меда и орехи."},
+            ],
+            "calories": 290,
+            "nutrition": {"protein": 28, "fat": 10, "carbohydrates": 24},
+            "tags": ["quick-and-easy", "high-protein", "breakfast"],
+        },
+        {
+            "id": "builtin_1005",
+            "title": "Овощной боул с рисом",
+            "ingredients": ["рис", "авокадо", "морковь", "огурец"],
+            "steps": [
+                {"number": 1, "step": "Отварите рис до готовности."},
+                {"number": 2, "step": "Добавьте нарезанные овощи и соус по вкусу."},
+            ],
+            "calories": 430,
+            "nutrition": {"protein": 9, "fat": 16, "carbohydrates": 62},
+            "tags": ["vegetarian", "healthy"],
+        },
+        {
+            "id": "builtin_1006",
+            "title": "Тунец с яйцом и зеленью",
+            "ingredients": ["тунец", "яйца", "огурец", "зелень"],
+            "steps": [
+                {"number": 1, "step": "Отварите яйца и нарежьте их."},
+                {"number": 2, "step": "Смешайте с тунцом, огурцом и зеленью."},
+            ],
+            "calories": 340,
+            "nutrition": {"protein": 38, "fat": 16, "carbohydrates": 6},
+            "tags": ["high-protein", "quick-and-easy", "low-calorie"],
+        },
+    ]
+
+    def include(card: Dict[str, Any]) -> bool:
+        card_tags = set(card.get("tags") or [])
+        title = str(card.get("title") or "").lower()
+        ingredients = " ".join(card.get("ingredients") or []).lower()
+        if tag_set and card_tags.intersection(tag_set):
+            return True
+        if q in {"быстро", "зож", "низкокалорийное", "высокий белок"}:
+            return True
+        if q and (q in title or q in ingredients):
+            return True
+        return False
+
+    out = []
+    for card in cards:
+        if not include(card):
+            continue
+        payload = dict(card)
+        payload.update(
+            {
+                "image": None,
+                "source_image": None,
+                "usedIngredientCount": len(card.get("ingredients") or []),
+                "translated_title": card["title"],
+                "translated_ingredients": card["ingredients"],
+                "translated_steps": card["steps"],
+                "likes_count": 0,
+                "meal_plan_count": 0,
+                "source": "builtin",
+                "relevance_score": 1,
+            }
+        )
+        out.append(payload)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def fallback_base_recipes_for_menu_filter(
+    query_text: str,
+    tags: Optional[str],
+    db: Session,
+    limit: int = 8,
+) -> List[Dict[str, Any]]:
+    """Fallback для быстрых фильтров меню, где label вроде «Быстро» не является ингредиентом."""
+    tag_set = {
+        t.strip().lower()
+        for t in (tags or "").split(",")
+        if t and t.strip()
+    }
+    q = (query_text or "").strip().lower()
+    if not tag_set and q not in {
+        "быстро",
+        "зож",
+        "низкокалорийное",
+        "высокий белок",
+    }:
+        return []
+
+    candidates = (
+        db.query(BaseRecipe)
+        .order_by(BaseRecipe.popularity_score.desc(), BaseRecipe.created_at.desc())
+        .limit(80)
+        .all()
+    )
+
+    def text_blob(recipe: BaseRecipe) -> str:
+        parts = [
+            recipe.title or "",
+            recipe.description or "",
+            json.dumps(recipe.tags or [], ensure_ascii=False),
+            json.dumps(recipe.search_keywords or [], ensure_ascii=False),
+        ]
+        return " ".join(parts).lower()
+
+    def protein_value(recipe: BaseRecipe) -> float:
+        n = recipe.nutrition or {}
+        raw = n.get("protein") or n.get("proteins") or n.get("protein_g") or 0
+        try:
+            return float(raw)
+        except Exception:
+            return 0.0
+
+    def matches(recipe: BaseRecipe) -> bool:
+        blob = text_blob(recipe)
+        if "low-calorie" in tag_set or q == "низкокалорийное":
+            return recipe.calories is not None and recipe.calories <= 450
+        if "high-protein" in tag_set or q == "высокий белок":
+            return protein_value(recipe) >= 18
+        if "vegetarian" in tag_set or q == "зож":
+            return any(
+                marker in blob
+                for marker in ("вегет", "овощ", "салат", "пост", "зож", "healthy")
+            )
+        if "quick-and-easy" in tag_set or q == "быстро":
+            return any(
+                marker in blob
+                for marker in ("быстр", "просто", "легко", "омлет", "салат", "завтрак")
+            )
+        return False
+
+    matched = [_base_recipe_to_card(r, db) for r in candidates if matches(r)]
+    if matched:
+        return matched[:limit]
+    popular = list_popular_base_recipes(db, limit=limit)
+    if popular:
+        return popular
+    return _builtin_menu_recipe_cards(query_text, tags, limit=limit)
+
+
 def _nutrition_from_recipe_body(body: Dict[str, Any]) -> tuple:
     nutrition = body.get("nutrition")
     if isinstance(nutrition, dict) and nutrition:
@@ -615,6 +947,155 @@ def _merge_recipe_cards(*lists: List[Dict[str, Any]], limit: int) -> List[Dict[s
             if len(out) >= limit:
                 return out
     return out
+
+
+def _num(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _card_has_image(card: Dict[str, Any]) -> bool:
+    if card.get("image") or card.get("source_image") or card.get("image_url"):
+        return True
+    images = card.get("images") or card.get("image_urls") or card.get("photos")
+    if isinstance(images, list) and any(bool(str(x).strip()) for x in images):
+        return True
+    media = card.get("media")
+    if isinstance(media, list):
+        return any(isinstance(m, dict) and (m.get("url") or m.get("image")) for m in media)
+    return False
+
+
+def _card_has_steps(card: Dict[str, Any]) -> bool:
+    steps = card.get("steps") or card.get("translated_steps")
+    return isinstance(steps, list) and len(steps) > 0
+
+
+def _card_has_nutrition(card: Dict[str, Any]) -> bool:
+    nutrition = card.get("nutrition")
+    return card.get("calories") is not None or (isinstance(nutrition, dict) and bool(nutrition))
+
+
+def _menu_source_label(source: str) -> str:
+    return {
+        "spoonacular": "Каталог",
+        "channel": "Канал",
+        "user": "Автор",
+        "base": "HAN Eat",
+        "builtin": "HAN Eat",
+    }.get(source, "Рецепт")
+
+
+def _menu_section_for_card(card: Dict[str, Any], context: str) -> str:
+    source = str(card.get("source") or "").lower()
+    if context == "search":
+        if _num(card.get("relevance_score") or card.get("_relevance")) > 0:
+            return "Лучшие совпадения"
+        if source == "channel":
+            return "Из каналов"
+        if source == "user":
+            return "От авторов"
+        return "Похожие рецепты"
+    if source == "channel":
+        return "Из каналов"
+    if source == "user":
+        return "От авторов"
+    if source in {"base", "builtin"}:
+        return "Популярное в HAN Eat"
+    return "Подобрано для вас"
+
+
+def _menu_reason_for_card(card: Dict[str, Any], context: str) -> str:
+    source = str(card.get("source") or "").lower()
+    relevance = _num(card.get("relevance_score") or card.get("_relevance"))
+    if context == "search" and relevance > 0:
+        return "по запросу"
+    if source == "channel":
+        return "из канала"
+    if source == "user":
+        return "от автора"
+    if card.get("meal_plan_count"):
+        return "часто в планах"
+    if card.get("likes_count"):
+        return "популярное"
+    if source == "base":
+        return "проверено HAN Eat"
+    if source == "builtin":
+        return "быстрый вариант"
+    return "из каталога"
+
+
+def _menu_quality_score(card: Dict[str, Any], index: int = 0) -> float:
+    score = 0.0
+    if _card_has_image(card):
+        score += 35
+    if _card_has_steps(card):
+        score += 20
+    ingredients = card.get("ingredients")
+    if isinstance(ingredients, list) and ingredients:
+        score += min(15, len(ingredients) * 1.5)
+    if _card_has_nutrition(card):
+        score += 10
+    score += min(12, _num(card.get("likes_count")) * 1.5)
+    score += min(8, _num(card.get("comments_count")) * 1.2)
+    score += min(8, _num(card.get("meal_plan_count")) * 1.2)
+    rating = _num(card.get("rating"))
+    if rating > 0:
+        score += min(10, rating * 2)
+    source = str(card.get("source") or "").lower()
+    if source in {"channel", "user"}:
+        score += 5
+    elif source in {"base", "builtin"}:
+        score += 3
+    # Keep API relevance order as a mild tie-breaker for Spoonacular.
+    score += max(0, 5 - min(index, 5)) * 0.2
+    return round(score, 2)
+
+
+def _annotate_menu_card(card: Dict[str, Any], *, context: str, index: int) -> Dict[str, Any]:
+    out = dict(card)
+    source = str(out.get("source") or "spoonacular").lower()
+    out["source"] = source
+    relevance = _num(out.get("relevance_score") or out.get("_relevance") or out.get("usedIngredientCount"))
+    out["relevance_score"] = round(relevance, 2)
+    out["quality_score"] = _menu_quality_score(out, index)
+    out["source_label"] = out.get("source_label") or _menu_source_label(source)
+    out["reason_label"] = out.get("reason_label") or _menu_reason_for_card(out, context)
+    out["menu_section"] = out.get("menu_section") or _menu_section_for_card(out, context)
+    return out
+
+
+def _prepare_menu_recipe_cards(
+    cards: List[Dict[str, Any]],
+    *,
+    limit: int,
+    context: str,
+) -> List[Dict[str, Any]]:
+    annotated: List[Dict[str, Any]] = []
+    seen: set = set()
+    for index, card in enumerate(cards or []):
+        if not isinstance(card, dict):
+            continue
+        source = str(card.get("source") or "spoonacular").lower()
+        key = f"{source}:{card.get('id')}:{card.get('title')}"
+        if key in seen:
+            continue
+        seen.add(key)
+        annotated.append(_annotate_menu_card(card, context=context, index=index))
+
+    annotated.sort(
+        key=lambda c: (
+            _num(c.get("relevance_score")),
+            _num(c.get("quality_score")),
+            _num(c.get("likes_count")),
+        ),
+        reverse=True,
+    )
+    return annotated[:limit]
 
 
 def get_recommendations_local_fallback(
@@ -655,11 +1136,17 @@ def _recommendations_response(
     from app.services.recipe_localization_service import apply_recipe_localization_to_cards
 
     lang = (language or "ru").lower()
+    prepared = _prepare_menu_recipe_cards(
+        recipes,
+        limit=len(recipes or []),
+        context="recommendations",
+    )
     localized, loc_meta = apply_recipe_localization_to_cards(
-        recipes, lang, db, current_user, full=False, titles_only=True
+        prepared, lang, db, current_user, full=False, titles_only=True
     )
     merged_meta = dict(meta or {})
     merged_meta.update(loc_meta)
+    merged_meta["menu_cards_contract_version"] = 1
     _inject_viewer_plus_meta(merged_meta, db, current_user)
     return {"recipes": localized, "meta": merged_meta}
 
@@ -678,16 +1165,20 @@ def search_user_recipes(
     - Ингредиентам
     - Тегам
     """
-    from sqlalchemy import func, or_
+    from sqlalchemy import String, func, or_
     from app.models.like import Like
     
     # Нормализуем запрос - разбиваем на слова
-    query_words = [word.strip().lower() for word in query_text.split() if word.strip()]
+    query_words = search_terms(query_text)
     if not query_words:
         return []
     
     # Также проверяем, может быть это список ингредиентов через запятую
-    ingredient_list = [ing.strip().lower() for ing in query_text.split(',') if ing.strip()]
+    ingredient_list = [
+        normalize_search_text(ing)
+        for ing in query_text.split(',')
+        if ing.strip()
+    ]
     # Объединяем все слова для поиска
     all_search_terms = list(set(query_words + ingredient_list))
     # Короткие токены в сериализованном JSON дают массу ложных совпадений (подстроки в ключах/числах).
@@ -716,8 +1207,7 @@ def search_user_recipes(
     search_filters = []
     for term in sql_terms:
         search_filters.append(func.lower(Post.title).contains(term))
-        if Post.description:
-            search_filters.append(func.lower(Post.description).contains(term))
+        search_filters.append(func.lower(func.coalesce(Post.description, "")).contains(term))
         # Только ингредиенты и шаги в body, не весь JSON
         search_filters.append(
             func.lower(
@@ -729,10 +1219,9 @@ def search_user_recipes(
                 func.coalesce(func.cast(Post.body["steps"], String), "")
             ).contains(term)
         )
-        if Post.tags:
-            search_filters.append(
-                func.lower(func.coalesce(func.cast(Post.tags, String), "")).contains(term)
-            )
+        search_filters.append(
+            func.lower(func.coalesce(func.cast(Post.tags, String), "")).contains(term)
+        )
     
     if search_filters:
         query = query.filter(or_(*search_filters))
@@ -760,17 +1249,17 @@ def search_user_recipes(
         # Подсчитываем количество совпавших слов/ингредиентов для релевантности
         matched_count = 0
         for term in all_search_terms:
-            if term in (post.title or "").lower():
+            if term in normalize_search_text(post.title or ""):
                 matched_count += 2
-            if post.description and term in post.description.lower():
+            if post.description and term in normalize_search_text(post.description):
                 matched_count += 1
             if post.tags:
                 for tag in post.tags:
-                    if tag and term in str(tag).lower():
+                    if tag and term in normalize_search_text(str(tag)):
                         matched_count += 2
                         break
             for post_ing in formatted_ingredients:
-                if term in post_ing.lower():
+                if term in normalize_search_text(post_ing):
                     matched_count += 1
                     break
             for step in body.get("steps", []) or []:
@@ -779,7 +1268,7 @@ def search_user_recipes(
                     if isinstance(step, dict)
                     else str(step)
                 )
-                if step_text and term in step_text.lower():
+                if step_text and term in normalize_search_text(step_text):
                     matched_count += 1
                     break
 
@@ -787,39 +1276,23 @@ def search_user_recipes(
         if matched_count < 1:
             continue
 
-        # Форматируем шаги
-        steps = body.get("steps", [])
-        formatted_steps = []
-        for i, step in enumerate(steps, 1):
-            if isinstance(step, dict):
-                formatted_steps.append({
-                    "number": step.get("number", i),
-                    "step": step.get("text", step.get("step", "")),
-                    "instruction": step.get("text", step.get("step", "")),
-                })
-            elif isinstance(step, str):
-                formatted_steps.append({
-                    "number": i,
-                    "step": step,
-                    "instruction": step,
-                })
+        # Форматируем шаги, сохраняя изображения шагов для экрана деталей.
+        formatted_steps = _format_recipe_steps_from_body(body)
         
-        # Получаем изображение
-        image = None
-        media = body.get("media", [])
-        if media:
-            for item in media:
-                if item.get("type") == "image" and item.get("url"):
-                    image = item.get("url")
-                    break
+        image_urls = _recipe_image_urls_from_body(body)
+        image = image_urls[0] if image_urls else None
         
         author, author_avatar = _recipe_author_fields(db, post)
+        stats = _post_recipe_comment_stats(db, post.id)
+        from app.services.recipe_origin_country import origin_country_fields_for_card
 
         recipe_data = {
             "id": f"user_{post.id}",  # ID для рецептов пользователей
             "title": post.title or "Рецепт без названия",
             "image": image,
             "source_image": image,
+            "images": image_urls,
+            "media": [{"type": "image", "url": url} for url in image_urls],
             "usedIngredientCount": matched_count,  # Количество совпавших слов/ингредиентов
             "ingredients": formatted_ingredients,
             "steps": formatted_steps,
@@ -831,11 +1304,14 @@ def search_user_recipes(
             "nutrition": None,
             "channel_id": post.channel_id,
             "user_id": post.user_id,
+            "author_id": None if post.channel_id else post.user_id,
             "source": "user" if post.channel_id is None else "channel",
             "likes_count": likes_count or 0,
+            **stats,
             "author": author,
             "author_avatar": author_avatar,
             "_relevance": matched_count,  # Для сортировки
+            **origin_country_fields_for_card(body),
         }
         recipes_with_relevance.append((recipe_data, matched_count))
     
@@ -906,21 +1382,7 @@ def get_channel_recipes_for_recommendations(
         author, author_avatar = _recipe_author_fields(db, post)
 
         body = post.body or {}
-        steps = body.get("steps", [])
-        formatted_steps = []
-        for i, step in enumerate(steps, 1):
-            if isinstance(step, dict):
-                formatted_steps.append({
-                    "number": step.get("number", i),
-                    "step": step.get("text", step.get("step", "")),
-                    "instruction": step.get("text", step.get("step", "")),
-                })
-            elif isinstance(step, str):
-                formatted_steps.append({
-                    "number": i,
-                    "step": step,
-                    "instruction": step,
-                })
+        formatted_steps = _format_recipe_steps_from_body(body)
         
         formatted_ingredients = []
         for ing in body.get("ingredients", []):
@@ -929,21 +1391,20 @@ def get_channel_recipes_for_recommendations(
             elif isinstance(ing, dict):
                 formatted_ingredients.append(ing.get("name", "") or str(ing))
         
-        # Получаем изображение
-        image = None
-        media = body.get("media", [])
-        if media:
-            for item in media:
-                if item.get("type") == "image" and item.get("url"):
-                    image = item.get("url")
-                    break
+        image_urls = _recipe_image_urls_from_body(body)
+        image = image_urls[0] if image_urls else None
         
         calories, nutrition = _nutrition_from_recipe_body(body)
+        stats = _post_recipe_comment_stats(db, post.id)
+        from app.services.recipe_origin_country import origin_country_fields_for_card
+
         recipe_data = {
             "id": f"user_{post.id}",  # ID для рецептов пользователей
             "title": post.title or "Рецепт без названия",
             "image": image,
             "source_image": image,
+            "images": image_urls,
+            "media": [{"type": "image", "url": url} for url in image_urls],
             "usedIngredientCount": 0,
             "ingredients": formatted_ingredients,
             "steps": formatted_steps,
@@ -955,10 +1416,13 @@ def get_channel_recipes_for_recommendations(
             "nutrition": nutrition,
             "channel_id": post.channel_id,
             "user_id": post.user_id,
+            "author_id": None if post.channel_id else post.user_id,
             "source": "user" if post.channel_id is None else "channel",
             "likes_count": likes_count or 0,
+            **stats,
             "author": author,
             "author_avatar": author_avatar,
+            **origin_country_fields_for_card(body),
         }
         recipes.append(recipe_data)
     
@@ -992,6 +1456,16 @@ async def get_recommendations(
     
     Оптимизировано с кэшированием для быстрой загрузки.
     """
+    from app.services.subscription_service import SubscriptionService
+
+    sub = SubscriptionService(db)
+    has_ai = bool(current_user and sub.has_ai_access(current_user.id))
+
+    effective_limit = min(20, limit + (4 if has_ai else 0))
+    spoonacular_tags = tags
+    if has_ai and not spoonacular_tags:
+        spoonacular_tags = "healthy,vegetarian"
+
     # Если Spoonacular не настроен — отдаём рецепты из каналов/профилей, чтобы в Menu что-то было
     if not SPOONACULAR_API_KEY:
         try:
@@ -1001,17 +1475,25 @@ async def get_recommendations(
             meta = {
                 "mode": mode or "balanced",
                 "language": language or "ru",
+                "ai_recommendations": has_ai,
             }
             return _recommendations_response(
-                local_recipes[:limit], meta, db, current_user, language
+                local_recipes[:effective_limit], meta, db, current_user, language
             )
         except Exception as e:
             logger.warning(f"Ошибка загрузки рецептов из каналов: {e}")
-            meta = {"mode": mode or "balanced", "language": language or "ru"}
+            meta = {
+                "mode": mode or "balanced",
+                "language": language or "ru",
+                "ai_recommendations": has_ai,
+            }
             return _recommendations_response([], meta, db, current_user, language)
 
     # Ключ кэша: при изменении состава полей (например author/author_avatar) — поднять версию.
-    cache_key = f"recommendations:v9:{limit}:{tags or 'none'}:{language or 'ru'}:q{int(quick)}"
+    cache_key = (
+        f"recommendations:v14:{effective_limit}:{spoonacular_tags or 'none'}:"
+        f"{language or 'ru'}:q{int(quick)}:ai{int(has_ai)}"
+    )
     
     # Проверяем кэш (pull-to-refresh передаёт refresh=true)
     try:
@@ -1038,7 +1520,7 @@ async def get_recommendations(
     
     url = "https://api.spoonacular.com/recipes/random"
     params = {
-        "number": limit,
+        "number": effective_limit,
         "apiKey": SPOONACULAR_API_KEY,
     }
     # Одним ответом больше данных: ингредиенты/шаги/калории без N+1
@@ -1047,12 +1529,12 @@ async def get_recommendations(
         params["addRecipeInformation"] = "true"
         params["fillIngredients"] = "true"
     
-    if tags:
-        params["tags"] = tags
+    if spoonacular_tags:
+        params["tags"] = spoonacular_tags
     
     try:
         logger.debug(f"🌐 Запрос к Spoonacular: {url} с параметрами {params}")
-        resp = requests.get(url, params=params, timeout=20)
+        resp = requests.get(url, params=params, timeout=4 if quick else 20)
         logger.debug(f"📡 Ответ Spoonacular: status={resp.status_code}")
         
         if resp.status_code != 200:
@@ -1360,11 +1842,18 @@ async def search_recipes(
     can_localize = viewer_can_localize_recipes(db, current_user, lang)
     
     # Проверяем кэш в Redis
-    cache_key = f"recipes:v3:{ingredients.lower()}:{requested_mode}:{lang}:{max_ready_time or 0}"
+    normalized_tags_for_cache = (tags or "").strip().lower()
+    cache_key = (
+        f"recipes:v8:{ingredients.lower()}:{requested_mode}:{lang}:"
+        f"{normalized_tags_for_cache}:{max_ready_time or 0}:ai{int(can_localize)}"
+    )
     try:
         cached = redis_client.get(cache_key)
         if cached:
             data = json.loads(cached)
+            if not data:
+                raise ValueError("skip empty recipe search cache")
+            data = _prepare_menu_recipe_cards(data, limit=8, context="search")
             store_history_entry(ingredients, None, requested_mode)
             meta_cached: Dict[str, Any] = {"mode": requested_mode, "language": lang}
             if can_localize:
@@ -1374,6 +1863,7 @@ async def search_recipes(
                 meta_cached.update(loc)
             elif any(card_needs_localization(c, lang) for c in data):
                 meta_cached["recipe_translation_requires_ai"] = True
+            meta_cached["menu_cards_contract_version"] = 1
             return {"recipes": data, "meta": meta_cached}
     except Exception as e:
         # Redis недоступен, продолжаем без кэша
@@ -1384,12 +1874,69 @@ async def search_recipes(
     # Если нет запятых, это скорее всего название блюда
     is_ingredient_list = ',' in ingredients or ' и ' in ingredients.lower()
 
+    local_base_recipes: List[Dict[str, Any]] = []
+    local_user_recipes: List[Dict[str, Any]] = []
+    if lang == "ru" and can_localize:
+        local_base_recipes = search_base_recipes(ingredients, db, limit=8)
+    local_user_recipes = search_user_recipes(
+        ingredients,
+        db,
+        limit=max(0, 8 - len(local_base_recipes)),
+    )
+    local_fast_recipes = _merge_recipe_cards(
+        local_base_recipes,
+        local_user_recipes,
+        limit=8,
+    )
+    if can_localize and len(local_fast_recipes) < SEARCH_LOCAL_FAST_MIN_RESULTS:
+        menu_filter_fallback = fallback_base_recipes_for_menu_filter(
+            ingredients,
+            tags,
+            db,
+            limit=8,
+        )
+        local_fast_recipes = _merge_recipe_cards(
+            local_fast_recipes,
+            menu_filter_fallback,
+            limit=8,
+        )
+
+    # Для меню важнее быстрый ответ. Если локальная база уже дала нормальную выдачу,
+    # не держим пользователя на внешнем Spoonacular.
+    if can_localize and len(local_fast_recipes) >= SEARCH_LOCAL_FAST_MIN_RESULTS:
+        local_fast_recipes = _prepare_menu_recipe_cards(
+            local_fast_recipes,
+            limit=8,
+            context="search",
+        )
+        try:
+            redis_client.setex(
+                cache_key,
+                CACHE_TTL,
+                json.dumps(local_fast_recipes, ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.warning("Redis cache save error (continuing without cache): %s", e)
+        store_history_entry(ingredients, None, requested_mode)
+        meta_out: Dict[str, Any] = {
+            "mode": requested_mode,
+            "language": lang,
+            "source": "local_fast",
+        }
+        if can_localize:
+            meta_out["recipe_translation_enabled"] = True
+        elif any(card_needs_localization(c, lang) for c in local_fast_recipes):
+            meta_out["recipe_translation_requires_ai"] = True
+        meta_out["menu_cards_contract_version"] = 1
+        return {"recipes": local_fast_recipes, "meta": meta_out}
+
     # Spoonacular (если ключ задан). Без ключа или при пустом ответе ниже подмешиваются база + каналы/профили.
     list_recipes: List[Dict[str, Any]] = []
     if SPOONACULAR_API_KEY:
         search_url = "https://api.spoonacular.com/recipes/complexSearch"
+        en_query = translate_query_to_english_for_spoonacular(ingredients)
         params = {
-            "query": ingredients,  # Поиск по названию, описанию и ингредиентам
+            "query": en_query or ingredients,  # Поиск по названию, описанию и ингредиентам
             "number": 12,  # Увеличиваем количество для лучших результатов
             "addRecipeInformation": "true",  # Получаем полную информацию сразу
             "fillIngredients": "true",  # Заполняем ингредиенты
@@ -1404,7 +1951,11 @@ async def search_recipes(
         try:
             # Основной поиск через complexSearch
             logger.debug(f"🔍 Запрос к complexSearch: query='{ingredients}', tags={tags}")
-            resp = requests.get(search_url, params=params, timeout=30)
+            resp = requests.get(
+                search_url,
+                params=params,
+                timeout=SEARCH_SPOONACULAR_TIMEOUT,
+            )
             logger.debug(f"🔍 complexSearch ответ: status={resp.status_code}")
             if resp.status_code == 200:
                 data = resp.json()
@@ -1419,14 +1970,18 @@ async def search_recipes(
                 list_recipes = []
 
             # Повтор complexSearch с английским запросом (кириллица в query часто даёт 0 результатов)
-            if len(list_recipes) == 0:
+            if len(list_recipes) == 0 and not en_query:
                 en_query = translate_query_to_english_for_spoonacular(ingredients)
                 if en_query:
                     params_en = dict(params)
                     params_en["query"] = en_query
                     logger.debug("🔁 complexSearch (EN fallback): query=%r", en_query)
                     try:
-                        resp_en = requests.get(search_url, params=params_en, timeout=30)
+                        resp_en = requests.get(
+                            search_url,
+                            params=params_en,
+                            timeout=SEARCH_SPOONACULAR_TIMEOUT,
+                        )
                         if resp_en.status_code == 200:
                             data_en = resp_en.json()
                             list_recipes = data_en.get("results", []) or []
@@ -1461,7 +2016,11 @@ async def search_recipes(
                     ingredients_params["tags"] = tags
 
                 try:
-                    ingredients_resp = requests.get(ingredients_url, params=ingredients_params, timeout=30)
+                    ingredients_resp = requests.get(
+                        ingredients_url,
+                        params=ingredients_params,
+                        timeout=SEARCH_SPOONACULAR_TIMEOUT,
+                    )
                     logger.debug(f"🔍 findByIngredients ответ: status={ingredients_resp.status_code}")
                     if ingredients_resp.status_code == 200:
                         ingredients_recipes = ingredients_resp.json() or []
@@ -1567,7 +2126,7 @@ async def search_recipes(
                         "apiKey": SPOONACULAR_API_KEY,
                         "includeNutrition": "true"
                     }, 
-                    timeout=8
+                    timeout=SEARCH_SPOONACULAR_DETAIL_TIMEOUT,
                 )
                 if dresp.status_code == 200:
                     info = dresp.json()
@@ -1738,40 +2297,54 @@ async def search_recipes(
     
         logger.debug(f"⚡ Параллельная загрузка завершена: {len(out)} рецептов")
     
-        # ГИБРИДНЫЙ ПОДХОД: базовая база → пользовательские → Spoonacular
+        # ГИБРИДНЫЙ ПОДХОД:
+        # - без AI не показываем "переведённую" локальную витрину; сначала оригинальные Spoonacular с фото
+        # - с AI сохраняем быстрый локальный RU-опыт, если он доступен
         all_recipes = []
-    
-        # 1. Сначала ищем в базовой базе (только для русского языка)
-        if lang == "ru":
-            base_recipes = search_base_recipes(ingredients, db, limit=8)
-            all_recipes.extend(base_recipes)
-            logger.debug(f"📚 Найдено {len(base_recipes)} рецептов из базовой базы")
-    
-        # 2. Если не хватает, добавляем рецепты пользователей
-        if len(all_recipes) < 8:
-            user_recipes = search_user_recipes(ingredients, db, limit=8 - len(all_recipes))
-            all_recipes.extend(user_recipes)
-            logger.debug(f"👥 Найдено {len(user_recipes)} рецептов пользователей")
-    
-        # 3. Если все еще не хватает, дополняем из Spoonacular (с оптимизированным переводом)
-        if len(all_recipes) < 8:
-            remaining = 8 - len(all_recipes)
-            # Ограничиваем результаты Spoonacular до нужного количества
-            spoonacular_recipes = out[:remaining]
-            all_recipes.extend(spoonacular_recipes)
-            logger.debug(f"🌐 Добавлено {len(spoonacular_recipes)} рецептов из Spoonacular")
+
+        if can_localize:
+            # 1. Сначала используем уже найденную локальную базу (только для русского языка)
+            all_recipes.extend(local_fast_recipes)
+            logger.debug(f"📚 Найдено {len(local_fast_recipes)} локальных рецептов")
+
+            # 2. Если не хватает, добавляем рецепты пользователей
+            if len(all_recipes) < 8:
+                if local_user_recipes:
+                    all_recipes.extend(local_user_recipes[: 8 - len(all_recipes)])
+                logger.debug(f"👥 Найдено {len(local_user_recipes)} рецептов пользователей")
+
+            # 3. Если все еще не хватает, дополняем из Spoonacular (с оптимизированным переводом)
+            if len(all_recipes) < 8:
+                remaining = 8 - len(all_recipes)
+                spoonacular_recipes = out[:remaining]
+                all_recipes.extend(spoonacular_recipes)
+                logger.debug(f"🌐 Добавлено {len(spoonacular_recipes)} рецептов из Spoonacular")
         else:
-            # Если уже достаточно из базовой базы и пользовательских, не используем Spoonacular
-            logger.debug(f"✅ Достаточно рецептов из базовой базы и пользовательских, Spoonacular не используется")
+            spoonacular_recipes = out[:8]
+            all_recipes.extend(spoonacular_recipes)
+            logger.debug(f"🌐 Без AI: добавлено {len(spoonacular_recipes)} оригинальных Spoonacular рецептов")
+
+            if len(all_recipes) < 8 and local_user_recipes:
+                all_recipes.extend(local_user_recipes[: 8 - len(all_recipes)])
+                logger.debug(f"👥 Без AI: добавлено {len(local_user_recipes)} рецептов пользователей")
+
+        if not all_recipes and local_fast_recipes:
+            all_recipes.extend(local_fast_recipes[:8])
+            logger.debug("⚠️ Spoonacular пуст — используем локальный fallback")
+
+        if can_localize:
+            # Сортируем локализованный RU-результат по релевантности локальной базы.
+            all_recipes.sort(key=lambda x: (
+                x.get("relevance_score", 0) if "base" in str(x.get("id", "")) else 0,
+                x.get("usedIngredientCount", 0)
+            ), reverse=True)
     
-        # Сортируем по релевантности: сначала базовая база (relevance_score), потом по usedIngredientCount
-        all_recipes.sort(key=lambda x: (
-            x.get("relevance_score", 0) if "base" in str(x.get("id", "")) else 0,
-            x.get("usedIngredientCount", 0)
-        ), reverse=True)
-    
-        # Ограничиваем результат до 8 рецептов
-        all_recipes = all_recipes[:8]
+        # Ограничиваем результат до 8 рецептов после единого ранжирования Menu.
+        all_recipes = _prepare_menu_recipe_cards(
+            all_recipes,
+            limit=8,
+            context="search",
+        )
 
         # Кэшируем итоговый список (с рецептами каналов/профилей и полями author), не только Spoonacular
         try:
@@ -1788,13 +2361,27 @@ async def search_recipes(
             meta_out["recipe_translation_enabled"] = True
         elif any(card_needs_localization(c, lang) for c in all_recipes):
             meta_out["recipe_translation_requires_ai"] = True
+        meta_out["menu_cards_contract_version"] = 1
         return {"recipes": all_recipes, "meta": meta_out}
     except Exception as e:
         logger.warning(f"Error searching recipes: {e}")
         # В случае ошибки все равно пытаемся вернуть рецепты из каналов и профилей
         try:
             channel_recipes = search_user_recipes(ingredients, db, limit=10)
-            return {"recipes": channel_recipes, "meta": {"mode": requested_mode, "language": lang}}
+            channel_recipes = _prepare_menu_recipe_cards(
+                channel_recipes,
+                limit=8,
+                context="search",
+            )
+            return {
+                "recipes": channel_recipes,
+                "meta": {
+                    "mode": requested_mode,
+                    "language": lang,
+                    "source": "fallback",
+                    "menu_cards_contract_version": 1,
+                },
+            }
         except Exception as e:
             logger.warning(f"⚠️ Error fetching user recipes: {e}")
             return {"recipes": [], "meta": {"mode": requested_mode, "language": lang}}
@@ -2105,6 +2692,7 @@ async def analyze_photo(
     """
     from app.core.entitlements import AI_SCAN_RESERVE_REQUIRED_CODE
     from app.core.security import verify_ai_scan_ticket
+    from app.services.ai_scan_credits_service import AiScanCreditsService
     from app.services.food_scan_gpt_service import analyze_food_photo_gpt
     from app.services.image_processing_service import optimize_scan_image_for_ai
 
@@ -2188,8 +2776,14 @@ async def analyze_photo(
                 if use_spoonacular
                 else None
             )
+            ai_priority = SubscriptionService(db).has_ai_access(current_user.id)
             gpt_future = (
-                executor.submit(analyze_food_photo_gpt, image_bytes, lang)
+                executor.submit(
+                    analyze_food_photo_gpt,
+                    image_bytes,
+                    lang,
+                    priority_fast=ai_priority,
+                )
                 if use_gpt
                 else None
             )
@@ -2403,10 +2997,20 @@ async def analyze_photo(
         db.commit()
 
         return {"analysis": analysis, "mode": requested_mode, "language": lang}
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code >= 500:
+            try:
+                AiScanCreditsService(db).refund_reserved_scan(current_user.id)
+                logger.info("food scan: refunded reserved scan after HTTP %s", exc.status_code)
+            except Exception as refund_exc:
+                logger.warning("food scan refund failed: %s", refund_exc)
         raise
     except Exception as e:
         logger.warning(f"Error analyzing photo: {e}")
+        try:
+            AiScanCreditsService(db).refund_reserved_scan(current_user.id)
+        except Exception as refund_exc:
+            logger.warning("food scan refund failed: %s", refund_exc)
         raise HTTPException(status_code=502, detail=f"analysis failed: {str(e)}")
 
 

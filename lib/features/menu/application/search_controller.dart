@@ -12,6 +12,10 @@ class SearchState {
     required this.loading,
     required this.error,
     required this.hasSearched,
+    this.recipeTranslationEnabled = false,
+    this.recipeTranslationRequiresAi = false,
+    this.recipeTranslationApiSupported = false,
+    this.source,
   });
 
   factory SearchState.initial() => const SearchState(
@@ -25,6 +29,10 @@ class SearchState {
   final bool loading;
   final String? error;
   final bool hasSearched;
+  final bool recipeTranslationEnabled;
+  final bool recipeTranslationRequiresAi;
+  final bool recipeTranslationApiSupported;
+  final String? source;
 
   /// Значение по умолчанию для [copyWith]: не менять поле [error].
   static const Object _errorUnset = Object();
@@ -34,12 +42,23 @@ class SearchState {
     bool? loading,
     Object? error = _errorUnset,
     bool? hasSearched,
+    bool? recipeTranslationEnabled,
+    bool? recipeTranslationRequiresAi,
+    bool? recipeTranslationApiSupported,
+    Object? source = _errorUnset,
   }) {
     return SearchState(
       recipes: recipes ?? this.recipes,
       loading: loading ?? this.loading,
       error: identical(error, _errorUnset) ? this.error : error as String?,
       hasSearched: hasSearched ?? this.hasSearched,
+      recipeTranslationEnabled:
+          recipeTranslationEnabled ?? this.recipeTranslationEnabled,
+      recipeTranslationRequiresAi:
+          recipeTranslationRequiresAi ?? this.recipeTranslationRequiresAi,
+      recipeTranslationApiSupported:
+          recipeTranslationApiSupported ?? this.recipeTranslationApiSupported,
+      source: identical(source, _errorUnset) ? this.source : source as String?,
     );
   }
 }
@@ -53,6 +72,7 @@ class SearchController extends StateNotifier<SearchState> {
   SearchController(this._ref) : super(SearchState.initial());
 
   final Ref _ref;
+  int _requestId = 0;
 
   Future<void> search(
     String query, {
@@ -62,11 +82,12 @@ class SearchController extends StateNotifier<SearchState> {
   }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
+    final requestId = ++_requestId;
     final settings = _ref.read(analysisSettingsProvider);
 
     state = state.copyWith(loading: true, error: null);
     try {
-      final recipes = await ApiService.searchRecipes(
+      final result = await ApiService.searchRecipesResult(
         trimmed,
         mode: settings.mode,
         language: settings.language,
@@ -74,14 +95,20 @@ class SearchController extends StateNotifier<SearchState> {
         tags: tags,
         maxReadyTime: maxReadyTime,
       );
+      if (requestId != _requestId) return;
       state = state.copyWith(
-        recipes: recipes,
+        recipes: result.recipes,
         loading: false,
         error: null,
         hasSearched: true,
+        recipeTranslationEnabled: result.recipeTranslationEnabled,
+        recipeTranslationRequiresAi: result.recipeTranslationRequiresAi,
+        recipeTranslationApiSupported: result.recipeTranslationApiSupported,
+        source: result.source,
       );
       await HistoryStorage.addQuery(trimmed, settings.mode);
     } catch (e) {
+      if (requestId != _requestId) return;
       state = state.copyWith(
         loading: false,
         error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),
@@ -97,31 +124,39 @@ class SearchController extends StateNotifier<SearchState> {
   }
 
   void reset() {
+    _requestId++;
     state = SearchState.initial();
   }
 
   /// Быстрый поиск по тегу (например «Быстро», тег quick-and-easy).
   Future<void> searchByTag(String query, String tag,
       {int? maxReadyTime}) async {
+    final requestId = ++_requestId;
     final settings = _ref.read(analysisSettingsProvider);
     state = state.copyWith(loading: true, error: null);
     try {
-      final recipes = await ApiService.searchRecipes(
+      final result = await ApiService.searchRecipesResult(
         query.trim().isEmpty ? tag : query,
         mode: settings.mode,
         language: settings.language,
         tags: [tag],
         maxReadyTime: maxReadyTime,
       );
+      if (requestId != _requestId) return;
       state = state.copyWith(
-        recipes: recipes,
+        recipes: result.recipes,
         loading: false,
         error: null,
         hasSearched: true,
+        recipeTranslationEnabled: result.recipeTranslationEnabled,
+        recipeTranslationRequiresAi: result.recipeTranslationRequiresAi,
+        recipeTranslationApiSupported: result.recipeTranslationApiSupported,
+        source: result.source,
       );
       await HistoryStorage.addQuery(
           query.trim().isEmpty ? tag : query, settings.mode);
     } catch (e) {
+      if (requestId != _requestId) return;
       state = state.copyWith(
         loading: false,
         error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),

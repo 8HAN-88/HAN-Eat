@@ -1,0 +1,62 @@
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'server_config.dart';
+
+/// Скачивает видео в temp-кэш — надёжнее AVPlayer streaming на физическом iOS.
+class VideoCacheService {
+  static const _minValidBytes = 4096;
+
+  static Future<File> fileForUrl(String url) async {
+    final resolved = ServerConfig.resolveMediaUrl(url);
+    final cacheDir = await _cacheDir();
+    final name = md5.convert(resolved.codeUnits).toString();
+    final file = File('${cacheDir.path}/$name.mp4');
+
+    if (await file.exists()) {
+      final len = await file.length();
+      if (len > _minValidBytes) return file;
+      await file.delete();
+    }
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 45);
+    try {
+      final request = await client.getUrl(Uri.parse(resolved));
+      final response = await request.close();
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        throw HttpException('Video HTTP ${response.statusCode} for $resolved');
+      }
+      final sink = file.openWrite();
+      try {
+        await for (final chunk in response) {
+          sink.add(chunk);
+        }
+      } finally {
+        await sink.close();
+      }
+      if (await file.length() < _minValidBytes) {
+        await file.delete();
+        throw const HttpException('Video file too small');
+      }
+      if (kDebugMode) {
+        debugPrint('VideoCache: saved ${await file.length()} bytes');
+      }
+      return file;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static Future<Directory> _cacheDir() async {
+    final base = await getTemporaryDirectory();
+    final dir = Directory('${base.path}/haneat_videos');
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+    return dir;
+  }
+}

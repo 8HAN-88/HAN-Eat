@@ -4,16 +4,21 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
 import '../../services/feed_api_cache.dart';
-import '../community/presentation/community_upload_screen.dart';
 import '../reels/application/reels_feed_refresh_provider.dart';
 
 /// Открыть экран загрузки рилса (community video API).
-Future<bool?> openCreateReel(BuildContext context, {WidgetRef? ref}) async {
-  final created = await Navigator.of(context).push<bool>(
-    MaterialPageRoute<bool>(
-      builder: (_) => const CommunityUploadScreen(),
-    ),
-  );
+///
+/// [channelId] — рилс публикуется в канал (как пост канала + опционально в Reels).
+Future<bool?> openCreateReel(
+  BuildContext context, {
+  WidgetRef? ref,
+  int? channelId,
+  String? channelName,
+}) async {
+  final route = channelId != null
+      ? CreateReelRoute.uri(channelId: channelId, channelName: channelName)
+      : CreateReelRoute.path;
+  final created = await context.push<bool?>(route);
   if (created == true) {
     await FeedApiCache.clear('rec_reels');
     if (ref != null) {

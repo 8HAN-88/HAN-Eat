@@ -6,6 +6,7 @@ import '../../../../services/notification_service.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../models/chat_models.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../application/unread_notifications_provider.dart';
@@ -237,7 +238,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           context.push(PostFeedRoute.pathFor(id));
         }
       }
+    } else if (notification.type == 'message' ||
+        notification.entityType == 'conversation' ||
+        notification.data?['route'] == 'chat') {
+      final data = notification.data;
+      final conversationId = _parseNotificationId(
+            data?['conversation_id'] ?? data?['conversationId'],
+          ) ??
+          _parseNotificationId(notification.entityId);
+      if (conversationId != null) {
+        final actorId = _parseNotificationId(
+          data?['actor_id'] ?? data?['actorId'] ?? notification.actor?.id,
+        );
+        final peer = ChatUserBrief(
+          id: actorId ?? 0,
+          name: notification.actor?.name ?? notification.title,
+        );
+        context.push(
+          ChatThreadRoute.pathForId(conversationId),
+          extra: peer,
+        );
+      }
     }
+  }
+
+  int? _parseNotificationId(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
   
   IconData _getNotificationIcon(String type) {
@@ -260,6 +289,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         return Icons.repeat;
       case 'mention':
         return Icons.alternate_email;
+      case 'message':
+        return Icons.chat_bubble_outline;
       case 'moderation_approved':
         return Icons.check_circle;
       case 'moderation_rejected':

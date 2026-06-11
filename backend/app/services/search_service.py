@@ -1,13 +1,16 @@
-"""
-Сервис для полнотекстового поиска
-"""
+"""Сервис для полнотекстового поиска."""
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, and_, text
+from sqlalchemy import func, or_, and_
 import sqlalchemy as sa
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.models.post import Post
 from app.services.feed_service import FeedService
+from app.services.search_normalization import (
+    escaped_like_pattern,
+    search_terms,
+    stable_search_key,
+)
 from app.models.user import User
 
 
@@ -30,6 +33,7 @@ class SearchService:
         min_likes: Optional[int] = None,
         min_comments: Optional[int] = None,
         sort_by: str = "relevance",  # relevance | date | popularity
+        following_only: bool = False,
         limit: int = 20,
         offset: int = 0
     ) -> Dict[str, Any]:
@@ -51,8 +55,18 @@ class SearchService:
             limit: Количество результатов
             offset: Смещение для пагинации
         """
-        # Подготавливаем поисковый запрос для PostgreSQL
+        # Подготавливаем поисковый запрос как обычный пользовательский текст.
+        # websearch_to_tsquery не падает на #, @, дефисах и других символах.
         search_query = self._prepare_search_query(query)
+        search_terms = self._search_terms(query)
+        if not search_query and not search_terms:
+            return {
+                "items": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "has_more": False,
+            }
         
         # Базовый запрос
         base_query = self.db.query(Post).filter(
@@ -73,6 +87,19 @@ class SearchService:
         # Фильтр по каналу
         if channel_id:
             base_query = base_query.filter(Post.channel_id == channel_id)
+
+        if following_only and user_id:
+            base_query = base_query.filter(
+                self._following_scope_filter(user_id)
+            )
+        elif following_only:
+            return {
+                "items": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "has_more": False,
+            }
         
         # Фильтр по тегам (посты должны содержать хотя бы один тег)
         if tags:
@@ -84,46 +111,91 @@ class SearchService:
             base_query = base_query.filter(Post.published_at >= date_from)
         if date_to:
             base_query = base_query.filter(Post.published_at <= date_to)
+
+        from app.models.like import Like
+        from app.models.comment import Comment
+
+        likes_count_expr = (
+            self.db.query(func.count(Like.id))
+            .filter(Like.post_id == Post.id)
+            .correlate(Post)
+            .scalar_subquery()
+        )
+        comments_count_expr = (
+            self.db.query(func.count(Comment.id))
+            .filter(Comment.post_id == Post.id, Comment.deleted_at.is_(None))
+            .correlate(Post)
+            .scalar_subquery()
+        )
+
+        if min_likes is not None:
+            base_query = base_query.filter(likes_count_expr >= min_likes)
+        if min_comments is not None:
+            base_query = base_query.filter(comments_count_expr >= min_comments)
         
         # Полнотекстовый поиск
         # Создаем комбинированный tsvector для поиска
         # Ищем в title, description, tags и body (для рецептов)
         
+        tags_text = func.coalesce(func.array_to_string(Post.tags, ' '), '')
+        ingredients_text = func.coalesce(
+            func.cast(Post.body['ingredients'], sa.Text), ''
+        )
+        steps_text = func.coalesce(
+            func.cast(Post.body['steps'], sa.Text), ''
+        )
+
         # Базовый tsvector для всех постов
         search_vector = func.to_tsvector('russian',
             func.coalesce(Post.title, '') + ' ' +
             func.coalesce(Post.description, '') + ' ' +
-            func.array_to_string(func.coalesce(Post.tags, []), ' ')
+            tags_text
         )
         
         # Для рецептов добавляем текст из body (ingredients и steps)
         if post_type == "recipe" or post_type is None:
-            # Извлекаем текст из JSON body для рецептов
-            ingredients_text = func.coalesce(
-                func.cast(Post.body['ingredients'], sa.Text), ''
-            )
-            steps_text = func.coalesce(
-                func.cast(Post.body['steps'], sa.Text), ''
-            )
-            
             search_vector = func.to_tsvector('russian',
                 func.coalesce(Post.title, '') + ' ' +
                 func.coalesce(Post.description, '') + ' ' +
-                func.array_to_string(func.coalesce(Post.tags, []), ' ') + ' ' +
+                tags_text + ' ' +
                 func.coalesce(ingredients_text, '') + ' ' +
                 func.coalesce(steps_text, '')
             )
         
-        # Применяем поиск используя оператор @@
-        search_query_ts = func.to_tsquery('russian', search_query)
-        base_query = base_query.filter(search_vector.op('@@')(search_query_ts))
+        # Применяем полнотекстовый поиск и fallback по подстрокам:
+        # FTS хорошо ранжирует слова, fallback ловит частичные названия,
+        # хештеги, латиницу и пользовательские запросы с символами.
+        search_query_ts = func.websearch_to_tsquery('russian', search_query)
+        text_match_filters = [
+            self._term_match_filter(term, tags_text, ingredients_text, steps_text)
+            for term in search_terms
+        ]
+        fallback_filter = and_(*text_match_filters) if text_match_filters else None
+        if fallback_filter is not None:
+            base_query = base_query.filter(
+                or_(search_vector.op('@@')(search_query_ts), fallback_filter)
+            )
+        else:
+            base_query = base_query.filter(search_vector.op('@@')(search_query_ts))
         
         # Подсчет релевантности (rank)
         # Используем ts_rank_cd для ранжирования результатов
         rank_expr = func.ts_rank_cd(search_vector, search_query_ts)
         
-        # Сортируем по релевантности
-        base_query = base_query.order_by(rank_expr.desc(), Post.published_at.desc())
+        if sort_by == "date":
+            base_query = base_query.order_by(Post.published_at.desc())
+        elif sort_by == "popularity":
+            base_query = base_query.order_by(
+                likes_count_expr.desc(),
+                comments_count_expr.desc(),
+                Post.published_at.desc(),
+            )
+        else:
+            base_query = base_query.order_by(
+                rank_expr.desc(),
+                likes_count_expr.desc(),
+                Post.published_at.desc(),
+            )
         
         # Подсчет общего количества результатов
         total_count = base_query.count()
@@ -146,34 +218,74 @@ class SearchService:
             "has_more": (offset + limit) < total_count
         }
     
+    def _following_scope_filter(self, user_id: int):
+        """Посты только от подписок и каналов пользователя."""
+        from app.models.follower import Follower
+        from app.models.community_member import ChannelMember
+        from app.models.community import Channel
+        from app.services.channel_membership_service import MEMBER_STATUS_ACTIVE
+
+        following_ids = [
+            row[0]
+            for row in self.db.query(Follower.followee_id).filter(
+                Follower.follower_id == user_id
+            ).all()
+        ]
+        subscribed_channel_ids = [
+            row[0]
+            for row in self.db.query(ChannelMember.channel_id).filter(
+                ChannelMember.user_id == user_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+            ).all()
+        ]
+        owned_channel_ids = [
+            row[0]
+            for row in self.db.query(Channel.id).filter(
+                Channel.admin_user_id == user_id
+            ).all()
+        ]
+        all_channel_ids = list(set(subscribed_channel_ids + owned_channel_ids))
+
+        conditions = []
+        if following_ids:
+            conditions.append(
+                and_(
+                    Post.user_id.in_(following_ids),
+                    Post.visibility.in_(["public", "followers"]),
+                )
+            )
+        if all_channel_ids:
+            conditions.append(
+                and_(
+                    Post.channel_id.in_(all_channel_ids),
+                    Post.channel_id.isnot(None),
+                )
+            )
+        if not conditions:
+            return Post.id == -1
+        return or_(*conditions)
+
     def _prepare_search_query(self, query: str) -> str:
         """
         Подготовить поисковый запрос для PostgreSQL tsquery
         
-        Преобразует обычный запрос в формат tsquery:
-        - Разбивает на слова
-        - Добавляет операторы & (AND) или | (OR)
-        - Экранирует специальные символы
+        Преобразует обычный запрос в безопасный текст для websearch_to_tsquery.
+        Слова вроде #tag и @user ищутся как tag/user, а не ломают SQL-запрос.
         """
-        # Удаляем лишние пробелы
-        query = query.strip()
-        
-        # Разбиваем на слова
-        words = query.split()
-        
-        if not words:
-            return ""
-        
-        # Экранируем специальные символы и объединяем через &
-        # Используем & для поиска всех слов (AND логика)
-        escaped_words = []
-        for word in words:
-            # Экранируем специальные символы tsquery
-            escaped = word.replace(':', '\\:').replace('&', '\\&').replace('|', '\\|')
-            escaped_words.append(escaped)
-        
-        # Объединяем через & (все слова должны присутствовать)
-        return ' & '.join(escaped_words)
+        return stable_search_key(query)
+
+    def _search_terms(self, query: str) -> List[str]:
+        return search_terms(query)
+
+    def _term_match_filter(self, term: str, tags_text, ingredients_text, steps_text):
+        pattern = escaped_like_pattern(term)
+        return or_(
+            func.coalesce(Post.title, '').ilike(pattern, escape='\\'),
+            func.coalesce(Post.description, '').ilike(pattern, escape='\\'),
+            tags_text.ilike(pattern, escape='\\'),
+            ingredients_text.ilike(pattern, escape='\\'),
+            steps_text.ilike(pattern, escape='\\'),
+        )
     
     
     def _enrich_posts(self, posts: List[Post], user_id: Optional[int]) -> List[Dict[str, Any]]:
@@ -309,11 +421,13 @@ class SearchService:
             *FeedService._recommendation_post_filters(),
         ).distinct().all()
         
-        query_lower = query.lower()
+        query_lower = stable_search_key(query)
+        if len(query_lower) < 2:
+            return []
         for tag_list in tags:
             if tag_list[0]:  # Проверяем, что теги не None
                 for tag in tag_list[0]:
-                    if query_lower in tag.lower() and tag not in suggestions:
+                    if query_lower in stable_search_key(tag) and tag not in suggestions:
                         suggestions.append(tag)
                         if len(suggestions) >= limit:
                             break
@@ -323,7 +437,9 @@ class SearchService:
             titles = self.db.query(Post.title).filter(
                 Post.status == "published",
                 Post.deleted_at.is_(None),
-                Post.title.ilike(f"%{query}%"),
+                func.coalesce(Post.title, '').ilike(
+                    escaped_like_pattern(query_lower), escape='\\'
+                ),
                 *FeedService._recommendation_post_filters(),
             ).distinct().limit(limit - len(suggestions)).all()
             

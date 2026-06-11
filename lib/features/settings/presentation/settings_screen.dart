@@ -10,6 +10,7 @@ import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../../widgets/app_gradient_background.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -84,14 +85,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(AccountSecurityRoute.path),
       ),
       _SettingsItem(
-        title: 'Уведомления',
-        icon: Icons.notifications_outlined,
-        subtitle: 'Тренды, новые видео сообщества, напоминания',
+        title: 'Входящие',
+        icon: Icons.inbox_outlined,
+        subtitle: 'Лайки, комментарии, сообщения и другие события',
         onTap: () {
           context.push(NotificationsRoute.path);
           _loadUnreadCount();
         },
         badge: _unreadNotificationsCount > 0 ? _unreadNotificationsCount : null,
+      ),
+      _SettingsItem(
+        title: 'Настройки уведомлений',
+        icon: Icons.notifications_outlined,
+        subtitle: 'Push, типы событий, регистрация устройства',
+        onTap: () => context.push(NotificationSettingsRoute.path),
       ),
       _SettingsItem(
         title: 'Поддержка',
@@ -148,102 +155,104 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          20,
-          16,
-          20 + floatingBottomPadding(context),
+      body: AppGradientBackground(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            20,
+            16,
+            20 + floatingBottomPadding(context),
+          ),
+          children: [
+            _SettingsSectionHeader(title: 'Внешний вид'),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Тема',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    _ThemeModeRow(
+                      selected: ref.watch(themeModeProvider),
+                      onSelected: (mode) {
+                        ref.read(themeModeProvider.notifier).setThemeMode(mode);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Язык перевода',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue:
+                          supportedLanguages.keys.contains(settings.language)
+                              ? settings.language
+                              : 'ru',
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.language),
+                      ),
+                      items: [
+                        for (final entry in supportedLanguages.entries)
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        controller.changeLanguage(value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Все рецепты, ингредиенты и шаги будут автоматически переводиться на выбранный язык.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
+            const Card(
+              child: AiScanCreditsTile(),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (var i = 0; i < serviceItems.length; i++) ...[
+                    _SettingsTile(item: serviceItems[i]),
+                    if (i < serviceItems.length - 1)
+                      Divider(
+                        height: 1,
+                        indent: 56,
+                        color: scheme.outlineVariant,
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
-        children: [
-          _SettingsSectionHeader(title: 'Внешний вид'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Тема',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  _ThemeModeRow(
-                    selected: ref.watch(themeModeProvider),
-                    onSelected: (mode) {
-                      ref.read(themeModeProvider.notifier).setThemeMode(mode);
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Язык перевода',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue:
-                        supportedLanguages.keys.contains(settings.language)
-                            ? settings.language
-                            : 'ru',
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.language),
-                    ),
-                    items: [
-                      for (final entry in supportedLanguages.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      controller.changeLanguage(value);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Все рецепты, ингредиенты и шаги будут автоматически переводиться на выбранный язык.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
-          const Card(
-            child: AiScanCreditsTile(),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (var i = 0; i < serviceItems.length; i++) ...[
-                  _SettingsTile(item: serviceItems[i]),
-                  if (i < serviceItems.length - 1)
-                    Divider(
-                      height: 1,
-                      indent: 56,
-                      color: scheme.outlineVariant,
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

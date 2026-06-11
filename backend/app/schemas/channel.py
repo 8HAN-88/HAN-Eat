@@ -1,8 +1,8 @@
 """
 Pydantic схемы для каналов
 """
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -36,6 +36,12 @@ class UpdateChannelRequest(BaseModel):
     allow_comments: Optional[bool] = None
     allow_likes: Optional[bool] = None
     allow_reposts: Optional[bool] = None
+    role_permissions: Optional[Dict[str, Dict[str, bool]]] = None
+    accent_color: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="HEX-цвет акцента канала (Creator / Pro)",
+    )
 
 
 class ChannelResponse(BaseModel):
@@ -55,6 +61,11 @@ class ChannelResponse(BaseModel):
     auto_publish_reels: bool = True
     membership_status: Optional[str] = None
     pending_join_requests_count: Optional[int] = None
+    has_creator_badge: bool = False
+    accent_color: Optional[str] = None
+    last_post_preview: Optional[str] = None
+    last_post_at: Optional[datetime] = None
+    seen_posts_count: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -79,6 +90,9 @@ class ChannelDetailResponse(ChannelResponse):
     allow_comments: bool = True
     allow_likes: bool = True
     allow_reposts: bool = True
+    role_permissions: Dict[str, Dict[str, bool]] = Field(default_factory=dict)
+    has_creator_badge: bool = False
+    accent_color: Optional[str] = None
 
 
 class JoinChannelResponse(BaseModel):

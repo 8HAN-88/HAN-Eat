@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../core/theme/app_card_decorations.dart';
+import '../core/theme/app_tokens.dart';
 
 /// Skeleton loader для карточки поста
 class PostCardSkeleton extends StatelessWidget {
@@ -12,6 +13,7 @@ class PostCardSkeleton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final base = scheme.surfaceContainerHighest;
     final highlight = scheme.surfaceContainerLow;
+    final fill = scheme.surface;
     return AppElevatedCard(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       padding: EdgeInsets.zero,
@@ -27,9 +29,9 @@ class PostCardSkeleton extends StatelessWidget {
                 Shimmer.fromColors(
                   baseColor: base,
                   highlightColor: highlight,
-                  child: const CircleAvatar(
+                  child: CircleAvatar(
                     radius: 20,
-                    backgroundColor: Colors.white,
+                    backgroundColor: fill,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -45,8 +47,8 @@ class PostCardSkeleton extends StatelessWidget {
                           height: 16,
                           width: 120,
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
+                            color: fill,
+                            borderRadius: BorderRadius.circular(AppRadius.xs),
                           ),
                         ),
                       ),
@@ -58,8 +60,8 @@ class PostCardSkeleton extends StatelessWidget {
                           height: 12,
                           width: 80,
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
+                            color: fill,
+                            borderRadius: BorderRadius.circular(AppRadius.xs),
                           ),
                         ),
                       ),
@@ -74,8 +76,8 @@ class PostCardSkeleton extends StatelessWidget {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
+                      color: fill,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                 ),
@@ -89,7 +91,7 @@ class PostCardSkeleton extends StatelessWidget {
             child: Container(
               height: 200,
               width: double.infinity,
-              color: Colors.white,
+              color: fill,
             ),
           ),
           // Skeleton текста
@@ -105,8 +107,8 @@ class PostCardSkeleton extends StatelessWidget {
                     height: 16,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
+                      color: fill,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                 ),
@@ -118,8 +120,8 @@ class PostCardSkeleton extends StatelessWidget {
                     height: 16,
                     width: 200,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
+                      color: fill,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                 ),
@@ -138,7 +140,7 @@ class PostCardSkeleton extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: fill,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -151,8 +153,8 @@ class PostCardSkeleton extends StatelessWidget {
                     height: 16,
                     width: 30,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
+                      color: fill,
+                      borderRadius: BorderRadius.circular(AppRadius.xs),
                     ),
                   ),
                 ),
@@ -164,7 +166,7 @@ class PostCardSkeleton extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: fill,
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
@@ -181,7 +183,7 @@ class PostCardSkeleton extends StatelessWidget {
 /// Список skeleton loaders для постов
 class PostListSkeletonLoader extends StatelessWidget {
   final int itemCount;
-  
+
   const PostListSkeletonLoader({
     super.key,
     this.itemCount = 5,
@@ -196,4 +198,3 @@ class PostListSkeletonLoader extends StatelessWidget {
     );
   }
 }
-

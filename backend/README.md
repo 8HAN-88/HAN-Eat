@@ -12,7 +12,7 @@ Backend API для социальной платформы с рецептами
 
 ## Миграции
 
-После обновления кода примените миграции (в т.ч. `034_recipe_visibility_v1`, `035_channel_member_status_v1`, `036_email_auth_tokens_v1`):
+После обновления кода примените миграции (в т.ч. `034_recipe_visibility_v1`, `035_channel_member_status_v1`, `036_email_auth_tokens_v1`, `037_post_poll_votes_v1`):
 
 ```bash
 cd backend
@@ -157,10 +157,27 @@ RABBITMQ_URL=amqp://localhost:5672
 ## Тестирование
 
 ```bash
-pytest tests/
+# Юнит-тесты backend
+pytest tests/test_post_poll_service.py -q
+
+# Полный локальный прогон (backend + flutter + analyze)
+cd .. && ./scripts/pre_release_check.sh
+
+# Smoke API (нужен запущенный backend или production)
+cd backend
+python3 scripts/smoke_api_check.py --base http://127.0.0.1:5001 \
+  --login han.test.creator@haneat.dev
 ```
 
 ## Деплой
 
-См. `docs/DEPLOYMENT.md`
+Production (Timeweb):
+
+```bash
+cd /root/HAN-Eat && git pull
+cd backend && source venv/bin/activate && alembic upgrade head
+sudo systemctl restart haneat-api
+```
+
+Деплой и откат: [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md). Smoke-чеклист: [docs/SMOKE_CHECKLIST.md](../docs/SMOKE_CHECKLIST.md).
 

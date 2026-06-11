@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_tokens.dart';
 import '../core/theme/color_schemes.dart';
 
 /// Секция опроса — карточка с заголовком и контентом.
@@ -26,7 +27,7 @@ class SurveySectionCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [
           BoxShadow(
             color: theme.colorScheme.shadow.withValues(alpha: 0.06),
@@ -39,7 +40,12 @@ class SurveySectionCard extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(20, compact ? 18 : 22, 20, compact ? 18 : 22),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.xl,
+          compact ? 18 : 22,
+          AppSpacing.xl,
+          compact ? 18 : 22,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -59,7 +65,7 @@ class SurveySectionCard extends StatelessWidget {
                           AppColors.secondary.withValues(alpha: 0.1),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Icon(icon, size: 22, color: AppColors.primary),
                   ),
@@ -167,7 +173,7 @@ class _SurveyOptionTile extends StatelessWidget {
         color: selected
             ? primary.withValues(alpha: 0.1)
             : theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
           color: selected
               ? primary.withValues(alpha: 0.55)
@@ -179,7 +185,7 @@ class _SurveyOptionTile extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
@@ -191,12 +197,13 @@ class _SurveyOptionTile extends StatelessWidget {
                     color: selected
                         ? primary.withValues(alpha: 0.16)
                         : theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Icon(
                     option.icon,
                     size: 22,
-                    color: selected ? primary : theme.colorScheme.onSurfaceVariant,
+                    color:
+                        selected ? primary : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -227,7 +234,8 @@ class _SurveyOptionTile extends StatelessWidget {
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
                   child: selected
-                      ? Icon(Icons.check_circle_rounded, key: const ValueKey('on'), color: primary)
+                      ? Icon(Icons.check_circle_rounded,
+                          key: const ValueKey('on'), color: primary)
                       : Icon(
                           Icons.circle_outlined,
                           key: const ValueKey('off'),

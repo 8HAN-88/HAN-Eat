@@ -8,12 +8,15 @@ import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
 import '../../../../app/app_router.dart';
+import '../../../../widgets/app_gradient_background.dart';
+import '../../../../widgets/server_connecting_hint.dart';
+import '../../../../widgets/legal_consent_checkbox.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
-  
+
   static const routeName = '/register';
-  
+
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -28,7 +31,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  
+  bool _legalAccepted = false;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -38,12 +42,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _usernameController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
-    
+    if (!_legalAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Примите политику конфиденциальности и пользовательское соглашение',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
-    
+
     try {
       final response = await AuthService.register(
         email: _emailController.text.trim(),
@@ -52,6 +66,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         username: _usernameController.text.trim().isEmpty
             ? null
             : _usernameController.text.trim(),
+        acceptLegal: true,
       );
 
       unawaited(
@@ -74,21 +89,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
+        final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.message),
-            backgroundColor: Colors.red,
+            backgroundColor: scheme.error,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              userVisibleError(e, fallback: 'Не удалось зарегистрироваться. Попробуйте позже.'),
+              userVisibleError(e,
+                  fallback: 'Не удалось зарегистрироваться. Попробуйте позже.'),
             ),
-            backgroundColor: Colors.red,
+            backgroundColor: scheme.error,
           ),
         );
       }
@@ -105,153 +123,157 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       appBar: AppBar(
         title: const Text('Регистрация'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 16),
-                // Имя
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Имя',
-                    hintText: 'Ваше имя',
-                    prefixIcon: Icon(Icons.person_outlined),
-                    border: OutlineInputBorder(),
+      body: AppGradientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  // Имя
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Имя',
+                      hintText: 'Ваше имя',
+                      prefixIcon: Icon(Icons.person_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Введите имя';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Введите имя';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'example@mail.com',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  // Email
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'example@mail.com',
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Введите email';
+                      }
+                      if (!value.contains('@')) {
+                        return 'Введите корректный email';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Введите email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Введите корректный email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Username (опционально)
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Username (опционально)',
-                    hintText: '@username',
-                    prefixIcon: Icon(Icons.alternate_email),
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  // Username (опционально)
+                  TextFormField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Username (опционально)',
+                      hintText: '@username',
+                      prefixIcon: Icon(Icons.alternate_email),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Пароль
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Пароль',
-                    hintText: 'Минимум 8 символов',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                  const SizedBox(height: 16),
+                  // Пароль
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Пароль',
+                      hintText: 'Минимум 8 символов',
+                      prefixIcon: const Icon(Icons.lock_outlined),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
                       ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
                     ),
-                    border: const OutlineInputBorder(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Введите пароль';
+                      }
+                      if (value.length < 8) {
+                        return 'Пароль должен быть минимум 8 символов';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Введите пароль';
-                    }
-                    if (value.length < 8) {
-                      return 'Пароль должен быть минимум 8 символов';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Подтверждение пароля
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Подтвердите пароль',
-                    prefixIcon: const Icon(Icons.lock_outlined),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                  const SizedBox(height: 16),
+                  // Подтверждение пароля
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Подтвердите пароль',
+                      prefixIcon: const Icon(Icons.lock_outlined),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscureConfirmPassword =
+                              !_obscureConfirmPassword);
+                        },
                       ),
-                      onPressed: () {
-                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
-                      },
                     ),
-                    border: const OutlineInputBorder(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Подтвердите пароль';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Пароли не совпадают';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Подтвердите пароль';
-                    }
-                    if (value != _passwordController.text) {
-                      return 'Пароли не совпадают';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                // Кнопка регистрации
-                FilledButton(
-                  onPressed: _isLoading ? null : _handleRegister,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  LegalConsentCheckbox(
+                    value: _legalAccepted,
+                    onChanged: _isLoading
+                        ? null
+                        : (v) => setState(() => _legalAccepted = v ?? false),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Зарегистрироваться'),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Уже есть аккаунт? '),
-                    TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => context.go(LoginRoute.path),
-                      child: const Text('Войти'),
-                    ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _isLoading ? null : _handleRegister,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Зарегистрироваться'),
+                  ),
+                  if (_isLoading) ...[
+                    const SizedBox(height: 12),
+                    const ServerConnectingHint(),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Уже есть аккаунт? '),
+                      TextButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => context.go(LoginRoute.path),
+                        child: const Text('Войти'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -259,4 +281,3 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 }
-

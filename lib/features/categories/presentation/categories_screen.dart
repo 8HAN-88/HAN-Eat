@@ -9,6 +9,7 @@ import '../../../core/subscription/recipe_nutrition_access.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/recipe_category.dart';
 import '../../../services/category_service.dart';
+import '../../../widgets/services_ready_gate.dart';
 
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
@@ -35,8 +36,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         title: const Text('Категории рецептов'),
         actions: [
           TextButton(
-            onPressed: () {
-              CategoryService.instance.resetAllFilters();
+            onPressed: () async {
+              final cats = await CategoryService.ensureInitialized();
+              cats.resetAllFilters();
+              if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Все фильтры сброшены')),
               );
@@ -45,8 +48,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           ),
         ],
       ),
-      body: ValueListenableBuilder<List<CategoryFilter>>(
-        valueListenable: CategoryService.instance.filters,
+      body: ServicesReadyGate(
+        services: const [DeferredLocalService.categories],
+        child: ValueListenableBuilder<List<CategoryFilter>>(
+        valueListenable: CategoryService.filtersListenable,
         builder: (context, filters, _) {
           if (filters.isEmpty) {
             return const Center(child: CircularProgressIndicator());
@@ -78,6 +83,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ],
           );
         },
+        ),
       ),
     );
   }

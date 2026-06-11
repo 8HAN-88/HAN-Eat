@@ -98,6 +98,13 @@ class FeedCacheService {
     return List.from(cachedPosts.value);
   }
 
+  PostModel? getCachedPostModel(int postId) {
+    for (final post in cachedPosts.value) {
+      if (post.id == postId) return post;
+    }
+    return null;
+  }
+
   /// Проверить, нужна ли синхронизация
   bool needsSync({Duration? maxAge}) {
     final lastSync = lastSyncTime.value;

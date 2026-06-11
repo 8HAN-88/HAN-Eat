@@ -115,6 +115,10 @@ class PushService:
             notification_data["post_type"] = str(payload["post_type"])
         if payload.get("route"):
             notification_data["route"] = str(payload["route"])
+        if payload.get("conversation_id") is not None:
+            notification_data["conversation_id"] = str(payload["conversation_id"])
+        if payload.get("message_id") is not None:
+            notification_data["message_id"] = str(payload["message_id"])
 
         if extra:
             notification_data.update({k: str(v) for k, v in extra.items()})

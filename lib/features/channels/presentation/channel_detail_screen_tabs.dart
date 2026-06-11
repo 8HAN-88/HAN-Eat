@@ -1,5 +1,8 @@
 // Дополнительные компоненты для вкладок канала
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 
 /// Пустое состояние вкладки (NestedScrollView + TabBarView): без bottom overflow.
@@ -17,6 +20,8 @@ class ChannelTabEmptyPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -30,22 +35,21 @@ class ChannelTabEmptyPlaceholder extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(icon, size: 64, color: Colors.grey[400]),
+                  Icon(icon, size: 64, color: scheme.outline),
                   const SizedBox(height: 16),
                   Text(
                     title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[700],
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w700,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -192,6 +196,12 @@ class ChannelAboutTab extends StatelessWidget {
                 icon: Icons.people,
                 label: 'Подписчики',
                 value: channel.membersCount.toString(),
+                onTap: () => context.push(
+                  ChannelDetailRoute.subscribers(
+                    channel.id,
+                    channelName: channel.name,
+                  ),
+                ),
               ),
               const SizedBox(width: 24),
               _StatItem(
@@ -211,21 +221,24 @@ class _StatItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   const _StatItem({
     required this.icon,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final scheme = Theme.of(context).colorScheme;
+    final child = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 20, color: Colors.grey[600]),
+            Icon(icon, size: 20, color: scheme.onSurfaceVariant),
             const SizedBox(width: 8),
             Text(
               value,
@@ -239,10 +252,19 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
+                color: scheme.onSurfaceVariant,
               ),
         ),
       ],
+    );
+    if (onTap == null) return child;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: child,
+      ),
     );
   }
 }

@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../core/firebase/lazy_firebase.dart';
 import '../models/post.dart';
 
 /// Сервис бизнес-правил для ленты (в стиле VK)
 /// Реализует ограничения и оптимизацию для улучшения UX
 @Deprecated('Legacy Firestore feed rules; production feed uses API FeedService')
 class FeedBusinessRulesService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Конфигурация бизнес-правил (можно вынести в настройки)
   static const _config = {

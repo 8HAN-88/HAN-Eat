@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../widgets/app_gradient_background.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../subscription/presentation/widgets/nutrition_upsell.dart';
 
@@ -25,10 +26,12 @@ class _DietScreenState extends ConsumerState<DietScreen> {
     'Средиземноморская': false,
   };
   final TextEditingController _calorieController = TextEditingController();
-  final TextEditingController _caloriesPerDishController = TextEditingController();
+  final TextEditingController _caloriesPerDishController =
+      TextEditingController();
   final TextEditingController _fatPerDishController = TextEditingController();
   final TextEditingController _carbsPerDishController = TextEditingController();
-  final TextEditingController _proteinPerDishController = TextEditingController();
+  final TextEditingController _proteinPerDishController =
+      TextEditingController();
   bool _loading = false;
 
   @override
@@ -95,10 +98,13 @@ class _DietScreenState extends ConsumerState<DietScreen> {
       } else {
         await prefs.remove('calorie_limit');
       }
-      await _saveInt(prefs, 'max_calories_per_dish', _caloriesPerDishController.text);
+      await _saveInt(
+          prefs, 'max_calories_per_dish', _caloriesPerDishController.text);
       await _saveInt(prefs, 'max_fat_per_dish_g', _fatPerDishController.text);
-      await _saveInt(prefs, 'max_carbs_per_dish_g', _carbsPerDishController.text);
-      await _saveInt(prefs, 'max_protein_per_dish_g', _proteinPerDishController.text);
+      await _saveInt(
+          prefs, 'max_carbs_per_dish_g', _carbsPerDishController.text);
+      await _saveInt(
+          prefs, 'max_protein_per_dish_g', _proteinPerDishController.text);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Настройки диеты сохранены')),
@@ -115,7 +121,8 @@ class _DietScreenState extends ConsumerState<DietScreen> {
     }
   }
 
-  Future<void> _saveInt(SharedPreferences prefs, String key, String text) async {
+  Future<void> _saveInt(
+      SharedPreferences prefs, String key, String text) async {
     final t = text.trim();
     if (t.isEmpty) {
       await prefs.remove(key);
@@ -130,92 +137,102 @@ class _DietScreenState extends ConsumerState<DietScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: const Text('Диета')),
-      body: _loading && _diets.values.every((v) => !v)
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                16 + floatingBottomPadding(context),
-              ),
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Лимиты на одно блюдо', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        _numberField('Макс. калории', 'ккал', _caloriesPerDishController, '500'),
-                        const SizedBox(height: 10),
-                        _numberField('Макс. жиры', 'г', _fatPerDishController, '30'),
-                        const SizedBox(height: 10),
-                        _numberField('Макс. углеводы', 'г', _carbsPerDishController, '50'),
-                        const SizedBox(height: 10),
-                        _numberField('Макс. белки', 'г', _proteinPerDishController, '40'),
-                      ],
-                    ),
-                  ),
+      body: AppGradientBackground(
+        child: _loading && _diets.values.every((v) => !v)
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  16 + floatingBottomPadding(context),
                 ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Дневной лимит калорий', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _calorieController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            hintText: 'Например: 2000',
-                            suffixText: 'ккал',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: Text('Тип диеты', style: theme.textTheme.titleMedium),
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Лимиты на одно блюдо',
+                              style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 12),
+                          _numberField('Макс. калории', 'ккал',
+                              _caloriesPerDishController, '500'),
+                          const SizedBox(height: 10),
+                          _numberField(
+                              'Макс. жиры', 'г', _fatPerDishController, '30'),
+                          const SizedBox(height: 10),
+                          _numberField('Макс. углеводы', 'г',
+                              _carbsPerDishController, '50'),
+                          const SizedBox(height: 10),
+                          _numberField('Макс. белки', 'г',
+                              _proteinPerDishController, '40'),
+                        ],
                       ),
-                      ..._diets.entries.map((e) => SwitchListTile(
-                            title: Text(e.key),
-                            value: e.value,
-                            onChanged: (v) => setState(() => _diets[e.key] = v),
-                          )),
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _loading ? null : _saveSettings,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Сохранить'),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Дневной лимит калорий',
+                              style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _calorieController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              hintText: 'Например: 2000',
+                              suffixText: 'ккал',
+                              isDense: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                          child: Text('Тип диеты',
+                              style: theme.textTheme.titleMedium),
+                        ),
+                        ..._diets.entries.map((e) => SwitchListTile(
+                              title: Text(e.key),
+                              value: e.value,
+                              onChanged: (v) =>
+                                  setState(() => _diets[e.key] = v),
+                            )),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _loading ? null : _saveSettings,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Сохранить'),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
-  Widget _numberField(String label, String suffix, TextEditingController controller, String hint) {
+  Widget _numberField(String label, String suffix,
+      TextEditingController controller, String hint) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
@@ -223,7 +240,6 @@ class _DietScreenState extends ConsumerState<DietScreen> {
         labelText: label,
         hintText: hint,
         suffixText: suffix,
-        border: const OutlineInputBorder(),
         isDense: true,
       ),
     );

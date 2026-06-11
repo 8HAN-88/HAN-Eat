@@ -84,6 +84,7 @@ class MediaService:
             }
         """
         # Валидация типа файла
+        max_size: Optional[int] = None
         if file_type == "image":
             if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_IMAGE_TYPES):
                 raise ValueError(f"Unsupported image type: {content_type}")
@@ -91,18 +92,37 @@ class MediaService:
         elif file_type == "video":
             if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_VIDEO_TYPES):
                 raise ValueError(f"Unsupported video type: {content_type}")
-            max_size = settings.MAX_VIDEO_SIZE_MB * 1024 * 1024
+            if settings.MAX_VIDEO_SIZE_MB > 0:
+                max_size = settings.MAX_VIDEO_SIZE_MB * 1024 * 1024
+        elif file_type == "audio":
+            if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_AUDIO_TYPES):
+                raise ValueError(f"Unsupported audio type: {content_type}")
+            max_size = settings.MAX_AUDIO_SIZE_MB * 1024 * 1024
+        elif file_type == "document":
+            ct = content_type.lower()
+            allowed = settings.ALLOWED_DOCUMENT_TYPES
+            if not any(ext in ct for ext in allowed):
+                raise ValueError(f"Unsupported document type: {content_type}")
+            max_size = settings.MAX_DOCUMENT_SIZE_MB * 1024 * 1024
         else:
-            raise ValueError(f"Invalid file_type: {file_type}. Must be 'image' or 'video'")
+            raise ValueError(
+                f"Invalid file_type: {file_type}. Must be 'image', 'video', 'audio' or 'document'"
+            )
         
-        # Проверка размера
-        if file_size > max_size:
+        if max_size is not None and file_size > max_size:
             raise ValueError(f"File size exceeds maximum: {max_size / (1024*1024):.1f}MB")
         
         # Генерируем уникальный ключ файла
         file_extension = content_type.split('/')[-1]
-        if file_extension not in ['jpeg', 'jpg', 'png', 'webp', 'mp4', 'mov', 'avi']:
-            file_extension = 'jpg' if file_type == 'image' else 'mp4'
+        if file_extension not in ['jpeg', 'jpg', 'png', 'webp', 'mp4', 'mov', 'avi', 'm4a', 'aac', 'mpeg', 'mp3', 'pdf', 'txt', 'doc', 'docx', 'zip']:
+            if file_type == 'image':
+                file_extension = 'jpg'
+            elif file_type == 'audio':
+                file_extension = 'm4a'
+            elif file_type == 'document':
+                file_extension = 'pdf'
+            else:
+                file_extension = 'mp4'
         
         upload_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().strftime("%Y/%m/%d")
@@ -110,7 +130,9 @@ class MediaService:
         
         # S3 не настроен или ключи невалидны — загрузка через API (диск + /uploads/file/…)
         if not self.s3_client:
-            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
+            from app.core.media_urls import public_base_url
+
+            base = public_base_url()
             return {
                 "upload_id": upload_id,
                 "upload_url": f"{base}/api/v1/uploads/mock/{upload_id}",
@@ -143,7 +165,9 @@ class MediaService:
             }
         except ClientError as e:
             logger.warning("presigned URL failed, fallback to API upload: %s", e)
-            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
+            from app.core.media_urls import public_base_url
+
+            base = public_base_url()
             return {
                 "upload_id": upload_id,
                 "upload_url": f"{base}/api/v1/uploads/mock/{upload_id}",
@@ -189,8 +213,10 @@ class MediaService:
             # Mock для локальной разработки
             # Используем локальный URL вместо CDN
             # file_key имеет формат: uploads/user_2/2025/12/10/uuid.jpg
-            base = settings.API_PUBLIC_BASE_URL.rstrip("/")
-            local_url = f"{base}/api/v1/uploads/file/{file_key}"
+            from app.core.media_urls import normalize_media_url, public_base_url
+
+            base = public_base_url()
+            local_url = normalize_media_url(f"{base}/api/v1/uploads/file/{file_key}")
             return {
                 "status": "completed",
                 "url": local_url,
@@ -209,6 +235,14 @@ class MediaService:
         url = f"{self.cdn_url}/{file_key}"
 
         effective_user_id = user_id if user_id is not None else self._user_id_from_file_key(file_key)
+
+        if file_type == "audio":
+            return {
+                "status": "completed",
+                "url": url,
+                "thumbnail_url": None,
+                "processing": False,
+            }
 
         # Для видео запускаем обработку
         if file_type == "video":

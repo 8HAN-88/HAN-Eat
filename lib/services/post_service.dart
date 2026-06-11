@@ -8,7 +8,7 @@ import 'server_config.dart';
 
 class PostService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
+
   /// Создать пост
   static Future<Post> createPost({
     required String type,
@@ -26,7 +26,7 @@ class PostService {
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
+
     final uri = Uri.parse('$baseUrl/posts');
     final response = await http.post(
       uri,
@@ -51,7 +51,7 @@ class PostService {
           },
       }),
     );
-    
+
     if (response.statusCode == 201) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return Post.fromJson(data);
@@ -233,13 +233,14 @@ class PostService {
       fallback: 'Не удалось загрузить список голосов',
     );
   }
-  
+
   /// Создать рецепт в профиле
   static Future<Post> createRecipe({
     required String title,
     String? description,
     required List<String> ingredients,
-    required List<Map<String, dynamic>> steps, // [{number: int, text: String, image_url?: String}]
+    required List<Map<String, dynamic>>
+        steps, // [{number: int, text: String, image_url?: String}]
     List<Map<String, dynamic>>? media, // [{type: 'image'|'video', url: String}]
     int? prepTimeMin,
     int? cookTimeMin,
@@ -252,6 +253,7 @@ class PostService {
     List<String>? tags,
     String? visibility,
     int? channelId,
+    String? originCountryCode,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -259,11 +261,12 @@ class PostService {
     }
 
     final uri = Uri.parse('$baseUrl/posts');
-    
+
     final body = <String, dynamic>{
       'type': 'recipe',
       'title': title,
-      if (description != null && description.isNotEmpty) 'description': description,
+      if (description != null && description.isNotEmpty)
+        'description': description,
       'ingredients': ingredients,
       'steps': steps,
       if (prepTimeMin != null) 'prep_time_min': prepTimeMin,
@@ -278,6 +281,8 @@ class PostService {
       if (media != null && media.isNotEmpty) 'media': media,
       if (visibility != null) 'visibility': visibility,
       if (channelId != null) 'channel_id': channelId,
+      if (originCountryCode != null && originCountryCode.isNotEmpty)
+        'origin_country_code': originCountryCode,
     };
 
     final response = await http.post(
@@ -300,22 +305,22 @@ class PostService {
       fallback: 'Не удалось создать рецепт',
     );
   }
-  
+
   /// Получить пост
   static Future<Post> getPost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
-    
+
     final uri = Uri.parse('$baseUrl/posts/$postId');
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
-    
+
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
     }
-    
+
     final response = await http.get(uri, headers: headers);
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return Post.fromJson(data);
@@ -323,7 +328,7 @@ class PostService {
       throw Exception('Failed to load post');
     }
   }
-  
+
   /// Удалить пост профиля (мягкое удаление на сервере).
   static Future<void> deletePost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
@@ -376,15 +381,16 @@ class PostService {
     String? linkPreview,
     String? pollQuestion,
     List<String>? pollOptions,
+    String? originCountryCode,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
+
     final uri = Uri.parse('$baseUrl/posts/$postId');
     final body = <String, dynamic>{};
-    
+
     if (title != null) body['title'] = title;
     if (description != null) body['description'] = description;
     if (tags != null) body['tags'] = tags;
@@ -408,7 +414,10 @@ class PostService {
         'options': pollOptions,
       };
     }
-    
+    if (originCountryCode != null) {
+      body['origin_country_code'] = originCountryCode;
+    }
+
     final response = await http.put(
       uri,
       headers: {
@@ -417,7 +426,7 @@ class PostService {
       },
       body: jsonEncode(body),
     );
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return Post.fromJson(data);
@@ -443,7 +452,7 @@ class Post {
   final int? communityId;
   final Map<String, dynamic>? body;
   final List<String>? tags;
-  
+
   Post({
     required this.id,
     required this.type,
@@ -456,7 +465,7 @@ class Post {
     this.body,
     this.tags,
   });
-  
+
   factory Post.fromJson(Map<String, dynamic> json) {
     return Post(
       id: json['id'] as int,
@@ -468,9 +477,8 @@ class Post {
       userId: json['user_id'] as int,
       communityId: json['community_id'] as int? ?? json['channel_id'] as int?,
       body: json['body'] as Map<String, dynamic>?,
-      tags: json['tags'] != null
-          ? List<String>.from(json['tags'] as List)
-          : null,
+      tags:
+          json['tags'] != null ? List<String>.from(json['tags'] as List) : null,
     );
   }
 
@@ -492,4 +500,3 @@ class Post {
         'is_liked': false,
       };
 }
-

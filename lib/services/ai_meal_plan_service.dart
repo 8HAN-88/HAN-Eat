@@ -14,12 +14,20 @@ class AiMealPlanService {
   AiMealPlan? get activePlan => _activePlan;
   MealPlanLimits? get limits => _limits;
 
+  AiMealPlan _parseUsablePlan(Map<String, dynamic> json) {
+    final plan = AiMealPlan.fromJson(json);
+    if (plan.days.isEmpty || plan.days.every((day) => day.meals.isEmpty)) {
+      throw StateError('Сервер вернул пустой план питания');
+    }
+    return plan;
+  }
+
   /// Загрузить последний сохранённый план с сервера (если есть).
   Future<AiMealPlan?> loadLatestSaved() async {
     try {
       final json = await ApiService.getLatestMealPlan();
       if (json == null) return null;
-      _activePlan = AiMealPlan.fromJson(json);
+      _activePlan = _parseUsablePlan(json);
       return _activePlan;
     } catch (_) {
       return null;
@@ -41,7 +49,7 @@ class AiMealPlanService {
       preferences: prefs,
       variationSeed: _variationSeed(),
     );
-    _activePlan = AiMealPlan.fromJson(json);
+    _activePlan = _parseUsablePlan(json);
     await ProductAnalytics.logEvent(
       eventType: 'meal_plan_generated',
       metadata: {'duration_days': durationDays},
@@ -69,7 +77,7 @@ class AiMealPlanService {
       preferences: prefs,
       variationSeed: _variationSeed(),
     );
-    _activePlan = AiMealPlan.fromJson(json);
+    _activePlan = _parseUsablePlan(json);
     await ProductAnalytics.logEvent(
       eventType: 'meal_plan_regenerated',
       metadata: {
@@ -96,7 +104,7 @@ class AiMealPlanService {
   Future<AiMealPlan?> loadSavedByPlanId(String planId) async {
     final json = await ApiService.getSavedMealPlanById(planId);
     if (json == null) return null;
-    _activePlan = AiMealPlan.fromJson(json);
+    _activePlan = _parseUsablePlan(json);
     return _activePlan;
   }
 

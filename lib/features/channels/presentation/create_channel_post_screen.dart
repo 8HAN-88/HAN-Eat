@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/app_router.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../core/recipe/recipe_nutrition_input.dart';
 import '../../../widgets/recipe_nutrition_form_section.dart';
 import '../../../widgets/recipe_visibility_selector.dart';
+import '../../../widgets/recipe_origin_country_field.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../services/post_service.dart';
 import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
@@ -96,6 +96,7 @@ class _CreateChannelPostScreenState
   DateTime? _scheduledPublishAt;
   String _recipeVisibility = 'public';
   String? _channelVisibilityMode;
+  String? _originCountryCode;
 
   bool get _isRecipeMode => _selectedPostType == 'recipe';
   bool get _isPollMode => _selectedPostType == 'poll';
@@ -114,7 +115,8 @@ class _CreateChannelPostScreenState
     if (body == null) return '';
     final nut = body['nutrition'];
     if (kind == 'protein') {
-      final v = body['protein_g'] ?? (nut is Map ? nut['protein_g'] ?? nut['protein'] : null);
+      final v = body['protein_g'] ??
+          (nut is Map ? nut['protein_g'] ?? nut['protein'] : null);
       return v == null ? '' : v.toString();
     }
     if (kind == 'carbs') {
@@ -123,11 +125,13 @@ class _CreateChannelPostScreenState
       return v == null ? '' : v.toString();
     }
     if (kind == 'fat') {
-      final v = body['fat_g'] ?? (nut is Map ? nut['fat_g'] ?? nut['fat'] : null);
+      final v =
+          body['fat_g'] ?? (nut is Map ? nut['fat_g'] ?? nut['fat'] : null);
       return v == null ? '' : v.toString();
     }
     if (kind == 'fiber') {
-      final v = body['fiber_g'] ?? (nut is Map ? nut['fiber_g'] ?? nut['fiber'] : null);
+      final v = body['fiber_g'] ??
+          (nut is Map ? nut['fiber_g'] ?? nut['fiber'] : null);
       return v == null ? '' : v.toString();
     }
     return '';
@@ -180,9 +184,9 @@ class _CreateChannelPostScreenState
     try {
       final channel = await ChannelService.getChannel(widget.channelId);
       if (!mounted) return;
-      final hasCreator = ref.read(subscriptionStatusProvider).asData?.value
-              ?.hasCreator ??
-          false;
+      final hasCreator =
+          ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
+              false;
       setState(() {
         _channelAutoPublishReels = channel.autoPublishReels;
         _channelVisibilityMode = channel.recipeVisibilityMode;
@@ -207,7 +211,6 @@ class _CreateChannelPostScreenState
     if (vis == 'private' || vis == 'public') {
       _recipeVisibility = vis!;
     }
-
     final body = postData['body'] as Map<String, dynamic>?;
     if (body != null) {
       // Загружаем ингредиенты
@@ -249,6 +252,10 @@ class _CreateChannelPostScreenState
       _carbsController.text = _nutritionFieldText(body, 'carbs');
       _fatController.text = _nutritionFieldText(body, 'fat');
       _fiberController.text = _nutritionFieldText(body, 'fiber');
+      final rawOrigin = body['origin_country_code'];
+      if (rawOrigin is String && rawOrigin.isNotEmpty) {
+        _originCountryCode = rawOrigin.toUpperCase();
+      }
 
       // Загружаем теги
       final tags = postData['tags'] as List<dynamic>?;
@@ -288,8 +295,7 @@ class _CreateChannelPostScreenState
             _pollOptionControllers.clear();
             for (final item in rawOpts) {
               if (item is Map<String, dynamic>) {
-                _pollTotalVotes +=
-                    (item['votes'] as num?)?.toInt() ?? 0;
+                _pollTotalVotes += (item['votes'] as num?)?.toInt() ?? 0;
                 _pollOptionControllers.add(TextEditingController(
                   text: item['text']?.toString() ?? '',
                 ));
@@ -385,10 +391,9 @@ class _CreateChannelPostScreenState
 
   Widget _buildLinkLivePreviewCard() {
     final meta = _linkPreviewMeta;
-    final title =
-        _linkPreviewController.text.trim().isNotEmpty
-            ? _linkPreviewController.text.trim()
-            : (meta?['title']?.toString());
+    final title = _linkPreviewController.text.trim().isNotEmpty
+        ? _linkPreviewController.text.trim()
+        : (meta?['title']?.toString());
     final description = meta?['description']?.toString();
     final image = meta?['image']?.toString();
     final domain = meta?['domain']?.toString();
@@ -487,11 +492,12 @@ class _CreateChannelPostScreenState
         height: height,
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
+          final scheme = Theme.of(context).colorScheme;
           return Container(
             width: width,
             height: height,
-            color: Colors.grey[300],
-            child: const Icon(Icons.error, color: Colors.red),
+            color: scheme.surfaceContainerHighest,
+            child: Icon(Icons.error_outline, color: scheme.error),
           );
         },
       );
@@ -513,11 +519,12 @@ class _CreateChannelPostScreenState
         height: height,
         fit: fit,
         errorBuilder: (context, error, stackTrace) {
+          final scheme = Theme.of(context).colorScheme;
           return Container(
             width: width,
             height: height,
-            color: Colors.grey[300],
-            child: const Icon(Icons.error, color: Colors.red),
+            color: scheme.surfaceContainerHighest,
+            child: Icon(Icons.error_outline, color: scheme.error),
           );
         },
       );
@@ -594,7 +601,9 @@ class _CreateChannelPostScreenState
       } catch (e2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+            SnackBar(
+                content: Text(userVisibleError(e,
+                    fallback: 'Не удалось выбрать изображение'))),
           );
         }
       }
@@ -605,7 +614,6 @@ class _CreateChannelPostScreenState
     try {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 2),
       );
 
       if (video != null) {
@@ -614,7 +622,9 @@ class _CreateChannelPostScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
         );
       }
     }
@@ -637,7 +647,9 @@ class _CreateChannelPostScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось выбрать обложку'))),
         );
       }
     }
@@ -743,7 +755,9 @@ class _CreateChannelPostScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
@@ -833,7 +847,9 @@ class _CreateChannelPostScreenState
           _videoProcessing = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
         );
       }
     }
@@ -851,9 +867,7 @@ class _CreateChannelPostScreenState
         leading: const Icon(Icons.schedule),
         title: const Text('Время публикации'),
         subtitle: Text(
-          hasCreator
-              ? label
-              : 'Отложенная публикация — тариф Creator или Pro',
+          hasCreator ? label : 'Отложенная публикация — тариф Creator или Pro',
         ),
         trailing: _scheduledPublishAt != null
             ? IconButton(
@@ -863,7 +877,7 @@ class _CreateChannelPostScreenState
             : null,
         onTap: hasCreator
             ? _pickSchedule
-            : () => context.push(SubscriptionRoute.pathWithProduct('creator')),
+            : () => showCreatorRecipeUpsellSheet(context),
       ),
     );
   }
@@ -908,6 +922,27 @@ class _CreateChannelPostScreenState
 
     // Валидация только для рецепта
     // Для обычных постов медиа опционально
+
+    if (_selectedVideo != null &&
+        _sendToReels &&
+        !_isPollMode &&
+        !_isLinkMode &&
+        !_isRecipeMode) {
+      final controller = _videoPreviewController;
+      if (controller != null &&
+          controller.value.isInitialized &&
+          controller.value.duration > const Duration(minutes: 2)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Для публикации в Рилсы видео должно быть не длиннее 2 минут. '
+              'Отключите «В Рилсы» или выберите более короткое видео.',
+            ),
+          ),
+        );
+        return;
+      }
+    }
 
     if (_selectedPostType == 'recipe') {
       // Валидация рецепта
@@ -1145,6 +1180,7 @@ class _CreateChannelPostScreenState
             fiberG: parseDoubleField(_fiberController.text),
             tags: tags.isNotEmpty ? tags : null,
             visibility: _recipeVisibility,
+            originCountryCode: _originCountryCode ?? '',
           );
         } else {
           // Режим создания
@@ -1171,6 +1207,7 @@ class _CreateChannelPostScreenState
             fatG: parseDoubleField(_fatController.text),
             fiberG: parseDoubleField(_fiberController.text),
             tags: tags.isNotEmpty ? tags : null,
+            originCountryCode: _originCountryCode,
           );
         }
       } else {
@@ -1262,8 +1299,7 @@ class _CreateChannelPostScreenState
         );
         if (!isEditing &&
             !scheduled &&
-            (_selectedPostType == 'reel' ||
-                (createdPost?.type == 'reel'))) {
+            (_selectedPostType == 'reel' || (createdPost?.type == 'reel'))) {
           await FeedApiCache.clear('rec_reels');
           notifyReelsFeedRefresh(ref);
         }
@@ -1313,7 +1349,6 @@ class _CreateChannelPostScreenState
       loading: () => false,
       error: (_, __) => false,
     );
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -1365,7 +1400,6 @@ class _CreateChannelPostScreenState
               controller: _titleController,
               decoration: const InputDecoration(
                 labelText: 'Заголовок',
-                border: OutlineInputBorder(),
               ),
               validator: (value) {
                 if (_isPollMode || _isLinkMode) return null;
@@ -1418,7 +1452,6 @@ class _CreateChannelPostScreenState
                 decoration: const InputDecoration(
                   labelText: 'Ссылка',
                   hintText: 'https://example.com',
-                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.url,
                 validator: (value) {
@@ -1431,7 +1464,6 @@ class _CreateChannelPostScreenState
                 controller: _linkPreviewController,
                 decoration: const InputDecoration(
                   labelText: 'Подпись к ссылке (необязательно)',
-                  border: OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -1443,8 +1475,8 @@ class _CreateChannelPostScreenState
             TextFormField(
               controller: _descriptionController,
               decoration: InputDecoration(
-                labelText: _isPollMode ? 'Комментарий (необязательно)' : 'Описание',
-                border: const OutlineInputBorder(),
+                labelText:
+                    _isPollMode ? 'Комментарий (необязательно)' : 'Описание',
               ),
               maxLines: 5,
             ),
@@ -1469,7 +1501,6 @@ class _CreateChannelPostScreenState
               decoration: const InputDecoration(
                 labelText: 'Теги (через запятую)',
                 hintText: 'выпечка, здоровое, завтрак',
-                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 24),
@@ -1540,22 +1571,22 @@ class _CreateChannelPostScreenState
         ),
         const SizedBox(height: 16),
         if (!_isPollMode && !_isLinkMode)
-        // Кнопки для добавления медиа (для всех типов постов кроме опроса)
-        Row(
-          children: [
-            OutlinedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.photo_library),
-              label: const Text('Добавить фото'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _pickVideo,
-              icon: const Icon(Icons.video_library),
-              label: const Text('Добавить видео'),
-            ),
-          ],
-        ),
+          // Кнопки для добавления медиа (для всех типов постов кроме опроса)
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _pickImage,
+                icon: const Icon(Icons.photo_library),
+                label: const Text('Добавить фото'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _pickVideo,
+                icon: const Icon(Icons.video_library),
+                label: const Text('Добавить видео'),
+              ),
+            ],
+          ),
         // Превью выбранных изображений (как в Telegram)
         if (_selectedImages.isNotEmpty)
           Padding(
@@ -1960,6 +1991,11 @@ class _CreateChannelPostScreenState
             ),
           ),
         const SizedBox(height: 24),
+        RecipeOriginCountryField(
+          selectedCode: _originCountryCode,
+          onChanged: (code) => setState(() => _originCountryCode = code),
+        ),
+        const SizedBox(height: 16),
 
         // Ингредиенты
         Row(
@@ -1987,7 +2023,6 @@ class _CreateChannelPostScreenState
                     controller: controller,
                     decoration: InputDecoration(
                       hintText: 'Ингредиент ${index + 1}',
-                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
@@ -2043,7 +2078,6 @@ class _CreateChannelPostScreenState
                   controller: controller,
                   decoration: const InputDecoration(
                     hintText: 'Описание шага',
-                    border: OutlineInputBorder(),
                   ),
                   maxLines: 3,
                 ),
@@ -2092,7 +2126,6 @@ class _CreateChannelPostScreenState
                 controller: _prepTimeController,
                 decoration: const InputDecoration(
                   labelText: 'Время подготовки (мин)',
-                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -2103,7 +2136,6 @@ class _CreateChannelPostScreenState
                 controller: _cookTimeController,
                 decoration: const InputDecoration(
                   labelText: 'Время готовки (мин)',
-                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -2115,7 +2147,6 @@ class _CreateChannelPostScreenState
           controller: _servingsController,
           decoration: const InputDecoration(
             labelText: 'Порций',
-            border: OutlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
         ),

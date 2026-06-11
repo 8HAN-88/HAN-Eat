@@ -109,6 +109,7 @@ class MealPlanBuilderService:
         daily_target = int(
             strategy.get("daily_calorie_target") or preferences.daily_calories or 2000
         )
+        meal_distribution = self._meal_calorie_distribution(strategy)
         start = start_date or date.today()
         planner = self._planner_for(preferences, duration_days, variation_seed=seed)
         used_recipe_titles: Set[str] = set()
@@ -120,6 +121,7 @@ class MealPlanBuilderService:
                 preferences,
                 day_index=di,
                 daily_target=daily_target,
+                meal_distribution=meal_distribution,
                 planner=planner,
                 modifier=modifier,
                 max_cook_time=max_cook_time,
@@ -173,6 +175,7 @@ class MealPlanBuilderService:
         daily_target = int(
             strategy.get("daily_calorie_target") or prefs.daily_calories or 2000
         )
+        meal_distribution = self._meal_calorie_distribution(strategy)
 
         if scope == "plan" or modifier == "refresh":
             fresh = self.generate(
@@ -217,6 +220,7 @@ class MealPlanBuilderService:
                 prefs,
                 day_index=day_index,
                 daily_target=daily_target,
+                meal_distribution=meal_distribution,
                 planner=planner,
                 modifier=modifier,
                 max_cook_time=max_cook,
@@ -252,7 +256,11 @@ class MealPlanBuilderService:
                 meal_type=meal_type,
                 day_index=day_index,
                 meal_index=meal_index,
-                daily_target=daily_target,
+                daily_target=self._meal_calorie_target(
+                    daily_target,
+                    meal_type,
+                    meal_distribution,
+                ),
                 planner=planner,
                 modifier=modifier,
                 max_cook_time=max_cook,
@@ -336,21 +344,26 @@ class MealPlanBuilderService:
         modifier: Optional[str],
         max_cook_time: Optional[int],
         include_recipes: bool,
+        meal_distribution: Optional[Dict[str, float]] = None,
         exclude_titles: Optional[Set[str]] = None,
         used_recipe_titles: Optional[Set[str]] = None,
         rng: Optional[random.Random] = None,
     ) -> List[MealBlock]:
-        per_meal = daily_target // len(MEAL_SLOTS)
         blocks: List[MealBlock] = []
         recipe_used = used_recipe_titles if used_recipe_titles is not None else set()
         for slot_i, meal_type in enumerate(MEAL_SLOTS):
+            meal_target = self._meal_calorie_target(
+                daily_target,
+                meal_type,
+                meal_distribution,
+            )
             blocks.append(
                 self._build_single_meal(
                     preferences,
                     meal_type=meal_type,
                     day_index=day_index,
                     meal_index=slot_i,
-                    daily_target=per_meal,
+                    daily_target=meal_target,
                     planner=planner,
                     modifier=modifier,
                     max_cook_time=max_cook_time,
@@ -361,6 +374,39 @@ class MealPlanBuilderService:
                 )
             )
         return blocks
+
+    @staticmethod
+    def _meal_calorie_distribution(strategy: Dict[str, Any]) -> Dict[str, float]:
+        raw = strategy.get("meal_calorie_distribution")
+        if not isinstance(raw, dict):
+            return {"breakfast": 0.25, "lunch": 0.4, "dinner": 0.35}
+        values: Dict[str, float] = {}
+        for meal_type, fallback in (
+            ("breakfast", 0.25),
+            ("lunch", 0.4),
+            ("dinner", 0.35),
+        ):
+            try:
+                val = float(raw.get(meal_type, fallback))
+            except (TypeError, ValueError):
+                val = fallback
+            if val > 1:
+                val = val / 100
+            values[meal_type] = max(0.05, min(0.8, val))
+        total = sum(values.values())
+        if total <= 0:
+            return {"breakfast": 0.25, "lunch": 0.4, "dinner": 0.35}
+        return {k: v / total for k, v in values.items()}
+
+    @staticmethod
+    def _meal_calorie_target(
+        daily_target: int,
+        meal_type: str,
+        distribution: Optional[Dict[str, float]],
+    ) -> int:
+        dist = distribution or {"breakfast": 0.25, "lunch": 0.4, "dinner": 0.35}
+        ratio = float(dist.get(meal_type) or (1 / len(MEAL_SLOTS)))
+        return max(150, int(round(daily_target * ratio)))
 
     def _build_single_meal(
         self,

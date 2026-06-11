@@ -1,30 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../core/theme/app_tokens.dart';
+
 class RecipeCardSkeleton extends StatelessWidget {
   const RecipeCardSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final base = scheme.surfaceContainerHighest;
+    final highlight = scheme.surfaceContainerLow;
+
     return Card(
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.card),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: AppInsets.card,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Skeleton для изображения
             Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
+              baseColor: base,
+              highlightColor: highlight,
               child: Container(
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  color: scheme.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
               ),
             ),
@@ -35,54 +41,54 @@ class RecipeCardSkeleton extends StatelessWidget {
                 children: [
                   // Skeleton для заголовка
                   Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
+                    baseColor: base,
+                    highlightColor: highlight,
                     child: Container(
                       height: 20,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
+                    baseColor: base,
+                    highlightColor: highlight,
                     child: Container(
                       height: 20,
                       width: 200,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
                   // Skeleton для описания
                   Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
+                    baseColor: base,
+                    highlightColor: highlight,
                     child: Container(
                       height: 14,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                     ),
                   ),
                   const SizedBox(height: 6),
                   Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
+                    baseColor: base,
+                    highlightColor: highlight,
                     child: Container(
                       height: 14,
                       width: 150,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
+                        color: scheme.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.xs),
                       ),
                     ),
                   ),
@@ -91,26 +97,26 @@ class RecipeCardSkeleton extends StatelessWidget {
                   Row(
                     children: [
                       Shimmer.fromColors(
-                        baseColor: Colors.grey[300]!,
-                        highlightColor: Colors.grey[100]!,
+                        baseColor: base,
+                        highlightColor: highlight,
                         child: Container(
                           height: 24,
                           width: 80,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: scheme.surface,
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Shimmer.fromColors(
-                        baseColor: Colors.grey[300]!,
-                        highlightColor: Colors.grey[100]!,
+                        baseColor: base,
+                        highlightColor: highlight,
                         child: Container(
                           height: 24,
                           width: 100,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: scheme.surface,
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
@@ -139,11 +145,10 @@ class ListSkeletonLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: AppInsets.screen,
       itemCount: itemCount,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, __) => const RecipeCardSkeleton(),
     );
   }
 }
-

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Хеш телефона для поиска друзей из адресной книги (общий pepper с клиентом)
+    PHONE_HASH_PEPPER: str = "haneat-phone-v1"
     
     # S3
     S3_BUCKET: str = "haneat-media"
@@ -101,8 +104,21 @@ class Settings(BaseSettings):
     YOOKASSA_SECRET_KEY: str = ""  # Secret Key из личного кабинета ЮKassa
     # sbp — только СБП; any — страница ЮKassa со всеми способами (карты, кошельки)
     YOOKASSA_PAYMENT_METHOD: str = "sbp"
+    # СБП: автопродление (после релиза и подключения рекуррента в ЛК ЮKassa).
+    # До релиза — false: только разовая оплата СБП, продление вручную в приложении.
+    YOOKASSA_SBP_RECURRING_ENABLED: bool = False
+
+    # Т-Банк эквайринг (СБП + рекуррент) — основной провайдер для RU при TBANK_ENABLED=true
+    TBANK_ENABLED: bool = False
+    TBANK_TERMINAL_KEY: str = ""
+    TBANK_PASSWORD: str = ""  # пароль терминала (для подписи Token)
+    TBANK_API_URL: str = "https://securepay.tinkoff.ru/v2"
+    TBANK_SBP_RECURRING_ENABLED: bool = True
     
     FRONTEND_URL: str = "http://localhost:8080"  # URL фронтенда для redirect после оплаты
+
+    # Версия юридических документов (privacy + terms); при смене — повторное согласие
+    LEGAL_DOCUMENT_VERSION: str = "2026-06-03"
 
     # Email-only auth: подтверждение почты, сброс/смена пароля, смена email
     REQUIRE_EMAIL_VERIFICATION: bool = True
@@ -203,9 +219,22 @@ class Settings(BaseSettings):
     
     # Media
     MAX_IMAGE_SIZE_MB: int = 10
-    MAX_VIDEO_SIZE_MB: int = 100
+    # 0 = без лимита (чаты/каналы); nginx client_max_body_size — фактический потолок
+    MAX_VIDEO_SIZE_MB: int = 0
+    MAX_AUDIO_SIZE_MB: int = 5
+    MAX_DOCUMENT_SIZE_MB: int = 25
     ALLOWED_IMAGE_TYPES: List[str] = ["jpeg", "jpg", "png", "webp"]
     ALLOWED_VIDEO_TYPES: List[str] = ["mp4", "mov", "avi"]
+    ALLOWED_AUDIO_TYPES: List[str] = ["m4a", "mp4", "aac", "mpeg", "mp3"]
+    ALLOWED_DOCUMENT_TYPES: List[str] = [
+        "pdf",
+        "txt",
+        "doc",
+        "docx",
+        "zip",
+        "plain",
+        "octet-stream",
+    ]
     
     
     class Config:

@@ -51,6 +51,9 @@ async def create_support_ticket(
         related_entity_type = "subscription"
         related_entity_id = subscription.id
     
+    tier, active = SubscriptionService(db).effective_tier(current_user.id)
+    is_priority = active and tier == "pro"
+
     # Создаем обращение
     ticket = SupportTicket(
         user_id=current_user.id,
@@ -58,6 +61,7 @@ async def create_support_ticket(
         subject=request.subject,
         message=request.message,
         status="open",
+        is_priority=is_priority,
         related_entity_type=related_entity_type,
         related_entity_id=related_entity_id
     )
@@ -71,7 +75,12 @@ async def create_support_ticket(
         "type": ticket.type,
         "status": ticket.status,
         "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
-        "message": "Support ticket created successfully. We will process your request soon."
+        "message": (
+            "Обращение создано. Мы ответим в ближайшее время."
+            if not is_priority
+            else "Приоритетное обращение H.A.N. Pro создано — обработаем в первую очередь."
+        ),
+        "is_priority": is_priority,
     }
 
 
@@ -225,8 +234,16 @@ async def get_all_tickets(
     if type_filter:
         query = query.filter(SupportTicket.type == type_filter)
     
-    tickets = query.order_by(SupportTicket.created_at.desc()).limit(limit).offset(offset).all()
-    
+    tickets = (
+        query.order_by(
+            SupportTicket.is_priority.desc(),
+            SupportTicket.created_at.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
     # Обогащаем данными о пользователях
     user_ids = {t.user_id for t in tickets}
     users = db.query(User).filter(User.id.in_(user_ids)).all()
@@ -246,6 +263,7 @@ async def get_all_tickets(
             "subject": ticket.subject,
             "message": ticket.message,
             "status": ticket.status,
+            "is_priority": bool(getattr(ticket, "is_priority", False)),
             "resolution_comment": ticket.resolution_comment,
             "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
             "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None,

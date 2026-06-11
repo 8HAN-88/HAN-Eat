@@ -62,7 +62,9 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить данные'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось загрузить данные'))),
         );
       }
     }
@@ -114,7 +116,9 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+          SnackBar(
+              content:
+                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     } finally {
@@ -134,11 +138,13 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Канал удалён')),
       );
-      context.go(ChannelsListRoute.path);
+      context.go(ChatsRoute.path);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось удалить канал'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось удалить канал'))),
         );
       }
     } finally {
@@ -204,7 +210,6 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Название канала',
-                      border: OutlineInputBorder(),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -220,7 +225,6 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                     controller: _descriptionController,
                     decoration: const InputDecoration(
                       labelText: 'Описание',
-                      border: OutlineInputBorder(),
                     ),
                     maxLines: 5,
                   ),
@@ -231,7 +235,6 @@ class _ChannelSettingsScreenState extends ConsumerState<ChannelSettingsScreen> {
                     controller: _categoryController,
                     decoration: const InputDecoration(
                       labelText: 'Категория',
-                      border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 16),

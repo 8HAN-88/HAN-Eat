@@ -141,6 +141,17 @@ class AiScanCreditsService:
             "credits_remaining": int(user.scan_credits or 0),
         }
 
+    def refund_reserved_scan(self, user_id: int) -> None:
+        """Return one reserved scan after a technical analysis failure."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return
+        is_plus = self.is_plus(user.id)
+        _, cap, _ = self._caps(is_plus)
+        current = int(user.scan_credits or 0)
+        user.scan_credits = min(cap, current + 1)
+        self.db.commit()
+
 
 def grant_ai_scan_on_subscription(db: Session, user_id: int, product: str) -> None:
     if tier_includes_ai(product):  # type: ignore[arg-type]

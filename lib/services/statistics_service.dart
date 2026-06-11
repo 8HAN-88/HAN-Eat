@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/firebase/lazy_firebase.dart';
 import '../models/post.dart';
 import '../models/community.dart';
 import 'package:flutter/foundation.dart';
@@ -83,7 +84,7 @@ class CommunityStatistics {
 
 /// Сервис для получения статистики
 class StatisticsService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Получить статистику поста
   static Future<PostStatistics> getPostStatistics(String postId) async {

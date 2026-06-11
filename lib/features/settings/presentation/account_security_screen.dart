@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_gradient_background.dart';
 
 class AccountSecurityScreen extends StatefulWidget {
   const AccountSecurityScreen({super.key});
@@ -123,81 +124,81 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     final user = AuthService.instance.currentUser;
     return Scaffold(
       appBar: AppBar(title: const Text('Безопасность аккаунта')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (user != null)
-            ListTile(
-              leading: const Icon(Icons.email_outlined),
-              title: Text(user.email),
-              subtitle: Text(
-                user.emailVerified ? 'Email подтверждён' : 'Email не подтверждён',
+      body: AppGradientBackground(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (user != null)
+              ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: Text(user.email),
+                subtitle: Text(
+                  user.emailVerified
+                      ? 'Email подтверждён'
+                      : 'Email не подтверждён',
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text('Смена пароля',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _currentPasswordController,
+              obscureText: _obscure,
+              decoration: const InputDecoration(
+                labelText: 'Текущий пароль',
               ),
             ),
-          const SizedBox(height: 8),
-          Text('Смена пароля', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _currentPasswordController,
-            obscureText: _obscure,
-            decoration: const InputDecoration(
-              labelText: 'Текущий пароль',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _newPasswordController,
+              obscureText: _obscure,
+              decoration: const InputDecoration(
+                labelText: 'Новый пароль',
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _newPasswordController,
-            obscureText: _obscure,
-            decoration: const InputDecoration(
-              labelText: 'Новый пароль',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _confirmPasswordController,
+              obscureText: _obscure,
+              decoration: const InputDecoration(
+                labelText: 'Повторите новый пароль',
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _confirmPasswordController,
-            obscureText: _obscure,
-            decoration: const InputDecoration(
-              labelText: 'Повторите новый пароль',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: _loading ? null : _changePassword,
+              child: const Text('Сохранить пароль'),
             ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _loading ? null : _changePassword,
-            child: const Text('Сохранить пароль'),
-          ),
-          const Divider(height: 32),
-          Text('Смена email', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          const Text(
-            'На новый адрес придёт письмо с подтверждением. До подтверждения вход остаётся по старому email.',
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _newEmailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Новый email',
-              border: OutlineInputBorder(),
+            const Divider(height: 32),
+            Text('Смена email', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            const Text(
+              'На новый адрес придёт письмо с подтверждением. До подтверждения вход остаётся по старому email.',
             ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _emailPasswordController,
-            obscureText: _obscure,
-            decoration: const InputDecoration(
-              labelText: 'Пароль для подтверждения',
-              border: OutlineInputBorder(),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _newEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Новый email',
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.tonal(
-            onPressed: _loading ? null : _changeEmail,
-            child: const Text('Запросить смену email'),
-          ),
-        ],
+            const SizedBox(height: 8),
+            TextField(
+              controller: _emailPasswordController,
+              obscureText: _obscure,
+              decoration: const InputDecoration(
+                labelText: 'Пароль для подтверждения',
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: _loading ? null : _changeEmail,
+              child: const Text('Запросить смену email'),
+            ),
+          ],
+        ),
       ),
     );
   }

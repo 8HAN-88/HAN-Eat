@@ -5,7 +5,7 @@ import logging
 import re
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -69,8 +69,16 @@ _AUTH_OPEN_PURPOSES = frozenset(
 
 
 def _user_response(user: User) -> UserResponse:
+    from app.services.legal_consent_service import user_legal_fields
+
     data = UserResponse.model_validate(user)
-    return data.model_copy(update={"email_verified": is_email_verified(user)})
+    legal = user_legal_fields(user)
+    return data.model_copy(
+        update={
+            "email_verified": is_email_verified(user),
+            **legal,
+        }
+    )
 
 
 def _auth_response(user: User, access_token: str, refresh_token: str, message: str | None = None) -> AuthResponse:
@@ -162,7 +170,11 @@ async def _resolve_google_claims(id_token: str) -> dict:
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+async def register(
+    request: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """Регистрация нового пользователя"""
     # Проверяем, существует ли пользователь
     existing_user = db.query(User).filter(User.email == request.email).first()
@@ -180,6 +192,18 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already taken"
             )
+
+    if not request.accept_legal:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "LEGAL_CONSENT_REQUIRED",
+                "message": (
+                    "Необходимо принять политику конфиденциальности "
+                    "и пользовательское соглашение"
+                ),
+            },
+        )
     
     # Создаем пользователя (5 стартовых AI scan, база для суточного начисления)
     from datetime import datetime
@@ -194,13 +218,16 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         scan_credits=FREE_START,
         last_scan_credit_at=datetime.utcnow(),
     )
+    from app.services.legal_consent_service import record_consent
+
+    record_consent(user, db)
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    from app.services.ai_scan_credits_service import AiScanCreditsService
+    from app.services.auth_background_tasks import refresh_scan_credits_for_user
 
-    user = AiScanCreditsService(db).refresh_user(user.id)
+    background_tasks.add_task(refresh_scan_credits_for_user, user.id)
 
     # Убеждаемся, что is_private не None
     if user.is_private is None:
@@ -231,7 +258,11 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """Вход пользователя"""
     import logging
     logger = logging.getLogger(__name__)
@@ -279,9 +310,9 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
         logger.info(f"Login successful for user: {user.id} ({request.email})")
 
-        from app.services.ai_scan_credits_service import AiScanCreditsService
+        from app.services.auth_background_tasks import refresh_scan_credits_for_user
 
-        user = AiScanCreditsService(db).refresh_user(user.id)
+        background_tasks.add_task(refresh_scan_credits_for_user, user.id)
 
         # Убеждаемся, что is_private не None (для совместимости со старыми данными)
         if user.is_private is None:
@@ -402,12 +433,22 @@ async def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db))
         # Ищем существующего пользователя по email
         user = db.query(User).filter(User.email == google_email).first()
         
-        if not user:
-            # Создаем нового пользователя
-            # Генерируем случайный пароль (пользователь не будет его использовать)
+        is_new_user = user is None
+        if is_new_user:
+            if not request.accept_legal:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": "LEGAL_CONSENT_REQUIRED",
+                        "message": (
+                            "Для регистрации через Google примите политику "
+                            "конфиденциальности и пользовательское соглашение"
+                        ),
+                    },
+                )
             import secrets
+
             random_password = secrets.token_urlsafe(32)
-            
             user = User(
                 email=google_email,
                 password_hash=get_password_hash(random_password),
@@ -415,6 +456,9 @@ async def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db))
                 username=_generate_unique_username(db, google_email),
             )
             mark_email_verified(user)
+            from app.services.legal_consent_service import record_consent
+
+            record_consent(user, db)
             db.add(user)
             db.commit()
             db.refresh(user)
@@ -430,15 +474,13 @@ async def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db))
                     detail="Account suspended",
                 )
 
-        # Убеждаемся, что is_private не None
         if user.is_private is None:
             user.is_private = False
             db.commit()
-        
-        # Создаем токены
+
         access_token = create_access_token(data={"sub": str(user.id)})
         refresh_token = create_refresh_token(data={"sub": str(user.id)})
-        
+
         if not is_email_verified(user):
             mark_email_verified(user)
             db.commit()
@@ -491,6 +533,17 @@ async def yandex_auth(request: YandexAuthRequest, db: Session = Depends(get_db))
         user = db.query(User).filter(User.email == yandex_email).first()
 
         if not user:
+            if not request.accept_legal:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": "LEGAL_CONSENT_REQUIRED",
+                        "message": (
+                            "Для регистрации через Яндекс примите политику "
+                            "конфиденциальности и пользовательское соглашение"
+                        ),
+                    },
+                )
             random_password = secrets.token_urlsafe(32)
             user = User(
                 email=yandex_email,
@@ -499,6 +552,9 @@ async def yandex_auth(request: YandexAuthRequest, db: Session = Depends(get_db))
                 username=_generate_unique_username(db, yandex_email),
             )
             mark_email_verified(user)
+            from app.services.legal_consent_service import record_consent
+
+            record_consent(user, db)
             db.add(user)
             db.commit()
             db.refresh(user)

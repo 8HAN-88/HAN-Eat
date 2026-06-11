@@ -9,24 +9,24 @@ import 'server_config.dart';
 
 class UserService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
+
   // Singleton instance
   static final UserService instance = UserService._();
   UserService._();
-  
+
   // Кэшированный профиль текущего пользователя
   final ValueNotifier<UserProfile?> profile = ValueNotifier(null);
-  
+
   /// Инициализация сервиса
   static Future<void> init() async {
     // Пока ничего не делаем при инициализации
   }
-  
+
   /// Получить публичный профиль пользователя
   Future<UserProfile> loadPublicProfile(String userId) async {
     return await getProfile(int.tryParse(userId) ?? 0);
   }
-  
+
   /// Загрузить профиль текущего пользователя
   Future<void> ensureProfileLoaded() async {
     final currentUser = AuthService.instance.currentUser;
@@ -38,7 +38,7 @@ class UserService {
       debugPrint('ensureProfileLoaded: $e');
     }
   }
-  
+
   /// Выбрать изображение аватара
   Future<XFile?> pickAvatarImage() async {
     final ImagePicker picker = ImagePicker();
@@ -56,9 +56,10 @@ class UserService {
       return null;
     }
   }
-  
+
   /// Обновить аватар из XFile (загрузка на API через /uploads, затем PATCH avatar_url).
-  Future<void> updateAvatarFromXFile(dynamic xFile, {Function(double)? onProgress}) async {
+  Future<void> updateAvatarFromXFile(dynamic xFile,
+      {Function(double)? onProgress}) async {
     if (AuthService.instance.currentUser == null) {
       throw Exception('Not authenticated');
     }
@@ -79,7 +80,7 @@ class UserService {
     await AuthService.persistUpdatedUser(updated);
     _applyCachedProfileUser(updated);
   }
-  
+
   void _applyCachedProfileUser(User user) {
     final current = profile.value;
     profile.value = UserProfile(
@@ -125,7 +126,7 @@ class UserService {
   Future<void> updateDisplayName(String name) async {
     await updateProfileFields(name: name);
   }
-  
+
   /// Подписан ли текущий пользователь на пользователя с id [userId] (числовой id API).
   Future<bool> isFollowing(String userId) async {
     final id = int.tryParse(userId);
@@ -163,7 +164,8 @@ class UserService {
   }
 
   /// Восстановить поля профиля из экспорта (только свой аккаунт).
-  Future<void> importFromJson(Map<String, dynamic> json, {bool merge = true}) async {
+  Future<void> importFromJson(Map<String, dynamic> json,
+      {bool merge = true}) async {
     final currentUser = AuthService.instance.currentUser;
     if (currentUser == null) {
       throw Exception('Not authenticated');
@@ -210,17 +212,17 @@ class UserService {
     await AuthService.persistUpdatedUser(updated);
     await ensureProfileLoaded();
   }
-  
+
   /// Проверить, инициализирован ли сервис
   static bool get isInitialized => true;
-  
+
   /// Получить профиль пользователя
   static Future<UserProfile> getProfile(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
+
     final uri = Uri.parse('$baseUrl/users/$userId');
     try {
       final response = await http.get(
@@ -235,7 +237,7 @@ class UserService {
           throw Exception('Превышено время ожидания ответа от сервера');
         },
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return UserProfile.fromJson(data);
@@ -246,7 +248,7 @@ class UserService {
       if (kDebugMode) {
         debugPrint('Error in getProfile: $e');
       }
-      if (e.toString().contains('Failed host lookup') || 
+      if (e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
           e.toString().contains('Failed to fetch') ||
           e.toString().contains('Превышено время ожидания')) {
@@ -255,14 +257,14 @@ class UserService {
       rethrow;
     }
   }
-  
+
   /// Подписаться на пользователя
   static Future<void> follow(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
+
     final uri = Uri.parse('$baseUrl/users/$userId/follow');
     try {
       final response = await http.post(
@@ -277,7 +279,7 @@ class UserService {
           throw Exception('Превышено время ожидания ответа от сервера');
         },
       );
-      
+
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception('Failed to follow user');
       }
@@ -285,7 +287,7 @@ class UserService {
       if (kDebugMode) {
         debugPrint('Error in follow: $e');
       }
-      if (e.toString().contains('Failed host lookup') || 
+      if (e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
           e.toString().contains('Failed to fetch') ||
           e.toString().contains('Превышено время ожидания')) {
@@ -294,7 +296,7 @@ class UserService {
       rethrow;
     }
   }
-  
+
   /// Подписаться на пользователя (алиас)
   static Future<void> followUser(String userId) async {
     final id = int.tryParse(userId);
@@ -303,7 +305,7 @@ class UserService {
     }
     return await follow(id);
   }
-  
+
   /// Отписаться от пользователя (алиас)
   static Future<void> unfollowUser(String userId) async {
     final id = int.tryParse(userId);
@@ -312,14 +314,14 @@ class UserService {
     }
     return await unfollow(id);
   }
-  
+
   /// Отписаться от пользователя
   static Future<void> unfollow(int userId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
+
     final uri = Uri.parse('$baseUrl/users/$userId/follow');
     try {
       final response = await http.delete(
@@ -334,7 +336,7 @@ class UserService {
           throw Exception('Превышено время ожидания ответа от сервера');
         },
       );
-      
+
       if (response.statusCode != 200 && response.statusCode != 204) {
         throw Exception('Failed to unfollow user');
       }
@@ -342,7 +344,7 @@ class UserService {
       if (kDebugMode) {
         debugPrint('Error in unfollow: $e');
       }
-      if (e.toString().contains('Failed host lookup') || 
+      if (e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
           e.toString().contains('Failed to fetch') ||
           e.toString().contains('Превышено время ожидания')) {
@@ -351,7 +353,45 @@ class UserService {
       rethrow;
     }
   }
-  
+
+  static Future<UserFollowListResponse> getFollowers(
+    int userId, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return _getFollowList(userId, 'followers', limit: limit, offset: offset);
+  }
+
+  static Future<UserFollowListResponse> getFollowing(
+    int userId, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return _getFollowList(userId, 'following', limit: limit, offset: offset);
+  }
+
+  static Future<UserFollowListResponse> _getFollowList(
+    int userId,
+    String type, {
+    required int limit,
+    required int offset,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/users/$userId/$type?limit=$limit&offset=$offset',
+    );
+    final response = await http.get(uri, headers: await _authHeaders()).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () =>
+              throw Exception('Превышено время ожидания ответа от сервера'),
+        );
+    if (response.statusCode != 200) {
+      throw Exception(
+          _apiErrorMessage(response, 'Не удалось загрузить список'));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return UserFollowListResponse.fromJson(data);
+  }
+
   /// Обновить профиль
   static Future<Map<String, String>> _authHeaders() async {
     final token = await AuthService.getAccessTokenForApi();
@@ -457,32 +497,34 @@ class UserProfile {
   final bool? isFollowing;
   final bool? isFollowedBy;
   final String? uid; // Для совместимости
-  
+
   // Геттеры для совместимости
   String get displayName => user.name;
   String? get avatarUrl => user.avatarUrl;
-  
+
   UserProfile({
     User? user,
     UserStats? stats,
     this.isFollowing,
     this.isFollowedBy,
     this.uid,
-  }) : user = user ?? User(
-          id: int.tryParse(uid ?? '0') ?? 0,
-          email: '',
-          name: '',
-          isPrivate: false,
-          createdAt: DateTime.now(),
-        ),
-        stats = stats ?? UserStats(
-          postsCount: 0,
-          reelsCount: 0,
-          savedCount: 0,
-          followersCount: 0,
-          followingCount: 0,
-        );
-  
+  })  : user = user ??
+            User(
+              id: int.tryParse(uid ?? '0') ?? 0,
+              email: '',
+              name: '',
+              isPrivate: false,
+              createdAt: DateTime.now(),
+            ),
+        stats = stats ??
+            UserStats(
+              postsCount: 0,
+              reelsCount: 0,
+              savedCount: 0,
+              followersCount: 0,
+              followingCount: 0,
+            );
+
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     // Преобразуем данные пользователя из JSON
     final userJson = {
@@ -495,12 +537,60 @@ class UserProfile {
       'is_private': json['is_private'],
       'created_at': json['created_at'],
     };
-    
+
     return UserProfile(
       user: User.fromJson(userJson),
       stats: UserStats.fromJson(json['stats'] as Map<String, dynamic>),
       isFollowing: json['is_following'] as bool?,
       isFollowedBy: json['is_followed_by'] as bool?,
+    );
+  }
+}
+
+class UserFollowListResponse {
+  const UserFollowListResponse({
+    required this.items,
+    required this.total,
+  });
+
+  final List<UserFollowItem> items;
+  final int total;
+
+  factory UserFollowListResponse.fromJson(Map<String, dynamic> json) {
+    final rawItems = json['items'] as List<dynamic>? ?? const [];
+    return UserFollowListResponse(
+      items: rawItems
+          .whereType<Map>()
+          .map((e) => UserFollowItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      total: json['total'] as int? ?? rawItems.length,
+    );
+  }
+}
+
+class UserFollowItem {
+  const UserFollowItem({
+    required this.user,
+    required this.isFollowing,
+  });
+
+  final User user;
+  final bool isFollowing;
+
+  factory UserFollowItem.fromJson(Map<String, dynamic> json) {
+    return UserFollowItem(
+      user: User(
+        id: json['id'] as int,
+        email: json['email'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        username: json['username'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
+        bio: json['bio'] as String?,
+        isPrivate: json['is_private'] as bool? ?? false,
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+      isFollowing: json['is_following'] as bool? ?? false,
     );
   }
 }
@@ -511,7 +601,7 @@ class UserStats {
   final int savedCount;
   final int followersCount;
   final int followingCount;
-  
+
   UserStats({
     required this.postsCount,
     required this.reelsCount,
@@ -519,7 +609,7 @@ class UserStats {
     required this.followersCount,
     required this.followingCount,
   });
-  
+
   factory UserStats.fromJson(Map<String, dynamic> json) {
     return UserStats(
       postsCount: json['posts_count'] as int? ?? 0,

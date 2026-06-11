@@ -14,15 +14,16 @@ import '../../../../services/media_upload_service.dart';
 import '../../../../utils/file_helper.dart';
 import '../../../../widgets/recipe_nutrition_form_section.dart';
 import '../../../../widgets/recipe_visibility_selector.dart';
+import '../../../../widgets/recipe_origin_country_field.dart';
 import '../../../../widgets/telegram_photo_grid.dart';
 import '../../../../widgets/create_poll_form_section.dart';
 import '../../../../utils/url_validator.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({super.key});
-  
+
   static const routeName = '/create-post';
-  
+
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
 }
@@ -31,22 +32,25 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  String _selectedType = 'text'; // По умолчанию обычный пост, рецепт нужно выбрать явно
+  String _selectedType =
+      'text'; // По умолчанию обычный пост, рецепт нужно выбрать явно
   bool _isLoading = false;
   String? _loadingStatus;
   int? _selectedChannelId;
   final List<Channel> _userChannels = [];
   String _recipeVisibility = 'public';
   String? _channelVisibilityMode;
-  
+  String? _originCountryCode;
+
   // Медиа файлы
   final ImagePicker _imagePicker = ImagePicker();
-  final List<XFile> _selectedImages = []; // Список выбранных изображений (как в Telegram)
+  final List<XFile> _selectedImages =
+      []; // Список выбранных изображений (как в Telegram)
   XFile? _selectedVideo;
   double _uploadProgress = 0.0;
   bool _isUploading = false;
   List<String> _uploadedMediaUrls = [];
-  
+
   // Для рецепта
   final List<TextEditingController> _ingredientControllers = [];
   final List<TextEditingController> _stepControllers = [];
@@ -89,7 +93,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _addStepField();
     }
   }
-  
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -119,13 +123,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
     super.dispose();
   }
-  
+
   void _addIngredientField() {
     setState(() {
       _ingredientControllers.add(TextEditingController());
     });
   }
-  
+
   void _removeIngredientField(int index) {
     if (_ingredientControllers.length > 1) {
       setState(() {
@@ -134,14 +138,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       });
     }
   }
-  
+
   void _addStepField() {
     setState(() {
       _stepControllers.add(TextEditingController());
       _stepImages.add(null);
     });
   }
-  
+
   void _removeStepField(int index) {
     if (_stepControllers.length > 1) {
       setState(() {
@@ -151,7 +155,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       });
     }
   }
-  
+
   Future<void> _pickStepImage(int index) async {
     try {
       final XFile? image = await _imagePicker.pickImage(
@@ -160,7 +164,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         maxHeight: 1280,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           _stepImages[index] = image;
@@ -169,14 +173,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
   }
-  
+
   /// Helper метод для отображения изображения (поддержка веб и мобильных)
-  Widget _buildImageWidget(XFile imageFile, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
+  Widget _buildImageWidget(XFile imageFile,
+      {double? width, double? height, BoxFit fit = BoxFit.cover}) {
     if (kIsWeb) {
       return Image.network(
         imageFile.path,
@@ -218,14 +225,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       );
     }
   }
-  
+
   Future<void> _pickImage() async {
     try {
       // Позволяем выбрать несколько изображений (как в Telegram)
       final List<XFile> images = await _imagePicker.pickMultiImage(
         imageQuality: 85,
       );
-      
+
       if (images.isNotEmpty) {
         setState(() {
           // Добавляем новые изображения к существующим (максимум 10)
@@ -245,7 +252,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           maxHeight: 1920,
           imageQuality: 85,
         );
-        
+
         if (image != null) {
           setState(() {
             if (_selectedImages.length < 10) {
@@ -257,20 +264,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       } catch (e2) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+            SnackBar(
+                content: Text(userVisibleError(e,
+                    fallback: 'Не удалось выбрать изображение'))),
           );
         }
       }
     }
   }
-  
+
   Future<void> _pickVideo() async {
     try {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.gallery,
         maxDuration: const Duration(minutes: 2), // Максимум 2 минуты для рилсов
       );
-      
+
       if (video != null) {
         setState(() {
           _selectedVideo = video; // Используем XFile напрямую
@@ -280,12 +289,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось выбрать видео'))),
         );
       }
     }
   }
-  
+
   Future<String?> _uploadImageFile(XFile file) async {
     final response = await MediaUploadService.uploadMediaFile(
       file: file,
@@ -340,15 +351,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Future<void> _uploadMedia() async {
     if (_selectedImages.isEmpty && _selectedVideo == null) return;
-    
+
     setState(() {
       _isUploading = true;
       _uploadProgress = 0.0;
     });
-    
+
     try {
       List<String> urls = [];
-      
+
       // Загружаем все выбранные изображения (как в Telegram)
       for (int i = 0; i < _selectedImages.length; i++) {
         final image = _selectedImages[i];
@@ -357,13 +368,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           fileType: 'image',
           onProgress: (progress) {
             // Обновляем прогресс с учетом количества изображений
-            setState(() => _uploadProgress = (i / _selectedImages.length) + (progress / _selectedImages.length));
+            setState(() => _uploadProgress = (i / _selectedImages.length) +
+                (progress / _selectedImages.length));
           },
         );
         final url = response.url;
         if (url != null && url.isNotEmpty) urls.add(url);
       }
-      
+
       if (_selectedVideo != null) {
         final response = await MediaUploadService.uploadMediaFile(
           file: _selectedVideo!,
@@ -375,7 +387,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         final url = response.url;
         if (url != null && url.isNotEmpty) urls.add(url);
       }
-      
+
       setState(() {
         _uploadedMediaUrls = urls;
         _isUploading = false;
@@ -384,7 +396,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (mounted) {
         setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить медиа'))),
         );
       }
     }
@@ -433,10 +447,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Widget _buildLinkLivePreviewCard() {
     final meta = _linkPreviewMeta;
-    final title =
-        _linkPreviewController.text.trim().isNotEmpty
-            ? _linkPreviewController.text.trim()
-            : (meta?['title']?.toString());
+    final title = _linkPreviewController.text.trim().isNotEmpty
+        ? _linkPreviewController.text.trim()
+        : (meta?['title']?.toString());
     final description = meta?['description']?.toString();
     final image = meta?['image']?.toString();
     final domain = meta?['domain']?.toString();
@@ -523,29 +536,29 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       ),
     );
   }
-  
+
   Future<void> _handlePublish() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     // Валидация только для рецепта
     if (_selectedType == 'recipe') {
       final ingredients = _ingredientControllers
           .map((c) => c.text.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      
+
       if (ingredients.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Добавьте хотя бы один ингредиент')),
         );
         return;
       }
-      
+
       final steps = _stepControllers
           .map((c) => c.text.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      
+
       if (steps.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Добавьте хотя бы один шаг')),
@@ -553,12 +566,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         return;
       }
     }
-    
+
     setState(() {
       _isLoading = true;
       _loadingStatus = 'Публикация…';
     });
-    
+
     try {
       // Сохраняем информацию о видео ДО загрузки
       final wasVideoSelected = _selectedVideo != null;
@@ -607,7 +620,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             .where((s) => s.isNotEmpty)
             .toList();
 
-        final stepImageUrls = List<String?>.filled(_stepControllers.length, null);
+        final stepImageUrls =
+            List<String?>.filled(_stepControllers.length, null);
         final stepUploads = <Future<void>>[];
         for (var i = 0; i < _stepImages.length; i++) {
           final file = _stepImages[i];
@@ -638,8 +652,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             'text': text,
             'step': text,
           };
-          final imageUrl =
-              i < stepImageUrls.length ? stepImageUrls[i] : null;
+          final imageUrl = i < stepImageUrls.length ? stepImageUrls[i] : null;
           if (imageUrl != null && imageUrl.isNotEmpty) {
             stepData['image'] = imageUrl;
             stepData['image_url'] = imageUrl;
@@ -679,6 +692,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           tags: tags.isNotEmpty ? tags : null,
           visibility: _recipeVisibility,
           channelId: _selectedChannelId,
+          originCountryCode: _originCountryCode,
         );
       } else {
         if ((_selectedImages.isNotEmpty || _selectedVideo != null) &&
@@ -689,40 +703,44 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         // Автоматически определяем тип поста на основе загруженного медиа
         String finalType = 'text';
         bool hasVideo = false;
-        
+
         List<Map<String, dynamic>>? media;
         if (_uploadedMediaUrls.isNotEmpty) {
           // Проверяем, есть ли видео в загруженных медиа
           // Используем сохраненную информацию о видео (из области видимости выше)
           hasVideo = wasVideoSelected;
-          
+
           if (hasVideo) {
             finalType = 'reel';
           } else {
             finalType = 'photo';
           }
-          
-          media = _uploadedMediaUrls.map((url) => {
-            'type': hasVideo ? 'video' : 'image',
-            'url': url,
-          }).toList();
+
+          media = _uploadedMediaUrls
+              .map((url) => {
+                    'type': hasVideo ? 'video' : 'image',
+                    'url': url,
+                  })
+              .toList();
         }
-        
+
         final tags = _tagsController.text
             .split(',')
             .map((s) => s.trim())
             .where((s) => s.isNotEmpty)
             .toList();
-        
+
         // Преобразуем media в нужный формат
         List<Map<String, String>>? mediaForPost;
         if (media != null && media.isNotEmpty) {
-          mediaForPost = media.map((item) => {
-            'type': item['type'] as String,
-            'url': item['url'] as String,
-          }).toList();
+          mediaForPost = media
+              .map((item) => {
+                    'type': item['type'] as String,
+                    'url': item['url'] as String,
+                  })
+              .toList();
         }
-        
+
         await PostService.createPost(
           type: finalType,
           title: _titleController.text.trim(),
@@ -732,7 +750,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           tags: tags.isNotEmpty ? tags : null,
         );
       }
-      
+
       if (mounted) {
         Navigator.of(context).pop(true); // Возвращаемся с успехом
         ScaffoldMessenger.of(context).showSnackBar(
@@ -753,7 +771,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось опубликовать'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось опубликовать'))),
         );
       }
     } finally {
@@ -765,7 +785,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -805,7 +825,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 // Выбор типа поста
                 _buildPostTypeSelector(),
                 const SizedBox(height: 24),
-                
+
                 // Заголовок
                 TextFormField(
                   controller: _titleController,
@@ -872,7 +892,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 TextFormField(
                   controller: _descriptionController,
                   decoration: InputDecoration(
-                    labelText: _isPollMode ? 'Комментарий (необязательно)' : 'Описание',
+                    labelText: _isPollMode
+                        ? 'Комментарий (необязательно)'
+                        : 'Описание',
                     hintText: _isPollMode
                         ? 'Дополнительный текст к опросу'
                         : 'Расскажите о вашем посте...',
@@ -889,12 +911,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Контент в зависимости от типа
                 if (_selectedType == 'recipe') _buildRecipeSection(),
-                
+
                 // Кнопки для добавления медиа (не для рецепта и опроса)
-                if (_selectedType != 'recipe' && !_isPollMode && !_isLinkMode) ...[
+                if (_selectedType != 'recipe' &&
+                    !_isPollMode &&
+                    !_isLinkMode) ...[
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -941,7 +965,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             top: 8,
                             right: 8,
                             child: IconButton(
-                              icon: const Icon(Icons.close, color: Colors.white),
+                              icon:
+                                  const Icon(Icons.close, color: Colors.white),
                               style: IconButton.styleFrom(
                                 backgroundColor: Colors.black54,
                               ),
@@ -956,7 +981,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                     ),
                 ],
-                
+
                 // Теги
                 const SizedBox(height: 16),
                 TextFormField(
@@ -1009,10 +1034,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         value: _recipeVisibility,
                         hasCreator: hasCreator,
                         channelMode: _channelVisibilityMode,
-                        onChanged: (v) =>
-                            setState(() => _recipeVisibility = v),
+                        onChanged: (v) => setState(() => _recipeVisibility = v),
                       );
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  RecipeOriginCountryField(
+                    selectedCode: _originCountryCode,
+                    onChanged: (code) =>
+                        setState(() => _originCountryCode = code),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -1072,7 +1102,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       ),
     );
   }
-  
+
   void _setContentType(String type) {
     setState(() {
       if (_selectedType == 'recipe' && type != 'recipe') {
@@ -1128,18 +1158,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
               label: 'Рецепт',
               icon: Icons.restaurant_menu,
               isSelected: _selectedType == 'recipe',
-              onTap: () => _setContentType(_selectedType == 'recipe' ? 'text' : 'recipe'),
+              onTap: () => _setContentType(
+                  _selectedType == 'recipe' ? 'text' : 'recipe'),
             ),
           ],
         ),
       ],
     );
   }
-  
+
   /// Виджет для отображения выбранных изображений (как в Telegram)
   Widget _buildSelectedImagesPreview() {
     if (_selectedImages.isEmpty) return const SizedBox.shrink();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1171,7 +1202,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   top: 4,
                   right: 4,
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                    icon:
+                        const Icon(Icons.close, color: Colors.white, size: 20),
                     style: IconButton.styleFrom(
                       backgroundColor: Colors.black54,
                       padding: const EdgeInsets.all(4),
@@ -1192,7 +1224,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       ],
     );
   }
-  
+
   Widget _buildRecipeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1226,7 +1258,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             ),
           ),
         const SizedBox(height: 24),
-        
+
         // Ингредиенты
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1267,7 +1299,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           );
         }),
         const SizedBox(height: 24),
-        
+
         // Шаги приготовления
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1330,8 +1362,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         top: 4,
                         right: 4,
                         child: IconButton(
-                          icon: const Icon(Icons.close, size: 20, color: Colors.white),
-                          onPressed: () => setState(() => _stepImages[index] = null),
+                          icon: const Icon(Icons.close,
+                              size: 20, color: Colors.white),
+                          onPressed: () =>
+                              setState(() => _stepImages[index] = null),
                         ),
                       ),
                     ],
@@ -1347,7 +1381,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           );
         }),
         const SizedBox(height: 24),
-        
+
         // Дополнительная информация
         Row(
           children: [
@@ -1412,14 +1446,14 @@ class _PostTypeChip extends StatelessWidget {
   final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
-  
+
   const _PostTypeChip({
     required this.label,
     required this.icon,
     required this.isSelected,
     required this.onTap,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return FilterChip(
@@ -1436,4 +1470,3 @@ class _PostTypeChip extends StatelessWidget {
     );
   }
 }
-

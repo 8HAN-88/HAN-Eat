@@ -52,6 +52,8 @@ def _strip_json_fence(content: str) -> str:
 def analyze_food_photo_gpt(
     image_bytes: bytes,
     language: str = "ru",
+    *,
+    priority_fast: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Возвращает dish_name, portion_grams, calories, confidence, nutrition
@@ -64,25 +66,38 @@ def analyze_food_photo_gpt(
     lang_name = _LANG_NAMES.get(language.lower(), "Russian")
     b64 = base64.b64encode(image_bytes).decode("ascii")
     prompt = (
-        f"Food photo. Reply in {lang_name}. JSON only.\n"
-        "Pick ONE most likely dish with a specific stable name "
-        '(e.g. "Маргарита пицца", not "еда" or "блюдо").\n'
-        "Estimate portion_grams (visible serving on the plate). "
-        "calories and nutrition must match THAT portion, not per 100g. "
-        "Round calories to nearest 10.\n"
-        '{"dish_name":"...","portion_grams":number,"calories":number,'
-        '"confidence":0-1,"nutrition":{"protein":g,"fat":g,"carbohydrates":g,'
+        f"You are a careful food-recognition dietitian. Reply in {lang_name}. "
+        "Return JSON only, no markdown.\n"
+        "Analyze the visible serving in the photo, not a generic recipe and not per 100g. "
+        "First infer the most likely dish, visible ingredients, cooking method, and portion size. "
+        "If there are several foods, name the main plate as a combined dish "
+        '(for example "chicken with rice and vegetables"). If the photo is unclear, '
+        "choose the safest broad dish name and lower confidence.\n"
+        "Do not invent hidden ingredients, sauces, oil, sugar, cheese, or drinks unless they are "
+        "visible or strongly implied by the dish. Estimate restaurant-style portions realistically: "
+        "small snack 80-180g, normal single serving 250-450g, large plate 500-800g. "
+        "Calories and macros must be internally consistent with portion_grams and ingredients. "
+        "Use kcal for calories, grams for protein/fat/carbohydrates/fiber/sugar, mg for sodium. "
+        "Round calories to nearest 10, portion_grams to nearest 5, macros to 0.1g. "
+        "Confidence should reflect visual certainty: 0.85+ only when dish and portion are clear; "
+        "0.55-0.75 for likely but uncertain; below 0.55 when blurry/partial.\n"
+        '{"dish_name":"specific stable dish name","portion_grams":number,'
+        '"calories":number,"confidence":0-1,'
+        '"nutrition":{"protein":g,"fat":g,"carbohydrates":g,'
         '"fiber":g or null,"sugar":g or null,"sodium":mg or null}}'
     )
 
     primary = (settings.OPENAI_FOOD_SCAN_MODEL or "gpt-4o-mini").strip()
     models = [primary]
-    if primary != "gpt-4o-mini":
+    if not priority_fast and primary != "gpt-4o-mini":
         models.append("gpt-4o-mini")
+
+    timeout = 14.0 if priority_fast else 22.0
+    image_detail = "low" if priority_fast else "high"
 
     try:
         resp = None
-        with httpx.Client(timeout=22.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             for model in models:
                 resp = client.post(
                     "https://api.openai.com/v1/chat/completions",
@@ -104,7 +119,7 @@ def analyze_food_photo_gpt(
                                         "type": "image_url",
                                         "image_url": {
                                             "url": f"data:image/jpeg;base64,{b64}",
-                                            "detail": "low",
+                                            "detail": image_detail,
                                         },
                                     },
                                 ],

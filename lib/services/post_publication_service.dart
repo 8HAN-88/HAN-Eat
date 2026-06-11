@@ -9,12 +9,13 @@ import 'feed_delivery_service.dart';
 import 'community_management_service.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/firebase/lazy_firebase.dart';
 import 'legacy_firestore_guard.dart';
 
 /// Сервис для публикации постов и рилсов
 class PostPublicationService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static final FirebaseStorage _storage = FirebaseStorage.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
+  static FirebaseStorage get _storage => LazyFirebase.storage;
 
   /// Опубликовать пост
   static Future<String> publishPost({

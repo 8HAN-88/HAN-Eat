@@ -82,6 +82,8 @@ class ChannelService {
     bool? allowLikes,
     bool? allowReposts,
     String? recipeVisibilityMode,
+    Map<String, Map<String, bool>>? rolePermissions,
+    String? accentColor,
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -99,16 +101,16 @@ class ChannelService {
       if (category != null && category.isNotEmpty) 'category': category,
       if (tags != null) 'tags': tags,
       if (rules != null) 'rules': rules,
-      if (autoPublishToFeed != null)
-        'auto_publish_to_feed': autoPublishToFeed,
-      if (autoPublishToMenu != null)
-        'auto_publish_to_menu': autoPublishToMenu,
+      if (autoPublishToFeed != null) 'auto_publish_to_feed': autoPublishToFeed,
+      if (autoPublishToMenu != null) 'auto_publish_to_menu': autoPublishToMenu,
       if (autoPublishReels != null) 'auto_publish_reels': autoPublishReels,
       if (allowComments != null) 'allow_comments': allowComments,
       if (allowLikes != null) 'allow_likes': allowLikes,
       if (allowReposts != null) 'allow_reposts': allowReposts,
       if (recipeVisibilityMode != null)
         'recipe_visibility_mode': recipeVisibilityMode,
+      if (rolePermissions != null) 'role_permissions': rolePermissions,
+      if (accentColor != null) 'accent_color': accentColor,
     };
     final body = jsonEncode(bodyMap);
 
@@ -216,6 +218,39 @@ class ChannelService {
     throw Exception('$msg (${response.statusCode})');
   }
 
+  /// Отметить посты канала просмотренными в inbox.
+  static Future<int> markChannelInboxRead(int channelId) async {
+    var token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final uri = Uri.parse('$baseUrl/channels/$channelId/inbox-read');
+    var response = await http.post(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await http.post(
+        uri,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    }
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['seen_posts_count'] as int? ?? 0;
+    }
+    String msg = 'Ошибка сервера';
+    try {
+      final err = jsonDecode(response.body) as Map<String, dynamic>?;
+      msg = err?['detail']?.toString() ?? msg;
+    } catch (_) {}
+    throw Exception('$msg (${response.statusCode})');
+  }
+
   /// Получить список каналов
   static Future<ChannelsListResponse> listChannels({
     int limit = 20,
@@ -232,6 +267,7 @@ class ChannelService {
     int? maxSubscribers,
     bool? hasRecipes,
     int? minPosts,
+    bool withLastPost = false,
   }) async {
     final queryParams = <String, String>{
       'limit': limit.toString(),
@@ -273,6 +309,9 @@ class ChannelService {
     }
     if (minPosts != null) {
       queryParams['min_posts'] = minPosts.toString();
+    }
+    if (withLastPost) {
+      queryParams['with_last_post'] = 'true';
     }
 
     final uri =
@@ -366,7 +405,8 @@ class ChannelService {
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>?;
     throw Exception(
-      error?['detail'] ?? 'Failed to load join requests: ${response.statusCode}',
+      error?['detail'] ??
+          'Failed to load join requests: ${response.statusCode}',
     );
   }
 
@@ -507,7 +547,7 @@ class ChannelService {
     }
   }
 
-  /// Получить список участников канала
+  /// Получить список подписчиков канала.
   static Future<Map<String, dynamic>> getChannelMembers({
     required int channelId,
     int limit = 50,
@@ -535,7 +575,7 @@ class ChannelService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to load channel members');
+      throw Exception('Не удалось загрузить подписчиков канала');
     }
   }
 
@@ -558,6 +598,7 @@ class ChannelService {
     double? fiberG,
     List<String>? tags,
     String visibility = 'public',
+    String? originCountryCode,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -588,6 +629,8 @@ class ChannelService {
       if (fiberG != null) 'fiber_g': fiberG,
       if (tags != null && tags.isNotEmpty) 'tags': tags,
       if (media != null && media.isNotEmpty) 'media': media,
+      if (originCountryCode != null && originCountryCode.isNotEmpty)
+        'origin_country_code': originCountryCode,
     };
 
     final response = await http.post(
@@ -633,6 +676,7 @@ class ChannelService {
     String? linkPreview,
     String? pollQuestion,
     List<String>? pollOptions,
+    String? originCountryCode,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -669,6 +713,9 @@ class ChannelService {
         'question': pollQuestion,
         'options': pollOptions,
       };
+    }
+    if (originCountryCode != null) {
+      body['origin_country_code'] = originCountryCode;
     }
 
     final response = await http.put(
@@ -779,7 +826,7 @@ class ChannelService {
     );
   }
 
-  /// Обновить роль участника канала
+  /// Обновить роль подписчика канала.
   static Future<void> updateChannelMemberRole({
     required int channelId,
     required int userId,
@@ -790,7 +837,7 @@ class ChannelService {
       throw Exception('Not authenticated');
     }
 
-    final uri = Uri.parse('$baseUrl/channels/$channelId/members/$userId');
+    final uri = Uri.parse('$baseUrl/channels/$channelId/members/$userId/role');
     final response = await http.put(
       uri,
       headers: {
@@ -806,7 +853,7 @@ class ChannelService {
     }
   }
 
-  /// Удалить участника из канала
+  /// Удалить подписчика из канала.
   static Future<CreatorStats> getCreatorStats() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -854,8 +901,7 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final list = data['posts'] as List<dynamic>? ?? [];
       return list
-          .map((e) =>
-              PromotedPostSummary.fromJson(e as Map<String, dynamic>))
+          .map((e) => PromotedPostSummary.fromJson(e as Map<String, dynamic>))
           .toList();
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
@@ -885,8 +931,7 @@ class ChannelService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final list = data['posts'] as List<dynamic>? ?? [];
       return list
-          .map((e) =>
-              ScheduledPostSummary.fromJson(e as Map<String, dynamic>))
+          .map((e) => ScheduledPostSummary.fromJson(e as Map<String, dynamic>))
           .toList();
     }
     final error = jsonDecode(response.body) as Map<String, dynamic>;
@@ -980,6 +1025,54 @@ class ChannelService {
   }
 
   /// Продвижение поста в ленте (Creator / Pro).
+  static Future<Map<String, dynamic>> pinPost(int postId) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+
+    final uri = Uri.parse('$baseUrl/creator/posts/$postId/pin');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>;
+    throw apiExceptionFromResponse(
+      response.statusCode,
+      error,
+      fallback: 'Не удалось закрепить пост',
+    );
+  }
+
+  static Future<Map<String, dynamic>> unpinPost(int postId) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+
+    final uri = Uri.parse('$baseUrl/creator/posts/$postId/pin');
+    final response = await http.delete(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>;
+    throw apiExceptionFromResponse(
+      response.statusCode,
+      error,
+      fallback: 'Не удалось открепить пост',
+    );
+  }
+
   static Future<Map<String, dynamic>> promotePost(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -1062,6 +1155,8 @@ class Channel {
   final String? avatarUrl;
   final int adminUserId;
   final bool isPublic;
+  final bool hasCreatorBadge;
+  final String? accentColor;
   final String? category;
   final int membersCount;
   final int postsCount;
@@ -1069,10 +1164,19 @@ class Channel {
   final bool autoPublishReels;
   final String membershipStatus;
   final int? pendingJoinRequestsCount;
+  final String? lastPostPreview;
+  final DateTime? lastPostAt;
+  final int? seenPostsCount;
 
   bool get isPending => membershipStatus == 'pending';
   bool get isActiveMember => membershipStatus == 'active';
   bool get canLoadPostsPreview => isPublic || isActiveMember;
+
+  int get inboxUnreadPosts {
+    final seen = seenPostsCount ?? 0;
+    final delta = postsCount - seen;
+    return delta > 0 ? delta : 0;
+  }
 
   Channel({
     required this.id,
@@ -1083,6 +1187,8 @@ class Channel {
     this.avatarUrl,
     required this.adminUserId,
     required this.isPublic,
+    this.hasCreatorBadge = false,
+    this.accentColor,
     this.category,
     required this.membersCount,
     required this.postsCount,
@@ -1090,6 +1196,9 @@ class Channel {
     required this.autoPublishReels,
     this.membershipStatus = 'none',
     this.pendingJoinRequestsCount,
+    this.lastPostPreview,
+    this.lastPostAt,
+    this.seenPostsCount,
   });
 
   factory Channel.fromJson(Map<String, dynamic> json) {
@@ -1102,14 +1211,20 @@ class Channel {
       avatarUrl: _resolveChannelMediaUrl(json['avatar_url'] as String?),
       adminUserId: json['admin_user_id'] as int,
       isPublic: json['is_public'] as bool,
+      hasCreatorBadge: json['has_creator_badge'] as bool? ?? false,
+      accentColor: json['accent_color'] as String?,
       category: json['category'] as String?,
       membersCount: json['members_count'] as int,
       postsCount: json['posts_count'] as int,
       createdAt: DateTime.parse(json['created_at'] as String),
       autoPublishReels: json['auto_publish_reels'] as bool? ?? true,
       membershipStatus: json['membership_status'] as String? ?? 'none',
-      pendingJoinRequestsCount:
-          json['pending_join_requests_count'] as int?,
+      pendingJoinRequestsCount: json['pending_join_requests_count'] as int?,
+      lastPostPreview: json['last_post_preview'] as String?,
+      lastPostAt: json['last_post_at'] != null
+          ? DateTime.tryParse(json['last_post_at'] as String)?.toLocal()
+          : null,
+      seenPostsCount: json['seen_posts_count'] as int?,
     );
   }
 }
@@ -1128,6 +1243,8 @@ class ChannelDetail extends Channel {
   final bool? allowComments;
   final bool? allowLikes;
   final bool? allowReposts;
+  final Map<String, Map<String, bool>> rolePermissions;
+
   /// С сервера: включены ли уведомления для текущего пользователя (только если [isMember]).
   final bool? channelNotificationsEnabled;
   final bool canViewPosts;
@@ -1141,6 +1258,8 @@ class ChannelDetail extends Channel {
     super.avatarUrl,
     required super.adminUserId,
     required super.isPublic,
+    super.hasCreatorBadge,
+    super.accentColor,
     super.category,
     required super.membersCount,
     required super.postsCount,
@@ -1161,11 +1280,13 @@ class ChannelDetail extends Channel {
     this.allowComments,
     this.allowLikes,
     this.allowReposts,
+    Map<String, Map<String, bool>>? rolePermissions,
     this.channelNotificationsEnabled,
     this.canViewPosts = true,
-  });
+  }) : rolePermissions = rolePermissions ?? defaultChannelRolePermissions();
 
   factory ChannelDetail.fromJson(Map<String, dynamic> json) {
+    final rolePermissions = _rolePermissionsFromJson(json['role_permissions']);
     return ChannelDetail(
       id: json['id'] as int,
       name: json['name'] as String,
@@ -1175,6 +1296,8 @@ class ChannelDetail extends Channel {
       avatarUrl: _resolveChannelMediaUrl(json['avatar_url'] as String?),
       adminUserId: json['admin_user_id'] as int,
       isPublic: json['is_public'] as bool,
+      hasCreatorBadge: json['has_creator_badge'] as bool? ?? false,
+      accentColor: json['accent_color'] as String?,
       category: json['category'] as String?,
       membersCount: json['members_count'] as int,
       postsCount: json['posts_count'] as int,
@@ -1194,14 +1317,32 @@ class ChannelDetail extends Channel {
       allowComments: json['allow_comments'] as bool?,
       allowLikes: json['allow_likes'] as bool?,
       allowReposts: json['allow_reposts'] as bool?,
+      rolePermissions: rolePermissions,
       channelNotificationsEnabled:
           json['channel_notifications_enabled'] as bool?,
       membershipStatus: json['membership_status'] as String? ?? 'none',
       canViewPosts: json['can_view_posts'] as bool? ?? true,
-      pendingJoinRequestsCount:
-          json['pending_join_requests_count'] as int?,
+      pendingJoinRequestsCount: json['pending_join_requests_count'] as int?,
     );
   }
+
+  bool hasPermission(String permission) {
+    if (isOwner) return true;
+    final role = isAdmin
+        ? 'admin'
+        : isModerator
+            ? 'moderator'
+            : null;
+    if (role == null) return false;
+    return rolePermissions[role]?[permission] ?? false;
+  }
+
+  bool get canManageChannelSettings => hasPermission('manage_channel_settings');
+  bool get canManageSubscribers => hasPermission('manage_subscribers');
+  bool get canManageJoinRequests => hasPermission('manage_join_requests');
+  bool get canCreatePosts => hasPermission('create_posts');
+  bool get canEditAnyPost => hasPermission('edit_any_post');
+  bool get canDeleteAnyPost => hasPermission('delete_any_post');
 
   Map<String, dynamic> toJson() {
     return {
@@ -1231,12 +1372,59 @@ class ChannelDetail extends Channel {
       'allow_comments': allowComments,
       'allow_likes': allowLikes,
       'allow_reposts': allowReposts,
+      'role_permissions': rolePermissions,
       'channel_notifications_enabled': channelNotificationsEnabled,
       'membership_status': membershipStatus,
       'can_view_posts': canViewPosts,
       'pending_join_requests_count': pendingJoinRequestsCount,
     };
   }
+}
+
+const channelPermissionKeys = <String>[
+  'manage_channel_settings',
+  'manage_subscribers',
+  'manage_join_requests',
+  'create_posts',
+  'edit_any_post',
+  'delete_any_post',
+];
+
+Map<String, Map<String, bool>> defaultChannelRolePermissions() {
+  return {
+    'admin': {
+      'manage_channel_settings': true,
+      'manage_subscribers': true,
+      'manage_join_requests': true,
+      'create_posts': true,
+      'edit_any_post': true,
+      'delete_any_post': true,
+    },
+    'moderator': {
+      'manage_channel_settings': false,
+      'manage_subscribers': false,
+      'manage_join_requests': true,
+      'create_posts': true,
+      'edit_any_post': true,
+      'delete_any_post': true,
+    },
+  };
+}
+
+Map<String, Map<String, bool>> _rolePermissionsFromJson(dynamic raw) {
+  final normalized = defaultChannelRolePermissions();
+  if (raw is! Map) return normalized;
+  for (final role in const ['admin', 'moderator']) {
+    final roleRaw = raw[role];
+    if (roleRaw is! Map) continue;
+    for (final key in channelPermissionKeys) {
+      final value = roleRaw[key];
+      if (value is bool) {
+        normalized[role]![key] = value;
+      }
+    }
+  }
+  return normalized;
 }
 
 class ChannelsListResponse {
@@ -1297,7 +1485,8 @@ class PromotedPostSummary {
   });
 
   factory PromotedPostSummary.fromJson(Map<String, dynamic> json) {
-    DateTime? parse(String? s) => s != null ? DateTime.parse(s).toLocal() : null;
+    DateTime? parse(String? s) =>
+        s != null ? DateTime.parse(s).toLocal() : null;
     return PromotedPostSummary(
       id: json['id'] as int,
       title: json['title'] as String?,
@@ -1330,8 +1519,7 @@ class ScheduledPostSummary {
       title: json['title'] as String?,
       type: json['type'] as String? ?? 'text',
       channelId: json['channel_id'] as int?,
-      scheduledPublishAt:
-          raw != null ? DateTime.parse(raw).toLocal() : null,
+      scheduledPublishAt: raw != null ? DateTime.parse(raw).toLocal() : null,
     );
   }
 }

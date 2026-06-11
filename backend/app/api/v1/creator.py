@@ -18,7 +18,9 @@ from app.services.post_publish_service import (
     MAX_PROMOTED_POSTS,
     count_promoted_posts,
     parse_scheduled_at,
+    pin_post,
     promote_post,
+    unpin_post,
     unpromote_post,
 )
 from app.services.subscription_service import SubscriptionService
@@ -126,6 +128,42 @@ async def creator_stats(
         "promoted_limit": MAX_PROMOTED_POSTS,
         "scheduled_count": scheduled,
     }
+
+
+@router.post("/posts/{post_id}/pin", response_model=PostResponse)
+async def pin_creator_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    post = pin_post(db, post_id, current_user.id)
+    AnalyticsService(db).log_event(
+        event_type="creator_post_pinned",
+        entity_type="post",
+        entity_id=post.id,
+        user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(post)
+    return PostResponse.model_validate(post)
+
+
+@router.delete("/posts/{post_id}/pin", response_model=PostResponse)
+async def unpin_creator_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    post = unpin_post(db, post_id, current_user.id)
+    AnalyticsService(db).log_event(
+        event_type="creator_post_unpinned",
+        entity_type="post",
+        entity_id=post.id,
+        user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(post)
+    return PostResponse.model_validate(post)
 
 
 @router.delete("/posts/{post_id}/promote", response_model=PostResponse)

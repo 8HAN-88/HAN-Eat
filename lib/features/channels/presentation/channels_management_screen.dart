@@ -105,7 +105,8 @@ class _ChannelsManagementScreenState
 
       final owned = mineResponse.items;
       final mineIds = owned.map((c) => c.id).toSet();
-      final catalog = catalogResponse.items.where((c) => !mineIds.contains(c.id)).toList();
+      final catalog =
+          catalogResponse.items.where((c) => !mineIds.contains(c.id)).toList();
       setState(() {
         _ownedChannels = owned;
         _catalogChannels = catalog;
@@ -113,7 +114,9 @@ class _ChannelsManagementScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить каналы'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось загрузить каналы'))),
         );
       }
     } finally {
@@ -251,7 +254,8 @@ class _ChannelsManagementScreenState
           ],
           if (_catalogChannels.isNotEmpty) ...[
             Padding(
-              padding: EdgeInsets.fromLTRB(4, _ownedChannels.isNotEmpty ? 8 : 4, 4, 8),
+              padding: EdgeInsets.fromLTRB(
+                  4, _ownedChannels.isNotEmpty ? 8 : 4, 4, 8),
               child: Text(
                 'Каталог',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -362,9 +366,10 @@ class _ChannelsManagementScreenState
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                       child: Text(
                         'Дополнительные фильтры',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                     ),
                     Padding(
@@ -493,7 +498,8 @@ class _ManagementHeader extends StatelessWidget {
         decoration: BoxDecoration(
           color: scheme.surface,
           border: Border(
-            bottom: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
+            bottom:
+                BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.6)),
           ),
         ),
         child: Column(
@@ -545,7 +551,9 @@ class _ManagementHeader extends StatelessWidget {
                     avatar: Icon(
                       opt.icon,
                       size: 18,
-                      color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+                      color: selected
+                          ? scheme.onSecondaryContainer
+                          : scheme.onSurfaceVariant,
                     ),
                     showCheckmark: false,
                     selected: selected,
@@ -620,7 +628,8 @@ class _ManagementHeader extends StatelessWidget {
                     const SizedBox(width: 8),
                     ActionChip(
                       label: const Text('Сбросить'),
-                      avatar: Icon(Icons.filter_alt_off_outlined, size: 18, color: scheme.error),
+                      avatar: Icon(Icons.filter_alt_off_outlined,
+                          size: 18, color: scheme.error),
                       onPressed: onClearFilters,
                     ),
                   ],
@@ -714,14 +723,15 @@ class _ManagementChannelCard extends StatelessWidget {
                           ),
                           _StatChip(
                             icon: Icons.people_outline,
-                            label: '${channel.membersCount} участников',
+                            label: '${channel.membersCount} подписчиков',
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+                Icon(Icons.chevron_right_rounded,
+                    color: scheme.onSurfaceVariant),
               ],
             ),
           ),

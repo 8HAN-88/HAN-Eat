@@ -69,9 +69,10 @@ class FeedLoadHelper {
     return 'Показано из сохранённого кеша';
   }
 
-  /// Сбрасывает просроченную сессию, чтобы роутер отправил на экран входа.
+  /// Сбрасывает сессию только при явном истечении refresh token.
   static Future<void> clearSessionIfExpired(Object e) async {
     if (!isSessionError(e)) return;
+    if (e is! AuthException) return;
     await AuthService.logout();
   }
 }

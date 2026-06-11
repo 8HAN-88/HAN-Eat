@@ -18,6 +18,7 @@ def main() -> int:
     print("=== YooKassa / Payments checklist ===\n")
     print(f"APP_ENV:          {settings.APP_ENV}")
     print(f"YOOKASSA_ENABLED: {settings.YOOKASSA_ENABLED}")
+    print(f"YOOKASSA_PAYMENT_METHOD: {settings.YOOKASSA_PAYMENT_METHOD}")
     print(f"FRONTEND_URL:     {settings.FRONTEND_URL}")
     print(f"API_PUBLIC_BASE:  {settings.API_PUBLIC_BASE_URL}")
     webhook = (
@@ -43,6 +44,11 @@ def main() -> int:
     print("\nРучной чеклист:")
     print("  [ ] Webhook URL зарегистрирован в ЮKassa (HTTPS, не localhost)")
     print("  [ ] 54-ФЗ чеки включены в ЛК, email покупателя передаётся")
+    print("  [ ] СБП включён в ЛК (если YOOKASSA_PAYMENT_METHOD=sbp)")
+    print(
+        "  [ ] YOOKASSA_SBP_RECURRING_ENABLED: false=разовая СБП (до релиза), "
+        "true=автопродление (после рекуррента в ЛК)"
+    )
     print("  [ ] Тестовый платёж → webhook → подписка active в /subscriptions/status")
     return 0
 

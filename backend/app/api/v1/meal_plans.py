@@ -65,6 +65,21 @@ def _persist_plan(
     )
 
 
+def _validate_regeneration_target(body: RegenerateMealPlanRequest) -> None:
+    days = body.plan.get("days")
+    if not isinstance(days, list) or not days:
+        raise HTTPException(status_code=400, detail="Plan has no days to regenerate")
+    if body.day_index < 0 or body.day_index >= len(days):
+        raise HTTPException(status_code=400, detail="day_index is out of range")
+    if body.scope == "meal":
+        day = days[body.day_index]
+        meals = day.get("meals") if isinstance(day, dict) else None
+        if not isinstance(meals, list) or not meals:
+            raise HTTPException(status_code=400, detail="Day has no meals to regenerate")
+        if body.meal_index < 0 or body.meal_index >= len(meals):
+            raise HTTPException(status_code=400, detail="meal_index is out of range")
+
+
 @router.get("/limits", response_model=MealPlanLimitsResponse)
 async def meal_plan_limits(
     current_user: User = Depends(get_current_user_required),
@@ -171,6 +186,7 @@ async def regenerate_meal_plan(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _validate_regeneration_target(body)
     ent = _entitlements(current_user, db)
     try:
         ent.validate_regeneration(body.plan)

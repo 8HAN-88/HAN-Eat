@@ -26,14 +26,12 @@ import '../../../widgets/recipe_network_image.dart';
 import '../../../widgets/skeleton_loader.dart';
 import '../../settings/application/analysis_mode_controller.dart';
 import '../application/menu_recommendations_refresh_provider.dart';
-import '../../settings/application/analysis_mode_controller.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../core/subscription/recipe_translation_access.dart';
 import '../../../app/app_router.dart';
 import '../../subscription/presentation/widgets/nutrition_upsell.dart';
 import '../../../core/subscription/recipe_nutrition_access.dart';
 import '../application/search_controller.dart';
-import '../../../app/app_router.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -119,7 +117,14 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     }
     _imageWarmRecipeIds = ids;
     final urls = recipes
-        .map((r) => r.image ?? r.sourceImage ?? r.videoThumbnail ?? '')
+        .map(
+          (r) =>
+              r.videoThumbnail ??
+              (r.imageUrls.isNotEmpty ? r.imageUrls.first : null) ??
+              r.image ??
+              r.sourceImage ??
+              '',
+        )
         .where((u) => u.isNotEmpty)
         .take(6);
     unawaited(warmRecipeImageCache(urls));
@@ -150,7 +155,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   /// Увеличить при изменении состава полей в `/recommendations` (например author / author_avatar).
-  static const int _kRecommendationsPayloadVersion = 11;
+  static const int _kRecommendationsPayloadVersion = 15;
   static int _appliedRecommendationsPayloadVersion = 0;
   List<Recipe> _favorites = [];
   bool _favoritesLoading = false;
@@ -190,12 +195,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       _cacheTimestamp = _sharedCacheTimestamp;
     }
 
-  _recommendationsFuture = _fetchRecommendationsImmediate(settings);
+    _recommendationsFuture = _fetchRecommendationsImmediate(settings);
 
     // Загружаем избранное параллельно (не блокируем UI)
     _loadFavorites();
     unawaited(ApiService.touchAiScanCreditsSilently());
-
   }
 
   Future<RecommendationsResult> _fetchRecommendationsImmediate(
@@ -514,7 +518,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            userVisibleError(e, fallback: 'Не удалось открыть камеру или галерею'),
+            userVisibleError(e,
+                fallback: 'Не удалось открыть камеру или галерею'),
           ),
           duration: const Duration(seconds: 3),
         ),
@@ -523,7 +528,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   Future<void> _openDetails(Recipe recipe) async {
-    final result = await Navigator.of(context, rootNavigator: true).push<RecipeDetailPopResult>(
+    final result = await Navigator.of(context, rootNavigator: true)
+        .push<RecipeDetailPopResult>(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => DetailPage(
           recipe: recipe,
@@ -603,7 +609,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           decoration: const InputDecoration(
             hintText:
                 'Введите продукты через запятую\nнапример: яйца, мука, молоко',
-            border: OutlineInputBorder(),
           ),
         ),
         actions: [
@@ -639,9 +644,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.7,
         minChildSize: 0.5,
@@ -718,8 +721,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               child: Builder(
                 builder: (context) {
                   try {
+                    final listenable = HistoryStorage.listenable();
+                    if (listenable == null) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
                     return ValueListenableBuilder(
-                      valueListenable: HistoryStorage.listenable(),
+                      valueListenable: listenable,
                       builder: (context, box, _) {
                         final entries = box.values
                             .toList()
@@ -840,7 +847,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       final hadAi = RecipeTranslationAccess.fromSubscription(
         previous?.asData?.value,
       );
-      final hasAi = RecipeTranslationAccess.fromSubscription(next.asData?.value);
+      final hasAi =
+          RecipeTranslationAccess.fromSubscription(next.asData?.value);
       if (!hadAi && hasAi && mounted) {
         unawaited(_refreshRecommendations(settings));
       }
@@ -982,7 +990,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   builder: (context) {
                     try {
                       return ValueListenableBuilder<List<CategoryFilter>>(
-                        valueListenable: CategoryService.instance.filters,
+                        valueListenable: CategoryService.filtersListenable,
                         builder: (context, filters, _) {
                           try {
                             final activeCategories =
@@ -1040,54 +1048,55 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     children: [
                       Text(
                         'Время готовки · для поиска',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
                       ),
                       const SizedBox(height: 6),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                        _TimeFilterChip(
-                          label: 'До 15 мин',
-                          minutes: 15,
-                          selected: _selectedMaxReadyTime == 15,
-                          onTap: () => setState(() {
-                            _selectedMaxReadyTime =
-                                _selectedMaxReadyTime == 15 ? null : 15;
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        _TimeFilterChip(
-                          label: 'До 30 мин',
-                          minutes: 30,
-                          selected: _selectedMaxReadyTime == 30,
-                          onTap: () => setState(() {
-                            _selectedMaxReadyTime =
-                                _selectedMaxReadyTime == 30 ? null : 30;
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        _TimeFilterChip(
-                          label: 'До 60 мин',
-                          minutes: 60,
-                          selected: _selectedMaxReadyTime == 60,
-                          onTap: () => setState(() {
-                            _selectedMaxReadyTime =
-                                _selectedMaxReadyTime == 60 ? null : 60;
-                          }),
-                        ),
-                        if (_selectedMaxReadyTime != null) ...[
-                          const SizedBox(width: 8),
-                          FilterChip(
-                            label: const Text('Сбросить время'),
-                            onSelected: (_) =>
-                                setState(() => _selectedMaxReadyTime = null),
-                          ),
-                        ],
+                            _TimeFilterChip(
+                              label: 'До 15 мин',
+                              minutes: 15,
+                              selected: _selectedMaxReadyTime == 15,
+                              onTap: () => setState(() {
+                                _selectedMaxReadyTime =
+                                    _selectedMaxReadyTime == 15 ? null : 15;
+                              }),
+                            ),
+                            const SizedBox(width: 8),
+                            _TimeFilterChip(
+                              label: 'До 30 мин',
+                              minutes: 30,
+                              selected: _selectedMaxReadyTime == 30,
+                              onTap: () => setState(() {
+                                _selectedMaxReadyTime =
+                                    _selectedMaxReadyTime == 30 ? null : 30;
+                              }),
+                            ),
+                            const SizedBox(width: 8),
+                            _TimeFilterChip(
+                              label: 'До 60 мин',
+                              minutes: 60,
+                              selected: _selectedMaxReadyTime == 60,
+                              onTap: () => setState(() {
+                                _selectedMaxReadyTime =
+                                    _selectedMaxReadyTime == 60 ? null : 60;
+                              }),
+                            ),
+                            if (_selectedMaxReadyTime != null) ...[
+                              const SizedBox(width: 8),
+                              FilterChip(
+                                label: const Text('Сбросить время'),
+                                onSelected: (_) => setState(
+                                    () => _selectedMaxReadyTime = null),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1111,43 +1120,45 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                               label: 'Быстро',
                               tags: 'quick-and-easy',
                               onTap: () => _applyQuickFilter(
-                                'Быстро',
-                                'quick-and-easy',
-                                settings,
-                                canViewNutrition: canViewNutrition,
-                              )),
+                                    'Быстро',
+                                    'quick-and-easy',
+                                    settings,
+                                    canViewNutrition: canViewNutrition,
+                                  )),
                           const SizedBox(width: 8),
                           _QuickFilterChip(
                               label: 'ЗОЖ',
                               tags: 'vegetarian',
                               onTap: () => _applyQuickFilter(
-                                'ЗОЖ',
-                                'vegetarian',
-                                settings,
-                                canViewNutrition: canViewNutrition,
-                              )),
+                                    'ЗОЖ',
+                                    'vegetarian',
+                                    settings,
+                                    canViewNutrition: canViewNutrition,
+                                  )),
                           const SizedBox(width: 8),
                           _QuickFilterChip(
                               label: 'Низкокалорийное',
                               tags: 'low-calorie',
                               isNutritionFilter: true,
+                              nutritionLocked: !canViewNutrition,
                               onTap: () => _applyQuickFilter(
-                                'Низкокалорийное',
-                                'low-calorie',
-                                settings,
-                                canViewNutrition: canViewNutrition,
-                              )),
+                                    'Низкокалорийное',
+                                    'low-calorie',
+                                    settings,
+                                    canViewNutrition: canViewNutrition,
+                                  )),
                           const SizedBox(width: 8),
                           _QuickFilterChip(
                               label: 'Высокий белок',
                               tags: 'high-protein',
                               isNutritionFilter: true,
+                              nutritionLocked: !canViewNutrition,
                               onTap: () => _applyQuickFilter(
-                                'Высокий белок',
-                                'high-protein',
-                                settings,
-                                canViewNutrition: canViewNutrition,
-                              )),
+                                    'Высокий белок',
+                                    'high-protein',
+                                    settings,
+                                    canViewNutrition: canViewNutrition,
+                                  )),
                           const SizedBox(width: 8),
                           _QuickFilterChip(
                             label: 'По ингредиентам',
@@ -1219,10 +1230,13 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     }
 
     if (searchState.recipes.isNotEmpty) {
+      final searchNotice = _searchMetaNotice(searchState);
       return RefreshIndicator(
         onRefresh: () async => _runSearch(),
         child: _RecipesGrid(
           recipes: searchState.recipes,
+          fallbackTitle: 'Лучшие совпадения',
+          topNotice: searchNotice,
           isFavorite: _isFavorite,
           onFavoriteTap: _toggleFavorite,
           onTap: _openDetails,
@@ -1263,6 +1277,77 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     return _buildRecommendations(
       settings,
       showNutritionValues: canViewNutrition,
+    );
+  }
+
+  String? _searchMetaNotice(SearchState state) {
+    if (state.source == 'fallback') {
+      return 'Показаны запасные результаты из HAN Eat, потому что внешний каталог временно недоступен.';
+    }
+    if (state.recipeTranslationRequiresAi) {
+      return 'Оригинальные рецепты показаны без перевода. Перевод названий и ингредиентов доступен в H.A.N. AI.';
+    }
+    if (state.recipeTranslationEnabled) {
+      return 'AI-перевод применён к найденным рецептам.';
+    }
+    return null;
+  }
+
+  SliverPadding _buildRecipeGridSliver({
+    required List<Recipe> recipes,
+    required bool showNutritionValues,
+    required double bottomPadding,
+  }) {
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(
+        _kMenuScreenEdgeGutter,
+        10,
+        _kMenuScreenEdgeGutter,
+        bottomPadding,
+      ),
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: _menuRecipeGridChildAspectRatio(
+            MediaQuery.sizeOf(context).width,
+            imageAspectRatio: _kMenuCardImageAspect,
+            textBlockHeight: _menuRecipeTextBlockHeight(context),
+          ),
+          crossAxisSpacing: _kMenuGridCrossAxisSpacing,
+          mainAxisSpacing: _kMenuGridCrossAxisSpacing,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final recipe = recipes[index];
+            return TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOut,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
+              child: ModernRecipeCard(
+                recipe: recipe,
+                imageAspectRatio: _kMenuCardImageAspect,
+                compact: true,
+                showNutritionValues: showNutritionValues,
+                isFavorite: _isFavorite(recipe.id),
+                onFavoriteTap: () => _toggleFavorite(recipe),
+                onTap: () => _openDetails(recipe),
+                favoritesLoading: _favoritesLoading,
+                showFavoriteButton: _favoritesEnabled,
+              ),
+            );
+          },
+          childCount: recipes.length,
+        ),
+      ),
     );
   }
 
@@ -1425,8 +1510,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: () => context.push(
-                        SubscriptionRoute.pathWithProduct('ai'),
-                      ),
+                      SubscriptionRoute.pathWithProduct('ai'),
+                    ),
                     icon: const Icon(Icons.workspace_premium_outlined),
                     label: const Text('Выбрать тариф'),
                   ),
@@ -1450,6 +1535,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               hasAiSubscription &&
               (!effective.recipeTranslationApiSupported ||
                   !effective.recipeTranslationEnabled);
+
+          final sections = _menuRecipeSections(
+            recipes,
+            fallbackTitle: 'Подобрано для вас',
+          );
 
           return CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -1508,60 +1598,94 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     ),
                   ),
                 ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  _kMenuScreenEdgeGutter,
-                  16,
-                  _kMenuScreenEdgeGutter,
-                  24 + bottomInset,
-                ),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: _menuRecipeGridChildAspectRatio(
-                      MediaQuery.sizeOf(context).width,
-                      imageAspectRatio: _kMenuCardImageAspect,
-                      textBlockHeight: _menuRecipeTextBlockHeight(context),
-                    ),
-                    crossAxisSpacing: _kMenuGridCrossAxisSpacing,
-                    mainAxisSpacing: _kMenuGridCrossAxisSpacing,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final recipe = recipes[index];
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOut,
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 20 * (1 - value)),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: ModernRecipeCard(
-                          recipe: recipe,
-                          imageAspectRatio: _kMenuCardImageAspect,
-                          compact: true,
-                          showNutritionValues: showNutritionValues,
-                          isFavorite: _isFavorite(recipe.id),
-                          onFavoriteTap: () => _toggleFavorite(recipe),
-                          onTap: () => _openDetails(recipe),
-                          favoritesLoading: _favoritesLoading,
-                          showFavoriteButton: _favoritesEnabled,
-                        ),
-                      );
-                    },
-                    childCount: recipes.length,
+              for (var i = 0; i < sections.length; i++) ...[
+                SliverToBoxAdapter(
+                  child: _MenuSectionHeader(
+                    title: sections[i].key,
+                    subtitle: _menuSectionSubtitle(sections[i].key),
                   ),
                 ),
-              ),
+                _buildRecipeGridSliver(
+                  recipes: sections[i].value,
+                  showNutritionValues: showNutritionValues,
+                  bottomPadding:
+                      i == sections.length - 1 ? 24 + bottomInset : 8,
+                ),
+              ],
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+List<MapEntry<String, List<Recipe>>> _menuRecipeSections(
+  List<Recipe> recipes, {
+  required String fallbackTitle,
+}) {
+  final grouped = <String, List<Recipe>>{};
+  for (final recipe in recipes) {
+    final raw = recipe.menuSection?.trim();
+    final key = raw == null || raw.isEmpty ? fallbackTitle : raw;
+    grouped.putIfAbsent(key, () => <Recipe>[]).add(recipe);
+  }
+  return grouped.entries.toList(growable: false);
+}
+
+String _menuSectionSubtitle(String title) {
+  switch (title) {
+    case 'Лучшие совпадения':
+      return 'Сначала рецепты с фото, инструкциями и лучшим совпадением';
+    case 'Из каналов':
+      return 'Рецепты авторов и каналов HAN Eat';
+    case 'От авторов':
+      return 'Публикации пользователей с рецептами';
+    case 'Популярное в HAN Eat':
+      return 'Проверенная локальная база и популярные варианты';
+    case 'Похожие рецепты':
+      return 'Дополнительные варианты из каталога';
+    default:
+      return 'Рецепты с фото, шагами и понятным составом';
+  }
+}
+
+class _MenuSectionHeader extends StatelessWidget {
+  const _MenuSectionHeader({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        _kMenuScreenEdgeGutter,
+        18,
+        _kMenuScreenEdgeGutter,
+        0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1573,13 +1697,11 @@ class _MenuActionCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -1619,26 +1741,6 @@ class _MenuActionCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (badge != null)
-                Positioned(
-                  top: 4,
-                  right: 6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -1675,11 +1777,13 @@ class _QuickFilterChip extends StatelessWidget {
     required this.tags,
     required this.onTap,
     this.isNutritionFilter = false,
+    this.nutritionLocked = false,
   });
   final String label;
   final String tags;
   final VoidCallback onTap;
   final bool isNutritionFilter;
+  final bool nutritionLocked;
 
   @override
   Widget build(BuildContext context) {
@@ -1692,9 +1796,11 @@ class _QuickFilterChip extends StatelessWidget {
           if (isNutritionFilter) ...[
             const SizedBox(width: 4),
             Icon(
-              Icons.workspace_premium_outlined,
+              nutritionLocked ? Icons.lock_outline : Icons.workspace_premium_outlined,
               size: 16,
-              color: scheme.primary,
+              color: nutritionLocked
+                  ? scheme.onSurfaceVariant
+                  : scheme.primary,
             ),
           ],
         ],
@@ -1707,15 +1813,19 @@ class _QuickFilterChip extends StatelessWidget {
 class _RecipesGrid extends StatelessWidget {
   const _RecipesGrid({
     required this.recipes,
+    required this.fallbackTitle,
     required this.isFavorite,
     required this.onFavoriteTap,
     required this.onTap,
+    this.topNotice,
     this.favoritesLoading = false,
     this.showNutritionValues = true,
     this.showFavoriteButton = true,
   });
 
   final List<Recipe> recipes;
+  final String fallbackTitle;
+  final String? topNotice;
   final bool Function(int) isFavorite;
   final Future<void> Function(Recipe) onFavoriteTap;
   final void Function(Recipe) onTap;
@@ -1726,6 +1836,10 @@ class _RecipesGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = floatingBottomPadding(context);
+    final sections = _menuRecipeSections(
+      recipes,
+      fallbackTitle: fallbackTitle,
+    );
     if (recipes.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -1742,53 +1856,94 @@ class _RecipesGrid extends StatelessWidget {
       );
     }
 
-    return GridView.builder(
+    return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(
-        _kMenuScreenEdgeGutter,
-        16,
-        _kMenuScreenEdgeGutter,
-        16 + bottomInset,
-      ),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: _menuRecipeGridChildAspectRatio(
-          MediaQuery.sizeOf(context).width,
-          imageAspectRatio: _kMenuCardImageAspect,
-          textBlockHeight: _menuRecipeTextBlockHeight(context),
-        ),
-        crossAxisSpacing: _kMenuGridCrossAxisSpacing,
-        mainAxisSpacing: _kMenuGridCrossAxisSpacing,
-      ),
-      itemCount: recipes.length,
-      itemBuilder: (context, index) {
-        final recipe = recipes[index];
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOut,
-          builder: (context, value, child) {
-            return Opacity(
-              opacity: value,
-              child: Transform.translate(
-                offset: Offset(0, 20 * (1 - value)),
-                child: child,
+      slivers: [
+        if (topNotice != null && topNotice!.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                _kMenuScreenEdgeGutter,
+                12,
+                _kMenuScreenEdgeGutter,
+                0,
               ),
-            );
-          },
-          child: ModernRecipeCard(
-            recipe: recipe,
-            imageAspectRatio: _kMenuCardImageAspect,
-            compact: true,
-            showNutritionValues: showNutritionValues,
-            isFavorite: isFavorite(recipe.id),
-            onFavoriteTap: () => onFavoriteTap(recipe),
-            onTap: () => onTap(recipe),
-            favoritesLoading: favoritesLoading,
-            showFavoriteButton: showFavoriteButton,
+              child: Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    topNotice!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              ),
+            ),
           ),
-        );
-      },
+        for (var sectionIndex = 0;
+            sectionIndex < sections.length;
+            sectionIndex++) ...[
+          SliverToBoxAdapter(
+            child: _MenuSectionHeader(
+              title: sections[sectionIndex].key,
+              subtitle: _menuSectionSubtitle(sections[sectionIndex].key),
+            ),
+          ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              _kMenuScreenEdgeGutter,
+              10,
+              _kMenuScreenEdgeGutter,
+              sectionIndex == sections.length - 1 ? 16 + bottomInset : 8,
+            ),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: _menuRecipeGridChildAspectRatio(
+                  MediaQuery.sizeOf(context).width,
+                  imageAspectRatio: _kMenuCardImageAspect,
+                  textBlockHeight: _menuRecipeTextBlockHeight(context),
+                ),
+                crossAxisSpacing: _kMenuGridCrossAxisSpacing,
+                mainAxisSpacing: _kMenuGridCrossAxisSpacing,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final recipe = sections[sectionIndex].value[index];
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(0, 20 * (1 - value)),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: ModernRecipeCard(
+                      recipe: recipe,
+                      imageAspectRatio: _kMenuCardImageAspect,
+                      compact: true,
+                      showNutritionValues: showNutritionValues,
+                      isFavorite: isFavorite(recipe.id),
+                      onFavoriteTap: () => onFavoriteTap(recipe),
+                      onTap: () => onTap(recipe),
+                      favoritesLoading: favoritesLoading,
+                      showFavoriteButton: showFavoriteButton,
+                    ),
+                  );
+                },
+                childCount: sections[sectionIndex].value.length,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -11,6 +11,7 @@ import '../../auth/sign_out_helper.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../services/push_notification_service.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../../widgets/legal_consent_checkbox.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -86,7 +87,9 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось загрузить аватар'))),
         );
       }
     } finally {
@@ -132,7 +135,9 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
+          SnackBar(
+              content:
+                  Text(userVisibleError(e, fallback: 'Не удалось обновить'))),
         );
       }
     } finally {
@@ -270,7 +275,6 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                     controller: _nameCtl,
                     decoration: const InputDecoration(
                       hintText: 'Введите ваше имя',
-                      border: OutlineInputBorder(),
                     ),
                     textInputAction: TextInputAction.next,
                   ),
@@ -284,7 +288,6 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                     controller: _bioCtl,
                     decoration: const InputDecoration(
                       hintText: 'Краткое описание профиля',
-                      border: OutlineInputBorder(),
                     ),
                     maxLines: 3,
                     textInputAction: TextInputAction.done,
@@ -360,6 +363,7 @@ class _LoginFormState extends State<_LoginForm> {
   final _emailCtl = TextEditingController();
   final _passCtl = TextEditingController();
   bool _loading = false;
+  bool _legalAccepted = false;
 
   @override
   void dispose() {
@@ -411,7 +415,8 @@ class _LoginFormState extends State<_LoginForm> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось войти'))),
+          SnackBar(
+              content: Text(userVisibleError(e, fallback: 'Не удалось войти'))),
         );
       }
     } finally {
@@ -441,9 +446,25 @@ class _LoginFormState extends State<_LoginForm> {
       }
       return;
     }
+    if (!_legalAccepted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Примите политику конфиденциальности и пользовательское соглашение',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _loading = true);
     try {
-      await AuthService.instance.createUserWithEmail(email, password);
+      await AuthService.instance.createUserWithEmail(
+        email,
+        password,
+        acceptLegal: true,
+      );
       unawaited(
         PushNotificationService.syncTokenAfterAuth().catchError(
           (Object e) => debugPrint('FCM after register: $e'),
@@ -486,9 +507,21 @@ class _LoginFormState extends State<_LoginForm> {
       }
       return;
     }
+    if (!_legalAccepted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Отметьте согласие с политикой и соглашением перед входом через Google',
+            ),
+          ),
+        );
+      }
+      return;
+    }
     setState(() => _loading = true);
     try {
-      await AuthService.instance.signInWithGoogle();
+      await AuthService.instance.signInWithGoogle(acceptLegal: true);
       unawaited(
         PushNotificationService.syncTokenAfterAuth().catchError(
           (Object e) => debugPrint('FCM after Google: $e'),
@@ -504,7 +537,9 @@ class _LoginFormState extends State<_LoginForm> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось войти через Google'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось войти через Google'))),
         );
       }
     } finally {
@@ -530,7 +565,6 @@ class _LoginFormState extends State<_LoginForm> {
             controller: _emailCtl,
             decoration: const InputDecoration(
               labelText: 'Эл. почта',
-              border: OutlineInputBorder(),
             ),
             keyboardType: TextInputType.emailAddress,
           ),
@@ -539,7 +573,6 @@ class _LoginFormState extends State<_LoginForm> {
             controller: _passCtl,
             decoration: const InputDecoration(
               labelText: 'Пароль',
-              border: OutlineInputBorder(),
             ),
             obscureText: true,
           ),
@@ -553,6 +586,13 @@ class _LoginFormState extends State<_LoginForm> {
                       ),
               child: const Text('Забыли пароль?'),
             ),
+          ),
+          const SizedBox(height: 8),
+          LegalConsentCheckbox(
+            value: _legalAccepted,
+            onChanged: _loading
+                ? null
+                : (v) => setState(() => _legalAccepted = v ?? false),
           ),
           const SizedBox(height: 8),
           if (_loading)
@@ -569,9 +609,8 @@ class _LoginFormState extends State<_LoginForm> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: _loading
-                    ? null
-                    : () => context.push(RegisterRoute.path),
+                onPressed:
+                    _loading ? null : () => context.push(RegisterRoute.path),
                 child: const Text('Зарегистрироваться'),
               ),
             ),

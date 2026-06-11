@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/server_connecting_hint.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key, this.initialToken});
@@ -64,75 +66,81 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Новый пароль')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Вставьте токен из письма (или откройте ссылку из письма на этом устройстве).',
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _tokenController,
-                  decoration: const InputDecoration(
-                    labelText: 'Код из письма',
-                    border: OutlineInputBorder(),
+      body: AppGradientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Вставьте токен из письма (или откройте ссылку из письма на этом устройстве).',
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().length < 16) ? 'Вставьте код' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscure,
-                  decoration: InputDecoration(
-                    labelText: 'Новый пароль',
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                      ),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _tokenController,
+                    decoration: const InputDecoration(
+                      labelText: 'Код из письма',
                     ),
+                    validator: (v) => (v == null || v.trim().length < 16)
+                        ? 'Вставьте код'
+                        : null,
                   ),
-                  validator: (v) {
-                    if (v == null || v.length < 8) {
-                      return 'Минимум 8 символов';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _confirmController,
-                  obscureText: _obscure,
-                  decoration: const InputDecoration(
-                    labelText: 'Повторите пароль',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Новый пароль',
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.length < 8) {
+                        return 'Минимум 8 символов';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (v) {
-                    if (v != _passwordController.text) {
-                      return 'Пароли не совпадают';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _loading ? null : _submit,
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Сохранить пароль'),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _confirmController,
+                    obscureText: _obscure,
+                    decoration: const InputDecoration(
+                      labelText: 'Повторите пароль',
+                    ),
+                    validator: (v) {
+                      if (v != _passwordController.text) {
+                        return 'Пароли не совпадают';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _loading ? null : _submit,
+                    child: _loading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Сохранить пароль'),
+                  ),
+                  if (_loading) ...[
+                    const SizedBox(height: 12),
+                    const ServerConnectingHint(),
+                  ],
+                ],
+              ),
             ),
           ),
         ),

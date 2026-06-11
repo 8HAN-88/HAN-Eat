@@ -171,14 +171,19 @@ class _ChannelPostsScreenState extends ConsumerState<ChannelPostsScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (_channel!.isOwner || _channel!.isAdmin) ...[
+          if (_channel!.canCreatePosts) ...[
             FloatingActionButton(
               heroTag: 'channel_posts_create',
-              onPressed: () => showChannelCreateContentSheet(
-                context,
-                channelId: widget.channelId,
-                channelName: _channel?.name,
-              ),
+              onPressed: () async {
+                final created = await showChannelCreateContentSheet(
+                  context,
+                  channelId: widget.channelId,
+                  channelName: _channel?.name,
+                );
+                if (created && mounted) {
+                  await _loadChannel();
+                }
+              },
               tooltip: 'Создать',
               child: const Icon(Icons.add),
             ),
@@ -232,7 +237,9 @@ class _ChannelPostsScreenState extends ConsumerState<ChannelPostsScreen> {
         onShare: _shareChannel,
         onCopyLink: _copyChannelLink,
         onSearch: () => _openSearch(rootContext),
-        onManage: (_channel!.isOwner || _channel!.isAdmin)
+        onManage: (_channel!.canManageChannelSettings ||
+                _channel!.canManageSubscribers ||
+                _channel!.canManageJoinRequests)
             ? () {
                 Navigator.of(sheetContext).pop();
                 rootContext
@@ -387,7 +394,8 @@ class _ChannelPostsListState extends State<_ChannelPostsList>
         if (refresh) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(userVisibleError(e, fallback: 'Не удалось загрузить посты')),
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось загрузить посты')),
               duration: const Duration(seconds: 3),
             ),
           );
@@ -424,7 +432,8 @@ class _ChannelPostsListState extends State<_ChannelPostsList>
         },
       );
 
-      if (mounted && response.posts.isNotEmpty) {
+      if (!mounted) return;
+      if (response.posts.isNotEmpty) {
         setState(() {
           // При reverse: true, элементы массива отображаются в обратном порядке
           // Чтобы старые посты отображались вверху, добавляем их в конец массива
@@ -442,7 +451,9 @@ class _ChannelPostsListState extends State<_ChannelPostsList>
       }
     } catch (e) {
       debugPrint('Ошибка загрузки старых постов: $e');
-      setState(() => _hasMoreOld = false);
+      if (mounted) {
+        setState(() => _hasMoreOld = false);
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

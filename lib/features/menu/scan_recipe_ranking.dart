@@ -28,10 +28,8 @@ class ScanRecipeRanking {
   static String _norm(String value) =>
       value.toLowerCase().replaceAll(RegExp(r'[_\-]+'), ' ').trim();
 
-  static List<String> _words(String value) => _norm(value)
-      .split(RegExp(r'\s+'))
-      .where((w) => w.length >= 3)
-      .toList();
+  static List<String> _words(String value) =>
+      _norm(value).split(RegExp(r'\s+')).where((w) => w.length >= 3).toList();
 
   /// Совпадение названия блюда с рецептом (для фильтра «похожих»).
   static bool recipeMatchesDish(Recipe recipe, String dishLabel) {
@@ -105,9 +103,8 @@ class ScanRecipeRanking {
       return local.take(8).toList();
     }
 
-    final relevantSpoon = spoonacular
-        .where((r) => recipeMatchesDish(r, label))
-        .toList();
+    final relevantSpoon =
+        spoonacular.where((r) => recipeMatchesDish(r, label)).toList();
     if (relevantSpoon.isNotEmpty) return relevantSpoon.take(10).toList();
 
     if (label.isNotEmpty && spoonacular.isNotEmpty) {
@@ -165,5 +162,4 @@ class ScanRecipeRanking {
     if (n != null && n.isNotEmpty) return n;
     return null;
   }
-
 }

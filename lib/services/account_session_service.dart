@@ -5,6 +5,7 @@ import 'favorites_service.dart';
 import 'ai_meal_plan_service.dart';
 import 'meal_plan_service.dart';
 import 'saved_posts_service.dart';
+import 'subscription_status_cache.dart';
 import 'user_service.dart';
 
 /// Единая точка смены аккаунта: очистка кэшей и сигнал UI пересобраться.
@@ -52,12 +53,19 @@ class AccountSessionService {
         if (kDebugMode) debugPrint('AccountSession: saved posts clear: $e');
       }
       try {
-        await FavoritesService.instance.clearLocalSession();
+        await SubscriptionStatusCache.clear();
+      } catch (e) {
+        if (kDebugMode) debugPrint('AccountSession: subscription cache clear: $e');
+      }
+      try {
+        final fav = await FavoritesService.ensureInitialized();
+        await fav.clearLocalSession();
       } catch (e) {
         if (kDebugMode) debugPrint('AccountSession: favorites clear: $e');
       }
       try {
-        await MealPlanService.instance.clearAllPlans();
+        final mealPlan = await MealPlanService.ensureInitialized();
+        await mealPlan.clearAllPlans();
       } catch (e) {
         if (kDebugMode) debugPrint('AccountSession: meal plan clear: $e');
       }

@@ -70,6 +70,13 @@ async def save_post(
     )
     
     db.commit()
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
     
     return {"saved": True, "message": "Post saved successfully"}
 
@@ -94,6 +101,13 @@ async def unsave_post(
     
     db.delete(saved_post)
     db.commit()
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(current_user.id)
+    except Exception:
+        pass
     
     return {"saved": False, "message": "Post unsaved successfully"}
 
@@ -120,7 +134,19 @@ async def save_spoonacular_recipe(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
-    """Сохранить рецепт Spoonacular"""
+    """Сохранить рецепт Spoonacular (офлайн-доступ — тариф H.A.N. AI / Pro)."""
+    from app.core.entitlements import HAN_AI_REQUIRED_CODE
+    from app.services.subscription_service import SubscriptionService
+
+    if not SubscriptionService(db).has_ai_access(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_AI_REQUIRED_CODE,
+                "message": "Сохранение рецептов для офлайн доступно с подпиской H.A.N. AI или Pro",
+            },
+        )
+
     # Проверяем, не сохранен ли уже
     existing = db.query(SavedPost).filter(
         SavedPost.user_id == current_user.id,

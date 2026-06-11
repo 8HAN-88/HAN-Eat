@@ -9,6 +9,10 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=8)
     name: str = Field(..., min_length=1, max_length=255)
     username: str | None = Field(None, max_length=100)
+    accept_legal: bool = Field(
+        ...,
+        description="Согласие с политикой конфиденциальности и пользовательским соглашением",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -60,11 +64,20 @@ class RefreshTokenRequest(BaseModel):
 
 class GoogleAuthRequest(BaseModel):
     id_token: str
+    accept_legal: bool = False
 
 
 class YandexAuthRequest(BaseModel):
     code: str
     redirect_uri: str
+    accept_legal: bool = False
+
+
+class LegalAcceptRequest(BaseModel):
+    accept_legal: bool = Field(
+        ...,
+        description="Подтверждение актуальной версии privacy + terms",
+    )
 
 
 from app.schemas.user import UserResponse

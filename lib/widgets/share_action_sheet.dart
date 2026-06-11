@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
 import '../models/post_model.dart';
 import '../models/recipe.dart';
@@ -32,9 +33,7 @@ class ShareActionSheet {
     final link = ShareLinkService.postLink(post.id);
     await showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (ctx) => _PostShareSheet(
         post: post,
         link: link,
@@ -51,9 +50,7 @@ class ShareActionSheet {
     final link = ShareLinkService.reelLink(reel.id);
     await showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (ctx) => _PostShareSheet(
         post: reel,
         link: link,
@@ -70,9 +67,7 @@ class ShareActionSheet {
     final text = ShareLinkService.recipeShareText(recipe);
     await showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -180,9 +175,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
 
       final picked = await showModalBottomSheet<Channel>(
         context: this.context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
+        showDragHandle: true,
         builder: (ctx) => SafeArea(
           child: ListView(
             shrinkWrap: true,
@@ -196,8 +189,11 @@ class _PostShareSheetState extends State<_PostShareSheet> {
               for (final c in channels)
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: c.avatarUrl != null ? NetworkImage(c.avatarUrl!) : null,
-                    child: c.avatarUrl == null ? Text(c.name.isNotEmpty ? c.name[0] : '?') : null,
+                    backgroundImage:
+                        c.avatarUrl != null ? NetworkImage(c.avatarUrl!) : null,
+                    child: c.avatarUrl == null
+                        ? Text(c.name.isNotEmpty ? c.name[0] : '?')
+                        : null,
                   ),
                   title: Text(c.name),
                   onTap: () => Navigator.pop(ctx, c),
@@ -224,12 +220,15 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text('Репост опубликован в канале «${picked.name}».')),
+        SnackBar(
+            content: Text('Репост опубликован в канале «${picked.name}».')),
       );
     } on ApiClientException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(this.context).showSnackBar(
-        SnackBar(content: Text(userVisibleAuthError(e, fallback: 'Не удалось опубликовать репост'))),
+        SnackBar(
+            content: Text(userVisibleAuthError(e,
+                fallback: 'Не удалось опубликовать репост'))),
       );
     } catch (e) {
       if (!mounted) return;
@@ -299,7 +298,8 @@ class _ChannelRepostCommentDialog extends StatefulWidget {
       _ChannelRepostCommentDialogState();
 }
 
-class _ChannelRepostCommentDialogState extends State<_ChannelRepostCommentDialog> {
+class _ChannelRepostCommentDialogState
+    extends State<_ChannelRepostCommentDialog> {
   final _controller = TextEditingController();
 
   @override
@@ -315,10 +315,12 @@ class _ChannelRepostCommentDialogState extends State<_ChannelRepostCommentDialog
       content: SingleChildScrollView(
         child: TextField(
           controller: _controller,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Комментарий (опционально)',
             hintText: 'Добавьте текст к репосту…',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.input),
+            ),
           ),
           maxLines: 4,
           autofocus: true,

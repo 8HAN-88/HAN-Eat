@@ -35,6 +35,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   int _offset = 0;
   int? _currentUserId;
   bool _isOffline = false;
+  bool _loadedFromCache = false;
   late TabController _tabController;
   String? _currentPostType; // null = все, 'post' = посты, 'reel' = рилсы
   
@@ -89,13 +90,17 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   }
   
   Future<void> _syncWithServer() async {
-    try {
-      await SavedPostsService.syncWithServer();
-      if (mounted) {
-        _loadPosts(refresh: true);
-      }
-    } catch (e) {
-      debugPrint('Failed to sync saved posts: $e');
+    final result = await SavedPostsService.syncWithServer();
+    if (!mounted) return;
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сохранённые синхронизированы')),
+      );
+      _loadPosts(refresh: true);
+    } else if (result.message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message!)),
+      );
     }
   }
   
@@ -153,6 +158,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
         _offset = _posts.length;
         _hasMore = _posts.length < response.total;
         _loadError = null;
+        _loadedFromCache = SavedPostsService.lastLoadFromCache;
       });
     } catch (e) {
       if (mounted) {
@@ -255,6 +261,25 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
 
     final content = Column(
       children: [
+        if (_isOffline || _loadedFromCache)
+          MaterialBanner(
+            content: Text(
+              _isOffline
+                  ? 'Офлайн — показаны сохранённые на устройстве рецепты и посты'
+                  : 'Показаны данные с устройства — потяните вниз для обновления',
+            ),
+            leading: Icon(
+              _isOffline ? Icons.cloud_off : Icons.cloud_download_outlined,
+              color: Colors.orange,
+            ),
+            actions: [
+              if (!_isOffline)
+                TextButton(
+                  onPressed: _syncWithServer,
+                  child: const Text('Синхронизировать'),
+                ),
+            ],
+          ),
         if (widget.embedded)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
@@ -262,7 +287,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
               children: [
                 const Expanded(
                   child: Text(
-                    'Избранное',
+                    'Сохранённые',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -304,7 +329,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Избранное'),
+        title: const Text('Сохранённые'),
         actions: [
           if (_isOffline)
             const Padding(

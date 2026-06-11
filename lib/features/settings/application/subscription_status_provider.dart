@@ -2,18 +2,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/subscription/recipe_nutrition_access.dart';
 import '../../../services/subscription_service.dart';
+import '../../../services/subscription_status_cache.dart';
 
 /// Счётчик для принудительного обновления [subscriptionStatusProvider].
 final subscriptionStatusRefreshProvider = StateProvider<int>((ref) => 0);
+
+/// true — последний запрос статуса не удался, показан кэш.
+final subscriptionStatusFromCacheProvider = StateProvider<bool>((ref) => false);
 
 /// Статус подписки с бэкенда (кэш через FutureProvider + ручной refresh).
 final subscriptionStatusProvider =
     FutureProvider<SubscriptionStatusResponse?>((ref) async {
   ref.watch(subscriptionStatusRefreshProvider);
   try {
-    return await SubscriptionService.getSubscriptionStatus();
+    final status = await SubscriptionService.getSubscriptionStatus();
+    await SubscriptionStatusCache.save(status);
+    ref.read(subscriptionStatusFromCacheProvider.notifier).state = false;
+    return status;
   } catch (_) {
-    return null;
+    final cached = await SubscriptionStatusCache.load();
+    ref.read(subscriptionStatusFromCacheProvider.notifier).state =
+        cached != null;
+    return cached;
   }
 });
 
@@ -26,6 +36,33 @@ final canViewRecipeNutritionProvider = Provider<bool>((ref) {
   final status = ref.watch(subscriptionStatusProvider);
   return status.when(
     data: RecipeNutritionAccess.fromSubscription,
+    loading: () => false,
+    error: (_, __) => false,
+  );
+});
+
+final hasProSubscriptionProvider = Provider<bool>((ref) {
+  final status = ref.watch(subscriptionStatusProvider);
+  return status.when(
+    data: (s) => s?.hasPro ?? false,
+    loading: () => false,
+    error: (_, __) => false,
+  );
+});
+
+final canSaveRecipesOfflineProvider = Provider<bool>((ref) {
+  final status = ref.watch(subscriptionStatusProvider);
+  return status.when(
+    data: (s) => (s?.hasAi ?? false) || (s?.isPlus ?? false),
+    loading: () => false,
+    error: (_, __) => false,
+  );
+});
+
+final hasFamilyMealPlanProvider = Provider<bool>((ref) {
+  final status = ref.watch(subscriptionStatusProvider);
+  return status.when(
+    data: (s) => s?.hasPro ?? false,
     loading: () => false,
     error: (_, __) => false,
   );

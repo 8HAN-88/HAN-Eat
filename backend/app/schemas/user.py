@@ -1,7 +1,7 @@
 """
 Pydantic схемы для пользователей
 """
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
 from typing import Optional, Any
 
@@ -21,6 +21,10 @@ class UserResponse(BaseModel):
     is_moderator: bool = False
     trust_score: Optional[float] = None
     email_verified: bool = False
+    legal_consent_required: bool = True
+    legal_consent_version: Optional[str] = None
+    legal_consent_at: Optional[datetime] = None
+    phone_linked: bool = False
 
     @model_validator(mode="wrap")
     @classmethod
@@ -28,8 +32,14 @@ class UserResponse(BaseModel):
         if hasattr(data, "email_verified_at"):
             result = handler(data)
             verified = getattr(data, "email_verified_at", None) is not None
+            linked = bool(getattr(data, "phone_hash", None))
+            updates = {}
             if result.email_verified != verified:
-                return result.model_copy(update={"email_verified": verified})
+                updates["email_verified"] = verified
+            if result.phone_linked != linked:
+                updates["phone_linked"] = linked
+            if updates:
+                return result.model_copy(update=updates)
             return result
         return handler(data)
 
@@ -49,6 +59,15 @@ class UserStats(BaseModel):
     saved_count: int = 0
     followers_count: int = 0
     following_count: int = 0
+
+
+class LinkPhoneRequest(BaseModel):
+    phone: str = Field(..., min_length=8, max_length=32)
+
+
+class LinkPhoneResponse(BaseModel):
+    ok: bool = True
+    phone_linked: bool = True
 
 
 class UpdateUserRequest(BaseModel):

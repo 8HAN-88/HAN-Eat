@@ -1,0 +1,2724 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:video_player/video_player.dart';
+
+import '../../../models/chat_models.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/chat_cache_service.dart';
+import '../../../services/chat_service.dart';
+import '../../../services/chat_stream_service.dart';
+import '../../../utils/chat_time_format.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/chat_link_preview.dart';
+import '../../../widgets/fullscreen_image_viewer.dart';
+import '../application/active_chat_session.dart';
+import '../application/chat_realtime_signals.dart';
+import '../application/chats_hub_refresh_provider.dart';
+import '../../../services/media_upload_service.dart';
+import '../../../services/server_config.dart';
+import '../../../utils/presence_format.dart';
+import '../../../utils/video_player_helper.dart';
+import '../../../widgets/inline_video_player.dart';
+import '../widgets/chat_voice_mic_button.dart';
+import '../widgets/chat_voice_waveform.dart';
+import 'chat_group_info_screen.dart';
+import 'chat_media_gallery_screen.dart';
+import 'chat_voice_bubble.dart';
+
+/// Загружает чат с API, если не передан в [extra] (push / deep link).
+class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
+  const ChatThreadLoaderScreen({
+    super.key,
+    required this.conversationId,
+    this.initialConversation,
+    this.initialPeer,
+  });
+
+  final int conversationId;
+  final ChatConversation? initialConversation;
+  final ChatUserBrief? initialPeer;
+
+  @override
+  ConsumerState<ChatThreadLoaderScreen> createState() =>
+      _ChatThreadLoaderScreenState();
+}
+
+class _ChatThreadLoaderScreenState extends ConsumerState<ChatThreadLoaderScreen> {
+  ChatConversation? _conversation;
+  bool _loading = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _conversation = widget.initialConversation;
+    if (_conversation == null && widget.initialPeer != null) {
+      _conversation = ChatConversation(
+        id: widget.conversationId,
+        type: 'direct',
+        peer: widget.initialPeer,
+        updatedAt: DateTime.now(),
+      );
+    }
+    if (_conversation == null) _resolveConversation();
+  }
+
+  Future<void> _resolveConversation() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final conv = await ChatService.getConversation(widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  void _refreshHub() {
+    ref.read(chatsHubRefreshProvider.notifier).state++;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null || _conversation == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: AppEmptyState(
+          icon: Icons.chat_bubble_outline,
+          title: 'Чат не найден',
+          subtitle: _error != null
+              ? userVisibleError(_error!)
+              : 'Нет доступа к диалогу',
+          action: FilledButton(
+            onPressed: _resolveConversation,
+            child: const Text('Повторить'),
+          ),
+        ),
+      );
+    }
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) _refreshHub();
+      },
+      child: ChatThreadScreen(
+        conversation: _conversation!,
+      ),
+    );
+  }
+}
+
+class ChatThreadScreen extends StatefulWidget {
+  const ChatThreadScreen({
+    super.key,
+    required this.conversation,
+  });
+
+  final ChatConversation conversation;
+
+  int get conversationId => conversation.id;
+
+  @override
+  State<ChatThreadScreen> createState() => _ChatThreadScreenState();
+}
+
+class _ChatThreadScreenState extends State<ChatThreadScreen>
+    with WidgetsBindingObserver {
+  final _controller = TextEditingController();
+  final _threadSearchController = TextEditingController();
+  final _scroll = ScrollController();
+  final _messages = <ChatMessage>[];
+  bool _loading = true;
+  bool _loadingMore = false;
+  String? _loadError;
+  bool _sending = false;
+  bool _hasMore = false;
+  int? _nextCursor;
+  Timer? _pollTimer;
+  Timer? _presenceTimer;
+  Timer? _typingDebounce;
+  Timer? _peerTypingClear;
+  StreamSubscription<void>? _signalSub;
+  ChatStreamService? _stream;
+  ChatMessage? _replyTo;
+  bool _appPaused = false;
+  bool _sseConnected = false;
+  bool _peerTyping = false;
+  bool _pinned = false;
+  bool _muted = false;
+  bool _recording = false;
+  bool _holdActive = false;
+  bool _recordCancelled = false;
+  bool _hasText = false;
+  Duration _recordDuration = Duration.zero;
+  int _messageLoadSeq = 0;
+  Timer? _recordTimer;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  Timer? _markReadDebounce;
+  Timer? _draftSaveDebounce;
+  final List<double> _waveLevels = [];
+  final _audioRecorder = AudioRecorder();
+  late ChatConversation _conversation;
+  Map<int, String> _senderNames = {};
+  List<ChatUserBrief> _groupMembers = [];
+  bool _threadSearchOpen = false;
+  String _threadSearchQuery = '';
+  ChatMessage? _pinnedMessage;
+  ChatMessage? _editingMessage;
+  bool _showJumpToBottom = false;
+  int _newMessagesBelow = 0;
+  bool _suppressMarkRead = false;
+
+  static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+  @override
+  void initState() {
+    super.initState();
+    _conversation = widget.conversation;
+    _pinned = widget.conversation.pinned;
+    _muted = widget.conversation.muted;
+    ActiveChatSession.instance.setOpen(widget.conversationId);
+    WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_onScrollChanged);
+    _controller.addListener(_onInputChanged);
+    unawaited(_loadCachedMessages());
+    unawaited(_restoreDraft());
+    _load(refresh: true);
+    _startPolling();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!_appPaused) _refreshConversation();
+    });
+    _signalSub = ChatRealtimeSignals.instance.threadPoll.listen((_) {
+      if (!_appPaused) _pollNew();
+    });
+    _stream = ChatStreamService(
+      conversationId: widget.conversationId,
+      onEvent: _onStreamEvent,
+      onConnected: () {
+        if (!mounted) return;
+        setState(() => _sseConnected = true);
+        _restartPolling();
+      },
+      onDisconnected: () {
+        if (!mounted) return;
+        setState(() => _sseConnected = false);
+        _restartPolling();
+      },
+    )..connect();
+    _refreshConversation();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    final interval = _sseConnected
+        ? const Duration(seconds: 45)
+        : const Duration(seconds: 3);
+    _pollTimer = Timer.periodic(interval, (_) {
+      if (!_appPaused) _pollNew();
+    });
+  }
+
+  Future<void> _loadCachedMessages() async {
+    final cached = await ChatCacheService.loadThread(widget.conversationId);
+    if (cached == null || cached.isEmpty || !mounted) return;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(cached);
+      _loading = false;
+    });
+  }
+
+  void _restartPolling() {
+    if (!mounted) return;
+    _startPolling();
+  }
+
+  void _onInputChanged() {
+    if (!mounted) return;
+    final has = _controller.text.trim().isNotEmpty;
+    if (has != _hasText) setState(() => _hasText = has);
+    _scheduleDraftSave();
+    if (!has) return;
+    _typingDebounce?.cancel();
+    _typingDebounce = Timer(const Duration(milliseconds: 800), () {
+      ChatService.sendTyping(conversationId: widget.conversationId);
+    });
+  }
+
+  void _onStreamEvent(Map<String, dynamic> event) {
+    if (!mounted) return;
+    final type = event['type']?.toString();
+    if (type == 'message.new') {
+      final raw = event['message'];
+      if (raw is! Map<String, dynamic>) return;
+      try {
+        final msg = ChatService.messageFromStreamPayload(raw);
+        setState(() => _integrateMessage(msg));
+        _scrollToBottom();
+        _scheduleMarkRead();
+      } catch (e) {
+        debugPrint('Chat SSE message parse failed: $e');
+      }
+      return;
+    }
+    if (type == 'message.deleted') {
+      final id = event['message_id'];
+      final messageId = id is int ? id : int.tryParse('$id');
+      if (messageId == null) return;
+      setState(() {
+        _messages.removeWhere((m) => m.id == messageId);
+        if (_pinnedMessage?.id == messageId) _pinnedMessage = null;
+      });
+      return;
+    }
+    if (type == 'typing') {
+      setState(() => _peerTyping = true);
+      _peerTypingClear?.cancel();
+      _peerTypingClear = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _peerTyping = false);
+      });
+      return;
+    }
+    if (type == 'message.read') {
+      final readerId = event['user_id'];
+      final myId = AuthService.instance.currentUser?.id;
+      if (readerId == myId) return;
+      final raw = event['last_read_message_id'];
+      final readId = raw is int ? raw : int.tryParse('$raw');
+      if (readId != null) _applyReadReceipt(readId);
+      return;
+    }
+    if (type == 'message.edited') {
+      final raw = event['message'];
+      if (raw is! Map<String, dynamic>) return;
+      try {
+        _replaceMessage(ChatService.messageFromStreamPayload(raw));
+      } catch (e) {
+        debugPrint('Chat SSE edit parse failed: $e');
+      }
+      return;
+    }
+    if (type == 'message.reaction') {
+      final id = event['message_id'];
+      final messageId = id is int ? id : int.tryParse('$id');
+      if (messageId == null) return;
+      _applyReactions(messageId, ChatService.parseReactions(event['reactions']));
+      return;
+    }
+    if (type == 'message.pinned') {
+      final raw = event['message'];
+      if (raw is Map<String, dynamic>) {
+        try {
+          setState(() {
+            _pinnedMessage = ChatService.messageFromStreamPayload(raw);
+          });
+        } catch (_) {}
+      }
+      return;
+    }
+    if (type == 'message.unpinned') {
+      setState(() => _pinnedMessage = null);
+    }
+  }
+
+  void _replaceMessage(ChatMessage updated) {
+    setState(() {
+      final idx = _messages.indexWhere((m) => m.id == updated.id);
+      if (idx >= 0) _messages[idx] = updated;
+      if (_pinnedMessage?.id == updated.id) _pinnedMessage = updated;
+    });
+  }
+
+  void _applyReactions(int messageId, List<ChatReactionSummary> reactions) {
+    setState(() {
+      final idx = _messages.indexWhere((m) => m.id == messageId);
+      if (idx >= 0) {
+        _messages[idx] = _messages[idx].copyWith(reactions: reactions);
+      }
+      if (_pinnedMessage?.id == messageId) {
+        _pinnedMessage = _pinnedMessage!.copyWith(reactions: reactions);
+      }
+    });
+  }
+
+  String? _normalizedMediaUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return null;
+    return ServerConfig.resolveMediaUrl(url.trim());
+  }
+
+  bool _isDuplicateMessage(ChatMessage a, ChatMessage b) {
+    if (a.id > 0 && b.id > 0 && a.id == b.id) return true;
+    if (!a.isMine || !b.isMine) return false;
+    if (a.conversationId != b.conversationId) return false;
+    if (a.type != b.type) return false;
+    if (a.createdAt.difference(b.createdAt).inSeconds.abs() > 20) return false;
+
+    switch (a.type) {
+      case 'voice':
+        final urlA = _normalizedMediaUrl(a.mediaUrl);
+        final urlB = _normalizedMediaUrl(b.mediaUrl);
+        if (urlA != null && urlB != null && urlA == urlB) return true;
+        return a.content.trim() == b.content.trim();
+      case 'image':
+        final imageA = _normalizedMediaUrl(a.mediaUrl);
+        final imageB = _normalizedMediaUrl(b.mediaUrl);
+        return imageA != null && imageA == imageB;
+      case 'video':
+        final videoA = _normalizedMediaUrl(a.mediaUrl);
+        final videoB = _normalizedMediaUrl(b.mediaUrl);
+        if (videoA != null && videoA == videoB) return true;
+        return a.content.trim() == b.content.trim();
+      case 'file':
+        final fileA = _normalizedMediaUrl(a.mediaUrl);
+        final fileB = _normalizedMediaUrl(b.mediaUrl);
+        return fileA != null &&
+            fileA == fileB &&
+            a.content.trim() == b.content.trim();
+      default:
+        return a.content.trim() == b.content.trim() &&
+            _normalizedMediaUrl(a.mediaUrl) == _normalizedMediaUrl(b.mediaUrl);
+    }
+  }
+
+  /// Вставляет или обновляет сообщение, убирая оптимистичные и повторные копии.
+  /// Возвращает true, если сообщение добавлено впервые.
+  bool _integrateMessage(ChatMessage msg, {int? removeTempId}) {
+    if (removeTempId != null) {
+      _messages.removeWhere((m) => m.id == removeTempId);
+    }
+    _messages.removeWhere((m) => m.id < 0 && m.isMine);
+    final idx = _messages.indexWhere(
+      (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
+    );
+    if (idx >= 0) {
+      _messages[idx] = msg;
+      return false;
+    }
+    _messages.add(msg);
+    return true;
+  }
+
+  String _pinnedPreview(ChatMessage msg) {
+    if (msg.type == 'voice') return '🎤 Голосовое';
+    if (msg.type == 'image') return '📷 Фото';
+    if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'file') {
+      final name = msg.content.trim();
+      return name.isEmpty ? '📎 Файл' : '📎 $name';
+    }
+    final text = msg.content.trim();
+    return text.isEmpty ? 'Сообщение' : text;
+  }
+
+  void _scrollToMessage(int messageId) {
+    final idx = _messages.indexWhere((m) => m.id == messageId);
+    if (idx < 0 || !_scroll.hasClients || _messages.isEmpty) return;
+    final fraction = idx / _messages.length;
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent * fraction,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _scrollToReplyMessage(int messageId) async {
+    if (_messages.any((m) => m.id == messageId)) {
+      _scrollToMessage(messageId);
+      return;
+    }
+    var attempts = 0;
+    while (_hasMore && attempts < 8) {
+      attempts++;
+      await _load(refresh: false);
+      if (_messages.any((m) => m.id == messageId)) {
+        if (!mounted) return;
+        _scrollToMessage(messageId);
+        return;
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Исходное сообщение не найдено')),
+    );
+  }
+
+  Future<void> _restoreDraft() async {
+    final draft = await ChatCacheService.loadDraft(widget.conversationId);
+    if (!mounted || draft == null || draft.isEmpty) return;
+    if (_controller.text.trim().isNotEmpty) return;
+    _controller.text = draft;
+    _controller.selection = TextSelection.collapsed(offset: draft.length);
+  }
+
+  void _scheduleDraftSave() {
+    _draftSaveDebounce?.cancel();
+    _draftSaveDebounce = Timer(const Duration(milliseconds: 400), () {
+      unawaited(
+        ChatCacheService.saveDraft(widget.conversationId, _controller.text),
+      );
+    });
+  }
+
+  void _onScrollChanged() {
+    if (!_scroll.hasClients || !_showJumpToBottom) return;
+    if (_isNearBottom()) {
+      setState(() {
+        _showJumpToBottom = false;
+        _newMessagesBelow = 0;
+      });
+    }
+  }
+
+  bool _isNearBottom([double threshold = 120]) {
+    if (!_scroll.hasClients) return true;
+    return _scroll.position.maxScrollExtent - _scroll.offset <= threshold;
+  }
+
+  int? _firstUnreadMessageId() {
+    final unread = _conversation.unreadCount;
+    if (unread <= 0 || _messages.isEmpty) return null;
+    var remaining = unread;
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      if (!_messages[i].isMine) {
+        remaining--;
+        if (remaining <= 0) return _messages[i].id;
+      }
+    }
+    return _messages.first.id;
+  }
+
+  void _scrollAfterInitialLoad() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final firstUnread = _firstUnreadMessageId();
+      if (firstUnread != null) {
+        _scrollToMessage(firstUnread);
+        final idx = _messages.indexWhere((m) => m.id == firstUnread);
+        final below = idx >= 0 ? _messages.length - idx - 1 : 0;
+        if (below > 0) {
+          setState(() {
+            _newMessagesBelow = below;
+            _showJumpToBottom = true;
+          });
+        }
+      } else {
+        _scrollToBottom();
+      }
+    });
+  }
+
+  void _jumpToBottomAndMarkRead() {
+    _scrollToBottom();
+    setState(() {
+      _showJumpToBottom = false;
+      _newMessagesBelow = 0;
+      _suppressMarkRead = false;
+    });
+    _scheduleMarkRead();
+  }
+
+  String _newMessagesChipLabel() {
+    final n = _newMessagesBelow;
+    if (n <= 0) return '↓ Новые';
+    if (n == 1) return '↓ 1 новое';
+    if (n >= 10) return '↓ $n новых';
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    if (mod10 == 1 && mod100 != 11) return '↓ $n новое';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return '↓ $n новых';
+    }
+    return '↓ $n новых';
+  }
+
+  void _startEdit(ChatMessage msg) {
+    setState(() {
+      _editingMessage = msg;
+      _replyTo = null;
+      _controller.text = msg.content;
+      _controller.selection = TextSelection.collapsed(offset: msg.content.length);
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editingMessage = null;
+      _controller.clear();
+    });
+  }
+
+  Future<void> _toggleReaction(ChatMessage msg, String emoji) async {
+    final existing = msg.reactions.where((r) => r.reactedByMe);
+    final myEmoji = existing.isEmpty ? null : existing.first.emoji;
+    try {
+      final reactions = myEmoji == emoji
+          ? await ChatService.removeReaction(
+              conversationId: widget.conversationId,
+              messageId: msg.id,
+            )
+          : await ChatService.setReaction(
+              conversationId: widget.conversationId,
+              messageId: msg.id,
+              emoji: emoji,
+            );
+      if (!mounted) return;
+      _applyReactions(msg.id, reactions);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _togglePinMessage(ChatMessage msg) async {
+    final isPinned = _pinnedMessage?.id == msg.id;
+    try {
+      await ChatService.pinMessage(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        pinned: !isPinned,
+      );
+      if (!mounted) return;
+      setState(() => _pinnedMessage = isPinned ? null : msg);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _showReactionPicker(ChatMessage msg) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
+            children: _quickReactions
+                .map(
+                  (emoji) => Material(
+                    color: msg.reactions.any(
+                      (r) => r.reactedByMe && r.emoji == emoji,
+                    )
+                        ? Theme.of(ctx).colorScheme.primaryContainer
+                        : Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _toggleReaction(msg, emoji);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(emoji, style: const TextStyle(fontSize: 28)),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _applyReadReceipt(int readUpToId) {
+    setState(() {
+      for (var i = 0; i < _messages.length; i++) {
+        final m = _messages[i];
+        if (m.isMine && m.id <= readUpToId && !m.isRead) {
+          _messages[i] = m.copyWith(isRead: true);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    ActiveChatSession.instance.clearIfOpen(widget.conversationId);
+    _scroll.removeListener(_onScrollChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    _presenceTimer?.cancel();
+    _typingDebounce?.cancel();
+    _peerTypingClear?.cancel();
+    _markReadDebounce?.cancel();
+    _draftSaveDebounce?.cancel();
+    _signalSub?.cancel();
+    _holdActive = false;
+    _recordTimer?.cancel();
+    _amplitudeSub?.cancel();
+    unawaited(_stopRecorderSilently());
+    _audioRecorder.dispose();
+    _stream?.disconnect();
+    unawaited(
+      ChatCacheService.saveDraft(widget.conversationId, _controller.text),
+    );
+    _controller.removeListener(_onInputChanged);
+    _controller.dispose();
+    _threadSearchController.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshConversation() async {
+    try {
+      final conv = await ChatService.getConversation(widget.conversationId);
+      Map<int, String> names = _senderNames;
+      List<ChatUserBrief> members = _groupMembers;
+      if (conv.isGroup) {
+        final loaded = await ChatService.listMembers(widget.conversationId);
+        members = loaded;
+        names = {for (final m in loaded) m.id: m.displayName};
+      }
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _pinned = conv.pinned;
+        _muted = conv.muted;
+        _senderNames = names;
+        _groupMembers = members;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _forwardMessage(ChatMessage msg) async {
+    try {
+      final chats = await ChatService.listConversations();
+      if (!mounted) return;
+      final targets = chats
+          .where((c) => c.id != widget.conversationId)
+          .toList();
+      if (targets.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет других чатов для пересылки')),
+        );
+        return;
+      }
+      final picked = await showModalBottomSheet<ChatConversation>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Переслать в…')),
+              ...targets.map(
+                (c) => ListTile(
+                  leading: Icon(
+                    c.isSaved
+                        ? Icons.bookmark_rounded
+                        : c.isGroup
+                            ? Icons.groups_rounded
+                            : Icons.person_rounded,
+                  ),
+                  title: Text(c.displayTitle),
+                  onTap: () => Navigator.pop(ctx, c),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+      await _sendForwardTo(picked, msg);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Переслано в «${picked.displayTitle}»')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _sendForwardTo(ChatConversation target, ChatMessage msg) async {
+    final mediaUrl = msg.mediaUrl?.trim();
+    if (msg.type == 'image' &&
+        mediaUrl != null &&
+        mediaUrl.isNotEmpty) {
+      await ChatService.sendImage(
+        conversationId: target.id,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        caption: msg.content.trim(),
+      );
+      return;
+    }
+    if (msg.type == 'voice' &&
+        mediaUrl != null &&
+        mediaUrl.isNotEmpty) {
+      await ChatService.sendVoice(
+        conversationId: target.id,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        durationSec: msg.voiceDurationSec ?? 1,
+      );
+      return;
+    }
+    if (msg.type == 'file' &&
+        mediaUrl != null &&
+        mediaUrl.isNotEmpty) {
+      await ChatService.sendFile(
+        conversationId: target.id,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        fileName: msg.content.trim().isEmpty ? 'Файл' : msg.content.trim(),
+      );
+      return;
+    }
+    if (msg.type == 'video' &&
+        mediaUrl != null &&
+        mediaUrl.isNotEmpty) {
+      await ChatService.sendVideo(
+        conversationId: target.id,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        caption: msg.content.trim(),
+      );
+      return;
+    }
+    final label = msg.isMine
+        ? 'Вы'
+        : (msg.senderName ?? _senderNames[msg.senderId] ?? 'Сообщение');
+    final body = msg.type == 'voice'
+        ? '🎤 Голосовое'
+        : msg.type == 'image'
+            ? '📷 Фото'
+            : msg.content.trim();
+    await ChatService.sendText(
+      conversationId: target.id,
+      content: '↪ $label: ${body.isEmpty ? 'Сообщение' : body}',
+    );
+  }
+
+  Future<void> _deleteChat() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить чат?'),
+        content: Text(
+          _conversation.isGroup
+              ? 'Вы выйдете из «${_conversation.displayTitle}».'
+              : 'Чат исчезнет из списка. При новом сообщении диалог можно начать снова.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.deleteConversation(conversationId: widget.conversationId);
+      unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      try {
+        ProviderScope.containerOf(context)
+            .read(chatsHubRefreshProvider.notifier)
+            .state++;
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _openFileUrl(String url) async {
+    final resolved = ServerConfig.resolveMediaUrl(url);
+    final uri = Uri.tryParse(resolved);
+    if (uri == null) return;
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось открыть файл')),
+      );
+    }
+  }
+
+  Future<void> _archiveChat() async {
+    try {
+      await ChatService.setArchived(
+        conversationId: widget.conversationId,
+        archived: true,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _showMembers() {
+    unawaited(_openMembersSheet());
+  }
+
+  Future<void> _openMembersSheet() async {
+    if (_groupMembers.isEmpty) {
+      try {
+        final members = await ChatService.listMembers(widget.conversationId);
+        if (!mounted) return;
+        setState(() {
+          _groupMembers = members;
+          _senderNames = {for (final m in members) m.id: m.displayName};
+        });
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.45,
+          minChildSize: 0.25,
+          maxChildSize: 0.85,
+          builder: (context, scrollController) => ListView(
+            controller: scrollController,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'Участники (${_conversation.memberCount})',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              ..._groupMembers.map(
+                (member) => ListTile(
+                  leading: _ThreadUserAvatar(user: member),
+                  title: Text(member.displayName),
+                  subtitle: Text(formatLastSeen(member.lastSeenAt)),
+                ),
+              ),
+              if (_groupMembers.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: Text('Нет данных об участниках')),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openMediaGallery() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ChatMediaGalleryScreen(messages: _messages),
+      ),
+    );
+  }
+
+  void _toggleThreadSearch() {
+    setState(() {
+      _threadSearchOpen = !_threadSearchOpen;
+      if (!_threadSearchOpen) {
+        _threadSearchQuery = '';
+        _threadSearchController.clear();
+      }
+    });
+  }
+
+  List<ChatMessage> get _visibleMessages {
+    final q = _threadSearchQuery.trim().toLowerCase();
+    if (q.isEmpty) return _messages;
+    return _messages.where((msg) {
+      if (msg.content.toLowerCase().contains(q)) return true;
+      final sender = msg.senderName ?? _senderNames[msg.senderId] ?? '';
+      if (sender.toLowerCase().contains(q)) return true;
+      if (msg.type == 'voice' && 'голосовое'.contains(q)) return true;
+      if (msg.type == 'image' && 'фото'.contains(q)) return true;
+      if (msg.type == 'video' && 'видео'.contains(q)) return true;
+      return false;
+    }).toList();
+  }
+
+  Future<void> _markUnread() async {
+    _markReadDebounce?.cancel();
+    try {
+      await ChatService.markUnread(conversationId: widget.conversationId);
+      if (!mounted) return;
+      setState(() => _suppressMarkRead = true);
+      try {
+        final conv = await ChatService.getConversation(widget.conversationId);
+        if (mounted) setState(() => _conversation = conv);
+      } catch (_) {}
+      try {
+        ProviderScope.containerOf(context)
+            .read(chatsHubRefreshProvider.notifier)
+            .state++;
+      } catch (_) {}
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Чат помечен непрочитанным')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _togglePin() async {
+    final next = !_pinned;
+    try {
+      await ChatService.setPinned(
+        conversationId: widget.conversationId,
+        pinned: next,
+      );
+      if (!mounted) return;
+      setState(() => _pinned = next);
+      try {
+        ProviderScope.containerOf(context)
+            .read(chatsHubRefreshProvider.notifier)
+            .state++;
+      } catch (_) {}
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _toggleMute() async {
+    final next = !_muted;
+    try {
+      await ChatService.setMuted(
+        conversationId: widget.conversationId,
+        muted: next,
+      );
+      if (!mounted) return;
+      setState(() {
+        _muted = next;
+        _conversation = _conversation.copyWith(muted: next);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _blockPeer() async {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Заблокировать?'),
+        content: Text(
+          '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Заблокировать'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.blockUser(peer.id);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _openGroupInfo() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ChatGroupInfoScreen(
+          conversation: _conversation,
+          onConversationChanged: (conv) {
+            if (!mounted) return;
+            setState(() {
+              _conversation = conv;
+              _muted = conv.muted;
+            });
+          },
+          onLeftGroup: () {
+            if (mounted) Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _leaveGroup() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Выйти из группы?'),
+        content: const Text('Вы больше не будете получать сообщения в этом чате.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.leaveGroup(conversationId: widget.conversationId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appPaused = state != AppLifecycleState.resumed;
+    if (_appPaused) {
+      _stream?.pause();
+      if (_recording || _holdActive) {
+        _holdActive = false;
+        unawaited(_cancelRecording());
+      }
+    } else {
+      _stream?.resume();
+      _pollNew();
+    }
+  }
+
+  ChatMessage? _replyTargetFor(ChatMessage msg) {
+    final id = msg.replyToMessageId;
+    if (id == null) return null;
+    for (final m in _messages) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  String _messagePreview(ChatMessage msg) {
+    if (msg.type == 'voice') return '🎤 Голосовое';
+    if (msg.type == 'image') return '📷 Фото';
+    if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'file') {
+      final name = msg.content.trim();
+      return name.isEmpty ? '📎 Файл' : '📎 $name';
+    }
+    final t = msg.content.trim();
+    return t.isEmpty ? 'Сообщение' : t;
+  }
+
+  String _formatRecordDuration(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  void _onHoldStart() {
+    _holdActive = true;
+    unawaited(_startRecording());
+  }
+
+  void _onHoldDrag(double dx) {
+    if (!_recording || !mounted) return;
+    final cancel = dx < -72;
+    if (cancel != _recordCancelled) {
+      setState(() => _recordCancelled = cancel);
+    }
+  }
+
+  void _onHoldEnd() {
+    _holdActive = false;
+    if (!_recording) return;
+    if (_recordCancelled) {
+      unawaited(_cancelRecording());
+    } else {
+      unawaited(_stopAndSendVoice());
+    }
+    if (mounted) setState(() => _recordCancelled = false);
+  }
+
+  Future<void> _stopRecorderSilently() async {
+    _recordTimer?.cancel();
+    _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    try {
+      await _audioRecorder.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _startRecording() async {
+    if (_sending || _recording) return;
+    final ok = await _audioRecorder.hasPermission();
+    if (!_holdActive || !mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Разрешите доступ к микрофону')),
+      );
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    try {
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      return;
+    }
+    if (!_holdActive || !mounted) {
+      await _stopRecorderSilently();
+      return;
+    }
+    _amplitudeSub?.cancel();
+    _waveLevels.clear();
+    _amplitudeSub = _audioRecorder
+        .onAmplitudeChanged(const Duration(milliseconds: 80))
+        .listen((amp) {
+      if (!mounted) return;
+      final norm = ((amp.current + 45) / 45).clamp(0.08, 1.0).toDouble();
+      setState(() {
+        _waveLevels.add(norm);
+        if (_waveLevels.length > 40) _waveLevels.removeAt(0);
+      });
+    });
+    setState(() {
+      _recording = true;
+      _recordCancelled = false;
+      _recordDuration = Duration.zero;
+    });
+    _recordTimer?.cancel();
+    _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _recordDuration += const Duration(seconds: 1));
+      if (_recordDuration.inSeconds >= 90) {
+        _stopAndSendVoice();
+      }
+    });
+  }
+
+  Future<void> _cancelRecording() async {
+    _recordTimer?.cancel();
+    _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    try {
+      await _audioRecorder.stop();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _recordCancelled = false;
+      _recordDuration = Duration.zero;
+      _waveLevels.clear();
+    });
+  }
+
+  Future<void> _stopAndSendVoice() async {
+    if (!_recording) return;
+    _recordTimer?.cancel();
+    _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    String? path;
+    try {
+      path = await _audioRecorder.stop();
+    } catch (_) {}
+    final durationSec = math.max(1, _recordDuration.inSeconds);
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _recordCancelled = false;
+      _recordDuration = Duration.zero;
+      _waveLevels.clear();
+    });
+    if (path == null || durationSec < 1) return;
+
+    setState(() => _sending = true);
+    try {
+      final file = XFile(path);
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
+        fileType: 'audio',
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      final msg = await ChatService.sendVoice(
+        conversationId: widget.conversationId,
+        mediaUrl: resolved,
+        durationSec: durationSec,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _showMessageActions(ChatMessage msg) {
+    final isPinned = _pinnedMessage?.id == msg.id;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.add_reaction_outlined),
+              title: const Text('Реакция'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showReactionPicker(msg);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.reply_rounded),
+              title: const Text('Ответить'),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _replyTo = msg;
+                  _editingMessage = null;
+                  _controller.clear();
+                });
+              },
+            ),
+            if (msg.isMine && msg.type == 'text')
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Изменить'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _startEdit(msg);
+                },
+              ),
+            ListTile(
+              leading: Icon(
+                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              ),
+              title: Text(isPinned ? 'Открепить' : 'Закрепить'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePinMessage(msg);
+              },
+            ),
+            if (msg.content.trim().isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: const Text('Копировать'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Clipboard.setData(ClipboardData(text: msg.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Скопировано')),
+                  );
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.forward_rounded),
+              title: const Text('Переслать'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _forwardMessage(msg);
+              },
+            ),
+            if (msg.isMine)
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(ctx).colorScheme.error,
+                ),
+                title: Text(
+                  'Удалить',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _deleteMessage(msg);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteMessage(ChatMessage msg) async {
+    try {
+      await ChatService.deleteMessage(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages.removeWhere((m) => m.id == msg.id);
+        if (_pinnedMessage?.id == msg.id) _pinnedMessage = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _load({required bool refresh}) async {
+    final seq = ++_messageLoadSeq;
+    if (refresh) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    } else {
+      setState(() => _loadingMore = true);
+    }
+    try {
+      final result = await ChatService.listMessages(
+        conversationId: widget.conversationId,
+        cursor: refresh ? null : _nextCursor,
+      );
+      if (!mounted || seq != _messageLoadSeq) return;
+      setState(() {
+        if (refresh) {
+          _messages
+            ..clear()
+            ..addAll(result.items);
+          _pinnedMessage = result.pinnedMessage;
+        } else {
+          _messages.insertAll(0, result.items);
+        }
+        _hasMore = result.hasMore;
+        _nextCursor = result.nextCursor;
+        _loading = false;
+        _loadingMore = false;
+        _loadError = null;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      if (refresh) {
+        _scrollAfterInitialLoad();
+      }
+      _scheduleMarkRead();
+    } catch (e) {
+      if (!mounted || seq != _messageLoadSeq) return;
+      final message = userVisibleError(e, fallback: 'Не удалось загрузить сообщения');
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        if (refresh && _messages.isEmpty) {
+          _loadError = message;
+        }
+      });
+      if (!refresh || _messages.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _pollNew() async {
+    if (_loading || _sending) return;
+    if (_messages.isEmpty) return;
+    try {
+      final lastId = _messages.last.id;
+      if (lastId <= 0) return;
+      final fresh = await ChatService.listMessagesAfter(
+        conversationId: widget.conversationId,
+        afterId: lastId,
+      );
+      if (!mounted || fresh.isEmpty) return;
+      var added = 0;
+      setState(() {
+        for (final msg in fresh) {
+          if (_integrateMessage(msg)) added++;
+        }
+      });
+      if (added == 0) return;
+      if (_isNearBottom()) {
+        _scrollToBottom();
+        _scheduleMarkRead();
+      } else {
+        setState(() {
+          _newMessagesBelow += added;
+          _showJumpToBottom = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _scheduleMarkRead() {
+    if (_suppressMarkRead) return;
+    _markReadDebounce?.cancel();
+    _markReadDebounce = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_markLatestRead());
+    });
+  }
+
+  Future<void> _markLatestRead() async {
+    if (_messages.isEmpty) return;
+    final last = _messages.last;
+    await ChatService.markRead(
+      conversationId: widget.conversationId,
+      messageId: last.id,
+    );
+  }
+
+  void _scrollToBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+    );
+    if (_suppressMarkRead) {
+      setState(() => _suppressMarkRead = false);
+      _scheduleMarkRead();
+    }
+  }
+
+  Future<void> _sendText() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _sending) return;
+    final editing = _editingMessage;
+    if (editing != null) {
+      setState(() => _sending = true);
+      _controller.clear();
+      try {
+        final msg = await ChatService.editMessage(
+          conversationId: widget.conversationId,
+          messageId: editing.id,
+          content: text,
+        );
+        if (!mounted) return;
+        setState(() {
+          final idx = _messages.indexWhere((m) => m.id == msg.id);
+          if (idx >= 0) _messages[idx] = msg;
+          if (_pinnedMessage?.id == msg.id) _pinnedMessage = msg;
+          _editingMessage = null;
+          _sending = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _sending = false);
+        _controller.text = text;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+      return;
+    }
+    final replyId = _replyTo?.id;
+    final uid = AuthService.instance.currentUser?.id ?? 0;
+    final tempId = -DateTime.now().millisecondsSinceEpoch;
+    final optimistic = ChatMessage(
+      id: tempId,
+      conversationId: widget.conversationId,
+      senderId: uid,
+      type: 'text',
+      content: text,
+      createdAt: DateTime.now(),
+      isMine: true,
+      replyToMessageId: replyId,
+    );
+    setState(() {
+      _messages.add(optimistic);
+      _replyTo = null;
+      _sending = true;
+    });
+    _controller.clear();
+    try {
+      final msg = await ChatService.sendText(
+        conversationId: widget.conversationId,
+        content: text,
+        replyToMessageId: replyId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg, removeTempId: tempId);
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      unawaited(ChatCacheService.clearDraft(widget.conversationId));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.removeWhere((m) => m.id == tempId);
+        _sending = false;
+      });
+      _controller.text = text;
+      _controller.selection = TextSelection.collapsed(offset: text.length);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _openImage(String url) {
+    final urls = _messages
+        .where((m) => m.type == 'image' && (m.mediaUrl?.isNotEmpty ?? false))
+        .map((m) => m.mediaUrl!)
+        .toList(growable: false);
+    final index = urls.indexOf(url);
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => FullscreenImageViewer(
+          imageUrls: urls.isEmpty ? [url] : urls,
+          initialIndex: index >= 0 ? index : 0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVideo(String url) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _ChatVideoPlayerPage(videoUrl: url),
+      ),
+    );
+  }
+
+  Future<void> _pickVideo() async {
+    if (_sending || _recording) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('Видео из галереи'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Снять видео'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picker = ImagePicker();
+    final file = await picker.pickVideo(source: source);
+    if (file == null) return;
+    setState(() => _sending = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
+        fileType: 'video',
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      final msg = await ChatService.sendVideo(
+        conversationId: widget.conversationId,
+        mediaUrl: resolved,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _pickFile() async {
+    if (_sending || _recording) return;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'txt', 'doc', 'docx', 'zip'],
+      );
+      if (result == null || result.files.isEmpty) return;
+      final picked = result.files.single;
+      final path = picked.path;
+      if (path == null || path.isEmpty) return;
+      setState(() => _sending = true);
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: XFile(path),
+        fileType: 'document',
+      );
+      final fileUrl = uploaded.url;
+      if (fileUrl == null || fileUrl.isEmpty) {
+        throw Exception('Не удалось загрузить файл');
+      }
+      final msg = await ChatService.sendFile(
+        conversationId: widget.conversationId,
+        mediaUrl: ServerConfig.resolveMediaUrl(fileUrl),
+        fileName: picked.name,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Галерея'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Камера'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1600,
+    );
+    if (file == null) return;
+    setState(() => _sending = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
+        fileType: 'image',
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      final msg = await ChatService.sendImage(
+        conversationId: widget.conversationId,
+        mediaUrl: resolved,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isGroup = _conversation.isGroup;
+    final isSaved = _conversation.isSaved;
+    final peer = _conversation.peer;
+    String subtitle = '';
+    if (isSaved) {
+      subtitle = 'Сохраняйте сообщения и заметки';
+    } else if (isGroup) {
+      subtitle = _peerTyping
+          ? 'печатает…'
+          : '${_conversation.memberCount} участников';
+    } else if (_peerTyping) {
+      subtitle = 'печатает…';
+    } else if (peer != null) {
+      subtitle = formatLastSeen(peer.lastSeenAt);
+    }
+    if (_muted && subtitle.isNotEmpty) {
+      subtitle = '$subtitle · без звука';
+    } else if (_muted) {
+      subtitle = 'без звука';
+    }
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: isSaved
+              ? scheme.onSurfaceVariant
+              : _peerTyping || (!isGroup && (peer?.isOnline ?? false))
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+        );
+    final visibleMessages = _visibleMessages;
+    final searching = _threadSearchQuery.trim().isNotEmpty;
+    final imageCount =
+        _messages.where((m) => m.type == 'image' && m.mediaUrl != null).length;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: GestureDetector(
+          onTap: isGroup ? _openGroupInfo : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_conversation.displayTitle),
+              if (subtitle.isNotEmpty) Text(subtitle, style: subtitleStyle),
+            ],
+          ),
+        ),
+        bottom: _threadSearchOpen
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(56),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: _threadSearchController,
+                    autofocus: true,
+                    onChanged: (v) => setState(() => _threadSearchQuery = v),
+                    decoration: InputDecoration(
+                      hintText: 'Поиск в чате',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _toggleThreadSearch,
+                      ),
+                      isDense: true,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : null,
+        actions: [
+          IconButton(
+            tooltip: 'Поиск',
+            icon: Icon(_threadSearchOpen ? Icons.search_off : Icons.search),
+            onPressed: _toggleThreadSearch,
+          ),
+          if (imageCount > 0)
+            IconButton(
+              tooltip: 'Медиа',
+              icon: const Icon(Icons.photo_library_outlined),
+              onPressed: _openMediaGallery,
+            ),
+          if (isGroup)
+            IconButton(
+              tooltip: 'О группе',
+              icon: const Icon(Icons.info_outline),
+              onPressed: _openGroupInfo,
+            ),
+          if (!isSaved) ...[
+            IconButton(
+              tooltip: _muted ? 'Включить уведомления' : 'Без звука',
+              icon: Icon(
+                _muted
+                    ? Icons.notifications_off_outlined
+                    : Icons.notifications_outlined,
+              ),
+              onPressed: _toggleMute,
+            ),
+            IconButton(
+              tooltip: _pinned ? 'Открепить' : 'Закрепить',
+              icon: Icon(_pinned ? Icons.push_pin : Icons.push_pin_outlined),
+              onPressed: _togglePin,
+            ),
+          ],
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'delete') _deleteChat();
+              if (v == 'archive') _archiveChat();
+              if (v == 'unread') _markUnread();
+              if (v == 'media') _openMediaGallery();
+              if (v == 'mute') _toggleMute();
+              if (v == 'group') _openGroupInfo();
+              if (v == 'block') _blockPeer();
+              if (v == 'leave') _leaveGroup();
+            },
+            itemBuilder: (ctx) => [
+              if (imageCount > 0)
+                PopupMenuItem(
+                  value: 'media',
+                  child: Text('Медиа ($imageCount)'),
+                ),
+              if (!isSaved) ...[
+                PopupMenuItem(
+                  value: 'mute',
+                  child: Text(_muted ? 'Включить уведомления' : 'Без звука'),
+                ),
+                if (isGroup)
+                  const PopupMenuItem(
+                    value: 'group',
+                    child: Text('О группе'),
+                  ),
+                if (!isGroup && peer != null)
+                  const PopupMenuItem(
+                    value: 'block',
+                    child: Text('Заблокировать'),
+                  ),
+                if (isGroup)
+                  const PopupMenuItem(
+                    value: 'leave',
+                    child: Text('Выйти из группы'),
+                  ),
+                const PopupMenuItem(
+                  value: 'unread',
+                  child: Text('Пометить непрочитанным'),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Удалить чат'),
+                ),
+                const PopupMenuItem(
+                  value: 'archive',
+                  child: Text('В архив'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+          if (_pinnedMessage != null)
+            Material(
+              color: scheme.surfaceContainerHighest,
+              child: InkWell(
+                onTap: () => _scrollToMessage(_pinnedMessage!.id),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.push_pin, size: 18, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Закреплённое сообщение',
+                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            Text(
+                              _pinnedPreview(_pinnedMessage!),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Открепить',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => _togglePinMessage(_pinnedMessage!),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          Expanded(
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                _loadError != null && _messages.isEmpty
+                    ? AppEmptyState(
+                        icon: Icons.cloud_off_outlined,
+                        title: 'Сообщения не загрузились',
+                        subtitle: _loadError!,
+                        action: FilledButton(
+                          onPressed: () => _load(refresh: true),
+                          child: const Text('Повторить'),
+                        ),
+                      )
+                    : _messages.isEmpty && !_loading
+                        ? const Center(child: Text('Напишите первое сообщение'))
+                        : searching && visibleMessages.isEmpty
+                            ? const Center(child: Text('Ничего не найдено'))
+                            : ListView.builder(
+                                controller: _scroll,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                itemCount: visibleMessages.length +
+                                    (_hasMore && !searching ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (_hasMore && !searching && index == 0) {
+                                    return TextButton(
+                                      onPressed: _loadingMore
+                                          ? null
+                                          : () => _load(refresh: false),
+                                      child: _loadingMore
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text('Загрузить раньше'),
+                                    );
+                                  }
+                                  final msgIndex =
+                                      index - (_hasMore && !searching ? 1 : 0);
+                                  final msg = visibleMessages[msgIndex];
+                                  final replyTarget = _replyTargetFor(msg);
+                                  final replyQuote = replyTarget != null
+                                      ? _messagePreview(replyTarget)
+                                      : (msg.replyToMessageId != null
+                                          ? 'Сообщение'
+                                          : null);
+                                  return GestureDetector(
+                                    onLongPress: () => _showMessageActions(msg),
+                                    child: _Bubble(
+                                      message: msg,
+                                      scheme: scheme,
+                                      replyQuote: replyQuote,
+                                      onReplyTap: msg.replyToMessageId != null
+                                          ? () => _scrollToReplyMessage(
+                                                msg.replyToMessageId!,
+                                              )
+                                          : null,
+                                      showSenderName: isGroup && !msg.isMine,
+                                      senderLabel: msg.senderName ??
+                                          _senderNames[msg.senderId],
+                                      isConversationPinned:
+                                          _pinnedMessage?.id == msg.id,
+                                      onImageTap: msg.type == 'image' &&
+                                              msg.mediaUrl != null
+                                          ? () => _openImage(msg.mediaUrl!)
+                                          : null,
+                                      onVideoTap: msg.type == 'video' &&
+                                              msg.mediaUrl != null
+                                          ? () => _openVideo(msg.mediaUrl!)
+                                          : null,
+                                      onReactionTap: (emoji) =>
+                                          _toggleReaction(msg, emoji),
+                                      onFileTap: msg.type == 'file' &&
+                                              msg.mediaUrl != null
+                                          ? () => _openFileUrl(msg.mediaUrl!)
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              ),
+                if (_showJumpToBottom && _newMessagesBelow > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Material(
+                      elevation: 2,
+                      borderRadius: BorderRadius.circular(20),
+                      color: scheme.primary,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _jumpToBottomAndMarkRead,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            _newMessagesChipLabel(),
+                            style: TextStyle(
+                              color: scheme.onPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_editingMessage != null)
+            Material(
+              color: scheme.primaryContainer.withValues(alpha: 0.35),
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.edit_outlined, size: 20),
+                title: const Text('Редактирование'),
+                subtitle: Text(
+                  _editingMessage!.content,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: _cancelEdit,
+                ),
+              ),
+            ),
+          if (_replyTo != null)
+            Material(
+              color: scheme.surfaceContainerHighest,
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.reply_rounded, size: 20),
+                title: Text(
+                  _replyTo!.isMine
+                      ? 'Вы'
+                      : (_replyTo!.senderName ??
+                          _senderNames[_replyTo!.senderId] ??
+                          _conversation.displayTitle),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+                subtitle: Text(
+                  _messagePreview(_replyTo!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => setState(() => _replyTo = null),
+                ),
+              ),
+            ),
+          if (_recording)
+            Material(
+              color: _recordCancelled
+                  ? scheme.errorContainer.withValues(alpha: 0.5)
+                  : scheme.primaryContainer.withValues(alpha: 0.35),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      _recordCancelled
+                          ? '← Отпустите для отмены'
+                          : 'Отпустите для отправки',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: _recordCancelled
+                                ? scheme.error
+                                : scheme.onSurface,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    ChatVoiceWaveform(
+                      levels: List<double>.from(_waveLevels),
+                      color: scheme.onSurfaceVariant,
+                      activeColor: scheme.primary,
+                      barCount: 32,
+                      height: 32,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatRecordDuration(_recordDuration),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: _sending || _recording ? null : _pickFile,
+                    icon: const Icon(Icons.attach_file),
+                    tooltip: 'Файл',
+                  ),
+                  IconButton(
+                    onPressed: _sending || _recording ? null : _pickImage,
+                    icon: const Icon(Icons.image_outlined),
+                    tooltip: 'Фото',
+                  ),
+                  IconButton(
+                    onPressed: _sending || _recording ? null : _pickVideo,
+                    icon: const Icon(Icons.videocam_outlined),
+                    tooltip: 'Видео',
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      enabled: !_recording,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _hasText ? _sendText() : null,
+                      decoration: InputDecoration(
+                        hintText: _recording
+                            ? 'Удерживайте микрофон…'
+                            : (_editingMessage != null
+                                ? 'Изменить сообщение'
+                                : (_hasText
+                                    ? 'Сообщение'
+                                    : 'Сообщение или удержите 🎤')),
+                        filled: true,
+                        fillColor: scheme.surfaceContainerHighest
+                            .withValues(alpha: 0.5),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  if (_hasText && !_recording)
+                    IconButton.filled(
+                      onPressed: _sending || _recording ? null : _sendText,
+                      icon: _sending
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: scheme.onPrimary,
+                              ),
+                            )
+                          : Icon(
+                              _editingMessage != null
+                                  ? Icons.check_rounded
+                                  : Icons.send_rounded,
+                            ),
+                    )
+                  else
+                    ChatVoiceMicButton(
+                      enabled: !_sending,
+                      recording: _recording,
+                      onHoldStart: _onHoldStart,
+                      onHoldEnd: _onHoldEnd,
+                      onHoldDragDx: _onHoldDrag,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bubble extends StatelessWidget {
+  const _Bubble({
+    required this.message,
+    required this.scheme,
+    this.replyQuote,
+    this.onReplyTap,
+    this.showSenderName = false,
+    this.senderLabel,
+    this.isConversationPinned = false,
+    this.onImageTap,
+    this.onVideoTap,
+    this.onFileTap,
+    this.onReactionTap,
+  });
+
+  final ChatMessage message;
+  final ColorScheme scheme;
+  final String? replyQuote;
+  final VoidCallback? onReplyTap;
+  final bool showSenderName;
+  final String? senderLabel;
+  final bool isConversationPinned;
+  final VoidCallback? onImageTap;
+  final VoidCallback? onVideoTap;
+  final VoidCallback? onFileTap;
+  final ValueChanged<String>? onReactionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = message.isMine;
+    final bg = mine ? scheme.primaryContainer : scheme.surfaceContainerHigh;
+    final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
+    final quoteBg = mine
+        ? scheme.primary.withValues(alpha: 0.12)
+        : scheme.onSurface.withValues(alpha: 0.06);
+
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(mine ? 16 : 4),
+            bottomRight: Radius.circular(mine ? 4 : 16),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showSenderName &&
+                (senderLabel?.isNotEmpty ?? false)) ...[
+              Text(
+                senderLabel!,
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            if (replyQuote != null) ...[
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onReplyTap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: quoteBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(
+                        left: BorderSide(
+                          color: scheme.primary,
+                          width: 3,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      replyQuote!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: fg.withValues(alpha: 0.85),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (message.type == 'voice' && message.mediaUrl != null)
+              ChatVoiceBubble(
+                message: message,
+                foregroundColor: fg,
+                accentColor: scheme.primary,
+                activeColor: mine ? scheme.primary : scheme.secondary,
+              )
+            else if (message.type == 'file' && message.mediaUrl != null)
+              Material(
+                color: quoteBg,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  onTap: onFileTap,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.insert_drive_file_outlined, color: fg),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            message.content.trim().isEmpty
+                                ? 'Файл'
+                                : message.content.trim(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: fg),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else if (message.type == 'image' && message.mediaUrl != null)
+              GestureDetector(
+                onTap: onImageTap,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CachedNetworkImage(
+                    imageUrl: message.mediaUrl!,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => SizedBox(
+                      height: 120,
+                      child: ColoredBox(
+                        color: quoteBg,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: fg.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else if (message.type == 'video' && message.mediaUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  child: InlineVideoPlayer(
+                    videoUrl: message.mediaUrl!,
+                    onTap: onVideoTap,
+                  ),
+                ),
+              ),
+              if (message.content.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(message.content, style: TextStyle(color: fg)),
+              ],
+            ]
+            else if (message.content.isNotEmpty && message.type != 'voice') ...[
+              Text(message.content, style: TextStyle(color: fg)),
+              if (extractFirstHttpUrl(message.content) case final url?)
+                ChatLinkPreview(
+                  url: url,
+                  foregroundColor: fg,
+                  accentColor: scheme.primary,
+                  backgroundColor: quoteBg,
+                ),
+            ],
+            if (message.reactions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: message.reactions
+                    .where((r) => r.emoji.isNotEmpty && r.count > 0)
+                    .map(
+                      (r) => Material(
+                        color: r.reactedByMe
+                            ? scheme.primary.withValues(alpha: 0.18)
+                            : quoteBg,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: onReactionTap == null
+                              ? null
+                              : () => onReactionTap!(r.emoji),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              '${r.emoji} ${r.count}',
+                              style: TextStyle(
+                                color: fg,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isConversationPinned) ...[
+                  Icon(Icons.push_pin, size: 12, color: scheme.primary),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  formatChatMessageTime(message.createdAt),
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.65),
+                    fontSize: 11,
+                  ),
+                ),
+                if (message.isEdited) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    'изм.',
+                    style: TextStyle(
+                      color: fg.withValues(alpha: 0.55),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                if (mine) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    message.isRead ? Icons.done_all : Icons.done,
+                    size: 14,
+                    color: message.isRead
+                        ? scheme.primary
+                        : fg.withValues(alpha: 0.55),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatVideoPlayerPage extends StatefulWidget {
+  const _ChatVideoPlayerPage({required this.videoUrl});
+
+  final String videoUrl;
+
+  @override
+  State<_ChatVideoPlayerPage> createState() => _ChatVideoPlayerPageState();
+}
+
+class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
+  VideoPlayerController? _controller;
+  bool _isPaused = false;
+  bool _initialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    VideoPlayerHelper.createPreparedController(
+      widget.videoUrl,
+      muted: false,
+      autoPlay: true,
+    ).then((c) {
+      if (!mounted) {
+        c.dispose();
+        return;
+      }
+      setState(() {
+        _controller = c;
+        _initialized = true;
+      });
+    }).catchError((_) {
+      if (mounted) {
+        setState(() {
+          _hasError = true;
+          _initialized = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Видео'),
+      ),
+      body: Center(
+        child: _hasError
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.white70),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Не удалось загрузить видео',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Назад'),
+                  ),
+                ],
+              )
+            : !_initialized || _controller == null
+                ? const CircularProgressIndicator(color: Colors.white)
+                : AspectRatio(
+                    aspectRatio: _controller!.value.aspectRatio,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final paused = await VideoPlayerHelper.toggleOrStart(
+                          _controller!,
+                        );
+                        if (!mounted) return;
+                        setState(() => _isPaused = paused);
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        alignment: Alignment.center,
+                        children: [
+                          VideoPlayer(_controller!),
+                          if (_isPaused)
+                            const Icon(
+                              Icons.play_circle_fill,
+                              color: Colors.white70,
+                              size: 64,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+      ),
+    );
+  }
+}
+
+class _ThreadUserAvatar extends StatelessWidget {
+  const _ThreadUserAvatar({required this.user});
+
+  final ChatUserBrief user;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = user.avatarUrl;
+    final resolved =
+        url != null && url.isNotEmpty ? ServerConfig.resolveMediaUrl(url) : null;
+    final trimmed = user.displayName.trim();
+    final letter = trimmed.isEmpty
+        ? '?'
+        : trimmed.characters.first.toUpperCase();
+    return CircleAvatar(
+      radius: 20,
+      backgroundImage:
+          resolved != null ? CachedNetworkImageProvider(resolved) : null,
+      child: resolved == null
+          ? Text(letter, style: const TextStyle(fontWeight: FontWeight.w600))
+          : null,
+    );
+  }
+}

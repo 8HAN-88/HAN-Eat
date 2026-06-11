@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/firebase/lazy_firebase.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import 'auth_service.dart';
@@ -6,7 +7,7 @@ import 'package:flutter/foundation.dart';
 
 /// Сервис для взаимодействий с постами (лайки, дизлайки, репосты, сохранения)
 class PostInteractionsService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Лайкнуть пост
   static Future<void> likePost(String postId) async {

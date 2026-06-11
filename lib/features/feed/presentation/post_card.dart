@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../models/post.dart';
+import '../../../utils/video_player_helper.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/share_link_service.dart';
@@ -553,7 +554,7 @@ class _SimpleVideoPlayerPage extends StatefulWidget {
 }
 
 class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _isPaused = false;
   bool _initialized = false;
   bool _hasError = false;
@@ -561,13 +562,16 @@ class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
-      ..initialize().then((_) {
+    VideoPlayerHelper.createPreparedController(
+      widget.videoUrl,
+      muted: false,
+      autoPlay: true,
+    ).then((c) {
+        _controller = c;
         if (mounted) {
           setState(() {
             _initialized = true;
           });
-          _controller.play();
         }
       }).catchError((error) {
         if (mounted) {
@@ -581,7 +585,7 @@ class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -606,26 +610,23 @@ class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
                   ),
                 ],
               )
-            : !_initialized
+            : !_initialized || _controller == null
                 ? const CircularProgressIndicator()
                 : AspectRatio(
-                    aspectRatio: _controller.value.aspectRatio,
+                    aspectRatio: _controller!.value.aspectRatio,
                     child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isPaused = !_isPaused;
-                        });
-                        if (_isPaused) {
-                          _controller.pause();
-                        } else {
-                          _controller.play();
-                        }
+                      onTap: () async {
+                        final paused = await VideoPlayerHelper.toggleOrStart(
+                          _controller!,
+                        );
+                        if (!mounted) return;
+                        setState(() => _isPaused = paused);
                       },
                       behavior: HitTestBehavior.opaque,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          VideoPlayer(_controller),
+                          VideoPlayer(_controller!),
                           // Индикатор паузы
                           if (_isPaused)
                             IgnorePointer(
@@ -645,17 +646,17 @@ class _SimpleVideoPlayerPageState extends State<_SimpleVideoPlayerPage> {
                     ),
                   ),
       ),
-      floatingActionButton: _initialized && !_hasError
+      floatingActionButton: _initialized && !_hasError && _controller != null
           ? FloatingActionButton(
               onPressed: () {
                 setState(() {
-                  _controller.value.isPlaying
-                      ? _controller.pause()
-                      : _controller.play();
+                  _controller!.value.isPlaying
+                      ? _controller!.pause()
+                      : _controller!.play();
                 });
               },
               child: Icon(
-                _controller.value.isPlaying
+                _controller!.value.isPlaying
                     ? Icons.pause
                     : Icons.play_arrow,
               ),

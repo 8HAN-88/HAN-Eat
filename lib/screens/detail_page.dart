@@ -1,8 +1,10 @@
 // lib/screens/detail_page.dart
+import 'dart:async';
 import 'dart:convert';
 import '../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../widgets/recipe_network_image.dart';
 import '../models/recipe.dart';
 import '../models/recipe_model.dart';
@@ -10,8 +12,8 @@ import '../features/meal_plan/presentation/add_to_meal_plan_screen.dart';
 import '../services/recipe_comments_service.dart';
 import '../services/comment_service.dart';
 import '../services/recipe_interaction_stats.dart';
-import '../services/author_subscription_service.dart';
 import '../services/auth_service.dart';
+import '../services/user_service.dart';
 import '../services/saved_posts_service.dart';
 import '../services/shopping_service.dart';
 import '../widgets/share_action_sheet.dart';
@@ -21,10 +23,24 @@ import '../services/recipe_notes_service.dart';
 import '../utils/recipe_nutrition.dart';
 import '../core/layout/floating_bottom_padding.dart';
 import '../core/subscription/recipe_translation_access.dart';
+import '../core/theme/app_tokens.dart';
+import '../app/app_router.dart';
 import '../features/settings/application/analysis_mode_controller.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 import '../features/subscription/presentation/widgets/nutrition_upsell.dart';
 import '../services/api_service.dart';
+import '../core/cuisine_countries.dart';
+
+String? _originCountryDetailLabel(Recipe recipe) {
+  final code = recipe.originCountryCode;
+  if (code != null && code.isNotEmpty) {
+    final found = findRecipeOriginCountry(code);
+    if (found != null) return found.displayLabel;
+  }
+  final name = recipe.originCountryName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+  return recipe.originCountryLabel?.trim();
+}
 
 class DetailPage extends ConsumerStatefulWidget {
   final Recipe recipe;
@@ -108,13 +124,16 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     fav = widget.isFavorite;
     _selectedServings = _recipe.servings ?? 1;
     if (_selectedServings < 1) _selectedServings = 1;
+    _avgRating = _recipe.rating ?? 0;
+    _ratingCount = _recipe.ratingCount ?? 0;
     _loadNote();
     _loadComments();
     _loadRecipeRating();
     _loadSavedStatus();
-    if (_recipe.author != null && _recipe.author!.isNotEmpty) {
+    if (_canFollowAuthor) {
       _checkSubscription();
     }
+    unawaited(SavedPostsService.cacheRecipeForOffline(_recipe));
     if (_isSpoonacularRecipe) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _hydrateFullRecipeFromApi();
@@ -122,19 +141,92 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     }
   }
 
+  bool get _canFollowAuthor {
+    if (_recipe.source == 'channel') return false;
+    final authorId = _recipe.authorId;
+    final currentUser = AuthService.instance.currentUser;
+    return authorId != null && authorId > 0 && currentUser?.id != authorId;
+  }
+
+  Future<void> _openAuthorProfile() async {
+    if (_recipe.source == 'channel' && _recipe.channelId != null) {
+      context.push(ChannelDetailRoute.pathFor(_recipe.channelId!));
+      return;
+    }
+    final authorId = _recipe.authorId;
+    if (authorId == null || authorId <= 0) return;
+    context.push(ProfileRoute.withUserId(authorId));
+  }
+
+  Future<void> _checkSubscription() async {
+    final authorId = _recipe.authorId;
+    if (authorId == null || authorId <= 0) return;
+    final following =
+        await UserService.instance.isFollowing(authorId.toString());
+    if (!mounted) return;
+    setState(() => _isSubscribed = following);
+  }
+
+  Future<void> _toggleSubscription() async {
+    final authorId = _recipe.authorId;
+    if (authorId == null || authorId <= 0) return;
+    setState(() => _subscriptionLoading = true);
+    try {
+      if (_isSubscribed) {
+        await UserService.unfollow(authorId);
+      } else {
+        await UserService.follow(authorId);
+      }
+      if (!mounted) return;
+      setState(() => _isSubscribed = !_isSubscribed);
+    } catch (e) {
+      if (mounted) {
+        _showNotice(
+            userVisibleError(e, fallback: 'Не удалось выполнить действие'));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _subscriptionLoading = false);
+      }
+    }
+  }
+
   Future<void> _hydrateFullRecipeFromApi() async {
     if (!mounted) return;
     setState(() => _hydratingFullRecipe = true);
+    final currentRecipe = _recipe;
     final lang = ref.read(analysisSettingsProvider).language;
-    final result = await ApiService.loadRecipeById(_recipe.id, language: lang);
+    final result =
+        await ApiService.loadRecipeById(currentRecipe.id, language: lang);
     if (!mounted) return;
-    if (result.recipe == null && result.errorMessage != null) {
-      _showNotice(result.errorMessage!);
+    if (result.recipe == null) {
+      final cached = await SavedPostsService.getOfflineRecipe(currentRecipe.id);
+      if (cached != null && mounted) {
+        setState(() {
+          _hydratingFullRecipe = false;
+          _recipe = cached;
+        });
+        return;
+      }
+      if (result.errorMessage != null) {
+        _showNotice(result.errorMessage!);
+      }
     }
     setState(() {
       _hydratingFullRecipe = false;
       if (result.recipe != null) {
-        _recipe = result.recipe!;
+        final loaded = result.recipe!;
+        final loadedHasImages = loaded.imageUrls.isNotEmpty ||
+            (loaded.image?.trim().isNotEmpty ?? false) ||
+            (loaded.sourceImage?.trim().isNotEmpty ?? false);
+        _recipe = loadedHasImages
+            ? loaded
+            : loaded.copyWith(
+                image: currentRecipe.image,
+                sourceImage: currentRecipe.sourceImage,
+                imageUrls: currentRecipe.imageUrls,
+              );
+        unawaited(SavedPostsService.cacheRecipeForOffline(_recipe));
       }
     });
   }
@@ -269,34 +361,6 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     }
   }
 
-  Future<void> _checkSubscription() async {
-    if (_recipe.author == null) return;
-    // Используем временный идентификатор пользователя (в реальном приложении из AuthService)
-    final subscriber = 'user_${DateTime.now().millisecondsSinceEpoch}';
-    final isSub = await AuthorSubscriptionService.isSubscribed(
-      subscriber,
-      _recipe.author!,
-    );
-    setState(() => _isSubscribed = isSub);
-  }
-
-  Future<void> _toggleSubscription() async {
-    if (_recipe.author == null) return;
-    setState(() => _subscriptionLoading = true);
-    final subscriber = 'user_${DateTime.now().millisecondsSinceEpoch}';
-    final success = _isSubscribed
-        ? await AuthorSubscriptionService.unsubscribe(subscriber, _recipe.author!)
-        : await AuthorSubscriptionService.subscribe(subscriber, _recipe.author!);
-    if (success) {
-      setState(() {
-        _isSubscribed = !_isSubscribed;
-        _subscriptionLoading = false;
-      });
-    } else {
-      setState(() => _subscriptionLoading = false);
-    }
-  }
-
   int? _selectedRating;
   static const _menuCook = 'cook';
   static const _menuPlan = 'plan';
@@ -334,7 +398,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     final text = _commentController.text.trim();
     if (text.isEmpty && _selectedRating == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите комментарий или выберите оценку')),
+        const SnackBar(
+            content: Text('Введите комментарий или выберите оценку')),
       );
       return;
     }
@@ -347,9 +412,11 @@ class _DetailPageState extends ConsumerState<DetailPage> {
       );
       return;
     }
-    
+
     // Берем имя из профиля пользователя
-    final author = currentUser.name.isNotEmpty ? currentUser.name : (currentUser.username ?? currentUser.email);
+    final author = currentUser.name.isNotEmpty
+        ? currentUser.name
+        : (currentUser.username ?? currentUser.email);
     final authorId = currentUser.id.toString();
     final authorAvatar = currentUser.avatarUrl;
 
@@ -430,7 +497,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
 
     if (comment.authorId != authorId) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы можете удалить только свои комментарии')),
+        const SnackBar(
+            content: Text('Вы можете удалить только свои комментарии')),
       );
       return;
     }
@@ -484,13 +552,22 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось добавить в избранное'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось добавить в избранное'))),
         );
       }
     }
   }
 
   Future<void> _toggleSaved() async {
+    if (_isSpoonacularRecipe &&
+        !_isSaved &&
+        !ref.read(canSaveRecipesOfflineProvider)) {
+      await showNutritionUpsellSheet(context);
+      return;
+    }
+
     setState(() => _isSavedLoading = true);
     try {
       if (_isSpoonacularRecipe) {
@@ -514,21 +591,23 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
+          SnackBar(
+              content:
+                  Text(userVisibleError(e, fallback: 'Не удалось сохранить'))),
         );
       }
     } finally {
       if (mounted) setState(() => _isSavedLoading = false);
     }
   }
-  
+
   double? _getProtein(Recipe recipe) {
     final nutrition = recipe.nutrition;
     if (nutrition == null) return null;
-    
+
     // Сначала пробуем прямые ключи
     var protein = nutrition['protein'] ?? nutrition['proteins'];
-    
+
     // Если нет, пробуем извлечь из массива nutrients
     if (protein == null) {
       final nutrients = nutrition['nutrients'];
@@ -554,9 +633,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         }
       }
     }
-    
+
     if (protein == null) return null;
-    
+
     if (protein is num) return protein.toDouble();
     if (protein is String) {
       final match = RegExp(r'(\d+\.?\d*)').firstMatch(protein);
@@ -570,10 +649,11 @@ class _DetailPageState extends ConsumerState<DetailPage> {
   double? _getCarbs(Recipe recipe) {
     final nutrition = recipe.nutrition;
     if (nutrition == null) return null;
-    
+
     // Сначала пробуем прямые ключи
-    var carbs = nutrition['carbs'] ?? nutrition['carbohydrates'] ?? nutrition['carb'];
-    
+    var carbs =
+        nutrition['carbs'] ?? nutrition['carbohydrates'] ?? nutrition['carb'];
+
     // Если нет, пробуем извлечь из массива nutrients
     if (carbs == null) {
       final nutrients = nutrition['nutrients'];
@@ -583,8 +663,10 @@ class _DetailPageState extends ConsumerState<DetailPage> {
             final name = (n['name']?.toString() ?? '').toLowerCase();
             final title = (n['title']?.toString() ?? '').toLowerCase();
             final searchName = title.isNotEmpty ? title : name;
-            if ((searchName.contains('carbohydrate') || searchName.contains('carbs') || searchName.contains('carb')) 
-                && !searchName.contains('net')) {
+            if ((searchName.contains('carbohydrate') ||
+                    searchName.contains('carbs') ||
+                    searchName.contains('carb')) &&
+                !searchName.contains('net')) {
               final amount = n['amount'];
               if (amount != null) {
                 if (amount is num) {
@@ -600,9 +682,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         }
       }
     }
-    
+
     if (carbs == null) return null;
-    
+
     if (carbs is num) return carbs.toDouble();
     if (carbs is String) {
       final match = RegExp(r'(\d+\.?\d*)').firstMatch(carbs);
@@ -621,39 +703,58 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     final theme = Theme.of(context);
     final locked = !canViewNutrition;
     final scheme = theme.colorScheme;
-    return ActionChip(
-      avatar: Icon(icon, size: 18, color: locked ? scheme.onSurfaceVariant : tint),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: locked ? scheme.onSurfaceVariant : const Color(0xFF1C1C1E),
-              fontWeight: FontWeight.w700,
-            ),
+    final avatar =
+        Icon(icon, size: 18, color: locked ? scheme.onSurfaceVariant : tint);
+    final chipLabel = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: locked ? scheme.onSurfaceVariant : const Color(0xFF1C1C1E),
+            fontWeight: FontWeight.w700,
           ),
-          if (locked) ...[
-            const SizedBox(width: 4),
-            Icon(
-              Icons.lock_outline,
-              size: 16,
-              color: scheme.primary,
-            ),
-          ],
+        ),
+        if (locked) ...[
+          const SizedBox(width: 4),
+          Icon(
+            Icons.lock_outline,
+            size: 16,
+            color: scheme.primary,
+          ),
         ],
+      ],
+    );
+    final backgroundColor = locked
+        ? scheme.surfaceContainerHigh
+        : Color.alphaBlend(tint.withValues(alpha: 0.22), scheme.surface);
+    final borderSide = BorderSide(
+      color: locked
+          ? scheme.outlineVariant.withValues(alpha: 0.6)
+          : tint.withValues(alpha: 0.45),
+    );
+
+    if (!locked) {
+      return Chip(
+        avatar: avatar,
+        label: chipLabel,
+        backgroundColor: backgroundColor,
+        side: borderSide,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      );
+    }
+
+    return ActionChip(
+      avatar: avatar,
+      label: chipLabel,
+      backgroundColor: backgroundColor,
+      side: borderSide,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
       ),
-      backgroundColor: locked
-          ? scheme.surfaceContainerHigh
-          : Color.alphaBlend(tint.withValues(alpha: 0.22), scheme.surface),
-      side: BorderSide(
-        color: locked
-            ? scheme.outlineVariant.withValues(alpha: 0.6)
-            : tint.withValues(alpha: 0.45),
-      ),
-      onPressed: locked
-          ? () => showNutritionUpsellSheet(context)
-          : null,
+      onPressed: () => showNutritionUpsellSheet(context),
     );
   }
 
@@ -668,7 +769,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось открыть план питания'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось открыть план питания'))),
         );
       }
     }
@@ -690,16 +793,16 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     final selected = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      showDragHandle: true,
       builder: (context) => _AddToShoppingSheet(ingredients: list),
     );
     if (selected == null || selected.isEmpty || !mounted) return;
-    await ShoppingService.instance.addItemsFromRecipe(selected);
+    final shopping = await ShoppingService.ensureInitialized();
+    await shopping.addItemsFromRecipe(selected);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Добавлено в список покупок: ${selected.length}')),
+        SnackBar(
+            content: Text('Добавлено в список покупок: ${selected.length}')),
       );
     }
   }
@@ -729,7 +832,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         ? recipe.translatedSteps!
         : recipe.steps;
     final stepsList = stepsRaw
-        .map((s) => (s['step'] ?? s['text'] ?? s['instruction'] ?? '').toString())
+        .map((s) =>
+            (s['step'] ?? s['text'] ?? s['instruction'] ?? '').toString())
         .toList();
     final ingredientsList = recipe.translatedIngredients?.isNotEmpty == true
         ? recipe.translatedIngredients!
@@ -760,9 +864,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
           r.translatedIngredients!,
           lang,
         );
-    final ingredientsRaw = useTranslatedIngredients
-        ? r.translatedIngredients!
-        : r.ingredients;
+    final ingredientsRaw =
+        useTranslatedIngredients ? r.translatedIngredients! : r.ingredients;
     final baseServings = r.servings ?? 1;
     final factor = baseServings > 0 ? _selectedServings / baseServings : 1.0;
     final ingredients = factor == 1.0
@@ -770,8 +873,12 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         : ingredientsRaw.map((s) => _scaleIngredient(s, factor)).toList();
     final useTranslatedSteps = r.translatedSteps != null &&
         r.translatedSteps!.isNotEmpty &&
-        !RecipeTranslationAccess.stepsLookUntranslated(r.translatedSteps!, lang);
+        !RecipeTranslationAccess.stepsLookUntranslated(
+            r.translatedSteps!, lang);
     final steps = useTranslatedSteps ? r.translatedSteps! : r.steps;
+    final photoUrls = _recipePhotoUrls(r);
+    final hasHeroMedia =
+        (r.videoThumbnail?.trim().isNotEmpty ?? false) || photoUrls.isNotEmpty;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -779,621 +886,720 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         _popWithResult();
       },
       child: Scaffold(
-      resizeToAvoidBottomInset: true,
-      bottomNavigationBar: _buildCommentComposerBar(context),
-      body: CustomScrollView(
-        slivers: [
-          // Hero изображение или видео
-          SliverAppBar(
-            expandedHeight: (r.videoThumbnail != null && r.videoThumbnail!.isNotEmpty) || 
-                           (r.image != null && r.image!.isNotEmpty) ? 300 : 150,
-            pinned: true,
-            leading: Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: _popWithResult,
-              ),
-            ),
-            actions: [
-              Container(
+        resizeToAvoidBottomInset: true,
+        bottomNavigationBar: _buildCommentComposerBar(context),
+        body: CustomScrollView(
+          slivers: [
+            // Hero изображение или видео
+            SliverAppBar(
+              expandedHeight: hasHeroMedia ? 300 : 150,
+              pinned: true,
+              leading: Container(
                 margin: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
                 child: IconButton(
-                  icon: const Icon(Icons.share_outlined, color: Colors.white),
-                  tooltip: 'Поделиться рецептом',
-                  onPressed: () => _shareRecipe(),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: _popWithResult,
                 ),
               ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: Icon(
-                    fav ? Icons.favorite : Icons.favorite_border,
-                    color: fav ? Colors.red : Colors.white,
+              actions: [
+                Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
                   ),
-                  tooltip: fav ? 'Удалить из избранного' : 'Добавить в избранное',
-                  onPressed: _toggle,
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  shape: BoxShape.circle,
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, color: Colors.white),
-                  tooltip: 'Действия',
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                  child: IconButton(
+                    icon: const Icon(Icons.share_outlined, color: Colors.white),
+                    tooltip: 'Поделиться рецептом',
+                    onPressed: () => _shareRecipe(),
                   ),
-                  elevation: 10,
-                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  onSelected: (value) => _handleMenuAction(value, r),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<String>(
-                      value: _menuCook,
-                      child: Row(
-                        children: [
-                          Icon(Icons.menu_book, size: 20),
-                          SizedBox(width: 10),
-                          Text('Режим готовки'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: _menuPlan,
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_today, size: 20),
-                          SizedBox(width: 10),
-                          Text('В план питания'),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuItem<String>(
-                      value: _menuShopping,
-                      child: Row(
-                        children: [
-                          Icon(Icons.shopping_cart_outlined, size: 20),
-                          SizedBox(width: 10),
-                          Text('В список покупок'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<String>(
-                      value: _menuSave,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(_isSaved ? 'Убрать из сохраненных' : 'Сохранить'),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-            ],
-            flexibleSpace: Hero(
-              tag: 'recipe_image_${r.id}',
-              child: FlexibleSpaceBar(
-                background: _buildHeroImage(context, r),
+                Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      fav ? Icons.favorite : Icons.favorite_border,
+                      color: fav ? Colors.red : Colors.white,
+                    ),
+                    tooltip:
+                        fav ? 'Удалить из избранного' : 'Добавить в избранное',
+                    onPressed: _toggle,
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_horiz, color: Colors.white),
+                    tooltip: 'Действия',
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 10,
+                    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                    onSelected: (value) => _handleMenuAction(value, r),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<String>(
+                        value: _menuCook,
+                        child: Row(
+                          children: [
+                            Icon(Icons.menu_book, size: 20),
+                            SizedBox(width: 10),
+                            Text('Режим готовки'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: _menuPlan,
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 20),
+                            SizedBox(width: 10),
+                            Text('В план питания'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: _menuShopping,
+                        child: Row(
+                          children: [
+                            Icon(Icons.shopping_cart_outlined, size: 20),
+                            SizedBox(width: 10),
+                            Text('В список покупок'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: _menuSave,
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isSaved ? Icons.bookmark : Icons.bookmark_border,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(_isSaved
+                                ? 'Убрать из сохраненных'
+                                : 'Сохранить'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              flexibleSpace: Hero(
+                tag: 'recipe_image_${r.id}',
+                child: FlexibleSpaceBar(
+                  background: _buildHeroImage(context, r),
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Заголовок
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(
-                        opacity: value,
-                        child: Transform.translate(
-                          offset: Offset(0, 20 * (1 - value)),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: Text(
-                      r.translatedTitle?.isNotEmpty == true ? r.translatedTitle! : r.title,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ),
-                  if (r.translatedTitle != null && r.translatedTitle != r.title) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Оригинальное название: ${r.title}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 480),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(opacity: value, child: child);
-                    },
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        Chip(
-                          avatar: const Icon(Icons.favorite, color: Colors.red, size: 18),
-                          label: Text('${r.likesCount ?? 0}'),
-                        ),
-                        Chip(
-                          avatar: const Icon(Icons.comment_outlined, size: 18),
-                          label: Text('${_comments.length}'),
-                        ),
-                        Chip(
-                          avatar: const Icon(Icons.star, color: Colors.amber, size: 18),
-                          label: Text(
-                            _ratingCount > 0
-                                ? '${_avgRating.toStringAsFixed(1)} ($_ratingCount)'
-                                : '0.0 (0)',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Метаданные (калории и БЖУ)
-                  if (r.calories != null ||
-                      _getProtein(r) != null ||
-                      _getFat(r) != null ||
-                      _getCarbs(r) != null)
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final canViewNutrition =
-                            ref.watch(canViewRecipeNutritionProvider);
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOut,
-                          builder: (context, value, child) {
-                            return Opacity(opacity: value, child: child);
-                          },
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (r.calories != null)
-                                _nutritionChip(
-                                  context,
-                                  canViewNutrition: canViewNutrition,
-                                  icon: Icons.local_fire_department_outlined,
-                                  label: canViewNutrition
-                                      ? '${r.calories} ккал'
-                                      : 'Калории',
-                                  tint: Colors.orange,
-                                ),
-                              if (_getProtein(r) != null)
-                                _nutritionChip(
-                                  context,
-                                  canViewNutrition: canViewNutrition,
-                                  icon: Icons.fitness_center,
-                                  label: canViewNutrition
-                                      ? '${_getProtein(r)!.toStringAsFixed(1)} г белков'
-                                      : 'Белки',
-                                  tint: Colors.blue,
-                                ),
-                              if (_getFat(r) != null)
-                                _nutritionChip(
-                                  context,
-                                  canViewNutrition: canViewNutrition,
-                                  icon: Icons.opacity,
-                                  label: canViewNutrition
-                                      ? '${_getFat(r)!.toStringAsFixed(1)} г жиров'
-                                      : 'Жиры',
-                                  tint: Colors.yellow.shade700,
-                                ),
-                              if (_getCarbs(r) != null)
-                                _nutritionChip(
-                                  context,
-                                  canViewNutrition: canViewNutrition,
-                                  icon: Icons.eco,
-                                  label: canViewNutrition
-                                      ? '${_getCarbs(r)!.toStringAsFixed(1)} г углеводов'
-                                      : 'Углеводы',
-                                  tint: Colors.green,
-                                ),
-                            ],
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Заголовок
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, 20 * (1 - value)),
+                            child: child,
                           ),
                         );
                       },
-                    ),
-                  const SizedBox(height: 24),
-                  // Видео, если есть
-                  if (r.videoUrl != null && r.videoUrl!.isNotEmpty) ...[
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 550),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(opacity: value, child: child);
-                      },
-                      child: _buildVideoSection(context, r),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  // Автор, если это рецепт пользователя
-                  if (r.author != null && r.author!.isNotEmpty) ...[
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 550),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(opacity: value, child: child);
-                      },
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.person_outline,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Автор: ${r.author}',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  // Описание
-                  if (r.summary != null && r.summary!.isNotEmpty) ...[
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOut,
-                      builder: (context, value, child) {
-                        return Opacity(opacity: value, child: child);
-                      },
                       child: Text(
-                        r.summary!,
-                        style: Theme.of(context).textTheme.bodyLarge,
+                        r.translatedTitle?.isNotEmpty == true
+                            ? r.translatedTitle!
+                            : r.title,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
+                    if (r.translatedTitle != null &&
+                        r.translatedTitle != r.title) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Оригинальное название: ${r.title}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                    if (_originCountryDetailLabel(r) != null) ...[
+                      const SizedBox(height: 10),
+                      Chip(
+                        avatar: const Icon(Icons.public, size: 18),
+                        label: Text(_originCountryDetailLabel(r)!),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 480),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(opacity: value, child: child);
+                      },
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Chip(
+                            avatar: const Icon(Icons.favorite,
+                                color: Colors.red, size: 18),
+                            label: Text('${r.likesCount ?? 0}'),
+                          ),
+                          Chip(
+                            avatar:
+                                const Icon(Icons.comment_outlined, size: 18),
+                            label: Text(
+                              '${_comments.isNotEmpty ? _comments.length : (r.commentsCount ?? 0)}',
+                            ),
+                          ),
+                          Chip(
+                            avatar: const Icon(Icons.star,
+                                color: Colors.amber, size: 18),
+                            label: Text(
+                              _ratingCount > 0
+                                  ? '${_avgRating.toStringAsFixed(1)} ($_ratingCount)'
+                                  : '0.0 (0)',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Метаданные (калории и БЖУ)
+                    if (r.calories != null ||
+                        _getProtein(r) != null ||
+                        _getFat(r) != null ||
+                        _getCarbs(r) != null)
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final canViewNutrition =
+                              ref.watch(canViewRecipeNutritionProvider);
+                          return TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.0, end: 1.0),
+                            duration: const Duration(milliseconds: 500),
+                            curve: Curves.easeOut,
+                            builder: (context, value, child) {
+                              return Opacity(opacity: value, child: child);
+                            },
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (r.calories != null)
+                                  _nutritionChip(
+                                    context,
+                                    canViewNutrition: canViewNutrition,
+                                    icon: Icons.local_fire_department_outlined,
+                                    label: canViewNutrition
+                                        ? '${r.calories} ккал'
+                                        : 'Калории',
+                                    tint: Colors.orange,
+                                  ),
+                                if (_getProtein(r) != null)
+                                  _nutritionChip(
+                                    context,
+                                    canViewNutrition: canViewNutrition,
+                                    icon: Icons.fitness_center,
+                                    label: canViewNutrition
+                                        ? '${_getProtein(r)!.toStringAsFixed(1)} г белков'
+                                        : 'Белки',
+                                    tint: Colors.blue,
+                                  ),
+                                if (_getFat(r) != null)
+                                  _nutritionChip(
+                                    context,
+                                    canViewNutrition: canViewNutrition,
+                                    icon: Icons.opacity,
+                                    label: canViewNutrition
+                                        ? '${_getFat(r)!.toStringAsFixed(1)} г жиров'
+                                        : 'Жиры',
+                                    tint: Colors.yellow.shade700,
+                                  ),
+                                if (_getCarbs(r) != null)
+                                  _nutritionChip(
+                                    context,
+                                    canViewNutrition: canViewNutrition,
+                                    icon: Icons.eco,
+                                    label: canViewNutrition
+                                        ? '${_getCarbs(r)!.toStringAsFixed(1)} г углеводов'
+                                        : 'Углеводы',
+                                    tint: Colors.green,
+                                  ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    // Видео, если есть
+                    if (r.videoUrl != null && r.videoUrl!.isNotEmpty) ...[
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 550),
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return Opacity(opacity: value, child: child);
+                        },
+                        child: _buildVideoSection(context, r),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    // Автор, если это рецепт пользователя
+                    if (r.author != null && r.author!.isNotEmpty) ...[
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 550),
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return Opacity(opacity: value, child: child);
+                        },
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: (r.authorId != null ||
+                                  (r.source == 'channel' &&
+                                      r.channelId != null))
+                              ? _openAuthorProfile
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundImage: r.authorAvatar != null &&
+                                          r.authorAvatar!.isNotEmpty
+                                      ? NetworkImage(r.authorAvatar!)
+                                      : null,
+                                  child: r.authorAvatar == null ||
+                                          r.authorAvatar!.isEmpty
+                                      ? const Icon(Icons.person_outline,
+                                          size: 16)
+                                      : null,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Автор: ${r.author}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                        decoration: r.authorId != null
+                                            ? TextDecoration.underline
+                                            : null,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    // Описание
+                    if (r.summary != null && r.summary!.isNotEmpty) ...[
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOut,
+                        builder: (context, value, child) {
+                          return Opacity(opacity: value, child: child);
+                        },
+                        child: Text(
+                          r.summary!,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    // Мои заметки к рецепту
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 620),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(opacity: value, child: child);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Мои заметки',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _noteController,
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Например: меньше соли, заменить X на Y...',
+                              alignLabelWithHint: true,
+                            ),
+                            onChanged: (value) {
+                              _recipeNote = value;
+                              RecipeNotesService.setNote(_recipe.id, value);
+                            },
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
-                  ],
-                  // Мои заметки к рецепту
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 620),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(opacity: value, child: child);
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Мои заметки',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _noteController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            hintText: 'Например: меньше соли, заменить X на Y...',
-                            border: OutlineInputBorder(),
-                            alignLabelWithHint: true,
-                          ),
-                          onChanged: (value) {
-                            _recipeNote = value;
-                            RecipeNotesService.setNote(_recipe.id, value);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Ингредиенты
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 700),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(opacity: value, child: child);
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ингредиенты',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        if (ingredients.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 4,
-                            children: [1, 2, 4, 6, 8].map((n) {
-                              final selected = _selectedServings == n;
-                              return ChoiceChip(
-                                label: Text('$n порц.'),
-                                selected: selected,
-                                onSelected: (v) {
-                                  if (v) setState(() => _selectedServings = n);
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 12),
-                        ],
-                        if (ingredients.isNotEmpty)
-                          ...ingredients.asMap().entries.map((entry) {
-                            return TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0.0, end: 1.0),
-                              duration: Duration(milliseconds: 800 + (entry.key * 50)),
-                              curve: Curves.easeOut,
-                              builder: (context, value, child) {
-                                return Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(20 * (1 - value), 0),
-                                    child: child,
-                                  ),
-                                );
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        entry.value,
-                                        style: Theme.of(context).textTheme.bodyLarge,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          })
-                        else
+                    // Ингредиенты
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(opacity: value, child: child);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'Нет данных об ингредиентах.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            'Ингредиенты',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                           ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Шаги приготовления
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(opacity: value, child: child);
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Шаги приготовления',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (_hydratingFullRecipe)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(child: CircularProgressIndicator()),
-                          )
-                        else if (steps.isNotEmpty)
-                          ...steps.asMap().entries.map((entry) {
-                            final step = entry.value;
-                            final num = step['number'] ?? entry.key + 1;
-                            // Преобразуем txt в строку, если это не строка
-                            // Проверяем все возможные поля для текста шага
-                            final txtRaw = step['step'] ?? 
-                                          step['text'] ?? 
-                                          step['instruction'] ?? 
-                                          (step.toString());
-                            // Убираем лишние символы JSON, если это строка-представление Map
-                            String txt = txtRaw is String ? txtRaw : txtRaw.toString();
-                            // Если это JSON-строка объекта, пытаемся извлечь текст
-                            if (txt.startsWith('{') && txt.contains('step')) {
-                              try {
-                                final decoded = jsonDecode(txt) as Map<String, dynamic>;
-                                txt = decoded['step']?.toString() ?? 
-                                      decoded['text']?.toString() ?? 
-                                      decoded['instruction']?.toString() ?? 
-                                      txt;
-                              } catch (e) {
-                                // Если не удалось распарсить, оставляем как есть
-                              }
-                            }
-                            // Извлекаем изображение шага
-                            dynamic imgRaw = step['image'] ?? step['image_url'];
-                            String? imgUrl;
-                            if (imgRaw != null) {
-                              if (imgRaw is String) {
-                                imgUrl = imgRaw.isNotEmpty && imgRaw != 'null' && imgRaw.trim().isNotEmpty ? imgRaw.trim() : null;
-                              } else {
-                                final imgStr = imgRaw.toString();
-                                imgUrl = imgStr.isNotEmpty && imgStr != 'null' && imgStr.trim().isNotEmpty ? imgStr.trim() : null;
-                              }
-                            }
-                            // Логирование для отладки
-                            debugPrint('🔍 Шаг $num: step=$step, imgRaw=$imgRaw, imgUrl=$imgUrl');
-                            if (imgUrl != null && imgUrl.isNotEmpty) {
-                              debugPrint('🖼️ Шаг $num: найдено изображение $imgUrl');
-                            } else {
-                              debugPrint('⚠️ Шаг $num: изображение отсутствует. imgRaw=$imgRaw, step keys=${step.keys.toList()}');
-                            }
-                            
-                            return TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 0.0, end: 1.0),
-                              duration: Duration(milliseconds: 900 + (entry.key * 100)),
-                              curve: Curves.easeOut,
-                              builder: (context, value, child) {
-                                return Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(0, 20 * (1 - value)),
-                                    child: child,
-                                  ),
+                          if (ingredients.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [1, 2, 4, 6, 8].map((n) {
+                                final selected = _selectedServings == n;
+                                return ChoiceChip(
+                                  label: Text('$n порц.'),
+                                  selected: selected,
+                                  onSelected: (v) {
+                                    if (v) {
+                                      setState(() => _selectedServings = n);
+                                    }
+                                  },
                                 );
-                              },
-                              child: Card(
-                                margin: const EdgeInsets.only(bottom: 16),
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (ingredients.isNotEmpty)
+                            ...ingredients.asMap().entries.map((entry) {
+                              return TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: Duration(
+                                    milliseconds: 800 + (entry.key * 50)),
+                                curve: Curves.easeOut,
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(20 * (1 - value), 0),
+                                      child: child,
+                                    ),
+                                  );
+                                },
                                 child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            width: 32,
-                                            height: 32,
-                                            decoration: BoxDecoration(
-                                              color: Theme.of(context).colorScheme.primary,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Center(
-                                              child: Text(
-                                                '$num',
-                                                style: TextStyle(
-                                                  color: Theme.of(context).colorScheme.onPrimary,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              txt,
-                                              style: Theme.of(context).textTheme.bodyLarge,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      if (imgUrl != null && imgUrl.isNotEmpty && imgUrl != 'null') ...[
-                                        const SizedBox(height: 12),
-                                        GestureDetector(
-                                          onTap: () {
-                                            // Собираем все изображения шагов для полноэкранного просмотра
-                                            final allStepImages = <String>[];
-                                            for (var s in steps) {
-                                              final stepImg = s['image'] ?? s['image_url'];
-                                              if (stepImg != null && stepImg.toString().isNotEmpty && stepImg.toString() != 'null') {
-                                                allStepImages.add(stepImg.toString());
-                                              }
-                                            }
-                                            if (allStepImages.isNotEmpty && imgUrl != null) {
-                                              final currentIndex = allStepImages.indexOf(imgUrl);
-                                              showFullscreenImageViewer(
-                                                context,
-                                                imageUrls: allStepImages,
-                                                initialIndex: currentIndex >= 0 ? currentIndex : 0,
-                                              );
-                                            }
-                                          },
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: RecipeNetworkImage(
-                                              rawUrl: imgUrl,
-                                              profile: RecipeImageProfile.card,
-                                              height: 180,
-                                              width: double.infinity,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary,
+                                          shape: BoxShape.circle,
                                         ),
-                                      ],
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          entry.value,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            );
-                          })
-                        else
+                              );
+                            })
+                          else
+                            Text(
+                              'Нет данных об ингредиентах.',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Шаги приготовления
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(opacity: value, child: child);
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'Шаги приготовления пока не доступны.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            'Шаги приготовления',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                           ),
-                      ],
+                          const SizedBox(height: 16),
+                          if (_hydratingFullRecipe)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (steps.isNotEmpty)
+                            ...steps.asMap().entries.map((entry) {
+                              final step = entry.value;
+                              final num = step['number'] ?? entry.key + 1;
+                              // Преобразуем txt в строку, если это не строка
+                              // Проверяем все возможные поля для текста шага
+                              final txtRaw = step['step'] ??
+                                  step['text'] ??
+                                  step['instruction'] ??
+                                  (step.toString());
+                              // Убираем лишние символы JSON, если это строка-представление Map
+                              String txt =
+                                  txtRaw is String ? txtRaw : txtRaw.toString();
+                              // Если это JSON-строка объекта, пытаемся извлечь текст
+                              if (txt.startsWith('{') && txt.contains('step')) {
+                                try {
+                                  final decoded =
+                                      jsonDecode(txt) as Map<String, dynamic>;
+                                  txt = decoded['step']?.toString() ??
+                                      decoded['text']?.toString() ??
+                                      decoded['instruction']?.toString() ??
+                                      txt;
+                                } catch (e) {
+                                  // Если не удалось распарсить, оставляем как есть
+                                }
+                              }
+                              // Извлекаем изображение шага
+                              dynamic imgRaw =
+                                  step['image'] ?? step['image_url'];
+                              String? imgUrl;
+                              if (imgRaw != null) {
+                                if (imgRaw is String) {
+                                  imgUrl = imgRaw.isNotEmpty &&
+                                          imgRaw != 'null' &&
+                                          imgRaw.trim().isNotEmpty
+                                      ? imgRaw.trim()
+                                      : null;
+                                } else {
+                                  final imgStr = imgRaw.toString();
+                                  imgUrl = imgStr.isNotEmpty &&
+                                          imgStr != 'null' &&
+                                          imgStr.trim().isNotEmpty
+                                      ? imgStr.trim()
+                                      : null;
+                                }
+                              }
+                              return TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: Duration(
+                                    milliseconds: 900 + (entry.key * 100)),
+                                curve: Curves.easeOut,
+                                builder: (context, value, child) {
+                                  return Opacity(
+                                    opacity: value,
+                                    child: Transform.translate(
+                                      offset: Offset(0, 20 * (1 - value)),
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Card(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              width: 32,
+                                              height: 32,
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  '$num',
+                                                  style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onPrimary,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                txt,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyLarge,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (imgUrl != null &&
+                                            imgUrl.isNotEmpty &&
+                                            imgUrl != 'null') ...[
+                                          const SizedBox(height: 12),
+                                          GestureDetector(
+                                            onTap: () {
+                                              // Собираем все изображения шагов для полноэкранного просмотра
+                                              final allStepImages = <String>[];
+                                              for (var s in steps) {
+                                                final stepImg = s['image'] ??
+                                                    s['image_url'];
+                                                if (stepImg != null &&
+                                                    stepImg
+                                                        .toString()
+                                                        .isNotEmpty &&
+                                                    stepImg.toString() !=
+                                                        'null') {
+                                                  allStepImages
+                                                      .add(stepImg.toString());
+                                                }
+                                              }
+                                              if (allStepImages.isNotEmpty &&
+                                                  imgUrl != null) {
+                                                final currentIndex =
+                                                    allStepImages
+                                                        .indexOf(imgUrl);
+                                                showFullscreenImageViewer(
+                                                  context,
+                                                  imageUrls: allStepImages,
+                                                  initialIndex:
+                                                      currentIndex >= 0
+                                                          ? currentIndex
+                                                          : 0,
+                                                );
+                                              }
+                                            },
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: RecipeNetworkImage(
+                                                rawUrl: imgUrl,
+                                                profile:
+                                                    RecipeImageProfile.card,
+                                                height: 180,
+                                                width: double.infinity,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            })
+                          else
+                            Text(
+                              'Шаги приготовления пока не доступны.',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Комментарии
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: const Duration(milliseconds: 900),
-                    curve: Curves.easeOut,
-                    builder: (context, value, child) {
-                      return Opacity(opacity: value, child: child);
-                    },
-                    child: _buildCommentsSection(context),
-                  ),
-                  SizedBox(
-                    height: 12 +
-                        floatingBottomPadding(context) +
-                        _kCommentComposerScrollReserve,
-                  ),
-                ],
+                    const SizedBox(height: 32),
+                    // Комментарии
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 900),
+                      curve: Curves.easeOut,
+                      builder: (context, value, child) {
+                        return Opacity(opacity: value, child: child);
+                      },
+                      child: _buildCommentsSection(context),
+                    ),
+                    SizedBox(
+                      height: 12 +
+                          floatingBottomPadding(context) +
+                          _kCommentComposerScrollReserve,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -1415,9 +1621,11 @@ class _DetailPageState extends ConsumerState<DetailPage> {
               if (_replyToCommentId != null)
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                    color: theme.colorScheme.primaryContainer
+                        .withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -1486,7 +1694,6 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                         hintText: _replyToCommentId != null
                             ? 'Ваш ответ…'
                             : 'Комментарий…',
-                        border: const OutlineInputBorder(),
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
@@ -1499,7 +1706,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                   FilledButton(
                     onPressed: _addComment,
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
                       minimumSize: const Size(48, 48),
                     ),
                     child: const Icon(Icons.send, size: 20),
@@ -1515,8 +1723,10 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                   Text(_isSpoonacularRecipe ? 'Оценка рецепта: ' : 'Оценка: '),
                   ...List.generate(5, (index) {
                     return IconButton(
-                      visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-                      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                      visualDensity:
+                          const VisualDensity(horizontal: -3, vertical: -3),
+                      constraints:
+                          const BoxConstraints.tightFor(width: 30, height: 30),
                       padding: EdgeInsets.zero,
                       splashRadius: 16,
                       icon: Icon(
@@ -1551,7 +1761,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     for (final comment in _comments) {
       final parentId = comment.parentId;
       if (parentId != null) {
-        repliesByParent.putIfAbsent(parentId, () => <RecipeComment>[]).add(comment);
+        repliesByParent
+            .putIfAbsent(parentId, () => <RecipeComment>[])
+            .add(comment);
       }
     }
     topLevelComments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -1586,13 +1798,15 @@ class _DetailPageState extends ConsumerState<DetailPage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Комментарии (${_comments.length})',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            Expanded(
+              child: Text(
+                'Комментарии (${_comments.isNotEmpty ? _comments.length : (_recipe.commentsCount ?? 0)})',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
             ),
-            if (_recipe.author != null && _recipe.author!.isNotEmpty)
+            if (_canFollowAuthor)
               TextButton.icon(
                 onPressed: _subscriptionLoading ? null : _toggleSubscription,
                 icon: _subscriptionLoading
@@ -1615,7 +1829,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                Icon(Icons.star_rounded, color: Colors.amber.shade600, size: 20),
+                Icon(Icons.star_rounded,
+                    color: Colors.amber.shade600, size: 20),
                 const SizedBox(width: 6),
                 Text(
                   '${_avgRating.toStringAsFixed(1)} из 5',
@@ -1645,7 +1860,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
           )
         else
           ...topLevelComments.map((comment) {
-            final replies = repliesByRoot[comment.id] ?? const <RecipeComment>[];
+            final replies =
+                repliesByRoot[comment.id] ?? const <RecipeComment>[];
             final isExpanded = _expandedReplyThreads.contains(comment.id);
             return FutureBuilder(
               future: AuthService.getCurrentUser(),
@@ -1657,6 +1873,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                   final canDelete = c.authorId != null &&
                       currentUserId != null &&
                       currentUserId == c.authorId;
+                  final commentAuthorId =
+                      c.authorId != null ? int.tryParse(c.authorId!) : null;
 
                   return Padding(
                     padding: EdgeInsets.only(left: leftPad, bottom: 8),
@@ -1667,16 +1885,27 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            c.authorAvatar != null && c.authorAvatar!.isNotEmpty
-                                ? CircleAvatar(
-                                    radius: 16,
-                                    backgroundImage: NetworkImage(c.authorAvatar!),
-                                    onBackgroundImageError: (_, __) {},
-                                  )
-                                : CircleAvatar(
-                                    radius: 16,
-                                    child: Text(c.author[0].toUpperCase()),
-                                  ),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: commentAuthorId != null
+                                  ? () => context.push(
+                                        ProfileRoute.withUserId(
+                                            commentAuthorId),
+                                      )
+                                  : null,
+                              child: c.authorAvatar != null &&
+                                      c.authorAvatar!.isNotEmpty
+                                  ? CircleAvatar(
+                                      radius: 16,
+                                      backgroundImage:
+                                          NetworkImage(c.authorAvatar!),
+                                      onBackgroundImageError: (_, __) {},
+                                    )
+                                  : CircleAvatar(
+                                      radius: 16,
+                                      child: Text(c.author[0].toUpperCase()),
+                                    ),
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -1685,9 +1914,19 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          c.author,
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        child: InkWell(
+                                          onTap: commentAuthorId != null
+                                              ? () => context.push(
+                                                    ProfileRoute.withUserId(
+                                                      commentAuthorId,
+                                                    ),
+                                                  )
+                                              : null,
+                                          child: Text(
+                                            c.author,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                          ),
                                         ),
                                       ),
                                       if (c.rating != null)
@@ -1695,7 +1934,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: List.generate(5, (index) {
                                             return Icon(
-                                              index < c.rating! ? Icons.star : Icons.star_border,
+                                              index < c.rating!
+                                                  ? Icons.star
+                                                  : Icons.star_border,
                                               size: 14,
                                               color: Colors.amber,
                                             );
@@ -1723,7 +1964,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                             vertical: -3,
                                           ),
                                           minimumSize: const Size(0, 20),
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
                                         ),
                                         child: const Text('Ответить'),
                                       ),
@@ -1732,7 +1974,9 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                         _formatDate(c.createdAt),
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                       ),
                                       if (canDelete) ...[
@@ -1742,12 +1986,14 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                             horizontal: -4,
                                             vertical: -4,
                                           ),
-                                          constraints: const BoxConstraints.tightFor(
+                                          constraints:
+                                              const BoxConstraints.tightFor(
                                             width: 24,
                                             height: 24,
                                           ),
                                           padding: EdgeInsets.zero,
-                                          icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                                          icon: const Icon(Icons.delete,
+                                              color: Colors.red, size: 18),
                                           onPressed: () => _deleteComment(c),
                                         ),
                                       ],
@@ -1799,9 +2045,10 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                         final parentAuthor = reply.parentId != null
                             ? commentsById[reply.parentId!]?.author
                             : null;
-                        final mention = (parentAuthor != null && parentAuthor.isNotEmpty)
-                            ? '$parentAuthor, '
-                            : '';
+                        final mention =
+                            (parentAuthor != null && parentAuthor.isNotEmpty)
+                                ? '$parentAuthor, '
+                                : '';
                         return Padding(
                           padding: const EdgeInsets.only(left: 18),
                           child: buildCommentTile(
@@ -1847,25 +2094,38 @@ class _DetailPageState extends ConsumerState<DetailPage> {
   }
 
   Widget _buildHeroImage(BuildContext context, Recipe r) {
-    // Приоритет: videoThumbnail > image
-    final primary = r.videoThumbnail ?? r.image;
-    final fallback = r.sourceImage;
-    
-    if ((primary != null && primary.isNotEmpty) || (fallback != null && fallback.isNotEmpty)) {
-      final primaryRaw =
-          (primary != null && primary.isNotEmpty) ? primary : fallback!;
+    String? nonEmpty(String? value) {
+      final trimmed = value?.trim();
+      return trimmed == null || trimmed.isEmpty ? null : trimmed;
+    }
+
+    final photos = _recipePhotoUrls(r);
+
+    // Приоритет как в карточке меню: videoThumbnail > imageUrls > image > sourceImage.
+    final primary = nonEmpty(r.videoThumbnail) ??
+        (photos.isNotEmpty ? photos.first : null) ??
+        nonEmpty(r.image) ??
+        nonEmpty(r.sourceImage);
+    final fallback = nonEmpty(r.sourceImage);
+    final galleryUrls = <String>[
+      if (nonEmpty(r.videoThumbnail) != null) nonEmpty(r.videoThumbnail)!,
+      ...photos,
+      if (primary != null) primary,
+      if (fallback != null) fallback,
+    ];
+    final dedupedGallery = <String>[];
+    final seen = <String>{};
+    for (final url in galleryUrls) {
+      if (seen.add(url)) dedupedGallery.add(url);
+    }
+
+    if (dedupedGallery.isNotEmpty) {
+      final primaryRaw = dedupedGallery.first;
       return GestureDetector(
         onTap: () {
-          final urls = <String>[
-            primaryRaw,
-            if (fallback != null &&
-                fallback.isNotEmpty &&
-                fallback != primaryRaw)
-              fallback,
-          ];
           showFullscreenImageViewer(
             context,
-            imageUrls: urls,
+            imageUrls: dedupedGallery,
             initialIndex: 0,
           );
         },
@@ -1895,27 +2155,81 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                   ),
                 ),
               ),
+            if (dedupedGallery.length > 1)
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.photo_library_outlined,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${dedupedGallery.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       );
     }
-    
+
     return _buildPlaceholder(context);
   }
 
+  List<String> _recipePhotoUrls(Recipe r) {
+    final seen = <String>{};
+    final urls = <String>[];
+
+    void add(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty || trimmed == 'null') return;
+      if (seen.add(trimmed)) urls.add(trimmed);
+    }
+
+    for (final url in r.imageUrls) {
+      add(url);
+    }
+    add(r.image);
+    add(r.sourceImage);
+    return urls;
+  }
+
   Widget _buildPlaceholder(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Theme.of(context).colorScheme.primaryContainer,
-            Theme.of(context).colorScheme.secondaryContainer,
+            scheme.surface,
+            scheme.surfaceContainerLow,
           ],
         ),
       ),
-      child: const Icon(Icons.restaurant_menu, size: 80),
+      child: Icon(
+        Icons.restaurant_menu,
+        size: 80,
+        color: scheme.primary.withValues(alpha: 0.72),
+      ),
     );
   }
 
@@ -1941,12 +2255,16 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                         profile: RecipeImageProfile.detailHero,
                         fit: BoxFit.cover,
                         errorWidget: Container(
-                          color: Colors.grey[300],
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
                           child: const Icon(Icons.video_library, size: 48),
                         ),
                       )
                     : Container(
-                        color: Colors.grey[300],
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                         child: const Icon(Icons.video_library, size: 48),
                       ),
               ),
@@ -1973,15 +2291,17 @@ class _DetailPageState extends ConsumerState<DetailPage> {
               top: 12,
               right: 12,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.play_circle_filled, color: Colors.white, size: 16),
+                    const Icon(Icons.play_circle_filled,
+                        color: Colors.white, size: 16),
                     const SizedBox(width: 4),
                     Text(
                       'Видео',

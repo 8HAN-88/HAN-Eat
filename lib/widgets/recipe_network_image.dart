@@ -150,7 +150,10 @@ class _RecipeNetworkImageState extends State<RecipeNetworkImage> {
     VoidCallback? onLoaded,
   }) {
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final targetW = widget.width != null ? (widget.width! * dpr).round() : null;
+    final rawWidth = widget.width;
+    final targetW = rawWidth != null && rawWidth.isFinite && rawWidth > 0
+        ? (rawWidth * dpr).round()
+        : null;
 
     return CachedNetworkImage(
       imageUrl: url,
@@ -188,7 +191,8 @@ class _RecipeNetworkImageState extends State<RecipeNetworkImage> {
         );
       },
       errorWidget: (context, failedUrl, error) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _tryNextCandidate());
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _tryNextCandidate());
         return widget.errorWidget ??
             Container(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,

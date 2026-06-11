@@ -114,7 +114,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         actions: [
           // Индикатор онлайн/оффлайн
           ValueListenableBuilder<bool>(
-            valueListenable: FeedSyncService.instance.isOnline,
+            valueListenable: FeedSyncService.onlineListenable,
             builder: (context, isOnline, _) {
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),

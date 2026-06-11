@@ -2,13 +2,38 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../core/storage/hive_bootstrap.dart';
 import '../models/shopping_item.dart';
 import '../utils/ingredient_quantity.dart';
 
 /// Список покупок хранится локально (Hive). Не очищается при выходе из аккаунта —
 /// удаляется только по действию пользователя (кнопка «Очистить список»).
 class ShoppingService {
-  static late final ShoppingService instance;
+  static ShoppingService? _instance;
+  static ShoppingService get instance {
+    if (_instance == null) {
+      throw StateError(
+        'ShoppingService not initialized. Call ShoppingService.init() first.',
+      );
+    }
+    return _instance!;
+  }
+
+  static Future<ShoppingService> ensureInitialized() async {
+    if (_instance != null) return _instance!;
+    await init();
+    return _instance!;
+  }
+
+  /// Безопасный listenable до [init] (пустой список).
+  static ValueListenable<List<ShoppingItem>> get itemsListenable {
+    try {
+      return instance.items;
+    } catch (_) {
+      return ValueNotifier<List<ShoppingItem>>(<ShoppingItem>[]);
+    }
+  }
+
   static const String _boxName = 'shopping_list';
   static const String _keyItems = 'items';
   late final Box _box;
@@ -49,8 +74,10 @@ class ShoppingService {
   }
 
   static Future<void> init() async {
+    if (_instance != null) return;
+    await ensureHiveReady();
     final box = await Hive.openBox(_boxName);
-    instance = ShoppingService._internal(box);
+    _instance = ShoppingService._internal(box);
   }
 
   /// Список сгруппированный по подгруппам (null = "Без группы").

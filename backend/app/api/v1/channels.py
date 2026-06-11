@@ -5,7 +5,7 @@ import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import String, and_, cast, func, or_
 from typing import Optional, List
 from redis.exceptions import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
 from app.core.database import get_db
@@ -26,10 +26,13 @@ from app.services.channel_membership_service import (
     MEMBER_STATUS_PENDING,
     active_member_channel_ids_subquery,
     can_view_channel_posts,
+    channel_role_permissions,
+    default_role_permissions,
     get_membership,
+    has_channel_permission,
     is_channel_owner,
-    is_staff_member,
     membership_status_for_user,
+    normalize_role_permissions,
     sync_channel_members_count,
 )
 from app.services.recipe_visibility_service import (
@@ -40,6 +43,7 @@ from app.services.recipe_visibility_service import (
     resolve_recipe_visibility,
     sync_recipe_index_flags,
 )
+from app.services.search_normalization import escaped_like_pattern, search_terms, stable_search_key
 from app.schemas.channel import (
     CreateChannelRequest,
     UpdateChannelRequest,
@@ -78,17 +82,61 @@ def _require_can_view_posts(
     return member
 
 
+def _post_preview_text(post: Post) -> str:
+    title = (post.title or "").strip()
+    if title:
+        return title[:120]
+    desc = (post.description or "").strip()
+    if desc:
+        return desc[:120]
+    ptype = (post.type or "").lower()
+    if ptype == "recipe":
+        return "Рецепт"
+    if ptype in ("reel", "video"):
+        return "Видео"
+    if ptype in ("photo", "image"):
+        return "Фото"
+    return "Новый пост"
+
+
+def _batch_last_posts(db: Session, channel_ids: List[int]) -> dict:
+    """Последний опубликованный пост на канал (один SQL-запрос)."""
+    if not channel_ids:
+        return {}
+    rows = (
+        db.query(Post)
+        .filter(
+            Post.channel_id.in_(channel_ids),
+            Post.status == "published",
+            Post.deleted_at.is_(None),
+        )
+        .order_by(Post.channel_id, Post.id.desc())
+        .all()
+    )
+    out: dict = {}
+    for post in rows:
+        cid = post.channel_id
+        if cid is None or cid in out:
+            continue
+        ts = post.published_at or post.created_at
+        out[cid] = (_post_preview_text(post), ts)
+    return out
+
+
 def _build_channel_response(
     db: Session,
     channel: Channel,
     current_user: Optional[User],
 ) -> ChannelResponse:
-    item = ChannelResponse.model_validate(channel)
+    from app.services.channel_presentation_service import channel_presentation_fields
+
+    presentation = channel_presentation_fields(db, channel)
+    item = ChannelResponse.model_validate(channel).model_copy(update=presentation)
     if not current_user:
         return item
     member = get_membership(db, channel.id, current_user.id)
     pending_count = None
-    if is_staff_member(member, channel, current_user):
+    if has_channel_permission(channel, member, current_user, "manage_join_requests"):
         pending_count = (
             db.query(ChannelMember)
             .filter(
@@ -97,24 +145,33 @@ def _build_channel_response(
             )
             .count()
         )
+    seen_posts_count = None
+    if member and member.status == MEMBER_STATUS_ACTIVE:
+        seen_posts_count = member.last_seen_posts_count or 0
     return item.model_copy(
         update={
             "membership_status": membership_status_for_user(
                 member, channel, current_user
             ),
             "pending_join_requests_count": pending_count,
+            "seen_posts_count": seen_posts_count,
+            **presentation,
         }
     )
 
 
-def _require_staff(
-    db: Session, channel: Channel, user: User
+def _require_channel_permission(
+    db: Session,
+    channel: Channel,
+    user: User,
+    permission: str,
+    detail: str = "Недостаточно прав для действия",
 ) -> ChannelMember:
     member = get_membership(db, channel.id, user.id)
-    if not is_staff_member(member, channel, user):
+    if not has_channel_permission(channel, member, user, permission):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only channel staff can perform this action",
+            detail=detail,
         )
     return member
 
@@ -167,6 +224,7 @@ async def create_channel(
             allow_comments=True,
             allow_likes=True,
             allow_reposts=True,
+            role_permissions=default_role_permissions(),
             auto_publish_reels=request.auto_publish_reels,
         )
         
@@ -232,19 +290,13 @@ async def update_channel(
             detail="Channel not found"
         )
     
-    # Проверяем права доступа
-    member = db.query(ChannelMember).filter(
-        ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id == current_user.id
-    ).first()
-    
-    is_owner = channel.admin_user_id == current_user.id
-    is_admin = member and (member.role == "admin" or member.role == "owner")
-    
-    if not (is_owner or is_admin):
+    member = get_membership(db, channel_id, current_user.id)
+    if not has_channel_permission(
+        channel, member, current_user, "manage_channel_settings"
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only channel owner or admin can update channel"
+            detail="Недостаточно прав для изменения настроек канала",
         )
     
     # Проверяем уникальность slug (если изменился)
@@ -293,7 +345,27 @@ async def update_channel(
         channel.allow_reposts = request.allow_reposts
     if request.auto_publish_reels is not None:
         channel.auto_publish_reels = request.auto_publish_reels
-    
+    if request.role_permissions is not None:
+        if not is_channel_owner(channel, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Только владелец канала может менять права ролей",
+            )
+        channel.role_permissions = normalize_role_permissions(request.role_permissions)
+    if request.accent_color is not None:
+        if not has_creator:
+            from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": HAN_CREATOR_REQUIRED_CODE,
+                    "message": "Оформление канала доступно с тарифом Creator или Pro",
+                },
+            )
+        color = (request.accent_color or "").strip()
+        channel.accent_color = color or None
+
     db.commit()
     db.refresh(channel)
     
@@ -361,7 +433,9 @@ async def get_channel(
         )
 
     pending_count = None
-    if current_user and is_staff_member(member, channel, current_user):
+    if current_user and has_channel_permission(
+        channel, member, current_user, "manage_join_requests"
+    ):
         pending_count = (
             db.query(ChannelMember)
             .filter(
@@ -372,6 +446,9 @@ async def get_channel(
         )
 
     admin = db.query(User).filter(User.id == channel.admin_user_id).first()
+    from app.services.channel_presentation_service import channel_presentation_fields
+
+    presentation = channel_presentation_fields(db, channel)
 
     return ChannelDetailResponse(
         id=channel.id,
@@ -393,6 +470,7 @@ async def get_channel(
         allow_comments=channel.allow_comments if channel.allow_comments is not None else True,
         allow_likes=channel.allow_likes if channel.allow_likes is not None else True,
         allow_reposts=channel.allow_reposts if channel.allow_reposts is not None else True,
+        role_permissions=channel_role_permissions(channel),
         is_owner=is_owner,
         is_moderator=is_moderator,
         members_count=channel.members_count if channel.members_count is not None else 0,
@@ -410,6 +488,8 @@ async def get_channel(
         membership_status=m_status,
         can_view_posts=can_posts,
         pending_join_requests_count=pending_count,
+        has_creator_badge=presentation["has_creator_badge"],
+        accent_color=presentation["accent_color"],
     )
 
 
@@ -428,6 +508,9 @@ async def list_channels(
     max_subscribers: Optional[int] = Query(None, description="Максимальное количество подписчиков"),
     has_recipes: Optional[bool] = Query(None, description="Только каналы с рецептами"),
     min_posts: Optional[int] = Query(None, description="Минимальное количество постов"),
+    with_last_post: Optional[bool] = Query(
+        None, description="Добавить превью последнего поста (для списка чатов)"
+    ),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user)
 ):
@@ -607,6 +690,24 @@ async def list_channels(
             # Пропускаем проблемный канал
             continue
     
+    if with_last_post and items:
+        previews = _batch_last_posts(db, [ch.id for ch in items])
+        enriched = []
+        for ch in items:
+            preview = previews.get(ch.id)
+            if preview:
+                enriched.append(
+                    ch.model_copy(
+                        update={
+                            "last_post_preview": preview[0],
+                            "last_post_at": preview[1],
+                        }
+                    )
+                )
+            else:
+                enriched.append(ch)
+        items = enriched
+
     return {
         "items": items,
         "total": total,
@@ -735,7 +836,13 @@ async def list_channel_join_requests(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found",
         )
-    _require_staff(db, channel, current_user)
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "manage_join_requests",
+        "Недостаточно прав для просмотра заявок на подписку",
+    )
 
     rows = (
         db.query(ChannelMember, User)
@@ -793,7 +900,13 @@ async def approve_channel_join_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found",
         )
-    _require_staff(db, channel, current_user)
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "manage_join_requests",
+        "Недостаточно прав для одобрения заявок на подписку",
+    )
 
     pending = get_membership(db, channel_id, user_id)
     if not pending or pending.status != MEMBER_STATUS_PENDING:
@@ -850,7 +963,13 @@ async def reject_channel_join_request(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Channel not found",
         )
-    _require_staff(db, channel, current_user)
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "manage_join_requests",
+        "Недостаточно прав для отклонения заявок на подписку",
+    )
 
     pending = get_membership(db, channel_id, user_id)
     if not pending or pending.status != MEMBER_STATUS_PENDING:
@@ -861,6 +980,33 @@ async def reject_channel_join_request(
     db.delete(pending)
     db.commit()
     return None
+
+
+@router.post("/{channel_id}/inbox-read")
+async def mark_channel_inbox_read(
+    channel_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Отметить посты канала просмотренными в inbox (синхронизация между устройствами)."""
+    channel = db.query(Channel).filter(Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Channel not found",
+        )
+    member = get_membership(db, channel_id, current_user.id)
+    if not member or member.status != MEMBER_STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not a member of this channel",
+        )
+    posts_count = channel.posts_count or 0
+    seen = member.last_seen_posts_count or 0
+    if posts_count > seen:
+        member.last_seen_posts_count = posts_count
+        db.commit()
+    return {"ok": True, "seen_posts_count": member.last_seen_posts_count or 0}
 
 
 @router.patch("/{channel_id}/notifications")
@@ -889,6 +1035,7 @@ async def patch_channel_notifications(
 async def get_channel_posts(
     channel_id: int,
     post_type: Optional[str] = Query(None, description="Filter by post type: text, photo, recipe, reel"),
+    search: Optional[str] = Query(None, description="Search by title, description, tags and recipe text"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -900,7 +1047,8 @@ async def get_channel_posts(
     Оптимизировано с кэшированием и batch loading для быстрой загрузки.
     """
     # Создаем ключ кэша
-    cache_key = f"channel_posts:{channel_id}:{post_type or 'all'}:{limit}:{offset}"
+    normalized_search = stable_search_key(search or "")
+    cache_key = f"channel_posts:{channel_id}:{post_type or 'all'}:{normalized_search or 'no_search'}:{limit}:{offset}"
     if current_user:
         cache_key += f":user_{current_user.id}"
     
@@ -935,11 +1083,34 @@ async def get_channel_posts(
     # Фильтр по типу поста
     if post_type:
         query = query.filter(Post.type == post_type)
+
+    if normalized_search:
+        tags_text = func.coalesce(func.array_to_string(Post.tags, ' '), '')
+        ingredients_text = func.coalesce(cast(Post.body["ingredients"], String), '')
+        steps_text = func.coalesce(cast(Post.body["steps"], String), '')
+
+        term_filters = []
+        for term in search_terms(normalized_search):
+            pattern = escaped_like_pattern(term)
+            term_filters.append(
+                or_(
+                    func.coalesce(Post.title, '').ilike(pattern, escape='\\'),
+                    func.coalesce(Post.description, '').ilike(pattern, escape='\\'),
+                    tags_text.ilike(pattern, escape='\\'),
+                    ingredients_text.ilike(pattern, escape='\\'),
+                    steps_text.ilike(pattern, escape='\\'),
+                )
+            )
+        if term_filters:
+            query = query.filter(and_(*term_filters))
     
-    # Для отображения как в чатах Telegram: новые посты внизу, старые вверху
-    # Всегда показываем последние посты при offset=0 (как в Telegram)
-    # Сортируем по убыванию даты (новые первыми)
-    posts = query.order_by(Post.published_at.desc()).limit(limit).offset(offset).all()
+    # Закреплённые сверху, затем по дате публикации (новые первыми)
+    posts = (
+        query.order_by(Post.is_pinned.desc(), Post.published_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
     
     # Подсчет общего количества
     total = query.count()
@@ -954,7 +1125,6 @@ async def get_channel_posts(
     from app.models.like import Like
     from app.models.comment import Comment
     from app.schemas.post import PostResponse
-    from sqlalchemy import func
     
     post_ids = [post.id for post in posts]
     
@@ -1022,6 +1192,14 @@ async def get_channel_posts(
         is_liked = post.id in user_liked_posts
         
         post_response = PostResponse.model_validate(post).model_dump()
+        if post_response.get("channel") is None:
+            post_response["channel"] = {
+                "id": channel.id,
+                "name": channel.name,
+                "slug": channel.slug,
+                "avatar_url": channel.avatar_url,
+                "description": channel.description,
+            }
         if post.id in poll_bodies:
             post_response["body"] = poll_bodies[post.id]
         posts_data.append({
@@ -1133,34 +1311,13 @@ async def create_channel_recipe(
         request.visibility, channel, has_creator
     )
 
-    # Проверяем, является ли пользователь владельцем, админом или модератором канала
-    is_owner = channel.admin_user_id == current_user.id
-    
-    if is_owner:
-        # Владелец канала всегда может публиковать
-        pass
-    else:
-        # Для не-владельцев проверяем роль участника
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first()
-        
-        # Участники с ролями owner, admin или moderator могут публиковать
-        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
-        
-        if not is_admin_or_moderator:
-            # Используем глобальный logger из начала файла
-            logger.warning(
-                f"User {current_user.id} (username: {current_user.username}) tried to post recipe to channel {channel_id}. "
-                f"Channel owner: {channel.admin_user_id}, Is owner: {is_owner}, "
-                f"Member found: {member is not None}, Member role: {member.role if member else 'None'}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Only channel owner, admins and moderators can post recipes to channel. "
-                       f"Channel owner ID: {channel.admin_user_id}, Your ID: {current_user.id}"
-            )
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "create_posts",
+        "Недостаточно прав для публикации рецептов в канале",
+    )
     
     # Валидация: должен быть тип recipe
     if request.type != "recipe":
@@ -1207,6 +1364,13 @@ async def create_channel_recipe(
         fat_g=request.fat_g,
         fiber_g=request.fiber_g,
     )
+    from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
+
+    apply_origin_country_to_recipe_body(
+        body,
+        origin_country_code=request.origin_country_code,
+        origin_country_name=request.origin_country_name,
+    )
     # Денормализация для карточек «Меню» / клиентов, читающих только body
     if channel.name:
         body["channel_name"] = channel.name
@@ -1252,6 +1416,13 @@ async def create_channel_recipe(
 
     db.commit()
     db.refresh(post)
+
+    try:
+        from app.services.user_stats_cache import invalidate_user_stats_cache
+
+        invalidate_user_stats_cache([current_user.id])
+    except Exception as e:
+        logger.warning("Failed to invalidate user stats after channel recipe: %s", e)
 
     try:
         from app.services.analytics_service import AnalyticsService
@@ -1340,34 +1511,13 @@ async def create_channel_post(
             detail="Channel not found"
         )
     
-    # Проверяем, является ли пользователь владельцем, админом или модератором канала
-    is_owner = channel.admin_user_id == current_user.id
-    
-    if is_owner:
-        # Владелец канала всегда может публиковать
-        pass
-    else:
-        # Для не-владельцев проверяем роль участника
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first()
-        
-        # Участники с ролями owner, admin или moderator могут публиковать
-        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
-        
-        if not is_admin_or_moderator:
-            # Используем глобальный logger из начала файла
-            logger.warning(
-                f"User {current_user.id} (username: {current_user.username}) tried to post to channel {channel_id}. "
-                f"Channel owner: {channel.admin_user_id}, Is owner: {is_owner}, "
-                f"Member found: {member is not None}, Member role: {member.role if member else 'None'}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Only channel owner, admins and moderators can post to channel. "
-                       f"Channel owner ID: {channel.admin_user_id}, Your ID: {current_user.id}"
-            )
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "create_posts",
+        "Недостаточно прав для публикации постов в канале",
+    )
     
     # Валидация: не должен быть тип recipe (для рецептов используется отдельный эндпоинт)
     if request.type == "recipe":
@@ -1383,13 +1533,14 @@ async def create_channel_post(
     if request.media:
         body["media"] = [{"type": item.type, "url": item.url} for item in request.media]
     
-    # Для рилсов автоматически добавляем в publish_to
-    publish_to = ["feed", f"channel:{channel_id}"]
+    publish_to = [f"channel:{channel_id}"]
+    if channel.auto_publish_to_feed:
+        publish_to.insert(0, "feed")
     publish_to_reels = request.publish_to_reels
     if publish_to_reels is None:
         publish_to_reels = channel.auto_publish_reels
     if request.type == "reel" and publish_to_reels:
-        publish_to.append("reels")  # Автоматически в Рилсы
+        publish_to.append("reels")
     
     post = Post(
         user_id=current_user.id,
@@ -1422,6 +1573,13 @@ async def create_channel_post(
 
     db.commit()
     db.refresh(post)
+
+    try:
+        from app.services.user_stats_cache import invalidate_user_stats_cache
+
+        invalidate_user_stats_cache([current_user.id])
+    except Exception as e:
+        logger.warning("Failed to invalidate user stats after channel post: %s", e)
 
     if post.status == "published":
         try:
@@ -1487,24 +1645,15 @@ async def update_channel_post(
             detail="Post not found"
         )
     
-    # Проверяем права: только автор поста, владелец канала, админ или модератор могут редактировать
-    is_owner = channel.admin_user_id == current_user.id
     is_author = post.user_id == current_user.id
-    
-    if not (is_owner or is_author):
-        # Проверяем роль участника
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first()
-        
-        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
-        
-        if not is_admin_or_moderator:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only post author, channel owner, admins and moderators can edit posts"
-            )
+    if not is_author:
+        _require_channel_permission(
+            db,
+            channel,
+            current_user,
+            "edit_any_post",
+            "Недостаточно прав для редактирования чужих постов канала",
+        )
     
     # Обновляем поля поста
     if request.title is not None:
@@ -1545,6 +1694,15 @@ async def update_channel_post(
             fat_g=request.fat_g,
             fiber_g=request.fiber_g,
         )
+        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
+
+        if request.origin_country_code is not None:
+            apply_origin_country_to_recipe_body(
+                body,
+                origin_country_code=request.origin_country_code,
+                origin_country_name=request.origin_country_name,
+                clear_if_empty=request.origin_country_code == "",
+            )
         
         post.body = body
     
@@ -1656,24 +1814,15 @@ async def delete_channel_post(
             detail="Post not found"
         )
     
-    # Проверяем права: только автор поста, владелец канала, админ или модератор могут удалять
-    is_owner = channel.admin_user_id == current_user.id
     is_author = post.user_id == current_user.id
-    
-    if not (is_owner or is_author):
-        # Проверяем роль участника
-        member = db.query(ChannelMember).filter(
-            ChannelMember.channel_id == channel_id,
-            ChannelMember.user_id == current_user.id
-        ).first()
-        
-        is_admin_or_moderator = member and member.role in ["admin", "moderator", "owner"]
-        
-        if not is_admin_or_moderator:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only post author, channel owner, admins and moderators can delete posts"
-            )
+    if not is_author:
+        _require_channel_permission(
+            db,
+            channel,
+            current_user,
+            "delete_any_post",
+            "Недостаточно прав для удаления чужих постов канала",
+        )
     
     # Мягкое удаление
     from datetime import datetime
@@ -1864,18 +2013,13 @@ async def update_member_role(
             detail="Channel not found"
         )
     
-    is_owner = channel.admin_user_id == current_user.id
-    current_member = db.query(ChannelMember).filter(
-        ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id == current_user.id
-    ).first()
-    is_admin = current_member and (current_member.role == "admin" or current_member.role == "owner")
-    
-    if not (is_owner or is_admin):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only channel owner or admin can change member roles"
-        )
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "manage_subscribers",
+        "Недостаточно прав для управления ролями подписчиков",
+    )
     
     member = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,
@@ -1940,18 +2084,13 @@ async def remove_member(
             detail="Channel not found"
         )
     
-    is_owner = channel.admin_user_id == current_user.id
-    current_member = db.query(ChannelMember).filter(
-        ChannelMember.channel_id == channel_id,
-        ChannelMember.user_id == current_user.id
-    ).first()
-    is_admin = current_member and (current_member.role == "admin" or current_member.role == "owner")
-    
-    if not (is_owner or is_admin):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only channel owner or admin can remove members"
-        )
+    _require_channel_permission(
+        db,
+        channel,
+        current_user,
+        "manage_subscribers",
+        "Недостаточно прав для удаления подписчиков",
+    )
     
     member = db.query(ChannelMember).filter(
         ChannelMember.channel_id == channel_id,

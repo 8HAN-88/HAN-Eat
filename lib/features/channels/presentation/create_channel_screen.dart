@@ -117,7 +117,9 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           setState(() => _isUploadingAvatar = false);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить аватар'))),
+              SnackBar(
+                  content: Text(userVisibleError(e,
+                      fallback: 'Не удалось загрузить аватар'))),
             );
           }
         }
@@ -125,7 +127,9 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выбрать изображение'))),
+          SnackBar(
+              content: Text(userVisibleError(e,
+                  fallback: 'Не удалось выбрать изображение'))),
         );
       }
     }
@@ -166,7 +170,9 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось создать канал'))),
+          SnackBar(
+              content: Text(
+                  userVisibleError(e, fallback: 'Не удалось создать канал'))),
         );
       }
     } finally {
@@ -178,6 +184,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Создать канал'),
@@ -199,7 +206,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                       children: [
                         CircleAvatar(
                           radius: 50,
-                          backgroundColor: Colors.grey[300],
+                          backgroundColor: scheme.surfaceContainerHighest,
                           backgroundImage: _selectedAvatar != null
                               ? (kIsWeb && _selectedAvatarBytes != null
                                   ? MemoryImage(_selectedAvatarBytes!)
@@ -249,7 +256,6 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     labelText: 'Название канала',
                     hintText: 'Например: Веганские рецепты',
                     prefixIcon: Icon(Icons.tag),
-                    border: OutlineInputBorder(),
                   ),
                   onChanged: (_) => _updateSlug(),
                   validator: (value) {
@@ -270,7 +276,6 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     labelText: 'URL идентификатор',
                     hintText: 'vegan_recipes',
                     prefixIcon: Icon(Icons.link),
-                    border: OutlineInputBorder(),
                     helperText: 'Используется в URL канала',
                   ),
                   validator: (value) {
@@ -290,7 +295,6 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Описание (опционально)',
                     hintText: 'Расскажите о вашем канале...',
-                    border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),
                   maxLines: 5,
@@ -323,7 +327,6 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                         labelText: 'Категория (опционально)',
                         hintText: 'Выберите или введите категорию',
                         prefixIcon: Icon(Icons.category),
-                        border: OutlineInputBorder(),
                         helperText: 'Например: Итальянская, Веган, Быстрое',
                       ),
                     );

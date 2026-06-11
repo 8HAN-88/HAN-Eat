@@ -1,13 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import '../core/firebase/lazy_firebase.dart';
 import '../models/post.dart';
 import '../models/post_types.dart';
 import 'moderation_service.dart';
 
 /// Сервис модерации постов
 class PostModerationService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static FirebaseFirestore get _firestore => LazyFirebase.firestore;
 
   /// Дополнительные uid модераторов (Firestore + `--dart-define=HANEAT_POST_MODERATOR_UIDS=id1,id2`).
   static List<String> _extraModeratorUids = _uidsFromEnvironment();

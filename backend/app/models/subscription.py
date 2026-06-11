@@ -16,6 +16,7 @@ class Subscription(Base):
     status = Column(String(20), nullable=False, index=True)  # active | cancelled | expired | pending | trial
     payment_provider = Column(String(20), nullable=True)  # stripe | paypal | apple | google
     payment_provider_subscription_id = Column(String(255), nullable=True, index=True)  # ID подписки в платежной системе
+    pending_renewal_payment_id = Column(String(64), nullable=True)  # платёж автопродления в ожидании
     amount = Column(Numeric(10, 2), nullable=False)  # Сумма подписки
     currency = Column(String(3), default="USD")  # Валюта
     started_at = Column(DateTime, server_default=func.now(), nullable=False)

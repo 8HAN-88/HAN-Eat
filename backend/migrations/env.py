@@ -28,6 +28,7 @@ from app.models.moderation_queue import ModerationQueue
 from app.models.analytics_event import AnalyticsEvent
 from app.models.ai_meal_plan_record import AiMealPlanRecord
 from app.models.notification import Notification
+from app.models.conversation import Conversation, ConversationMember, Message, Contact
 from app.models.subscription import Subscription
 from app.models.support_ticket import SupportTicket
 from app.models.notification_preferences import NotificationPreferences

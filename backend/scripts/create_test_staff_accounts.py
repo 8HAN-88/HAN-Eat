@@ -22,9 +22,11 @@ PASSWORD = "HANtest2026!"
 # email, label, is_admin, is_moderator, subscription product (None = free)
 STAFF = [
     ("han.staff.moderator@haneat.dev", "Модератор", False, True, None),
+    ("han.staff.moderator.ai@haneat.dev", "Модер+AI", False, True, "ai"),
     ("han.staff.admin@haneat.dev", "Админ", True, False, None),
     ("han.staff.adminmod@haneat.dev", "Админ+Модер", True, True, None),
     ("han.staff.adminpro@haneat.dev", "Админ+Pro", True, False, "pro"),
+    ("han.staff.adminmod.pro@haneat.dev", "Админ+Модер+Pro", True, True, "pro"),
 ]
 
 

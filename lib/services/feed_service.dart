@@ -34,7 +34,7 @@ class FeedService {
     try {
       var token = await AuthService.getAccessTokenForApi();
       if (token == null) {
-        throw Exception('Сессия истекла. Войдите снова.');
+        throw AuthService.tokenUnavailableException();
       }
 
       final uri = Uri.parse('$baseUrl/feed').replace(queryParameters: {
