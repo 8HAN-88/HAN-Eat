@@ -1,6 +1,7 @@
 """Сервис личных чатов и контактов."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -14,6 +15,7 @@ from app.models.conversation import (
     Message,
     MessageReaction,
 )
+from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.services.notification_service import NotificationService
@@ -1206,3 +1208,261 @@ class ChatService:
             {"user": u, "is_contact": u.id in contact_ids}
             for u in users
         ]
+
+    def _folder_payload(self, folder: ChatFolder) -> dict:
+        items = (
+            self.db.query(ChatFolderItem)
+            .filter(ChatFolderItem.folder_id == folder.id)
+            .all()
+        )
+        filters = {}
+        if folder.filters_json:
+            try:
+                parsed = json.loads(folder.filters_json)
+                if isinstance(parsed, dict):
+                    filters = parsed
+            except json.JSONDecodeError:
+                filters = {}
+        return {
+            "id": folder.id,
+            "name": folder.name,
+            "icon": folder.icon,
+            "position": folder.position,
+            "conversation_ids": [
+                i.conversation_id for i in items if i.conversation_id is not None
+            ],
+            "channel_ids": [i.channel_id for i in items if i.channel_id is not None],
+            "filters": filters,
+        }
+
+    @staticmethod
+    def _normalize_filters(filters: Optional[dict]) -> dict:
+        if not filters:
+            return {}
+        return {
+            "groups": bool(filters.get("groups")),
+            "channels": bool(filters.get("channels")),
+            "unread_only": bool(filters.get("unread_only")),
+        }
+
+    def list_folders(self, user_id: int) -> List[dict]:
+        folders = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.user_id == user_id)
+            .order_by(ChatFolder.position.asc(), ChatFolder.id.asc())
+            .all()
+        )
+        return [self._folder_payload(f) for f in folders]
+
+    def create_folder(
+        self,
+        user_id: int,
+        name: str,
+        icon: Optional[str] = None,
+        conversation_ids: Optional[List[int]] = None,
+        channel_ids: Optional[List[int]] = None,
+        filters: Optional[dict] = None,
+    ) -> dict:
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("invalid_name")
+        max_pos = (
+            self.db.query(func.max(ChatFolder.position))
+            .filter(ChatFolder.user_id == user_id)
+            .scalar()
+        )
+        norm_filters = self._normalize_filters(filters)
+        folder = ChatFolder(
+            user_id=user_id,
+            name=name[:64],
+            icon=(icon or "")[:8] or None,
+            position=(max_pos or -1) + 1,
+            filters_json=json.dumps(norm_filters) if norm_filters else None,
+        )
+        self.db.add(folder)
+        self.db.flush()
+        self._set_folder_items(folder, user_id, conversation_ids or [], channel_ids or [])
+        self.db.flush()
+        return self._folder_payload(folder)
+
+    def _set_folder_items(
+        self,
+        folder: ChatFolder,
+        user_id: int,
+        conversation_ids: List[int],
+        channel_ids: List[int],
+    ) -> None:
+        self.db.query(ChatFolderItem).filter(ChatFolderItem.folder_id == folder.id).delete()
+        seen_conv: set[int] = set()
+        for cid in conversation_ids:
+            if cid in seen_conv:
+                continue
+            seen_conv.add(cid)
+            if not self._is_member(cid, user_id):
+                continue
+            self.db.add(
+                ChatFolderItem(folder_id=folder.id, conversation_id=cid, channel_id=None)
+            )
+        seen_ch: set[int] = set()
+        for ch_id in channel_ids:
+            if ch_id in seen_ch:
+                continue
+            seen_ch.add(ch_id)
+            self.db.add(
+                ChatFolderItem(folder_id=folder.id, conversation_id=None, channel_id=ch_id)
+            )
+
+    def update_folder(
+        self,
+        user_id: int,
+        folder_id: int,
+        name: Optional[str] = None,
+        icon: Optional[str] = None,
+        conversation_ids: Optional[List[int]] = None,
+        channel_ids: Optional[List[int]] = None,
+        filters: Optional[dict] = None,
+    ) -> Optional[dict]:
+        folder = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
+            .first()
+        )
+        if not folder:
+            return None
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError("invalid_name")
+            folder.name = name[:64]
+        if icon is not None:
+            folder.icon = icon[:8] if icon else None
+        if filters is not None:
+            norm_filters = self._normalize_filters(filters)
+            folder.filters_json = json.dumps(norm_filters) if norm_filters else None
+        if conversation_ids is not None or channel_ids is not None:
+            current = self._folder_payload(folder)
+            self._set_folder_items(
+                folder,
+                user_id,
+                conversation_ids if conversation_ids is not None else current["conversation_ids"],
+                channel_ids if channel_ids is not None else current["channel_ids"],
+            )
+        self.db.flush()
+        return self._folder_payload(folder)
+
+    def delete_folder(self, user_id: int, folder_id: int) -> bool:
+        folder = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
+            .first()
+        )
+        if not folder:
+            return False
+        self.db.delete(folder)
+        return True
+
+    def add_folder_item(
+        self,
+        user_id: int,
+        folder_id: int,
+        conversation_id: Optional[int] = None,
+        channel_id: Optional[int] = None,
+    ) -> Optional[dict]:
+        folder = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
+            .first()
+        )
+        if not folder:
+            return None
+        if conversation_id is not None:
+            if not self._is_member(conversation_id, user_id):
+                raise ValueError("not_member")
+            exists = (
+                self.db.query(ChatFolderItem.id)
+                .filter(
+                    ChatFolderItem.folder_id == folder_id,
+                    ChatFolderItem.conversation_id == conversation_id,
+                )
+                .first()
+            )
+            if not exists:
+                self.db.add(
+                    ChatFolderItem(
+                        folder_id=folder_id,
+                        conversation_id=conversation_id,
+                        channel_id=None,
+                    )
+                )
+        elif channel_id is not None:
+            exists = (
+                self.db.query(ChatFolderItem.id)
+                .filter(
+                    ChatFolderItem.folder_id == folder_id,
+                    ChatFolderItem.channel_id == channel_id,
+                )
+                .first()
+            )
+            if not exists:
+                self.db.add(
+                    ChatFolderItem(
+                        folder_id=folder_id,
+                        conversation_id=None,
+                        channel_id=channel_id,
+                    )
+                )
+        else:
+            raise ValueError("invalid_item")
+        self.db.flush()
+        return self._folder_payload(folder)
+
+    def remove_folder_item(
+        self,
+        user_id: int,
+        folder_id: int,
+        conversation_id: Optional[int] = None,
+        channel_id: Optional[int] = None,
+    ) -> Optional[dict]:
+        folder = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.id == folder_id, ChatFolder.user_id == user_id)
+            .first()
+        )
+        if not folder:
+            return None
+        q = self.db.query(ChatFolderItem).filter(ChatFolderItem.folder_id == folder_id)
+        if conversation_id is not None:
+            q = q.filter(ChatFolderItem.conversation_id == conversation_id)
+        elif channel_id is not None:
+            q = q.filter(ChatFolderItem.channel_id == channel_id)
+        else:
+            raise ValueError("invalid_item")
+        q.delete(synchronize_session=False)
+        self.db.flush()
+        return self._folder_payload(folder)
+
+    def reorder_folders(self, user_id: int, folder_ids: List[int]) -> List[dict]:
+        folders = (
+            self.db.query(ChatFolder)
+            .filter(ChatFolder.user_id == user_id)
+            .order_by(ChatFolder.position.asc(), ChatFolder.id.asc())
+            .all()
+        )
+        by_id = {f.id: f for f in folders}
+        ordered: List[ChatFolder] = []
+        seen: set[int] = set()
+        for fid in folder_ids:
+            folder = by_id.get(fid)
+            if folder is None or fid in seen:
+                continue
+            seen.add(fid)
+            ordered.append(folder)
+        for folder in folders:
+            if folder.id not in seen:
+                ordered.append(folder)
+        for pos, folder in enumerate(ordered):
+            folder.position = pos
+        self.db.flush()
+        return [self._folder_payload(f) for f in ordered]
+
+    def _folder_payload(self, folder: ChatFolder) -> dict:

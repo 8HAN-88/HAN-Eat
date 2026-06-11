@@ -21,6 +21,11 @@ from app.schemas.chat import (
     ConversationResponse,
     ChatUserBrief,
     CreateGroupChatRequest,
+    CreateChatFolderRequest,
+    ChatFolderItemRequest,
+    ChatFolderListResponse,
+    ChatFolderResponse,
+    ReorderChatFoldersRequest,
     DirectChatRequest,
     EditMessageRequest,
     MarkReadRequest,
@@ -29,6 +34,7 @@ from app.schemas.chat import (
     MuteChatRequest,
     PinChatRequest,
     UpdateGroupChatRequest,
+    UpdateChatFolderRequest,
     MessageListResponse,
     MessageResponse,
     PhoneContactMatchItem,
@@ -249,6 +255,141 @@ async def get_saved_chat(
     if not item:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Saved chat failed")
     return item
+
+
+@router.get("/chats/folders", response_model=ChatFolderListResponse)
+async def list_chat_folders(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    items = [ChatFolderResponse(**row) for row in svc.list_folders(current_user.id)]
+    return ChatFolderListResponse(items=items)
+
+
+@router.post("/chats/folders", response_model=ChatFolderResponse)
+async def create_chat_folder(
+    body: CreateChatFolderRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.create_folder(
+            current_user.id,
+            body.name,
+            body.icon,
+            body.conversation_ids,
+            body.channel_ids,
+            body.filters,
+        )
+        db.commit()
+        return ChatFolderResponse(**row)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+
+
+@router.post("/chats/folders/reorder", response_model=ChatFolderListResponse)
+async def reorder_chat_folders(
+    body: ReorderChatFoldersRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    rows = svc.reorder_folders(current_user.id, body.folder_ids)
+    db.commit()
+    return ChatFolderListResponse(items=[ChatFolderResponse(**row) for row in rows])
+
+
+@router.patch("/chats/folders/{folder_id}", response_model=ChatFolderResponse)
+async def update_chat_folder(
+    folder_id: int,
+    body: UpdateChatFolderRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.update_folder(
+            current_user.id,
+            folder_id,
+            body.name,
+            body.icon,
+            body.conversation_ids,
+            body.channel_ids,
+            body.filters,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+    db.commit()
+    return ChatFolderResponse(**row)
+
+
+@router.delete("/chats/folders/{folder_id}")
+async def delete_chat_folder(
+    folder_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    ok = svc.delete_folder(current_user.id, folder_id)
+    db.commit()
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+    return {"ok": True}
+
+
+@router.post("/chats/folders/{folder_id}/items", response_model=ChatFolderResponse)
+async def add_chat_folder_item(
+    folder_id: int,
+    body: ChatFolderItemRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.add_folder_item(
+            current_user.id,
+            folder_id,
+            body.conversation_id,
+            body.channel_id,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+    db.commit()
+    return ChatFolderResponse(**row)
+
+
+@router.delete("/chats/folders/{folder_id}/items", response_model=ChatFolderResponse)
+async def remove_chat_folder_item(
+    folder_id: int,
+    conversation_id: Optional[int] = Query(None),
+    channel_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.remove_folder_item(
+            current_user.id,
+            folder_id,
+            conversation_id,
+            channel_id,
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
+    db.commit()
+    return ChatFolderResponse(**row)
 
 
 @router.get("/chats/{conversation_id}", response_model=ConversationResponse)

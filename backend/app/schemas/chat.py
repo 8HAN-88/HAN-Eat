@@ -178,3 +178,42 @@ class PhoneContactMatchItem(BaseModel):
 
 class PhoneSyncResponse(BaseModel):
     items: List[PhoneContactMatchItem]
+
+
+class ChatFolderResponse(BaseModel):
+    id: int
+    name: str
+    icon: Optional[str] = None
+    position: int = 0
+    conversation_ids: List[int] = []
+    channel_ids: List[int] = []
+    filters: dict = Field(default_factory=dict)
+
+
+class ChatFolderListResponse(BaseModel):
+    items: List[ChatFolderResponse]
+
+
+class CreateChatFolderRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    icon: Optional[str] = Field(None, max_length=8)
+    conversation_ids: List[int] = []
+    channel_ids: List[int] = []
+    filters: dict = Field(default_factory=dict)
+
+
+class UpdateChatFolderRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=64)
+    icon: Optional[str] = Field(None, max_length=8)
+    conversation_ids: Optional[List[int]] = None
+    channel_ids: Optional[List[int]] = None
+    filters: Optional[dict] = None
+
+
+class ReorderChatFoldersRequest(BaseModel):
+    folder_ids: List[int] = Field(..., min_length=1)
+
+
+class ChatFolderItemRequest(BaseModel):
+    conversation_id: Optional[int] = None
+    channel_id: Optional[int] = None
