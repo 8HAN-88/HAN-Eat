@@ -1,5 +1,9 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'recipe_network_image.dart';
+
+import '../utils/file_helper.dart';
+import '../utils/image_url_helper.dart';
 
 /// Полноэкранный просмотрщик изображений с возможностью листания (как в Telegram)
 class FullscreenImageViewer extends StatefulWidget {
@@ -199,9 +203,8 @@ class _ZoomableImageState extends State<_ZoomableImage> {
         panEnabled: false, // Отключаем панорамирование полностью
         boundaryMargin: const EdgeInsets.all(double.infinity),
         child: Center(
-          child: RecipeNetworkImage(
+          child: _FullscreenMediaImage(
             rawUrl: widget.rawUrl,
-            profile: RecipeImageProfile.fullscreen,
             fit: BoxFit.contain,
             placeholder: const Center(
               child: CircularProgressIndicator(color: Colors.white),
@@ -214,6 +217,89 @@ class _ZoomableImageState extends State<_ZoomableImage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FullscreenMediaImage extends StatefulWidget {
+  const _FullscreenMediaImage({
+    required this.rawUrl,
+    required this.fit,
+    required this.placeholder,
+    required this.errorWidget,
+  });
+
+  final String rawUrl;
+  final BoxFit fit;
+  final Widget placeholder;
+  final Widget errorWidget;
+
+  @override
+  State<_FullscreenMediaImage> createState() => _FullscreenMediaImageState();
+}
+
+class _FullscreenMediaImageState extends State<_FullscreenMediaImage> {
+  int _attempt = 0;
+
+  List<String> get _candidates => getFullscreenImageUrlCandidates(widget.rawUrl);
+
+  void _tryNextCandidate() {
+    if (_attempt + 1 < _candidates.length && mounted) {
+      setState(() => _attempt++);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = widget.rawUrl.trim();
+    if (raw.isEmpty) return widget.errorWidget;
+
+    final isNetwork = raw.startsWith('http://') || raw.startsWith('https://');
+    if (!isNetwork) {
+      if (kIsWeb) {
+        return Image.network(
+          raw,
+          fit: widget.fit,
+          errorBuilder: (_, __, ___) => widget.errorWidget,
+        );
+      }
+      final file = getFileFromPath(raw);
+      if (file == null) return widget.errorWidget;
+      return Image.file(
+        file,
+        fit: widget.fit,
+        errorBuilder: (_, __, ___) => widget.errorWidget,
+      );
+    }
+
+    final candidates = _candidates;
+    if (candidates.isEmpty) return widget.errorWidget;
+
+    final url = candidates[_attempt.clamp(0, candidates.length - 1)];
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final screenW = MediaQuery.sizeOf(context).width;
+    final memCacheWidth = (screenW * dpr).round().clamp(800, 2400);
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: widget.fit,
+      fadeInDuration: const Duration(milliseconds: 120),
+      fadeOutDuration: Duration.zero,
+      httpHeaders: const {
+        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        'User-Agent': 'HAN-Eat/1.0 (Flutter)',
+      },
+      memCacheWidth: memCacheWidth,
+      maxWidthDiskCache: 2400,
+      placeholder: (_, __) => widget.placeholder,
+      errorWidget: (_, __, ___) {
+        if (_attempt < candidates.length - 1) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _tryNextCandidate());
+          return widget.placeholder;
+        }
+        return widget.errorWidget;
+      },
     );
   }
 }

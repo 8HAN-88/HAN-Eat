@@ -24,6 +24,39 @@ String getRecipeCardImageUrl(String raw) =>
 String getRecipeDetailImageUrl(String raw) =>
     getRecipeImageUrl(raw, spoonacularDimensions: '556x370');
 
+/// Кандидаты URL для полноэкранного просмотра: сначала оригинал, затем medium и fallback рецептов.
+List<String> getFullscreenImageUrlCandidates(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return const [];
+
+  final isNetwork =
+      trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  if (!isNetwork) return [trimmed];
+
+  final resolved = ServerConfig.resolveMediaUrl(trimmed);
+  final full = ServerConfig.resolvePublisherAvatarUrl(resolved);
+  final medium =
+      ServerConfig.resolvePublisherAvatarUrl(getOptimizedImageUrl(resolved));
+
+  final candidates = <String>[];
+  void add(String url) {
+    if (url.isNotEmpty && !candidates.contains(url)) {
+      candidates.add(url);
+    }
+  }
+
+  add(full);
+  if (medium != full) add(medium);
+
+  if (trimmed.contains('spoonacular.com')) {
+    for (final dim in ['556x370', '312x231', '240x150']) {
+      add(getRecipeImageUrl(trimmed, spoonacularDimensions: dim));
+    }
+  }
+
+  return candidates;
+}
+
 /// Общая сборка URL изображения рецепта.
 String getRecipeImageUrl(
   String raw, {

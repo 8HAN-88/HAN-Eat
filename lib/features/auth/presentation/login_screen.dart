@@ -89,8 +89,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
@@ -118,20 +116,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const Center(
                       child: AppBrandLogo(
                         layout: AppBrandLogoLayout.horizontal,
-                        width: 168,
+                        width: 200,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'H.A.N. Eat',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.6,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 40),
                   // Email поле
                   TextFormField(
                     controller: _emailController,
