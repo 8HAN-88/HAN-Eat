@@ -54,6 +54,7 @@ class InitUploadRequest(BaseModel):
     file_type: str  # image | video | audio
     content_type: str  # image/jpeg, video/mp4, etc.
     file_size: int  # размер в байтах
+    prefer_api: bool = False  # загрузка через API (надёжнее с мобильных)
 
 
 class CompleteUploadRequest(BaseModel):
@@ -79,10 +80,11 @@ async def init_upload(
             file_type=request.file_type,
             content_type=request.content_type,
             file_size=request.file_size,
-            user_id=current_user.id
+            user_id=current_user.id,
+            prefer_api=request.prefer_api,
         )
-        # API-загрузка (mock): запоминаем upload_id → file_key
-        if result.get("upload_via") == "api" or not media_service.s3_client:
+        # API-загрузка: запоминаем upload_id → file_key
+        if result.get("upload_via") == "api":
             _remember_mock_upload(result["upload_id"], result["file_key"])
         return result
     except ValueError as e:
@@ -321,6 +323,7 @@ async def mock_upload(
     Этот эндпоинт используется только для разработки без S3.
     """
     import os
+    from botocore.exceptions import ClientError
     
     try:
         # Получаем file_key (память + Redis, чтобы пережить перезапуск API)
@@ -337,8 +340,35 @@ async def mock_upload(
         
         # Получаем тело запроса как байты
         file_data = await request.body()
+        if not file_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty upload body",
+            )
+
+        media_service = MediaService()
+        content_type = (
+            request.headers.get("content-type") or "application/octet-stream"
+        )
+
+        if media_service.s3_client:
+            try:
+                media_service.s3_client.put_object(
+                    Bucket=media_service.bucket,
+                    Key=file_key,
+                    Body=file_data,
+                    ContentType=content_type,
+                )
+            except ClientError as e:
+                logger.exception("API upload to S3 failed for %s", file_key)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"S3 upload failed: {e}",
+                ) from e
+            url = f"{media_service.cdn_url}/{file_key}"
+            return {"ok": True, "url": url, "file_key": file_key}
         
-        # Сохраняем файл локально по пути, соответствующему file_key
+        # Локальная разработка без S3
         uploads_dir = os.path.join(os.getcwd(), "uploads")
         os.makedirs(uploads_dir, exist_ok=True)
         
@@ -372,48 +402,70 @@ async def mock_upload(
 @router.get("/file/{file_path:path}")
 async def get_uploaded_file(file_path: str, request: Request):
     """
-    Получить загруженный файл (для локальной разработки)
-    
-    В production файлы должны раздаваться через CDN или веб-сервер (nginx).
-    Поддержка HTTP Range (206) обязательна для AVPlayer на iOS.
+    Получить загруженный файл.
+
+    Локально — с диска; в production при отсутствии на диске — из S3.
+    Поддержка HTTP Range (206) обязательна для AVPlayer / audioplayers на iOS.
     """
     import os
 
-    from app.core.ranged_file import ranged_file_response
-    
-    # Безопасность: проверяем, что путь не содержит опасных символов
-    if '..' in file_path:
+    from botocore.exceptions import ClientError
+
+    from app.core.ranged_file import (
+        content_type_for_upload_path,
+        ranged_file_response,
+        ranged_s3_object_response,
+    )
+
+    if ".." in file_path:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file path"
+            detail="Invalid file path",
         )
-    
-    # file_path имеет формат: uploads/user_2/2025/12/10/uuid.jpg
-    # Создаем полный путь относительно корня проекта
-    file_path_full = os.path.join(os.getcwd(), file_path)
-    
-    # Проверяем, что файл существует и находится в корне проекта
-    if not os.path.exists(file_path_full) or not file_path_full.startswith(os.getcwd()):
+
+    if not file_path.startswith("uploads/"):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file path",
         )
-    
-    # Определяем content type по расширению
-    content_type = "application/octet-stream"
-    if file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
-        content_type = "image/jpeg"
-    elif file_path.endswith('.png'):
-        content_type = "image/png"
-    elif file_path.endswith('.gif'):
-        content_type = "image/gif"
-    elif file_path.endswith('.webp'):
-        content_type = "image/webp"
-    elif file_path.endswith('.mp4'):
-        content_type = "video/mp4"
-    
-    return ranged_file_response(
-        file_path_full,
-        request,
-        media_type=content_type,
+
+    content_type = content_type_for_upload_path(file_path)
+    file_path_full = os.path.join(os.getcwd(), file_path)
+    cwd = os.getcwd()
+    if (
+        os.path.exists(file_path_full)
+        and os.path.abspath(file_path_full).startswith(os.path.abspath(cwd))
+    ):
+        return ranged_file_response(
+            file_path_full,
+            request,
+            media_type=content_type,
+        )
+
+    media_service = MediaService()
+    if media_service.s3_client:
+        try:
+            return ranged_s3_object_response(
+                media_service.s3_client,
+                media_service.bucket,
+                file_path,
+                request,
+                media_type=content_type,
+            )
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchKey", "NotFound"):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="File not found",
+                ) from e
+            logger.exception("S3 file read failed for %s", file_path)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to read file from storage",
+            ) from e
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="File not found",
     )

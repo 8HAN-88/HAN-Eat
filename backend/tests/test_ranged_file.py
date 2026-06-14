@@ -4,7 +4,7 @@ import tempfile
 import pytest
 from starlette.requests import Request
 
-from app.core.ranged_file import ranged_file_response
+from app.core.ranged_file import ranged_file_response, content_type_for_upload_path
 
 
 def _make_request(method: str = "GET", headers=None) -> Request:
@@ -51,3 +51,8 @@ def test_ranged_file_sets_accept_ranges_on_full_response():
         assert resp.headers["accept-ranges"] == "bytes"
     finally:
         os.unlink(path)
+
+
+def test_content_type_for_voice_files():
+    assert content_type_for_upload_path("uploads/u/v.m4a") == "audio/mp4"
+    assert content_type_for_upload_path("uploads/u/v.webm") == "audio/webm"

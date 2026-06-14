@@ -1,0 +1,72 @@
+name: Deploy Backend (api.haneat.app)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'scripts/update_production_timeweb.sh'
+      - 'scripts/deploy_on_server_console.sh'
+      - '.github/workflows/deploy-backend.yml'
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.TIMEWEB_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 89.19.216.60 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Rsync backend to Timeweb
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude 'venv' \
+            --exclude 'uploads' \
+            --exclude 'dev.db' \
+            backend/ \
+            root@89.19.216.60:/root/HAN-Eat/backend/
+
+      - name: Remote pip, migrations, restart
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 \
+            root@89.19.216.60 bash -s <<'REMOTE'
+          set -euo pipefail
+          APP_DIR="/root/HAN-Eat"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq ffmpeg
+          cd "$APP_DIR/backend"
+          if [[ -d venv ]]; then
+            source venv/bin/activate
+          else
+            python3 -m venv venv
+            source venv/bin/activate
+          fi
+          pip install -q -r requirements.txt
+          alembic upgrade head
+          systemctl daemon-reload
+          systemctl restart haneat-api
+          systemctl restart haneat-video-worker 2>/dev/null || true
+          sleep 2
+          systemctl is-active haneat-api
+          REMOTE
+
+      - name: Smoke
+        run: |
+          curl -sf https://api.haneat.app/health
+          echo ""
+          curl -sf https://api.haneat.app/api/v1/system/readiness | python3 -m json.tool | head -20

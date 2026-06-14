@@ -1,11 +1,11 @@
 """
-HTTP byte-range ответ для видео (AVPlayer / video_player на iOS требуют 206).
+HTTP byte-range ответ для видео и аудио (AVPlayer / video_player на iOS требуют 206).
 """
 from __future__ import annotations
 
 import os
 import re
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from fastapi import Request
 from fastapi.responses import FileResponse, Response
@@ -86,3 +86,83 @@ def ranged_file_response(
         stat_result=stat,
         method=request.method,
     )
+
+
+def content_type_for_upload_path(path: str) -> str:
+    lower = path.lower()
+    if lower.endswith((".jpg", ".jpeg")):
+        return "image/jpeg"
+    if lower.endswith(".png"):
+        return "image/png"
+    if lower.endswith(".gif"):
+        return "image/gif"
+    if lower.endswith(".webp"):
+        return "image/webp"
+    if lower.endswith(".mp4"):
+        return "video/mp4"
+    if lower.endswith(".mov"):
+        return "video/quicktime"
+    if lower.endswith(".m4a"):
+        return "audio/mp4"
+    if lower.endswith(".aac"):
+        return "audio/aac"
+    if lower.endswith(".mp3"):
+        return "audio/mpeg"
+    if lower.endswith(".webm"):
+        return "audio/webm"
+    if lower.endswith(".ogg"):
+        return "audio/ogg"
+    return "application/octet-stream"
+
+
+def ranged_s3_object_response(
+    s3_client: Any,
+    bucket: str,
+    key: str,
+    request: Request,
+    *,
+    media_type: Optional[str] = None,
+    extra_headers: Optional[dict[str, str]] = None,
+) -> Response:
+    """Стриминг объекта S3 с поддержкой Range (голосовые / видео с телефона)."""
+    head = s3_client.head_object(Bucket=bucket, Key=key)
+    file_size = int(head["ContentLength"])
+    effective_type = media_type or head.get("ContentType") or content_type_for_upload_path(key)
+
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=31536000",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+
+    range_header = request.headers.get("range") or request.headers.get("Range")
+    if range_header and file_size > 0:
+        parsed = _parse_range(range_header, file_size)
+        if parsed is None:
+            return Response(
+                status_code=416,
+                headers={
+                    "Content-Range": f"bytes */{file_size}",
+                    "Accept-Ranges": "bytes",
+                },
+            )
+        start, end = parsed
+        obj = s3_client.get_object(
+            Bucket=bucket,
+            Key=key,
+            Range=f"bytes={start}-{end}",
+        )
+        chunk = obj["Body"].read()
+        headers.update(
+            {
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Content-Length": str(len(chunk)),
+            }
+        )
+        return Response(content=chunk, status_code=206, media_type=effective_type, headers=headers)
+
+    obj = s3_client.get_object(Bucket=bucket, Key=key)
+    body = obj["Body"].read()
+    headers["Content-Length"] = str(len(body))
+    return Response(content=body, status_code=200, media_type=effective_type, headers=headers)

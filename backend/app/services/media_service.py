@@ -14,6 +14,37 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# iOS галерея/камера отдаёт .mov как video/quicktime, не video/mov.
+_VIDEO_MIME_ALIASES = frozenset(
+    {
+        "video/quicktime",
+        "video/x-quicktime",
+        "video/x-msvideo",
+    }
+)
+
+
+def _is_allowed_video_content_type(content_type: str) -> bool:
+    ct = content_type.lower().strip()
+    if ct in _VIDEO_MIME_ALIASES:
+        return True
+    return any(ct.endswith(f"/{ext}") for ext in settings.ALLOWED_VIDEO_TYPES)
+
+
+def _video_extension_from_content_type(content_type: str) -> str:
+    ct = content_type.lower().strip()
+    if ct in ("video/quicktime", "video/x-quicktime"):
+        return "mov"
+    if ct in ("video/x-msvideo",) or ct.endswith("/avi"):
+        return "avi"
+    if ct.endswith("/mov"):
+        return "mov"
+    if ct.endswith("/mp4"):
+        return "mp4"
+    if ct.endswith("/webm"):
+        return "webm"
+    return "mp4"
+
 
 class MediaService:
     """Сервис для работы с медиа файлами"""
@@ -65,7 +96,8 @@ class MediaService:
         file_type: str,
         content_type: str,
         file_size: int,
-        user_id: int
+        user_id: int,
+        prefer_api: bool = False,
     ) -> Dict[str, str]:
         """
         Генерация presigned URL для загрузки файла
@@ -90,7 +122,7 @@ class MediaService:
                 raise ValueError(f"Unsupported image type: {content_type}")
             max_size = settings.MAX_IMAGE_SIZE_MB * 1024 * 1024
         elif file_type == "video":
-            if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_VIDEO_TYPES):
+            if not _is_allowed_video_content_type(content_type):
                 raise ValueError(f"Unsupported video type: {content_type}")
             if settings.MAX_VIDEO_SIZE_MB > 0:
                 max_size = settings.MAX_VIDEO_SIZE_MB * 1024 * 1024
@@ -113,23 +145,45 @@ class MediaService:
             raise ValueError(f"File size exceeds maximum: {max_size / (1024*1024):.1f}MB")
         
         # Генерируем уникальный ключ файла
-        file_extension = content_type.split('/')[-1]
-        if file_extension not in ['jpeg', 'jpg', 'png', 'webp', 'mp4', 'mov', 'avi', 'm4a', 'aac', 'mpeg', 'mp3', 'pdf', 'txt', 'doc', 'docx', 'zip']:
-            if file_type == 'image':
-                file_extension = 'jpg'
-            elif file_type == 'audio':
-                file_extension = 'm4a'
-            elif file_type == 'document':
-                file_extension = 'pdf'
-            else:
-                file_extension = 'mp4'
+        if file_type == "video":
+            file_extension = _video_extension_from_content_type(content_type)
+        else:
+            file_extension = content_type.split("/")[-1]
+            if file_extension not in [
+                "jpeg",
+                "jpg",
+                "png",
+                "webp",
+                "mp4",
+                "mov",
+                "avi",
+                "m4a",
+                "aac",
+                "mpeg",
+                "mp3",
+                "webm",
+                "ogg",
+                "pdf",
+                "txt",
+                "doc",
+                "docx",
+                "zip",
+            ]:
+                if file_type == "image":
+                    file_extension = "jpg"
+                elif file_type == "audio":
+                    file_extension = "m4a"
+                elif file_type == "document":
+                    file_extension = "pdf"
+                else:
+                    file_extension = "mp4"
         
         upload_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().strftime("%Y/%m/%d")
         file_key = f"uploads/user_{user_id}/{timestamp}/{upload_id}.{file_extension}"
         
-        # S3 не настроен или ключи невалидны — загрузка через API (диск + /uploads/file/…)
-        if not self.s3_client:
+        # Прямой S3 с телефона часто падает (TLS/сеть) — отдаём URL API.
+        if prefer_api or not self.s3_client:
             from app.core.media_urls import public_base_url
 
             base = public_base_url()
