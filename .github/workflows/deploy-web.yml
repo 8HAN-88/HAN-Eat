@@ -2,6 +2,11 @@ name: Deploy Web (haneat.app)
 
 on:
   workflow_dispatch:
+    inputs:
+      prebuilt_tag:
+        description: 'Deploy tarball from GitHub release (skip build), e.g. web-deploy-latest'
+        required: false
+        default: ''
   push:
     branches: [main]
     paths:
@@ -28,13 +33,27 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Flutter pub get
+        run: flutter pub get
+
       - name: Install Pillow (PWA icons)
         run: pip install Pillow
 
       - name: Build web release
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.prebuilt_tag == '' }}
         run: ./scripts/build_web_release.sh
         env:
           HANEAT_API_BASE: https://api.haneat.app
+
+      - name: Download prebuilt web tarball
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.prebuilt_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ inputs.prebuilt_tag }}" -R "${{ github.repository }}" -p 'haneat-web.tgz' -D /tmp
+          mkdir -p build
+          tar xzf /tmp/haneat-web.tgz -C build
+          test -f build/web/index.html
 
       - name: Setup SSH key
         run: |
