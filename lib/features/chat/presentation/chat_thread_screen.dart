@@ -259,8 +259,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _startPolling() {
     _pollTimer?.cancel();
     final interval = _sseConnected
-        ? const Duration(seconds: 45)
-        : const Duration(seconds: 3);
+        ? const Duration(seconds: 60)
+        : const Duration(seconds: 5);
     _pollTimer = Timer.periodic(interval, (_) {
       if (!_appPaused) _pollNew();
     });

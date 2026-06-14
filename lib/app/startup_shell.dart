@@ -75,7 +75,7 @@ class _StartupShellState extends State<StartupShell> {
     try {
       if (mounted) setState(() => _status = 'Восстановление сессии…');
       await bootstrapServicesForFirstFrame().timeout(
-        Duration(seconds: kIsWeb ? 2 : 6),
+        Duration(seconds: kIsWeb ? 1 : 6),
         onTimeout: () {
           debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout');
         },

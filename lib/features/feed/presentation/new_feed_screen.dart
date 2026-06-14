@@ -71,7 +71,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       'rec_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
 
   @override
-  bool get wantKeepAlive => !kIsWeb;
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -138,19 +138,45 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     final requestedCacheVariant =
         _cacheVariant(requestedFeedType, requestedSortMode);
 
-    setState(() {
-      _isLoading = true;
-      if (refresh) {
-        _posts = [];
-        _nextCursor = null;
-        _hasMore = true;
-        _lastLoadError = null;
-        _servingFromCache = false;
-        _cacheLoadError = null;
+    if (refresh) {
+      final cached = await FeedApiCache.load(requestedCacheVariant);
+      if (!mounted) return;
+      if (requestId != _loadGeneration) return;
+      if (cached.isNotEmpty) {
+        setState(() {
+          _posts = cached;
+          _nextCursor = null;
+          _hasMore = true;
+          _isLoading = true;
+          _lastLoadError = null;
+          _servingFromCache = true;
+          _cacheLoadError = null;
+        });
+      } else {
+        setState(() {
+          _isLoading = true;
+          _posts = [];
+          _nextCursor = null;
+          _hasMore = true;
+          _lastLoadError = null;
+          _servingFromCache = false;
+          _cacheLoadError = null;
+        });
       }
-    });
+    } else {
+      setState(() => _isLoading = true);
+    }
 
     if (refresh && !feedDeviceOnline()) {
+      if (_posts.isNotEmpty) {
+        if (mounted && requestId == _loadGeneration) {
+          setState(() {
+            _isLoading = false;
+            _cacheLoadError = 'offline';
+          });
+        }
+        return;
+      }
       final cached = await FeedApiCache.load(requestedCacheVariant);
       if (!mounted) return;
       if (requestId != _loadGeneration) return;

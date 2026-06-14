@@ -114,10 +114,9 @@
         });
       }
 
-      var cachedBuild = localStorage.getItem(KEY);
-      if (cachedBuild) {
-        loadFlutter(cachedBuild);
-      }
+      var cachedBuild = localStorage.getItem(KEY) || '';
+      // Не ждём version.json — Flutter стартует сразу, проверка версии параллельно.
+      loadFlutter(cachedBuild || String(Date.now()));
 
       fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })

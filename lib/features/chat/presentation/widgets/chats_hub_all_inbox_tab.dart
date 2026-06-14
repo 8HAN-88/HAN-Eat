@@ -399,7 +399,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     List<ChatConversation> chats = [];
     Object? chatsError;
     List<Channel> channels = [];
-    List<Channel> recommended = [];
     Object? channelsError;
     var favoriteIds = <int>{};
     var archivedChannelIds = <int>{};
@@ -433,20 +432,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           channels = _uniqueChannels([...owned.items, ...subscribed.items])
               .where((c) => !archivedChannelIds.contains(c.id))
               .toList();
-          try {
-            final rec = await ChannelService.listChannels(
-              limit: 8,
-              offset: 0,
-              recommended: true,
-              withLastPost: true,
-            );
-            final known = channels.map((c) => c.id).toSet();
-            recommended = rec.items
-                .where((c) =>
-                    !known.contains(c.id) &&
-                    !archivedChannelIds.contains(c.id))
-                .toList();
-          } catch (_) {}
         } catch (e) {
           channelsError = e;
           if (kDebugMode) debugPrint('Channels load failed: $e');
@@ -461,7 +446,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
     if (chats.isEmpty &&
         channels.isEmpty &&
-        recommended.isEmpty &&
         resolvedSaved == null) {
       setState(() {
         _entries.clear();
@@ -511,15 +495,44 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _entries
         ..clear()
         ..addAll(entries);
-      _recommended = recommended;
       _error = null;
       _chatsPartialError =
-          chatsError != null && (channels.isNotEmpty || recommended.isNotEmpty)
-              ? chatsError
-              : null;
+          chatsError != null && channels.isNotEmpty ? chatsError : null;
       _loading = false;
       _servingFromCache = false;
     });
+
+    unawaited(
+      _loadRecommendedChannels(
+        seq: seq,
+        channels: channels,
+        archivedChannelIds: archivedChannelIds,
+      ),
+    );
+  }
+
+  Future<void> _loadRecommendedChannels({
+    required int seq,
+    required List<Channel> channels,
+    required Set<int> archivedChannelIds,
+  }) async {
+    try {
+      final rec = await ChannelService.listChannels(
+        limit: 8,
+        offset: 0,
+        recommended: true,
+        withLastPost: true,
+      );
+      if (!mounted || seq != _loadSeq) return;
+      final known = channels.map((c) => c.id).toSet();
+      final recommended = rec.items
+          .where(
+            (c) => !known.contains(c.id) && !archivedChannelIds.contains(c.id),
+          )
+          .toList();
+      if (!mounted || seq != _loadSeq) return;
+      setState(() => _recommended = recommended);
+    } catch (_) {}
   }
 
   void _onChannelSortAtChanged(ChannelInboxEntry entry, DateTime sortAt) {

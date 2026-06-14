@@ -125,9 +125,14 @@ Future<void> bootstrapServicesForFirstFrame() async {
   }
   // Сразу держим связь с API — не ждём deferred bootstrap.
   unawaited(
-    ApiReachabilityService.init().catchError((Object e) {
-      debugPrint('ApiReachabilityService early init: $e');
-    }),
+    Future.wait<void>([
+      ApiReachabilityService.init().catchError((Object e) {
+        debugPrint('ApiReachabilityService early init: $e');
+      }),
+      _warmApiConnection().catchError((Object e) {
+        debugPrint('API warm-up early: $e');
+      }),
+    ]),
   );
 }
 
@@ -168,7 +173,7 @@ Future<void> _warmApiConnection() async {
     final uri = Uri.parse('${ServerConfig.apiBaseUrl}/system/readiness');
     await HanEatHttpClient.shared
         .get(uri)
-        .timeout(const Duration(seconds: 10));
+        .timeout(kIsWeb ? const Duration(seconds: 4) : const Duration(seconds: 8));
     if (kDebugMode) debugPrint('API warm-up: OK');
   } catch (e) {
     if (kDebugMode) debugPrint('API warm-up: $e');

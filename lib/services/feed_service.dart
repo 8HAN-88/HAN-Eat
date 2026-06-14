@@ -1,8 +1,8 @@
-// Сервис для работы с лентой
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../core/network/haneat_http_client.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
 import 'auth_service.dart';
@@ -63,18 +63,28 @@ class FeedService {
         'Content-Type': 'application/json',
       };
 
-      var response = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 25),
-        onTimeout: () => throw TimeoutException('Превышено время ожидания ответа от сервера'),
+      const timeout = Duration(seconds: 12);
+
+      var response = await HanEatHttpClient.shared
+          .get(uri, headers: headers)
+          .timeout(
+        timeout,
+        onTimeout: () => throw TimeoutException(
+          'Превышено время ожидания ответа от сервера',
+        ),
       );
 
       // При 401 пробуем обновить токен и повторить запрос
       if (response.statusCode == 401) {
         token = await AuthService.refreshToken();
         headers['Authorization'] = 'Bearer $token';
-        response = await http.get(uri, headers: headers).timeout(
-          const Duration(seconds: 25),
-          onTimeout: () => throw TimeoutException('Превышено время ожидания ответа от сервера'),
+        response = await HanEatHttpClient.shared
+            .get(uri, headers: headers)
+            .timeout(
+          timeout,
+          onTimeout: () => throw TimeoutException(
+            'Превышено время ожидания ответа от сервера',
+          ),
         );
       }
 

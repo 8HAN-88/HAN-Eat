@@ -63,7 +63,7 @@ class _SubscriptionsFeedScreenState
   String get _cacheVariant => 'following_${_feedType}_${_sortMode.value}';
 
   @override
-  bool get wantKeepAlive => !kIsWeb;
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -136,16 +136,42 @@ class _SubscriptionsFeedScreenState
     setState(() {
       _isLoading = true;
       if (refresh) {
-        _posts = [];
-        _nextCursor = null;
-        _hasMore = true;
         _lastLoadError = null;
-        _servingFromCache = false;
         _cacheLoadError = null;
       }
     });
 
+    if (refresh) {
+      final cached = await FeedApiCache.load(_cacheVariant);
+      if (!mounted) return;
+      if (cached.isNotEmpty) {
+        setState(() {
+          _posts = cached;
+          _nextCursor = null;
+          _hasMore = true;
+          _servingFromCache = true;
+          _isLoading = true;
+        });
+      } else {
+        setState(() {
+          _posts = [];
+          _nextCursor = null;
+          _hasMore = true;
+          _servingFromCache = false;
+        });
+      }
+    }
+
     if (refresh && !feedDeviceOnline()) {
+      if (_posts.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _cacheLoadError = 'offline';
+          });
+        }
+        return;
+      }
       final cached = await FeedApiCache.load(_cacheVariant);
       if (!mounted) return;
       if (cached.isNotEmpty) {

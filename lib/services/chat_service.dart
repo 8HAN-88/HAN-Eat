@@ -12,7 +12,7 @@ import 'server_config.dart';
 
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
-  static const _requestTimeout = Duration(seconds: 25);
+  static const _requestTimeout = Duration(seconds: 12);
 
   static bool _shouldRetry(int statusCode) =>
       statusCode == 401 ||
