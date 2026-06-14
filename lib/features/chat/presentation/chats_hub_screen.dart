@@ -189,21 +189,12 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
           PopupMenuButton<String>(
             tooltip: 'Ещё',
             onSelected: (v) {
-              if (v == 'search') _toggleSearch();
               if (v == 'people') _openPeopleSearch();
               if (v == 'channels') context.push(ChannelsManagementRoute.path);
               if (v == 'create_channel') _createChannel();
               if (v == 'archive') _openArchived();
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'search',
-                child: _hubMenuRow(
-                  _searchOpen ? Icons.search_off : Icons.search,
-                  _searchOpen ? 'Закрыть поиск' : 'Поиск',
-                ),
-              ),
-              const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'people',
                 child: _hubMenuRow(

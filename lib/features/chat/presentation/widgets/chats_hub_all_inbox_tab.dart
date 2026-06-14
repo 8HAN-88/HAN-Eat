@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/app_router.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
+import '../../../../core/network/feed_load_helper.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/channel_service.dart';
@@ -447,10 +448,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (chats.isEmpty &&
         channels.isEmpty &&
         resolvedSaved == null) {
+      final err = chatsError ?? channelsError;
+      if (err != null) {
+        unawaited(FeedLoadHelper.clearSessionIfExpired(err));
+      }
       setState(() {
         _entries.clear();
         _recommended = [];
-        _error = chatsError ?? channelsError;
+        _error = err;
         _chatsPartialError = null;
         _loading = false;
         _servingFromCache = false;
@@ -1006,11 +1011,19 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       return const ChatInboxSkeleton();
     }
     if (_error != null && !_showSavedPinned) {
+      final sessionExpired = FeedLoadHelper.isSessionError(_error!);
       return AppEmptyState(
-        icon: Icons.cloud_off_outlined,
-        title: 'Не удалось загрузить',
-        subtitle: userVisibleError(_error!),
-        action: FilledButton(onPressed: _load, child: const Text('Повторить')),
+        icon: sessionExpired ? Icons.login_rounded : Icons.cloud_off_outlined,
+        title: sessionExpired ? 'Сессия истекла' : 'Не удалось загрузить',
+        subtitle: sessionExpired
+            ? 'Войдите снова, чтобы видеть чаты и каналы.'
+            : userVisibleError(_error!),
+        action: sessionExpired
+            ? FilledButton(
+                onPressed: () => context.go(LoginRoute.path),
+                child: const Text('Войти'),
+              )
+            : FilledButton(onPressed: _load, child: const Text('Повторить')),
       );
     }
     if (_entries.isEmpty && !_showSavedPinned) {

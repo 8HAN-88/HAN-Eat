@@ -15,6 +15,7 @@ import '../../../../services/account_session_service.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../widgets/connectivity_status_banner.dart';
+import '../../../../widgets/pwa_install_banner.dart';
 import '../../../../services/feed_sync_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/presence_service.dart';
@@ -409,6 +410,7 @@ class _RootShellState extends ConsumerState<RootShell> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const ConnectivityStatusBanner(),
+                  const PwaInstallBanner(),
                   _subscriptionStaleBanner(context),
                   Expanded(
                     child: _navigationContent(context, online: online),

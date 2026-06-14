@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,6 +16,8 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/haptics/app_haptics.dart';
+import '../../../core/network/feed_load_helper.dart';
+import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
@@ -508,12 +511,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onScrollChanged() {
-    if (!_scroll.hasClients || !_showJumpToBottom) return;
-    if (_isNearBottom()) {
-      setState(() {
-        _showJumpToBottom = false;
-        _newMessagesBelow = 0;
-      });
+    if (!_scroll.hasClients || _selectionMode) return;
+    final nearBottom = _isNearBottom();
+    if (nearBottom) {
+      if (_showJumpToBottom) {
+        setState(() {
+          _showJumpToBottom = false;
+          _newMessagesBelow = 0;
+        });
+      }
+      return;
+    }
+    if (!_showJumpToBottom) {
+      setState(() => _showJumpToBottom = true);
     }
   }
 
@@ -1847,7 +1857,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scheduleMarkRead();
     } catch (e) {
       if (!mounted || seq != _messageLoadSeq) return;
-      final message = userVisibleError(e, fallback: 'Не удалось загрузить сообщения');
+      unawaited(FeedLoadHelper.clearSessionIfExpired(e));
+      final message = FeedLoadHelper.isSessionError(e)
+          ? 'Сессия истекла. Войдите снова.'
+          : userVisibleError(e, fallback: 'Не удалось загрузить сообщения');
       setState(() {
         _loading = false;
         _loadingMore = false;
@@ -2516,10 +2529,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         icon: Icons.cloud_off_outlined,
                         title: 'Сообщения не загрузились',
                         subtitle: _loadError!,
-                        action: FilledButton(
-                          onPressed: () => _load(refresh: true),
-                          child: const Text('Повторить'),
-                        ),
+                        action: FeedLoadHelper.isSessionError(_loadError!)
+                            ? FilledButton(
+                                onPressed: () => context.go(LoginRoute.path),
+                                child: const Text('Войти'),
+                              )
+                            : FilledButton(
+                                onPressed: () => _load(refresh: true),
+                                child: const Text('Повторить'),
+                              ),
                       )
                     : _messages.isEmpty && !_loading
                         ? const Center(child: Text('Напишите первое сообщение'))
@@ -2612,7 +2630,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   );
                                 },
                               ),
-                if (_showJumpToBottom && _newMessagesBelow > 0 && !_selectionMode)
+                if (_showJumpToBottom && !_selectionMode)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Material(
@@ -2628,7 +2646,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             vertical: 8,
                           ),
                           child: Text(
-                            _newMessagesChipLabel(),
+                            _newMessagesBelow > 0
+                                ? _newMessagesChipLabel()
+                                : '↓ Вниз',
                             style: TextStyle(
                               color: scheme.onPrimary,
                               fontWeight: FontWeight.w600,
@@ -2650,6 +2670,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onForward: _forwardSelectedMessages,
             )
           else ...[
+          if (_sending)
+            Material(
+              color: scheme.secondaryContainer.withValues(alpha: 0.55),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: scheme.onSecondaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Отправка…',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: scheme.onSecondaryContainer,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (_editingMessage != null)
             Material(
               color: scheme.primaryContainer.withValues(alpha: 0.35),

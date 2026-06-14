@@ -229,11 +229,17 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
           if (_playError != null)
             Padding(
               padding: const EdgeInsets.only(left: 4, top: 2),
-              child: Text(
-                _playError!,
-                style: TextStyle(
-                  color: widget.foregroundColor.withValues(alpha: 0.75),
-                  fontSize: 11,
+              child: GestureDetector(
+                onTap: _loading ? null : _togglePlay,
+                child: Text(
+                  '$_playError · Повторить',
+                  style: TextStyle(
+                    color: widget.foregroundColor.withValues(alpha: 0.85),
+                    fontSize: 11,
+                    decoration: TextDecoration.underline,
+                    decorationColor:
+                        widget.foregroundColor.withValues(alpha: 0.5),
+                  ),
                 ),
               ),
             ),
