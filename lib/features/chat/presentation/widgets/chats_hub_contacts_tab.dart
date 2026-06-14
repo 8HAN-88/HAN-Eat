@@ -202,29 +202,102 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     if (mounted) setState(() => _syncingPhone = false);
   }
 
-  Future<void> _addPhoneContact({bool offerAccountLink = false}) async {
-    final nameController = TextEditingController(
-      text: AuthService.instance.currentUser?.name ?? '',
-    );
+  Future<void> _linkMyPhone() async {
     final phoneController = TextEditingController();
-    var linkToAccount = offerAccountLink;
     final formKey = GlobalKey<FormState>();
 
     try {
       final saved = await showDialog<bool>(
         context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            title: const Text('Новый контакт'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
+        builder: (ctx) => AlertDialog(
+          title: const Text('Привязать ваш номер'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Друзья из телефонной книги смогут найти вас в HAN Eat.',
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Ваш номер',
+                    hintText: '+7 900 123-45-67',
+                  ),
+                  validator: (value) {
+                    final raw = value?.trim() ?? '';
+                    if (raw.isEmpty) return 'Введите номер';
+                    if (normalizePhoneE164(raw) == null) {
+                      return 'Некорректный номер';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() != true) return;
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Привязать'),
+            ),
+          ],
+        ),
+      );
+      if (saved != true || !mounted) return;
+
+      await AuthService.linkPhone(phoneController.text.trim());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Номер привязан')),
+      );
+      setState(() {});
+      await _fetchPhoneContacts();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      phoneController.dispose();
+    }
+  }
+
+  Future<void> _addPhoneContact() async {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Новый контакт'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
                     controller: nameController,
                     textCapitalization: TextCapitalization.words,
+                    autofocus: true,
                     decoration: const InputDecoration(
                       labelText: 'Имя',
                       hintText: 'Иван Петров',
@@ -253,39 +326,23 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                       return null;
                     },
                   ),
-                  if (offerAccountLink) ...[
-                    const SizedBox(height: 8),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: linkToAccount,
-                      onChanged: (value) {
-                        setDialogState(() => linkToAccount = value ?? false);
-                      },
-                      title: const Text('Это мой номер в HAN Eat'),
-                      subtitle: const Text(
-                        'Друзья из телефона смогут вас найти',
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (formKey.currentState?.validate() != true) return;
-                  Navigator.pop(ctx, true);
-                },
-                child: const Text('Сохранить'),
-              ),
-            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() != true) return;
+                Navigator.pop(ctx, true);
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
         ),
       );
       if (saved != true || !mounted) return;
@@ -298,35 +355,11 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         phoneRaw: phone,
       );
 
-      var linked = false;
-      if (linkToAccount) {
-        try {
-          await AuthService.linkPhone(phone);
-          linked = true;
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Контакт сохранён, но номер не привязан: ${userVisibleError(e)}',
-              ),
-            ),
-          );
-          await _fetchPhoneContacts();
-          if (mounted) setState(() {});
-          return;
-        }
-      }
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            linked
-                ? 'Контакт сохранён, номер привязан'
-                : kIsWeb
-                    ? 'Контакт сохранён'
-                    : 'Контакт сохранён в телефоне',
+            kIsWeb ? 'Контакт сохранён' : 'Контакт сохранён в телефоне',
           ),
         ),
       );
@@ -504,7 +537,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                   ),
                 ),
                 trailing: FilledButton.tonal(
-                  onPressed: () => _addPhoneContact(offerAccountLink: true),
+                  onPressed: _linkMyPhone,
                   child: const Text('Привязать'),
                 ),
               ),
@@ -574,16 +607,12 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               leading: const Icon(Icons.person_add_outlined),
               title: const Text('Добавить контакт'),
               subtitle: Text(
-                showLinkPhone
-                    ? (kIsWeb
-                        ? 'Имя и номер сохранятся в списке контактов'
-                        : 'Имя и номер сохранятся в телефонной книге')
-                    : (kIsWeb
-                        ? 'Сохранить в списке контактов'
-                        : 'Сохранить в телефонной книге'),
+                kIsWeb
+                    ? 'Имя и номер человека, которого хотите добавить'
+                    : 'Сохранится в телефонной книге',
               ),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => _addPhoneContact(offerAccountLink: showLinkPhone),
+              onTap: _addPhoneContact,
             ),
           ),
           if (_phoneSyncError != null)
