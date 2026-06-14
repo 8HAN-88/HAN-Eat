@@ -193,6 +193,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     if (kIsWeb) {
       final fromBrowser = parseDeepLinkToGoPath(Uri.base.toString());
       if (fromBrowser != null) return fromBrowser;
+      // Сессия уже восстановлена в StartupShell — не мигаем /boot.
+      return AuthService.instance.currentUser == null
+          ? LoginRoute.path
+          : FeedRoute.path;
     }
     return BootScreen.path;
   }();

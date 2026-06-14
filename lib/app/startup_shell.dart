@@ -23,7 +23,6 @@ class StartupShell extends StatefulWidget {
 
 class _StartupShellState extends State<StartupShell> {
   Object? _error;
-  String _status = 'Запуск…';
 
   void _openMainUi() {
     if (AppBootstrapState.authReady.value) return;
@@ -49,7 +48,6 @@ class _StartupShellState extends State<StartupShell> {
   void _retryBootstrap() {
     setState(() {
       _error = null;
-      _status = 'Запуск…';
       AppBootstrapState.authReady.value = false;
       AppBootstrapState.hiveReady.value = false;
       AppBootstrapState.servicesReady.value = false;
@@ -61,7 +59,6 @@ class _StartupShellState extends State<StartupShell> {
 
   Future<void> _runBootstrapInBackground() async {
     try {
-      if (mounted) setState(() => _status = 'Загрузка…');
       await bootstrapEarly().timeout(
         const Duration(seconds: 8),
         onTimeout: () {
@@ -73,7 +70,6 @@ class _StartupShellState extends State<StartupShell> {
     }
 
     try {
-      if (mounted) setState(() => _status = 'Восстановление сессии…');
       await bootstrapServicesForFirstFrame().timeout(
         Duration(seconds: kIsWeb ? 1 : 6),
         onTimeout: () {
@@ -100,44 +96,30 @@ class _StartupShellState extends State<StartupShell> {
   }
 
   Widget _loadingApp() {
-    // Минимальный UI без ассетов/темы — быстрее первый кадр на физическом iPhone.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: _kStartupCanvas,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF6B35),
-          brightness: Brightness.light,
-        ),
+        brightness: Brightness.dark,
       ),
-      home: Scaffold(
+      home: const Scaffold(
         backgroundColor: _kStartupCanvas,
         body: SafeArea(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const AppBrandLogo(size: 72),
-                  const SizedBox(height: 24),
-                  const CircularProgressIndicator(
+                  AppBrandLogo(
+                    layout: AppBrandLogoLayout.horizontal,
+                    width: 168,
+                  ),
+                  SizedBox(height: 32),
+                  CircularProgressIndicator(
                     color: Color(0xFFFF6B35),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'HAN Eat',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _status,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 15),
+                    strokeWidth: 2.5,
                   ),
                 ],
               ),
