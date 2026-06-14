@@ -186,30 +186,54 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
           ),
         ),
         actions: [
-          IconButton(
-            icon: Icon(_searchOpen ? Icons.search_off : Icons.search),
-            tooltip: _searchOpen ? 'Закрыть поиск' : 'Поиск',
-            onPressed: _toggleSearch,
-          ),
-          IconButton(
-            icon: const Icon(Icons.archive_outlined),
-            tooltip: 'Архив чатов и каналов',
-            onPressed: _openArchived,
-          ),
-          IconButton(
-            icon: const Icon(Icons.explore_outlined),
-            tooltip: 'Каталог каналов',
-            onPressed: () => context.push(ChannelsManagementRoute.path),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            tooltip: 'Найти людей',
-            onPressed: _openPeopleSearch,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Создать канал',
-            onPressed: _createChannel,
+          PopupMenuButton<String>(
+            tooltip: 'Ещё',
+            onSelected: (v) {
+              if (v == 'search') _toggleSearch();
+              if (v == 'people') _openPeopleSearch();
+              if (v == 'channels') context.push(ChannelsManagementRoute.path);
+              if (v == 'create_channel') _createChannel();
+              if (v == 'archive') _openArchived();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'search',
+                child: _hubMenuRow(
+                  _searchOpen ? Icons.search_off : Icons.search,
+                  _searchOpen ? 'Закрыть поиск' : 'Поиск',
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'people',
+                child: _hubMenuRow(
+                  Icons.person_search_outlined,
+                  'Найти людей',
+                ),
+              ),
+              PopupMenuItem(
+                value: 'channels',
+                child: _hubMenuRow(
+                  Icons.explore_outlined,
+                  'Каталог каналов',
+                ),
+              ),
+              PopupMenuItem(
+                value: 'create_channel',
+                child: _hubMenuRow(
+                  Icons.add_circle_outline,
+                  'Создать канал',
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'archive',
+                child: _hubMenuRow(
+                  Icons.archive_outlined,
+                  'Архив',
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -237,4 +261,14 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
       ),
     );
   }
+}
+
+Widget _hubMenuRow(IconData icon, String label) {
+  return Row(
+    children: [
+      Icon(icon, size: 20),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label)),
+    ],
+  );
 }

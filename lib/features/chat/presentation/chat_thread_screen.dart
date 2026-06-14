@@ -2025,7 +2025,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Future<void> _showMediaPicker() async {
+  Future<void> _showAttachMenu() async {
     if (_sending || _recording) return;
     final choice = await showModalBottomSheet<String>(
       context: context,
@@ -2035,14 +2035,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.image_outlined),
-              title: const Text('Фото'),
-              onTap: () => Navigator.pop(ctx, 'photo'),
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Медиатека'),
+              subtitle: const Text('Фото или видео'),
+              onTap: () => Navigator.pop(ctx, 'library'),
             ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Сделать снимок'),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
             ListTile(
-              leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Видео'),
-              onTap: () => Navigator.pop(ctx, 'video'),
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('Выбрать файл'),
+              onTap: () => Navigator.pop(ctx, 'file'),
             ),
           ],
         ),
@@ -2050,64 +2057,89 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (!mounted || choice == null) return;
     switch (choice) {
-      case 'photo':
-        await _pickImage();
-      case 'video':
-        await _pickVideo();
+      case 'library':
+        await _pickFromMediaLibrary();
+      case 'camera':
+        await _pickImage(source: ImageSource.camera);
+      case 'file':
+        await _pickFile();
     }
   }
 
-  Future<void> _pickVideo() async {
+  bool _looksLikeVideoFile(XFile file) {
+    final name = file.name.toLowerCase();
+    return name.endsWith('.mp4') ||
+        name.endsWith('.mov') ||
+        name.endsWith('.webm') ||
+        name.endsWith('.avi') ||
+        name.endsWith('.mkv');
+  }
+
+  Future<void> _pickFromMediaLibrary() async {
     if (_sending || _recording) return;
-    ImageSource? source;
-    if (kIsWeb) {
-      source = ImageSource.gallery;
-    } else {
-      source = await showModalBottomSheet<ImageSource>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.video_library_outlined),
-                title: const Text('Видео из галереи'),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.videocam_outlined),
-                title: const Text('Снять видео'),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-    if (source == null) return;
     final picker = ImagePicker();
-    final file = await picker.pickVideo(
-      source: source,
-      maxDuration: const Duration(minutes: 3),
+    final file = await picker.pickMedia(
+      imageQuality: 85,
+      maxWidth: 1600,
     );
     if (file == null) return;
-    final bytes = await file.length();
-    if (bytes > 80 * 1024 * 1024) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Видео слишком большое (макс. 80 МБ). Выберите короче или сожмите файл.'),
-          ),
-        );
+    if (_looksLikeVideoFile(file)) {
+      final bytes = await file.length();
+      if (bytes > 80 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Видео слишком большое (макс. 80 МБ). Выберите короче или сожмите файл.',
+              ),
+            ),
+          );
+        }
+        return;
       }
-      return;
+      await _sendPickedVideo(await _normalizeVideoFileForUpload(file));
+    } else {
+      await _sendPickedImage(file);
     }
-    final uploadFile = await _normalizeVideoFileForUpload(file);
+  }
+
+  Future<void> _sendPickedImage(XFile file) async {
     setState(() => _sending = true);
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
-        file: uploadFile,
+        file: file,
+        fileType: 'image',
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      final msg = await ChatService.sendImage(
+        conversationId: widget.conversationId,
+        mediaUrl: resolved,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+        _sending = false;
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _sendPickedVideo(XFile file) async {
+    setState(() => _sending = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
         fileType: 'video',
         waitForProcessing: false,
       );
@@ -2204,29 +2236,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _pickImage() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Галерея'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Камера'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (source == null) return;
+  Future<void> _pickImage({required ImageSource source}) async {
+    if (_sending || _recording) return;
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: source,
@@ -2234,35 +2245,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       maxWidth: 1600,
     );
     if (file == null) return;
-    setState(() => _sending = true);
-    try {
-      final uploaded = await MediaUploadService.uploadMediaFile(
-        file: file,
-        fileType: 'image',
-      );
-      final url = uploaded.url;
-      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
-      final resolved = ServerConfig.resolveMediaUrl(url);
-      final msg = await ChatService.sendImage(
-        conversationId: widget.conversationId,
-        mediaUrl: resolved,
-        replyToMessageId: _replyTo?.id,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-        _sending = false;
-      });
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+    await _sendPickedImage(file);
   }
 
   @override
@@ -2379,87 +2362,101 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               )
             : null,
         actions: [
-          IconButton(
-            tooltip: 'Поиск',
-            icon: Icon(_threadSearchOpen ? Icons.search_off : Icons.search),
-            onPressed: _toggleThreadSearch,
-          ),
-          if (mediaCount > 0)
-            IconButton(
-              tooltip: 'Медиа',
-              icon: const Icon(Icons.photo_library_outlined),
-              onPressed: _openMediaGallery,
-            ),
-          if (isGroup)
-            IconButton(
-              tooltip: 'О группе',
-              icon: const Icon(Icons.info_outline),
-              onPressed: _openGroupInfo,
-            ),
-          if (!isSaved) ...[
-            IconButton(
-              tooltip: _muted ? 'Включить уведомления' : 'Без звука',
-              icon: Icon(
-                _muted
-                    ? Icons.notifications_off_outlined
-                    : Icons.notifications_outlined,
-              ),
-              onPressed: _toggleMute,
-            ),
-            IconButton(
-              tooltip: _pinned ? 'Открепить' : 'Закрепить',
-              icon: Icon(_pinned ? Icons.push_pin : Icons.push_pin_outlined),
-              onPressed: _togglePin,
-            ),
-          ],
           PopupMenuButton<String>(
+            tooltip: 'Ещё',
             onSelected: (v) {
-              if (v == 'delete') _deleteChat();
-              if (v == 'archive') _archiveChat();
-              if (v == 'unread') _markUnread();
+              if (v == 'search') _toggleThreadSearch();
               if (v == 'media') _openMediaGallery();
               if (v == 'mute') _toggleMute();
+              if (v == 'pin') _togglePin();
               if (v == 'group') _openGroupInfo();
               if (v == 'block') _blockPeer();
               if (v == 'leave') _leaveGroup();
+              if (v == 'unread') _markUnread();
+              if (v == 'delete') _deleteChat();
+              if (v == 'archive') _archiveChat();
             },
             itemBuilder: (ctx) => [
-              if (mediaCount > 0)
+              PopupMenuItem(
+                value: 'search',
+                child: _threadMenuRow(
+                  _threadSearchOpen ? Icons.search_off : Icons.search,
+                  _threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате',
+                ),
+              ),
+              if (mediaCount > 0) ...[
+                const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'media',
-                  child: Text('Медиа ($mediaCount)'),
+                  child: _threadMenuRow(
+                    Icons.photo_library_outlined,
+                    'Медиа ($mediaCount)',
+                  ),
                 ),
+              ],
               if (!isSaved) ...[
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'pin',
+                  child: _threadMenuRow(
+                    _pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    _pinned ? 'Открепить' : 'Закрепить',
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'mute',
-                  child: Text(_muted ? 'Включить уведомления' : 'Без звука'),
+                  child: _threadMenuRow(
+                    _muted
+                        ? Icons.notifications_off_outlined
+                        : Icons.notifications_outlined,
+                    _muted ? 'Включить уведомления' : 'Без звука',
+                  ),
                 ),
                 if (isGroup)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'group',
-                    child: Text('О группе'),
+                    child: _threadMenuRow(
+                      Icons.info_outline,
+                      'О группе',
+                    ),
                   ),
                 if (!isGroup && peer != null)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'block',
-                    child: Text('Заблокировать'),
+                    child: _threadMenuRow(
+                      Icons.block_outlined,
+                      'Заблокировать',
+                    ),
                   ),
                 if (isGroup)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'leave',
-                    child: Text('Выйти из группы'),
+                    child: _threadMenuRow(
+                      Icons.logout,
+                      'Выйти из группы',
+                    ),
                   ),
-                const PopupMenuItem(
+                const PopupMenuDivider(),
+                PopupMenuItem(
                   value: 'unread',
-                  child: Text('Пометить непрочитанным'),
+                  child: _threadMenuRow(
+                    Icons.mark_chat_unread_outlined,
+                    'Пометить непрочитанным',
+                  ),
                 ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Удалить чат'),
-                ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'archive',
-                  child: Text('В архив'),
+                  child: _threadMenuRow(
+                    Icons.archive_outlined,
+                    'В архив',
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: _threadMenuRow(
+                    Icons.delete_outline,
+                    'Удалить чат',
+                  ),
                 ),
               ],
             ],
@@ -2742,14 +2739,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: _sending || _recording ? null : _pickFile,
-                    icon: const Icon(Icons.attach_file),
-                    tooltip: 'Файл',
-                  ),
-                  IconButton(
-                    onPressed: _sending || _recording ? null : _showMediaPicker,
-                    icon: const Icon(Icons.perm_media_outlined),
-                    tooltip: 'Фото или видео',
+                    onPressed: _sending || _recording ? null : _showAttachMenu,
+                    icon: const Icon(Icons.attach_file_outlined),
+                    tooltip: 'Вложение',
                   ),
                   Expanded(
                     child: TextField(
@@ -2818,6 +2810,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+}
+
+Widget _threadMenuRow(IconData icon, String label) {
+  return Row(
+    children: [
+      Icon(icon, size: 20),
+      const SizedBox(width: 12),
+      Expanded(child: Text(label)),
+    ],
+  );
 }
 
 class _Bubble extends StatelessWidget {
