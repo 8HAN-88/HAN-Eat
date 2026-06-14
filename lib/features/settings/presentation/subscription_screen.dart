@@ -44,8 +44,12 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       _selectedProduct = 'pro';
     }
     WidgetsBinding.instance.addObserver(this);
-    _loadPrices();
-    _loadPaymentHistory();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadPrices();
+        _loadPaymentHistory();
+      }
+    });
     ProductAnalytics.logEvent(
       eventType: 'subscription_paywall_view',
       metadata: {'initial_product': _selectedProduct},
@@ -158,7 +162,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
   }
 
   Future<void> _loadPrices() async {
-    final scheme = Theme.of(context).colorScheme;
     setState(() => _isLoadingPrices = true);
     try {
       final prices = await PaymentService.getPrices();
@@ -167,6 +170,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
       }
     } catch (e) {
       if (mounted) {
+        final scheme = Theme.of(context).colorScheme;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

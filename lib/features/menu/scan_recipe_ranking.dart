@@ -107,10 +107,6 @@ class ScanRecipeRanking {
         spoonacular.where((r) => recipeMatchesDish(r, label)).toList();
     if (relevantSpoon.isNotEmpty) return relevantSpoon.take(10).toList();
 
-    if (label.isNotEmpty && spoonacular.isNotEmpty) {
-      return spoonacular.take(6).toList();
-    }
-
     return const [];
   }
 
