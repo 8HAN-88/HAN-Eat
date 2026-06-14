@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PWA-иконки: чёрный фон, логотип по центру с полями (как на домашнем экране iOS)."""
+"""PWA-иконки из app_icon_source.png без дополнительных чёрных полей."""
 from __future__ import annotations
 
 import sys
@@ -16,13 +16,14 @@ SRC = ROOT / "assets" / "app_icon_source.png"
 OUT = ROOT / "web" / "icons"
 BG = (0, 0, 0, 255)
 
-# Логотип ~66% стороны (поля ~17% с каждой стороны) — как на эталонной иконке.
-ICON_PADDING = 0.17
-MASKABLE_PADDING = 0.22
-FAVICON_PADDING = 0.14
+# Только maskable: безопасная зона под круглую маску iOS/Android.
+MASKABLE_PADDING = 0.10
 
 
-def _fit_contain(src: Image.Image, size: int, padding_ratio: float) -> Image.Image:
+def _render(src: Image.Image, size: int, padding_ratio: float = 0.0) -> Image.Image:
+    if padding_ratio <= 0:
+        return src.resize((size, size), Image.Resampling.LANCZOS).convert("RGB")
+
     canvas = Image.new("RGBA", (size, size), BG)
     pad = int(size * padding_ratio)
     inner = size - 2 * pad
@@ -46,14 +47,13 @@ def main() -> None:
         (192, "Icon-192.png"),
         (512, "Icon-512.png"),
     ):
-        _fit_contain(src, size, padding_ratio=ICON_PADDING).save(OUT / name, "PNG")
+        _render(src, size).save(OUT / name, "PNG")
 
     for size, name in ((192, "Icon-maskable-192.png"), (512, "Icon-maskable-512.png")):
-        _fit_contain(src, size, padding_ratio=MASKABLE_PADDING).save(OUT / name, "PNG")
+        _render(src, size, padding_ratio=MASKABLE_PADDING).save(OUT / name, "PNG")
 
-    favicon = _fit_contain(src, 32, padding_ratio=FAVICON_PADDING)
-    favicon.save(ROOT / "web" / "favicon.png", "PNG")
-    print(f"✓ PWA icons (black bg, padding={ICON_PADDING}) → {OUT}")
+    _render(src, 32).save(ROOT / "web" / "favicon.png", "PNG")
+    print(f"✓ PWA icons (no extra borders) → {OUT}")
 
 
 if __name__ == "__main__":
