@@ -60,7 +60,7 @@ class WebAppUpdateService {
       );
       _reloadScheduled = true;
       stop();
-      reload.reloadWebPage();
+      await reload.reloadWebPage();
     } catch (e) {
       debugPrint('WebAppUpdateService: $e');
     } finally {
