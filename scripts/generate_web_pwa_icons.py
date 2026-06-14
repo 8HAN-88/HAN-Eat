@@ -16,8 +16,10 @@ SRC = ROOT / "assets" / "app_icon_source.png"
 OUT = ROOT / "web" / "icons"
 BG = (0, 0, 0, 255)
 
-# Только maskable: безопасная зона под круглую маску iOS/Android.
-MASKABLE_PADDING = 0.10
+# Логотип ~68% стороны — компактнее на домашнем экране, фон остаётся чёрным.
+ICON_PADDING = 0.16
+MASKABLE_PADDING = 0.20
+FAVICON_PADDING = 0.12
 
 
 def _render(src: Image.Image, size: int, padding_ratio: float = 0.0) -> Image.Image:
@@ -47,13 +49,13 @@ def main() -> None:
         (192, "Icon-192.png"),
         (512, "Icon-512.png"),
     ):
-        _render(src, size).save(OUT / name, "PNG")
+        _render(src, size, padding_ratio=ICON_PADDING).save(OUT / name, "PNG")
 
     for size, name in ((192, "Icon-maskable-192.png"), (512, "Icon-maskable-512.png")):
         _render(src, size, padding_ratio=MASKABLE_PADDING).save(OUT / name, "PNG")
 
-    _render(src, 32).save(ROOT / "web" / "favicon.png", "PNG")
-    print(f"✓ PWA icons (no extra borders) → {OUT}")
+    _render(src, 32, padding_ratio=FAVICON_PADDING).save(ROOT / "web" / "favicon.png", "PNG")
+    print(f"✓ PWA icons (logo scale={1 - 2 * ICON_PADDING:.0%}) → {OUT}")
 
 
 if __name__ == "__main__":
