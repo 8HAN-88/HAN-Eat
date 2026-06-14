@@ -1,16 +1,14 @@
 import 'package:flutter_contacts/flutter_contacts.dart';
 
 import '../core/phone/phone_hash.dart';
-import '../models/chat_models.dart';
-import 'chat_service.dart';
+import 'phone_contacts_sync_core.dart';
 import 'phone_contacts_types.dart';
 
 /// Синхронизация адресной книги телефона с HAN Eat (как в Telegram).
 class PhoneContactsService {
   PhoneContactsService._();
 
-  static const _maxInvitees = 500;
-  static const _apiBatchSize = 500;
+  static bool get supportsContactPicker => false;
 
   static Future<bool> _requestContactsPermission({
     PermissionType type = PermissionType.read,
@@ -23,6 +21,8 @@ class PhoneContactsService {
   static Future<bool> requestPermission() async {
     return _requestContactsPermission();
   }
+
+  static Future<int> importFromPicker() async => 0;
 
   /// Сохранить контакт в телефонную книгу устройства.
   static Future<void> addContactToDevice({
@@ -58,19 +58,6 @@ class PhoneContactsService {
     await FlutterContacts.create(contact);
   }
 
-  static Future<List<ChatUserSearchItem>> _matchHashesInBatches(
-    List<String> hashes,
-  ) async {
-    final out = <ChatUserSearchItem>[];
-    for (var i = 0; i < hashes.length; i += _apiBatchSize) {
-      final end = (i + _apiBatchSize).clamp(0, hashes.length);
-      final batch = hashes.sublist(i, end);
-      final items = await ChatService.syncPhoneContacts(batch);
-      out.addAll(items);
-    }
-    return out;
-  }
-
   /// Прочитать телефонную книгу и (по возможности) сопоставить с пользователями HAN Eat.
   static Future<PhoneContactsSyncResult> syncFromDevice({
     String defaultRegion = 'RU',
@@ -90,81 +77,21 @@ class PhoneContactsService {
     for (final contact in contacts) {
       final label = (contact.displayName ?? '').trim();
       for (final phone in contact.phones) {
-        final raw = phone.normalizedNumber ?? phone.number;
-        final e164 = normalizePhoneE164(raw, defaultRegion: defaultRegion);
-        if (e164 == null) continue;
-        final hash = hashPhoneE164(e164);
-        hashes.add(hash);
-        hashToName.putIfAbsent(
-          hash,
-          () => label.isNotEmpty ? label : phone.number,
+        collectPhoneHashes(
+          displayName: label.isNotEmpty ? label : phone.number,
+          phoneRaw: phone.normalizedNumber ?? phone.number,
+          hashToName: hashToName,
+          hashToE164: hashToE164,
+          hashes: hashes,
+          defaultRegion: defaultRegion,
         );
-        hashToE164.putIfAbsent(hash, () => e164);
       }
     }
 
-    if (hashes.isEmpty) {
-      return const PhoneContactsSyncResult(
-        phoneBook: [],
-        onApp: [],
-        invitees: [],
-      );
-    }
-
-    Object? apiError;
-    List<ChatUserSearchItem> users = [];
-    try {
-      users = await _matchHashesInBatches(hashes.toList());
-    } catch (e) {
-      apiError = e;
-    }
-
-    final hashToUser = <String, ChatUserSearchItem>{};
-    for (final u in users) {
-      final h = u.phoneHash;
-      if (h != null && h.isNotEmpty) {
-        hashToUser[h] = u;
-      }
-    }
-
-    final phoneBook = <PhoneBookContact>[];
-    final onApp = <PhoneContactMatch>[];
-    final invitees = <PhoneContactInvite>[];
-
-    final sortedHashes = hashes.toList()
-      ..sort(
-        (a, b) => (hashToName[a] ?? '').compareTo(hashToName[b] ?? ''),
-      );
-
-    for (final hash in sortedHashes) {
-      final e164 = hashToE164[hash];
-      if (e164 == null) continue;
-      final name = hashToName[hash] ?? e164;
-      final matched = hashToUser[hash];
-      phoneBook.add(
-        PhoneBookContact(
-          displayName: name,
-          phoneE164: e164,
-          matchedUser: matched,
-        ),
-      );
-      if (matched != null) {
-        onApp.add(
-          PhoneContactMatch(
-            user: matched,
-            addressBookName: name,
-          ),
-        );
-      } else if (invitees.length < _maxInvitees) {
-        invitees.add(PhoneContactInvite(displayName: name, phoneE164: e164));
-      }
-    }
-
-    return PhoneContactsSyncResult(
-      phoneBook: phoneBook,
-      onApp: onApp,
-      invitees: invitees,
-      apiError: apiError,
+    return buildPhoneContactsSyncResult(
+      hashToName: hashToName,
+      hashToE164: hashToE164,
+      hashes: hashes,
     );
   }
 }

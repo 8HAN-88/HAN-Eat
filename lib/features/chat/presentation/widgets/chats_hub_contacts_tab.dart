@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -140,7 +141,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       if (!mounted) return;
       setState(() {
         _phoneBook = [];
-        _phonePermissionDenied = true;
+        _phonePermissionDenied = !kIsWeb;
       });
     } catch (e) {
       if (!mounted) return;
@@ -148,7 +149,50 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     }
   }
 
+  Future<void> _importFromPhoneBook() async {
+    if (!PhoneContactsService.supportsContactPicker) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Импорт из телефонной книги недоступен в этом браузере. '
+            'Используйте Chrome на Android или добавьте контакты вручную.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _syncingPhone = true;
+      _phoneSyncError = null;
+      _phonePermissionDenied = false;
+    });
+    try {
+      final count = await PhoneContactsService.importFromPicker();
+      if (!mounted) return;
+      if (count == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Контакты не выбраны')),
+        );
+      }
+      await _fetchPhoneContacts();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _phoneSyncError = e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _syncingPhone = false);
+    }
+  }
+
   Future<void> _retryPhonePermission() async {
+    if (kIsWeb) {
+      await _importFromPhoneBook();
+      return;
+    }
     setState(() {
       _syncingPhone = true;
       _phoneSyncError = null;
@@ -279,8 +323,10 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         SnackBar(
           content: Text(
             linked
-                ? 'Контакт сохранён в телефоне, номер привязан'
-                : 'Контакт сохранён в телефоне',
+                ? 'Контакт сохранён, номер привязан'
+                : kIsWeb
+                    ? 'Контакт сохранён'
+                    : 'Контакт сохранён в телефоне',
           ),
         ),
       );
@@ -487,6 +533,41 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                       ),
               ),
             ),
+          if (kIsWeb && PhoneContactsService.supportsContactPicker)
+            Card(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: ListTile(
+                leading: const Icon(Icons.sync_outlined),
+                title: const Text('Синхронизация контактов'),
+                subtitle: Text(
+                  _phoneBook.isEmpty
+                      ? 'Выберите контакты из телефонной книги — покажем, кто уже в HAN Eat'
+                      : 'Добавить ещё контакты из телефонной книги',
+                ),
+                trailing: _syncingPhone
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : FilledButton(
+                        onPressed: _importFromPhoneBook,
+                        child: Text(_phoneBook.isEmpty ? 'Импорт' : 'Ещё'),
+                      ),
+              ),
+            ),
+          if (kIsWeb && !PhoneContactsService.supportsContactPicker)
+            Card(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Импорт с телефона'),
+                subtitle: Text(
+                  'В этом браузере нельзя прочитать телефонную книгу целиком. '
+                  'Откройте HAN Eat в Chrome на Android или добавляйте номера вручную.',
+                ),
+              ),
+            ),
           Card(
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: ListTile(
@@ -494,8 +575,12 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               title: const Text('Добавить контакт'),
               subtitle: Text(
                 showLinkPhone
-                    ? 'Имя и номер сохранятся в телефонной книге'
-                    : 'Сохранить в телефонной книге',
+                    ? (kIsWeb
+                        ? 'Имя и номер сохранятся в списке контактов'
+                        : 'Имя и номер сохранятся в телефонной книге')
+                    : (kIsWeb
+                        ? 'Сохранить в списке контактов'
+                        : 'Сохранить в телефонной книге'),
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _addPhoneContact(offerAccountLink: showLinkPhone),
@@ -625,13 +710,15 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               !_phonePermissionDenied &&
               !_loading &&
               !searching)
-            const Padding(
-              padding: EdgeInsets.all(24),
+            Padding(
+              padding: const EdgeInsets.all(24),
               child: AppEmptyState(
                 icon: Icons.people_outline_rounded,
                 title: 'Пока пусто',
                 subtitle:
-                    'В телефонной книге нет номеров с кодом страны или добавьте людей через поиск.',
+                    kIsWeb
+                        ? 'Импортируйте контакты с телефона или добавьте номера вручную.'
+                        : 'В телефонной книге нет номеров с кодом страны или добавьте людей через поиск.',
               ),
             ),
         ],
