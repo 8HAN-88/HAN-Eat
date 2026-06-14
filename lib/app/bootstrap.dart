@@ -1,9 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb, kReleaseMode;
 import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

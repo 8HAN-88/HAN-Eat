@@ -37,9 +37,7 @@ class _RecipeByIdScreenState extends State<RecipeByIdScreen> {
     final result = await ApiService.loadRecipeById(widget.recipeId);
     if (!mounted) return;
     Recipe? recipe = result.recipe;
-    if (recipe == null) {
-      recipe = await SavedPostsService.getOfflineRecipe(widget.recipeId);
-    }
+    recipe ??= await SavedPostsService.getOfflineRecipe(widget.recipeId);
     if (recipe == null) {
       setState(() {
         _loading = false;

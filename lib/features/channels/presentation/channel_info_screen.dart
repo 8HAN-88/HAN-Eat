@@ -1,6 +1,5 @@
 // Полноэкранная страница канала в духе Telegram: шапка, 4 кнопки, карточка ссылки/описания, вкладки (без ленты постов).
 import 'package:flutter/material.dart';
-import 'package:flutter/painting.dart' show ResizeImage;
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

@@ -43,9 +43,11 @@ class LikeService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return LikeResponse.fromJson(data);
     } else if (response.statusCode == 400) {
-      // Лайк уже поставлен - получаем актуальное состояние
       final statusResponse = await getLikeStatus(postId);
-      return statusResponse;
+      return LikeResponse(
+        liked: true,
+        likesCount: statusResponse.likesCount,
+      );
     } else {
       final errorData = jsonDecode(response.body) as Map<String, dynamic>?;
       final errorMessage = errorData?['detail'] as String? ?? 'Failed to like post';
@@ -89,9 +91,11 @@ class LikeService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return LikeResponse.fromJson(data);
     } else if (response.statusCode == 404) {
-      // Лайк уже убран - получаем актуальное состояние
       final statusResponse = await getLikeStatus(postId);
-      return statusResponse;
+      return LikeResponse(
+        liked: false,
+        likesCount: statusResponse.likesCount,
+      );
     } else {
       final errorData = jsonDecode(response.body) as Map<String, dynamic>?;
       final errorMessage = errorData?['detail'] as String? ?? 'Failed to unlike post';

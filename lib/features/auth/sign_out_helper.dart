@@ -2,66 +2,94 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
-import '../../app/guest_routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/api_error_parser.dart';
 
 /// Подтверждённый выход из аккаунта (единый UX).
-///
-/// [navigateToLogin] — false, если экран сам показывает форму входа после выхода.
-Future<void> confirmAndSignOut(
-  BuildContext context, {
-  bool navigateToLogin = true,
-  VoidCallback? onSignedOut,
-}) async {
-  final confirm = await showDialog<bool>(
+Future<void> confirmAndSignOut(BuildContext context) async {
+  final signedOut = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Выйти из аккаунта?'),
-      content: const Text('Вы уверены, что хотите выйти?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Выйти'),
-        ),
-      ],
-    ),
+    barrierDismissible: false,
+    builder: (ctx) => const _SignOutDialog(),
   );
-  if (confirm != true || !context.mounted) return;
+  if (signedOut != true || !context.mounted) return;
+  final loc = GoRouterState.of(context).matchedLocation.split('?').first;
+  if (loc != LoginRoute.path) {
+    context.go(LoginRoute.path);
+  }
+}
 
-  if (!AuthService.isInitialized) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Сервис авторизации не инициализирован'),
-      ),
-    );
-    return;
+class _SignOutDialog extends StatefulWidget {
+  const _SignOutDialog();
+
+  @override
+  State<_SignOutDialog> createState() => _SignOutDialogState();
+}
+
+class _SignOutDialogState extends State<_SignOutDialog> {
+  bool _working = false;
+
+  Future<void> _signOut() async {
+    if (_working) return;
+    if (!AuthService.isInitialized) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сервис авторизации не инициализирован'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _working = true);
+    try {
+      await AuthService.instance.signOut();
+      if (UserService.isInitialized) {
+        UserService.instance.profile.value = null;
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _working = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userVisibleError(e, fallback: 'Не удалось выйти')),
+        ),
+      );
+    }
   }
 
-  try {
-    await AuthService.instance.signOut();
-    if (UserService.isInitialized) {
-      UserService.instance.profile.value = null;
-    }
-    if (!context.mounted) return;
-    if (navigateToLogin) {
-      // sessionRevision уже пересчитал redirect в GoRouter — не дублируем go(/login).
-      final loc = GoRouterState.of(context).matchedLocation.split('?').first;
-      if (routeAllowsGuestAccess(loc) && loc != LoginRoute.path) {
-        context.go(LoginRoute.path);
-      }
-    } else {
-      onSignedOut?.call();
-    }
-  } catch (e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось выйти'))),
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_working,
+      child: AlertDialog(
+        title: const Text('Выйти из аккаунта?'),
+        content: _working
+            ? const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Выход из аккаунта...'),
+                ],
+              )
+            : const Text('Вы уверены, что хотите выйти?'),
+        actions: _working
+            ? null
+            : [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: _signOut,
+                  child: const Text('Выйти'),
+                ),
+              ],
+      ),
     );
   }
 }

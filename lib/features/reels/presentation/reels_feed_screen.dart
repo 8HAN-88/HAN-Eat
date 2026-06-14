@@ -62,11 +62,17 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   int _currentIndex = 0;
   String? _lastLoadError;
   bool _loadKickoff = false;
+  int _loadGeneration = 0;
   bool _servingFromCache = false;
   Object? _cacheLoadError;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = false;
+
+  static const Duration _likeTouchGrace = Duration(seconds: 20);
+
+  final Set<int> _likeBusy = {};
+  final Map<int, DateTime> _likeTouchedAt = {};
 
   bool _followingOnly = false;
 
@@ -76,6 +82,88 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   int get _initialVideoPreloadCount => kIsWeb ? 2 : 3;
 
   int get _lookaheadVideoPreloadCount => kIsWeb ? 1 : 2;
+
+  Future<void> _initSingleVideo(int i) async {
+    if (!mounted || !widget.isTabVisible) return;
+    if (_videoControllers.containsKey(i)) return;
+    if (i < 0 || i >= _reels.length) return;
+
+    final reel = _reels[i];
+    final videoUrl = reel.videoUrl;
+    if (videoUrl == null || videoUrl.isEmpty) {
+      if (mounted) setState(() => _videoInitFailed[i] = true);
+      return;
+    }
+    try {
+      final shouldPlay = i == _currentIndex && widget.isTabVisible;
+      final videoController = await VideoPlayerHelper.createPreparedController(
+        videoUrl,
+        autoPlay: shouldPlay,
+        muted: _sessionMuted,
+      );
+
+      if (!mounted) {
+        videoController.dispose();
+        return;
+      }
+
+      setState(() {
+        _videoControllers[i] = videoController;
+        _videoInitFailed.remove(i);
+      });
+    } catch (e) {
+      debugPrint('Ошибка инициализации видео $i ($videoUrl): $e');
+      if (mounted) {
+        setState(() => _videoInitFailed[i] = true);
+      }
+    }
+  }
+
+  Future<void> _initializeVideos(
+    int startIndex,
+    int count, {
+    int? priorityIndex,
+  }) async {
+    if (!widget.isTabVisible) return;
+    final end = math.min(startIndex + count, _reels.length);
+    final indices = <int>[
+      for (var i = startIndex; i < end; i++)
+        if (!_videoControllers.containsKey(i)) i,
+    ];
+    if (indices.isEmpty) return;
+
+    final priority = priorityIndex ?? _currentIndex;
+    if (indices.contains(priority)) {
+      await _initSingleVideo(priority);
+      indices.remove(priority);
+    }
+    if (indices.isNotEmpty) {
+      unawaited(Future.wait(indices.map(_initSingleVideo)));
+    }
+  }
+
+  void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {
+    final kept = <int, VideoPlayerController>{};
+    final cur = _currentIndex;
+    if (cur >= 0 &&
+        cur < _reels.length &&
+        cur < nextReels.length &&
+        _reels[cur].id == nextReels[cur].id &&
+        _reels[cur].videoUrl == nextReels[cur].videoUrl) {
+      final c = _videoControllers[cur];
+      if (c != null) kept[cur] = c;
+    }
+    for (final entry in _videoControllers.entries) {
+      if (!kept.containsKey(entry.key)) {
+        entry.value.dispose();
+      }
+    }
+    _videoControllers
+      ..clear()
+      ..addAll(kept);
+    _isPaused.removeWhere((i, _) => !kept.containsKey(i));
+    _videoInitFailed.removeWhere((i, _) => !kept.containsKey(i));
+  }
 
   @override
   void initState() {
@@ -100,6 +188,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _initializeVideos(
           _currentIndex,
           math.min(_initialVideoPreloadCount, _reels.length - _currentIndex),
+          priorityIndex: _currentIndex,
         );
         final c = _videoControllers[_currentIndex];
         if (c != null) VideoPlayerHelper.ensurePlaying(c);
@@ -137,28 +226,83 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     _videoControllers.clear();
   }
 
-  Future<void> _loadReels({bool refresh = false}) async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      if (refresh) {
-        _reels = [];
-        _nextCursor = null;
-        _hasMore = true;
-        _lastLoadError = null;
-        _servingFromCache = false;
-        _cacheLoadError = null;
-        _currentReelStartedAt = null;
-        _impressedReelIds.clear();
-        _videoInitFailed.clear();
-        _disposeAllControllers();
+  List<PostModel> _mergePreservingRecentLikes(List<PostModel> incoming) {
+    if (_reels.isEmpty) return incoming;
+    final existing = {for (final r in _reels) r.id: r};
+    final now = DateTime.now();
+    return incoming.map((post) {
+      final prev = existing[post.id];
+      if (prev == null) return post;
+      final touched = _likeTouchedAt[post.id];
+      if (touched != null && now.difference(touched) < _likeTouchGrace) {
+        return post.copyWith(
+          isLiked: prev.isLiked,
+          likesCount: prev.likesCount,
+        );
       }
-    });
+      return post;
+    }).toList();
+  }
+
+  Future<void> _loadReels({bool refresh = false}) async {
+    if (_isLoading && !refresh) return;
+
+    final requestId = ++_loadGeneration;
+
+    if (refresh) {
+      final cached = await FeedApiCache.load(_cacheVariant);
+      if (!mounted || requestId != _loadGeneration) return;
+      if (cached.isNotEmpty) {
+        setState(() {
+          _reels = cached;
+          _nextCursor = null;
+          _hasMore = true;
+          _isLoading = true;
+          _lastLoadError = null;
+          _servingFromCache = true;
+          _cacheLoadError = null;
+        });
+        unawaited(
+          _initializeVideos(
+            _currentIndex,
+            math.min(_initialVideoPreloadCount, cached.length - _currentIndex),
+            priorityIndex: _currentIndex,
+          ),
+        );
+        if (_currentIndex < cached.length) {
+          _startReelExposure(_currentIndex);
+        }
+      } else {
+        setState(() {
+          _isLoading = true;
+          _reels = [];
+          _nextCursor = null;
+          _hasMore = true;
+          _lastLoadError = null;
+          _servingFromCache = false;
+          _cacheLoadError = null;
+          _currentReelStartedAt = null;
+          _impressedReelIds.clear();
+          _videoInitFailed.clear();
+          _disposeAllControllers();
+        });
+      }
+    } else {
+      setState(() => _isLoading = true);
+    }
 
     if (refresh && !feedDeviceOnline()) {
+      if (_reels.isNotEmpty) {
+        if (mounted && requestId == _loadGeneration) {
+          setState(() {
+            _isLoading = false;
+            _cacheLoadError = 'offline';
+          });
+        }
+        return;
+      }
       final cached = await FeedApiCache.load(_cacheVariant);
-      if (!mounted) return;
+      if (!mounted || requestId != _loadGeneration) return;
       if (cached.isNotEmpty) {
         setState(() {
           _reels = cached;
@@ -169,9 +313,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           _cacheLoadError = 'offline';
           _isLoading = false;
         });
-        if (_reels.isNotEmpty) {
-          _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
-        }
+        unawaited(
+          _initializeVideos(
+            _currentIndex,
+            math.min(_initialVideoPreloadCount, cached.length - _currentIndex),
+            priorityIndex: _currentIndex,
+          ),
+        );
         return;
       }
     }
@@ -184,9 +332,16 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         followingOnly: _followingOnly,
       );
 
-      if (!mounted) return;
-      final nextReels =
+      if (!mounted || requestId != _loadGeneration) return;
+      final prevLen = _reels.length;
+      final fetched =
           refresh ? response.items : <PostModel>[..._reels, ...response.items];
+      final nextReels = refresh
+          ? _mergePreservingRecentLikes(fetched)
+          : fetched;
+      if (refresh) {
+        _retainMatchingControllerOnRefresh(nextReels);
+      }
       setState(() {
         _reels = nextReels;
         _nextCursor = response.nextCursor;
@@ -195,14 +350,36 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _servingFromCache = false;
         _cacheLoadError = null;
       });
-      await FeedApiCache.save(_cacheVariant, nextReels);
+      unawaited(FeedApiCache.save(_cacheVariant, nextReels));
 
       if (_reels.isNotEmpty) {
-        _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
-        _startReelExposure(_currentIndex);
+        if (refresh) {
+          unawaited(
+            _initializeVideos(
+              _currentIndex,
+              math.min(
+                _initialVideoPreloadCount,
+                _reels.length - _currentIndex,
+              ),
+              priorityIndex: _currentIndex,
+            ),
+          );
+          _startReelExposure(_currentIndex);
+        } else {
+          final added = nextReels.length - prevLen;
+          if (added > 0) {
+            unawaited(
+              _initializeVideos(
+                prevLen,
+                math.min(2, added),
+                priorityIndex: _currentIndex,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && requestId == _loadGeneration) {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
           if (!mounted) return;
@@ -212,20 +389,27 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
-        if (!mounted) return;
+        if (!mounted || requestId != _loadGeneration) return;
         if (cached.isNotEmpty) {
           setState(() {
-            _reels = cached;
+            _reels = _mergePreservingRecentLikes(cached);
             _nextCursor = null;
             _hasMore = false;
             _lastLoadError = null;
             _servingFromCache = true;
             _cacheLoadError = e;
           });
-          if (_reels.isNotEmpty) {
-            _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
-            _startReelExposure(_currentIndex);
-          }
+          unawaited(
+            _initializeVideos(
+              _currentIndex,
+              math.min(
+                _initialVideoPreloadCount,
+                cached.length - _currentIndex,
+              ),
+              priorityIndex: _currentIndex,
+            ),
+          );
+          _startReelExposure(_currentIndex);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(FeedLoadHelper.cacheSnackMessage(e))),
           );
@@ -240,47 +424,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         }
       }
     } finally {
-      if (mounted) {
+      if (mounted && requestId == _loadGeneration) {
         setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _initializeVideos(int startIndex, int count) async {
-    if (!widget.isTabVisible) return;
-    for (int i = startIndex; i < startIndex + count && i < _reels.length; i++) {
-      final reel = _reels[i];
-      if (_videoControllers.containsKey(i)) continue;
-
-      final videoUrl = reel.videoUrl;
-      if (videoUrl == null || videoUrl.isEmpty) {
-        if (mounted) {
-          setState(() => _videoInitFailed[i] = true);
-        }
-        continue;
-      }
-      try {
-        final shouldPlay = i == _currentIndex && widget.isTabVisible;
-        final videoController = await VideoPlayerHelper.createPreparedController(
-          videoUrl,
-          autoPlay: shouldPlay,
-          muted: _sessionMuted,
-        );
-
-        if (!mounted) {
-          videoController.dispose();
-          return;
-        }
-
-        setState(() {
-          _videoControllers[i] = videoController;
-          _videoInitFailed.remove(i);
-        });
-      } catch (e) {
-        debugPrint('Ошибка инициализации видео $i ($videoUrl): $e');
-        if (mounted) {
-          setState(() => _videoInitFailed[i] = true);
-        }
       }
     }
   }
@@ -303,10 +448,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     if (_videoControllers.containsKey(index)) {
       VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
     } else {
-      _initializeVideos(index, 1).then((_) {
-        final c = _videoControllers[index];
-        if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
-      });
+      unawaited(
+        _initializeVideos(index, 1, priorityIndex: index).then((_) {
+          final c = _videoControllers[index];
+          if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
+        }),
+      );
     }
 
     // Загружаем больше, если приближаемся к концу
@@ -314,9 +461,15 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       _loadReels();
     }
 
-    // Предзагружаем следующие видео (на web только текущий)
+    // Предзагружаем следующие видео параллельно
     if (_lookaheadVideoPreloadCount > 0 && index + 1 < _reels.length) {
-      _initializeVideos(index + 1, _lookaheadVideoPreloadCount);
+      unawaited(
+        _initializeVideos(
+          index + 1,
+          _lookaheadVideoPreloadCount,
+          priorityIndex: index,
+        ),
+      );
     }
     _trimVideoControllers();
   }
@@ -482,7 +635,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
                   _isPaused[index] = paused;
                 });
               },
-              onLike: () => _toggleLike(reel),
+              onLike: () => _toggleLike(reel.id),
               onComment: () {
                 FeedAnalyticsService.openDetail(
                   reel,
@@ -580,27 +733,53 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     );
   }
 
-  Future<void> _toggleLike(PostModel reel) async {
+  Future<void> _toggleLike(int postId) async {
+    if (_likeBusy.contains(postId)) return;
+    final index = _reels.indexWhere((r) => r.id == postId);
+    if (index == -1) return;
+
+    final wasLiked = _reels[index].isLiked;
+    _likeBusy.add(postId);
+    _likeTouchedAt[postId] = DateTime.now();
+
+    setState(() {
+      _reels[index] = _reels[index].copyWith(
+        isLiked: !wasLiked,
+        likesCount: _reels[index].likesCount + (wasLiked ? -1 : 1),
+      );
+    });
+
     try {
-      final wasLiked = reel.isLiked;
       final response = wasLiked
-          ? await LikeService.unlikePost(reel.id)
-          : await LikeService.likePost(reel.id);
-      setState(() {
-        final index = _reels.indexWhere((r) => r.id == reel.id);
-        if (index != -1) {
-          _reels[index] = _reels[index].copyWith(
+          ? await LikeService.unlikePost(postId)
+          : await LikeService.likePost(postId);
+      if (!mounted) return;
+      final i = _reels.indexWhere((r) => r.id == postId);
+      if (i != -1) {
+        setState(() {
+          _reels[i] = _reels[i].copyWith(
             likesCount: response.likesCount,
             isLiked: response.liked,
           );
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
+        });
+        unawaited(FeedApiCache.save(_cacheVariant, _reels));
       }
+    } catch (e) {
+      if (!mounted) return;
+      final i = _reels.indexWhere((r) => r.id == postId);
+      if (i != -1) {
+        setState(() {
+          _reels[i] = _reels[i].copyWith(
+            isLiked: wasLiked,
+            likesCount: _reels[i].likesCount + (wasLiked ? 1 : -1),
+          );
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      _likeBusy.remove(postId);
     }
   }
 
@@ -723,7 +902,6 @@ class _ReelCardState extends State<ReelCard>
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
-  VideoPlayerController? _progressController;
 
   static const double _igIconSize = 28;
   static const double _igActionGap = 18;
@@ -749,42 +927,20 @@ class _ReelCardState extends State<ReelCard>
         curve: const Interval(0.5, 1.0),
       ),
     );
-    _attachProgressListener(widget.videoController);
   }
 
   @override
   void dispose() {
-    _detachProgressListener();
-    for (final r in _descriptionRecognizers) {
-      r.dispose();
-    }
-    _descriptionRecognizers.clear();
+    _clearDescriptionRecognizers();
     _likeAnimationController.dispose();
     super.dispose();
   }
 
-  void _detachProgressListener() {
-    _progressController?.removeListener(_onVideoProgress);
-    _progressController = null;
-  }
-
-  void _attachProgressListener(VideoPlayerController? controller) {
-    if (_progressController == controller) return;
-    _progressController?.removeListener(_onVideoProgress);
-    _progressController = controller;
-    _progressController?.addListener(_onVideoProgress);
-  }
-
-  void _onVideoProgress() {
-    if (mounted) setState(() {});
-  }
-
-  double get _playbackProgress {
-    final controller = widget.videoController;
-    if (controller == null || !controller.value.isInitialized) return 0;
-    final durationMs = controller.value.duration.inMilliseconds;
-    if (durationMs <= 0) return 0;
-    return (controller.value.position.inMilliseconds / durationMs).clamp(0.0, 1.0);
+  void _clearDescriptionRecognizers() {
+    for (final r in _descriptionRecognizers) {
+      r.dispose();
+    }
+    _descriptionRecognizers.clear();
   }
 
   void _showMoreMenu() {
@@ -823,13 +979,6 @@ class _ReelCardState extends State<ReelCard>
     );
   }
 
-  void _clearDescriptionRecognizers() {
-    for (final r in _descriptionRecognizers) {
-      r.dispose();
-    }
-    _descriptionRecognizers.clear();
-  }
-
   void _handleDoubleTap() {
     if (!widget.reel.isLiked) {
       widget.onLike();
@@ -845,12 +994,6 @@ class _ReelCardState extends State<ReelCard>
         }
       });
     }
-  }
-
-  @override
-  void didUpdateWidget(ReelCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _attachProgressListener(widget.videoController);
   }
 
   Future<void> _toggleMute() async {
@@ -944,74 +1087,59 @@ class _ReelCardState extends State<ReelCard>
               child: Center(child: _buildVideoPlaceholder()),
             ),
 
-          Positioned(
-            left: 0,
-            top: 0,
-            right: _igRailWidth + _igRightInset,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: _handleSingleTap,
-              onDoubleTap: _handleDoubleTap,
-              behavior: HitTestBehavior.opaque,
-            ),
-          ),
-
           if (widget.isPaused)
-            Positioned(
-              left: 0,
-              top: 0,
-              right: _igRailWidth + _igRightInset,
-              bottom: 0,
-              child: GestureDetector(
-                onTap: _handleSingleTap,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ColoredBox(
                   color: Colors.black.withValues(alpha: 0.15),
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.videoController != null) ...[
-                        GestureDetector(
-                          onTap: _toggleMute,
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.45),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              widget.isMuted
-                                  ? Icons.volume_off_rounded
-                                  : Icons.volume_up_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
+                ),
+              ),
+            ),
+
+          if (widget.isPaused && widget.videoController != null)
+            Positioned.fill(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: _toggleMute,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(height: 20),
-                      ],
-                      GestureDetector(
-                        onTap: _handleSingleTap,
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 44,
-                          ),
+                        child: Icon(
+                          widget.isMuted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
+                          color: Colors.white,
+                          size: 18,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: _handleSingleTap,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 44,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1238,20 +1366,12 @@ class _ReelCardState extends State<ReelCard>
             ),
           ),
 
-          if (widget.videoController != null &&
-              widget.videoController!.value.isInitialized)
+          if (widget.videoController != null)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
-              child: SizedBox(
-                height: 2,
-                child: LinearProgressIndicator(
-                  value: _playbackProgress,
-                  backgroundColor: Colors.white.withValues(alpha: 0.25),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
+              child: _ReelPlaybackProgress(controller: widget.videoController!),
             ),
         ],
       ),
@@ -1309,6 +1429,36 @@ class _ReelCardState extends State<ReelCard>
       ),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+/// Прогресс воспроизведения без перерисовки всей [ReelCard].
+class _ReelPlaybackProgress extends StatelessWidget {
+  const _ReelPlaybackProgress({required this.controller});
+
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final value = controller.value;
+        if (!value.isInitialized) return const SizedBox.shrink();
+        final durationMs = value.duration.inMilliseconds;
+        if (durationMs <= 0) return const SizedBox.shrink();
+        final progress =
+            (value.position.inMilliseconds / durationMs).clamp(0.0, 1.0);
+        return SizedBox(
+          height: 2,
+          child: LinearProgressIndicator(
+            value: progress,
+            backgroundColor: Colors.white.withValues(alpha: 0.25),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        );
+      },
     );
   }
 }

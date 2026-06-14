@@ -17,7 +17,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   final _newEmailController = TextEditingController();
   final _emailPasswordController = TextEditingController();
   bool _loading = false;
-  bool _obscure = true;
+  static const _obscure = true;
 
   @override
   void dispose() {

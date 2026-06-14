@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../../services/analytics_service.dart';
 import '../../settings/application/subscription_status_provider.dart';
@@ -146,7 +145,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${_selectedDays} дн'),
+                  Text('$_selectedDays дн'),
                   const Icon(Icons.arrow_drop_down),
                 ],
               ),

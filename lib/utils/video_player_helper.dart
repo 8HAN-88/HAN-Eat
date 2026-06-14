@@ -16,7 +16,8 @@ class VideoPlayerHelper {
     );
   }
 
-  /// Создать и подготовить контроллер (на iPhone — сначала скачать в кэш).
+  /// Создать и подготовить контроллер.
+  /// На iOS: мгновенный стрим; если файл уже в кэше — с диска; иначе фоновый prefetch.
   static Future<VideoPlayerController> createPreparedController(
     String url, {
     bool loop = true,
@@ -25,12 +26,12 @@ class VideoPlayerHelper {
   }) async {
     VideoPlayerController controller;
     if (_useFileOnIos) {
-      try {
-        final file = await VideoCacheService.fileForUrl(url);
-        controller = VideoPlayerController.file(file);
-      } catch (e) {
-        debugPrint('VideoCache failed, network fallback: $e');
+      final cached = await VideoCacheService.cachedFileIfExists(url);
+      if (cached != null) {
+        controller = VideoPlayerController.file(cached);
+      } else {
         controller = networkController(url);
+        VideoCacheService.prefetchInBackground(url);
       }
     } else {
       controller = networkController(url);
@@ -64,9 +65,9 @@ class VideoPlayerHelper {
       await controller.setVolume(0);
     }
 
-    for (var i = 0; i < 40; i++) {
+    for (var i = 0; i < 6; i++) {
       if (controller.value.duration > Duration.zero) break;
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 25));
     }
 
     if (autoPlay) {
@@ -76,14 +77,14 @@ class VideoPlayerHelper {
 
   static Future<void> ensurePlaying(VideoPlayerController controller) async {
     if (!controller.value.isInitialized) return;
-    for (var attempt = 0; attempt < 8; attempt++) {
+    for (var attempt = 0; attempt < 4; attempt++) {
       if (controller.value.isPlaying) return;
       if (controller.value.hasError) {
         debugPrint('VideoPlayer error: ${controller.value.errorDescription}');
         return;
       }
       await controller.play();
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 

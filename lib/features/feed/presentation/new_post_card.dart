@@ -1,7 +1,6 @@
 // Новая карточка поста для нового API
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';

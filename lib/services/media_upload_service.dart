@@ -1,7 +1,9 @@
 // Сервис для загрузки медиа файлов
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import '../core/network/haneat_http_client.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -20,11 +22,12 @@ class MediaUploadService {
     return uploadUrl;
   }
 
-  /// Инициализация загрузки (получение presigned URL)
+  /// Инициализация загрузки (получение presigned URL или API URL)
   static Future<UploadInitResponse> initUpload({
     required String fileType, // 'image', 'video', 'audio' or 'document'
     required String contentType, // 'image/jpeg', 'video/mp4', etc.
     required int fileSize,
+    bool preferApiUpload = false,
   }) async {
     var token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -42,6 +45,7 @@ class MediaUploadService {
         'file_type': fileType,
         'content_type': contentType,
         'file_size': fileSize,
+        'prefer_api': preferApiUpload,
       }),
     );
     
@@ -75,32 +79,34 @@ class MediaUploadService {
     }
   }
 
-  /// Загрузка файла по presigned URL
+  static bool _isApiUploadUrl(String url) {
+    return url.contains('/uploads/mock/');
+  }
+
+  /// Загрузка файла по presigned URL или через API
   static Future<void> uploadFile({
     required String uploadUrl,
-    required XFile file, // Используем только XFile для кроссплатформенности
+    required XFile file,
     required String contentType,
   }) async {
-    // На эмуляторе подменяем localhost на 10.0.2.2
     final effectiveUrl = _fixUploadUrl(uploadUrl);
-
-    // XFile работает на всех платформах (Web, iOS, Android, Desktop)
     final fileBytes = await file.readAsBytes();
 
-    // Если это mock URL (локальная разработка), добавляем токен авторизации
     final headers = <String, String>{
       'Content-Type': contentType,
+      'Content-Length': '${fileBytes.length}',
     };
 
-    // Загрузка через API (не presigned S3) — нужен JWT
-    if (effectiveUrl.contains('/uploads/mock/')) {
+    final viaApi = _isApiUploadUrl(effectiveUrl);
+    if (viaApi) {
       final token = await AuthService.getAccessTokenForApi();
-      if (token != null) {
-        headers['Authorization'] = 'Bearer $token';
+      if (token == null) {
+        throw Exception('Not authenticated');
       }
+      headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await http.put(
+    final response = await HanEatHttpClient.shared.put(
       Uri.parse(effectiveUrl),
       headers: headers,
       body: fileBytes,
@@ -176,68 +182,92 @@ class MediaUploadService {
     }
   }
   
+  static Future<UploadCompleteResponse> _uploadMediaFileOnce({
+    required XFile file,
+    required String fileType,
+    Function(double)? onProgress,
+    required bool waitForProcessing,
+    required bool preferApiUpload,
+  }) async {
+    final filePath = file.path;
+    final fileSize = await file.length();
+    final contentType = _getContentType(
+      filePath,
+      fileType,
+      fileName: file.name,
+    );
+
+    final initResponse = await initUpload(
+      fileType: fileType,
+      contentType: contentType,
+      fileSize: fileSize,
+      preferApiUpload: preferApiUpload,
+    );
+
+    if (onProgress != null) onProgress(0.1);
+
+    await uploadFile(
+      uploadUrl: initResponse.uploadUrl,
+      file: file,
+      contentType: contentType,
+    );
+
+    if (onProgress != null) onProgress(0.9);
+
+    final completeResponse = await completeUpload(
+      uploadId: initResponse.uploadId,
+      fileKey: initResponse.fileKey,
+      fileType: fileType,
+    );
+
+    if (onProgress != null) onProgress(1.0);
+
+    if (waitForProcessing &&
+        fileType == 'video' &&
+        completeResponse.processing) {
+      final uploadId = completeResponse.uploadId;
+      if (uploadId != null && uploadId.isNotEmpty) {
+        return waitForVideoProcessing(
+          uploadId: uploadId,
+          fallbackUrl: completeResponse.url,
+          onProgress: onProgress,
+        );
+      }
+    }
+
+    return completeResponse;
+  }
+
   /// Полный процесс загрузки (init + upload + complete)
   static Future<UploadCompleteResponse> uploadMediaFile({
-    required XFile file, // Используем только XFile для кроссплатформенности
-    required String fileType, // 'image', 'video', 'audio' or 'document'
+    required XFile file,
+    required String fileType,
     Function(double)? onProgress,
-    /// Для чатов: отправляем сразу после upload, без ожидания транскодинга.
     bool waitForProcessing = true,
   }) async {
     try {
-      // 1. Определяем content type и размер файла
-      // XFile работает на всех платформах
-      final filePath = file.path;
-      final fileSize = await file.length();
-      final contentType = _getContentType(
-        filePath,
-        fileType,
-        fileName: file.name,
-      );
-      
-      // 2. Инициализация загрузки
-      final initResponse = await initUpload(
-        fileType: fileType,
-        contentType: contentType,
-        fileSize: fileSize,
-      );
-      
-      if (onProgress != null) onProgress(0.1);
-      
-      // 3. Загрузка файла
-      await uploadFile(
-        uploadUrl: initResponse.uploadUrl,
+      // На iOS/Android прямой PUT в S3 часто падает (ClientLoad failed).
+      final preferApi = !kIsWeb;
+      return await _uploadMediaFileOnce(
         file: file,
-        contentType: contentType,
-      );
-      
-      if (onProgress != null) onProgress(0.9);
-      
-      // 4. Завершение загрузки
-      final completeResponse = await completeUpload(
-        uploadId: initResponse.uploadId,
-        fileKey: initResponse.fileKey,
         fileType: fileType,
+        onProgress: onProgress,
+        waitForProcessing: waitForProcessing,
+        preferApiUpload: preferApi,
       );
-      
-      if (onProgress != null) onProgress(1.0);
-      
-      if (waitForProcessing &&
-          fileType == 'video' &&
-          completeResponse.processing) {
-        final uploadId = completeResponse.uploadId;
-        if (uploadId != null && uploadId.isNotEmpty) {
-          return waitForVideoProcessing(
-            uploadId: uploadId,
-            fallbackUrl: completeResponse.url,
-            onProgress: onProgress,
-          );
-        }
-      }
-      
-      return completeResponse;
     } catch (e) {
-      throw Exception('Upload failed: $e');
+      if (!kIsWeb) rethrow;
+      try {
+        return await _uploadMediaFileOnce(
+          file: file,
+          fileType: fileType,
+          onProgress: onProgress,
+          waitForProcessing: waitForProcessing,
+          preferApiUpload: true,
+        );
+      } catch (_) {
+        throw Exception('Upload failed: $e');
+      }
     }
   }
 

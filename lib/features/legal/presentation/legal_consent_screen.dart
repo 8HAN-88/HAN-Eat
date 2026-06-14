@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../services/auth_service.dart';
+import '../../auth/sign_out_helper.dart';
 import '../../../services/legal_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/legal_consent_checkbox.dart';
@@ -84,7 +84,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
   }
 
   Future<void> _signOut() async {
-    await AuthService.logout();
+    await confirmAndSignOut(context);
   }
 
   @override

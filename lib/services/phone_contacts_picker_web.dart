@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:js' as js;
+import 'package:js/js.dart';
 
 import 'phone_contacts_store_web.dart';
 
@@ -39,10 +40,10 @@ class PhoneContactsPickerWeb {
   static Future<Object?> _promiseToFuture(js.JsObject promise) {
     final completer = Completer<Object?>();
     promise.callMethod('then', [
-      js.allowInterop((Object? value) {
+      allowInterop((Object? value) {
         if (!completer.isCompleted) completer.complete(value);
       }),
-      js.allowInterop((Object? error) {
+      allowInterop((Object? error) {
         if (!completer.isCompleted) {
           completer.completeError(error ?? 'Contact picker failed');
         }

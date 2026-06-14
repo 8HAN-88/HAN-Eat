@@ -1,4 +1,5 @@
 // Fullscreen Reels при тапе на видео в ленте — вертикальный свайп, возврат на то же место
+import 'dart:async';
 import 'dart:math' as math;
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
@@ -42,13 +43,18 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = false;
 
+  static const Duration _likeTouchGrace = Duration(seconds: 20);
+
+  final Set<int> _likeBusy = {};
+  final Map<int, DateTime> _likeTouchedAt = {};
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
     _reels = [widget.initialPost];
-    _loadMoreReels();
-    _initializeVideos(0, 1);
+    unawaited(_loadMoreReels());
+    unawaited(_initializeVideos(0, 1, priorityIndex: 0));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _startReelExposure(0);
     });
@@ -69,6 +75,24 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     _videoControllers.clear();
   }
 
+  List<PostModel> _mergePreservingRecentLikes(List<PostModel> incoming) {
+    if (_reels.isEmpty) return incoming;
+    final existing = {for (final r in _reels) r.id: r};
+    final now = DateTime.now();
+    return incoming.map((post) {
+      final prev = existing[post.id];
+      if (prev == null) return post;
+      final touched = _likeTouchedAt[post.id];
+      if (touched != null && now.difference(touched) < _likeTouchGrace) {
+        return post.copyWith(
+          isLiked: prev.isLiked,
+          likesCount: prev.likesCount,
+        );
+      }
+      return post;
+    }).toList();
+  }
+
   Future<void> _loadMoreReels() async {
     if (_isLoading) return;
 
@@ -84,8 +108,11 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       if (!mounted) return;
 
       final existingIds = _reels.map((r) => r.id).toSet();
-      final newReels =
-          response.items.where((r) => !existingIds.contains(r.id)).toList();
+      final newReels = _mergePreservingRecentLikes(
+        response.items.where((r) => !existingIds.contains(r.id)).toList(),
+      );
+
+      final prevLen = _reels.length;
 
       setState(() {
         _reels.addAll(newReels);
@@ -95,7 +122,13 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       });
 
       if (newReels.isNotEmpty) {
-        _initializeVideos(1, math.min(3, _reels.length));
+        unawaited(
+          _initializeVideos(
+            prevLen,
+            math.min(2, newReels.length),
+            priorityIndex: _currentIndex,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -104,33 +137,65 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     }
   }
 
-  Future<void> _initializeVideos(int startIndex, int count) async {
-    for (int i = startIndex; i < startIndex + count && i < _reels.length; i++) {
-      if (_videoControllers.containsKey(i)) continue;
+  Future<void> _initSingleVideo(int i) async {
+    if (!mounted) return;
+    if (_videoControllers.containsKey(i)) return;
+    if (i < 0 || i >= _reels.length) return;
 
-      final reel = _reels[i];
-      final videoUrl = reel.videoUrl;
-      if (videoUrl == null || videoUrl.isEmpty) continue;
+    final reel = _reels[i];
+    final videoUrl = reel.videoUrl;
+    if (videoUrl == null || videoUrl.isEmpty) return;
 
-      try {
-        final shouldPlay = i == _currentIndex;
-        final videoController = await VideoPlayerHelper.createPreparedController(
-          videoUrl,
-          autoPlay: shouldPlay,
-          muted: _sessionMuted,
-        );
+    try {
+      final shouldPlay = i == _currentIndex;
+      final videoController = await VideoPlayerHelper.createPreparedController(
+        videoUrl,
+        autoPlay: shouldPlay,
+        muted: _sessionMuted,
+      );
 
-        if (!mounted) {
-          videoController.dispose();
-          return;
-        }
-
-        setState(() {
-          _videoControllers[i] = videoController;
-        });
-      } catch (e) {
-        debugPrint('ReelsFullscreen init video $i: $e');
+      if (!mounted) {
+        videoController.dispose();
+        return;
       }
+
+      setState(() {
+        _videoControllers[i] = videoController;
+      });
+    } catch (e) {
+      debugPrint('ReelsFullscreen init video $i: $e');
+    }
+  }
+
+  Future<void> _initializeVideos(
+    int startIndex,
+    int count, {
+    int? priorityIndex,
+  }) async {
+    final end = math.min(startIndex + count, _reels.length);
+    final indices = <int>[
+      for (var i = startIndex; i < end; i++)
+        if (!_videoControllers.containsKey(i)) i,
+    ];
+    if (indices.isEmpty) return;
+
+    final priority = priorityIndex ?? _currentIndex;
+    if (indices.contains(priority)) {
+      await _initSingleVideo(priority);
+      indices.remove(priority);
+    }
+    if (indices.isNotEmpty) {
+      unawaited(Future.wait(indices.map(_initSingleVideo)));
+    }
+  }
+
+  void _trimVideoControllers() {
+    final stale = _videoControllers.keys
+        .where((i) => (i - _currentIndex).abs() > 1)
+        .toList();
+    for (final i in stale) {
+      _videoControllers.remove(i)?.dispose();
+      _isPaused.remove(i);
     }
   }
 
@@ -149,18 +214,21 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     if (_videoControllers.containsKey(index)) {
       VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
     } else {
-      _initializeVideos(index, 1).then((_) {
-        final c = _videoControllers[index];
-        if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
-      });
+      unawaited(
+        _initializeVideos(index, 1, priorityIndex: index).then((_) {
+          final c = _videoControllers[index];
+          if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
+        }),
+      );
     }
 
     if (index >= _reels.length - 3 && _hasMore && !_isLoading) {
       _loadMoreReels();
     }
     if (index + 1 < _reels.length) {
-      _initializeVideos(index + 1, 2);
+      unawaited(_initializeVideos(index + 1, 2, priorityIndex: index));
     }
+    _trimVideoControllers();
   }
 
   void _setSessionMuted(bool muted) {
@@ -224,14 +292,31 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     _currentReelStartedAt = null;
   }
 
-  Future<void> _toggleLike(PostModel reel) async {
+  Future<void> _toggleLike(int postId) async {
+    if (_likeBusy.contains(postId)) return;
+    final index = _reels.indexWhere((r) => r.id == postId);
+    if (index == -1) return;
+
+    final wasLiked = _reels[index].isLiked;
+    _likeBusy.add(postId);
+    _likeTouchedAt[postId] = DateTime.now();
+
+    _updateReelAt(
+      postId,
+      (r) => _copyReelWith(
+        r,
+        isLiked: !wasLiked,
+        likesCount: r.likesCount + (wasLiked ? -1 : 1),
+      ),
+    );
+
     try {
-      final wasLiked = reel.isLiked;
       final response = wasLiked
-          ? await LikeService.unlikePost(reel.id)
-          : await LikeService.likePost(reel.id);
+          ? await LikeService.unlikePost(postId)
+          : await LikeService.likePost(postId);
+      if (!mounted) return;
       _updateReelAt(
-        reel.id,
+        postId,
         (r) => _copyReelWith(
           r,
           likesCount: response.likesCount,
@@ -239,10 +324,19 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
-      }
+      if (!mounted) return;
+      _updateReelAt(
+        postId,
+        (r) => _copyReelWith(
+          r,
+          isLiked: wasLiked,
+          likesCount: r.likesCount + (wasLiked ? 1 : -1),
+        ),
+      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(userVisibleError(e))));
+    } finally {
+      _likeBusy.remove(postId);
     }
   }
 
@@ -378,7 +472,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
                 onPauseToggle: (paused) {
                   setState(() => _isPaused[index] = paused);
                 },
-                onLike: () => _toggleLike(reel),
+                onLike: () => _toggleLike(reel.id),
                 onComment: () {
                   FeedAnalyticsService.openDetail(
                     reel,

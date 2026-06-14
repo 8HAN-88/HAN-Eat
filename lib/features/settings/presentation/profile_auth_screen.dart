@@ -148,13 +148,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   Future<void> _signOut() async {
-    await confirmAndSignOut(
-      context,
-      navigateToLogin: false,
-      onSignedOut: () {
-        if (mounted) setState(() {});
-      },
-    );
+    await confirmAndSignOut(context);
   }
 
   @override
