@@ -1,0 +1,27 @@
+name: Diagnose Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Setup SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.TIMEWEB_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 89.19.216.60 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Server logs
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            root@89.19.216.60 bash -s <<'REMOTE'
+          set -x
+          systemctl status haneat-api --no-pager || true
+          journalctl -u haneat-api -n 120 --no-pager || true
+          cd /root/HAN-Eat/backend && source venv/bin/activate
+          python -c "from app.main import app; print('import ok')" || true
+          REMOTE
