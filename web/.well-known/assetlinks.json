@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.haneat.app",
+      "sha256_cert_fingerprints": [
+        "a245926e5c5b37164ab12b8ca2922362f281a87643563f0469909c935aa56c17"
+      ]
+    }
+  }
+]

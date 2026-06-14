@@ -393,7 +393,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
     }
     final json = {'items': items.map((e) => e.toJson()).toList()};
     final data = base64Url.encode(utf8.encode(jsonEncode(json)));
-    final link = 'haneat://shopping/import?data=$data';
+    final link = kIsWeb
+        ? 'https://haneat.app/shopping-import?data=${Uri.encodeComponent(data)}'
+        : 'haneat://shopping/import?data=$data';
     final text = 'Список покупок — откройте в приложении H.A.N. Eat и добавьте к себе:\n$link';
     await SystemShare.shareText(
       context,

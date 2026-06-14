@@ -3,6 +3,8 @@ bool routeAllowsGuestAccess(String location) {
   final loc = location.split('?').first;
   return loc == '/login' ||
       loc == '/register' ||
+      loc == '/invite' ||
+      loc.startsWith('/shopping-import') ||
       loc == '/profile-auth' ||
       loc == '/forgot-password' ||
       loc == '/reset-password' ||

@@ -137,18 +137,20 @@ class ServerConfig {
     return resolveMediaUrl(url);
   }
 
-  /// Аватар канала/автора в карточке: локальные URL как есть; внешние HTTPS на iOS/Android — через image-proxy.
+  /// Аватар / любое внешнее изображение: на web всегда через image-proxy (CORS).
   static String resolvePublisherAvatarUrl(String url) {
     if (url.isEmpty) return url;
     final resolved = resolveRecipeImageUrl(resolveMediaUrl(url));
-    if (kIsWeb) return resolved;
     try {
       final imageUri = Uri.parse(resolved);
-      if (imageUri.scheme != 'https') return resolved;
-      final apiHost = Uri.parse(baseUrl).host;
-      if (imageUri.host.toLowerCase() == apiHost.toLowerCase()) {
+      if (imageUri.scheme != 'https' && imageUri.scheme != 'http') {
         return resolved;
       }
+      final apiHost = Uri.parse(baseUrl).host.toLowerCase();
+      if (imageUri.host.toLowerCase() == apiHost) {
+        return resolved;
+      }
+      // Внешние CDN / аватары — прокси (критично для web из‑за CORS).
       return _recipeImageProxyUrl(resolved);
     } catch (_) {
       return resolved;

@@ -53,7 +53,7 @@ extension SearchScopeLabels on SearchScope {
   String get hint {
     switch (this) {
       case SearchScope.main:
-        return 'Посты, рилсы, рецепты в ленте…';
+        return 'Посты, люди, рилсы, рецепты…';
       case SearchScope.channels:
         return 'Название или описание канала…';
       case SearchScope.menu:

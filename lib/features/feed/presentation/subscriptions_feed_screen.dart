@@ -1,12 +1,14 @@
 // Экран ленты подписок с постами от подписанных пользователей
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
+import '../../../models/post_types.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
@@ -23,10 +25,18 @@ class SubscriptionsFeedScreen extends ConsumerStatefulWidget {
   const SubscriptionsFeedScreen({
     super.key,
     this.externalFeedType,
+    this.externalSortMode,
+    this.deferLoad = false,
   });
 
   /// Тип контента с родителя ([MainFeedScreen]).
   final String? externalFeedType;
+
+  /// Сортировка с родителя; по умолчанию — сначала новые.
+  final FeedSortMode? externalSortMode;
+
+  /// Не загружать ленту до первого показа таба (web).
+  final bool deferLoad;
 
   @override
   ConsumerState<SubscriptionsFeedScreen> createState() =>
@@ -34,7 +44,8 @@ class SubscriptionsFeedScreen extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionsFeedScreenState
-    extends ConsumerState<SubscriptionsFeedScreen> {
+    extends ConsumerState<SubscriptionsFeedScreen>
+    with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   List<PostModel> _posts = [];
   bool _isLoading = false;
@@ -47,27 +58,45 @@ class _SubscriptionsFeedScreenState
   Object? _cacheLoadError;
 
   String _feedType = 'all';
+  FeedSortMode _sortMode = FeedSortMode.recent;
 
-  String get _cacheVariant => 'following_$_feedType';
+  String get _cacheVariant => 'following_${_feedType}_${_sortMode.value}';
+
+  @override
+  bool get wantKeepAlive => !kIsWeb;
 
   @override
   void initState() {
     super.initState();
     _feedType = widget.externalFeedType ?? 'all';
+    _sortMode = widget.externalSortMode ?? FeedSortMode.recent;
     _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _loadKickoff = true);
-      _loadFeed(refresh: true);
-    });
+    if (!widget.deferLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _loadKickoff = true);
+        _loadFeed(refresh: true);
+      });
+    }
   }
 
   @override
   void didUpdateWidget(SubscriptionsFeedScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.deferLoad != oldWidget.deferLoad &&
+        !widget.deferLoad &&
+        !_loadKickoff) {
+      setState(() => _loadKickoff = true);
+      _loadFeed(refresh: true);
+    }
     final ext = widget.externalFeedType;
-    if (ext != null && ext != oldWidget.externalFeedType && ext != _feedType) {
+    if (ext != null && ext != oldWidget.externalFeedType) {
       _feedType = ext;
+      _loadFeed(refresh: true);
+    }
+    final sort = widget.externalSortMode;
+    if (sort != null && sort != oldWidget.externalSortMode) {
+      _sortMode = sort;
       _loadFeed(refresh: true);
     }
   }
@@ -139,6 +168,7 @@ class _SubscriptionsFeedScreenState
         limit: 20,
         feedType: _feedType,
         followingOnly: true,
+        sortMode: _sortMode,
       );
 
       if (!mounted) return;
@@ -207,6 +237,7 @@ class _SubscriptionsFeedScreenState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final currentUser = AuthService.instance.currentUser;
 
     if (currentUser == null) {
@@ -278,6 +309,7 @@ class _SubscriptionsFeedScreenState
               builder: (context, chromeHidden, _) {
                 return ListView.builder(
               controller: _scrollController,
+              cacheExtent: kIsWeb ? 200 : 250,
               padding: EdgeInsets.only(
                 bottom: _listBottomPadding(context, chromeHidden),
               ),

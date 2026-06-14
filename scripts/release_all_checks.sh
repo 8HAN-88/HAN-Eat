@@ -23,19 +23,35 @@ else
   exit 1
 fi
 
+echo ""
+echo "========== 4/5 Pre-web release =========="
+if ./scripts/pre_web_release_check.sh; then
+  echo "  pre_web_release: OK"
+else
+  echo "  pre_web_release: есть FAIL — исправьте перед деплоем haneat.app"
+  exit 1
+fi
+
 if [[ "$RUN_PROD_SMOKE" == "1" ]]; then
   echo ""
-  echo "========== 4/4 Production API smoke =========="
+  echo "========== 5/6 Production API smoke =========="
   ./scripts/verify_production_api.sh "$PROD_API"
+  echo ""
+  echo "========== 6/6 Web production smoke =========="
+  ./scripts/verify_web_prod.sh
 else
   echo ""
-  echo "========== 4/4 Production smoke (пропуск) =========="
+  echo "========== 5/6 Production smoke (пропуск) =========="
   echo "  Запустите: RUN_PROD_SMOKE=1 ./scripts/release_all_checks.sh"
 fi
 
 echo ""
 echo "========== Готово к сборке =========="
-echo "  iOS:     ./scripts/build_ios_release.sh $PROD_API"
+echo "  Web:     ./scripts/build_web_release.sh $PROD_API"
+echo "  Web deploy: bash scripts/deploy_web_timeweb.sh"
+echo "  Web smoke: ./scripts/verify_web_prod.sh"
+echo "  TWA Play: ./scripts/build_twa_release.sh build"
 echo "  Android: ./scripts/build_android_release.sh $PROD_API"
+echo "  iOS:     ./scripts/build_ios_release.sh $PROD_API"
 echo "  Устройство: ./scripts/run_ios_physical.sh"
-echo "  Чеклист: docs/STABILITY.md"
+echo "  Чеклист: docs/RELEASE_WEB_AND_PLAY.md"

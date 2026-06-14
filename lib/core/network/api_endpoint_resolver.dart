@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_build_config.dart';
+import 'haneat_http_client.dart';
 
 /// Выбор API-хоста: домен или IP, если DNS домена недоступен.
 class ApiEndpointResolver {
@@ -46,7 +47,7 @@ class ApiEndpointResolver {
 
     try {
       final addresses = await InternetAddress.lookup(productionHost)
-          .timeout(const Duration(seconds: 2));
+          .timeout(const Duration(seconds: 4));
       final ipv4 = addresses
           .where((a) => a.type == InternetAddressType.IPv4)
           .map((a) => a.address)
@@ -77,6 +78,24 @@ class ApiEndpointResolver {
 
   static String get resolvedRoot =>
       _resolvedRoot ?? AppBuildConfig.apiBaseRoot;
+
+  /// Повторный выбор хоста после сбоя сети (домен ↔ IP).
+  static Future<void> revalidateIfNeeded() async {
+    final configured = AppBuildConfig.apiBaseRoot;
+    final uri = Uri.tryParse(configured);
+    final host = (uri?.host ?? '').toLowerCase();
+    if (host != productionHost) return;
+
+    final previous = _resolvedRoot;
+    _resolvedRoot = null;
+    usingIpFallback = false;
+    await resolve();
+    if (previous != _resolvedRoot) {
+      // ignore: invalid_use_of_visible_for_testing_member
+      HanEatHttpClient.resetForTest();
+      debugPrint('📡 API: endpoint switched → $resolvedRoot');
+    }
+  }
 
   static bool hostNeedsSslRelaxation(String host) =>
       usingIpFallback && host == productionFallbackIp;

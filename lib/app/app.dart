@@ -10,8 +10,10 @@ import 'app_router.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../services/api_service.dart';
+import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
+import '../services/web_app_update_service.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 
 class HanEatApp extends ConsumerStatefulWidget {
@@ -45,10 +47,16 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
         onError: (Object e) => debugPrint('uriLinkStream: $e'),
       );
     }
+    if (kIsWeb) {
+      WebAppUpdateService.start();
+    }
   }
 
   @override
   void dispose() {
+    if (kIsWeb) {
+      WebAppUpdateService.stop();
+    }
     AccountSessionService.unregisterListener(_onAccountSessionChanged);
     WidgetsBinding.instance.removeObserver(this);
     _deepLinkSubscription?.cancel();
@@ -58,7 +66,12 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(ApiReachabilityService.instance.warmUp());
+      unawaited(AuthService.getAccessTokenForApi());
       unawaited(ApiService.touchAiScanCreditsSilently());
+      if (kIsWeb) {
+        unawaited(WebAppUpdateService.checkForUpdate());
+      }
     }
   }
 
@@ -89,6 +102,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
           final theme = Theme.of(context);
           final canvas = theme.scaffoldBackgroundColor;
           final defaultBody = theme.textTheme.bodyMedium ?? const TextStyle();
+          final media = MediaQuery.of(context);
           final content = child ??
               Scaffold(
                 backgroundColor: canvas,
@@ -114,11 +128,19 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
                   ),
                 ),
               );
-          return ColoredBox(
-            color: canvas,
-            child: DefaultTextStyle(
-              style: defaultBody.copyWith(color: theme.colorScheme.onSurface),
-              child: content,
+          return MediaQuery(
+            data: media.copyWith(
+              textScaler: media.textScaler.clamp(
+                minScaleFactor: 0.9,
+                maxScaleFactor: 1.35,
+              ),
+            ),
+            child: ColoredBox(
+              color: canvas,
+              child: DefaultTextStyle(
+                style: defaultBody.copyWith(color: theme.colorScheme.onSurface),
+                child: content,
+              ),
             ),
           );
         },

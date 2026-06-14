@@ -7,9 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../application/channels_list_refresh_provider.dart';
-import '../../../services/channel_notification_prefs.dart';
-import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
+import '../../../services/channel_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class ChannelSettingsBottomSheet extends ConsumerStatefulWidget {
@@ -51,7 +50,7 @@ class _ChannelSettingsBottomSheetState
 
   Future<void> _loadPrefs() async {
     try {
-      final enabled = await ChannelNotificationPrefs.getNotificationsEnabled(
+      final enabled = await ChannelSheetPrefs.getNotificationsEnabled(
         widget.channelId,
       );
       final inFeed = await ChannelSheetPrefs.getShowInFeed(widget.channelId);
@@ -173,8 +172,7 @@ class _ChannelSettingsBottomSheetState
                 onChanged: widget.channel.isMember
                     ? (value) async {
                         try {
-                          await ChannelNotificationPrefs
-                              .setNotificationsEnabled(
+                          await ChannelSheetPrefs.setNotificationsEnabled(
                             widget.channelId,
                             value,
                           );

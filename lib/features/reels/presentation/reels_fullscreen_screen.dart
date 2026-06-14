@@ -40,6 +40,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
   int _currentIndex = 0;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
+  bool _sessionMuted = false;
 
   @override
   void initState() {
@@ -116,6 +117,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
         final videoController = await VideoPlayerHelper.createPreparedController(
           videoUrl,
           autoPlay: shouldPlay,
+          muted: _sessionMuted,
         );
 
         if (!mounted) {
@@ -158,6 +160,15 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     }
     if (index + 1 < _reels.length) {
       _initializeVideos(index + 1, 2);
+    }
+  }
+
+  void _setSessionMuted(bool muted) {
+    setState(() => _sessionMuted = muted);
+    for (final controller in _videoControllers.values) {
+      if (controller.value.isInitialized) {
+        controller.setVolume(muted ? 0.0 : 1.0);
+      }
     }
   }
 
@@ -362,6 +373,8 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
                 videoController: _videoControllers[index],
                 isCurrent: index == _currentIndex,
                 isPaused: _isPaused[index] ?? false,
+                isMuted: _sessionMuted,
+                onMutePreferenceChanged: _setSessionMuted,
                 onPauseToggle: (paused) {
                   setState(() => _isPaused[index] = paused);
                 },

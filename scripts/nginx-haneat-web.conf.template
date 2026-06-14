@@ -1,0 +1,53 @@
+# Nginx: Flutter Web PWA на haneat.app
+# Установка на сервер: bash scripts/setup_nginx_haneat_web.sh
+#
+# Требования:
+# - DNS: A haneat.app → IP сервера, A www → тот же IP (или CNAME)
+# - Статика: /var/www/haneat-web (деплой: scripts/deploy_web_timeweb.sh)
+# - SSL: certbot --nginx -d haneat.app -d www.haneat.app
+
+server {
+    listen 80;
+    server_name haneat.app www.haneat.app;
+
+    root /var/www/haneat-web;
+    index index.html;
+
+    # Загрузки в чаты/посты — прокси на API (если нужны прямые URL на api.*)
+    client_max_body_size 64M;
+
+    # Digital Asset Links — для Trusted Web Activity (Google Play)
+    location = /.well-known/assetlinks.json {
+        default_type application/json;
+        add_header Cache-Control "public, max-age=3600";
+        try_files $uri =404;
+    }
+
+    # Legal (прокси с API или статика — см. docs/LEGAL_PAGES_DEPLOY.md)
+    location = /privacy {
+        proxy_pass https://api.haneat.app/privacy;
+        proxy_set_header Host api.haneat.app;
+    }
+    location = /terms {
+        proxy_pass https://api.haneat.app/terms;
+        proxy_set_header Host api.haneat.app;
+    }
+
+    # Flutter service worker — не кэшировать агрессивно
+    location ~* ^/(flutter_service_worker\.js|flutter_bootstrap\.js)$ {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+
+    # Хэшируемые ассеты — долгий кэш
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|wasm)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # SPA: все маршруты → index.html (go_router на клиенте)
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

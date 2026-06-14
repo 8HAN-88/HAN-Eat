@@ -243,7 +243,7 @@ class _CommunityUploadScreenState
               chewieController: _chewieController,
               videoBytesLength: _videoBytes?.length,
               onPickVideo: _pickVideo,
-              onRecordVideo: _recordVideo,
+              onRecordVideo: kIsWeb ? null : _recordVideo,
             ),
             const SizedBox(height: 16),
             TextFormField(

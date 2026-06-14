@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../application/feed_scroll_chrome.dart';
 import '../../chat/application/chats_hub_search.dart';
 import '../application/app_search_context.dart';
-import '../application/root_shell_chrome.dart';
 import '../application/shell_tab_visibility.dart';
 import '../../menu/application/menu_recommendations_refresh_provider.dart';
 import '../../settings/application/subscription_status_provider.dart';
@@ -14,12 +13,15 @@ import '../../onboarding/onboarding_overlay.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/account_session_service.dart';
 import '../../../../services/api_service.dart';
+import '../../../../services/api_reachability_service.dart';
+import '../../../../widgets/connectivity_status_banner.dart';
 import '../../../../services/feed_sync_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/presence_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../chat/application/channel_inbox_badge.dart';
 import '../../chat/application/chats_hub_refresh_provider.dart';
+import '../../chat/application/chat_realtime_signals.dart';
 import '../application/shell_chat_badge_refresh_provider.dart';
 
 class RootShell extends ConsumerStatefulWidget {
@@ -57,6 +59,8 @@ class RootShell extends ConsumerStatefulWidget {
 
 class _RootShellState extends ConsumerState<RootShell> {
   int _unreadChatCount = 0;
+  int _unreadDmCount = 0;
+  int _unreadChannelCount = 0;
   bool _shellIndexFixScheduled = false;
 
   static int _clampShellIndex(int index) =>
@@ -111,11 +115,24 @@ class _RootShellState extends ConsumerState<RootShell> {
     });
     _loadChatUnreadCount();
     _startPeriodicUpdate();
+    _chatSignalsSub =
+        ChatRealtimeSignals.instance.hubRefresh.listen((_) {
+      if (mounted) _loadChatUnreadCount();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (AuthService.instance.currentUser != null) {
         PresenceService.instance.start();
       }
+      unawaited(ApiReachabilityService.instance.warmUp());
     });
+    _apiReachabilityListener = () {
+      if (!mounted) return;
+      if (ApiReachabilityService.instance.isApiReachable.value) {
+        _loadChatUnreadCount();
+      }
+    };
+    ApiReachabilityService.instance.isApiReachable
+        .addListener(_apiReachabilityListener!);
   }
 
   @override
@@ -132,20 +149,39 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 
   void _startPeriodicUpdate() {
-    Future.delayed(const Duration(seconds: 30), () {
+    Future.delayed(const Duration(seconds: 90), () {
       if (mounted) {
+        unawaited(ApiReachabilityService.instance.warmUp());
         _loadChatUnreadCount();
         _startPeriodicUpdate();
       }
     });
   }
 
+  StreamSubscription<void>? _chatSignalsSub;
+  VoidCallback? _apiReachabilityListener;
+
+  @override
+  void dispose() {
+    _chatSignalsSub?.cancel();
+    if (_apiReachabilityListener != null) {
+      ApiReachabilityService.instance.isApiReachable
+          .removeListener(_apiReachabilityListener!);
+    }
+    super.dispose();
+  }
+
   Future<void> _loadChatUnreadCount() async {
     try {
       final chatCount = await ChatService.unreadCount();
       final channelNew = await ChannelInboxBadge.countNewPosts();
-      final total = chatCount + channelNew;
-      if (mounted) setState(() => _unreadChatCount = total);
+      if (mounted) {
+        setState(() {
+          _unreadDmCount = chatCount;
+          _unreadChannelCount = channelNew;
+          _unreadChatCount = chatCount + channelNew;
+        });
+      }
     } catch (e) {
       debugPrint('Unread chat count: $e');
     }
@@ -161,6 +197,7 @@ class _RootShellState extends ConsumerState<RootShell> {
     if (index != 0) {
       resetFeedScrollChrome();
     }
+    resetShellNavCompact();
 
     if (index == 1) {
       _loadChatUnreadCount();
@@ -209,46 +246,6 @@ class _RootShellState extends ConsumerState<RootShell> {
     );
   }
 
-  Widget _offlineBanner(BuildContext context, bool online) {
-    try {
-      if (online) return const SizedBox.shrink();
-      final scheme = Theme.of(context).colorScheme;
-      return Material(
-        color: scheme.errorContainer,
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.wifi_off_rounded,
-                  size: 18,
-                  color: scheme.onErrorContainer,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Нет сети. Лента, избранное и недавние чаты доступны офлайн.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onErrorContainer,
-                          height: 1.2,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    } catch (_) {
-      return const SizedBox.shrink();
-    }
-  }
-
   Widget _navigationContent(BuildContext context, {required bool online}) {
     final child = OnboardingOverlay(
       child: ValueListenableBuilder<int>(
@@ -262,11 +259,15 @@ class _RootShellState extends ConsumerState<RootShell> {
       ),
     );
 
-    if (online) return child;
-    return MediaQuery.removePadding(
-      context: context,
-      removeTop: true,
-      child: child,
+    if (online) {
+      return ShellScrollChromeListener(child: child);
+    }
+    return ShellScrollChromeListener(
+      child: MediaQuery.removePadding(
+        context: context,
+        removeTop: true,
+        child: child,
+      ),
     );
   }
 
@@ -277,176 +278,204 @@ class _RootShellState extends ConsumerState<RootShell> {
         _loadChatUnreadCount();
       }
     });
+    ref.listen<int>(chatsHubRefreshProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        _loadChatUnreadCount();
+      }
+    });
 
     final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
     final pageBg = Theme.of(context).scaffoldBackgroundColor;
 
     return ValueListenableBuilder<bool>(
-      valueListenable: rootShellHideBottomNav,
-      builder: (context, hideBottomNav, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: feedScrollChromeHidden,
-          builder: (context, feedChromeHidden, __) {
-            final shellIndex =
-                _clampShellIndex(widget.navigationShell.currentIndex);
-            final hideForReels = hideBottomNav && shellIndex == 0;
-            final hideForFeedScroll = shellIndex == 0 && feedChromeHidden;
-            final hideNav = hideForReels || hideForFeedScroll;
+      valueListenable: shellNavCompact,
+      builder: (context, compact, _) {
+        final shellIndex =
+            _clampShellIndex(widget.navigationShell.currentIndex);
+        final navHeight =
+            compact ? kShellNavCompactHeight : kShellNavExpandedHeight;
+        final iconSize = compact ? 20.0 : 26.0;
+        final navShadow = scheme.shadow.withValues(alpha: 0.15);
+        final searchPath = contextualSearchPath(shellIndex);
+        final chatsInlineSearch = usesChatsHubInlineSearch(shellIndex);
+        final showSearchButton = searchPath != null || chatsInlineSearch;
+        final navDuration =
+            compact ? kShellNavCompactDuration : kShellNavExpandDuration;
 
-            final navShadow = scheme.shadow.withValues(alpha: 0.15);
-            final searchPath = contextualSearchPath(shellIndex);
-            final chatsInlineSearch = usesChatsHubInlineSearch(shellIndex);
-            final showSearchButton = searchPath != null || chatsInlineSearch;
-            final navBar = SafeArea(
-              minimum: const EdgeInsets.only(left: 16, right: 16, bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Material(
-                      color: Colors.transparent,
-                      elevation: 0,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadius.nav),
-                        child: NavigationBarTheme(
-                          data: NavigationBarThemeData(
-                            height: AppSizes.floatingNavHeight,
-                            labelTextStyle: WidgetStateProperty.resolveWith(
-                              (states) => textTheme.labelSmall?.copyWith(
-                                fontSize: 11,
-                                height: 1.1,
-                              ),
-                            ),
-                            iconTheme: WidgetStateProperty.resolveWith(
-                              (states) => IconThemeData(
-                                size: states.contains(WidgetState.selected)
-                                    ? 22
-                                    : 21,
-                              ),
+        final navBar = SafeArea(
+          minimum: EdgeInsets.only(left: 16, right: 16, bottom: compact ? 4 : 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  elevation: 0,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      compact ? AppRadius.sm : AppRadius.nav,
+                    ),
+                    child: AnimatedContainer(
+                      duration: navDuration,
+                      curve: kShellNavChromeCurve,
+                      height: navHeight,
+                      child: NavigationBarTheme(
+                        data: NavigationBarThemeData(
+                          height: navHeight,
+                          labelTextStyle:
+                              WidgetStateProperty.all(const TextStyle(fontSize: 0)),
+                          iconTheme: WidgetStateProperty.resolveWith(
+                            (states) => IconThemeData(
+                              size: states.contains(WidgetState.selected)
+                                  ? iconSize + 1
+                                  : iconSize,
                             ),
                           ),
-                          child: NavigationBar(
-                            height: AppSizes.floatingNavHeight,
-                            labelBehavior:
-                                NavigationDestinationLabelBehavior.alwaysShow,
-                            selectedIndex: shellIndex,
-                            onDestinationSelected: _onDestinationSelected,
-                            backgroundColor: pageBg,
-                            elevation: 4,
-                            shadowColor: navShadow,
-                            surfaceTintColor: Colors.transparent,
-                            indicatorColor:
-                                scheme.primary.withValues(alpha: 0.14),
-                            destinations: [
-                              for (var i = 0;
-                                  i < RootShell._destinations.length;
-                                  i++)
-                                _buildNavigationDestination(
-                                  RootShell._destinations[i],
-                                  badgeCount: _badgeCountForTab(i),
-                                ),
-                            ],
-                          ),
+                        ),
+                        child: NavigationBar(
+                          height: navHeight,
+                          labelBehavior:
+                              NavigationDestinationLabelBehavior.alwaysHide,
+                          selectedIndex: shellIndex,
+                          onDestinationSelected: _onDestinationSelected,
+                          backgroundColor: pageBg,
+                          elevation: 4,
+                          shadowColor: navShadow,
+                          surfaceTintColor: Colors.transparent,
+                          indicatorColor:
+                              scheme.primary.withValues(alpha: 0.14),
+                          destinations: [
+                            for (var i = 0;
+                                i < RootShell._destinations.length;
+                                i++)
+                              _buildNavigationDestination(
+                                RootShell._destinations[i],
+                                badgeLabel: _badgeLabelForTab(i),
+                                badgeTooltip: i == 1
+                                    ? _chatTabBadgeTooltip()
+                                    : null,
+                              ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                  if (showSearchButton) ...[
-                    const SizedBox(width: 8),
-                    Material(
-                      color: pageBg,
-                      elevation: 4,
-                      shadowColor: navShadow,
-                      borderRadius: BorderRadius.circular(AppRadius.nav),
-                      clipBehavior: Clip.antiAlias,
-                      child: SizedBox(
-                        width: AppSizes.floatingNavSearchSize,
-                        height: AppSizes.floatingNavSearchSize,
-                        child: IconButton(
-                          tooltip: 'Поиск',
-                          icon: const Icon(Icons.search_rounded, size: 22),
-                          onPressed: () {
-                            if (chatsInlineSearch) {
-                              requestChatsHubSearchOpen();
-                              return;
-                            }
-                            context.push(searchPath!);
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-
-            return Scaffold(
-              backgroundColor: pageBg,
-              extendBody: true,
-              body: ValueListenableBuilder<bool>(
-                valueListenable: FeedSyncService.onlineListenable,
-                builder: (context, online, _) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _offlineBanner(context, online),
-                      _subscriptionStaleBanner(context),
-                      Expanded(
-                        child: _navigationContent(context, online: online),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              bottomNavigationBar: ClipRect(
-                child: AnimatedAlign(
-                  duration: kFeedScrollChromeDuration,
-                  curve: kFeedScrollChromeCurve,
-                  alignment: Alignment.topCenter,
-                  heightFactor: hideNav ? 0 : 1,
-                  child: AnimatedOpacity(
-                    duration: kFeedScrollChromeDuration,
-                    curve: kFeedScrollChromeCurve,
-                    opacity: hideNav ? 0 : 1,
-                    child: IgnorePointer(
-                      ignoring: hideNav,
-                      child: navBar,
                     ),
                   ),
                 ),
               ),
-            );
-          },
+              if (showSearchButton) ...[
+                const SizedBox(width: 8),
+                AnimatedContainer(
+                  duration: navDuration,
+                  curve: kShellNavChromeCurve,
+                  width: navHeight,
+                  height: navHeight,
+                  child: Material(
+                    color: pageBg,
+                    elevation: 4,
+                    shadowColor: navShadow,
+                    borderRadius: BorderRadius.circular(
+                      compact ? AppRadius.sm : AppRadius.nav,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      tooltip: 'Поиск',
+                      icon: Icon(Icons.search_rounded, size: iconSize),
+                      onPressed: () {
+                        if (chatsInlineSearch) {
+                          requestChatsHubSearchOpen();
+                          return;
+                        }
+                        context.push(searchPath!);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+
+        return Scaffold(
+          backgroundColor: pageBg,
+          extendBody: true,
+          body: ListenableBuilder(
+            listenable: Listenable.merge([
+              FeedSyncService.onlineListenable,
+              ApiReachabilityService.instance.isApiReachable,
+            ]),
+            builder: (context, _) {
+              final online = FeedSyncService.onlineListenable.value;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const ConnectivityStatusBanner(),
+                  _subscriptionStaleBanner(context),
+                  Expanded(
+                    child: _navigationContent(context, online: online),
+                  ),
+                ],
+              );
+            },
+          ),
+          bottomNavigationBar: navBar,
         );
       },
     );
   }
 
-  int? _badgeCountForTab(int index) {
-    if (index == 1 && _unreadChatCount > 0) {
-      return _unreadChatCount;
+  String? _chatTabBadgeLabel() {
+    if (_unreadDmCount <= 0 && _unreadChannelCount <= 0) return null;
+    if (_unreadDmCount > 0 && _unreadChannelCount > 0) {
+      final dm = _unreadDmCount > 99 ? '99+' : '$_unreadDmCount';
+      final ch = _unreadChannelCount > 99 ? '99+' : '$_unreadChannelCount';
+      return '$dm·$ch';
     }
+    final single = _unreadDmCount > 0 ? _unreadDmCount : _unreadChannelCount;
+    return single > 99 ? '99+' : '$single';
+  }
+
+  String? _chatTabBadgeTooltip() {
+    if (_unreadDmCount <= 0 && _unreadChannelCount <= 0) return null;
+    return 'Чаты: $_unreadDmCount · Каналы: $_unreadChannelCount';
+  }
+
+  String? _badgeLabelForTab(int index) {
+    if (index == 1) return _chatTabBadgeLabel();
     return null;
   }
 
   Widget _buildNavigationDestination(
     _NavDestination destination, {
-    int? badgeCount,
+    String? badgeLabel,
+    String? badgeTooltip,
   }) {
     Widget icon = Icon(destination.icon);
     Widget selectedIcon = Icon(destination.selectedIcon);
 
-    if (badgeCount != null && badgeCount > 0) {
-      final label = badgeCount > 99 ? '99+' : '$badgeCount';
-      icon = Badge(label: Text(label), child: icon);
-      selectedIcon = Badge(label: Text(label), child: selectedIcon);
+    if (badgeLabel != null && badgeLabel.isNotEmpty) {
+      icon = Badge(
+        label: Text(
+          badgeLabel,
+          style: const TextStyle(fontSize: 10),
+        ),
+        child: icon,
+      );
+      selectedIcon = Badge(
+        label: Text(
+          badgeLabel,
+          style: const TextStyle(fontSize: 10),
+        ),
+        child: selectedIcon,
+      );
     }
 
-    return NavigationDestination(
-      icon: icon,
-      selectedIcon: selectedIcon,
-      label: destination.label,
+    return Semantics(
+      label: badgeTooltip ?? destination.label,
+      child: NavigationDestination(
+        icon: icon,
+        selectedIcon: selectedIcon,
+        label: '',
+      ),
     );
   }
 }

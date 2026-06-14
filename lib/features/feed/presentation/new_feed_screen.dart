@@ -1,12 +1,14 @@
 // Новый экран ленты с постами из API
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
+import '../../../models/post_types.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
@@ -25,6 +27,8 @@ class NewFeedScreen extends ConsumerStatefulWidget {
 
     /// Тип ленты с родителя ([MainFeedScreen]); если null — экран сам хранит фильтр (полный Scaffold).
     this.externalFeedType,
+    this.externalSortMode,
+    this.deferLoad = false,
   });
 
   /// Если true, не показывать Scaffold и AppBar (для использования внутри табов)
@@ -32,6 +36,12 @@ class NewFeedScreen extends ConsumerStatefulWidget {
 
   /// См. [externalFeedType].
   final String? externalFeedType;
+
+  /// Сортировка с родителя; если null — personalized.
+  final FeedSortMode? externalSortMode;
+
+  /// Не загружать ленту до первого показа таба (web).
+  final bool deferLoad;
 
   @override
   ConsumerState<NewFeedScreen> createState() => _NewFeedScreenState();
@@ -45,6 +55,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   bool _hasMore = true;
   String? _nextCursor;
   String _feedType = 'all';
+  FeedSortMode _sortMode = FeedSortMode.personalized;
   bool _pendingLoadMore = false;
   bool _loadKickoff = false;
   int _loadGeneration = 0;
@@ -56,29 +67,44 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   bool _servingFromCache = false;
   Object? _cacheLoadError;
 
-  String _cacheVariant([String? feedType]) => 'rec_${feedType ?? _feedType}';
+  String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
+      'rec_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
 
   @override
-  bool get wantKeepAlive => true;
+  bool get wantKeepAlive => !kIsWeb;
 
   @override
   void initState() {
     super.initState();
     _feedType = widget.externalFeedType ?? 'all';
+    _sortMode = widget.externalSortMode ?? FeedSortMode.personalized;
     _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _loadKickoff = true);
-      _loadFeed(refresh: true);
-    });
+    if (!widget.deferLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _loadKickoff = true);
+        _loadFeed(refresh: true);
+      });
+    }
   }
 
   @override
   void didUpdateWidget(NewFeedScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.deferLoad != oldWidget.deferLoad &&
+        !widget.deferLoad &&
+        !_loadKickoff) {
+      setState(() => _loadKickoff = true);
+      _loadFeed(refresh: true);
+    }
     final ext = widget.externalFeedType;
-    if (ext != null && ext != oldWidget.externalFeedType && ext != _feedType) {
+    if (ext != null && ext != oldWidget.externalFeedType) {
       _feedType = ext;
+      _loadFeed(refresh: true);
+    }
+    final sort = widget.externalSortMode;
+    if (sort != null && sort != oldWidget.externalSortMode) {
+      _sortMode = sort;
       _loadFeed(refresh: true);
     }
   }
@@ -108,7 +134,9 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
 
     final requestId = ++_loadGeneration;
     final requestedFeedType = _feedType;
-    final requestedCacheVariant = _cacheVariant(requestedFeedType);
+    final requestedSortMode = _sortMode;
+    final requestedCacheVariant =
+        _cacheVariant(requestedFeedType, requestedSortMode);
 
     setState(() {
       _isLoading = true;
@@ -145,6 +173,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         cursor: refresh ? null : _nextCursor,
         limit: 20,
         feedType: requestedFeedType,
+        sortMode: requestedSortMode,
       );
 
       if (!mounted) return;
@@ -262,6 +291,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                 builder: (context, chromeHidden, _) {
                   return ListView.builder(
                 controller: _scrollController,
+                cacheExtent: kIsWeb ? 200 : 250,
                 padding:
                     EdgeInsets.only(bottom: _listBottomPadding(context, chromeHidden)),
                 itemCount: (_servingFromCache ? 1 : 0) +

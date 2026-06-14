@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 
 import '../services/server_config.dart';
 import 'inline_video_player.dart';
@@ -87,7 +88,10 @@ class FeedVideoPlayer extends StatelessWidget {
                           CircleAvatar(
                             radius: 18,
                             backgroundImage: avatar != null
-                                ? CachedNetworkImageProvider(avatar)
+                                ? ResizeImage(
+                                    CachedNetworkImageProvider(avatar),
+                                    width: 72,
+                                  )
                                 : null,
                             child: avatar == null
                                 ? Text(

@@ -4,6 +4,14 @@ import '../../../services/channel_service.dart';
 class ChannelInboxBadge {
   static Future<int> countNewPosts() async {
     try {
+      return await ChannelService.inboxUnreadCount();
+    } catch (_) {
+      return _countLegacy();
+    }
+  }
+
+  static Future<int> _countLegacy() async {
+    try {
       final owned = await ChannelService.listChannels(
         limit: 50,
         offset: 0,

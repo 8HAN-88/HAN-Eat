@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb, kReleaseMode;
@@ -23,6 +24,7 @@ import '../services/category_service.dart';
 import '../services/recipe_service.dart';
 import '../services/feed_sync_service.dart';
 import '../services/saved_posts_service.dart';
+import '../services/api_reachability_service.dart';
 import '../services/history_storage.dart';
 import '../core/config/app_build_config.dart';
 import '../core/config/legacy_firestore_config.dart';
@@ -121,6 +123,12 @@ Future<void> bootstrapServicesForFirstFrame() async {
   } catch (e) {
     debugPrint('AuthService init error (сессия из кэша сохранена): $e');
   }
+  // Сразу держим связь с API — не ждём deferred bootstrap.
+  unawaited(
+    ApiReachabilityService.init().catchError((Object e) {
+      debugPrint('ApiReachabilityService early init: $e');
+    }),
+  );
 }
 
 bool _firebaseReady = false;
@@ -169,22 +177,46 @@ Future<void> _warmApiConnection() async {
 
 /// Остальные сервисы — в фоне после показа UI.
 Future<void> bootstrapServicesDeferred() async {
-  try {
-    await ensureHiveReady().timeout(
-      const Duration(seconds: 8),
-      onTimeout: () {
-        debugPrint('⚠️ deferred ensureHiveReady: timeout 8s');
-      },
-    );
-  } catch (e, st) {
-    debugPrint('bootstrapServicesDeferred ensureHiveReady: $e\n$st');
-  } finally {
+  unawaited(
+    ApiReachabilityService.init().catchError((Object e) {
+      debugPrint('ApiReachabilityService deferred init: $e');
+    }),
+  );
+
+  if (kIsWeb) {
     AppBootstrapState.hiveReady.value = true;
+    unawaited(
+      ensureHiveReady().timeout(const Duration(seconds: 8)).catchError((Object e) {
+        debugPrint('bootstrapServicesDeferred ensureHiveReady (web): $e');
+      }),
+    );
+  } else {
+    try {
+      await ensureHiveReady().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('⚠️ deferred ensureHiveReady: timeout 8s');
+        },
+      );
+    } catch (e, st) {
+      debugPrint('bootstrapServicesDeferred ensureHiveReady: $e\n$st');
+    } finally {
+      AppBootstrapState.hiveReady.value = true;
+    }
   }
 
   unawaited(_warmApiConnection());
 
-  final firebaseInitialized = await ensureFirebaseReady();
+  final firebaseInitialized =
+      kIsWeb ? false : await ensureFirebaseReady();
+  if (kIsWeb) {
+    unawaited(
+      ensureFirebaseReady().catchError((Object e) {
+        debugPrint('Firebase init (web deferred): $e');
+        return false;
+      }),
+    );
+  }
 
   unawaited(() async {
     try {
@@ -212,17 +244,19 @@ Future<void> bootstrapServicesDeferred() async {
   final localNotifDelay = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
       ? const Duration(seconds: 4)
       : Duration.zero;
-  Future<void>.delayed(localNotifDelay, () {
-    unawaited(
-      NotificationService.init(
-        onPushPayloadTap: PushNotificationService.navigateFromPushData,
-      ).catchError((Object e) {
-        debugPrint('NotificationService init error: $e');
-      }),
-    );
-  });
+  if (!kIsWeb) {
+    Future<void>.delayed(localNotifDelay, () {
+      unawaited(
+        NotificationService.init(
+          onPushPayloadTap: PushNotificationService.navigateFromPushData,
+        ).catchError((Object e) {
+          debugPrint('NotificationService init error: $e');
+        }),
+      );
+    });
+  }
 
-  if (firebaseInitialized) {
+  if (firebaseInitialized && !kIsWeb) {
     final pushDelay = (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
         ? const Duration(seconds: 12)
         : const Duration(seconds: 2);
@@ -281,16 +315,33 @@ Future<void> bootstrapServicesDeferred() async {
     }
   }
 
-  await Future.wait<void>([
+  final criticalInits = <Future<void>>[
     safeInit(UserService.init(), 'UserService'),
-    safeInit(FavoritesService.init(), 'FavoritesService'),
-    safeInit(ShoppingService.init(), 'ShoppingService'),
-    safeInit(MealPlanService.init(), 'MealPlanService'),
-    safeInit(CategoryService.init(), 'CategoryService'),
-    safeInit(RecipeService.init(), 'RecipeService'),
     safeInit(FeedSyncService.init(), 'FeedSyncService'),
     safeInit(SavedPostsService.init(), 'SavedPostsService'),
-  ], eagerError: false);
+  ];
+  if (!kIsWeb) {
+    criticalInits.addAll([
+      safeInit(FavoritesService.init(), 'FavoritesService'),
+      safeInit(ShoppingService.init(), 'ShoppingService'),
+      safeInit(MealPlanService.init(), 'MealPlanService'),
+      safeInit(CategoryService.init(), 'CategoryService'),
+      safeInit(RecipeService.init(), 'RecipeService'),
+    ]);
+  }
+  await Future.wait<void>(criticalInits, eagerError: false);
+
+  if (kIsWeb) {
+    unawaited(
+      Future.wait<void>([
+        safeInit(FavoritesService.init(), 'FavoritesService'),
+        safeInit(ShoppingService.init(), 'ShoppingService'),
+        safeInit(MealPlanService.init(), 'MealPlanService'),
+        safeInit(CategoryService.init(), 'CategoryService'),
+        safeInit(RecipeService.init(), 'RecipeService'),
+      ], eagerError: false),
+    );
+  }
   if (AuthService.instance.currentUser != null) {
     unawaited(
       SavedPostsService.processPendingOps().catchError((Object e) {
@@ -304,7 +355,7 @@ Future<void> bootstrapServicesDeferred() async {
       }),
     );
   }
-  if (firebaseInitialized) {
+  if (firebaseInitialized && !kIsWeb) {
     Future<void>.delayed(const Duration(seconds: 5), () {
       unawaited(
         CrashReporting.initialize(firebaseInitialized: true).catchError((Object e) {

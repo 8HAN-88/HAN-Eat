@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -164,6 +165,7 @@ class _FeedExposureTrackerState extends State<FeedExposureTracker> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) return widget.child;
     return VisibilityDetector(
       key: ValueKey('feed_exposure_${widget.feedSurface}_${widget.post.id}'),
       onVisibilityChanged: _onVisibilityChanged,

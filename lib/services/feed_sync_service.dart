@@ -9,6 +9,7 @@ import 'auth_service.dart';
 import 'feed_service.dart';
 import 'feed_cache_service.dart';
 import 'saved_posts_service.dart';
+import 'api_reachability_service.dart';
 
 /// Сервис синхронизации ленты (онлайн/оффлайн)
 class FeedSyncService {
@@ -83,6 +84,14 @@ class FeedSyncService {
     // Проверяем текущее состояние
     _connectivity.checkConnectivity().then((result) {
       isOnline.value = !result.contains(ConnectivityResult.none);
+    });
+
+    ApiReachabilityService.instance.isApiReachable.addListener(() {
+      if (ApiReachabilityService.instance.isApiReachable.value &&
+          isOnline.value &&
+          _shouldSyncInBackground()) {
+        syncFeedInBackground();
+      }
     });
   }
 

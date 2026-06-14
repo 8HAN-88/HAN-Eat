@@ -10,6 +10,7 @@ import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
 import '../../../../widgets/app_brand_logo.dart';
 import '../../../../widgets/app_gradient_background.dart';
+import '../../../../widgets/pwa_install_banner.dart';
 import '../../../../widgets/server_connecting_hint.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -102,10 +103,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 24),
-                  const AppBrandLogo(
-                    layout: AppBrandLogoLayout.horizontal,
-                    width: 220,
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: AppBrandLogo(
+                      layout: AppBrandLogoLayout.horizontal,
+                      width: 72,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -208,6 +211,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  const PwaInstallBanner(),
                 ],
               ),
             ),

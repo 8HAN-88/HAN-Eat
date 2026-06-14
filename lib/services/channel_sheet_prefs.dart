@@ -1,100 +1,194 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Локальные переключатели из bottom sheet канала (пока без отдельного API «избранного канала»).
+import 'channel_service.dart';
+
+/// Настройки inbox канала: API + локальный кэш (офлайн).
 class ChannelSheetPrefs {
   ChannelSheetPrefs._();
 
-  static const _showInFeedKey = 'channel_sheet_show_in_feed_v1';
-  static const _favoriteKey = 'channel_sheet_favorite_v1';
-  static const _archivedKey = 'channel_inbox_archived_v1';
+  static const _cacheKey = 'channel_inbox_prefs_cache_v1';
+  static Map<int, ChannelInboxPrefs>? _memoryCache;
+  static DateTime? _lastSync;
 
-  static Future<Map<int, bool>> _readMap(String key) async {
+  static Future<Map<int, ChannelInboxPrefs>> _loadCache() async {
+    if (_memoryCache != null) return _memoryCache!;
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(key);
-    if (raw == null || raw.isEmpty) return {};
+    final raw = prefs.getString(_cacheKey);
+    if (raw == null || raw.isEmpty) {
+      _memoryCache = {};
+      return _memoryCache!;
+    }
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final result = <int, bool>{};
+      final out = <int, ChannelInboxPrefs>{};
       for (final entry in decoded.entries) {
         final id = int.tryParse(entry.key);
-        if (id != null) result[id] = entry.value == true;
+        if (id == null || entry.value is! Map) continue;
+        out[id] = ChannelInboxPrefs.fromJson(
+          Map<String, dynamic>.from(entry.value as Map),
+        );
       }
-      return result;
+      _memoryCache = out;
+      return out;
     } catch (_) {
-      return {};
+      _memoryCache = {};
+      return _memoryCache!;
     }
   }
 
-  static Future<void> _writeMap(String key, Map<int, bool> map) async {
+  static Future<void> _saveCache(Map<int, ChannelInboxPrefs> map) async {
+    _memoryCache = map;
     final prefs = await SharedPreferences.getInstance();
-    final enc = map.map((k, v) => MapEntry(k.toString(), v));
-    await prefs.setString(key, jsonEncode(enc));
+    final enc = map.map(
+      (k, v) => MapEntry(k.toString(), v.toJson()),
+    );
+    await prefs.setString(_cacheKey, jsonEncode(enc));
   }
 
-  /// Показывать канал в разделе «Каналы» / подборках (локально, по умолчанию true).
+  static Future<void> syncFromServer({bool force = false}) async {
+    if (!force &&
+        _lastSync != null &&
+        DateTime.now().difference(_lastSync!) < const Duration(minutes: 2)) {
+      return;
+    }
+    try {
+      final items = await ChannelService.listInboxPrefs();
+      final map = {for (final p in items) p.channelId: p};
+      await _saveCache(map);
+      _lastSync = DateTime.now();
+    } catch (_) {}
+  }
+
+  static Future<ChannelInboxPrefs> _prefsFor(int channelId) async {
+    await syncFromServer();
+    final cache = await _loadCache();
+    return cache[channelId] ??
+        ChannelInboxPrefs(
+          channelId: channelId,
+          showInFeed: true,
+          notificationsEnabled: true,
+        );
+  }
+
+  static Future<ChannelInboxPrefs?> _patch(
+    int channelId, {
+    bool? isFavorite,
+    bool? inboxArchived,
+    bool? showInFeed,
+    bool? notificationsEnabled,
+  }) async {
+    try {
+      final updated = await ChannelService.patchInboxPrefs(
+        channelId: channelId,
+        isFavorite: isFavorite,
+        inboxArchived: inboxArchived,
+        showInFeed: showInFeed,
+        notificationsEnabled: notificationsEnabled,
+      );
+      final cache = await _loadCache();
+      cache[channelId] = updated;
+      await _saveCache(cache);
+      return updated;
+    } catch (_) {
+      final cache = await _loadCache();
+      final prev = cache[channelId] ??
+          ChannelInboxPrefs(
+            channelId: channelId,
+            showInFeed: true,
+            notificationsEnabled: true,
+          );
+      final next = ChannelInboxPrefs(
+        channelId: channelId,
+        isFavorite: isFavorite ?? prev.isFavorite,
+        inboxArchived: inboxArchived ?? prev.inboxArchived,
+        showInFeed: showInFeed ?? prev.showInFeed,
+        notificationsEnabled:
+            notificationsEnabled ?? prev.notificationsEnabled,
+      );
+      cache[channelId] = next;
+      await _saveCache(cache);
+      return next;
+    }
+  }
+
   static Future<bool> getShowInFeed(int channelId) async {
-    final m = await _readMap(_showInFeedKey);
-    return m[channelId] ?? true;
+    final p = await _prefsFor(channelId);
+    return p.showInFeed;
   }
 
   static Future<void> setShowInFeed(int channelId, bool value) async {
-    final m = await _readMap(_showInFeedKey);
-    m[channelId] = value;
-    await _writeMap(_showInFeedKey, m);
+    await _patch(channelId, showInFeed: value);
   }
 
   static Future<bool> getFavorite(int channelId) async {
-    final m = await _readMap(_favoriteKey);
-    return m[channelId] ?? false;
+    final cache = await _loadCache();
+    return cache[channelId]?.isFavorite ?? false;
   }
 
   static Future<void> setFavorite(int channelId, bool value) async {
-    final m = await _readMap(_favoriteKey);
-    if (value) {
-      m[channelId] = true;
-    } else {
-      m.remove(channelId);
-    }
-    await _writeMap(_favoriteKey, m);
+    await _patch(channelId, isFavorite: value);
   }
 
-  /// Каналы, скрытые из inbox «Чаты» (локально на устройстве).
   static Future<Set<int>> listArchivedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_archivedKey);
-    if (raw == null || raw.isEmpty) return {};
-    try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded.map((e) => int.tryParse('$e')).whereType<int>().toSet();
-    } catch (_) {
-      return {};
-    }
+    await syncFromServer();
+    final cache = await _loadCache();
+    return cache.entries
+        .where((e) => e.value.inboxArchived)
+        .map((e) => e.key)
+        .toSet();
   }
 
   static Future<bool> isArchived(int channelId) async {
-    final ids = await listArchivedIds();
-    return ids.contains(channelId);
+    final cache = await _loadCache();
+    return cache[channelId]?.inboxArchived ?? false;
   }
 
   static Future<void> setArchived(int channelId, bool archived) async {
-    final ids = await listArchivedIds();
-    if (archived) {
-      ids.add(channelId);
-    } else {
-      ids.remove(channelId);
-    }
-    final prefs = await SharedPreferences.getInstance();
-    final sorted = ids.toList()..sort();
-    await prefs.setString(_archivedKey, jsonEncode(sorted));
+    await _patch(channelId, inboxArchived: archived);
   }
 
-  /// ID каналов в избранном (порядок по возрастанию id).
+  static Future<bool> getNotificationsEnabled(int channelId) async {
+    final p = await _prefsFor(channelId);
+    return p.notificationsEnabled;
+  }
+
+  static Future<void> setNotificationsEnabled(int channelId, bool value) async {
+    await _patch(channelId, notificationsEnabled: value);
+  }
+
+  static Future<void> seedNotifications(int channelId, bool enabled) async {
+    final cache = await _loadCache();
+    final prev = cache[channelId] ??
+        ChannelInboxPrefs(
+          channelId: channelId,
+          showInFeed: true,
+          notificationsEnabled: true,
+        );
+    cache[channelId] = ChannelInboxPrefs(
+      channelId: channelId,
+      isFavorite: prev.isFavorite,
+      inboxArchived: prev.inboxArchived,
+      showInFeed: prev.showInFeed,
+      notificationsEnabled: enabled,
+    );
+    await _saveCache(cache);
+  }
+
+  /// Только для тестов: локальный кэш без сети.
+  @visibleForTesting
+  static Future<void> seedForTest(Map<int, ChannelInboxPrefs> map) async {
+    _lastSync = DateTime.now();
+    await _saveCache(map);
+  }
+
   static Future<List<int>> listFavoriteIds() async {
-    final m = await _readMap(_favoriteKey);
-    final ids = m.entries
-        .where((e) => e.value)
+    await syncFromServer();
+    final cache = await _loadCache();
+    final ids = cache.entries
+        .where((e) => e.value.isFavorite)
         .map((e) => e.key)
         .toList()
       ..sort();

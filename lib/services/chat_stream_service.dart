@@ -174,7 +174,7 @@ class ChatStreamService {
     if (_disposed) return;
     _reconnectTimer?.cancel();
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
-    final baseSec = math.min(_reconnectAttempt * 2, 30);
+    final baseSec = math.min(1 + _reconnectAttempt, 15);
     final jitterMs = _random.nextInt(800);
     final delay = Duration(seconds: baseSec, milliseconds: jitterMs);
     _reconnectTimer = Timer(delay, connect);

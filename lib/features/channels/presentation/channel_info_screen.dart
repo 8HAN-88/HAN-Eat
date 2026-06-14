@@ -1,5 +1,6 @@
 // Полноэкранная страница канала в духе Telegram: шапка, 4 кнопки, карточка ссылки/описания, вкладки (без ленты постов).
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/format/russian_count_labels.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
-import '../../../services/channel_notification_prefs.dart';
+import '../../../services/channel_sheet_prefs.dart';
+import '../../../services/server_config.dart';
 import 'channel_detail_screen.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_settings_bottom_sheet.dart';
@@ -75,13 +77,13 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       var notificationsEnabled = true;
       if (channel.channelNotificationsEnabled != null) {
         notificationsEnabled = channel.channelNotificationsEnabled!;
-        await ChannelNotificationPrefs.cacheFromServer(
+        await ChannelSheetPrefs.seedNotifications(
           widget.channelId,
           notificationsEnabled,
         );
       } else {
         notificationsEnabled =
-            await ChannelNotificationPrefs.getNotificationsEnabled(
+            await ChannelSheetPrefs.getNotificationsEnabled(
           widget.channelId,
         );
       }
@@ -182,7 +184,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     }
     final nextMuted = !_notificationsMuted;
     try {
-      await ChannelNotificationPrefs.setNotificationsEnabled(
+      await ChannelSheetPrefs.setNotificationsEnabled(
         widget.channelId,
         !nextMuted,
       );
@@ -394,7 +396,14 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                   radius: 36,
                   backgroundImage:
                       c.avatarUrl != null && c.avatarUrl!.isNotEmpty
-                          ? CachedNetworkImageProvider(c.avatarUrl!)
+                          ? ResizeImage(
+                              CachedNetworkImageProvider(
+                                ServerConfig.resolvePublisherAvatarUrl(
+                                  c.avatarUrl!,
+                                ),
+                              ),
+                              width: 144,
+                            )
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(

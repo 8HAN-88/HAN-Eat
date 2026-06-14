@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,9 +13,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../core/haptics/app_haptics.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
@@ -22,6 +27,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
+import '../../../widgets/highlighted_text.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chats_hub_refresh_provider.dart';
@@ -30,6 +36,8 @@ import '../../../services/server_config.dart';
 import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
+import 'widgets/chat_message_action_overlay.dart';
+import 'widgets/chat_message_selection_toolbar.dart';
 import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
@@ -165,6 +173,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Timer? _typingDebounce;
   Timer? _peerTypingClear;
   StreamSubscription<void>? _signalSub;
+  VoidCallback? _apiReachabilityListener;
   ChatStreamService? _stream;
   ChatMessage? _replyTo;
   bool _appPaused = false;
@@ -189,13 +198,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   List<ChatUserBrief> _groupMembers = [];
   bool _threadSearchOpen = false;
   String _threadSearchQuery = '';
+  int _searchMatchIndex = 0;
   ChatMessage? _pinnedMessage;
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
   int _newMessagesBelow = 0;
   bool _suppressMarkRead = false;
+  bool _selectionMode = false;
+  final _selectedMessageIds = <int>{};
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
 
   @override
   void initState() {
@@ -217,6 +230,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _signalSub = ChatRealtimeSignals.instance.threadPoll.listen((_) {
       if (!_appPaused) _pollNew();
     });
+    _apiReachabilityListener = () {
+      if (!ApiReachabilityService.instance.isApiReachable.value || _appPaused) {
+        return;
+      }
+      _stream?.resume();
+      unawaited(_pollNew());
+    };
+    ApiReachabilityService.instance.isApiReachable
+        .addListener(_apiReachabilityListener!);
     _stream = ChatStreamService(
       conversationId: widget.conversationId,
       onEvent: _onStreamEvent,
@@ -679,6 +701,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _markReadDebounce?.cancel();
     _draftSaveDebounce?.cancel();
     _signalSub?.cancel();
+    if (_apiReachabilityListener != null) {
+      ApiReachabilityService.instance.isApiReachable
+          .removeListener(_apiReachabilityListener!);
+    }
     _holdActive = false;
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
@@ -967,23 +993,67 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _threadSearchOpen = !_threadSearchOpen;
       if (!_threadSearchOpen) {
         _threadSearchQuery = '';
+        _searchMatchIndex = 0;
         _threadSearchController.clear();
       }
     });
   }
 
+  bool _messageMatchesSearch(ChatMessage msg, String q) {
+    if (msg.content.toLowerCase().contains(q)) return true;
+    final sender = msg.senderName ?? _senderNames[msg.senderId] ?? '';
+    if (sender.toLowerCase().contains(q)) return true;
+    if (msg.type == 'voice' && 'голосовое'.contains(q)) return true;
+    if (msg.type == 'image' && 'фото'.contains(q)) return true;
+    if (msg.type == 'video' && 'видео'.contains(q)) return true;
+    if (msg.type == 'file') {
+      final name = msg.content.trim().toLowerCase();
+      if (name.contains(q) || 'файл'.contains(q)) return true;
+    }
+    return false;
+  }
+
+  List<int> get _searchMatchIds {
+    final q = _threadSearchQuery.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    return [
+      for (final msg in _messages)
+        if (_messageMatchesSearch(msg, q)) msg.id,
+    ];
+  }
+
+  void _onThreadSearchChanged(String value) {
+    setState(() {
+      _threadSearchQuery = value;
+      _searchMatchIndex = 0;
+    });
+    _scrollToCurrentSearchMatch();
+  }
+
+  void _scrollToCurrentSearchMatch() {
+    final ids = _searchMatchIds;
+    if (ids.isEmpty) return;
+    final idx = _searchMatchIndex.clamp(0, ids.length - 1);
+    _scrollToMessage(ids[idx]);
+  }
+
+  void _goToSearchMatch(bool forward) {
+    final ids = _searchMatchIds;
+    if (ids.isEmpty) return;
+    setState(() {
+      if (forward) {
+        _searchMatchIndex = (_searchMatchIndex + 1) % ids.length;
+      } else {
+        _searchMatchIndex = (_searchMatchIndex - 1 + ids.length) % ids.length;
+      }
+    });
+    _scrollToMessage(ids[_searchMatchIndex]);
+  }
+
   List<ChatMessage> get _visibleMessages {
     final q = _threadSearchQuery.trim().toLowerCase();
     if (q.isEmpty) return _messages;
-    return _messages.where((msg) {
-      if (msg.content.toLowerCase().contains(q)) return true;
-      final sender = msg.senderName ?? _senderNames[msg.senderId] ?? '';
-      if (sender.toLowerCase().contains(q)) return true;
-      if (msg.type == 'voice' && 'голосовое'.contains(q)) return true;
-      if (msg.type == 'image' && 'фото'.contains(q)) return true;
-      if (msg.type == 'video' && 'видео'.contains(q)) return true;
-      return false;
-    }).toList();
+    return _messages.where((msg) => _messageMatchesSearch(msg, q)).toList();
   }
 
   Future<void> _markUnread() async {
@@ -1151,6 +1221,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_cancelRecording());
       }
     } else {
+      unawaited(ApiReachabilityService.instance.warmUp());
       _stream?.resume();
       _pollNew();
     }
@@ -1226,18 +1297,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    final dir = await getTemporaryDirectory();
-    final path =
-        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final dir = kIsWeb ? null : await getTemporaryDirectory();
+    final path = dir == null
+        ? null
+        : '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     try {
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: path,
-      );
+      if (kIsWeb) {
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.opus,
+            bitRate: 96000,
+            sampleRate: 48000,
+          ),
+          path: 'voice.webm',
+        );
+      } else {
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 128000,
+            sampleRate: 44100,
+          ),
+          path: path!,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1309,11 +1392,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _recordDuration = Duration.zero;
       _waveLevels.clear();
     });
-    if (path == null || durationSec < 1) return;
+    if (durationSec < 1) return;
+    if (!kIsWeb && (path == null || path.isEmpty)) return;
 
     setState(() => _sending = true);
     try {
-      final file = XFile(path);
+      final XFile file;
+      if (kIsWeb) {
+        if (path == null || path.isEmpty) {
+          throw Exception('Не удалось сохранить запись');
+        }
+        final bytes = await XFile(path).readAsBytes();
+        if (bytes.isEmpty) throw Exception('Пустая запись');
+        file = XFile.fromData(
+          bytes,
+          name: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
+          mimeType: 'audio/webm',
+        );
+      } else {
+        file = XFile(path!);
+      }
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'audio',
@@ -1344,91 +1442,351 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  void _showMessageActions(ChatMessage msg) {
-    final isPinned = _pinnedMessage?.id == msg.id;
-    showModalBottomSheet<void>(
+  String _copyableText(ChatMessage msg) {
+    final text = msg.content.trim();
+    if (text.isNotEmpty) return text;
+    final media = msg.mediaUrl?.trim();
+    if (media != null && media.isNotEmpty) {
+      return ServerConfig.resolveMediaUrl(media);
+    }
+    return _messagePreview(msg);
+  }
+
+  int _mediaMessageCount() {
+    return _messages
+        .where(
+          (m) =>
+              m.mediaUrl != null &&
+              m.mediaUrl!.trim().isNotEmpty &&
+              (m.type == 'image' || m.type == 'video' || m.type == 'file'),
+        )
+        .length;
+  }
+
+  void _enterSelectionMode(ChatMessage initial) {
+    setState(() {
+      _selectionMode = true;
+      _selectedMessageIds
+        ..clear()
+        ..add(initial.id);
+      _replyTo = null;
+      _editingMessage = null;
+      _controller.clear();
+    });
+    AppHaptics.selection();
+  }
+
+  void _exitSelectionMode() {
+    if (!_selectionMode) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedMessageIds.clear();
+    });
+  }
+
+  void _toggleMessageSelection(int messageId) {
+    setState(() {
+      if (_selectedMessageIds.contains(messageId)) {
+        _selectedMessageIds.remove(messageId);
+        if (_selectedMessageIds.isEmpty) {
+          _selectionMode = false;
+        }
+      } else {
+        _selectedMessageIds.add(messageId);
+      }
+    });
+    AppHaptics.selection();
+  }
+
+  List<ChatMessage> get _selectedMessages => _messages
+      .where((m) => _selectedMessageIds.contains(m.id))
+      .toList(growable: false);
+
+  Future<void> _deleteSelectedMessages() async {
+    final selected = _selectedMessages;
+    final mine = selected.where((m) => m.isMine).toList();
+    final skipped = selected.length - mine.length;
+
+    if (mine.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Можно удалить только свои сообщения')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.add_reaction_outlined),
-              title: const Text('Реакция'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showReactionPicker(msg);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.reply_rounded),
-              title: const Text('Ответить'),
-              onTap: () {
-                Navigator.pop(ctx);
-                setState(() {
-                  _replyTo = msg;
-                  _editingMessage = null;
-                  _controller.clear();
-                });
-              },
-            ),
-            if (msg.isMine && msg.type == 'text')
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Изменить'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _startEdit(msg);
-                },
-              ),
-            ListTile(
-              leading: Icon(
-                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              ),
-              title: Text(isPinned ? 'Открепить' : 'Закрепить'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _togglePinMessage(msg);
-              },
-            ),
-            if (msg.content.trim().isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.copy_rounded),
-                title: const Text('Копировать'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Clipboard.setData(ClipboardData(text: msg.content));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Скопировано')),
-                  );
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.forward_rounded),
-              title: const Text('Переслать'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _forwardMessage(msg);
-              },
-            ),
-            if (msg.isMine)
-              ListTile(
-                leading: Icon(
-                  Icons.delete_outline,
-                  color: Theme.of(ctx).colorScheme.error,
-                ),
-                title: Text(
-                  'Удалить',
-                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _deleteMessage(msg);
-                },
-              ),
-          ],
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          mine.length == 1
+              ? 'Удалить сообщение?'
+              : 'Удалить ${mine.length} сообщения?',
         ),
+        content: skipped > 0
+            ? Text(
+                'Чужие сообщения ($skipped) останутся — удаляются только ваши.',
+              )
+            : null,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Удалить',
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    for (final msg in mine) {
+      await _deleteMessage(msg);
+    }
+    if (!mounted) return;
+    _exitSelectionMode();
+    if (skipped > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Удалено ${mine.length}, пропущено $skipped')),
+      );
+    }
+  }
+
+  void _copySelectedMessages() {
+    final texts = _selectedMessages
+        .map(_copyableText)
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
+    if (texts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нечего копировать')),
+      );
+      return;
+    }
+    Clipboard.setData(ClipboardData(text: texts));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Скопировано (${_selectedMessageIds.length})')),
+    );
+  }
+
+  Future<void> _shareSelectedMessages() async {
+    final texts = _selectedMessages
+        .map(_copyableText)
+        .where((t) => t.isNotEmpty)
+        .join('\n\n');
+    if (texts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нечего отправить')),
+      );
+      return;
+    }
+    await Share.share(texts);
+  }
+
+  Future<void> _forwardSelectedMessages() async {
+    final selected = _selectedMessages;
+    if (selected.isEmpty) return;
+    try {
+      final chats = await ChatService.listConversations();
+      if (!mounted) return;
+      final targets =
+          chats.where((c) => c.id != widget.conversationId).toList();
+      if (targets.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет других чатов для пересылки')),
+        );
+        return;
+      }
+      final picked = await showModalBottomSheet<ChatConversation>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Переслать в…')),
+              ...targets.map(
+                (c) => ListTile(
+                  leading: Icon(
+                    c.isSaved
+                        ? Icons.bookmark_rounded
+                        : c.isGroup
+                            ? Icons.groups_rounded
+                            : Icons.person_rounded,
+                  ),
+                  title: Text(c.displayTitle),
+                  onTap: () => Navigator.pop(ctx, c),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+      for (final msg in selected) {
+        await _sendForwardTo(picked, msg);
+      }
+      if (!mounted) return;
+      _exitSelectionMode();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Переслано ${selected.length} в «${picked.displayTitle}»',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _handleMessageAction(ChatMessage msg, String action) {
+    switch (action) {
+      case 'reply':
+        setState(() {
+          _replyTo = msg;
+          _editingMessage = null;
+          _controller.clear();
+        });
+      case 'copy':
+        Clipboard.setData(ClipboardData(text: _copyableText(msg)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Скопировано')),
+        );
+      case 'edit':
+        _startEdit(msg);
+      case 'pin':
+        _togglePinMessage(msg);
+      case 'forward':
+        _forwardMessage(msg);
+      case 'delete':
+        unawaited(_confirmDeleteMessage(msg));
+      case 'select':
+        _enterSelectionMode(msg);
+    }
+  }
+
+  Future<void> _confirmDeleteMessage(ChatMessage msg) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить сообщение?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Удалить',
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _deleteMessage(msg);
+    }
+  }
+
+  Widget _messageBubbleWidget({
+    required ChatMessage msg,
+    required ColorScheme scheme,
+    required bool searching,
+    required bool isGroup,
+    String? replyQuote,
+    VoidCallback? onReplyTap,
+    bool interactive = true,
+  }) {
+    return _Bubble(
+      message: msg,
+      scheme: scheme,
+      highlightQuery: searching ? _threadSearchQuery : null,
+      replyQuote: replyQuote,
+      onReplyTap: onReplyTap,
+      showSenderName: isGroup && !msg.isMine,
+      senderLabel: msg.senderName ?? _senderNames[msg.senderId],
+      isConversationPinned: _pinnedMessage?.id == msg.id,
+      onImageTap: interactive && msg.type == 'image' && msg.mediaUrl != null
+          ? () => _openImage(msg.mediaUrl!)
+          : null,
+      onVideoTap: interactive && msg.type == 'video' && msg.mediaUrl != null
+          ? () => _openVideo(msg.mediaUrl!)
+          : null,
+      onReactionTap: interactive ? (emoji) => _toggleReaction(msg, emoji) : null,
+      onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
+          ? () => _openFileUrl(msg.mediaUrl!)
+          : null,
+    );
+  }
+
+  Future<void> _showMessageActionOverlay(
+    ChatMessage msg,
+    RenderBox bubbleBox,
+  ) async {
+    if (_selectionMode) return;
+    final rect = Rect.fromPoints(
+      bubbleBox.localToGlobal(Offset.zero),
+      bubbleBox.localToGlobal(bubbleBox.size.bottomRight(Offset.zero)),
+    );
+    final isPinned = _pinnedMessage?.id == msg.id;
+    final scheme = Theme.of(context).colorScheme;
+    final searching = _threadSearchQuery.trim().isNotEmpty;
+    final isGroup = _conversation.isGroup;
+    final replyTarget = _replyTargetFor(msg);
+    final replyQuote = replyTarget != null
+        ? _messagePreview(replyTarget)
+        : (msg.replyToMessageId != null ? 'Сообщение' : null);
+
+    await ChatMessageActionOverlay.show(
+      context: context,
+      messageRect: rect,
+      messagePreview: _messageBubbleWidget(
+        msg: msg,
+        scheme: scheme,
+        searching: searching,
+        isGroup: isGroup,
+        replyQuote: replyQuote,
+        onReplyTap: null,
+      ),
+      quickReactions: _overlayReactions,
+      canEdit: msg.isMine && msg.type == 'text',
+      isPinned: isPinned,
+      canDelete: msg.isMine,
+      hasCopyableText: _copyableText(msg).isNotEmpty,
+      onReaction: (emoji) => _toggleReaction(msg, emoji),
+      onExpandReactions: () => _showReactionPicker(msg),
+      onAction: (action) => _handleMessageAction(msg, action),
+    );
+  }
+
+  Widget _selectionIndicator(bool selected, ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8, bottom: 6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? scheme.primary : Colors.transparent,
+          border: Border.all(
+            color: selected ? scheme.primary : scheme.outline,
+            width: 2,
+          ),
+        ),
+        child: selected
+            ? Icon(Icons.check, size: 16, color: scheme.onPrimary)
+            : null,
       ),
     );
   }
@@ -1668,9 +2026,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Future<void> _pickVideo() async {
+  Future<void> _showMediaPicker() async {
     if (_sending || _recording) return;
-    final source = await showModalBottomSheet<ImageSource>(
+    final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -1678,28 +2036,81 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.video_library_outlined),
-              title: const Text('Видео из галереи'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('Фото'),
+              onTap: () => Navigator.pop(ctx, 'photo'),
             ),
             ListTile(
               leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Снять видео'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              title: const Text('Видео'),
+              onTap: () => Navigator.pop(ctx, 'video'),
             ),
           ],
         ),
       ),
     );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'photo':
+        await _pickImage();
+      case 'video':
+        await _pickVideo();
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    if (_sending || _recording) return;
+    ImageSource? source;
+    if (kIsWeb) {
+      source = ImageSource.gallery;
+    } else {
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.video_library_outlined),
+                title: const Text('Видео из галереи'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.videocam_outlined),
+                title: const Text('Снять видео'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (source == null) return;
     final picker = ImagePicker();
-    final file = await picker.pickVideo(source: source);
+    final file = await picker.pickVideo(
+      source: source,
+      maxDuration: const Duration(minutes: 3),
+    );
     if (file == null) return;
+    final bytes = await file.length();
+    if (bytes > 80 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Видео слишком большое (макс. 80 МБ). Выберите короче или сожмите файл.'),
+          ),
+        );
+      }
+      return;
+    }
+    final uploadFile = await _normalizeVideoFileForUpload(file);
     setState(() => _sending = true);
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
-        file: file,
+        file: uploadFile,
         fileType: 'video',
+        waitForProcessing: false,
       );
       final url = uploaded.url;
       if (url == null || url.isEmpty) throw Exception('Нет URL файла');
@@ -1726,6 +2137,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  /// На web браузер часто отдаёт webm без расширения в имени — бэкенд тогда отклоняет upload.
+  Future<XFile> _normalizeVideoFileForUpload(XFile file) async {
+    if (!kIsWeb) return file;
+    final name = file.name.trim();
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.avi')) {
+      return file;
+    }
+    final bytes = await file.readAsBytes();
+    final ext = lower.contains('quicktime') ? 'mov' : 'webm';
+    final safeName = name.isEmpty ? 'video_${DateTime.now().millisecondsSinceEpoch}.$ext' : '$name.$ext';
+    return XFile.fromData(bytes, name: safeName, mimeType: 'video/$ext');
+  }
+
   Future<void> _pickFile() async {
     if (_sending || _recording) return;
     try {
@@ -1735,11 +2163,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (result == null || result.files.isEmpty) return;
       final picked = result.files.single;
-      final path = picked.path;
-      if (path == null || path.isEmpty) return;
+      final XFile file;
+      if (kIsWeb) {
+        final bytes = picked.bytes;
+        if (bytes == null || bytes.isEmpty) return;
+        file = XFile.fromData(bytes, name: picked.name);
+      } else {
+        final path = picked.path;
+        if (path == null || path.isEmpty) return;
+        file = XFile(path);
+      }
       setState(() => _sending = true);
       final uploaded = await MediaUploadService.uploadMediaFile(
-        file: XFile(path),
+        file: file,
         fileType: 'document',
       );
       final fileUrl = uploaded.url;
@@ -1862,11 +2298,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
     final visibleMessages = _visibleMessages;
     final searching = _threadSearchQuery.trim().isNotEmpty;
-    final imageCount =
-        _messages.where((m) => m.type == 'image' && m.mediaUrl != null).length;
+    final mediaCount = _mediaMessageCount();
 
-    return Scaffold(
-      appBar: AppBar(
+    return PopScope(
+      canPop: !_selectionMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _selectionMode) _exitSelectionMode();
+      },
+      child: Scaffold(
+      appBar: _selectionMode
+          ? AppBar(
+              leading: TextButton(
+                onPressed: _exitSelectionMode,
+                child: const Text('Отмена'),
+              ),
+              title: Text(
+                _selectedMessageIds.length == 1
+                    ? 'Выбрано 1'
+                    : 'Выбрано ${_selectedMessageIds.length}',
+              ),
+              centerTitle: true,
+            )
+          : AppBar(
         title: GestureDetector(
           onTap: isGroup ? _openGroupInfo : null,
           child: Column(
@@ -1885,13 +2338,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: TextField(
                     controller: _threadSearchController,
                     autofocus: true,
-                    onChanged: (v) => setState(() => _threadSearchQuery = v),
+                    onChanged: _onThreadSearchChanged,
                     decoration: InputDecoration(
                       hintText: 'Поиск в чате',
                       prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: _toggleThreadSearch,
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_searchMatchIds.isNotEmpty) ...[
+                            Text(
+                              '${_searchMatchIndex + 1}/${_searchMatchIds.length}',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                            IconButton(
+                              tooltip: 'Предыдущее',
+                              icon: const Icon(Icons.keyboard_arrow_up),
+                              onPressed: () => _goToSearchMatch(false),
+                            ),
+                            IconButton(
+                              tooltip: 'Следующее',
+                              icon: const Icon(Icons.keyboard_arrow_down),
+                              onPressed: () => _goToSearchMatch(true),
+                            ),
+                          ],
+                          IconButton(
+                            tooltip: 'Закрыть',
+                            icon: const Icon(Icons.close),
+                            onPressed: _toggleThreadSearch,
+                          ),
+                        ],
                       ),
                       isDense: true,
                       filled: true,
@@ -1910,7 +2385,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             icon: Icon(_threadSearchOpen ? Icons.search_off : Icons.search),
             onPressed: _toggleThreadSearch,
           ),
-          if (imageCount > 0)
+          if (mediaCount > 0)
             IconButton(
               tooltip: 'Медиа',
               icon: const Icon(Icons.photo_library_outlined),
@@ -1950,10 +2425,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               if (v == 'leave') _leaveGroup();
             },
             itemBuilder: (ctx) => [
-              if (imageCount > 0)
+              if (mediaCount > 0)
                 PopupMenuItem(
                   value: 'media',
-                  child: Text('Медиа ($imageCount)'),
+                  child: Text('Медиа ($mediaCount)'),
                 ),
               if (!isSaved) ...[
                 PopupMenuItem(
@@ -2088,41 +2563,60 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       : (msg.replyToMessageId != null
                                           ? 'Сообщение'
                                           : null);
-                                  return GestureDetector(
-                                    onLongPress: () => _showMessageActions(msg),
-                                    child: _Bubble(
-                                      message: msg,
-                                      scheme: scheme,
-                                      replyQuote: replyQuote,
-                                      onReplyTap: msg.replyToMessageId != null
-                                          ? () => _scrollToReplyMessage(
-                                                msg.replyToMessageId!,
-                                              )
-                                          : null,
-                                      showSenderName: isGroup && !msg.isMine,
-                                      senderLabel: msg.senderName ??
-                                          _senderNames[msg.senderId],
-                                      isConversationPinned:
-                                          _pinnedMessage?.id == msg.id,
-                                      onImageTap: msg.type == 'image' &&
-                                              msg.mediaUrl != null
-                                          ? () => _openImage(msg.mediaUrl!)
-                                          : null,
-                                      onVideoTap: msg.type == 'video' &&
-                                              msg.mediaUrl != null
-                                          ? () => _openVideo(msg.mediaUrl!)
-                                          : null,
-                                      onReactionTap: (emoji) =>
-                                          _toggleReaction(msg, emoji),
-                                      onFileTap: msg.type == 'file' &&
-                                              msg.mediaUrl != null
-                                          ? () => _openFileUrl(msg.mediaUrl!)
-                                          : null,
-                                    ),
+                                  final selected = _selectedMessageIds.contains(msg.id);
+                                  return Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      if (_selectionMode)
+                                        _selectionIndicator(selected, scheme),
+                                      Expanded(
+                                        child: Builder(
+                                          builder: (bubbleContext) =>
+                                              GestureDetector(
+                                            behavior: HitTestBehavior.opaque,
+                                            onTap: _selectionMode
+                                                ? () => _toggleMessageSelection(
+                                                      msg.id,
+                                                    )
+                                                : null,
+                                            onLongPress: _selectionMode
+                                                ? null
+                                                : () {
+                                                    final box =
+                                                        bubbleContext.findRenderObject()
+                                                            as RenderBox?;
+                                                    if (box != null) {
+                                                      unawaited(
+                                                        _showMessageActionOverlay(
+                                                          msg,
+                                                          box,
+                                                        ),
+                                                      );
+                                                    }
+                                                  },
+                                            child: _messageBubbleWidget(
+                                              msg: msg,
+                                              scheme: scheme,
+                                              searching: searching,
+                                              isGroup: isGroup,
+                                              replyQuote: replyQuote,
+                                              interactive: !_selectionMode,
+                                              onReplyTap:
+                                                  msg.replyToMessageId != null
+                                                      ? () =>
+                                                          _scrollToReplyMessage(
+                                                            msg.replyToMessageId!,
+                                                          )
+                                                      : null,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   );
                                 },
                               ),
-                if (_showJumpToBottom && _newMessagesBelow > 0)
+                if (_showJumpToBottom && _newMessagesBelow > 0 && !_selectionMode)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Material(
@@ -2151,6 +2645,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ],
             ),
           ),
+          if (_selectionMode)
+            ChatMessageSelectionToolbar(
+              enabled: _selectedMessageIds.isNotEmpty,
+              onDelete: _deleteSelectedMessages,
+              onCopy: _copySelectedMessages,
+              onShare: _shareSelectedMessages,
+              onForward: _forwardSelectedMessages,
+            )
+          else ...[
           if (_editingMessage != null)
             Material(
               color: scheme.primaryContainer.withValues(alpha: 0.35),
@@ -2245,14 +2748,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     tooltip: 'Файл',
                   ),
                   IconButton(
-                    onPressed: _sending || _recording ? null : _pickImage,
-                    icon: const Icon(Icons.image_outlined),
-                    tooltip: 'Фото',
-                  ),
-                  IconButton(
-                    onPressed: _sending || _recording ? null : _pickVideo,
-                    icon: const Icon(Icons.videocam_outlined),
-                    tooltip: 'Видео',
+                    onPressed: _sending || _recording ? null : _showMediaPicker,
+                    icon: const Icon(Icons.perm_media_outlined),
+                    tooltip: 'Фото или видео',
                   ),
                   Expanded(
                     child: TextField(
@@ -2315,7 +2813,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
           ),
+          ],
         ],
+      ),
       ),
     );
   }
@@ -2325,6 +2825,7 @@ class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.message,
     required this.scheme,
+    this.highlightQuery,
     this.replyQuote,
     this.onReplyTap,
     this.showSenderName = false,
@@ -2338,6 +2839,7 @@ class _Bubble extends StatelessWidget {
 
   final ChatMessage message;
   final ColorScheme scheme;
+  final String? highlightQuery;
   final String? replyQuote;
   final VoidCallback? onReplyTap;
   final bool showSenderName;
@@ -2409,8 +2911,9 @@ class _Bubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                    child: Text(
-                      replyQuote!,
+                    child: HighlightedText(
+                      text: replyQuote!,
+                      query: highlightQuery,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2448,10 +2951,11 @@ class _Bubble extends StatelessWidget {
                         Icon(Icons.insert_drive_file_outlined, color: fg),
                         const SizedBox(width: 8),
                         Flexible(
-                          child: Text(
-                            message.content.trim().isEmpty
+                          child: HighlightedText(
+                            text: message.content.trim().isEmpty
                                 ? 'Файл'
                                 : message.content.trim(),
+                            query: highlightQuery,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: fg),
@@ -2468,8 +2972,12 @@ class _Bubble extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: CachedNetworkImage(
-                    imageUrl: message.mediaUrl!,
+                    imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                      ServerConfig.resolveMediaUrl(message.mediaUrl!),
+                    ),
                     fit: BoxFit.cover,
+                    memCacheWidth: 720,
+                    maxWidthDiskCache: 720,
                     errorWidget: (_, __, ___) => SizedBox(
                       height: 120,
                       child: ColoredBox(
@@ -2496,11 +3004,19 @@ class _Bubble extends StatelessWidget {
               ),
               if (message.content.trim().isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(message.content, style: TextStyle(color: fg)),
+                HighlightedText(
+                  text: message.content,
+                  query: highlightQuery,
+                  style: TextStyle(color: fg),
+                ),
               ],
             ]
             else if (message.content.isNotEmpty && message.type != 'voice') ...[
-              Text(message.content, style: TextStyle(color: fg)),
+              HighlightedText(
+                text: message.content,
+                query: highlightQuery,
+                style: TextStyle(color: fg),
+              ),
               if (extractFirstHttpUrl(message.content) case final url?)
                 ChatLinkPreview(
                   url: url,
@@ -2706,16 +3222,18 @@ class _ThreadUserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = user.avatarUrl;
-    final resolved =
-        url != null && url.isNotEmpty ? ServerConfig.resolveMediaUrl(url) : null;
+    final resolved = url != null && url.isNotEmpty
+        ? ServerConfig.resolvePublisherAvatarUrl(url)
+        : null;
     final trimmed = user.displayName.trim();
     final letter = trimmed.isEmpty
         ? '?'
         : trimmed.characters.first.toUpperCase();
     return CircleAvatar(
       radius: 20,
-      backgroundImage:
-          resolved != null ? CachedNetworkImageProvider(resolved) : null,
+      backgroundImage: resolved != null
+          ? ResizeImage(CachedNetworkImageProvider(resolved), width: 80)
+          : null,
       child: resolved == null
           ? Text(letter, style: const TextStyle(fontWeight: FontWeight.w600))
           : null,

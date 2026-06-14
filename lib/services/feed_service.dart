@@ -12,8 +12,7 @@ class FeedService {
   // Используем общий конфиг для определения базового URL
   static String get baseUrl => ServerConfig.apiBaseUrl;
 
-  // Бэкенд принимает feed_type: all|reels|recipes|photos.
-  // UI-режимы (personalized/recent/popular/trending) пока маппим в all.
+  // Бэкенд: feed_type + sort_by.
   static String _toBackendFeedType(FeedSortMode mode) {
     switch (mode) {
       case FeedSortMode.personalized:
@@ -23,6 +22,19 @@ class FeedService {
         return 'all';
     }
   }
+
+  static String _toBackendSortBy(FeedSortMode mode) {
+    switch (mode) {
+      case FeedSortMode.personalized:
+        return 'personalized';
+      case FeedSortMode.recent:
+        return 'recent';
+      case FeedSortMode.popular:
+        return 'popular';
+      case FeedSortMode.trending:
+        return 'trending';
+    }
+  }
   
   /// Получить ленту постов
   static Future<FeedResponse> getFeed({
@@ -30,6 +42,7 @@ class FeedService {
     int limit = 20,
     String feedType = 'all',
     bool followingOnly = false,
+    FeedSortMode sortMode = FeedSortMode.personalized,
   }) async {
     try {
       var token = await AuthService.getAccessTokenForApi();
@@ -42,6 +55,7 @@ class FeedService {
         'limit': limit.toString(),
         'feed_type': feedType,
         'following_only': followingOnly.toString(),
+        'sort_by': _toBackendSortBy(sortMode),
       });
 
       var headers = <String, String>{
@@ -89,6 +103,7 @@ class FeedService {
       cursor: lastPostId,
       limit: limit,
       feedType: _toBackendFeedType(mode),
+      sortMode: mode,
     );
     return response.items;
   }

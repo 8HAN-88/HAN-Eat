@@ -181,13 +181,19 @@ class MediaUploadService {
     required XFile file, // Используем только XFile для кроссплатформенности
     required String fileType, // 'image', 'video', 'audio' or 'document'
     Function(double)? onProgress,
+    /// Для чатов: отправляем сразу после upload, без ожидания транскодинга.
+    bool waitForProcessing = true,
   }) async {
     try {
       // 1. Определяем content type и размер файла
       // XFile работает на всех платформах
       final filePath = file.path;
       final fileSize = await file.length();
-      final contentType = _getContentType(filePath, fileType);
+      final contentType = _getContentType(
+        filePath,
+        fileType,
+        fileName: file.name,
+      );
       
       // 2. Инициализация загрузки
       final initResponse = await initUpload(
@@ -216,7 +222,9 @@ class MediaUploadService {
       
       if (onProgress != null) onProgress(1.0);
       
-      if (fileType == 'video' && completeResponse.processing) {
+      if (waitForProcessing &&
+          fileType == 'video' &&
+          completeResponse.processing) {
         final uploadId = completeResponse.uploadId;
         if (uploadId != null && uploadId.isNotEmpty) {
           return waitForVideoProcessing(
@@ -272,8 +280,30 @@ class MediaUploadService {
     );
   }
   
-  static String _getContentType(String filePath, String fileType) {
-    final extension = filePath.split('.').last.toLowerCase();
+  static String _fileExtension(String filePath, {String? fileName}) {
+    for (final source in [fileName, filePath]) {
+      if (source == null || source.isEmpty) continue;
+      final dot = source.lastIndexOf('.');
+      if (dot >= 0 && dot < source.length - 1) {
+        return source.substring(dot + 1).toLowerCase();
+      }
+    }
+    return '';
+  }
+
+  static String _getContentType(
+    String filePath,
+    String fileType, {
+    String? fileName,
+  }) {
+    var extension = _fileExtension(filePath, fileName: fileName);
+    if (extension.isEmpty) {
+      extension = switch (fileType) {
+        'video' => 'webm',
+        'audio' => 'webm',
+        _ => '',
+      };
+    }
     
     if (fileType == 'image') {
       switch (extension) {
@@ -295,6 +325,8 @@ class MediaUploadService {
           return 'video/quicktime';
         case 'avi':
           return 'video/x-msvideo';
+        case 'webm':
+          return 'video/webm';
         default:
           return 'video/mp4';
       }
@@ -308,8 +340,13 @@ class MediaUploadService {
           return 'audio/mpeg';
         case 'caf':
           return 'audio/x-caf';
+        case 'webm':
+          return 'audio/webm';
+        case 'ogg':
+        case 'opus':
+          return 'audio/ogg';
         default:
-          return 'audio/mp4';
+          return 'audio/webm';
       }
     } else if (fileType == 'document') {
       switch (extension) {

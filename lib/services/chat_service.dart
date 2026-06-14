@@ -12,10 +12,39 @@ import 'server_config.dart';
 
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
-  static const _requestTimeout = Duration(seconds: 15);
+  static const _requestTimeout = Duration(seconds: 25);
 
   static bool _shouldRetry(int statusCode) =>
-      statusCode == 502 || statusCode == 503 || statusCode == 504;
+      statusCode == 401 ||
+      statusCode == 502 ||
+      statusCode == 503 ||
+      statusCode == 504;
+
+  static Future<Map<String, String>?> _headersOrNull() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final token = await AuthService.getAccessTokenForApi();
+      if (token != null && token.isNotEmpty) {
+        return {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        };
+      }
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+      }
+    }
+
+    if (!await AuthService.isAuthenticated()) return null;
+
+    final stale = await AuthService.getAccessToken();
+    if (stale != null && stale.isNotEmpty) {
+      return {
+        'Authorization': 'Bearer $stale',
+        'Content-Type': 'application/json',
+      };
+    }
+    return null;
+  }
 
   static Never _throwForResponse(http.Response response, String fallback) {
     throw apiExceptionFromHttpResponse(
@@ -30,15 +59,6 @@ class ChatService {
     _throwForResponse(response, fallback);
   }
 
-  static Future<Map<String, String>?> _headersOrNull() async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) return null;
-    return {
-      'Authorization': 'Bearer $token',
-      'Content-Type': 'application/json',
-    };
-  }
-
   static Future<String?> _refreshTokenOrNull() async {
     try {
       return await AuthService.refreshToken();
@@ -49,11 +69,14 @@ class ChatService {
 
   static Future<http.Response> _request(
     Future<http.Response> Function(Map<String, String> headers) request, {
-    int retries = 1,
+    int retries = 3,
   }) async {
     var headers = await _headersOrNull();
     if (headers == null) {
-      return http.Response('{"detail":"offline"}', 503);
+      if (!await AuthService.isAuthenticated()) {
+        return http.Response('{"detail":"offline"}', 503);
+      }
+      return http.Response('{"detail":"network_error"}', 503);
     }
 
     Future<http.Response> run(Map<String, String> h) async {
@@ -79,7 +102,9 @@ class ChatService {
       }
     }
     if (retries > 0 && _shouldRetry(response.statusCode)) {
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await Future<void>.delayed(
+        Duration(milliseconds: 350 * (4 - retries)),
+      );
       return _request(request, retries: retries - 1);
     }
     return response;
@@ -645,5 +670,117 @@ class ChatService {
       } catch (_) {}
     }
     return out;
+  }
+
+  static ChatFolder _folderFromResponse(http.Response response, String fallback) {
+    _ensureOk(response, fallback);
+    return ChatFolder.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<List<ChatFolder>> listFolders() async {
+    final uri = Uri.parse('$_base/chats/folders');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить папки');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ChatFolder.fromJson)
+        .toList();
+  }
+
+  static Future<ChatFolder> createFolder({
+    required String name,
+    String? icon,
+    List<int> conversationIds = const [],
+    List<int> channelIds = const [],
+    ChatFolderFilters filters = const ChatFolderFilters(),
+  }) async {
+    final uri = Uri.parse('$_base/chats/folders');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'name': name,
+        if (icon != null && icon.isNotEmpty) 'icon': icon,
+        'conversation_ids': conversationIds,
+        'channel_ids': channelIds,
+        'filters': filters.toJson(),
+      }),
+    );
+    return _folderFromResponse(response, 'Не удалось создать папку');
+  }
+
+  static Future<ChatFolder> updateFolder({
+    required int folderId,
+    String? name,
+    String? icon,
+    List<int>? conversationIds,
+    List<int>? channelIds,
+    ChatFolderFilters? filters,
+  }) async {
+    final uri = Uri.parse('$_base/chats/folders/$folderId');
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (icon != null) body['icon'] = icon;
+    if (conversationIds != null) body['conversation_ids'] = conversationIds;
+    if (channelIds != null) body['channel_ids'] = channelIds;
+    if (filters != null) body['filters'] = filters.toJson();
+    final response = await _patch(uri, body: jsonEncode(body));
+    return _folderFromResponse(response, 'Не удалось обновить папку');
+  }
+
+  static Future<void> deleteFolder({required int folderId}) async {
+    final uri = Uri.parse('$_base/chats/folders/$folderId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось удалить папку');
+  }
+
+  static Future<ChatFolder> addFolderItem({
+    required int folderId,
+    int? conversationId,
+    int? channelId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/folders/$folderId/items');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        if (conversationId != null) 'conversation_id': conversationId,
+        if (channelId != null) 'channel_id': channelId,
+      }),
+    );
+    return _folderFromResponse(response, 'Не удалось добавить в папку');
+  }
+
+  static Future<ChatFolder> removeFolderItem({
+    required int folderId,
+    int? conversationId,
+    int? channelId,
+  }) async {
+    final params = <String, String>{};
+    if (conversationId != null) {
+      params['conversation_id'] = '$conversationId';
+    }
+    if (channelId != null) params['channel_id'] = '$channelId';
+    final uri = Uri.parse('$_base/chats/folders/$folderId/items')
+        .replace(queryParameters: params);
+    final response = await _delete(uri);
+    return _folderFromResponse(response, 'Не удалось убрать из папки');
+  }
+
+  static Future<List<ChatFolder>> reorderFolders(List<int> folderIds) async {
+    final uri = Uri.parse('$_base/chats/folders/reorder');
+    final response = await _post(
+      uri,
+      body: jsonEncode({'folder_ids': folderIds}),
+    );
+    _ensureOk(response, 'Не удалось изменить порядок папок');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(ChatFolder.fromJson)
+        .toList();
   }
 }

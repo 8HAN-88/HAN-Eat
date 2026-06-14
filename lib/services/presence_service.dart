@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'auth_service.dart';
@@ -20,7 +21,10 @@ class PresenceService with WidgetsBindingObserver {
     _started = true;
     WidgetsBinding.instance.addObserver(this);
     _ping();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
+    final interval = kIsWeb
+        ? const Duration(seconds: 30)
+        : const Duration(seconds: 60);
+    _timer = Timer.periodic(interval, (_) {
       if (!_appPaused) _ping();
     });
   }

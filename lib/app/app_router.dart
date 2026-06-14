@@ -67,7 +67,6 @@ import '../features/moderation/presentation/moderation_queue_screen.dart';
 import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/favorites/favorites_page.dart';
-import '../features/profile/user_search_page.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
@@ -81,10 +80,33 @@ import 'router_keys.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
 
-/// Преобразует `haneat://...` в путь для [GoRouter].
+/// Преобразует `haneat://...` или `https://haneat.app/...` в путь для [GoRouter].
 String? parseDeepLinkToGoPath(String raw) {
   try {
     final uri = Uri.parse(raw);
+    if (uri.scheme == 'https' || uri.scheme == 'http') {
+      final host = uri.host.toLowerCase();
+      if (host == 'haneat.app' || host == 'www.haneat.app') {
+        final path = uri.path;
+        if (path == '/shopping/import') {
+          final data = uri.queryParameters['data'];
+          if (data != null && data.isNotEmpty) {
+            return '${ShoppingImportRoute.path}?data=${Uri.encodeComponent(data)}';
+          }
+        }
+        if (path.isNotEmpty && path != '/') {
+          final q = uri.query;
+          return q.isEmpty ? path : '$path?$q';
+        }
+        if (uri.queryParameters.containsKey('ref')) {
+          final ref = uri.queryParameters['ref'];
+          if (ref != null && ref.isNotEmpty) {
+            return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
+          }
+        }
+      }
+      return null;
+    }
     if (uri.scheme != 'haneat') return null;
     if (uri.host == 'recipe' && uri.pathSegments.isNotEmpty) {
       return '/recipe/${uri.pathSegments.first}';
@@ -168,6 +190,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       initialDeepLink = null;
       if (path != null) return path;
     }
+    if (kIsWeb) {
+      final fromBrowser = parseDeepLinkToGoPath(Uri.base.toString());
+      if (fromBrowser != null) return fromBrowser;
+    }
     return BootScreen.path;
   }();
   return GoRouter(
@@ -218,6 +244,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (routeAllowsGuestAccess(loc)) return null;
       final isAuthRoute = loc == LoginRoute.path ||
           loc == RegisterRoute.path ||
+          loc == '/invite' ||
           loc == ProfileAuthRoute.path ||
           loc == ForgotPasswordRoute.path ||
           loc == ResetPasswordRoute.path ||
@@ -506,6 +533,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: BackupPage()),
       ),
       // Auth маршруты
+      GoRoute(
+        path: '/invite',
+        name: 'invite',
+        redirect: (context, state) {
+          final ref = state.uri.queryParameters['ref'];
+          if (ref != null && ref.isNotEmpty) {
+            return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
+          }
+          return RegisterRoute.path;
+        },
+      ),
       GoRoute(
         path: LoginRoute.path,
         name: LoginRoute.name,
@@ -931,8 +969,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: UserSearchRoute.path,
         name: UserSearchRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage<void>(child: UserSearchPage()),
+        pageBuilder: (context, state) => const MaterialPage<void>(
+          child: SearchScreen(scope: SearchScope.main),
+        ),
       ),
       GoRoute(
         path: '${ChatThreadRoute.path}/:conversationId',

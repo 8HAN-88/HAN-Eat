@@ -1,23 +1,21 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 enum AppBrandLogoLayout {
-  /// Квадрат — иконка, миниатюры.
+  /// Квадратная иконка приложения.
   square,
 
-  /// Символ букв целиком (экран входа).
+  /// На экранах входа — компактный логотип по центру.
   horizontal,
 }
 
-/// Логотип HAN Eat.
+/// Логотип HAN Eat (иконка приложения).
 class AppBrandLogo extends StatelessWidget {
   const AppBrandLogo({
     super.key,
     this.size = 80,
-    this.width = 200,
+    this.width = 72,
     this.layout = AppBrandLogoLayout.square,
-    this.borderRadius = 20,
+    this.borderRadius = 16,
   });
 
   final double size;
@@ -25,63 +23,48 @@ class AppBrandLogo extends StatelessWidget {
   final AppBrandLogoLayout layout;
   final double borderRadius;
 
-  static const _squareAsset = 'assets/app_icon_source.png';
-  static const _symbolAsset = 'assets/brand_logo.png';
-
-  /// Соотношение сторон вырезанного символа (758×565).
-  static const _symbolAspect = 758 / 565;
+  static const _iconAsset = 'assets/app_icon_source.png';
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isHorizontal = layout == AppBrandLogoLayout.horizontal;
-    final symbolHeight = width / _symbolAspect;
+    final edge = isHorizontal ? width.clamp(64.0, 80.0) : size;
+    final bg = theme.scaffoldBackgroundColor;
 
-    final symbol = Image.asset(
-      _symbolAsset,
-      fit: BoxFit.contain,
-      width: isHorizontal ? width : size,
-      height: isHorizontal ? symbolHeight : size,
-      filterQuality: FilterQuality.high,
-      errorBuilder: (_, __, ___) => Icon(
-        Icons.restaurant_menu,
-        size: isHorizontal ? width * 0.4 : size,
-        color: theme.colorScheme.primary,
-      ),
-    );
-
-    if (!isHorizontal) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: Image.asset(
-          _squareAsset,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.restaurant_menu,
-            size: size,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-      );
-    }
-
-    // Только символ на прозрачном фоне + мягкое свечение за буквами.
     return Center(
-      child: Stack(
-        alignment: Alignment.center,
-        clipBehavior: Clip.none,
-        children: [
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Opacity(
-              opacity: 0.35,
-              child: symbol,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(borderRadius),
+          boxShadow: isHorizontal
+              ? null
+              : [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Padding(
+            padding: EdgeInsets.all(isHorizontal ? edge * 0.08 : edge * 0.06),
+            child: Image.asset(
+              _iconAsset,
+              width: edge,
+              height: edge,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.restaurant_menu,
+                size: edge * 0.45,
+                color: theme.colorScheme.primary,
+              ),
             ),
           ),
-          symbol,
-        ],
+        ),
       ),
     );
   }

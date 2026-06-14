@@ -1,5 +1,7 @@
 // Новая карточка поста для нового API
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
@@ -120,7 +122,9 @@ class _NewPostCardState extends State<NewPostCard> {
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
     _loadCurrentUserId();
-    _hydrateSpoonacularCommentsCount();
+    if (!kIsWeb) {
+      _hydrateSpoonacularCommentsCount();
+    }
     _syncFeedChannelRepostFuture();
   }
 
@@ -690,7 +694,12 @@ class _NewPostCardState extends State<NewPostCard> {
                         radius: 16,
                         backgroundColor: scheme.surfaceContainerHighest,
                         backgroundImage: url != null
-                            ? CachedNetworkImageProvider(url)
+                            ? ResizeImage(
+                                CachedNetworkImageProvider(
+                                  ServerConfig.resolvePublisherAvatarUrl(url),
+                                ),
+                                width: 64,
+                              )
                             : null,
                         child: url == null
                             ? Text(
@@ -881,12 +890,6 @@ class _NewPostCardState extends State<NewPostCard> {
     final hasFeedVideo =
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
 
-    // Логирование для отладки постов из каналов
-    if (post.communityId != null) {
-      debugPrint(
-          '🔍 [POST CARD] Rendering channel post ${post.id}, communityId=${post.communityId}, channel=${channel?.name}, repostedBy=${repostedBy?.name}');
-    }
-
     // Красивая карточка с тенью и скруглениями
     return PostCardContainer(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -925,8 +928,13 @@ class _NewPostCardState extends State<NewPostCard> {
                           radius: 16,
                           backgroundImage: originalAuthorAvatar != null &&
                                   originalAuthorAvatar.isNotEmpty
-                              ? CachedNetworkImageProvider(
-                                  originalAuthorAvatar,
+                              ? ResizeImage(
+                                  CachedNetworkImageProvider(
+                                    ServerConfig.resolvePublisherAvatarUrl(
+                                      originalAuthorAvatar,
+                                    ),
+                                  ),
+                                  width: 64,
                                 )
                               : null,
                           child: originalAuthorAvatar == null ||
@@ -1005,7 +1013,14 @@ class _NewPostCardState extends State<NewPostCard> {
                     child: CircleAvatar(
                       radius: 20,
                       backgroundImage: displayAvatar != null
-                          ? CachedNetworkImageProvider(displayAvatar)
+                          ? ResizeImage(
+                              CachedNetworkImageProvider(
+                                ServerConfig.resolvePublisherAvatarUrl(
+                                  displayAvatar,
+                                ),
+                              ),
+                              width: 80,
+                            )
                           : null,
                       child: displayAvatar == null
                           ? Text(
@@ -1084,8 +1099,15 @@ class _NewPostCardState extends State<NewPostCard> {
                                     ? CircleAvatar(
                                         radius: 10,
                                         backgroundImage:
-                                            CachedNetworkImageProvider(
-                                                originalAuthorAvatar),
+                                            ResizeImage(
+                                          CachedNetworkImageProvider(
+                                            ServerConfig
+                                                .resolvePublisherAvatarUrl(
+                                              originalAuthorAvatar,
+                                            ),
+                                          ),
+                                          width: 40,
+                                        ),
                                       )
                                     : CircleAvatar(
                                         radius: 10,
@@ -1244,10 +1266,13 @@ class _NewPostCardState extends State<NewPostCard> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
-                                imageUrl: post.linkImage!,
+                                imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                                  post.linkImage!,
+                                ),
                                 height: 150,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
+                                memCacheWidth: 800,
                               ),
                             ),
                           ),
@@ -1569,20 +1594,12 @@ class _NewPostCardState extends State<NewPostCard> {
       void onRecipeTap() {
         final body = post.body;
         if (body == null) {
-          debugPrint('❌ onRecipeTap: body is null');
           return;
         }
 
         try {
-          debugPrint(
-              '🔍 onRecipeTap вызван для post.id=${post.id}, post.type=${post.type}');
-          debugPrint('🔍 body keys: ${body.keys.toList()}');
-          debugPrint('🔍 post.id type: ${post.id.runtimeType}');
-
-          // Получаем изображение из body (включая nested recipe) или media.
           String? imageUrl = _extractRecipeImageUrl(body);
 
-          // Если не найдено, пробуем из media
           if (imageUrl == null || imageUrl.isEmpty) {
             final media = body['media'] as List<dynamic>?;
             if (media != null && media.isNotEmpty) {
@@ -1591,19 +1608,12 @@ class _NewPostCardState extends State<NewPostCard> {
                   (m) => m['type'] == 'image',
                 ) as Map<String, dynamic>?;
                 imageUrl = firstImage?['url'] as String?;
-              } catch (e) {
-                debugPrint('⚠️ Изображение не найдено в media');
-              }
+              } catch (_) {}
             }
           }
 
-          debugPrint('🔍 imageUrl: $imageUrl');
-
-          // Извлекаем ID рецепта
-          // Для рецептов Spoonacular ID уже извлечен в PostModel.fromJson из строки "spoonacular_123"
           int recipeId = post.id;
 
-          // Если это рецепт Spoonacular, проверяем body для подтверждения
           if (body['spoonacular_recipe_id'] != null) {
             final spoonacularId = body['spoonacular_recipe_id'];
             final extractedId = spoonacularId is int
@@ -1611,13 +1621,10 @@ class _NewPostCardState extends State<NewPostCard> {
                 : int.tryParse(spoonacularId.toString());
             if (extractedId != null && extractedId != 0) {
               recipeId = extractedId;
-              debugPrint('🔍 Найден spoonacular_recipe_id в body: $recipeId');
             }
           }
 
-          // Если ID все еще 0, это проблема
           if (recipeId == 0) {
-            debugPrint('❌ Ошибка: recipeId = 0');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -1629,16 +1636,11 @@ class _NewPostCardState extends State<NewPostCard> {
             return;
           }
 
-          debugPrint('✅ Используем recipeId: $recipeId');
-
           final recipe = Recipe.fromPostModel(post);
-          debugPrint('🔍 Создаем Recipe с id=${recipe.id}');
 
-          // Получаем информацию о том, является ли рецепт избранным
           final isFavorite =
               FavoritesService.safeIsFavorite(recipe.id.toString());
 
-          debugPrint('✅ Открываем DetailPage для рецепта ${recipe.id}');
           FeedAnalyticsService.openDetail(
             post,
             source: 'post_card',
@@ -1658,9 +1660,9 @@ class _NewPostCardState extends State<NewPostCard> {
             ),
           );
         } catch (e, stackTrace) {
-          debugPrint('❌ Error parsing recipe from post: $e');
-          debugPrint('❌ Body: $body');
-          debugPrint('❌ Stack trace: $stackTrace');
+          if (kDebugMode) {
+            debugPrint('Recipe open failed: $e\n$stackTrace');
+          }
 
           // Показываем ошибку пользователю
           if (mounted) {

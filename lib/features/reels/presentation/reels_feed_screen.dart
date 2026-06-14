@@ -2,6 +2,7 @@
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../../models/post_model.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
+import '../../../services/server_config.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
@@ -26,7 +28,6 @@ import '../../../widgets/app_empty_state.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../application/reels_feed_refresh_provider.dart';
-import '../../navigation/application/root_shell_chrome.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
   const ReelsFeedScreen({
@@ -65,25 +66,22 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   Object? _cacheLoadError;
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
+  bool _sessionMuted = false;
 
   bool _followingOnly = false;
 
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
 
+  int get _initialVideoPreloadCount => kIsWeb ? 1 : 3;
+
+  int get _lookaheadVideoPreloadCount => kIsWeb ? 0 : 2;
+
   @override
   void initState() {
     super.initState();
     _followingOnly = widget.externalFollowingOnly;
-    _syncRootShellChrome();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startLoadIfNeeded());
-  }
-
-  void _syncRootShellChrome() {
-    syncRootShellBottomNavForReels(
-      embeddedInShell: widget.hideScaffold,
-      tabVisible: widget.isTabVisible,
-    );
   }
 
   @override
@@ -96,16 +94,12 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _loadReels(refresh: true);
       }
     }
-    if (widget.hideScaffold != oldWidget.hideScaffold ||
-        widget.isTabVisible != oldWidget.isTabVisible) {
-      _syncRootShellChrome();
-    }
     if (widget.isTabVisible && !oldWidget.isTabVisible) {
       _startLoadIfNeeded();
       if (_reels.isNotEmpty) {
         _initializeVideos(
           _currentIndex,
-          math.min(3, _reels.length - _currentIndex),
+          math.min(_initialVideoPreloadCount, _reels.length - _currentIndex),
         );
         final c = _videoControllers[_currentIndex];
         if (c != null) VideoPlayerHelper.ensurePlaying(c);
@@ -130,9 +124,6 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   @override
   void dispose() {
-    if (widget.hideScaffold) {
-      clearRootShellBottomNavHide();
-    }
     _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();
@@ -179,7 +170,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           _isLoading = false;
         });
         if (_reels.isNotEmpty) {
-          _initializeVideos(0, math.min(3, _reels.length));
+          _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
         }
         return;
       }
@@ -206,9 +197,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       });
       await FeedApiCache.save(_cacheVariant, nextReels);
 
-      // Инициализируем видео для первых 3 рилсов
       if (_reels.isNotEmpty) {
-        _initializeVideos(0, math.min(3, _reels.length));
+        _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
         _startReelExposure(_currentIndex);
       }
     } catch (e) {
@@ -233,7 +223,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
             _cacheLoadError = e;
           });
           if (_reels.isNotEmpty) {
-            _initializeVideos(0, math.min(3, _reels.length));
+            _initializeVideos(0, math.min(_initialVideoPreloadCount, _reels.length));
             _startReelExposure(_currentIndex);
           }
           ScaffoldMessenger.of(context).showSnackBar(
@@ -274,6 +264,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         final videoController = await VideoPlayerHelper.createPreparedController(
           videoUrl,
           autoPlay: shouldPlay,
+          muted: _sessionMuted,
         );
 
         if (!mounted) {
@@ -305,11 +296,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
     setState(() {
       _currentIndex = index;
-      _isPaused[index] = false; // Сбрасываем состояние паузы для текущего
+      _isPaused[index] = false;
     });
     _startReelExposure(index);
 
-    // Воспроизводим текущее видео
     if (_videoControllers.containsKey(index)) {
       VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
     } else {
@@ -324,9 +314,30 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       _loadReels();
     }
 
-    // Предзагружаем следующие видео
-    if (index + 1 < _reels.length) {
-      _initializeVideos(index + 1, 2);
+    // Предзагружаем следующие видео (на web только текущий)
+    if (_lookaheadVideoPreloadCount > 0 && index + 1 < _reels.length) {
+      _initializeVideos(index + 1, _lookaheadVideoPreloadCount);
+    }
+    _trimVideoControllers();
+  }
+
+  void _setSessionMuted(bool muted) {
+    setState(() => _sessionMuted = muted);
+    for (final controller in _videoControllers.values) {
+      if (controller.value.isInitialized) {
+        controller.setVolume(muted ? 0.0 : 1.0);
+      }
+    }
+  }
+
+  void _trimVideoControllers() {
+    final stale = _videoControllers.keys
+        .where((i) => (i - _currentIndex).abs() > 1)
+        .toList();
+    for (final i in stale) {
+      _videoControllers.remove(i)?.dispose();
+      _isPaused.remove(i);
+      _videoInitFailed.remove(i);
     }
   }
 
@@ -464,6 +475,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
               },
               isCurrent: index == _currentIndex,
               isPaused: _isPaused[index] ?? false,
+              isMuted: _sessionMuted,
+              onMutePreferenceChanged: _setSessionMuted,
               onPauseToggle: (paused) {
                 setState(() {
                   _isPaused[index] = paused;
@@ -542,13 +555,28 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       ],
     );
 
+    final reelFeed = kIsWeb
+        ? ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: pageBody,
+                ),
+              ),
+            ),
+          )
+        : pageBody;
+
     if (widget.hideScaffold) {
-      return pageBody;
+      return reelFeed;
     }
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: pageBody,
+      body: reelFeed,
     );
   }
 
@@ -647,6 +675,8 @@ class ReelCard extends StatefulWidget {
   final VoidCallback? onRetryVideo;
   final bool isCurrent;
   final bool isPaused;
+  final bool isMuted;
+  final ValueChanged<bool> onMutePreferenceChanged;
   final ValueChanged<bool> onPauseToggle;
   final VoidCallback onLike;
   final VoidCallback onComment;
@@ -667,6 +697,8 @@ class ReelCard extends StatefulWidget {
     this.onRetryVideo,
     required this.isCurrent,
     required this.isPaused,
+    required this.isMuted,
+    required this.onMutePreferenceChanged,
     required this.onPauseToggle,
     required this.onLike,
     required this.onComment,
@@ -686,12 +718,17 @@ class ReelCard extends StatefulWidget {
 class _ReelCardState extends State<ReelCard>
     with SingleTickerProviderStateMixin {
   DateTime? _lastTap;
-  bool _isMuted = true;
   bool _showLikeAnimation = false;
   late AnimationController _likeAnimationController;
   late Animation<double> _likeScaleAnimation;
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
+  VideoPlayerController? _progressController;
+
+  static const double _igIconSize = 28;
+  static const double _igActionGap = 18;
+  static const double _igRightInset = 12;
+  static const double _igRailWidth = 52;
 
   @override
   void initState() {
@@ -712,16 +749,78 @@ class _ReelCardState extends State<ReelCard>
         curve: const Interval(0.5, 1.0),
       ),
     );
+    _attachProgressListener(widget.videoController);
   }
 
   @override
   void dispose() {
+    _detachProgressListener();
     for (final r in _descriptionRecognizers) {
       r.dispose();
     }
     _descriptionRecognizers.clear();
     _likeAnimationController.dispose();
     super.dispose();
+  }
+
+  void _detachProgressListener() {
+    _progressController?.removeListener(_onVideoProgress);
+    _progressController = null;
+  }
+
+  void _attachProgressListener(VideoPlayerController? controller) {
+    if (_progressController == controller) return;
+    _progressController?.removeListener(_onVideoProgress);
+    _progressController = controller;
+    _progressController?.addListener(_onVideoProgress);
+  }
+
+  void _onVideoProgress() {
+    if (mounted) setState(() {});
+  }
+
+  double get _playbackProgress {
+    final controller = widget.videoController;
+    if (controller == null || !controller.value.isInitialized) return 0;
+    final durationMs = controller.value.duration.inMilliseconds;
+    if (durationMs <= 0) return 0;
+    return (controller.value.position.inMilliseconds / durationMs).clamp(0.0, 1.0);
+  }
+
+  void _showMoreMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(
+                (widget.reel.isSaved ?? false)
+                    ? Icons.bookmark
+                    : Icons.bookmark_border,
+              ),
+              title: Text(
+                (widget.reel.isSaved ?? false) ? 'Убрать из сохранённых' : 'Сохранить',
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onSave();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('Пожаловаться'),
+              onTap: () {
+                Navigator.pop(ctx);
+                widget.onReport();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _clearDescriptionRecognizers() {
@@ -751,17 +850,11 @@ class _ReelCardState extends State<ReelCard>
   @override
   void didUpdateWidget(ReelCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final vc = widget.videoController;
-    if (vc != null && vc.value.isInitialized) {
-      _isMuted = vc.value.volume < 0.5;
-    }
+    _attachProgressListener(widget.videoController);
   }
 
   Future<void> _toggleMute() async {
-    final vc = widget.videoController;
-    if (vc == null) return;
-    final muted = await VideoPlayerHelper.toggleMute(vc);
-    if (mounted) setState(() => _isMuted = muted);
+    widget.onMutePreferenceChanged(!widget.isMuted);
   }
 
   void _handleSingleTap() {
@@ -770,14 +863,60 @@ class _ReelCardState extends State<ReelCard>
         now.difference(_lastTap!) < const Duration(milliseconds: 300)) {
       _handleDoubleTap();
       _lastTap = null;
-    } else {
-      _lastTap = now;
-      if (widget.videoController != null) {
-        VideoPlayerHelper.toggleOrStart(widget.videoController!).then((paused) {
-          if (mounted) widget.onPauseToggle(paused);
-        });
-      }
+      return;
     }
+    _lastTap = now;
+
+    if (widget.videoController != null) {
+      VideoPlayerHelper.toggleOrStart(widget.videoController!).then((paused) {
+        if (mounted) widget.onPauseToggle(paused);
+      });
+    }
+  }
+
+  Widget _buildVideoPlaceholder() {
+    if (widget.videoInitFailed) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.videocam_off_outlined,
+              color: Colors.white70, size: 48),
+          const SizedBox(height: 12),
+          const Text(
+            'Не удалось загрузить видео',
+            style: TextStyle(color: Colors.white70),
+          ),
+          if (widget.onRetryVideo != null) ...[
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: widget.onRetryVideo,
+              child: const Text('Повторить'),
+            ),
+          ],
+        ],
+      );
+    }
+
+    final thumb = widget.reel.videoThumbnail;
+    if (thumb != null && thumb.isNotEmpty) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedNetworkImage(
+            imageUrl: thumb,
+            fit: BoxFit.cover,
+            memCacheWidth: 860,
+            placeholder: (_, __) => Container(color: Colors.grey[900]),
+            errorWidget: (_, __, ___) => Container(color: Colors.grey[900]),
+          ),
+          const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
+        ],
+      );
+    }
+
+    return const CircularProgressIndicator(color: Colors.white);
   }
 
   @override
@@ -785,6 +924,9 @@ class _ReelCardState extends State<ReelCard>
     final reel = widget.reel;
     final publisherAvatar = PostPublisherDisplay.avatarUrl(reel);
     final publisherInitial = PostPublisherDisplay.avatarInitial(reel);
+    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    final railBottom = bottomSafe + 96;
+    final contentBottom = bottomSafe + 8;
 
     return GestureDetector(
       onTap: _handleSingleTap,
@@ -792,7 +934,6 @@ class _ReelCardState extends State<ReelCard>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Видео (полноэкранное)
           if (widget.videoController != null)
             SizedBox.expand(
               child: CoverNetworkVideo(controller: widget.videoController!),
@@ -800,49 +941,13 @@ class _ReelCardState extends State<ReelCard>
           else
             Container(
               color: Colors.black,
-              child: Center(
-                child: widget.videoInitFailed
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.videocam_off_outlined,
-                              color: Colors.white70, size: 48),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Не удалось загрузить видео',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                          if (widget.onRetryVideo != null) ...[
-                            const SizedBox(height: 12),
-                            TextButton(
-                              onPressed: widget.onRetryVideo,
-                              child: const Text('Повторить'),
-                            ),
-                          ],
-                        ],
-                      )
-                    : const CircularProgressIndicator(color: Colors.white),
-              ),
+              child: Center(child: _buildVideoPlaceholder()),
             ),
 
-          // Индикатор паузы
-          if (widget.isPaused)
-            Container(
-              color: Colors.black.withValues(alpha: 0.3),
-              child: const Center(
-                child: Icon(
-                  Icons.pause_circle_filled,
-                  color: Colors.white,
-                  size: 80,
-                ),
-              ),
-            ),
-
-          // Прозрачный overlay для паузы/плей (не закрываем правую колонку — 100px)
           Positioned(
             left: 0,
             top: 0,
-            right: 100,
+            right: _igRailWidth + _igRightInset,
             bottom: 0,
             child: GestureDetector(
               onTap: _handleSingleTap,
@@ -851,7 +956,66 @@ class _ReelCardState extends State<ReelCard>
             ),
           ),
 
-          // Анимация лайка при двойном тапе
+          if (widget.isPaused)
+            Positioned(
+              left: 0,
+              top: 0,
+              right: _igRailWidth + _igRightInset,
+              bottom: 0,
+              child: GestureDetector(
+                onTap: _handleSingleTap,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.videoController != null) ...[
+                        GestureDetector(
+                          onTap: _toggleMute,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              widget.isMuted
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      GestureDetector(
+                        onTap: _handleSingleTap,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 44,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           if (_showLikeAnimation)
             Center(
               child: AnimatedBuilder(
@@ -872,20 +1036,19 @@ class _ReelCardState extends State<ReelCard>
               ),
             ),
 
-          // Градиент снизу (для читаемости текста)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              height: 300,
+              height: 220,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.8),
-                    Colors.black.withValues(alpha: 0.4),
+                    Colors.black.withValues(alpha: 0.75),
+                    Colors.black.withValues(alpha: 0.35),
                     Colors.transparent,
                   ],
                 ),
@@ -893,193 +1056,203 @@ class _ReelCardState extends State<ReelCard>
             ),
           ),
 
-          // Контент справа (кнопки) — оборачиваем в Material для надёжного hit-testing на web
           Positioned(
-            right: 12,
-            bottom: 100,
+            right: _igRightInset,
+            bottom: railBottom,
             child: Material(
               type: MaterialType.transparency,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Аватар автора (сверху)
-                  GestureDetector(
-                    onTap: widget.onAuthorTap,
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2.5),
-                      ),
-                      child: ClipOval(
-                        child: publisherAvatar != null
-                            ? CachedNetworkImage(
-                                imageUrl: publisherAvatar,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.grey[800],
-                                  child: const Icon(Icons.person,
-                                      color: Colors.white),
-                                ),
-                              )
-                            : Container(
-                                color: Colors.grey[800],
-                                child: Center(
-                                  child: Text(
-                                    publisherInitial,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Лайк
-                  _ActionButton(
+                  _IgReelAction(
                     icon: widget.reel.isLiked
                         ? Icons.favorite
                         : Icons.favorite_border,
                     count: widget.reel.likesCount,
                     onTap: widget.onLike,
-                    color: widget.reel.isLiked ? Colors.red : Colors.white,
+                    color: widget.reel.isLiked ? const Color(0xFFFF3040) : Colors.white,
                   ),
-                  const SizedBox(height: 20),
-
-                  // Комментарий
-                  _ActionButton(
-                    icon: Icons.comment_outlined,
+                  const SizedBox(height: _igActionGap),
+                  _IgReelAction(
+                    icon: Icons.mode_comment_outlined,
                     count: widget.reel.commentsCount,
                     onTap: widget.onComment,
                   ),
-                  const SizedBox(height: 20),
-
-                  // Репост
-                  _ActionButton(
-                    icon: widget.reel.isReposted ?? false
-                        ? Icons.repeat
-                        : Icons.repeat_outlined,
+                  const SizedBox(height: _igActionGap),
+                  _IgReelAction(
+                    icon: (widget.reel.isReposted ?? false)
+                        ? Icons.repeat_on
+                        : Icons.repeat,
                     count: widget.reel.repostsCount,
                     onTap: widget.onRepost,
                     color: (widget.reel.isReposted ?? false)
-                        ? Colors.green
+                        ? const Color(0xFF4CD964)
                         : Colors.white,
                   ),
-                  const SizedBox(height: 20),
-
-                  // Сохранить
-                  _ActionButton(
-                    icon: (widget.reel.isSaved ?? false)
-                        ? Icons.bookmark
-                        : Icons.bookmark_border,
-                    count: 0,
-                    onTap: widget.onSave,
-                    color: (widget.reel.isSaved ?? false)
-                        ? Colors.amber
-                        : Colors.white,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Поделиться
-                  _ActionButton(
-                    icon: Icons.share_outlined,
-                    count: 0,
+                  const SizedBox(height: _igActionGap),
+                  _IgReelAction(
+                    icon: Icons.near_me_outlined,
                     onTap: widget.onShare,
+                    showCount: false,
                   ),
-                  const SizedBox(height: 20),
-
-                  // Звук
-                  if (widget.videoController != null)
-                    _ActionButton(
-                      icon: _isMuted ? Icons.volume_off : Icons.volume_up,
-                      count: 0,
-                      onTap: _toggleMute,
-                      showCount: false,
-                    ),
-                  if (widget.videoController != null) const SizedBox(height: 20),
-
-                  // Пожаловаться
-                  _ActionButton(
-                    icon: Icons.flag_outlined,
-                    count: 0,
-                    onTap: widget.onReport,
+                  const SizedBox(height: _igActionGap),
+                  _IgReelAction(
+                    icon: Icons.more_horiz,
+                    onTap: _showMoreMenu,
+                    showCount: false,
                   ),
                 ],
               ),
             ),
           ),
 
-          // Информация об авторе и описание снизу слева - как в Instagram
           Positioned(
-            bottom: 0,
             left: 12,
-            right: 80,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 20, left: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Имя автора (кликабельное)
-                  GestureDetector(
-                    onTap: widget.onAuthorTap,
-                    child: Text(
-                      PostPublisherDisplay.atLabel(reel),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+            right: _igRailWidth + _igRightInset + 8,
+            bottom: contentBottom + 4,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: widget.onAuthorTap,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: ClipOval(
+                          child: publisherAvatar != null
+                              ? CachedNetworkImage(
+                                  imageUrl:
+                                      ServerConfig.resolvePublisherAvatarUrl(
+                                    publisherAvatar,
+                                  ),
+                                  fit: BoxFit.cover,
+                                  memCacheWidth: 64,
+                                  placeholder: (_, __) =>
+                                      ColoredBox(color: Colors.grey[800]!),
+                                  errorWidget: (_, __, ___) => ColoredBox(
+                                    color: Colors.grey[800]!,
+                                    child: Center(
+                                      child: Text(
+                                        publisherInitial,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : ColoredBox(
+                                  color: Colors.grey[800]!,
+                                  child: Center(
+                                    child: Text(
+                                      publisherInitial,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Описание с поддержкой хештегов и упоминаний
-                  if (widget.reel.description != null &&
-                      widget.reel.description!.isNotEmpty)
-                    _buildDescription(widget.reel.description!),
-
-                  // Хештеги из tags
-                  if (widget.reel.tags != null &&
-                      widget.reel.tags!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: widget.reel.tags!.map((tag) {
-                        return GestureDetector(
-                          onTap: () => widget.onHashtagTap(tag),
-                          child: Text(
-                            '#$tag',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: widget.onAuthorTap,
+                        child: Text(
+                          PostPublisherDisplay.atLabel(reel),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
                           ),
-                        );
-                      }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: widget.onAuthorTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.45),
+                          ),
+                        ),
+                        child: const Text(
+                          'Подписаться',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                if (widget.reel.description != null &&
+                    widget.reel.description!.isNotEmpty)
+                  _buildDescription(widget.reel.description!),
+                if (widget.reel.tags != null &&
+                    widget.reel.tags!.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: widget.reel.tags!.map((tag) {
+                      return GestureDetector(
+                        onTap: () => widget.onHashtagTap(tag),
+                        child: Text(
+                          '#$tag',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
+
+          if (widget.videoController != null &&
+              widget.videoController!.value.isInitialized)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SizedBox(
+                height: 2,
+                child: LinearProgressIndicator(
+                  value: _playbackProgress,
+                  backgroundColor: Colors.white.withValues(alpha: 0.25),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1140,53 +1313,54 @@ class _ReelCardState extends State<ReelCard>
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _IgReelAction extends StatelessWidget {
+  const _IgReelAction({
+    required this.icon,
+    required this.onTap,
+    this.count = 0,
+    this.color,
+    this.showCount = true,
+  });
+
   final IconData icon;
   final int count;
   final VoidCallback onTap;
   final Color? color;
   final bool showCount;
 
-  const _ActionButton({
-    required this.icon,
-    required this.count,
-    required this.onTap,
-    this.color,
-    this.showCount = true,
-  });
-
-  // Используем утилиту для форматирования чисел
-  String _formatCount(int count) => NumberFormatter.formatCount(count);
-
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.all(8),
+    final showNumber = showCount;
+
+    return SizedBox(
+      width: 44,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
             child: Icon(
               icon,
               color: color ?? Colors.white,
-              size: 32,
+              size: 28,
             ),
           ),
-        ),
-        if (showCount) ...[
-          const SizedBox(height: 4),
-          Text(
-            _formatCount(count),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+          if (showNumber) ...[
+            const SizedBox(height: 3),
+            Text(
+              NumberFormatter.formatCount(count),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+              ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

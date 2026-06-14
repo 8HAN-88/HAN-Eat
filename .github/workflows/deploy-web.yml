@@ -1,0 +1,59 @@
+name: Deploy Web (haneat.app)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'scripts/build_web_release.sh'
+      - 'scripts/patch_web_cache_bust.sh'
+      - 'scripts/generate_web_pwa_icons.py'
+      - '.github/workflows/deploy-web.yml'
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Pillow (PWA icons)
+        run: pip install Pillow
+
+      - name: Build web release
+        run: ./scripts/build_web_release.sh
+        env:
+          HANEAT_API_BASE: https://api.haneat.app
+
+      - name: Setup SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.TIMEWEB_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 89.19.216.60 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Rsync to Timeweb
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
+            build/web/ \
+            root@89.19.216.60:/var/www/haneat-web/
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            root@89.19.216.60 \
+            "chown -R www-data:www-data /var/www/haneat-web 2>/dev/null || true"
+
+      - name: Smoke
+        run: |
+          curl -sf https://haneat.app/version.json
+          curl -sfI https://haneat.app/flutter_bootstrap.js | grep -i cache-control

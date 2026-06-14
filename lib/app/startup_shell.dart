@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,8 +11,8 @@ import 'app.dart';
 import 'app_bootstrap_state.dart';
 import 'bootstrap.dart';
 
-/// Фон загрузки — не чисто белый, чтобы отличать от зависшего Launch Screen.
-const _kStartupCanvas = Color(0xFFF2F4F7);
+/// Фон загрузки — совпадает с темой приложения.
+const _kStartupCanvas = Color(0xFFF7F8FA);
 
 class StartupShell extends StatefulWidget {
   const StartupShell({super.key});
@@ -33,14 +34,15 @@ class _StartupShellState extends State<StartupShell> {
   @override
   void initState() {
     super.initState();
-    // Первый кадр — сразу основной UI; bootstrap не блокирует экран.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _openMainUi();
       unawaited(_runBootstrapInBackground());
     });
-    // Страховка: если postFrame не сработал — через 2 с всё равно открываем UI.
-    Future<void>.delayed(const Duration(seconds: 2), () {
-      if (mounted) _openMainUi();
+    // Страховка: если bootstrap завис — не вечный спиннер (сессия уже могла восстановиться).
+    Future<void>.delayed(const Duration(seconds: 12), () {
+      if (mounted && !AppBootstrapState.authReady.value) {
+        debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
+        _openMainUi();
+      }
     });
   }
 
@@ -59,7 +61,7 @@ class _StartupShellState extends State<StartupShell> {
 
   Future<void> _runBootstrapInBackground() async {
     try {
-      if (mounted) setState(() => _status = 'Подключение к серверу…');
+      if (mounted) setState(() => _status = 'Загрузка…');
       await bootstrapEarly().timeout(
         const Duration(seconds: 8),
         onTimeout: () {
@@ -73,15 +75,16 @@ class _StartupShellState extends State<StartupShell> {
     try {
       if (mounted) setState(() => _status = 'Восстановление сессии…');
       await bootstrapServicesForFirstFrame().timeout(
-        const Duration(seconds: 6),
+        Duration(seconds: kIsWeb ? 2 : 6),
         onTimeout: () {
-          debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout 6s');
+          debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout');
         },
       );
     } catch (e, st) {
       debugPrint('bootstrapServicesForFirstFrame: $e\n$st');
       if (mounted) setState(() => _error = e);
     } finally {
+      // Только после восстановления сессии — иначе redirect на /login при F5.
       _openMainUi();
     }
 
@@ -118,13 +121,7 @@ class _StartupShellState extends State<StartupShell> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const AppBrandLogo(size: 72),
-                  const SizedBox(height: 20),
-                  Icon(
-                    Icons.restaurant_rounded,
-                    size: 40,
-                    color: Color(0xFFFF6B35),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
                   const CircularProgressIndicator(
                     color: Color(0xFFFF6B35),
                   ),

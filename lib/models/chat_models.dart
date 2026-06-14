@@ -347,3 +347,123 @@ class ChatUserSearchItem {
     );
   }
 }
+
+class ChatFolderFilters {
+  const ChatFolderFilters({
+    this.groups = false,
+    this.channels = false,
+    this.unreadOnly = false,
+  });
+
+  final bool groups;
+  final bool channels;
+  final bool unreadOnly;
+
+  bool get isEmpty => !groups && !channels && !unreadOnly;
+
+  ChatFolderFilters copyWith({
+    bool? groups,
+    bool? channels,
+    bool? unreadOnly,
+  }) {
+    return ChatFolderFilters(
+      groups: groups ?? this.groups,
+      channels: channels ?? this.channels,
+      unreadOnly: unreadOnly ?? this.unreadOnly,
+    );
+  }
+
+  factory ChatFolderFilters.fromJson(Map<String, dynamic>? json) {
+    if (json == null) return const ChatFolderFilters();
+    return ChatFolderFilters(
+      groups: json['groups'] as bool? ?? false,
+      channels: json['channels'] as bool? ?? false,
+      unreadOnly: json['unread_only'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'groups': groups,
+        'channels': channels,
+        'unread_only': unreadOnly,
+      };
+}
+
+class ChatFolder {
+  const ChatFolder({
+    required this.id,
+    required this.name,
+    this.icon,
+    this.position = 0,
+    this.conversationIds = const [],
+    this.channelIds = const [],
+    this.filters = const ChatFolderFilters(),
+  });
+
+  final int id;
+  final String name;
+  final String? icon;
+  final int position;
+  final List<int> conversationIds;
+  final List<int> channelIds;
+  final ChatFolderFilters filters;
+
+  String get displayLabel {
+    final emoji = icon?.trim();
+    if (emoji != null && emoji.isNotEmpty) return '$emoji $name';
+    return name;
+  }
+
+  bool containsConversation(int conversationId) =>
+      conversationIds.contains(conversationId);
+
+  bool containsChannel(int channelId) => channelIds.contains(channelId);
+
+  ChatFolder copyWith({
+    int? id,
+    String? name,
+    String? icon,
+    int? position,
+    List<int>? conversationIds,
+    List<int>? channelIds,
+    ChatFolderFilters? filters,
+  }) {
+    return ChatFolder(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      position: position ?? this.position,
+      conversationIds: conversationIds ?? this.conversationIds,
+      channelIds: channelIds ?? this.channelIds,
+      filters: filters ?? this.filters,
+    );
+  }
+
+  factory ChatFolder.fromJson(Map<String, dynamic> json) {
+    return ChatFolder(
+      id: _parseInt(json['id']),
+      name: json['name'] as String? ?? '',
+      icon: json['icon'] as String?,
+      position: _parseInt(json['position']),
+      conversationIds: (json['conversation_ids'] as List<dynamic>? ?? [])
+          .map(_parseInt)
+          .toList(),
+      channelIds: (json['channel_ids'] as List<dynamic>? ?? [])
+          .map(_parseInt)
+          .toList(),
+      filters: ChatFolderFilters.fromJson(
+        json['filters'] as Map<String, dynamic>?,
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'icon': icon,
+        'position': position,
+        'conversation_ids': conversationIds,
+        'channel_ids': channelIds,
+        'filters': filters.toJson(),
+      };
+}

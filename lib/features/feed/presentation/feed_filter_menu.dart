@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/post_types.dart';
+
 /// Пункты фильтра контента ленты (подписки / рекомендации).
 List<PopupMenuEntry<String>> feedContentFilterMenuItems(String current) {
   const options = <String, String>{
@@ -21,6 +23,34 @@ List<PopupMenuEntry<String>> feedContentFilterMenuItems(String current) {
         ),
       )
       .toList();
+}
+
+/// Фильтр контента + сортировка (подписки / рекомендации).
+List<PopupMenuEntry<String>> feedTabFilterMenuItems({
+  required String currentType,
+  required FeedSortMode currentSort,
+}) {
+  return [
+    ...feedContentFilterMenuItems(currentType),
+    const PopupMenuDivider(),
+    const PopupMenuItem<String>(
+      enabled: false,
+      child: Text(
+        'Сортировка',
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    ),
+    for (final mode in FeedSortMode.values)
+      PopupMenuItem<String>(
+        value: 'sort:${mode.value}',
+        child: Text(
+          mode.label,
+          style: TextStyle(
+            fontWeight: currentSort == mode ? FontWeight.bold : null,
+          ),
+        ),
+      ),
+  ];
 }
 
 /// Пункты фильтра вкладки «Рилсы».

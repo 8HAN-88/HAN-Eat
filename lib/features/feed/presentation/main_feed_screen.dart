@@ -1,5 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
+import '../../../services/feed_ui_prefs.dart';
+import '../../../models/post_types.dart';
 import 'subscriptions_feed_screen.dart';
 import '../../reels/presentation/reels_feed_screen.dart';
 import 'new_feed_screen.dart';
@@ -22,7 +27,12 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
 
   String _subsFeedType = 'all';
   String _recFeedType = 'all';
+  FeedSortMode _subsSortMode = FeedSortMode.recent;
+  FeedSortMode _recSortMode = FeedSortMode.personalized;
   bool _reelsFollowingOnly = false;
+
+  /// На web не грузим все табы сразу — только активный и уже открытые.
+  final Set<int> _activatedTabs = kIsWeb ? {1} : {0, 1, 2};
 
   @override
   void initState() {
@@ -30,6 +40,32 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
     _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
     _tabController.addListener(_onTabUi);
     feedScrollChromeActive.value = _tabController.index != 2;
+    unawaited(_restoreUiPrefs());
+  }
+
+  Future<void> _restoreUiPrefs() async {
+    final results = await Future.wait([
+      FeedUiPrefs.loadTabIndex(),
+      FeedUiPrefs.loadSubsFeedType(),
+      FeedUiPrefs.loadSubsSortMode(),
+      FeedUiPrefs.loadRecFeedType(),
+      FeedUiPrefs.loadRecSortMode(),
+      FeedUiPrefs.loadReelsFollowingOnly(),
+    ]);
+    if (!mounted) return;
+    final tab = results[0] as int;
+    setState(() {
+      _subsFeedType = results[1] as String;
+      _subsSortMode = results[2] as FeedSortMode;
+      _recFeedType = results[3] as String;
+      _recSortMode = results[4] as FeedSortMode;
+      _reelsFollowingOnly = results[5] as bool;
+    });
+    if (tab != _tabController.index) {
+      _tabController.index = tab;
+      feedScrollChromeActive.value = tab != 2;
+      if (kIsWeb) _activatedTabs.add(tab);
+    }
   }
 
   void _onTabUi() {
@@ -37,7 +73,13 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
     final isReels = _tabController.index == 2;
     feedScrollChromeActive.value = !isReels;
     if (isReels) resetFeedScrollChrome();
-    if (mounted) setState(() {});
+    unawaited(FeedUiPrefs.saveTabIndex(_tabController.index));
+    if (kIsWeb) {
+      final added = _activatedTabs.add(_tabController.index);
+      if (added && mounted) setState(() {});
+    } else if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -70,16 +112,29 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                 child: FeedSectionTabs(
                   controller: _tabController,
                   subsFeedType: _subsFeedType,
+                  subsSortMode: _subsSortMode,
                   recFeedType: _recFeedType,
+                  recSortMode: _recSortMode,
                   reelsFollowingOnly: _reelsFollowingOnly,
                   onSubsFilterChanged: (value) {
                     setState(() => _subsFeedType = value);
+                    unawaited(FeedUiPrefs.saveSubsFeedType(value));
+                  },
+                  onSubsSortChanged: (mode) {
+                    setState(() => _subsSortMode = mode);
+                    unawaited(FeedUiPrefs.saveSubsSortMode(mode));
                   },
                   onRecFilterChanged: (value) {
                     setState(() => _recFeedType = value);
+                    unawaited(FeedUiPrefs.saveRecFeedType(value));
+                  },
+                  onRecSortChanged: (mode) {
+                    setState(() => _recSortMode = mode);
+                    unawaited(FeedUiPrefs.saveRecSortMode(mode));
                   },
                   onReelsFilterChanged: (followingOnly) {
                     setState(() => _reelsFollowingOnly = followingOnly);
+                    unawaited(FeedUiPrefs.saveReelsFollowingOnly(followingOnly));
                   },
                 ),
               ),
@@ -119,11 +174,15 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                 controller: _tabController,
                 children: [
                   SubscriptionsFeedScreen(
+                    deferLoad: kIsWeb && !_activatedTabs.contains(0),
                     externalFeedType: _subsFeedType,
+                    externalSortMode: _subsSortMode,
                   ),
                   NewFeedScreen(
                     hideScaffold: true,
+                    deferLoad: kIsWeb && !_activatedTabs.contains(1),
                     externalFeedType: _recFeedType,
+                    externalSortMode: _recSortMode,
                   ),
                   ReelsFeedScreen(
                     hideScaffold: true,

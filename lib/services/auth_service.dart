@@ -178,6 +178,7 @@ class AuthService {
         debugPrint(
           '✅ AuthService: сессия из кэша (${user.email}), deferRefresh=$deferTokenRefresh',
         );
+        sessionRevision.value++;
         if (deferTokenRefresh) {
           unawaited(_refreshSessionOnStartup());
         } else {
@@ -187,6 +188,33 @@ class AuthService {
       }
 
       instance._cachedUser = null;
+      if (kIsWeb) {
+        for (var attempt = 0; attempt < 4; attempt++) {
+          await Future<void>.delayed(Duration(milliseconds: 40 * (attempt + 1)));
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.reload();
+            final retryUser = await getCurrentUser();
+            final retryToken = await getAccessToken();
+            if (retryUser != null && retryToken != null) {
+              instance._cachedUser = retryUser;
+              AccountSessionService.restoreCachedUser(retryUser);
+              sessionRevision.value++;
+              debugPrint(
+                '✅ AuthService: сессия из кэша (web retry ${attempt + 1})',
+              );
+              if (deferTokenRefresh) {
+                unawaited(_refreshSessionOnStartup());
+              } else {
+                await _refreshSessionOnStartup();
+              }
+              return;
+            }
+          } catch (e) {
+            debugPrint('⚠️ AuthService web retry ${attempt + 1}: $e');
+          }
+        }
+      }
       if (!deferTokenRefresh) {
         await Future.delayed(const Duration(milliseconds: 100));
         try {
@@ -738,13 +766,26 @@ class AuthService {
         } else {
           debugPrint('⚠️ getAccessTokenForApi: $e');
         }
-        return null;
+        final stale = await getAccessToken();
+        return stale != null && stale.isNotEmpty ? stale : null;
       }
     }
     if (!_accessTokenLooksExpired(token)) return token;
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getString(_refreshTokenKey) == null) {
+        final stale = await getAccessToken();
+        if (stale != null &&
+            stale.isNotEmpty &&
+            !_accessTokenLooksExpired(stale)) {
+          return stale;
+        }
+        if (instance._cachedUser != null) {
+          debugPrint(
+            '⚠️ getAccessTokenForApi: нет refresh, остаёмся в аккаунте (кэш)',
+          );
+          return stale;
+        }
         await logout();
         return null;
       }
@@ -755,10 +796,10 @@ class AuthService {
         return null;
       }
       debugPrint('⚠️ getAccessTokenForApi: $e');
-      return _accessTokenLooksExpired(token) ? null : token;
+      return token;
     } catch (e) {
       debugPrint('⚠️ getAccessTokenForApi: refresh failed: $e');
-      return _accessTokenLooksExpired(token) ? null : token;
+      return token;
     }
   }
   
@@ -840,6 +881,14 @@ class AuthService {
         return newAccessToken;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
+        // Параллельный refresh мог уже обновить токены — не выходим зря.
+        final latestAccess = prefs.getString(_accessTokenKey);
+        if (latestAccess != null &&
+            latestAccess.isNotEmpty &&
+            latestAccess != refreshToken &&
+            !_accessTokenLooksExpired(latestAccess)) {
+          return latestAccess;
+        }
         await logout();
         throw AuthException('Сессия истекла. Войдите снова.');
       }

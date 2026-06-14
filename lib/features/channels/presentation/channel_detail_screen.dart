@@ -2,6 +2,7 @@
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -266,7 +267,14 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                   radius: 18,
                   backgroundImage:
                       c.avatarUrl != null && c.avatarUrl!.isNotEmpty
-                          ? CachedNetworkImageProvider(c.avatarUrl!)
+                          ? ResizeImage(
+                              CachedNetworkImageProvider(
+                                ServerConfig.resolvePublisherAvatarUrl(
+                                  c.avatarUrl!,
+                                ),
+                              ),
+                              width: 72,
+                            )
                           : null,
                   child: c.avatarUrl == null || c.avatarUrl!.isEmpty
                       ? Text(

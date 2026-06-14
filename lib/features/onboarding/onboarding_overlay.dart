@@ -81,6 +81,13 @@ class _OnboardingContentState extends State<_OnboardingContent> {
       body: 'Ищите рецепты, сканируйте блюда по фото и планируйте питание.',
     ),
     _OnboardingPage(
+      icon: Icons.dynamic_feed_outlined,
+      title: 'Лента',
+      body:
+          'Подписки — посты друзей. Рекомендации — новое по вашим интересам. '
+          'Рилсы — короткие видео на весь экран.',
+    ),
+    _OnboardingPage(
       icon: Icons.camera_alt_outlined,
       title: 'Сканер блюд',
       body: 'Сфотографируйте тарелку — узнайте калории и получите похожие рецепты.',
@@ -96,6 +103,21 @@ class _OnboardingContentState extends State<_OnboardingContent> {
       body:
           'Персональный план составляется в разделе «План питания» — '
           'короткая анкета откроется только когда вы решите его создать.',
+    ),
+    _OnboardingPage(
+      icon: Icons.forum_outlined,
+      title: 'Чаты и папки',
+      body:
+          'Личные сообщения, группы и каналы — в одном месте. '
+          'Создавайте папки как в Telegram: перетаскивайте их и '
+          'добавляйте автофильтры по непрочитанным и типу чата.',
+    ),
+    _OnboardingPage(
+      icon: Icons.notifications_active_outlined,
+      title: 'Уведомления',
+      body:
+          'Колокольчик в ленте показывает новую активность. '
+          'В профиле можно настроить, о чём получать push-уведомления.',
     ),
   ];
 

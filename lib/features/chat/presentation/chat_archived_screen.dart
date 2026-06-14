@@ -34,6 +34,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
       _error = null;
     });
     try {
+      await ChannelSheetPrefs.syncFromServer(force: true);
       final results = await Future.wait<Object>([
         ChatService.listConversations(archived: true),
         ChannelSheetPrefs.listArchivedIds(),

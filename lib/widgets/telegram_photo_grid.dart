@@ -314,8 +314,11 @@ class TelegramPhotoGrid extends StatelessWidget {
     
     // Локальный API часто отдаёт localhost:5000 — подставляем baseUrl (порт 5001 и т.д.)
     final resolvedUrl = isLocalFile ? url : ServerConfig.resolveMediaUrl(url);
-    final optimizedUrl =
-        isLocalFile ? resolvedUrl : getOptimizedImageUrl(resolvedUrl);
+    final optimizedUrl = isLocalFile
+        ? resolvedUrl
+        : ServerConfig.resolvePublisherAvatarUrl(
+            getOptimizedImageUrl(resolvedUrl),
+          );
     
     if (isLocalFile) {
       if (kIsWeb) {
@@ -547,8 +550,11 @@ class _ModernPhotoCarouselState extends State<_ModernPhotoCarousel> {
     final scheme = Theme.of(context).colorScheme;
     final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
     final resolvedUrl = isLocalFile ? url : ServerConfig.resolveMediaUrl(url);
-    final optimizedUrl =
-        isLocalFile ? resolvedUrl : getOptimizedImageUrl(resolvedUrl);
+    final optimizedUrl = isLocalFile
+        ? resolvedUrl
+        : ServerConfig.resolvePublisherAvatarUrl(
+            getOptimizedImageUrl(resolvedUrl),
+          );
 
     Widget fallback(IconData icon, {Color? color}) {
       return Container(

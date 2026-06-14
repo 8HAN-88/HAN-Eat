@@ -328,9 +328,95 @@ class ChannelService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return ChannelsListResponse.fromJson(data);
-    } else {
-      throw Exception('Failed to load channels');
     }
+    String detail = 'Не удалось загрузить каналы';
+    try {
+      final err = jsonDecode(response.body) as Map<String, dynamic>?;
+      detail = err?['detail']?.toString() ?? detail;
+    } catch (_) {}
+    throw Exception('$detail (${response.statusCode})');
+  }
+
+  /// Сумма непрочитанных постов в inbox каналов (один запрос).
+  static Future<int> inboxUnreadCount() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) return 0;
+
+    final uri = Uri.parse('$baseUrl/channels/inbox-unread-count');
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['count'] as int? ?? 0;
+    }
+    throw Exception('Failed to load channel inbox unread count');
+  }
+
+  static Future<List<ChannelInboxPrefs>> listInboxPrefs() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) return [];
+
+    final uri = Uri.parse('$baseUrl/channels/inbox-prefs');
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final items = data['items'] as List<dynamic>? ?? [];
+      return items
+          .whereType<Map<String, dynamic>>()
+          .map(ChannelInboxPrefs.fromJson)
+          .toList();
+    }
+    throw Exception('Failed to load channel inbox prefs');
+  }
+
+  static Future<ChannelInboxPrefs> patchInboxPrefs({
+    required int channelId,
+    bool? isFavorite,
+    bool? inboxArchived,
+    bool? showInFeed,
+    bool? notificationsEnabled,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final body = <String, dynamic>{};
+    if (isFavorite != null) body['is_favorite'] = isFavorite;
+    if (inboxArchived != null) body['inbox_archived'] = inboxArchived;
+    if (showInFeed != null) body['show_in_feed'] = showInFeed;
+    if (notificationsEnabled != null) {
+      body['notifications_enabled'] = notificationsEnabled;
+    }
+
+    final uri = Uri.parse('$baseUrl/channels/$channelId/inbox-prefs');
+    final response = await http.patch(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return ChannelInboxPrefs.fromJson(data);
+    }
+    throw Exception('Failed to update channel inbox prefs');
   }
 
   /// Присоединиться к каналу
@@ -1609,6 +1695,40 @@ class ChannelPostsResponse {
           .map((item) => item as Map<String, dynamic>)
           .toList(),
       total: json['total'] as int,
+    );
+  }
+}
+
+class ChannelInboxPrefs {
+  const ChannelInboxPrefs({
+    required this.channelId,
+    this.isFavorite = false,
+    this.inboxArchived = false,
+    this.showInFeed = true,
+    this.notificationsEnabled = true,
+  });
+
+  final int channelId;
+  final bool isFavorite;
+  final bool inboxArchived;
+  final bool showInFeed;
+  final bool notificationsEnabled;
+
+  Map<String, dynamic> toJson() => {
+        'channel_id': channelId,
+        'is_favorite': isFavorite,
+        'inbox_archived': inboxArchived,
+        'show_in_feed': showInFeed,
+        'notifications_enabled': notificationsEnabled,
+      };
+
+  factory ChannelInboxPrefs.fromJson(Map<String, dynamic> json) {
+    return ChannelInboxPrefs(
+      channelId: json['channel_id'] as int? ?? 0,
+      isFavorite: json['is_favorite'] as bool? ?? false,
+      inboxArchived: json['inbox_archived'] as bool? ?? false,
+      showInFeed: json['show_in_feed'] as bool? ?? true,
+      notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
     );
   }
 }

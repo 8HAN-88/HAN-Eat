@@ -1,13 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../services/search_service.dart';
+import '../../../../services/chat_service.dart';
+import '../../../../services/channel_service.dart';
+import '../../../../services/server_config.dart';
 import '../../../../models/post_model.dart';
+import '../../../../models/chat_models.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../../widgets/post_card_skeleton.dart';
+import '../../../../widgets/highlighted_text.dart';
 import '../../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
 import '../application/search_scope.dart';
+
+enum _MainSearchTab { all, posts, people, channels }
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({
@@ -38,9 +50,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   
   // Результаты поиска
   List<PostModel> _posts = [];
+  List<ChatUserSearchItem> _people = [];
+  List<Channel> _channels = [];
+  List<String> _recentQueries = [];
   int _total = 0;
   int _offset = 0;
   static const int _limit = 20;
+  
+  _MainSearchTab _mainTab = _MainSearchTab.all;
   
   // Фильтры
   String? _selectedPostType;
@@ -63,7 +80,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       widget.scope?.title ?? 'Поиск';
 
   String get _searchHint =>
-      widget.scope?.hint ?? 'Поиск по постам и публикациям...';
+      widget.scope?.hint ?? 'Посты, люди, рилсы, рецепты…';
+
+  bool get _channelsOnlyMode => widget.scope == SearchScope.channels;
+
+  bool get _unifiedPeopleSearch =>
+      !_recipeSearch &&
+      !_channelsOnlyMode &&
+      (widget.scope == null || widget.scope == SearchScope.main);
+
+  bool get _searchPosts =>
+      !_channelsOnlyMode &&
+      (!_unifiedPeopleSearch ||
+          _mainTab == _MainSearchTab.all ||
+          _mainTab == _MainSearchTab.posts);
+
+  bool get _searchPeople =>
+      _unifiedPeopleSearch &&
+      (_mainTab == _MainSearchTab.all || _mainTab == _MainSearchTab.people);
+
+  bool get _searchChannels =>
+      _channelsOnlyMode ||
+      (_unifiedPeopleSearch &&
+          (_mainTab == _MainSearchTab.all ||
+              _mainTab == _MainSearchTab.channels));
+
+  static const _historyKey = 'main_search_history_v1';
 
   @override
   void initState() {
@@ -75,6 +117,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         widget.feedType != null && widget.feedType != 'all';
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
+    _loadRecentQueries();
+    if (_channelsOnlyMode) _mainTab = _MainSearchTab.channels;
     final q = widget.initialQuery?.trim();
     if (q != null && q.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,6 +134,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRecentQueries() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_historyKey) ?? [];
+    if (mounted) setState(() => _recentQueries = raw.take(12).toList());
+  }
+
+  Future<void> _rememberQuery(String query) async {
+    final q = query.trim();
+    if (q.length < 2) return;
+    final next = [q, ..._recentQueries.where((e) => e != q)].take(12).toList();
+    _recentQueries = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, next);
   }
 
   void _onSearchChanged() {
@@ -130,6 +189,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (query.isEmpty) {
       setState(() {
         _posts = [];
+        _people = [];
+        _channels = [];
         _total = 0;
         _error = null;
       });
@@ -139,6 +200,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (reset) {
       _offset = 0;
       _posts = [];
+      if (_searchPeople) _people = [];
+      if (_searchChannels) _channels = [];
     }
 
     setState(() {
@@ -175,6 +238,43 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return;
       }
 
+      List<ChatUserSearchItem>? peopleResult;
+      if (_searchPeople && reset) {
+        try {
+          peopleResult = await ChatService.searchUsers(query);
+        } catch (e) {
+          if (_mainTab == _MainSearchTab.people) rethrow;
+        }
+      }
+
+      List<Channel>? channelsResult;
+      if (_searchChannels && reset) {
+        try {
+          final resp = await ChannelService.listChannels(
+            search: query,
+            limit: 30,
+            catalog: true,
+          );
+          channelsResult = resp.items;
+        } catch (e) {
+          if (_mainTab == _MainSearchTab.channels || _channelsOnlyMode) {
+            rethrow;
+          }
+        }
+      }
+
+      if (!_searchPosts) {
+        if (mounted) {
+          setState(() {
+            if (peopleResult != null) _people = peopleResult;
+            if (channelsResult != null) _channels = channelsResult;
+            _isLoading = false;
+          });
+          if (reset) unawaited(_rememberQuery(query));
+        }
+        return;
+      }
+
       final response = await SearchService.searchPosts(
         query: query,
         postType: _selectedPostType,
@@ -191,6 +291,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       if (mounted) {
         setState(() {
+          if (reset && peopleResult != null) {
+            _people = peopleResult;
+          }
+          if (reset && channelsResult != null) {
+            _channels = channelsResult;
+          }
           if (reset) {
             _posts = response.posts;
           } else {
@@ -200,6 +306,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           _offset = _offset + response.posts.length;
           _isLoading = false;
         });
+        if (reset) unawaited(_rememberQuery(query));
       }
     } catch (e) {
       if (mounted) {
@@ -212,8 +319,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _loadMore() async {
-    if (_isLoading || _offset >= _total) return;
+    if (_isLoading || !_searchPosts || _offset >= _total) return;
     await _performSearch(reset: false);
+  }
+
+  Future<void> _openPersonChat(ChatUserSearchItem user) async {
+    try {
+      final conv = await ChatService.openDirectChat(user.id);
+      if (!mounted) return;
+      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   void _clearFilters() {
@@ -235,12 +355,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       appBar: AppBar(
         title: Text(_screenTitle),
         actions: [
-          IconButton(
-            icon: Icon(_showFilters ? Icons.filter_alt : Icons.filter_alt_outlined),
-            onPressed: () {
-              setState(() => _showFilters = !_showFilters);
-            },
-          ),
+          if (!_unifiedPeopleSearch || _mainTab != _MainSearchTab.people)
+            IconButton(
+              icon: Icon(
+                  _showFilters ? Icons.filter_alt : Icons.filter_alt_outlined),
+              onPressed: () {
+                setState(() => _showFilters = !_showFilters);
+              },
+            ),
         ],
       ),
       body: LayoutBuilder(
@@ -264,6 +386,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   _searchController.clear();
                                   setState(() {
                                     _posts = [];
+                                    _people = [];
+                                    _channels = [];
                                     _total = 0;
                                     _error = null;
                                   });
@@ -281,6 +405,40 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         }
                       },
                     ),
+                    if (_unifiedPeopleSearch) ...[
+                      const SizedBox(height: 12),
+                      SegmentedButton<_MainSearchTab>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _MainSearchTab.all,
+                            label: Text('Все'),
+                          ),
+                          ButtonSegment(
+                            value: _MainSearchTab.posts,
+                            label: Text('Посты'),
+                          ),
+                          ButtonSegment(
+                            value: _MainSearchTab.people,
+                            label: Text('Люди'),
+                          ),
+                          ButtonSegment(
+                            value: _MainSearchTab.channels,
+                            label: Text('Каналы'),
+                          ),
+                        ],
+                        selected: {_mainTab},
+                        onSelectionChanged: (selection) {
+                          setState(() => _mainTab = selection.first);
+                          if (_searchController.text.trim().isNotEmpty) {
+                            _performSearch();
+                          }
+                        },
+                      ),
+                    ],
+                    if (_searchController.text.trim().isEmpty &&
+                        _recentQueries.isNotEmpty &&
+                        !_recipeSearch)
+                      _buildRecentQueries(),
                     // Автодополнение
                     if (_showSuggestions && _suggestions.isNotEmpty)
                       Container(
@@ -549,12 +707,53 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
+  Widget _buildRecentQueries() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _recentQueries
+              .map(
+                (q) => ActionChip(
+                  label: Text(q),
+                  onPressed: () {
+                    _searchController.text = q;
+                    _performSearch();
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildResults() {
-    if (_isLoading && _posts.isEmpty) {
+    final query = _searchController.text.trim();
+    final showPeople = _searchPeople && _people.isNotEmpty;
+    final showPosts = _searchPosts && _posts.isNotEmpty;
+    final showChannels = _searchChannels && _channels.isNotEmpty;
+    final peopleOnly = _unifiedPeopleSearch && _mainTab == _MainSearchTab.people;
+    final channelsOnly =
+        _channelsOnlyMode || (_unifiedPeopleSearch && _mainTab == _MainSearchTab.channels);
+
+    if (_isLoading &&
+        _posts.isEmpty &&
+        _people.isEmpty &&
+        _channels.isEmpty) {
+      if (peopleOnly) {
+        return const Center(child: CircularProgressIndicator());
+      }
       return const PostListSkeletonLoader(itemCount: 5);
     }
 
-    if (_error != null && _posts.isEmpty) {
+    if (_error != null &&
+        _posts.isEmpty &&
+        _people.isEmpty &&
+        _channels.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -582,19 +781,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
 
-    if (_posts.isEmpty && !_isLoading) {
+    if (_posts.isEmpty &&
+        _people.isEmpty &&
+        _channels.isEmpty &&
+        !_isLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.search_off,
+              query.isEmpty ? Icons.search_off : Icons.person_search_outlined,
               size: 64,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
             Text(
-              'Введите запрос для поиска',
+              query.isEmpty
+                  ? 'Введите запрос для поиска'
+                  : 'Ничего не найдено',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
@@ -610,24 +814,89 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: () => _performSearch(),
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _posts.length + (_isLoading ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _posts.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
+    if (peopleOnly) {
+      return RefreshIndicator(
+        onRefresh: () => _performSearch(),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _people.length,
+          separatorBuilder: (_, __) =>
+              const Divider(height: 1, indent: 72),
+          itemBuilder: (context, index) =>
+              _buildPersonTile(_people[index], query),
+        ),
+      );
+    }
 
-          final post = _posts[index];
-          return Padding(
+    if (channelsOnly) {
+      return RefreshIndicator(
+        onRefresh: () => _performSearch(),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _channels.length,
+          separatorBuilder: (_, __) =>
+              const Divider(height: 1, indent: 72),
+          itemBuilder: (context, index) =>
+              _buildChannelTile(_channels[index], query),
+        ),
+      );
+    }
+
+    final children = <Widget>[];
+
+    if (showPeople) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'Люди',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      );
+      for (final person in _people) {
+        children.add(_buildPersonTile(person, query));
+      }
+    }
+
+    if (showChannels) {
+      if (showPeople || showPosts) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Text(
+              'Каналы',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        );
+      }
+      for (final channel in _channels) {
+        children.add(_buildChannelTile(channel, query));
+      }
+    }
+
+    if (showPosts) {
+      if (showPeople || showChannels) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Text(
+              'Посты',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        );
+      }
+      for (final post in _posts) {
+        children.add(
+          Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: NewPostCard(
               post: post,
@@ -642,9 +911,112 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 context.push(ProfileRoute.withUserId(post.userId));
               },
             ),
-          );
-        },
+          ),
+        );
+      }
+      if (_isLoading) {
+        children.add(
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+        );
+      }
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _performSearch(),
+      child: ListView(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        children: children,
       ),
+    );
+  }
+
+  Widget _buildPersonTile(ChatUserSearchItem user, String query) {
+    final brief = user.brief;
+    final avatarUrl = brief.avatarUrl;
+    final resolved = avatarUrl != null && avatarUrl.isNotEmpty
+        ? ServerConfig.resolvePublisherAvatarUrl(avatarUrl)
+        : null;
+    final displayName = brief.displayName;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: resolved != null
+            ? ResizeImage(CachedNetworkImageProvider(resolved), width: 96)
+            : null,
+        child: resolved == null
+            ? Text(
+                displayName.isNotEmpty
+                    ? displayName.characters.first.toUpperCase()
+                    : '?',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              )
+            : null,
+      ),
+      title: HighlightedText(
+        text: displayName,
+        query: query,
+        style: Theme.of(context).textTheme.bodyLarge!,
+      ),
+      subtitle: user.username != null
+          ? HighlightedText(
+              text: '@${user.username}',
+              query: query,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            )
+          : null,
+      trailing: IconButton(
+        tooltip: 'Написать',
+        icon: const Icon(Icons.chat_bubble_outline),
+        onPressed: () => _openPersonChat(user),
+      ),
+      onTap: () => context.push(ProfileRoute.withUserId(user.id)),
+    );
+  }
+
+  Widget _buildChannelTile(Channel channel, String query) {
+    final avatarUrl = channel.avatarUrl;
+    final resolved = avatarUrl != null && avatarUrl.isNotEmpty
+        ? ServerConfig.resolvePublisherAvatarUrl(avatarUrl)
+        : null;
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: resolved != null
+            ? ResizeImage(CachedNetworkImageProvider(resolved), width: 96)
+            : null,
+        child: resolved == null
+            ? Text(
+                channel.name.isNotEmpty
+                    ? channel.name.characters.first.toUpperCase()
+                    : '?',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              )
+            : null,
+      ),
+      title: HighlightedText(
+        text: channel.name,
+        query: query,
+        style: Theme.of(context).textTheme.bodyLarge!,
+      ),
+      subtitle: channel.description != null && channel.description!.isNotEmpty
+          ? HighlightedText(
+              text: channel.description!,
+              query: query,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            )
+          : Text('${channel.membersCount} подписчиков'),
+      onTap: () => context.push(ChannelDetailRoute.pathFor(channel.id)),
     );
   }
 }

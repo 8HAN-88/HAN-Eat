@@ -135,6 +135,19 @@ enum FeedSortMode {
         return 'trending';
     }
   }
+
+  String get label {
+    switch (this) {
+      case FeedSortMode.personalized:
+        return 'Для вас';
+      case FeedSortMode.recent:
+        return 'Сначала новые';
+      case FeedSortMode.popular:
+        return 'Популярное';
+      case FeedSortMode.trending:
+        return 'В тренде';
+    }
+  }
   
   static FeedSortMode? fromString(String? value) {
     if (value == null) return null;

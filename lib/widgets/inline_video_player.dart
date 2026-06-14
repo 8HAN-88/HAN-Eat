@@ -1,9 +1,13 @@
 // Inline video player с autoplay при появлении в viewport (Telegram/Instagram стиль)
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../services/server_config.dart';
 import '../utils/video_player_helper.dart';
 import 'cover_network_video.dart';
 
@@ -39,6 +43,14 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   static const double _visibilityThresholdPause = 0.1;
 
   void _onVisibilityChanged(VisibilityInfo info) {
+    // Web: не автозапускаем декодеры при скролле — только пауза у уже играющих.
+    if (kIsWeb) {
+      if (info.visibleFraction < _visibilityThresholdPause && _controller != null) {
+        _pause();
+      }
+      return;
+    }
+
     final visible = info.visibleFraction >= _visibilityThresholdPlay;
     final shouldPause = info.visibleFraction < _visibilityThresholdPause;
 
@@ -100,6 +112,11 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       widget.onTap!();
       return;
     }
+    if (kIsWeb && _controller == null) {
+      _isVisible = true;
+      unawaited(_ensurePlaying());
+      return;
+    }
     // Toggle mute
     setState(() => _isMuted = !_isMuted);
     _controller?.setVolume(_isMuted ? 0 : 1);
@@ -114,100 +131,127 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return VisibilityDetector(
-      key: Key('inline_video_${widget.videoUrl.hashCode}'),
-      onVisibilityChanged: _onVisibilityChanged,
-      child: GestureDetector(
-        onTap: _handleTap,
-        behavior: HitTestBehavior.opaque,
-        child: AspectRatio(
-          aspectRatio: widget.aspectRatio,
-          child: Stack(
-            fit: StackFit.expand,
-            alignment: Alignment.center,
-            children: [
-              // Thumbnail or loading
-              if (!_initialized || _controller == null) ...[
-                if (widget.thumbnailUrl != null)
-                  CachedNetworkImage(
-                    imageUrl: widget.thumbnailUrl!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    placeholder: (_, __) => Container(
-                      color: Colors.black,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
+    final content = GestureDetector(
+      onTap: _handleTap,
+      behavior: HitTestBehavior.opaque,
+      child: AspectRatio(
+        aspectRatio: widget.aspectRatio,
+        child: Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.center,
+          children: [
+            // Thumbnail or loading
+            if (!_initialized || _controller == null) ...[
+              if (widget.thumbnailUrl != null)
+                CachedNetworkImage(
+                  imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                    widget.thumbnailUrl!,
+                  ),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  memCacheWidth: 640,
+                  placeholder: (_, __) => Container(
+                    color: Colors.black,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
                     ),
-                    errorWidget: (_, __, ___) => _placeholder(),
-                  )
-                else
+                  ),
+                  errorWidget: (_, __, ___) => _placeholder(),
+                )
+              else
+                _placeholder(),
+            ] else if (!_hasError && _controller != null)
+              CoverNetworkVideo(controller: _controller!),
+
+            if (_hasError)
+              Stack(
+                fit: StackFit.expand,
+                children: [
                   _placeholder(),
-              ] else if (!_hasError && _controller != null)
-                CoverNetworkVideo(controller: _controller!),
-
-              if (_hasError)
-                Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _placeholder(),
-                    Center(
-                      child: FilledButton.tonalIcon(
-                        onPressed: () {
-                          setState(() {
-                            _hasError = false;
-                            _initialized = false;
-                            _initKey = null;
-                            _controller?.dispose();
-                            _controller = null;
-                          });
-                          _ensurePlaying();
-                        },
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Повторить'),
-                      ),
+                  Center(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () {
+                        setState(() {
+                          _hasError = false;
+                          _initialized = false;
+                          _initKey = null;
+                          _controller?.dispose();
+                          _controller = null;
+                        });
+                        _ensurePlaying();
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Повторить'),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
 
-              // Прозрачный overlay для захвата тапов (видео на web перехватывает клики)
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: _handleTap,
-                  behavior: HitTestBehavior.opaque,
+            // Web: подсказка «нажмите для воспроизведения»
+            if (kIsWeb && _controller == null && !_hasError)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_arrow_rounded, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text('Воспроизвести', style: TextStyle(color: Colors.white)),
+                    ],
+                  ),
                 ),
               ),
 
-              // Кнопка звука — свой GestureDetector, тап переключает mute
-              if (_initialized && !_hasError)
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _isMuted = !_isMuted);
-                      _controller?.setVolume(_isMuted ? 0 : 1);
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(
-                        _isMuted ? Icons.volume_off : Icons.volume_up,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+            // Прозрачный overlay для захвата тапов
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _handleTap,
+                behavior: HitTestBehavior.opaque,
+              ),
+            ),
+
+            // Кнопка звука — свой GestureDetector, тап переключает mute
+            if (_initialized && !_hasError)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _isMuted = !_isMuted);
+                    _controller?.setVolume(_isMuted ? 0 : 1);
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      _isMuted ? Icons.volume_off : Icons.volume_up,
+                      color: Colors.white,
+                      size: 20,
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
+    );
+
+    if (kIsWeb) return content;
+
+    return VisibilityDetector(
+      key: Key('inline_video_${widget.videoUrl.hashCode}'),
+      onVisibilityChanged: _onVisibilityChanged,
+      child: content,
     );
   }
 
