@@ -63,6 +63,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
 
   /// Последняя ошибка загрузки (таймаут / API недоступен) — не путать с «в БД нет постов».
   String? _lastLoadError;
+  bool _sessionExpiredOnLoad = false;
 
   /// Посты с диска (офлайн / ошибка сети).
   bool _servingFromCache = false;
@@ -212,6 +213,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
         _nextCursor = response.nextCursor;
         _hasMore = response.hasMore;
         _lastLoadError = null;
+        _sessionExpiredOnLoad = false;
         _servingFromCache = false;
         _cacheLoadError = null;
       });
@@ -239,7 +241,10 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
           });
         } else {
           final short = FeedLoadHelper.feedLoadErrorMessage(e);
-          setState(() => _lastLoadError = short);
+          setState(() {
+            _lastLoadError = short;
+            _sessionExpiredOnLoad = FeedLoadHelper.isSessionError(e);
+          });
         }
       }
     } finally {
@@ -291,18 +296,29 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                     sliver: SliverFillRemaining(
                       hasScrollBody: false,
                       child: AppEmptyState(
-                        icon: Icons.dynamic_feed_outlined,
+                        icon: _sessionExpiredOnLoad
+                            ? Icons.login_rounded
+                            : Icons.dynamic_feed_outlined,
                         title: _lastLoadError != null
-                            ? 'Не удалось загрузить ленту'
+                            ? (_sessionExpiredOnLoad
+                                ? 'Сессия истекла'
+                                : 'Не удалось загрузить ленту')
                             : 'Пока нет постов',
                         subtitle: _lastLoadError ??
                             'Обновите ленту или смените фильтр в меню выше.',
                         action: _lastLoadError != null
-                            ? FilledButton.icon(
-                                onPressed: () => _loadFeed(refresh: true),
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Повторить'),
-                              )
+                            ? (_sessionExpiredOnLoad
+                                ? FilledButton.icon(
+                                    onPressed: () =>
+                                        context.go(LoginRoute.path),
+                                    icon: const Icon(Icons.login),
+                                    label: const Text('Войти'),
+                                  )
+                                : FilledButton.icon(
+                                    onPressed: () => _loadFeed(refresh: true),
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Повторить'),
+                                  ))
                             : null,
                       ),
                     ),

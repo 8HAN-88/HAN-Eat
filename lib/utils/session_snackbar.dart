@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_router.dart';
 import '../core/network/feed_load_helper.dart';
+import 'api_error_parser.dart';
 
 /// SnackBar с кнопкой «Войти» при истёкшей сессии.
 void showSessionExpiredSnackBar(BuildContext context, {String? message}) {
@@ -28,8 +29,14 @@ void showErrorSnackBar(
     showSessionExpiredSnackBar(context);
     return;
   }
-  final text = error.toString().replaceAll('Exception: ', '');
+  final text = authFallback != null
+      ? userVisibleAuthError(
+          error,
+          fallback: fallback ?? 'Ошибка',
+          authFallback: authFallback,
+        )
+      : userVisibleError(error, fallback: fallback ?? 'Ошибка');
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(text.isNotEmpty ? text : (fallback ?? 'Ошибка'))),
+    SnackBar(content: Text(text)),
   );
 }

@@ -26,6 +26,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
@@ -172,6 +173,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   double? _uploadProgress;
   String _sendingStatus = 'Отправка…';
   final Map<int, _PendingTextSend> _failedTextSends = {};
+  _PendingMediaSend? _pendingMediaRetry;
   bool _showVoiceHint = false;
   bool _hasMore = false;
   int? _nextCursor;
@@ -559,9 +561,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() => _failedTextSends[tempId] = pending);
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      showErrorSnackBar(context, e);
     }
   }
 
@@ -571,6 +571,70 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages.removeWhere((m) => m.id == tempId);
     });
     unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+  }
+
+  void _discardPendingMedia() {
+    setState(() => _pendingMediaRetry = null);
+  }
+
+  void _rememberFailedMedia(_PendingMediaSend pending) {
+    setState(() => _pendingMediaRetry = pending);
+  }
+
+  Future<void> _retryPendingMedia() async {
+    final pending = _pendingMediaRetry;
+    if (pending == null || _sending) return;
+    setState(() => _pendingMediaRetry = null);
+    switch (pending.kind) {
+      case _PendingMediaKind.image:
+        await _sendPickedImage(pending.file, replyToId: pending.replyToMessageId);
+      case _PendingMediaKind.video:
+        await _sendPickedVideo(pending.file, replyToId: pending.replyToMessageId);
+      case _PendingMediaKind.file:
+        await _sendPickedFile(
+          pending.file,
+          fileName: pending.fileName ?? 'file',
+          replyToId: pending.replyToMessageId,
+        );
+    }
+  }
+
+  Widget _pendingMediaRetryBanner(ColorScheme scheme) {
+    final pending = _pendingMediaRetry;
+    if (pending == null) return const SizedBox.shrink();
+    final label = switch (pending.kind) {
+      _PendingMediaKind.image => 'фото',
+      _PendingMediaKind.video => 'видео',
+      _PendingMediaKind.file => 'файл',
+    };
+    return Material(
+      color: scheme.errorContainer.withValues(alpha: 0.55),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 18, color: scheme.error),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Не удалось отправить $label',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onErrorContainer,
+                    ),
+              ),
+            ),
+            TextButton(
+              onPressed: _sending ? null : _retryPendingMedia,
+              child: const Text('Повторить'),
+            ),
+            TextButton(
+              onPressed: _sending ? null : _discardPendingMedia,
+              child: const Text('Отмена'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _restoreDraft() async {
@@ -1528,9 +1592,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить голосовое');
     }
   }
 
@@ -2129,9 +2191,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       });
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      showErrorSnackBar(context, e);
     }
   }
 
@@ -2237,7 +2297,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _sendPickedImage(XFile file) async {
+  Future<void> _sendPickedImage(XFile file, {int? replyToId}) async {
+    final reply = replyToId ?? _replyTo?.id;
     _beginSending(status: 'Загрузка фото…');
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
@@ -2252,7 +2313,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final msg = await ChatService.sendImage(
         conversationId: widget.conversationId,
         mediaUrl: resolved,
-        replyToMessageId: _replyTo?.id,
+        replyToMessageId: reply,
       );
       if (!mounted) return;
       setState(() {
@@ -2265,13 +2326,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      _rememberFailedMedia(_PendingMediaSend(
+        kind: _PendingMediaKind.image,
+        file: file,
+        replyToMessageId: reply,
+      ));
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить фото');
     }
   }
 
-  Future<void> _sendPickedVideo(XFile file) async {
+  Future<void> _sendPickedVideo(XFile file, {int? replyToId}) async {
+    final reply = replyToId ?? _replyTo?.id;
     _beginSending(status: 'Загрузка видео…');
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
@@ -2287,7 +2352,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final msg = await ChatService.sendVideo(
         conversationId: widget.conversationId,
         mediaUrl: resolved,
-        replyToMessageId: _replyTo?.id,
+        replyToMessageId: reply,
       );
       if (!mounted) return;
       setState(() {
@@ -2300,9 +2365,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      _rememberFailedMedia(_PendingMediaSend(
+        kind: _PendingMediaKind.video,
+        file: file,
+        replyToMessageId: reply,
+      ));
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить видео');
     }
   }
 
@@ -2342,7 +2410,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (path == null || path.isEmpty) return;
         file = XFile(path);
       }
-      _beginSending(status: 'Загрузка файла…');
+      await _sendPickedFile(file, fileName: picked.name);
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось выбрать файл');
+    }
+  }
+
+  Future<void> _sendPickedFile(
+    XFile file, {
+    required String fileName,
+    int? replyToId,
+  }) async {
+    final reply = replyToId ?? _replyTo?.id;
+    _beginSending(status: 'Загрузка файла…');
+    try {
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'document',
@@ -2356,8 +2438,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final msg = await ChatService.sendFile(
         conversationId: widget.conversationId,
         mediaUrl: ServerConfig.resolveMediaUrl(fileUrl),
-        fileName: picked.name,
-        replyToMessageId: _replyTo?.id,
+        fileName: fileName,
+        replyToMessageId: reply,
       );
       if (!mounted) return;
       setState(() {
@@ -2370,9 +2452,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _endSending();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      _rememberFailedMedia(_PendingMediaSend(
+        kind: _PendingMediaKind.file,
+        file: file,
+        fileName: fileName,
+        replyToMessageId: reply,
+      ));
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить файл');
     }
   }
 
@@ -2872,6 +2958,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ),
             ),
+          if (_pendingMediaRetry != null) _pendingMediaRetryBanner(scheme),
           if (_showVoiceHint && !_recording && !_sending)
             Material(
               color: scheme.tertiaryContainer.withValues(alpha: 0.45),
@@ -3055,6 +3142,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+}
+
+enum _PendingMediaKind { image, video, file }
+
+class _PendingMediaSend {
+  const _PendingMediaSend({
+    required this.kind,
+    required this.file,
+    this.fileName,
+    this.replyToMessageId,
+  });
+
+  final _PendingMediaKind kind;
+  final XFile file;
+  final String? fileName;
+  final int? replyToMessageId;
 }
 
 class _PendingTextSend {

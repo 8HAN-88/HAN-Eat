@@ -55,6 +55,7 @@ class _SubscriptionsFeedScreenState
   bool _pendingLoadMore = false;
   bool _loadKickoff = false;
   String? _lastLoadError;
+  bool _sessionExpiredOnLoad = false;
   bool _servingFromCache = false;
   Object? _cacheLoadError;
 
@@ -138,6 +139,7 @@ class _SubscriptionsFeedScreenState
       _isLoading = true;
       if (refresh) {
         _lastLoadError = null;
+        _sessionExpiredOnLoad = false;
         _cacheLoadError = null;
       }
     });
@@ -231,7 +233,10 @@ class _SubscriptionsFeedScreenState
           });
         } else {
           final short = FeedLoadHelper.feedLoadErrorMessage(e);
-          setState(() => _lastLoadError = short);
+          setState(() {
+            _lastLoadError = short;
+            _sessionExpiredOnLoad = FeedLoadHelper.isSessionError(e);
+          });
         }
       }
     } finally {
@@ -294,20 +299,30 @@ class _SubscriptionsFeedScreenState
               sliver: SliverFillRemaining(
                 hasScrollBody: false,
                 child: AppEmptyState(
-                  icon: _lastLoadError != null
-                      ? Icons.cloud_off_outlined
-                      : Icons.subscriptions_outlined,
+                  icon: _sessionExpiredOnLoad
+                      ? Icons.login_rounded
+                      : (_lastLoadError != null
+                          ? Icons.cloud_off_outlined
+                          : Icons.subscriptions_outlined),
                   title: _lastLoadError != null
-                      ? 'Не удалось загрузить ленту'
+                      ? (_sessionExpiredOnLoad
+                          ? 'Сессия истекла'
+                          : 'Не удалось загрузить ленту')
                       : 'Подписки',
                   subtitle: _lastLoadError ??
                       'Подпишитесь на авторов, чтобы видеть их посты здесь.',
                   action: _lastLoadError != null
-                      ? FilledButton.icon(
-                          onPressed: () => _loadFeed(refresh: true),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Повторить'),
-                        )
+                      ? (_sessionExpiredOnLoad
+                          ? FilledButton.icon(
+                              onPressed: () => context.go(LoginRoute.path),
+                              icon: const Icon(Icons.login),
+                              label: const Text('Войти'),
+                            )
+                          : FilledButton.icon(
+                              onPressed: () => _loadFeed(refresh: true),
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Повторить'),
+                            ))
                       : FilledButton.icon(
                           onPressed: () => context.push(SearchRoute.path),
                           icon: const Icon(Icons.search),

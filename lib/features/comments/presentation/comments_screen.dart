@@ -6,6 +6,7 @@ import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
@@ -157,17 +158,11 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleAuthError(
-                e,
-                fallback: 'Не удалось отправить комментарий',
-                authFallback: 'Войдите, чтобы оставить комментарий',
-              ),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось отправить комментарий',
+          authFallback: 'Войдите, чтобы оставить комментарий',
         );
       }
     } finally {

@@ -14,7 +14,6 @@ import '../../../services/auth_service.dart';
 import '../../../services/favorites_service.dart';
 import '../../../services/recipe_comments_service.dart';
 import '../../../services/comment_service.dart';
-import '../../../core/network/feed_load_helper.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
@@ -332,22 +331,12 @@ class _NewPostCardState extends State<NewPostCard> {
       });
 
       if (mounted) {
-        if (FeedLoadHelper.isSessionError(e)) {
-          showSessionExpiredSnackBar(context);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                userVisibleAuthError(
-                  e,
-                  fallback: 'Не удалось поставить лайк',
-                  authFallback: 'Войдите, чтобы поставить лайк',
-                ),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось поставить лайк',
+          authFallback: 'Войдите, чтобы поставить лайк',
+        );
       }
     } finally {
       if (mounted) {
@@ -425,17 +414,11 @@ class _NewPostCardState extends State<NewPostCard> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                userVisibleAuthError(
-                  e,
-                  fallback: 'Не удалось убрать репост',
-                  authFallback: 'Войдите, чтобы убрать репост',
-                ),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
+          showErrorSnackBar(
+            context,
+            e,
+            fallback: 'Не удалось убрать репост',
+            authFallback: 'Войдите, чтобы убрать репост',
           );
         }
       } finally {
@@ -475,17 +458,11 @@ class _NewPostCardState extends State<NewPostCard> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleAuthError(
-                e,
-                fallback: 'Не удалось сделать репост',
-                authFallback: 'Войдите, чтобы сделать репост',
-              ),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось сделать репост',
+          authFallback: 'Войдите, чтобы сделать репост',
         );
       }
     } finally {
