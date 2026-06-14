@@ -8,7 +8,6 @@ import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
-import '../../../widgets/app_empty_state.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
 import '../application/chats_hub_search.dart';
 import 'chat_archived_screen.dart';
@@ -135,13 +134,8 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   @override
   Widget build(BuildContext context) {
     if (AuthService.instance.currentUser == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Чаты')),
-        body: const AppEmptyState(
-          icon: Icons.login_rounded,
-          title: 'Войдите в аккаунт',
-          subtitle: 'Чтобы переписываться и читать каналы.',
-        ),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 

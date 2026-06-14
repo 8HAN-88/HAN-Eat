@@ -383,8 +383,6 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       if (mounted && requestId == _loadGeneration) {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
-          if (!mounted) return;
-          showSessionExpiredSnackBar(context);
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
@@ -822,16 +820,13 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     } catch (e) {
       if (mounted) {
         final msg = e.toString().toLowerCase();
-        final text = msg.contains('own post') || msg.contains('свой пост')
-            ? 'Нельзя репостнуть свой пост'
-            : userVisibleAuthError(
-                e,
-                fallback: 'Не удалось сделать репост',
-                authFallback: 'Войдите, чтобы сделать репост',
-              );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text)),
-        );
+        if (msg.contains('own post') || msg.contains('свой пост')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Нельзя репостнуть свой пост')),
+          );
+        } else {
+          showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+        }
       }
     }
   }

@@ -295,20 +295,6 @@ class _NewPostCardState extends State<NewPostCard> {
       return;
     }
 
-    // Проверяем авторизацию
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Войдите, чтобы поставить лайк'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-
     setState(() {
       _isLoading = true;
       _isLiked = !_isLiked;
@@ -335,7 +321,6 @@ class _NewPostCardState extends State<NewPostCard> {
           context,
           e,
           fallback: 'Не удалось поставить лайк',
-          authFallback: 'Войдите, чтобы поставить лайк',
         );
       }
     } finally {
@@ -382,20 +367,6 @@ class _NewPostCardState extends State<NewPostCard> {
   Future<void> _toggleRepost() async {
     if (_isReposting) return;
 
-    // Проверяем авторизацию
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Войдите, чтобы сделать репост'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-
     if (_isReposted) {
       // Если уже репостнуто, просто удаляем
       setState(() {
@@ -418,7 +389,6 @@ class _NewPostCardState extends State<NewPostCard> {
             context,
             e,
             fallback: 'Не удалось убрать репост',
-            authFallback: 'Войдите, чтобы убрать репост',
           );
         }
       } finally {
@@ -462,7 +432,6 @@ class _NewPostCardState extends State<NewPostCard> {
           context,
           e,
           fallback: 'Не удалось сделать репост',
-          authFallback: 'Войдите, чтобы сделать репост',
         );
       }
     } finally {
@@ -1384,20 +1353,6 @@ class _NewPostCardState extends State<NewPostCard> {
                           onPressed: () async {
                             if (_isSpoonacularRecipePost) {
                               await _openRecipeFromPost();
-                              return;
-                            }
-                            final token =
-                                await AuthService.getAccessTokenForApi();
-                            if (token == null && widget.onCommentTap != null) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                        'Войдите, чтобы оставить комментарий'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              }
                               return;
                             }
                             FeedAnalyticsService.openDetail(

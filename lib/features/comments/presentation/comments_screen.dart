@@ -107,20 +107,6 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
     final text = _commentController.text.trim();
     if (text.isEmpty || _isPosting) return;
     
-    // Проверяем авторизацию
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Войдите, чтобы оставить комментарий'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-    
     setState(() => _isPosting = true);
     
     try {
@@ -162,7 +148,6 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
           context,
           e,
           fallback: 'Не удалось отправить комментарий',
-          authFallback: 'Войдите, чтобы оставить комментарий',
         );
       }
     } finally {

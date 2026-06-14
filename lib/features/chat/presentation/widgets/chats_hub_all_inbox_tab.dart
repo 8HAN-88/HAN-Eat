@@ -1011,19 +1011,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       return const ChatInboxSkeleton();
     }
     if (_error != null && !_showSavedPinned) {
-      final sessionExpired = FeedLoadHelper.isSessionError(_error!);
       return AppEmptyState(
-        icon: sessionExpired ? Icons.login_rounded : Icons.cloud_off_outlined,
-        title: sessionExpired ? 'Сессия истекла' : 'Не удалось загрузить',
-        subtitle: sessionExpired
-            ? 'Войдите снова, чтобы видеть чаты и каналы.'
-            : userVisibleError(_error!),
-        action: sessionExpired
-            ? FilledButton(
-                onPressed: () => context.go(LoginRoute.path),
-                child: const Text('Войти'),
-              )
-            : FilledButton(onPressed: _load, child: const Text('Повторить')),
+        icon: Icons.cloud_off_outlined,
+        title: 'Не удалось загрузить',
+        subtitle: userVisibleError(_error!),
+        action: FilledButton(onPressed: _load, child: const Text('Повторить')),
       );
     }
     if (_entries.isEmpty && !_showSavedPinned) {

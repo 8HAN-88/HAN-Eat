@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
-import '../../../utils/session_snackbar.dart';
 import '../../../models/post_model.dart';
 import '../../../models/post_types.dart';
 import '../../../services/feed_api_cache.dart';
@@ -55,7 +54,8 @@ class _SubscriptionsFeedScreenState
   bool _pendingLoadMore = false;
   bool _loadKickoff = false;
   String? _lastLoadError;
-  bool _sessionExpiredOnLoad = false;
+
+  /// Посты с диска
   bool _servingFromCache = false;
   Object? _cacheLoadError;
 
@@ -139,7 +139,6 @@ class _SubscriptionsFeedScreenState
       _isLoading = true;
       if (refresh) {
         _lastLoadError = null;
-        _sessionExpiredOnLoad = false;
         _cacheLoadError = null;
       }
     });
@@ -216,8 +215,6 @@ class _SubscriptionsFeedScreenState
       if (mounted) {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
-          if (!mounted) return;
-          showSessionExpiredSnackBar(context);
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);
@@ -235,7 +232,6 @@ class _SubscriptionsFeedScreenState
           final short = FeedLoadHelper.feedLoadErrorMessage(e);
           setState(() {
             _lastLoadError = short;
-            _sessionExpiredOnLoad = FeedLoadHelper.isSessionError(e);
           });
         }
       }
@@ -271,11 +267,7 @@ class _SubscriptionsFeedScreenState
     final currentUser = AuthService.instance.currentUser;
 
     if (currentUser == null) {
-      return AppEmptyState(
-        icon: Icons.login_rounded,
-        title: 'Войдите в аккаунт',
-        subtitle: 'Чтобы видеть посты от людей, на которых вы подписаны.',
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_posts.isEmpty && !_isLoading && !_loadKickoff) {
@@ -299,30 +291,20 @@ class _SubscriptionsFeedScreenState
               sliver: SliverFillRemaining(
                 hasScrollBody: false,
                 child: AppEmptyState(
-                  icon: _sessionExpiredOnLoad
-                      ? Icons.login_rounded
-                      : (_lastLoadError != null
-                          ? Icons.cloud_off_outlined
-                          : Icons.subscriptions_outlined),
+                  icon: _lastLoadError != null
+                      ? Icons.cloud_off_outlined
+                      : Icons.subscriptions_outlined,
                   title: _lastLoadError != null
-                      ? (_sessionExpiredOnLoad
-                          ? 'Сессия истекла'
-                          : 'Не удалось загрузить ленту')
+                      ? 'Не удалось загрузить ленту'
                       : 'Подписки',
                   subtitle: _lastLoadError ??
                       'Подпишитесь на авторов, чтобы видеть их посты здесь.',
                   action: _lastLoadError != null
-                      ? (_sessionExpiredOnLoad
-                          ? FilledButton.icon(
-                              onPressed: () => context.go(LoginRoute.path),
-                              icon: const Icon(Icons.login),
-                              label: const Text('Войти'),
-                            )
-                          : FilledButton.icon(
-                              onPressed: () => _loadFeed(refresh: true),
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Повторить'),
-                            ))
+                      ? FilledButton.icon(
+                          onPressed: () => _loadFeed(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Повторить'),
+                        )
                       : FilledButton.icon(
                           onPressed: () => context.push(SearchRoute.path),
                           icon: const Icon(Icons.search),

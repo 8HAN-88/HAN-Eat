@@ -30,6 +30,7 @@ import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/recipe_visibility_badge.dart';
 import '../../../widgets/recipe_visibility_selector.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -329,19 +330,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   Future<void> _toggleLike() async {
     if (_isLoading) return;
 
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Войдите, чтобы поставить лайк'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-
     // Сохраняем исходное состояние для отката
     final originalIsLiked = _isLiked;
     final originalLikesCount = _likesCount;
@@ -374,37 +362,13 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           _likesCount = originalLikesCount;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleAuthError(
-                e,
-                fallback: 'Не удалось поставить лайк',
-                authFallback: 'Войдите, чтобы поставить лайк',
-              ),
-            ),
-          ),
-        );
+        showErrorSnackBar(context, e, fallback: 'Не удалось поставить лайк');
       }
     }
   }
 
   Future<void> _toggleRepost() async {
     if (_isReposting) return;
-
-    // Проверяем авторизацию
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Войдите, чтобы сделать репост'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
 
     // Если уже репостнуто, удаляем репост
     if (_isReposted) {
@@ -437,18 +401,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                userVisibleAuthError(
-                  e,
-                  fallback: 'Не удалось убрать репост',
-                  authFallback: 'Войдите, чтобы убрать репост',
-                ),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          showErrorSnackBar(context, e, fallback: 'Не удалось убрать репост');
         }
       } finally {
         if (mounted) {
@@ -504,18 +457,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleAuthError(
-                e,
-                fallback: 'Не удалось сделать репост',
-                authFallback: 'Войдите, чтобы сделать репост',
-              ),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
       }
     } finally {
       if (mounted) {
@@ -1451,19 +1393,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                     IconButton(
                       icon: const Icon(Icons.comment_outlined, size: 28),
                       onPressed: () async {
-                        final token = await AuthService.getAccessTokenForApi();
-                        if (token == null && widget.onCommentTap != null) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Войдите, чтобы оставить комментарий'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                          return;
-                        }
                         await widget.onCommentTap?.call();
                         await _refreshCommentsCount();
                       },

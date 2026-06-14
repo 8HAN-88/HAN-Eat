@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
@@ -377,16 +378,13 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     } catch (e) {
       if (mounted) {
         final msg = e.toString().toLowerCase();
-        final text = msg.contains('own post') || msg.contains('свой пост')
-            ? 'Нельзя репостнуть свой пост'
-            : userVisibleAuthError(
-                e,
-                fallback: 'Не удалось сделать репост',
-                authFallback: 'Войдите, чтобы сделать репост',
-              );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(text)),
-        );
+        if (msg.contains('own post') || msg.contains('свой пост')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Нельзя репостнуть свой пост')),
+          );
+        } else {
+          showErrorSnackBar(context, e, fallback: 'Не удалось сделать репост');
+        }
       }
     }
   }

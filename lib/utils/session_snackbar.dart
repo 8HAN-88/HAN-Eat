@@ -1,42 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'dart:async';
 
-import '../app/app_router.dart';
+import 'package:flutter/material.dart';
+
 import '../core/network/feed_load_helper.dart';
 import 'api_error_parser.dart';
 
-/// SnackBar с кнопкой «Войти» при истёкшей сессии.
-void showSessionExpiredSnackBar(BuildContext context, {String? message}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(message ?? 'Сессия истекла. Войдите снова.'),
-      action: SnackBarAction(
-        label: 'Войти',
-        onPressed: () => context.go(LoginRoute.path),
-      ),
-      duration: const Duration(seconds: 5),
-    ),
-  );
-}
-
+/// Ошибка в SnackBar. При истёкшей сессии — logout и редирект роутера (без «Войти»).
 void showErrorSnackBar(
   BuildContext context,
   Object error, {
   String? fallback,
-  String? authFallback,
 }) {
   if (FeedLoadHelper.isSessionError(error)) {
-    showSessionExpiredSnackBar(context);
+    unawaited(FeedLoadHelper.clearSessionIfExpired(error));
     return;
   }
-  final text = authFallback != null
-      ? userVisibleAuthError(
-          error,
-          fallback: fallback ?? 'Ошибка',
-          authFallback: authFallback,
-        )
-      : userVisibleError(error, fallback: fallback ?? 'Ошибка');
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(text)),
+    SnackBar(
+      content: Text(userVisibleError(error, fallback: fallback ?? 'Ошибка')),
+    ),
   );
 }

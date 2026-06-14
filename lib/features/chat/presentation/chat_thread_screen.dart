@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +16,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
-import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
@@ -2039,10 +2037,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _scheduleMarkRead();
     } catch (e) {
       if (!mounted || seq != _messageLoadSeq) return;
-      unawaited(FeedLoadHelper.clearSessionIfExpired(e));
-      final message = FeedLoadHelper.isSessionError(e)
-          ? 'Сессия истекла. Войдите снова.'
-          : userVisibleError(e, fallback: 'Не удалось загрузить сообщения');
+      if (FeedLoadHelper.isSessionError(e)) {
+        unawaited(FeedLoadHelper.clearSessionIfExpired(e));
+        return;
+      }
+      final message =
+          userVisibleError(e, fallback: 'Не удалось загрузить сообщения');
       setState(() {
         _loading = false;
         _loadingMore = false;
@@ -2051,9 +2051,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       });
       if (!refresh || _messages.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        showErrorSnackBar(context, e, fallback: message);
       }
     }
   }
@@ -2742,15 +2740,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         icon: Icons.cloud_off_outlined,
                         title: 'Сообщения не загрузились',
                         subtitle: _loadError!,
-                        action: FeedLoadHelper.isSessionError(_loadError!)
-                            ? FilledButton(
-                                onPressed: () => context.go(LoginRoute.path),
-                                child: const Text('Войти'),
-                              )
-                            : FilledButton(
-                                onPressed: () => _load(refresh: true),
-                                child: const Text('Повторить'),
-                              ),
+                        action: FilledButton(
+                          onPressed: () => _load(refresh: true),
+                          child: const Text('Повторить'),
+                        ),
                       )
                     : _messages.isEmpty && !_loading
                         ? const Center(child: Text('Напишите первое сообщение'))
