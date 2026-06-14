@@ -67,6 +67,12 @@ jobs:
 
       - name: Smoke
         run: |
-          curl -sf https://api.haneat.app/health
-          echo ""
-          curl -sf https://api.haneat.app/api/v1/system/readiness | python3 -m json.tool | head -20
+          for i in 1 2 3 4 5; do
+            if curl -sf https://api.haneat.app/health; then
+              echo ""
+              curl -sf https://api.haneat.app/api/v1/system/readiness | python3 -m json.tool | head -20
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
@@ -30,11 +31,13 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
   final _player = AudioPlayer();
   bool _playing = false;
   bool _loading = false;
+  String? _playError;
   Duration _position = Duration.zero;
   Duration _total = Duration.zero;
   StreamSubscription<Duration>? _posSub;
   StreamSubscription<Duration>? _durSub;
   StreamSubscription<void>? _completeSub;
+  bool _audioContextReady = false;
 
   int get _fallbackSec => widget.message.voiceDurationSec ?? 0;
 
@@ -56,12 +59,45 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    unawaited(_ensureAudioContext());
+  }
+
+  @override
   void dispose() {
     _posSub?.cancel();
     _durSub?.cancel();
     _completeSub?.cancel();
-    _player.dispose();
+    unawaited(_player.dispose());
     super.dispose();
+  }
+
+  Future<void> _ensureAudioContext() async {
+    if (_audioContextReady || kIsWeb) return;
+    try {
+      await _player.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {AVAudioSessionOptions.defaultToSpeaker},
+          ),
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            contentType: AndroidContentType.speech,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      );
+      await _player.setPlayerMode(PlayerMode.mediaPlayer);
+      _audioContextReady = true;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('ChatVoiceBubble: audio context setup failed: $e');
+      }
+    }
   }
 
   void _bindStreams() {
@@ -87,7 +123,10 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
 
   Future<void> _togglePlay() async {
     final url = widget.message.mediaUrl;
-    if (url == null || url.isEmpty) return;
+    if (url == null || url.isEmpty) {
+      setState(() => _playError = 'Нет файла');
+      return;
+    }
 
     if (_playing) {
       await _player.pause();
@@ -96,10 +135,17 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
       return;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _playError = null;
+    });
     try {
+      await _ensureAudioContext();
       _bindStreams();
-      final resolved = ServerConfig.resolveMediaUrl(url);
+      final resolved = ServerConfig.resolveVoiceMediaUrl(url);
+      if (kDebugMode) {
+        debugPrint('ChatVoiceBubble: play $resolved');
+      }
       if (_position > Duration.zero && _total > Duration.zero) {
         await _player.resume();
       } else {
@@ -110,9 +156,16 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
         _playing = true;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('ChatVoiceBubble: playback failed: $e');
+      }
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _playing = false;
+        _playError = 'Не удалось воспроизвести';
+      });
     }
   }
 
@@ -125,46 +178,65 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
 
     return SizedBox(
       width: 200,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            onPressed: _loading ? null : _togglePlay,
-            icon: _loading
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: widget.foregroundColor,
-                    ),
-                  )
-                : Icon(
-                    _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    color: active,
-                  ),
+          Row(
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: _loading ? null : _togglePlay,
+                icon: _loading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: widget.foregroundColor,
+                        ),
+                      )
+                    : Icon(
+                        _playing
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: active,
+                      ),
+              ),
+              Expanded(
+                child: ChatVoiceWaveform(
+                  seed: widget.message.id,
+                  progress: _progress,
+                  color: widget.foregroundColor,
+                  activeColor: active,
+                  barCount: 24,
+                  height: 26,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                timeLabel,
+                style: TextStyle(
+                  color: widget.foregroundColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            child: ChatVoiceWaveform(
-              seed: widget.message.id,
-              progress: _progress,
-              color: widget.foregroundColor,
-              activeColor: active,
-              barCount: 24,
-              height: 26,
+          if (_playError != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, top: 2),
+              child: Text(
+                _playError!,
+                style: TextStyle(
+                  color: widget.foregroundColor.withValues(alpha: 0.75),
+                  fontSize: 11,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            timeLabel,
-            style: TextStyle(
-              color: widget.foregroundColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
         ],
       ),
     );

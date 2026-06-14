@@ -137,6 +137,37 @@ class ServerConfig {
     return resolveMediaUrl(url);
   }
 
+  /// URL для воспроизведения голосовых в чате.
+  /// Прямой S3/CDN с телефона часто недоступен — идём через API (Range + HTTPS).
+  static String resolveVoiceMediaUrl(String url) {
+    if (url.isEmpty) return url;
+    final resolved = resolveMediaUrl(url);
+    try {
+      final uri = Uri.parse(resolved);
+      final path = uri.path;
+
+      if (path.contains('/uploads/file/') ||
+          path.contains('/api/v1/uploads/file/')) {
+        return resolved;
+      }
+
+      final uploadsIdx = path.indexOf('/uploads/');
+      if (uploadsIdx >= 0) {
+        final fileKey = path.substring(uploadsIdx + 1);
+        if (fileKey.startsWith('uploads/')) {
+          return '$apiBaseUrl/uploads/file/$fileKey';
+        }
+      }
+
+      if (!resolved.startsWith('http://') && !resolved.startsWith('https://')) {
+        if (resolved.startsWith('uploads/')) {
+          return '$apiBaseUrl/uploads/file/$resolved';
+        }
+      }
+    } catch (_) {}
+    return resolved;
+  }
+
   /// Аватар / любое внешнее изображение: на web всегда через image-proxy (CORS).
   static String resolvePublisherAvatarUrl(String url) {
     if (url.isEmpty) return url;
