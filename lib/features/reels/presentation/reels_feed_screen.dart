@@ -73,9 +73,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
 
-  int get _initialVideoPreloadCount => kIsWeb ? 1 : 3;
+  int get _initialVideoPreloadCount => kIsWeb ? 2 : 3;
 
-  int get _lookaheadVideoPreloadCount => kIsWeb ? 0 : 2;
+  int get _lookaheadVideoPreloadCount => kIsWeb ? 1 : 2;
 
   @override
   void initState() {

@@ -57,13 +57,6 @@ if index_html.exists():
         f'href="manifest.json{icon_qs}"',
         html,
     )
-    if 'id="boot-status"' in html:
-        html, n = re.subn(
-            r'(<div id="boot-status"[^>]*>)Загрузка…',
-            rf'\1Загрузка… · {build_id}',
-            html,
-            count=1,
-        )
     index_html.write_text(html, encoding="utf-8")
 
 manifest = pathlib.Path("${MANIFEST}")

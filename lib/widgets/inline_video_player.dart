@@ -1,7 +1,6 @@
 // Inline video player с autoplay при появлении в viewport (Telegram/Instagram стиль)
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -39,27 +38,30 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   bool _hasError = false;
   String? _initKey;
 
-  static const double _visibilityThresholdPlay = 0.3;
-  static const double _visibilityThresholdPause = 0.1;
+  static const double _visibilityThresholdPlay = 0.25;
+  static const double _visibilityThresholdPause = 0.08;
+  static const double _visibilityThresholdPreload = 0.12;
 
   void _onVisibilityChanged(VisibilityInfo info) {
-    // Web: не автозапускаем декодеры при скролле — только пауза у уже играющих.
-    if (kIsWeb) {
-      if (info.visibleFraction < _visibilityThresholdPause && _controller != null) {
+    final fraction = info.visibleFraction;
+
+    if (fraction < _visibilityThresholdPause) {
+      if (_isVisible) {
+        _isVisible = false;
         _pause();
       }
       return;
     }
 
-    final visible = info.visibleFraction >= _visibilityThresholdPlay;
-    final shouldPause = info.visibleFraction < _visibilityThresholdPause;
+    if (fraction >= _visibilityThresholdPreload && _controller == null) {
+      unawaited(_ensurePlaying());
+    }
 
-    if (visible && !_isVisible) {
+    if (fraction >= _visibilityThresholdPlay) {
       _isVisible = true;
-      _ensurePlaying();
-    } else if (shouldPause && _isVisible) {
-      _isVisible = false;
-      _pause();
+      if (_controller != null) {
+        unawaited(VideoPlayerHelper.ensurePlaying(_controller!));
+      }
     }
   }
 
@@ -69,14 +71,14 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       return;
     }
 
-    if (_initKey == widget.videoUrl) return; // Уже инициализируем
+    if (_initKey == widget.videoUrl) return;
     _initKey = widget.videoUrl;
 
     try {
       final controller = await VideoPlayerHelper.createPreparedController(
         widget.videoUrl,
         muted: _isMuted,
-        autoPlay: _isVisible,
+        autoPlay: true,
       );
 
       if (!mounted) {
@@ -112,12 +114,6 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       widget.onTap!();
       return;
     }
-    if (kIsWeb && _controller == null) {
-      _isVisible = true;
-      unawaited(_ensurePlaying());
-      return;
-    }
-    // Toggle mute
     setState(() => _isMuted = !_isMuted);
     _controller?.setVolume(_isMuted ? 0 : 1);
   }
@@ -131,134 +127,100 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final content = GestureDetector(
-      onTap: _handleTap,
-      behavior: HitTestBehavior.opaque,
-      child: AspectRatio(
-        aspectRatio: widget.aspectRatio,
-        child: Stack(
-          fit: StackFit.expand,
-          alignment: Alignment.center,
-          children: [
-            // Thumbnail or loading
-            if (!_initialized || _controller == null) ...[
-              if (widget.thumbnailUrl != null)
-                CachedNetworkImage(
-                  imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-                    widget.thumbnailUrl!,
-                  ),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  memCacheWidth: 640,
-                  placeholder: (_, __) => Container(
-                    color: Colors.black,
-                    child: const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                  ),
-                  errorWidget: (_, __, ___) => _placeholder(),
-                )
-              else
-                _placeholder(),
-            ] else if (!_hasError && _controller != null)
-              CoverNetworkVideo(controller: _controller!),
-
-            if (_hasError)
-              Stack(
-                fit: StackFit.expand,
-                children: [
-                  _placeholder(),
-                  Center(
-                    child: FilledButton.tonalIcon(
-                      onPressed: () {
-                        setState(() {
-                          _hasError = false;
-                          _initialized = false;
-                          _initKey = null;
-                          _controller?.dispose();
-                          _controller = null;
-                        });
-                        _ensurePlaying();
-                      },
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Повторить'),
-                    ),
-                  ),
-                ],
-              ),
-
-            // Web: подсказка «нажмите для воспроизведения»
-            if (kIsWeb && _controller == null && !_hasError)
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.play_arrow_rounded, color: Colors.white),
-                      SizedBox(width: 4),
-                      Text('Воспроизвести', style: TextStyle(color: Colors.white)),
-                    ],
-                  ),
-                ),
-              ),
-
-            // Прозрачный overlay для захвата тапов
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _handleTap,
-                behavior: HitTestBehavior.opaque,
-              ),
-            ),
-
-            // Кнопка звука — свой GestureDetector, тап переключает mute
-            if (_initialized && !_hasError)
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: () {
-                    setState(() => _isMuted = !_isMuted);
-                    _controller?.setVolume(_isMuted ? 0 : 1);
-                  },
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      _isMuted ? Icons.volume_off : Icons.volume_up,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-
-    if (kIsWeb) return content;
-
     return VisibilityDetector(
       key: Key('inline_video_${widget.videoUrl.hashCode}'),
       onVisibilityChanged: _onVisibilityChanged,
-      child: content,
+      child: GestureDetector(
+        onTap: _handleTap,
+        behavior: HitTestBehavior.opaque,
+        child: AspectRatio(
+          aspectRatio: widget.aspectRatio,
+          child: Stack(
+            fit: StackFit.expand,
+            alignment: Alignment.center,
+            children: [
+              if (!_initialized || _controller == null) ...[
+                if (widget.thumbnailUrl != null)
+                  CachedNetworkImage(
+                    imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                      widget.thumbnailUrl!,
+                    ),
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    memCacheWidth: 640,
+                    placeholder: (_, __) => Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => _placeholder(),
+                  )
+                else
+                  _placeholder(),
+              ] else if (!_hasError && _controller != null)
+                CoverNetworkVideo(controller: _controller!),
+
+              if (_hasError)
+                Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _placeholder(),
+                    Center(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () {
+                          setState(() {
+                            _hasError = false;
+                            _initialized = false;
+                            _initKey = null;
+                            _controller?.dispose();
+                            _controller = null;
+                          });
+                          unawaited(_ensurePlaying());
+                        },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Повторить'),
+                      ),
+                    ),
+                  ],
+                ),
+
+              if (_initialized && !_hasError)
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _isMuted = !_isMuted);
+                      _controller?.setVolume(_isMuted ? 0 : 1);
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        _isMuted ? Icons.volume_off : Icons.volume_up,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _placeholder() => Container(
         color: Colors.black,
         child: const Center(
-          child: Icon(Icons.play_circle_filled, color: Colors.white54, size: 64),
+          child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
         ),
       );
 }
