@@ -1464,5 +1464,3 @@ class ChatService:
             folder.position = pos
         self.db.flush()
         return [self._folder_payload(f) for f in ordered]
-
-    def _folder_payload(self, folder: ChatFolder) -> dict:
