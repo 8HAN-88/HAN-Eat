@@ -85,7 +85,6 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
 
   Future<void> _signOut() async {
     await AuthService.logout();
-    if (mounted) context.go(LoginRoute.path);
   }
 
   @override

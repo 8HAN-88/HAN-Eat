@@ -85,13 +85,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     _onSessionChanged = (user) {
       if (widget.userId != null || !mounted) return;
       user_service.UserService.instance.profile.value = null;
+      if (user == null) {
+        setState(() {
+          _loadedTabs
+            ..clear()
+            ..add(0);
+          _tabController.index = 0;
+          _postsListEpoch = null;
+          _profile = null;
+          _isLoading = false;
+        });
+        return;
+      }
       setState(() {
         _loadedTabs
           ..clear()
           ..add(0);
         _tabController.index = 0;
-        _postsListEpoch = user?.id;
-        _profile = user != null ? _userProfileFromAuthUser(user) : null;
+        _postsListEpoch = user.id;
+        _profile = _userProfileFromAuthUser(user);
       });
       _loadProfile();
     };
@@ -258,14 +270,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       final currentUser = AuthService.instance.currentUser;
 
       if (currentUser == null && widget.userId == null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          context.go(LoginRoute.path);
-        });
-        return Scaffold(
-          appBar: AppBar(title: const Text('Профиль')),
-          body: const Center(child: CircularProgressIndicator()),
-        );
+        return const SizedBox.shrink();
       }
       if (widget.userId != null) {
         if (_profileLoadError != null) {

@@ -547,8 +547,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: LoginRoute.path,
         name: LoginRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: LoginScreen()),
+        pageBuilder: (context, state) => const NoTransitionPage(
+          key: ValueKey('login'),
+          child: LoginScreen(),
+        ),
       ),
       GoRoute(
         path: RegisterRoute.path,

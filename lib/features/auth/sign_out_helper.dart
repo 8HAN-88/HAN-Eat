@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
+import '../../app/guest_routes.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/api_error_parser.dart';
@@ -49,7 +50,11 @@ Future<void> confirmAndSignOut(
     }
     if (!context.mounted) return;
     if (navigateToLogin) {
-      context.go(LoginRoute.path);
+      // sessionRevision уже пересчитал redirect в GoRouter — не дублируем go(/login).
+      final loc = GoRouterState.of(context).matchedLocation.split('?').first;
+      if (routeAllowsGuestAccess(loc) && loc != LoginRoute.path) {
+        context.go(LoginRoute.path);
+      }
     } else {
       onSignedOut?.call();
     }
