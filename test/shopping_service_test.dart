@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:han_eat/models/shopping_item.dart';
 import 'package:han_eat/services/shopping_service.dart';
 
 void main() {
@@ -22,14 +22,15 @@ void main() {
   test('ShoppingService add/remove/clear & export/import', () async {
     await ShoppingService.init();
     final svc = ShoppingService.instance;
+    List<String> names() => svc.items.value.map((e) => e.name).toList();
 
     expect(svc.items.value, isEmpty);
 
     await svc.addItems(['apple', 'banana']);
-    expect(svc.items.value, containsAll(['apple', 'banana']));
+    expect(names(), containsAll(['apple', 'banana']));
 
-    await svc.removeItem('apple');
-    expect(svc.items.value, isNot(contains('apple')));
+    await svc.removeItem(const ShoppingItem(name: 'apple'));
+    expect(names(), isNot(contains('apple')));
 
     final exported = svc.exportToJson();
     expect(exported['items'], isA<List>());
@@ -38,6 +39,6 @@ void main() {
     await svc.importFromJson({
       'items': ['x', 'y']
     }, merge: false);
-    expect(svc.items.value, containsAll(['x', 'y']));
+    expect(names(), containsAll(['x', 'y']));
   });
 }

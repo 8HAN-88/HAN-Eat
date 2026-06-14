@@ -27,6 +27,11 @@ async def get_feed(
     limit: int = Query(20, ge=1, le=50),
     feed_type: str = Query("all", regex="^(all|reels|recipes|photos)$"),
     following_only: bool = Query(False, description="Показывать только посты от подписок"),
+    sort_by: str = Query(
+        "personalized",
+        regex="^(personalized|recent|popular|trending)$",
+        description="Сортировка: personalized, recent, popular, trending",
+    ),
     current_user: User = Depends(get_current_user_required),
     db = Depends(get_db),
     redis = Depends(get_redis)
@@ -38,7 +43,8 @@ async def get_feed(
         cursor=cursor,
         limit=limit,
         feed_type=feed_type,
-        following_only=following_only
+        following_only=following_only,
+        sort_by=sort_by,
     )
     return {
         "items": result["items"],

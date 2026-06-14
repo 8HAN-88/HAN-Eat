@@ -224,8 +224,8 @@ class Settings(BaseSettings):
     MAX_AUDIO_SIZE_MB: int = 5
     MAX_DOCUMENT_SIZE_MB: int = 25
     ALLOWED_IMAGE_TYPES: List[str] = ["jpeg", "jpg", "png", "webp"]
-    ALLOWED_VIDEO_TYPES: List[str] = ["mp4", "mov", "avi"]
-    ALLOWED_AUDIO_TYPES: List[str] = ["m4a", "mp4", "aac", "mpeg", "mp3"]
+    ALLOWED_VIDEO_TYPES: List[str] = ["mp4", "mov", "avi", "webm"]
+    ALLOWED_AUDIO_TYPES: List[str] = ["m4a", "mp4", "aac", "mpeg", "mp3", "webm", "ogg"]
     ALLOWED_DOCUMENT_TYPES: List[str] = [
         "pdf",
         "txt",

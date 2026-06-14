@@ -41,6 +41,8 @@ class FeedService:
     def _apply_feed_type_filter(query, feed_type: str):
         """
         Фильтр типа ленты. Для reels — как в профиле: type=reel или видео в body.media.
+        feed_type из API: all | photos | recipes | reels (множественное число).
+        Post.type в БД: photo | recipe | reel | text.
         """
         if feed_type == "all":
             return query
@@ -54,6 +56,10 @@ class FeedService:
                 body_j.contains({"media": [{"type": "video"}]}),
             )
             return query.filter(or_(Post.type == "reel", video_in_media))
+        if feed_type == "photos":
+            return query.filter(Post.type == "photo")
+        if feed_type == "recipes":
+            return query.filter(Post.type == "recipe")
         return query.filter(Post.type == feed_type)
     
     def __init__(self, db: Session, redis_client):
@@ -66,7 +72,8 @@ class FeedService:
         cursor: Optional[str] = None,
         limit: int = 20,
         feed_type: str = "all",
-        following_only: bool = False
+        following_only: bool = False,
+        sort_by: str = "personalized",
     ) -> dict:
         """
         Получить персональную ленту пользователя
@@ -90,7 +97,7 @@ class FeedService:
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
             f"feed:{user_id}:{feed_type}:following_only={following_only}"
-            f":hide_promo={hide_promoted}"
+            f":sort={sort_by}:hide_promo={hide_promoted}"
         )
         cached_data = None
 
@@ -127,12 +134,20 @@ class FeedService:
         posts = self._fetch_posts(user_id, feed_type, following_only=following_only)
         logger.debug(f"Found {len(posts)} posts for user {user_id}, following_only={following_only}")
 
-        # Ранжируем
-        ranked_posts = self._rank_posts(
-            posts,
-            user_id,
-            following_only=following_only,
-        )
+        # Ранжируем / сортируем
+        sort_key = (sort_by or "personalized").lower()
+        if sort_key == "recent":
+            ranked_posts = self._sort_posts_recent(posts)
+        elif sort_key == "popular":
+            ranked_posts = self._sort_posts_popular(posts)
+        elif sort_key == "trending":
+            ranked_posts = self._sort_posts_trending(posts)
+        else:
+            ranked_posts = self._rank_posts(
+                posts,
+                user_id,
+                following_only=following_only,
+            )
         if dismissed_ids:
             ranked_posts = [p for p in ranked_posts if p.id not in dismissed_ids]
 
@@ -410,6 +425,79 @@ class FeedService:
         scored_posts.sort(key=lambda x: x[0], reverse=True)
         
         return self._apply_diversity_guard(scored_posts, following_only=following_only)
+
+    def _sort_posts_recent(self, posts: List[Post]) -> List[Post]:
+        return sorted(
+            posts,
+            key=lambda p: p.published_at or p.created_at or datetime.min,
+            reverse=True,
+        )
+
+    def _sort_posts_popular(self, posts: List[Post]) -> List[Post]:
+        if not posts:
+            return []
+        from app.models.like import Like
+        from app.models.comment import Comment
+
+        ids = [p.id for p in posts]
+        likes_rows = (
+            self.db.query(Like.post_id, func.count(Like.id))
+            .filter(Like.post_id.in_(ids))
+            .group_by(Like.post_id)
+            .all()
+        )
+        comments_rows = (
+            self.db.query(Comment.post_id, func.count(Comment.id))
+            .filter(Comment.post_id.in_(ids), Comment.deleted_at.is_(None))
+            .group_by(Comment.post_id)
+            .all()
+        )
+        likes_map = {pid: cnt for pid, cnt in likes_rows}
+        comments_map = {pid: cnt for pid, cnt in comments_rows}
+
+        def score(post: Post) -> float:
+            likes = likes_map.get(post.id, 0)
+            comments = comments_map.get(post.id, 0)
+            views = post.views_count or 0
+            return likes * 3.0 + comments * 4.0 + views * 0.05
+
+        return sorted(posts, key=score, reverse=True)
+
+    def _sort_posts_trending(self, posts: List[Post]) -> List[Post]:
+        if not posts:
+            return []
+        now = datetime.utcnow()
+        from app.models.like import Like
+        from app.models.comment import Comment
+
+        ids = [p.id for p in posts]
+        likes_rows = (
+            self.db.query(Like.post_id, func.count(Like.id))
+            .filter(Like.post_id.in_(ids))
+            .group_by(Like.post_id)
+            .all()
+        )
+        comments_rows = (
+            self.db.query(Comment.post_id, func.count(Comment.id))
+            .filter(Comment.post_id.in_(ids), Comment.deleted_at.is_(None))
+            .group_by(Comment.post_id)
+            .all()
+        )
+        likes_map = {pid: cnt for pid, cnt in likes_rows}
+        comments_map = {pid: cnt for pid, cnt in comments_rows}
+
+        scored: List[tuple] = []
+        for post in posts:
+            ts = post.published_at or post.created_at or now
+            age_hours = max(1.0, (now - ts).total_seconds() / 3600.0)
+            engagement = (
+                likes_map.get(post.id, 0) * 3.0
+                + comments_map.get(post.id, 0) * 4.0
+                + (post.views_count or 0) * 0.05
+            )
+            scored.append((engagement / (age_hours**1.2), post))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [p for _, p in scored]
 
     def _apply_diversity_guard(
         self,
@@ -1580,9 +1668,16 @@ class FeedService:
             feed_types = (
                 [feed_type] if feed_type else ["all", "reels", "recipes", "photos"]
             )
+            sort_modes = ("personalized", "recent", "popular", "trending")
             for ft in feed_types:
                 for following_only in (True, False):
                     for hide_promo in (True, False):
+                        for sort_by in sort_modes:
+                            self.redis.delete(
+                                f"feed:{user_id}:{ft}:following_only={following_only}"
+                                f":sort={sort_by}:hide_promo={hide_promo}"
+                            )
+                        # legacy key (до sort в ключе)
                         self.redis.delete(
                             f"feed:{user_id}:{ft}:following_only={following_only}"
                             f":hide_promo={hide_promo}"

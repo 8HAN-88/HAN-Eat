@@ -17,6 +17,8 @@ class ChannelMember(Base):
     status = Column(String(20), default="active", nullable=False, index=True)
     # owner определяется через admin_user_id в channels, но для удобства может быть и здесь
     is_favorite = Column(Boolean, default=False, nullable=False)  # Избранный канал
+    inbox_archived = Column(Boolean, default=False, nullable=False)
+    show_in_feed = Column(Boolean, default=True, nullable=False)
     # Push / in-app уведомления о постах канала (false = «без звука»)
     notifications_enabled = Column(Boolean, default=True, nullable=False)
     # Сколько постов пользователь «видел» в inbox (синхронизация между устройствами)

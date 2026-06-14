@@ -21,9 +21,23 @@ def test_apply_feed_type_filter_all_returns_query_unchanged():
 
 
 def test_apply_feed_type_filter_photos_filters_type():
+    from app.models.post import Post
+
     query = MagicMock()
     FeedService._apply_feed_type_filter(query, "photos")
     query.filter.assert_called_once()
+    clause = query.filter.call_args[0][0]
+    assert str(clause) == str(Post.type == "photo")
+
+
+def test_apply_feed_type_filter_recipes_filters_type():
+    from app.models.post import Post
+
+    query = MagicMock()
+    FeedService._apply_feed_type_filter(query, "recipes")
+    query.filter.assert_called_once()
+    clause = query.filter.call_args[0][0]
+    assert str(clause) == str(Post.type == "recipe")
 
 
 def test_diversity_guard_limits_repeated_authors_in_recommendations():

@@ -66,6 +66,9 @@ class ChannelResponse(BaseModel):
     last_post_preview: Optional[str] = None
     last_post_at: Optional[datetime] = None
     seen_posts_count: Optional[int] = None
+    is_favorite: Optional[bool] = None
+    inbox_archived: Optional[bool] = None
+    show_in_feed: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -104,6 +107,25 @@ class JoinChannelResponse(BaseModel):
 
 class ChannelNotificationsPatchRequest(BaseModel):
     enabled: bool
+
+
+class ChannelInboxPrefsPatchRequest(BaseModel):
+    is_favorite: Optional[bool] = None
+    inbox_archived: Optional[bool] = None
+    show_in_feed: Optional[bool] = None
+    notifications_enabled: Optional[bool] = None
+
+
+class ChannelInboxPrefsItem(BaseModel):
+    channel_id: int
+    is_favorite: bool = False
+    inbox_archived: bool = False
+    show_in_feed: bool = True
+    notifications_enabled: bool = True
+
+
+class ChannelInboxPrefsListResponse(BaseModel):
+    items: List[ChannelInboxPrefsItem]
 
 
 class ChannelMemberResponse(BaseModel):

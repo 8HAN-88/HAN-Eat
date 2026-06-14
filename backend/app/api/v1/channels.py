@@ -53,6 +53,9 @@ from app.schemas.channel import (
     ChannelMemberResponse,
     UpdateChannelMemberRoleRequest,
     ChannelNotificationsPatchRequest,
+    ChannelInboxPrefsPatchRequest,
+    ChannelInboxPrefsItem,
+    ChannelInboxPrefsListResponse,
     ChannelJoinRequestResponse,
 )
 from app.schemas.post import CreatePostRequest, UpdatePostRequest, PostResponse, RecipeStep
@@ -146,8 +149,14 @@ def _build_channel_response(
             .count()
         )
     seen_posts_count = None
+    is_favorite = None
+    inbox_archived = None
+    show_in_feed = None
     if member and member.status == MEMBER_STATUS_ACTIVE:
         seen_posts_count = member.last_seen_posts_count or 0
+        is_favorite = bool(member.is_favorite)
+        inbox_archived = bool(getattr(member, "inbox_archived", False))
+        show_in_feed = bool(getattr(member, "show_in_feed", True))
     return item.model_copy(
         update={
             "membership_status": membership_status_for_user(
@@ -155,6 +164,9 @@ def _build_channel_response(
             ),
             "pending_join_requests_count": pending_count,
             "seen_posts_count": seen_posts_count,
+            "is_favorite": is_favorite,
+            "inbox_archived": inbox_archived,
+            "show_in_feed": show_in_feed,
             **presentation,
         }
     )
@@ -392,6 +404,98 @@ async def update_channel(
             created_at=channel.created_at,
             auto_publish_reels=channel.auto_publish_reels,
         )
+
+
+@router.get("/inbox-unread-count")
+async def channel_inbox_unread_count(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Сумма непрочитанных постов в каналах пользователя (inbox)."""
+    rows = (
+        db.query(Channel.posts_count, ChannelMember.last_seen_posts_count)
+        .join(ChannelMember, ChannelMember.channel_id == Channel.id)
+        .filter(
+            ChannelMember.user_id == current_user.id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
+        )
+        .all()
+    )
+    total = 0
+    for posts_count, seen in rows:
+        posts = posts_count or 0
+        seen_n = seen or 0
+        delta = posts - seen_n
+        if delta > 0:
+            total += delta
+    return {"count": total}
+
+
+@router.get("/inbox-prefs", response_model=ChannelInboxPrefsListResponse)
+async def list_channel_inbox_prefs(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Настройки inbox для всех каналов пользователя (синхронизация между устройствами)."""
+    rows = (
+        db.query(ChannelMember)
+        .filter(
+            ChannelMember.user_id == current_user.id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
+        )
+        .all()
+    )
+    items = [
+        ChannelInboxPrefsItem(
+            channel_id=m.channel_id,
+            is_favorite=bool(m.is_favorite),
+            inbox_archived=bool(getattr(m, "inbox_archived", False)),
+            show_in_feed=bool(getattr(m, "show_in_feed", True)),
+            notifications_enabled=bool(getattr(m, "notifications_enabled", True)),
+        )
+        for m in rows
+    ]
+    return ChannelInboxPrefsListResponse(items=items)
+
+
+@router.patch("/{channel_id}/inbox-prefs")
+async def patch_channel_inbox_prefs(
+    channel_id: int,
+    body: ChannelInboxPrefsPatchRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Обновить избранное, архив inbox, показ в ленте, уведомления."""
+    member = (
+        db.query(ChannelMember)
+        .filter(
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.user_id == current_user.id,
+            ChannelMember.status == MEMBER_STATUS_ACTIVE,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not a member of this channel",
+        )
+    if body.is_favorite is not None:
+        member.is_favorite = body.is_favorite
+    if body.inbox_archived is not None:
+        member.inbox_archived = body.inbox_archived
+    if body.show_in_feed is not None:
+        member.show_in_feed = body.show_in_feed
+    if body.notifications_enabled is not None:
+        member.notifications_enabled = body.notifications_enabled
+    db.commit()
+    return ChannelInboxPrefsItem(
+        channel_id=member.channel_id,
+        is_favorite=bool(member.is_favorite),
+        inbox_archived=bool(getattr(member, "inbox_archived", False)),
+        show_in_feed=bool(getattr(member, "show_in_feed", True)),
+        notifications_enabled=bool(getattr(member, "notifications_enabled", True)),
+    )
 
 
 @router.get("/{channel_id}", response_model=ChannelDetailResponse)
