@@ -72,19 +72,23 @@ class RecipeService {
   }
 
   Future<void> _startConnectivityMonitor() async {
-    final conn = Connectivity();
-    final initial = await conn.checkConnectivity();
-    online.value = !initial.contains(ConnectivityResult.none);
+    try {
+      final conn = Connectivity();
+      final initial = await conn.checkConnectivity();
+      online.value = !initial.contains(ConnectivityResult.none);
 
-    _connectivitySub = conn.onConnectivityChanged.listen((result) {
-      final isOnline = !result.contains(ConnectivityResult.none);
-      final prev = online.value;
-      online.value = isOnline;
-      if (!prev && isOnline) {
-        // regained connectivity -> attempt sync
-        manualSync();
-      }
-    });
+      _connectivitySub = conn.onConnectivityChanged.listen((result) {
+        final isOnline = !result.contains(ConnectivityResult.none);
+        final prev = online.value;
+        online.value = isOnline;
+        if (!prev && isOnline) {
+          manualSync();
+        }
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('Connectivity monitor unavailable: $e');
+      online.value = false;
+    }
   }
 
   // Manual sync: fetch remote (real API if online) and merge with local

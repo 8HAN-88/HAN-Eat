@@ -1,3 +1,5 @@
+import 'dart:io' show Directory;
+
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
@@ -63,7 +65,13 @@ Future<void> _initHiveCoreOnce() async {
         return;
       }
     } else {
-      return;
+      try {
+        final dir = await Directory.systemTemp.createTemp('hive_fallback_');
+        Hive.init(dir.path);
+      } catch (e2) {
+        debugPrint('Hive fallback init failed: $e2');
+        return;
+      }
     }
   }
   if (!Hive.isAdapterRegistered(RecipeModelAdapter().typeId)) {

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:han_eat/data/mock_recipes.dart';
 import 'package:han_eat/models/recipe_model.dart';
 import 'package:han_eat/services/recipe_service.dart';
 
@@ -22,12 +23,11 @@ void main() {
     } catch (_) {}
   });
 
-  test('RecipeService manualSync populates cache', () async {
+  test('RecipeService caches mock recipes', () async {
     await RecipeService.init();
     final svc = RecipeService.instance;
 
-    // initial may be empty; force a manual sync (uses mock if API key absent)
-    await svc.manualSync();
+    await svc.cacheRecipes(getMockRecipeModels());
 
     expect(svc.recipes.value, isA<List<RecipeModel>>());
     expect(svc.recipes.value.length, greaterThanOrEqualTo(1));
@@ -37,7 +37,6 @@ void main() {
     await RecipeService.init();
     final svc = RecipeService.instance;
 
-    // remote search with likely empty API key will fallback to mock; ensure no error
     await svc.searchRemoteAndCache('pasta');
     expect(svc.recipes.value, isNotNull);
   });
