@@ -7,7 +7,7 @@
     "display": "standalone",
     "display_override": ["standalone", "minimal-ui"],
     "background_color": "#000000",
-    "theme_color": "#F7F8FA",
+    "theme_color": "#0F1319",
     "description": "Рецепты, лента, каналы и план питания",
     "lang": "ru",
     "dir": "ltr",

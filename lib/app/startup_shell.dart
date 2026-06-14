@@ -11,8 +11,8 @@ import 'app.dart';
 import 'app_bootstrap_state.dart';
 import 'bootstrap.dart';
 
-/// Фон загрузки — совпадает с темой приложения.
-const _kStartupCanvas = Color(0xFFF7F8FA);
+/// Фон загрузки — тёмный, без белой вспышки на PWA.
+const _kStartupCanvas = Color(0xFF0F1319);
 
 class StartupShell extends StatefulWidget {
   const StartupShell({super.key});

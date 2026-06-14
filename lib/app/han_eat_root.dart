@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
@@ -17,7 +18,7 @@ class HanEatRoot extends StatefulWidget {
 
 class _HanEatRootState extends State<HanEatRoot> {
   static const _bootOrange = Color(0xFFFF6B35);
-  static const _bootCanvas = Color(0xFFF7F8FA);
+  static const _bootCanvas = Color(0xFF0F1319);
 
   bool _uiReady = false;
   String _status = 'Запуск…';
@@ -34,12 +35,12 @@ class _HanEatRootState extends State<HanEatRoot> {
     try {
       if (mounted) setState(() => _status = 'Инициализация…');
       await bootstrapEarly().timeout(
-        const Duration(seconds: 6),
+        Duration(seconds: kIsWeb ? 4 : 6),
         onTimeout: () => debugPrint('⚠️ HanEatRoot bootstrapEarly timeout'),
       );
       if (mounted) setState(() => _status = 'Сессия…');
       await bootstrapServicesForFirstFrame().timeout(
-        const Duration(seconds: 5),
+        Duration(seconds: kIsWeb ? 2 : 5),
         onTimeout: () => debugPrint('⚠️ HanEatRoot auth timeout'),
       );
     } catch (e, st) {
@@ -69,56 +70,30 @@ class _HanEatRootState extends State<HanEatRoot> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
+        brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
           seedColor: _bootOrange,
-          brightness: Brightness.light,
+          brightness: Brightness.dark,
         ),
         scaffoldBackgroundColor: _bootCanvas,
       ),
       home: Scaffold(
         backgroundColor: _bootCanvas,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: const BoxDecoration(
-                      color: _bootOrange,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.restaurant_rounded,
-                      color: Colors.white,
-                      size: 44,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'HAN Eat',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const CircularProgressIndicator(color: _bootOrange),
-                  const SizedBox(height: 16),
-                  Text(
-                    _status,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Color(0xFF5C5C5C),
-                    ),
-                  ),
-                ],
-              ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/brand_logo.png',
+                  width: 160,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
+                const SizedBox(height: 28),
+                const CircularProgressIndicator(color: _bootOrange),
+              ],
             ),
           ),
         ),
