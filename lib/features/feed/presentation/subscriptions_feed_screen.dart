@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../models/post_model.dart';
 import '../../../models/post_types.dart';
 import '../../../services/feed_api_cache.dart';
@@ -214,9 +215,7 @@ class _SubscriptionsFeedScreenState
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
-          );
+          showSessionExpiredSnackBar(context);
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);

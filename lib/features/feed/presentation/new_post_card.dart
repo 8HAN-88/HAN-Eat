@@ -14,7 +14,9 @@ import '../../../services/auth_service.dart';
 import '../../../services/favorites_service.dart';
 import '../../../services/recipe_comments_service.dart';
 import '../../../services/comment_service.dart';
+import '../../../core/network/feed_load_helper.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../screens/detail_page.dart';
 import '../../../utils/number_formatter.dart';
@@ -330,18 +332,22 @@ class _NewPostCardState extends State<NewPostCard> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleAuthError(
-                e,
-                fallback: 'Не удалось поставить лайк',
-                authFallback: 'Войдите, чтобы поставить лайк',
+        if (FeedLoadHelper.isSessionError(e)) {
+          showSessionExpiredSnackBar(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                userVisibleAuthError(
+                  e,
+                  fallback: 'Не удалось поставить лайк',
+                  authFallback: 'Войдите, чтобы поставить лайк',
+                ),
               ),
+              duration: const Duration(seconds: 3),
             ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+          );
+        }
       }
     } finally {
       if (mounted) {

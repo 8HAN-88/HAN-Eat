@@ -1,6 +1,7 @@
 // Экран Reels Feed с вертикальной прокруткой (как TikTok/Instagram Reels)
 import 'dart:async';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -383,9 +384,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         if (FeedLoadHelper.isSessionError(e)) {
           await FeedLoadHelper.clearSessionIfExpired(e);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
-          );
+          showSessionExpiredSnackBar(context);
           return;
         }
         final cached = await FeedApiCache.load(_cacheVariant);

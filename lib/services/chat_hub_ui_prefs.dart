@@ -5,7 +5,18 @@ class ChatHubUiPrefs {
   ChatHubUiPrefs._();
 
   static const _gesturesHintKey = 'chat_hub_gestures_hint_dismissed_v1';
+  static const _voiceHintKey = 'chat_voice_hint_dismissed_v1';
   static const _selectedFolderKey = 'chat_selected_folder_id_v1';
+
+  static Future<bool> isVoiceHintDismissed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_voiceHintKey) ?? false;
+  }
+
+  static Future<void> dismissVoiceHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_voiceHintKey, true);
+  }
 
   static Future<bool> isGesturesHintDismissed() async {
     final prefs = await SharedPreferences.getInstance();

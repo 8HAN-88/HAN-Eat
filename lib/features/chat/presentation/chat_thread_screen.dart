@@ -35,6 +35,7 @@ import '../application/chat_realtime_signals.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
+import '../../../services/chat_hub_ui_prefs.dart';
 import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
@@ -168,6 +169,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _loadingMore = false;
   String? _loadError;
   bool _sending = false;
+  double? _uploadProgress;
+  String _sendingStatus = 'Отправка…';
+  final Map<int, _PendingTextSend> _failedTextSends = {};
+  bool _showVoiceHint = false;
   bool _hasMore = false;
   int? _nextCursor;
   Timer? _pollTimer;
@@ -224,6 +229,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _controller.addListener(_onInputChanged);
     unawaited(_loadCachedMessages());
     unawaited(_restoreDraft());
+    unawaited(_restoreVoiceHint());
     _load(refresh: true);
     _startPolling();
     _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -436,8 +442,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _integrateMessage(ChatMessage msg, {int? removeTempId}) {
     if (removeTempId != null) {
       _messages.removeWhere((m) => m.id == removeTempId);
+      _failedTextSends.remove(removeTempId);
     }
-    _messages.removeWhere((m) => m.id < 0 && m.isMine);
+    _messages.removeWhere(
+      (m) => m.id < 0 && m.isMine && !_failedTextSends.containsKey(m.id),
+    );
     final idx = _messages.indexWhere(
       (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
     );
@@ -491,6 +500,77 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Исходное сообщение не найдено')),
     );
+  }
+
+  Future<void> _restoreVoiceHint() async {
+    final dismissed = await ChatHubUiPrefs.isVoiceHintDismissed();
+    if (!mounted) return;
+    if (!dismissed) setState(() => _showVoiceHint = true);
+  }
+
+  Future<void> _dismissVoiceHint() async {
+    await ChatHubUiPrefs.dismissVoiceHint();
+    if (mounted) setState(() => _showVoiceHint = false);
+  }
+
+  void _beginSending({String status = 'Отправка…'}) {
+    setState(() {
+      _sending = true;
+      _sendingStatus = status;
+      _uploadProgress = null;
+    });
+  }
+
+  void _endSending() {
+    setState(() {
+      _sending = false;
+      _sendingStatus = 'Отправка…';
+      _uploadProgress = null;
+    });
+  }
+
+  void _setUploadProgress(double value, {String? status}) {
+    if (!mounted) return;
+    setState(() {
+      _uploadProgress = value.clamp(0.0, 1.0);
+      if (status != null) _sendingStatus = status;
+    });
+  }
+
+  Future<void> _retryFailedText(int tempId) async {
+    final pending = _failedTextSends[tempId];
+    if (pending == null || _sending) return;
+    _failedTextSends.remove(tempId);
+    _beginSending();
+    try {
+      final msg = await ChatService.sendText(
+        conversationId: widget.conversationId,
+        content: pending.text,
+        replyToMessageId: pending.replyToMessageId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg, removeTempId: tempId);
+      });
+      _endSending();
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _failedTextSends[tempId] = pending);
+      _endSending();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _discardFailedText(int tempId) {
+    setState(() {
+      _failedTextSends.remove(tempId);
+      _messages.removeWhere((m) => m.id == tempId);
+    });
+    unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
   }
 
   Future<void> _restoreDraft() async {
@@ -1306,6 +1386,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
+    if (_showVoiceHint) unawaited(_dismissVoiceHint());
     final dir = kIsWeb ? null : await getTemporaryDirectory();
     final path = dir == null
         ? null
@@ -1404,7 +1485,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (durationSec < 1) return;
     if (!kIsWeb && (path == null || path.isEmpty)) return;
 
-    setState(() => _sending = true);
+    _beginSending(status: 'Загрузка голосового…');
     try {
       final XFile file;
       if (kIsWeb) {
@@ -1424,10 +1505,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'audio',
+        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка голосового…'),
       );
       final url = uploaded.url;
       if (url == null || url.isEmpty) throw Exception('Нет URL файла');
-      final resolved = ServerConfig.resolveMediaUrl(url);
+      final resolved = ServerConfig.resolveVoiceMediaUrl(url);
+      _setUploadProgress(1, status: 'Отправка…');
       final msg = await ChatService.sendVoice(
         conversationId: widget.conversationId,
         mediaUrl: resolved,
@@ -1438,13 +1521,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         _integrateMessage(msg);
         _replyTo = null;
-        _sending = false;
       });
+      _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      _endSending();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1705,6 +1788,43 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (confirmed == true && mounted) {
       await _deleteMessage(msg);
     }
+  }
+
+  Widget _failedSendActions(int tempId, ColorScheme scheme) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 4),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 4,
+        children: [
+          Icon(Icons.error_outline, size: 14, color: scheme.error),
+          Text(
+            'Не отправлено',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.error,
+                ),
+          ),
+          TextButton(
+            onPressed: _sending ? null : () => _retryFailedText(tempId),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Повторить'),
+          ),
+          TextButton(
+            onPressed: _sending ? null : () => _discardFailedText(tempId),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _messageBubbleWidget({
@@ -1983,8 +2103,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() {
       _messages.add(optimistic);
       _replyTo = null;
-      _sending = true;
     });
+    _beginSending();
     _controller.clear();
     try {
       final msg = await ChatService.sendText(
@@ -1995,19 +2115,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() {
         _integrateMessage(msg, removeTempId: tempId);
-        _sending = false;
       });
+      _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       unawaited(ChatCacheService.clearDraft(widget.conversationId));
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.removeWhere((m) => m.id == tempId);
-        _sending = false;
+        _failedTextSends[tempId] = _PendingTextSend(
+          text: text,
+          replyToMessageId: replyId,
+        );
       });
-      _controller.text = text;
-      _controller.selection = TextSelection.collapsed(offset: text.length);
+      _endSending();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2117,15 +2238,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendPickedImage(XFile file) async {
-    setState(() => _sending = true);
+    _beginSending(status: 'Загрузка фото…');
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'image',
+        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка фото…'),
       );
       final url = uploaded.url;
       if (url == null || url.isEmpty) throw Exception('Нет URL файла');
       final resolved = ServerConfig.resolveMediaUrl(url);
+      _setUploadProgress(1, status: 'Отправка…');
       final msg = await ChatService.sendImage(
         conversationId: widget.conversationId,
         mediaUrl: resolved,
@@ -2135,13 +2258,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         _integrateMessage(msg);
         _replyTo = null;
-        _sending = false;
       });
+      _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      _endSending();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2149,16 +2272,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendPickedVideo(XFile file) async {
-    setState(() => _sending = true);
+    _beginSending(status: 'Загрузка видео…');
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'video',
         waitForProcessing: false,
+        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка видео…'),
       );
       final url = uploaded.url;
       if (url == null || url.isEmpty) throw Exception('Нет URL файла');
       final resolved = ServerConfig.resolveMediaUrl(url);
+      _setUploadProgress(1, status: 'Отправка…');
       final msg = await ChatService.sendVideo(
         conversationId: widget.conversationId,
         mediaUrl: resolved,
@@ -2168,13 +2293,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         _integrateMessage(msg);
         _replyTo = null;
-        _sending = false;
       });
+      _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      _endSending();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2217,15 +2342,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (path == null || path.isEmpty) return;
         file = XFile(path);
       }
-      setState(() => _sending = true);
+      _beginSending(status: 'Загрузка файла…');
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
         fileType: 'document',
+        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка файла…'),
       );
       final fileUrl = uploaded.url;
       if (fileUrl == null || fileUrl.isEmpty) {
         throw Exception('Не удалось загрузить файл');
       }
+      _setUploadProgress(1, status: 'Отправка…');
       final msg = await ChatService.sendFile(
         conversationId: widget.conversationId,
         mediaUrl: ServerConfig.resolveMediaUrl(fileUrl),
@@ -2236,13 +2363,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         _integrateMessage(msg);
         _replyTo = null;
-        _sending = false;
       });
+      _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _sending = false);
+      _endSending();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -2578,52 +2705,68 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           ? 'Сообщение'
                                           : null);
                                   final selected = _selectedMessageIds.contains(msg.id);
+                                  final failed = _failedTextSends.containsKey(msg.id);
                                   return Row(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       if (_selectionMode)
                                         _selectionIndicator(selected, scheme),
                                       Expanded(
-                                        child: Builder(
-                                          builder: (bubbleContext) =>
-                                              GestureDetector(
-                                            behavior: HitTestBehavior.opaque,
-                                            onTap: _selectionMode
-                                                ? () => _toggleMessageSelection(
-                                                      msg.id,
-                                                    )
-                                                : null,
-                                            onLongPress: _selectionMode
-                                                ? null
-                                                : () {
-                                                    final box =
-                                                        bubbleContext.findRenderObject()
-                                                            as RenderBox?;
-                                                    if (box != null) {
-                                                      unawaited(
-                                                        _showMessageActionOverlay(
-                                                          msg,
-                                                          box,
-                                                        ),
-                                                      );
-                                                    }
-                                                  },
-                                            child: _messageBubbleWidget(
-                                              msg: msg,
-                                              scheme: scheme,
-                                              searching: searching,
-                                              isGroup: isGroup,
-                                              replyQuote: replyQuote,
-                                              interactive: !_selectionMode,
-                                              onReplyTap:
-                                                  msg.replyToMessageId != null
-                                                      ? () =>
-                                                          _scrollToReplyMessage(
-                                                            msg.replyToMessageId!,
-                                                          )
-                                                      : null,
+                                        child: Column(
+                                          crossAxisAlignment: msg.isMine
+                                              ? CrossAxisAlignment.end
+                                              : CrossAxisAlignment.start,
+                                          children: [
+                                            Builder(
+                                              builder: (bubbleContext) =>
+                                                  GestureDetector(
+                                                behavior: HitTestBehavior.opaque,
+                                                onTap: _selectionMode
+                                                    ? () =>
+                                                        _toggleMessageSelection(
+                                                          msg.id,
+                                                        )
+                                                    : null,
+                                                onLongPress: _selectionMode
+                                                    ? null
+                                                    : () {
+                                                        final box =
+                                                            bubbleContext
+                                                                    .findRenderObject()
+                                                                as RenderBox?;
+                                                        if (box != null) {
+                                                          unawaited(
+                                                            _showMessageActionOverlay(
+                                                              msg,
+                                                              box,
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                child: Opacity(
+                                                  opacity: failed ? 0.55 : 1,
+                                                  child: _messageBubbleWidget(
+                                                    msg: msg,
+                                                    scheme: scheme,
+                                                    searching: searching,
+                                                    isGroup: isGroup,
+                                                    replyQuote: replyQuote,
+                                                    interactive: !_selectionMode,
+                                                    onReplyTap:
+                                                        msg.replyToMessageId !=
+                                                                null
+                                                            ? () =>
+                                                                _scrollToReplyMessage(
+                                                                  msg.replyToMessageId!,
+                                                                )
+                                                            : null,
+                                                  ),
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            if (failed)
+                                              _failedSendActions(msg.id, scheme),
+                                          ],
                                         ),
                                       ),
                                     ],
@@ -2674,25 +2817,81 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Material(
               color: scheme.secondaryContainer.withValues(alpha: 0.55),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: scheme.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Отправка…',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: scheme.onSecondaryContainer,
+                    Row(
+                      children: [
+                        if (_uploadProgress == null)
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: scheme.onSecondaryContainer,
+                            ),
+                          )
+                        else
+                          Text(
+                            '${(_uploadProgress! * 100).round()}%',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: scheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _sendingStatus,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: scheme.onSecondaryContainer,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (_uploadProgress != null) ...[
+                      const SizedBox(height: 6),
+                      LinearProgressIndicator(
+                        value: _uploadProgress,
+                        minHeight: 3,
+                        borderRadius: BorderRadius.circular(2),
+                        color: scheme.primary,
+                        backgroundColor:
+                            scheme.onSecondaryContainer.withValues(alpha: 0.2),
+                      ),
+                    ],
                   ],
+                ),
+              ),
+            ),
+          if (_showVoiceHint && !_recording && !_sending)
+            Material(
+              color: scheme.tertiaryContainer.withValues(alpha: 0.45),
+              child: ListTile(
+                dense: true,
+                leading: Icon(
+                  Icons.mic_none_rounded,
+                  color: scheme.onTertiaryContainer,
+                  size: 22,
+                ),
+                title: Text(
+                  'Удерживайте кнопку микрофона для голосового',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onTertiaryContainer,
+                      ),
+                ),
+                trailing: IconButton(
+                  tooltip: 'Скрыть',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: _dismissVoiceHint,
                 ),
               ),
             ),
@@ -2856,6 +3055,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
   }
+}
+
+class _PendingTextSend {
+  const _PendingTextSend({
+    required this.text,
+    this.replyToMessageId,
+  });
+
+  final String text;
+  final int? replyToMessageId;
 }
 
 Widget _threadMenuRow(IconData icon, String label) {
