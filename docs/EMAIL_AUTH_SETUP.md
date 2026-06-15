@@ -125,3 +125,55 @@ AUTH_LINK_BASE_URL=haneat://auth
 4. `python3 scripts/check_email_config.py --send-test airat8446@gmail.com`
 
 Яндекс SMTP можно оставить закомментированным — при `EMAIL_PROVIDER=resend` он не используется.
+
+## 8. Отправка на любые адреса (mail.ru, gmail и т.д.)
+
+С `onboarding@resend.dev` Resend разрешает письма **только на email владельца аккаунта** (тест прошёл — это нормально).
+
+Чтобы письма шли **всем пользователям**, верифицируйте домен `haneat.app`:
+
+### 8.1 Resend
+
+1. https://resend.com/domains → **Add Domain** → `haneat.app`
+2. Resend покажет DNS-записи (обычно 3 DKIM CNAME + TXT для SPF/DMARC). Скопируйте их.
+
+### 8.2 DNS у регистратора домена
+
+Где управляется DNS для `haneat.app` (Timeweb / Cloudflare / регистратор):
+
+- Добавьте **все** записи из Resend **как указано** (имена вида `resend._domainkey`, `send` и т.п.)
+- Не удаляйте существующие MX для почты, если они нужны
+- SPF: объедините с существующим TXT или добавьте отдельную запись, как советует Resend
+
+Проверка (через 5–30 мин):
+
+```bash
+dig +short CNAME resend._domainkey.haneat.app
+```
+
+В Resend статус домена должен стать **Verified**.
+
+### 8.3 Сервер
+
+В `/root/HAN-Eat/backend/.env`:
+
+```env
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_...
+EMAIL_FROM=noreply@haneat.app
+EMAIL_FROM_NAME=HAN Eat
+RESEND_DOMAIN_VERIFIED=true
+```
+
+```bash
+systemctl restart haneat-api
+cd /root/HAN-Eat/backend && source venv/bin/activate
+python3 scripts/check_email_config.py --send-test kokmaks2007@mail.ru
+```
+
+Или деплой с Mac/GitHub Actions — скрипт `ensure_server_email_env.sh` подхватит `RESEND_DOMAIN_VERIFIED=true`.
+
+### 8.4 Проверка в приложении
+
+1. https://haneat.app → регистрация / «Отправить письмо ещё раз»
+2. Проверить inbox и **Спам** (особенно @mail.ru)
