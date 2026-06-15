@@ -1,4 +1,6 @@
 // Модель поста для нового API (без code generation пока)
+import '../models/video_quality_preference.dart';
+import '../services/reel_video_sources.dart';
 import '../services/server_config.dart';
 import 'post.dart';
 
@@ -60,25 +62,15 @@ class PostModel {
   String? get linkImage => linkMeta?['image'] as String?;
   String? get linkDomain => linkMeta?['domain'] as String?;
 
-  /// URL видео для рилса (media[] или legacy video_url).
-  String? get videoUrl {
-    final direct = body?['video_url'];
-    if (direct is String && direct.trim().isNotEmpty) {
-      return ServerConfig.resolveMediaUrl(direct.trim());
-    }
-    final media = body?['media'];
-    if (media is List) {
-      for (final item in media) {
-        if (item is Map<String, dynamic> && item['type'] == 'video') {
-          final u = item['url'];
-          if (u is String && u.trim().isNotEmpty) {
-            return ServerConfig.resolveMediaUrl(u.trim());
-          }
-        }
-      }
-    }
-    return null;
-  }
+  /// Все варианты видео (HLS, 480p, 720p, оригинал).
+  ReelVideoSources get reelVideoSources => ReelVideoSources.fromPostBody(body);
+
+  /// URL для быстрого старта (режим «Авто») — обратная совместимость.
+  String? get videoUrl =>
+      reelVideoSources.fastStartUrl(VideoQualityPreference.auto);
+
+  String? videoUrlFor(VideoQualityPreference pref) =>
+      reelVideoSources.fastStartUrl(pref);
 
   String? get videoThumbnail {
     final direct = body?['video_thumbnail'];

@@ -30,6 +30,8 @@ import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
 import '../application/reels_feed_refresh_provider.dart';
+import '../application/reels_video_preload.dart';
+import '../../settings/application/video_playback_controller.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
   const ReelsFeedScreen({
@@ -81,9 +83,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
 
-  int get _initialVideoPreloadCount => kIsWeb ? 2 : 3;
+  int get _initialVideoPreloadCount => kIsWeb ? 3 : 4;
 
-  int get _lookaheadVideoPreloadCount => kIsWeb ? 1 : 2;
+  int get _lookaheadVideoPreloadCount => kIsWeb ? 2 : 3;
+
+  int get _controllerRetainDistance => kIsWeb ? 1 : 2;
 
   Future<void> _initSingleVideo(int i) async {
     if (!mounted || !widget.isTabVisible) return;
@@ -91,30 +95,53 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     if (i < 0 || i >= _reels.length) return;
 
     final reel = _reels[i];
-    final videoUrl = reel.videoUrl;
-    if (videoUrl == null || videoUrl.isEmpty) {
+    final sources = reel.reelVideoSources;
+    if (sources.isEmpty) {
       if (mounted) setState(() => _videoInitFailed[i] = true);
       return;
     }
     try {
       final shouldPlay = i == _currentIndex && widget.isTabVisible;
-      final videoController = await VideoPlayerHelper.createPreparedController(
-        videoUrl,
+      final qualityPref = ref.read(videoPlaybackProvider);
+      final playback = await VideoPlayerHelper.createReelPlayback(
+        sources: sources,
+        qualityPref: qualityPref,
         autoPlay: shouldPlay,
         muted: _sessionMuted,
       );
 
       if (!mounted) {
-        videoController.dispose();
+        playback.controller.dispose();
         return;
       }
 
       setState(() {
-        _videoControllers[i] = videoController;
+        _videoControllers[i] = playback.controller;
         _videoInitFailed.remove(i);
       });
+
+      final upgradeUrl = playback.upgradeUrl;
+      if (upgradeUrl != null) {
+        final controllerRef = playback.controller;
+        VideoPlayerHelper.scheduleQualityUpgrade(
+          current: controllerRef,
+          upgradeUrl: upgradeUrl,
+          onUpgraded: (upgraded) {
+            if (!mounted) {
+              upgraded.dispose();
+              return;
+            }
+            if (_videoControllers[i] != controllerRef) {
+              upgraded.dispose();
+              return;
+            }
+            setState(() => _videoControllers[i] = upgraded);
+          },
+        );
+      }
     } catch (e) {
-      debugPrint('Ошибка инициализации видео $i ($videoUrl): $e');
+      final startUrl = sources.fastStartUrl(ref.read(videoPlaybackProvider));
+      debugPrint('Ошибка инициализации видео $i ($startUrl): $e');
       if (mounted) {
         setState(() => _videoInitFailed[i] = true);
       }
@@ -132,26 +159,33 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       for (var i = startIndex; i < end; i++)
         if (!_videoControllers.containsKey(i)) i,
     ];
-    if (indices.isEmpty) return;
+    await initializeReelVideosStaggered(
+      indices: indices,
+      priorityIndex: priorityIndex ?? _currentIndex,
+      initSingle: _initSingleVideo,
+    );
+  }
 
-    final priority = priorityIndex ?? _currentIndex;
-    if (indices.contains(priority)) {
-      await _initSingleVideo(priority);
-      indices.remove(priority);
-    }
-    if (indices.isNotEmpty) {
-      unawaited(Future.wait(indices.map(_initSingleVideo)));
-    }
+  void _prefetchAdjacentReelFiles(int index) {
+    final pref = ref.read(videoPlaybackProvider);
+    final urls = <String?>[
+      if (index + 1 < _reels.length)
+        _reels[index + 1].reelVideoSources.prefetchUrl(pref),
+      if (index + 2 < _reels.length)
+        _reels[index + 2].reelVideoSources.prefetchUrl(pref),
+    ];
+    prefetchReelVideoUrls(urls);
   }
 
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {
     final kept = <int, VideoPlayerController>{};
     final cur = _currentIndex;
+    final pref = ref.read(videoPlaybackProvider);
     if (cur >= 0 &&
         cur < _reels.length &&
         cur < nextReels.length &&
         _reels[cur].id == nextReels[cur].id &&
-        _reels[cur].videoUrl == nextReels[cur].videoUrl) {
+        _reels[cur].videoUrlFor(pref) == nextReels[cur].videoUrlFor(pref)) {
       final c = _videoControllers[cur];
       if (c != null) kept[cur] = c;
     }
@@ -471,7 +505,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       _loadReels();
     }
 
-    // Предзагружаем следующие видео параллельно
+    // Предзагружаем следующие видео без конкуренции за канал с текущим
     if (_lookaheadVideoPreloadCount > 0 && index + 1 < _reels.length) {
       unawaited(
         _initializeVideos(
@@ -481,6 +515,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         ),
       );
     }
+    _prefetchAdjacentReelFiles(index);
     _trimVideoControllers();
   }
 
@@ -494,8 +529,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   }
 
   void _trimVideoControllers() {
+    final retain = _controllerRetainDistance;
     final stale = _videoControllers.keys
-        .where((i) => (i - _currentIndex).abs() > 1)
+        .where((i) => (i - _currentIndex).abs() > retain)
         .toList();
     for (final i in stale) {
       _videoControllers.remove(i)?.dispose();

@@ -1567,6 +1567,13 @@ class FeedService:
 
         poll_bodies = enrich_posts_poll_batch(self.db, posts, user_id)
 
+        from app.services.post_video_enrich_service import enrich_posts_video_media_batch
+
+        bodies_for_video = {
+            p.id: poll_bodies.get(p.id, p.body) for p in posts
+        }
+        video_bodies = enrich_posts_video_media_batch(self.db, bodies_for_video)
+
         # Формируем результат
         enriched = []
         for post in posts:
@@ -1574,7 +1581,7 @@ class FeedService:
             channel = channels_dict.get(post.channel_id) if post.channel_id else None
             from app.core.media_urls import normalize_post_body_media
 
-            post_body = normalize_post_body_media(poll_bodies.get(post.id, post.body))
+            post_body = normalize_post_body_media(video_bodies.get(post.id, post.body))
 
             enriched.append({
                 "id": post.id,

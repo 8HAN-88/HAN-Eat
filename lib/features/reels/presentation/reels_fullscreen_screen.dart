@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 import '../../../models/post_model.dart';
@@ -18,9 +19,11 @@ import '../../../widgets/report_content_dialog.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
 import '../../navigation/application/root_shell_chrome.dart';
+import '../application/reels_video_preload.dart';
+import '../../settings/application/video_playback_controller.dart';
 import 'reels_feed_screen.dart';
 
-class ReelsFullscreenScreen extends StatefulWidget {
+class ReelsFullscreenScreen extends ConsumerStatefulWidget {
   final PostModel initialPost;
 
   const ReelsFullscreenScreen({
@@ -29,10 +32,11 @@ class ReelsFullscreenScreen extends StatefulWidget {
   });
 
   @override
-  State<ReelsFullscreenScreen> createState() => _ReelsFullscreenScreenState();
+  ConsumerState<ReelsFullscreenScreen> createState() =>
+      _ReelsFullscreenScreenState();
 }
 
-class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
+class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   late PageController _pageController;
   final Map<int, VideoPlayerController> _videoControllers = {};
   final Map<int, bool> _isPaused = {};
@@ -147,25 +151,47 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
     if (i < 0 || i >= _reels.length) return;
 
     final reel = _reels[i];
-    final videoUrl = reel.videoUrl;
-    if (videoUrl == null || videoUrl.isEmpty) return;
+    final sources = reel.reelVideoSources;
+    if (sources.isEmpty) return;
 
     try {
       final shouldPlay = i == _currentIndex;
-      final videoController = await VideoPlayerHelper.createPreparedController(
-        videoUrl,
+      final qualityPref = ref.read(videoPlaybackProvider);
+      final playback = await VideoPlayerHelper.createReelPlayback(
+        sources: sources,
+        qualityPref: qualityPref,
         autoPlay: shouldPlay,
         muted: _sessionMuted,
       );
 
       if (!mounted) {
-        videoController.dispose();
+        playback.controller.dispose();
         return;
       }
 
       setState(() {
-        _videoControllers[i] = videoController;
+        _videoControllers[i] = playback.controller;
       });
+
+      final upgradeUrl = playback.upgradeUrl;
+      if (upgradeUrl != null) {
+        final controllerRef = playback.controller;
+        VideoPlayerHelper.scheduleQualityUpgrade(
+          current: controllerRef,
+          upgradeUrl: upgradeUrl,
+          onUpgraded: (upgraded) {
+            if (!mounted) {
+              upgraded.dispose();
+              return;
+            }
+            if (_videoControllers[i] != controllerRef) {
+              upgraded.dispose();
+              return;
+            }
+            setState(() => _videoControllers[i] = upgraded);
+          },
+        );
+      }
     } catch (e) {
       debugPrint('ReelsFullscreen init video $i: $e');
     }
@@ -181,21 +207,27 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       for (var i = startIndex; i < end; i++)
         if (!_videoControllers.containsKey(i)) i,
     ];
-    if (indices.isEmpty) return;
+    await initializeReelVideosStaggered(
+      indices: indices,
+      priorityIndex: priorityIndex ?? _currentIndex,
+      initSingle: _initSingleVideo,
+    );
+  }
 
-    final priority = priorityIndex ?? _currentIndex;
-    if (indices.contains(priority)) {
-      await _initSingleVideo(priority);
-      indices.remove(priority);
-    }
-    if (indices.isNotEmpty) {
-      unawaited(Future.wait(indices.map(_initSingleVideo)));
-    }
+  void _prefetchAdjacentReelFiles(int index) {
+    final pref = ref.read(videoPlaybackProvider);
+    final urls = <String?>[
+      if (index + 1 < _reels.length)
+        _reels[index + 1].reelVideoSources.prefetchUrl(pref),
+      if (index + 2 < _reels.length)
+        _reels[index + 2].reelVideoSources.prefetchUrl(pref),
+    ];
+    prefetchReelVideoUrls(urls);
   }
 
   void _trimVideoControllers() {
     final stale = _videoControllers.keys
-        .where((i) => (i - _currentIndex).abs() > 1)
+        .where((i) => (i - _currentIndex).abs() > 2)
         .toList();
     for (final i in stale) {
       _videoControllers.remove(i)?.dispose();
@@ -230,8 +262,9 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
       _loadMoreReels();
     }
     if (index + 1 < _reels.length) {
-      unawaited(_initializeVideos(index + 1, 2, priorityIndex: index));
+      unawaited(_initializeVideos(index + 1, 3, priorityIndex: index));
     }
+    _prefetchAdjacentReelFiles(index);
     _trimVideoControllers();
   }
 

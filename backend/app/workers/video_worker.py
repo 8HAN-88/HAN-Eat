@@ -134,6 +134,12 @@ class VideoWorker:
             self.db.commit()
             VideoQueueService.update_processing_status(upload_id, "processing", 80.0)
             
+            # Загружаем MP4 1080p
+            if "mp4_1080p" in transcoded_files:
+                mp4_1080p_key = f"{file_key.rsplit('.', 1)[0]}_1080p.mp4"
+                self._upload_to_s3(transcoded_files["mp4_1080p"], mp4_1080p_key)
+                video_processing.mp4_1080p_url = f"{self.media_service.cdn_url}/{mp4_1080p_key}"
+
             # Загружаем MP4 720p
             if "mp4_720p" in transcoded_files:
                 mp4_720p_key = f"{file_key.rsplit('.', 1)[0]}_720p.mp4"

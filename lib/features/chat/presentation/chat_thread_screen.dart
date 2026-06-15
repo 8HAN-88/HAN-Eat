@@ -40,6 +40,7 @@ import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
+import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
 import 'widgets/create_chat_poll_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
@@ -2335,50 +2336,74 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _showAttachMenu() async {
     if (_sending || _recording) return;
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Медиатека'),
-              subtitle: const Text('Фото или видео'),
-              onTap: () => Navigator.pop(ctx, 'library'),
-            ),
-            if (!kIsWeb)
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Сделать снимок'),
-                onTap: () => Navigator.pop(ctx, 'camera'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.insert_drive_file_outlined),
-              title: const Text('Выбрать файл'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.poll_outlined),
-              title: const Text('Опрос'),
-              subtitle: const Text('Создать голосование'),
-              onTap: () => Navigator.pop(ctx, 'poll'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case 'library':
-        await _pickFromMediaLibrary();
-      case 'camera':
-        await _pickImage(source: ImageSource.camera);
-      case 'file':
+    final selection = await showChatAttachSheet(context);
+    if (!mounted || selection == null) return;
+    switch (selection.kind) {
+      case ChatAttachResult.galleryFiles:
+        await _sendGallerySelection(selection.galleryFiles);
+      case ChatAttachResult.file:
         await _pickFile();
-      case 'poll':
+      case ChatAttachResult.poll:
         await _createAndSendPoll();
+      case ChatAttachResult.contact:
+        final contact = selection.contact;
+        if (contact != null) await _sendContact(contact);
+    }
+  }
+
+  Future<void> _sendGallerySelection(List<XFile> files) async {
+    if (files.isEmpty) return;
+    for (final file in files) {
+      if (!mounted) return;
+      if (_looksLikeVideoFile(file)) {
+        final bytes = await file.length();
+        if (bytes > 80 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Видео слишком большое (макс. 80 МБ). Пропущено.',
+                ),
+              ),
+            );
+          }
+          continue;
+        }
+        await _sendPickedVideo(await _normalizeVideoFileForUpload(file));
+      } else {
+        await _sendPickedImage(file);
+      }
+    }
+  }
+
+  Future<void> _sendContact(ChatContact contact) async {
+    if (_sending || _recording) return;
+    final user = contact.user;
+    final lines = <String>['👤 Контакт', user.displayName];
+    final username = user.username?.trim();
+    if (username != null && username.isNotEmpty) {
+      lines.add(username.startsWith('@') ? username : '@$username');
+    }
+    final text = lines.join('\n');
+    _beginSending(status: 'Отправка контакта…');
+    try {
+      final msg = await ChatService.sendText(
+        conversationId: widget.conversationId,
+        content: text,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+      });
+      _endSending();
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      _endSending();
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить контакт');
     }
   }
 

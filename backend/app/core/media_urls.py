@@ -67,6 +67,9 @@ def normalize_post_body_media(body: Any) -> Any:
                 continue
             if isinstance(item.get("url"), str):
                 item["url"] = normalize_media_url(item["url"])
+            for extra in ("mp4_480p_url", "mp4_720p_url", "mp4_1080p_url", "hls_url"):
+                if isinstance(item.get(extra), str):
+                    item[extra] = normalize_media_url(item[extra])
             thumb = item.get("thumbnail_url") or item.get("thumbnail")
             if isinstance(thumb, str):
                 if "thumbnail_url" in item:

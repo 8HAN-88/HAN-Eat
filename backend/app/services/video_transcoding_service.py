@@ -72,11 +72,29 @@ class VideoTranscodingService:
         
         output_dir_path = Path(output_dir)
         output_dir_path.mkdir(parents=True, exist_ok=True)
+
+        source_info = self.get_video_info(input_file_path)
+        source_height = int(source_info.get("height") or 0)
+        source_width = int(source_info.get("width") or 0)
+        # Рилсы и горизонтальное видео: 1080p только если исходник достаточно крупный.
+        include_1080p = source_height >= 1080 or source_width >= 1920
         
         results = {}
         
         try:
-            # 1. MP4 720p
+            # 1. MP4 1080p (если исходник позволяет)
+            if include_1080p:
+                mp4_1080p_path = output_dir_path / f"{upload_id}_1080p.mp4"
+                self._transcode_to_mp4(
+                    input_file_path,
+                    str(mp4_1080p_path),
+                    width=1920,
+                    height=1080,
+                    bitrate="4500k",
+                )
+                results["mp4_1080p"] = str(mp4_1080p_path)
+
+            # 2. MP4 720p
             mp4_720p_path = output_dir_path / f"{upload_id}_720p.mp4"
             self._transcode_to_mp4(
                 input_file_path,
@@ -87,7 +105,7 @@ class VideoTranscodingService:
             )
             results["mp4_720p"] = str(mp4_720p_path)
             
-            # 2. MP4 480p
+            # 3. MP4 480p
             mp4_480p_path = output_dir_path / f"{upload_id}_480p.mp4"
             self._transcode_to_mp4(
                 input_file_path,
@@ -98,18 +116,19 @@ class VideoTranscodingService:
             )
             results["mp4_480p"] = str(mp4_480p_path)
             
-            # 3. HLS (для адаптивного стриминга)
+            # 4. HLS (для адаптивного стриминга)
             hls_dir = output_dir_path / f"{upload_id}_hls"
             hls_dir.mkdir(exist_ok=True)
             hls_playlist = hls_dir / "playlist.m3u8"
             self._transcode_to_hls(
                 input_file_path,
                 str(hls_playlist),
-                hls_dir
+                hls_dir,
+                include_1080p=include_1080p,
             )
             results["hls"] = str(hls_playlist)
             
-            # 4. Thumbnail (кадр на 1 секунде)
+            # 5. Thumbnail (кадр на 1 секунде)
             thumbnail_path = output_dir_path / f"{upload_id}_thumb.jpg"
             self._extract_thumbnail(
                 input_file_path,
@@ -173,15 +192,20 @@ class VideoTranscodingService:
         self,
         input_path: str,
         output_playlist: str,
-        output_dir: Path
+        output_dir: Path,
+        include_1080p: bool = True,
     ):
         """Транскодировать в HLS формат"""
-        # Создаем несколько вариантов качества для адаптивного стриминга
-        qualities = [
+        qualities = []
+        if include_1080p:
+            qualities.append(
+                {"name": "1080p", "width": 1920, "height": 1080, "bitrate": "4500k"}
+            )
+        qualities.extend([
             {"name": "720p", "width": 1280, "height": 720, "bitrate": "2500k"},
             {"name": "480p", "width": 854, "height": 480, "bitrate": "1000k"},
             {"name": "360p", "width": 640, "height": 360, "bitrate": "500k"},
-        ]
+        ])
         
         segment_pattern = output_dir / "segment_%03d.ts"
         playlist_pattern = output_dir / "playlist_%s.m3u8"

@@ -456,6 +456,9 @@ class UploadStatusResponse {
   final double progress;
   final String? url;
   final String? mp4_720pUrl;
+  final String? mp4_480pUrl;
+  final String? mp4_1080pUrl;
+  final String? hlsUrl;
   final String? thumbnailUrl;
   
   UploadStatusResponse({
@@ -463,6 +466,9 @@ class UploadStatusResponse {
     required this.progress,
     this.url,
     this.mp4_720pUrl,
+    this.mp4_480pUrl,
+    this.mp4_1080pUrl,
+    this.hlsUrl,
     this.thumbnailUrl,
   });
   
@@ -474,6 +480,9 @@ class UploadStatusResponse {
       progress: progress,
       url: json['url'] as String?,
       mp4_720pUrl: json['mp4_720p_url'] as String?,
+      mp4_480pUrl: json['mp4_480p_url'] as String?,
+      mp4_1080pUrl: json['mp4_1080p_url'] as String?,
+      hlsUrl: json['hls_url'] as String?,
       thumbnailUrl: json['thumbnail_url'] as String?,
     );
   }

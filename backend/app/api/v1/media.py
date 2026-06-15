@@ -272,7 +272,8 @@ async def get_upload_status(
             return {
                 "status": video_processing.status,
                 "progress": video_processing.progress,
-                "url": video_processing.mp4_720p_url,  # Основной URL
+                "url": video_processing.mp4_720p_url or video_processing.mp4_1080p_url,
+                "mp4_1080p_url": video_processing.mp4_1080p_url,
                 "mp4_720p_url": video_processing.mp4_720p_url,
                 "mp4_480p_url": video_processing.mp4_480p_url,
                 "hls_url": video_processing.hls_url,

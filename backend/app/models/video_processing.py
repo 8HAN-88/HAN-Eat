@@ -19,6 +19,7 @@ class VideoProcessing(Base):
     progress = Column(Float, default=0.0)  # 0.0 - 100.0
     
     # Результаты обработки
+    mp4_1080p_url = Column(Text, nullable=True)  # URL для MP4 1080p
     mp4_720p_url = Column(Text, nullable=True)  # URL для MP4 720p
     mp4_480p_url = Column(Text, nullable=True)  # URL для MP4 480p
     hls_url = Column(Text, nullable=True)  # URL для HLS плейлиста
