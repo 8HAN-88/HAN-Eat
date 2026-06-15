@@ -185,18 +185,32 @@ class VideoWorker:
                 logger.warning(f"Failed to cleanup temp directory {temp_dir}: {e}")
     
     def _download_from_s3(self, file_key: str, local_path: str):
-        """Скачать файл из S3"""
+        """Скачать файл из S3 или с диска (API mock upload)."""
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+
+        if self.media_service.s3_client:
+            try:
+                self.media_service.s3_client.download_file(
+                    self.media_service.bucket,
+                    file_key,
+                    local_path,
+                )
+                if os.path.getsize(local_path) > 4096:
+                    return
+            except Exception as e:
+                logger.warning("S3 download failed for %s: %s", file_key, e)
+
+        for base in (os.getcwd(), os.path.join(os.getcwd(), "..")):
+            local_src = os.path.join(base, file_key)
+            if os.path.isfile(local_src) and os.path.getsize(local_src) > 4096:
+                shutil.copy2(local_src, local_path)
+                return
+
         if not self.media_service.s3_client:
-            # Для локальной разработки создаем пустой файл
-            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
             Path(local_path).touch()
             return
-        
-        self.media_service.s3_client.download_file(
-            self.media_service.bucket,
-            file_key,
-            local_path
-        )
+
+        raise FileNotFoundError(f"Video source not found: {file_key}")
     
     def _upload_to_s3(self, local_path: str, s3_key: str):
         """Загрузить файл в S3"""
