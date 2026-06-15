@@ -1026,10 +1026,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: ReelsFeedScreen()),
       ),
-      // Reels Fullscreen (при тапе на видео в ленте)
+      // Reels Fullscreen (при тапе на видео в ленте — поверх shell, без нижней панели)
       GoRoute(
         path: ReelsFullscreenRoute.path,
         name: ReelsFullscreenRoute.name,
+        parentNavigatorKey: hanEatRootNavigatorKey,
         pageBuilder: (context, state) {
           final extra = state.extra;
           if (extra is! PostModel) {

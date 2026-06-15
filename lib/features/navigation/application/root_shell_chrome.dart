@@ -21,11 +21,18 @@ void _setRootShellHideBottomNav(bool hide) {
   SchedulerBinding.instance.addPostFrameCallback((_) => apply());
 }
 
+void hideShellBottomNavForFullscreenReels() {
+  _setRootShellHideBottomNav(true);
+}
+
 void syncRootShellBottomNavForReels({
   required bool embeddedInShell,
   required bool tabVisible,
 }) {
-  _setRootShellHideBottomNav(embeddedInShell && tabVisible);
+  // Встроенная вкладка «Рилсы» в ленте — панель остаётся; скрытие только для fullscreen.
+  if (embeddedInShell && tabVisible) {
+    _setRootShellHideBottomNav(false);
+  }
 }
 
 void clearRootShellBottomNavHide() {

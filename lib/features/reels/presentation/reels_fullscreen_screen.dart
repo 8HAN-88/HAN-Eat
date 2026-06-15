@@ -17,6 +17,7 @@ import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
+import '../../navigation/application/root_shell_chrome.dart';
 import 'reels_feed_screen.dart';
 
 class ReelsFullscreenScreen extends StatefulWidget {
@@ -52,6 +53,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
   @override
   void initState() {
     super.initState();
+    hideShellBottomNavForFullscreenReels();
     _pageController = PageController(initialPage: 0);
     _reels = [widget.initialPost];
     unawaited(_loadMoreReels());
@@ -63,6 +65,7 @@ class _ReelsFullscreenScreenState extends State<ReelsFullscreenScreen> {
 
   @override
   void dispose() {
+    clearRootShellBottomNavHide();
     _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();

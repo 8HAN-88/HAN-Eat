@@ -8,6 +8,7 @@ import '../application/feed_scroll_chrome.dart';
 import '../../chat/application/chats_hub_search.dart';
 import '../application/app_search_context.dart';
 import '../application/shell_tab_visibility.dart';
+import '../application/root_shell_chrome.dart';
 import '../../menu/application/menu_recommendations_refresh_provider.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../onboarding/onboarding_overlay.dart';
@@ -294,8 +295,11 @@ class _RootShellState extends ConsumerState<RootShell> {
     final pageBg = Theme.of(context).scaffoldBackgroundColor;
 
     return ValueListenableBuilder<bool>(
-      valueListenable: shellNavCompact,
-      builder: (context, compact, _) {
+      valueListenable: rootShellHideBottomNav,
+      builder: (context, hideBottomNav, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: shellNavCompact,
+          builder: (context, compact, _) {
         final shellIndex =
             _clampShellIndex(widget.navigationShell.currentIndex);
         final navHeight =
@@ -409,7 +413,16 @@ class _RootShellState extends ConsumerState<RootShell> {
               );
             },
           ),
-          bottomNavigationBar: navBar,
+          bottomNavigationBar: hideBottomNav
+              ? null
+              : AnimatedSlide(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  offset: Offset.zero,
+                  child: navBar,
+                ),
+        );
+          },
         );
       },
     );

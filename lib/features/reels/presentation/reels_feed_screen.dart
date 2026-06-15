@@ -28,6 +28,7 @@ import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/post_publisher_display.dart';
+import '../../navigation/application/root_shell_chrome.dart';
 import '../application/reels_feed_refresh_provider.dart';
 
 class ReelsFeedScreen extends ConsumerStatefulWidget {
@@ -170,12 +171,24 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   void initState() {
     super.initState();
     _followingOnly = widget.externalFollowingOnly;
+    _syncEmbeddedShellNav();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startLoadIfNeeded());
+  }
+
+  void _syncEmbeddedShellNav() {
+    if (!widget.hideScaffold) return;
+    syncRootShellBottomNavForReels(
+      embeddedInShell: true,
+      tabVisible: widget.isTabVisible,
+    );
   }
 
   @override
   void didUpdateWidget(ReelsFeedScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.isTabVisible != oldWidget.isTabVisible) {
+      _syncEmbeddedShellNav();
+    }
     if (widget.externalFollowingOnly != oldWidget.externalFollowingOnly &&
         widget.externalFollowingOnly != _followingOnly) {
       _followingOnly = widget.externalFollowingOnly;
