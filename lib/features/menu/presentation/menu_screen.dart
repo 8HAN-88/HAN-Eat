@@ -19,6 +19,7 @@ import '../../../services/ai_scan_gate.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/session_snackbar.dart';
 import '../../../services/history_storage.dart';
 import '../../../services/category_service.dart';
 import '../../../widgets/modern_recipe_card.dart';
@@ -314,19 +315,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   Future<void> _toggleFavorite(Recipe recipe) async {
     final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Войдите, чтобы сохранять рецепты в избранное'),
-        ),
-      );
-      await context.push(LoginRoute.path);
-      if (mounted) {
-        await _loadFavorites();
-      }
-      return;
-    }
+    if (token == null) return;
 
     // Проверяем, что у рецепта есть ID
     if (recipe.id == 0) {
@@ -385,8 +374,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             'Лимит каталога рецептов на сегодня исчерпан. Повторите позже или оформите H.A.N. AI (от 199 ₽/мес).';
       } else if (errorMsg.contains('unauthorized') ||
           errorMsg.contains('401')) {
-        userMessage =
-            'Требуется вход в аккаунт или сессия истекла. Войдите снова и повторите.';
+        showErrorSnackBar(context, e);
+        return;
       } else if (errorMsg.contains('network') ||
           errorMsg.contains('connection')) {
         userMessage = 'Ошибка сети. Проверьте подключение к интернету.';

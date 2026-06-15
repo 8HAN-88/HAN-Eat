@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../core/network/feed_load_helper.dart';
 import '../../../services/api_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -37,10 +37,7 @@ class _MealPlanAnalyticsScreenState extends State<MealPlanAnalyticsScreen> {
       final token = await AuthService.getAccessTokenForApi();
       if (token == null || token.isEmpty) {
         if (!mounted) return;
-        setState(() {
-          _error = 'Войдите в аккаунт для просмотра аналитики';
-          _loading = false;
-        });
+        setState(() => _loading = true);
         return;
       }
       final data = await ApiService.getMealPlanAnalytics(days: _days);
@@ -51,6 +48,10 @@ class _MealPlanAnalyticsScreenState extends State<MealPlanAnalyticsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      if (FeedLoadHelper.isSessionError(e)) {
+        unawaited(FeedLoadHelper.clearSessionIfExpired(e));
+        return;
+      }
       setState(() {
         _error = userVisibleError(e, fallback: 'Не удалось загрузить аналитику');
         _loading = false;
@@ -86,22 +87,13 @@ class _MealPlanAnalyticsScreenState extends State<MealPlanAnalyticsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? AppEmptyState(
-                  icon: _error!.contains('Войдите')
-                      ? Icons.login_rounded
-                      : Icons.cloud_off_rounded,
-                  title: _error!.contains('Войдите')
-                      ? 'Нужен вход'
-                      : 'Не удалось загрузить',
+                  icon: Icons.cloud_off_rounded,
+                  title: 'Не удалось загрузить',
                   subtitle: _error,
-                  action: _error!.contains('Войдите')
-                      ? FilledButton(
-                          onPressed: () => context.push(LoginRoute.path),
-                          child: const Text('Войти'),
-                        )
-                      : FilledButton(
-                          onPressed: _load,
-                          child: const Text('Повторить'),
-                        ),
+                  action: FilledButton(
+                    onPressed: _load,
+                    child: const Text('Повторить'),
+                  ),
                 )
               : ListView(
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottom),

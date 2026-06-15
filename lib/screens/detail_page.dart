@@ -406,12 +406,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
 
     // Получаем данные текущего пользователя
     final currentUser = await AuthService.getCurrentUser();
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Необходимо войти в систему')),
-      );
-      return;
-    }
+    if (currentUser == null) return;
 
     // Берем имя из профиля пользователя
     final author = currentUser.name.isNotEmpty

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../core/network/feed_load_helper.dart';
 import '../../../utils/api_error_parser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -285,8 +286,11 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       });
       await ScanResultCache.instance.put(prepared, core);
     } catch (e) {
+      if (e is HanLoginRequiredException) {
+        unawaited(FeedLoadHelper.clearSessionIfExpired(e));
+        return;
+      }
       if (e is HanPlusRequiredException ||
-          e is HanLoginRequiredException ||
           e is AiScansExhaustedException ||
           e is AiScanReserveRequiredException ||
           e is AiScanBackendMissingException) {
@@ -860,13 +864,6 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                           context.push(SubscriptionRoute.pathWithProduct('ai')),
                       icon: const Icon(Icons.workspace_premium_outlined),
                       label: const Text('Оформить H.A.N. AI'),
-                    ),
-                  ],
-                  if (err is HanLoginRequiredException) ...[
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => context.push(LoginRoute.path),
-                      child: const Text('Войти'),
                     ),
                   ],
                   if (err is AiScanBackendMissingException) ...[

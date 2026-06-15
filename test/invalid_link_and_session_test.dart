@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/app/invalid_link_screen.dart';
 import 'package:han_eat/core/network/feed_load_helper.dart';
+import 'package:han_eat/services/api_service.dart';
 import 'package:han_eat/services/auth_service.dart';
 
 void main() {
@@ -37,6 +38,12 @@ void main() {
       expect(
         FeedLoadHelper.isSessionError(
           AuthException('Сессия истекла. Войдите снова.'),
+        ),
+        isTrue,
+      );
+      expect(
+        FeedLoadHelper.isSessionError(
+          const HanLoginRequiredException('Войдите в аккаунт'),
         ),
         isTrue,
       );

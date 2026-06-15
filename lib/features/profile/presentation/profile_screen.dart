@@ -496,15 +496,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   Widget _buildFavoritesTab() {
     final userId = widget.userId ?? _profile?.user.id;
     if (userId == null) {
-      return AppEmptyState(
-        icon: Icons.bookmark_border,
-        title: 'Войдите в аккаунт',
-        subtitle: 'Сохранённые посты доступны после входа',
-        action: FilledButton(
-          onPressed: () => context.push(LoginRoute.path),
-          child: const Text('Войти'),
-        ),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     // Показываем сохраненные посты (с подвкладками: Общее, Посты, Рилсы)
     return SavedPostsScreen(userId: userId, embedded: true);

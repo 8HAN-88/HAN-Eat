@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 
 /// Сообщения при показе [FeedApiCache] после ошибки загрузки.
 class FeedLoadHelper {
   static bool isSessionError(Object e) {
+    if (e is HanLoginRequiredException) return true;
     if (e is AuthException) {
       final m = e.message;
       return m.contains('Сессия истекла') ||
@@ -72,7 +74,6 @@ class FeedLoadHelper {
   /// Сбрасывает сессию только при явном истечении refresh token.
   static Future<void> clearSessionIfExpired(Object e) async {
     if (!isSessionError(e)) return;
-    if (e is! AuthException) return;
     await AuthService.logout();
   }
 }

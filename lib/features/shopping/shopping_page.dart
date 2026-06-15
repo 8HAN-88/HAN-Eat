@@ -90,13 +90,10 @@ class _ShoppingPageState extends State<ShoppingPage> {
     if (!mounted) return;
     Navigator.of(context).pop();
     if (recipes.isEmpty) {
-      final loggedIn = AuthService.instance.currentUser != null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            loggedIn
-                ? 'Добавьте рецепты в избранное или план питания'
-                : 'Войдите, чтобы подтянуть избранное, или добавьте блюда в план',
+            'Добавьте рецепты в избранное или план питания',
           ),
         ),
       );

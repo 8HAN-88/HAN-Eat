@@ -43,18 +43,6 @@ class AiScanGate {
   static Future<bool> _refreshStatus(BuildContext context) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null || token.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                const Text('Войдите в аккаунт, чтобы использовать AI-скан.'),
-            action: SnackBarAction(
-              label: 'Войти',
-              onPressed: () => context.push(LoginRoute.path),
-            ),
-          ),
-        );
-      }
       return false;
     }
 

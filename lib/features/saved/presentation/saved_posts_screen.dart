@@ -254,9 +254,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     final userId = widget.userId ?? _currentUserId;
     
     if (userId == null) {
-      return const Center(
-        child: Text('Войдите, чтобы видеть сохраненные посты'),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final content = Column(
