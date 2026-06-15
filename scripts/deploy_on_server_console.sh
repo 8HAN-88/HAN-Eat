@@ -51,6 +51,7 @@ EOF
 fi
 
 pip install -q -r requirements.txt
+bash "${APP_DIR}/scripts/ensure_server_email_env.sh" "${APP_DIR}/backend/.env"
 alembic upgrade head
 python3 scripts/create_all_test_accounts.py || true
 systemctl daemon-reload

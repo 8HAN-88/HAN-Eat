@@ -8,6 +8,7 @@ on:
       - 'backend/**'
       - 'scripts/update_production_timeweb.sh'
       - 'scripts/deploy_on_server_console.sh'
+      - 'scripts/ensure_server_email_env.sh'
       - '.github/workflows/deploy-backend.yml'
 
 concurrency:
@@ -58,6 +59,7 @@ jobs:
           fi
           pip install -q -r requirements.txt
           alembic upgrade head
+          bash "$APP_DIR/scripts/ensure_server_email_env.sh" "$APP_DIR/backend/.env"
           systemctl daemon-reload
           systemctl restart haneat-api
           systemctl restart haneat-video-worker 2>/dev/null || true
@@ -74,6 +76,7 @@ jobs:
           cd /root/HAN-Eat/backend
           source venv/bin/activate
           python3 scripts/check_email_config.py
+          python3 scripts/check_email_config.py --send-test airat8446@gmail.com || true
           journalctl -u haneat-api -n 40 --no-pager | grep -iE 'resend|email|smtp' || true
           REMOTE
 
