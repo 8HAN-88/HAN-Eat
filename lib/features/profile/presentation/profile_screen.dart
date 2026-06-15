@@ -13,6 +13,7 @@ import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../services/chat_service.dart';
+import '../../navigation/application/shell_tab_visibility.dart';
 import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
@@ -69,6 +70,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   late final void Function(User?) _onSessionChanged;
   int? _postsListEpoch;
   int _postsRefreshGeneration = 0;
+  bool _profileDataStarted = false;
 
   @override
   void initState() {
@@ -108,11 +110,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       _loadProfile();
     };
     AuthService.registerSessionListener(_onSessionChanged);
+    if (widget.userId == null) {
+      final cached = AuthService.instance.currentUser;
+      if (cached != null) {
+        _profile = _userProfileFromAuthUser(cached);
+        _isLoading = false;
+      }
+    }
+    ShellTabVisibility.activeIndex.addListener(_onShellTabChanged);
+    _maybeStartProfileLoading();
+  }
+
+  void _onShellTabChanged() {
+    _maybeStartProfileLoading();
+  }
+
+  void _maybeStartProfileLoading() {
+    if (widget.userId != null) {
+      if (_profileDataStarted) return;
+      _profileDataStarted = true;
+      _loadProfile();
+      return;
+    }
+    if (!ShellTabVisibility.profileActive) return;
+    if (_profileDataStarted) return;
+    _profileDataStarted = true;
     _loadProfile();
   }
 
   @override
   void dispose() {
+    ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
     AuthService.unregisterSessionListener(_onSessionChanged);
     _tabController.dispose();
     super.dispose();

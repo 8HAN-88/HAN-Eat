@@ -188,6 +188,9 @@ class AuthService {
       }
 
       instance._cachedUser = null;
+      if (kIsWeb && deferTokenRefresh) {
+        return;
+      }
       if (kIsWeb) {
         for (var attempt = 0; attempt < 4; attempt++) {
           await Future<void>.delayed(Duration(milliseconds: 40 * (attempt + 1)));

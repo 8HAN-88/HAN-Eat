@@ -7,5 +7,8 @@ class ShellTabVisibility {
 
   static final ValueNotifier<int> activeIndex = ValueNotifier<int>(0);
 
+  static bool get feedActive => activeIndex.value == 0;
   static bool get chatsActive => activeIndex.value == 1;
+  static bool get menuActive => activeIndex.value == 2;
+  static bool get profileActive => activeIndex.value == 3;
 }

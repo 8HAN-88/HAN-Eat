@@ -120,17 +120,19 @@ Future<void> bootstrapServicesForFirstFrame() async {
   } catch (e) {
     debugPrint('AuthService init error (сессия из кэша сохранена): $e');
   }
-  // Сразу держим связь с API — не ждём deferred bootstrap.
-  unawaited(
-    Future.wait<void>([
-      ApiReachabilityService.init().catchError((Object e) {
-        debugPrint('ApiReachabilityService early init: $e');
-      }),
-      _warmApiConnection().catchError((Object e) {
-        debugPrint('API warm-up early: $e');
-      }),
-    ]),
-  );
+  // Прогрев API — в deferred bootstrap, чтобы не конкурировать с лентой.
+  if (!kIsWeb) {
+    unawaited(
+      Future.wait<void>([
+        ApiReachabilityService.init().catchError((Object e) {
+          debugPrint('ApiReachabilityService early init: $e');
+        }),
+        _warmApiConnection().catchError((Object e) {
+          debugPrint('API warm-up early: $e');
+        }),
+      ]),
+    );
+  }
 }
 
 bool _firebaseReady = false;

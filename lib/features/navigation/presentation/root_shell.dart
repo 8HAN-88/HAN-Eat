@@ -114,7 +114,6 @@ class _RootShellState extends ConsumerState<RootShell> {
         widget.navigationShell.goBranch(safe);
       }
     });
-    _loadChatUnreadCount();
     _startPeriodicUpdate();
     _chatSignalsSub =
         ChatRealtimeSignals.instance.hubRefresh.listen((_) {
@@ -124,7 +123,13 @@ class _RootShellState extends ConsumerState<RootShell> {
       if (AuthService.instance.currentUser != null) {
         PresenceService.instance.start();
       }
-      unawaited(ApiReachabilityService.instance.warmUp());
+      // Не конкурируем с лентой при холодном старте — бейджи чуть позже.
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted) _loadChatUnreadCount();
+      });
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        if (mounted) unawaited(ApiReachabilityService.instance.warmUp());
+      });
     });
     _apiReachabilityListener = () {
       if (!mounted) return;

@@ -25,6 +25,8 @@ import '../../../services/category_service.dart';
 import '../../../widgets/modern_recipe_card.dart';
 import '../../../widgets/recipe_network_image.dart';
 import '../../../widgets/skeleton_loader.dart';
+import '../../../services/subscription_service.dart';
+import '../../navigation/application/shell_tab_visibility.dart';
 import '../../settings/application/analysis_mode_controller.dart';
 import '../application/menu_recommendations_refresh_provider.dart';
 import '../../settings/application/subscription_status_provider.dart';
@@ -105,6 +107,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   bool _lastRecipeTranslationApiSupported = false;
   bool _recommendationsLoadFailed = false;
   bool _isRefreshingRecommendations = false;
+  bool _menuDataStarted = false;
   int _recommendationsRequestId = 0;
   List<int>? _imageWarmRecipeIds;
 
@@ -186,9 +189,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         }
       }
     });
-    // Предзагружаем рецепты сразу при инициализации
-    final settings = ref.read(analysisSettingsProvider);
-
     // Поднимаем кэш из общего статического хранилища между открытиями экрана.
     if (_sharedRecommendationsCache.isNotEmpty &&
         _sharedCacheTimestamp != null) {
@@ -196,9 +196,22 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       _cacheTimestamp = _sharedCacheTimestamp;
     }
 
-    _recommendationsFuture = _fetchRecommendationsImmediate(settings);
+    _recommendationsFuture = Future.value(_recommendationsFromCacheOnly());
+    ShellTabVisibility.activeIndex.addListener(_onShellTabChanged);
+    _maybeStartMenuLoading();
+  }
 
-    // Загружаем избранное параллельно (не блокируем UI)
+  void _onShellTabChanged() {
+    _maybeStartMenuLoading();
+  }
+
+  void _maybeStartMenuLoading() {
+    if (!ShellTabVisibility.menuActive) return;
+    if (_menuDataStarted) return;
+    _menuDataStarted = true;
+
+    final settings = ref.read(analysisSettingsProvider);
+    _recommendationsFuture = _fetchRecommendationsImmediate(settings);
     _loadFavorites();
     unawaited(ApiService.touchAiScanCreditsSilently());
   }
@@ -282,6 +295,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   @override
   void dispose() {
+    ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -815,7 +829,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
     final searchState = ref.watch(searchControllerProvider);
     final settings = ref.watch(analysisSettingsProvider);
-    final subscriptionStatus = ref.watch(subscriptionStatusProvider);
+    final menuActive = ShellTabVisibility.menuActive;
+    final subscriptionStatus = menuActive
+        ? ref.watch(subscriptionStatusProvider)
+        : const AsyncValue<SubscriptionStatusResponse?>.data(null);
     final canViewNutrition = RecipeNutritionAccess.resolve(
       subscription: subscriptionStatus.valueOrNull,
       viewerIsPlus: _lastViewerIsPlus,
@@ -832,16 +849,18 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
       },
     );
 
-    ref.listen(subscriptionStatusProvider, (previous, next) {
-      final hadAi = RecipeTranslationAccess.fromSubscription(
-        previous?.asData?.value,
-      );
-      final hasAi =
-          RecipeTranslationAccess.fromSubscription(next.asData?.value);
-      if (!hadAi && hasAi && mounted) {
-        unawaited(_refreshRecommendations(settings));
-      }
-    });
+    if (menuActive) {
+      ref.listen(subscriptionStatusProvider, (previous, next) {
+        final hadAi = RecipeTranslationAccess.fromSubscription(
+          previous?.asData?.value,
+        );
+        final hasAi =
+            RecipeTranslationAccess.fromSubscription(next.asData?.value);
+        if (!hadAi && hasAi && mounted) {
+          unawaited(_refreshRecommendations(settings));
+        }
+      });
+    }
 
     return Scaffold(
       extendBody: true,
@@ -1192,6 +1211,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     settings: settings,
                     searchState: searchState,
                     canViewNutrition: canViewNutrition,
+                    subscription: subscriptionStatus.valueOrNull,
                   ),
                 ),
               ],
@@ -1211,6 +1231,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     required AnalysisSettingsState settings,
     required SearchState searchState,
     required bool canViewNutrition,
+    SubscriptionStatusResponse? subscription,
   }) {
     if (searchState.loading &&
         searchState.hasSearched &&
@@ -1266,6 +1287,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     return _buildRecommendations(
       settings,
       showNutritionValues: canViewNutrition,
+      subscription: subscription,
     );
   }
 
@@ -1343,6 +1365,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   Widget _buildRecommendations(
     AnalysisSettingsState settings, {
     required bool showNutritionValues,
+    SubscriptionStatusResponse? subscription,
   }) {
     return RefreshIndicator(
       onRefresh: () => _refreshRecommendations(settings),
@@ -1509,7 +1532,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             );
           }
           final hasAiSubscription = RecipeTranslationAccess.fromSubscription(
-            ref.watch(subscriptionStatusProvider).valueOrNull,
+            subscription,
           );
           final looksUntranslated =
               RecipeTranslationAccess.recipesLookUntranslated(
