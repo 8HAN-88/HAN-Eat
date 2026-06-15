@@ -16,6 +16,16 @@ def test_extract_upload_id():
     )
 
 
+def test_extract_file_key_from_api_upload_url():
+    url = (
+        "https://api.haneat.app/api/v1/uploads/file/"
+        "uploads/user_7/2026/06/05/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4"
+    )
+    assert extract_file_key_from_video_url(url) == (
+        "uploads/user_7/2026/06/05/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.mp4"
+    )
+
+
 def test_extract_file_key_strips_transcode_suffix():
     url = (
         "https://cdn.haneat.app/uploads/user_1/2024/01/01/"

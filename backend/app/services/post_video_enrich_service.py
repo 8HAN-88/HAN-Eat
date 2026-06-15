@@ -36,11 +36,15 @@ def extract_upload_id_from_video_url(url: str) -> Optional[str]:
 def extract_file_key_from_video_url(url: str) -> Optional[str]:
     if not url:
         return None
-    path = urlparse(url).path
-    idx = path.find("uploads/")
-    if idx < 0:
-        return None
-    key = path[idx:].lstrip("/")
+    path = urlparse(url).path.lstrip("/")
+    api_marker = "api/v1/uploads/file/"
+    if api_marker in path:
+        key = path.split(api_marker, 1)[1]
+    else:
+        idx = path.find("uploads/")
+        if idx < 0:
+            return None
+        key = path[idx:]
     for suffix in ("_1080p.mp4", "_720p.mp4", "_480p.mp4"):
         if key.endswith(suffix):
             return key[: -len(suffix)] + ".mp4"
