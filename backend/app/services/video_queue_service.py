@@ -68,6 +68,42 @@ class VideoQueueService:
         return video_processing
     
     @staticmethod
+    def requeue_video_processing(
+        db: Session,
+        video_processing: VideoProcessing,
+    ) -> VideoProcessing:
+        """Повторно поставить существующую запись в очередь (ретранскод)."""
+        video_processing.status = "pending"
+        video_processing.progress = 0.0
+        video_processing.error_message = None
+        db.commit()
+        db.refresh(video_processing)
+
+        task_data = {
+            "upload_id": video_processing.upload_id,
+            "file_key": video_processing.file_key,
+            "user_id": video_processing.user_id,
+            "processing_id": video_processing.id,
+        }
+
+        try:
+            redis_client.lpush(
+                VideoQueueService.QUEUE_KEY,
+                json.dumps(task_data),
+            )
+            logger.info(
+                "Video requeued for retranscode: %s",
+                video_processing.upload_id,
+            )
+        except Exception as e:
+            logger.error("Failed to requeue video processing: %s", e)
+            video_processing.status = "failed"
+            video_processing.error_message = f"Failed to requeue: {e}"
+            db.commit()
+
+        return video_processing
+    
+    @staticmethod
     def dequeue_video_processing() -> Optional[Dict]:
         """
         Получить следующую задачу из очереди
