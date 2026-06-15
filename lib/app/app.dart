@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
-import '../services/api_service.dart';
 import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
@@ -66,9 +65,8 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(ApiReachabilityService.instance.warmUp());
+      unawaited(ApiReachabilityService.instance.checkNow());
       unawaited(AuthService.getAccessTokenForApi());
-      unawaited(ApiService.touchAiScanCreditsSilently());
       if (kIsWeb) {
         unawaited(WebAppUpdateService.checkForUpdate());
       }

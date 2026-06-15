@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +11,6 @@ import '../application/shell_tab_visibility.dart';
 import '../../menu/application/menu_recommendations_refresh_provider.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../onboarding/onboarding_overlay.dart';
-import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/account_session_service.dart';
 import '../../../../services/api_service.dart';
 import '../../../../services/api_reachability_service.dart';
@@ -157,7 +157,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   void _startPeriodicUpdate() {
     Future.delayed(const Duration(seconds: 90), () {
       if (mounted) {
-        unawaited(ApiReachabilityService.instance.warmUp());
+        unawaited(ApiReachabilityService.instance.checkNow());
         _loadChatUnreadCount();
         _startPeriodicUpdate();
       }
@@ -300,8 +300,7 @@ class _RootShellState extends ConsumerState<RootShell> {
             _clampShellIndex(widget.navigationShell.currentIndex);
         final navHeight =
             compact ? kShellNavCompactHeight : kShellNavExpandedHeight;
-        final iconSize = compact ? 20.0 : 26.0;
-        final navShadow = scheme.shadow.withValues(alpha: 0.15);
+        final iconSize = compact ? 22.0 : 26.0;
         final searchPath = contextualSearchPath(shellIndex);
         final chatsInlineSearch = usesChatsHubInlineSearch(shellIndex);
         final showSearchButton = searchPath != null || chatsInlineSearch;
@@ -309,91 +308,77 @@ class _RootShellState extends ConsumerState<RootShell> {
             compact ? kShellNavCompactDuration : kShellNavExpandDuration;
 
         final navBar = SafeArea(
-          minimum: EdgeInsets.only(left: 16, right: 16, bottom: compact ? 4 : 8),
+          minimum: EdgeInsets.only(
+            left: kShellNavSideMargin,
+            right: kShellNavSideMargin,
+            bottom: compact
+                ? kShellNavBottomMarginCompact
+                : kShellNavBottomMarginExpanded,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  elevation: 0,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      compact ? AppRadius.sm : AppRadius.nav,
-                    ),
-                    child: AnimatedContainer(
-                      duration: navDuration,
-                      curve: kShellNavChromeCurve,
+                child: _ShellNavGlassPill(
+                  height: navHeight,
+                  compact: compact,
+                  duration: navDuration,
+                  child: NavigationBarTheme(
+                    data: NavigationBarThemeData(
                       height: navHeight,
-                      child: NavigationBarTheme(
-                        data: NavigationBarThemeData(
-                          height: navHeight,
-                          labelTextStyle:
-                              WidgetStateProperty.all(const TextStyle(fontSize: 0)),
-                          iconTheme: WidgetStateProperty.resolveWith(
-                            (states) => IconThemeData(
-                              size: states.contains(WidgetState.selected)
-                                  ? iconSize + 1
-                                  : iconSize,
-                            ),
-                          ),
-                        ),
-                        child: NavigationBar(
-                          height: navHeight,
-                          labelBehavior:
-                              NavigationDestinationLabelBehavior.alwaysHide,
-                          selectedIndex: shellIndex,
-                          onDestinationSelected: _onDestinationSelected,
-                          backgroundColor: pageBg,
-                          elevation: 4,
-                          shadowColor: navShadow,
-                          surfaceTintColor: Colors.transparent,
-                          indicatorColor:
-                              scheme.primary.withValues(alpha: 0.14),
-                          destinations: [
-                            for (var i = 0;
-                                i < RootShell._destinations.length;
-                                i++)
-                              _buildNavigationDestination(
-                                RootShell._destinations[i],
-                                badgeLabel: _badgeLabelForTab(i),
-                                badgeTooltip: i == 1
-                                    ? _chatTabBadgeTooltip()
-                                    : null,
-                              ),
-                          ],
+                      labelTextStyle:
+                          WidgetStateProperty.all(const TextStyle(fontSize: 0)),
+                      iconTheme: WidgetStateProperty.resolveWith(
+                        (states) => IconThemeData(
+                          size: states.contains(WidgetState.selected)
+                              ? iconSize + 1
+                              : iconSize,
                         ),
                       ),
+                    ),
+                    child: NavigationBar(
+                      height: navHeight,
+                      labelBehavior:
+                          NavigationDestinationLabelBehavior.alwaysHide,
+                      selectedIndex: shellIndex,
+                      onDestinationSelected: _onDestinationSelected,
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      indicatorColor: scheme.primary.withValues(alpha: 0.18),
+                      destinations: [
+                        for (var i = 0;
+                            i < RootShell._destinations.length;
+                            i++)
+                          _buildNavigationDestination(
+                            RootShell._destinations[i],
+                            badgeLabel: _badgeLabelForTab(i),
+                            badgeTooltip: i == 1
+                                ? _chatTabBadgeTooltip()
+                                : null,
+                          ),
+                      ],
                     ),
                   ),
                 ),
               ),
               if (showSearchButton) ...[
-                const SizedBox(width: 8),
-                AnimatedContainer(
-                  duration: navDuration,
-                  curve: kShellNavChromeCurve,
-                  width: navHeight,
+                const SizedBox(width: 10),
+                _ShellNavGlassPill(
                   height: navHeight,
-                  child: Material(
-                    color: pageBg,
-                    elevation: 4,
-                    shadowColor: navShadow,
-                    borderRadius: BorderRadius.circular(
-                      compact ? AppRadius.sm : AppRadius.nav,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: IconButton(
-                      tooltip: 'Поиск',
-                      icon: Icon(Icons.search_rounded, size: iconSize),
-                      onPressed: () {
-                        if (chatsInlineSearch) {
-                          requestChatsHubSearchOpen();
-                          return;
-                        }
-                        context.push(searchPath!);
-                      },
-                    ),
+                  compact: compact,
+                  duration: navDuration,
+                  child: IconButton(
+                    tooltip: 'Поиск',
+                    icon: Icon(Icons.search_rounded, size: iconSize),
+                    onPressed: () {
+                      if (chatsInlineSearch) {
+                        requestChatsHubSearchOpen();
+                        return;
+                      }
+                      context.push(searchPath!);
+                    },
                   ),
                 ),
               ],
@@ -482,6 +467,64 @@ class _RootShellState extends ConsumerState<RootShell> {
         icon: icon,
         selectedIcon: selectedIcon,
         label: '',
+      ),
+    );
+  }
+}
+
+/// Полупрозрачная «таблетка» нижней панели (blur + pill), как в Instagram.
+class _ShellNavGlassPill extends StatelessWidget {
+  const _ShellNavGlassPill({
+    required this.height,
+    required this.compact,
+    required this.duration,
+    required this.child,
+  });
+
+  final double height;
+  final bool compact;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = height / 2;
+    final fill = isDark
+        ? Colors.black.withValues(alpha: compact ? 0.52 : 0.62)
+        : scheme.surface.withValues(alpha: compact ? 0.68 : 0.78);
+    final blur = compact ? 14.0 : 20.0;
+
+    return AnimatedContainer(
+      duration: duration,
+      curve: kShellNavChromeCurve,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+            blurRadius: compact ? 12 : 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: scheme.onSurface.withValues(alpha: isDark ? 0.12 : 0.08),
+              ),
+            ),
+            child: child,
+          ),
+        ),
       ),
     );
   }

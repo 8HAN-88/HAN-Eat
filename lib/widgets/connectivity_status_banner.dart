@@ -20,7 +20,11 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
   bool? _lastDeviceOnline;
   bool? _lastApiReachable;
   Timer? _recoveredTimer;
+  Timer? _apiDownGraceTimer;
   bool _showRecovered = false;
+  bool _showApiDown = false;
+
+  static const Duration _apiDownGrace = Duration(seconds: 10);
 
   late final VoidCallback _onConnectivityChanged;
 
@@ -31,11 +35,15 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
     FeedSyncService.onlineListenable.addListener(_onConnectivityChanged);
     ApiReachabilityService.instance.isApiReachable
         .addListener(_onConnectivityChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleConnectivityChanged();
+    });
   }
 
   @override
   void dispose() {
     _recoveredTimer?.cancel();
+    _apiDownGraceTimer?.cancel();
     FeedSyncService.onlineListenable.removeListener(_onConnectivityChanged);
     ApiReachabilityService.instance.isApiReachable
         .removeListener(_onConnectivityChanged);
@@ -46,6 +54,29 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
     if (!mounted) return;
     final deviceOnline = FeedSyncService.onlineListenable.value;
     final apiReachable = ApiReachabilityService.instance.isApiReachable.value;
+
+    if (deviceOnline && apiReachable) {
+      _apiDownGraceTimer?.cancel();
+      _apiDownGraceTimer = null;
+      if (_showApiDown) {
+        setState(() => _showApiDown = false);
+      }
+    } else if (deviceOnline && !apiReachable) {
+      _apiDownGraceTimer ??= Timer(_apiDownGrace, () {
+        if (!mounted) return;
+        if (!FeedSyncService.onlineListenable.value ||
+            ApiReachabilityService.instance.isApiReachable.value) {
+          return;
+        }
+        setState(() => _showApiDown = true);
+      });
+    } else {
+      _apiDownGraceTimer?.cancel();
+      _apiDownGraceTimer = null;
+      if (_showApiDown) {
+        setState(() => _showApiDown = false);
+      }
+    }
 
     final wasOffline = _lastDeviceOnline == false ||
         (_lastDeviceOnline == true && _lastApiReachable == false);
@@ -115,6 +146,10 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
             'Нет интернета. Лента, избранное и недавние чаты доступны офлайн.',
         textTheme: textTheme,
       );
+    }
+
+    if (!_showApiDown) {
+      return const SizedBox.shrink();
     }
 
     return _BannerShell(

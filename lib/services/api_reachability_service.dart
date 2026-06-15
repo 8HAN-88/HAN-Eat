@@ -27,7 +27,7 @@ class ApiReachabilityService {
 
     registerWebPageVisibilityListener(svc.warmUp);
 
-    await svc.checkNow();
+    unawaited(svc.checkNow());
     svc._schedulePeriodicCheck();
 
     Connectivity().onConnectivityChanged.listen((result) {
@@ -46,19 +46,22 @@ class ApiReachabilityService {
   bool _started = false;
   int _consecutiveFailures = 0;
   bool _reconnectInFlight = false;
+  bool _warmUpInFlight = false;
+  DateTime? _lastWarmUpAt;
+
+  static const Duration _warmUpMinInterval = Duration(seconds: 20);
 
   Duration get _healthyInterval =>
-      kIsWeb ? const Duration(seconds: 30) : const Duration(seconds: 35);
+      kIsWeb ? const Duration(seconds: 45) : const Duration(seconds: 50);
 
   Duration get _unhealthyInterval =>
-      kIsWeb ? const Duration(seconds: 3) : const Duration(seconds: 6);
+      kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 10);
 
-  Duration get _probeTimeout =>
-      isApiReachable.value
-          ? (kIsWeb ? const Duration(seconds: 4) : const Duration(seconds: 6))
-          : (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 12));
+  Duration get _probeTimeout => isApiReachable.value
+      ? (kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 12))
+      : (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 10));
 
-  int get _failuresBeforeDown => kIsWeb ? 1 : 2;
+  int get _failuresBeforeDown => kIsWeb ? 3 : 3;
 
   void _schedulePeriodicCheck() {
     _timer?.cancel();
@@ -110,6 +113,9 @@ class ApiReachabilityService {
     final changed = wasReachable != reachable;
     if (changed) {
       isApiReachable.value = reachable;
+      if (!reachable) {
+        _consecutiveFailures = _failuresBeforeDown;
+      }
       _schedulePeriodicCheck();
       if (kDebugMode) {
         debugPrint(
@@ -147,26 +153,26 @@ class ApiReachabilityService {
     }
   }
 
-  /// Прогрев TCP/TLS и сессии после возврата из фона / на вкладку.
+  /// Прогрев сессии после возврата из фона / на вкладку (не чаще раза в 20 с).
   Future<void> warmUp() async {
-    unawaited(_pingReadiness());
-    final ok = await checkNow();
-    if (!ok || AuthService.instance.currentUser == null) return;
-    try {
-      await AuthService.getAccessTokenForApi();
-    } catch (e) {
-      if (kDebugMode) debugPrint('warmUp token refresh: $e');
+    final now = DateTime.now();
+    if (_warmUpInFlight) return;
+    if (_lastWarmUpAt != null &&
+        now.difference(_lastWarmUpAt!) < _warmUpMinInterval) {
+      return;
     }
-  }
-
-  Future<void> _pingReadiness() async {
+    _warmUpInFlight = true;
+    _lastWarmUpAt = now;
     try {
-      final uri = Uri.parse('${ServerConfig.apiBaseUrl}/system/readiness');
-      await HanEatHttpClient.shared.get(uri).timeout(
-        kIsWeb ? const Duration(seconds: 4) : const Duration(seconds: 6),
-      );
-    } catch (e) {
-      if (kDebugMode) debugPrint('warmUp readiness: $e');
+      final ok = await checkNow();
+      if (!ok || AuthService.instance.currentUser == null) return;
+      try {
+        await AuthService.getAccessTokenForApi();
+      } catch (e) {
+        if (kDebugMode) debugPrint('warmUp token refresh: $e');
+      }
+    } finally {
+      _warmUpInFlight = false;
     }
   }
 }
