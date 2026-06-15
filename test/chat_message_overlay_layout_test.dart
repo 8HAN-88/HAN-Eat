@@ -19,8 +19,7 @@ void main() {
     );
 
     const menuItemCount = 7;
-    const hasDivider = true;
-    final menuH = menuItemCount * 46 + (hasDivider ? 8 : 0);
+    const menuH = menuItemCount * 46 + 8;
     final maxMenuBottom = screen.height - padding.bottom - 88;
     expect(layout.menuTop + menuH, lessThanOrEqualTo(maxMenuBottom + 1));
     expect(layout.messageTop, lessThan(620));

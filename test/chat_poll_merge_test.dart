@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:han_eat/models/chat_models.dart';
-import 'package:han_eat/models/chat_poll.dart';
 
 void main() {
   test('patchChatPollClosedInContent sets is_closed flag', () {
