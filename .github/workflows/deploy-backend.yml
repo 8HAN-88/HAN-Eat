@@ -79,12 +79,13 @@ jobs:
 
       - name: Smoke
         run: |
-          for i in 1 2 3 4 5; do
+          sleep 5
+          for i in 1 2 3 4 5 6 7 8; do
             if curl -sf https://api.haneat.app/health; then
               echo ""
               curl -sf https://api.haneat.app/api/v1/system/readiness | python3 -m json.tool | head -20
               exit 0
             fi
-            sleep 3
+            sleep 5
           done
           exit 1
