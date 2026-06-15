@@ -8,8 +8,6 @@ import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
-import '../application/video_playback_controller.dart';
-import '../../../models/video_quality_preference.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -71,8 +69,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(analysisSettingsProvider);
     final controller = ref.read(analysisSettingsProvider.notifier);
-    final videoQuality = ref.watch(videoPlaybackProvider);
-    final videoQualityNotifier = ref.read(videoPlaybackProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
 
     final serviceItems = <_SettingsItem>[
@@ -186,46 +182,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ref.read(themeModeProvider.notifier).setThemeMode(mode);
                       },
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Качество видео в рилсах',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Авто — быстрый старт и адаптация под сеть (как в Instagram)',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...VideoQualityPreference.values.map((pref) {
-                      final selected = videoQuality == pref;
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        leading: Icon(
-                          selected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: selected ? scheme.primary : scheme.outline,
-                        ),
-                        title: Text(pref.labelRu),
-                        subtitle: Text(pref.subtitleRu),
-                        onTap: () =>
-                            videoQualityNotifier.setPreference(pref),
-                      );
-                    }),
                   ],
                 ),
               ),

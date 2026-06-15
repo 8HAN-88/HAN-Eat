@@ -47,6 +47,7 @@ from app.services.auth_email_service import (
     send_password_reset_email,
     send_verify_email,
 )
+from app.services.email_delivery_service import EmailDeliveryError
 from app.services.yandex_oauth_service import (
     build_authorize_url,
     exchange_code_and_fetch_profile,
@@ -242,10 +243,24 @@ async def register(
     try:
         send_verify_email(db, user)
         db.commit()
-        verify_msg = "На вашу почту отправлено письмо для подтверждения email."
+        verify_msg = (
+            "На вашу почту отправлено письмо для подтверждения email. "
+            "Проверьте также папку «Спам»."
+        )
+    except EmailDeliveryError as mail_err:
+        logger.error("verify email send failed for %s: %s", user.email, mail_err)
+        db.commit()
+        verify_msg = (
+            "Аккаунт создан, но письмо не удалось отправить. "
+            "Нажмите «Отправить письмо ещё раз» или обратитесь в поддержку."
+        )
     except Exception as mail_err:
         logger.warning("verify email send failed for %s: %s", user.email, mail_err)
         db.commit()
+        verify_msg = (
+            "Аккаунт создан, но письмо не удалось отправить. "
+            "Попробуйте «Отправить письмо ещё раз»."
+        )
 
     try:
         return _auth_response(user, access_token, refresh_token, verify_msg)
@@ -749,9 +764,29 @@ async def resend_verification(
         try:
             send_verify_email(db, user)
             db.commit()
+            return MessageResponse(
+                message=(
+                    "Письмо отправлено. Проверьте входящие и папку «Спам» "
+                    "(для mail.ru письма часто попадают в «Нежелательная почта»)."
+                ),
+            )
+        except EmailDeliveryError as e:
+            logger.error("resend verification failed for %s: %s", email, e)
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Не удалось отправить письмо. Попробуйте позже или "
+                    "обратитесь в поддержку."
+                ),
+            )
         except Exception as e:
             logger.warning("resend verification failed: %s", e)
             db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Не удалось отправить письмо. Попробуйте позже.",
+            )
 
     return MessageResponse(
         message="Если аккаунт существует и email не подтверждён, письмо отправлено.",

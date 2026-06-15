@@ -140,6 +140,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           'Откройте ссылку в письме или вставьте код ниже.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
+                if (!_verified) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Не видите письмо? Проверьте «Спам» / «Нежелательная почта» '
+                    '(особенно для @mail.ru).',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 TextField(
                   controller: _tokenController,

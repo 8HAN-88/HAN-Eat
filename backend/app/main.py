@@ -106,11 +106,13 @@ async def health():
     redis_cfg = infra["redis"]
     redis_ok = True if not redis_cfg["enabled"] else redis_cfg["ok"]
     ok = db_ok and redis_ok
+    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
     return {
         "status": "ok" if ok else "degraded",
         "database": db_ok,
         "redis": redis_cfg,
         "email_smtp_configured": email_delivery_configured(),
+        "email_provider": provider,
     }
 
 

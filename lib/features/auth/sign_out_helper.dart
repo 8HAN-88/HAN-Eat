@@ -8,16 +8,12 @@ import '../../utils/api_error_parser.dart';
 
 /// Подтверждённый выход из аккаунта (единый UX).
 Future<void> confirmAndSignOut(BuildContext context) async {
-  final signedOut = await showDialog<bool>(
+  await showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => const _SignOutDialog(),
   );
-  if (signedOut != true || !context.mounted) return;
-  final loc = GoRouterState.of(context).matchedLocation.split('?').first;
-  if (loc != LoginRoute.path) {
-    context.go(LoginRoute.path);
-  }
+  // Навигация выполняется внутри диалога до его закрытия — без повторного «мигания» экрана.
 }
 
 class _SignOutDialog extends StatefulWidget {
@@ -49,6 +45,10 @@ class _SignOutDialogState extends State<_SignOutDialog> {
         UserService.instance.profile.value = null;
       }
       if (!mounted) return;
+      final loc = GoRouterState.of(context).matchedLocation.split('?').first;
+      if (loc != LoginRoute.path) {
+        GoRouter.of(context).go(LoginRoute.path);
+      }
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;

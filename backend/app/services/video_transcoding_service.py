@@ -76,8 +76,13 @@ class VideoTranscodingService:
         source_info = self.get_video_info(input_file_path)
         source_height = int(source_info.get("height") or 0)
         source_width = int(source_info.get("width") or 0)
-        # Рилсы и горизонтальное видео: 1080p только если исходник достаточно крупный.
-        include_1080p = source_height >= 1080 or source_width >= 1920
+        portrait = source_height > source_width if source_width and source_height else False
+        dims_1080, dims_720, dims_480 = self._tier_dimensions(portrait)
+        # 1080p только если исходник достаточно крупный (вертикаль 9:16 или горизонталь 16:9).
+        if portrait:
+            include_1080p = source_width >= 1080 or source_height >= 1920
+        else:
+            include_1080p = source_height >= 1080 or source_width >= 1920
         
         results = {}
         
@@ -88,8 +93,8 @@ class VideoTranscodingService:
                 self._transcode_to_mp4(
                     input_file_path,
                     str(mp4_1080p_path),
-                    width=1920,
-                    height=1080,
+                    width=dims_1080[0],
+                    height=dims_1080[1],
                     bitrate="4500k",
                 )
                 results["mp4_1080p"] = str(mp4_1080p_path)
@@ -99,8 +104,8 @@ class VideoTranscodingService:
             self._transcode_to_mp4(
                 input_file_path,
                 str(mp4_720p_path),
-                width=1280,
-                height=720,
+                width=dims_720[0],
+                height=dims_720[1],
                 bitrate="2500k"
             )
             results["mp4_720p"] = str(mp4_720p_path)
@@ -110,8 +115,8 @@ class VideoTranscodingService:
             self._transcode_to_mp4(
                 input_file_path,
                 str(mp4_480p_path),
-                width=854,
-                height=480,
+                width=dims_480[0],
+                height=dims_480[1],
                 bitrate="1000k"
             )
             results["mp4_480p"] = str(mp4_480p_path)
@@ -126,6 +131,7 @@ class VideoTranscodingService:
                     str(hls_playlist),
                     hls_dir,
                     include_1080p=include_1080p,
+                    portrait=portrait,
                 )
                 results["hls"] = str(hls_playlist)
             except Exception as hls_err:
@@ -161,6 +167,34 @@ class VideoTranscodingService:
                     pass
             raise
     
+    def _tier_dimensions(self, portrait: bool) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
+        """Размеры MP4: вертикаль 9:16 (как Instagram Reels) или горизонталь 16:9."""
+        if portrait:
+            return (1080, 1920), (720, 1280), (480, 854)
+        return (1920, 1080), (1280, 720), (854, 480)
+
+    def _hls_qualities(self, portrait: bool, include_1080p: bool) -> list:
+        dims_1080, dims_720, dims_480 = self._tier_dimensions(portrait)
+        qualities = []
+        if include_1080p:
+            qualities.append(
+                {
+                    "name": "1080p",
+                    "width": dims_1080[0],
+                    "height": dims_1080[1],
+                    "bitrate": "4500k",
+                }
+            )
+        qualities.extend([
+            {"name": "720p", "width": dims_720[0], "height": dims_720[1], "bitrate": "2500k"},
+            {"name": "480p", "width": dims_480[0], "height": dims_480[1], "bitrate": "1000k"},
+        ])
+        if portrait:
+            qualities.append({"name": "360p", "width": 360, "height": 640, "bitrate": "500k"})
+        else:
+            qualities.append({"name": "360p", "width": 640, "height": 360, "bitrate": "500k"})
+        return qualities
+
     def _scale_pad_filter(self, width: int, height: int) -> str:
         """Чётные размеры для libx264 (вертикальные рилсы)."""
         return (
@@ -209,18 +243,10 @@ class VideoTranscodingService:
         output_playlist: str,
         output_dir: Path,
         include_1080p: bool = True,
+        portrait: bool = False,
     ):
         """Транскодировать в HLS формат"""
-        qualities = []
-        if include_1080p:
-            qualities.append(
-                {"name": "1080p", "width": 1920, "height": 1080, "bitrate": "4500k"}
-            )
-        qualities.extend([
-            {"name": "720p", "width": 1280, "height": 720, "bitrate": "2500k"},
-            {"name": "480p", "width": 854, "height": 480, "bitrate": "1000k"},
-            {"name": "360p", "width": 640, "height": 360, "bitrate": "500k"},
-        ])
+        qualities = self._hls_qualities(portrait, include_1080p)
         
         segment_pattern = output_dir / "segment_%03d.ts"
         playlist_pattern = output_dir / "playlist_%s.m3u8"

@@ -18,7 +18,10 @@ from app.models.auth_token import (
 )
 from app.models.user import User
 from app.services.auth_link_redirect import email_web_link
-from app.services.email_delivery_service import send_transactional_email
+from app.services.email_delivery_service import (
+    send_transactional_email,
+    send_transactional_email_or_raise,
+)
 from app.services.email_templates import render_branded_email
 
 logger = logging.getLogger(__name__)
@@ -77,7 +80,7 @@ def _create_token(
     return raw
 
 
-def send_verify_email(db: Session, user: User) -> bool:
+def send_verify_email(db: Session, user: User) -> None:
     raw = _create_token(
         db,
         user.id,
@@ -93,12 +96,13 @@ def send_verify_email(db: Session, user: User) -> bool:
         paragraphs=[
             "Спасибо за регистрацию в HAN Eat. Нажмите кнопку ниже, "
             "чтобы подтвердить адрес почты и завершить создание аккаунта.",
+            f"Или откройте приложение HAN Eat и вставьте код: {raw}",
         ],
         cta_label="Подтвердить email",
         cta_url=link,
-        expiry_note=f"Ссылка действует {settings.AUTH_VERIFY_EMAIL_HOURS} ч.",
+        expiry_note=f"Ссылка и код действуют {settings.AUTH_VERIFY_EMAIL_HOURS} ч.",
     )
-    return send_transactional_email(user.email, subject, text, html)
+    send_transactional_email_or_raise(user.email, subject, text, html)
 
 
 def send_password_reset_email(db: Session, user: User) -> bool:

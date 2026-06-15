@@ -1,6 +1,6 @@
 /// Предпочтение качества видео в рилсах и ленте.
 enum VideoQualityPreference {
-  /// HLS (адаптивный битрейт) или быстрый старт с 480p с догрузкой качества.
+  /// Старт 720p, на Wi‑Fi — апгрейд до 1080p после прогрузки.
   auto,
 
   /// Не выше 480p — экономия трафика.
@@ -29,7 +29,7 @@ extension VideoQualityPreferenceX on VideoQualityPreference {
 
   String get subtitleRu => switch (this) {
         VideoQualityPreference.auto =>
-          'Быстрый старт, качество подстраивается под сеть',
+          'Старт 720p, на Wi‑Fi повышается до 1080p',
         VideoQualityPreference.dataSaver => 'До 480p, минимум трафика',
         VideoQualityPreference.hd720 => 'Баланс качества и скорости',
         VideoQualityPreference.hd1080 => 'Высокое качество при хорошей сети',

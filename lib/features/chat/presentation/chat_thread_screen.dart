@@ -40,6 +40,7 @@ import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
+import '../application/chat_recent_files_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
 import 'widgets/create_chat_poll_sheet.dart';
@@ -2343,11 +2344,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await _sendGallerySelection(selection.galleryFiles);
       case ChatAttachResult.file:
         await _pickFile();
+      case ChatAttachResult.pickedFile:
+        final picked = selection.pickedFile;
+        final pickedName = selection.pickedFileName;
+        if (picked != null && pickedName != null) {
+          await _sendPickedFile(picked, fileName: pickedName);
+        }
       case ChatAttachResult.poll:
-        await _createAndSendPoll();
+        final draft = selection.pollDraft;
+        if (draft != null) {
+          await _sendPollDraft(draft);
+        } else {
+          await _createAndSendPoll();
+        }
       case ChatAttachResult.contact:
         final contact = selection.contact;
         if (contact != null) await _sendContact(contact);
+      case ChatAttachResult.resendFile:
+        final url = selection.resendFileUrl;
+        final name = selection.resendFileName;
+        if (url != null && name != null) {
+          await _resendStoredFile(name: name, mediaUrl: url);
+        }
     }
   }
 
@@ -2411,6 +2429,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_sending || _recording) return;
     final draft = await CreateChatPollSheet.show(context);
     if (!mounted || draft == null) return;
+    await _sendPollDraft(draft);
+  }
+
+  Future<void> _sendPollDraft(ChatPollDraft draft) async {
+    if (_sending || _recording) return;
     _beginSending(status: 'Отправка опроса…');
     try {
       final msg = await ChatService.sendPoll(
@@ -2433,6 +2456,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       _endSending();
       showErrorSnackBar(context, e, fallback: 'Не удалось отправить опрос');
+    }
+  }
+
+  Future<void> _resendStoredFile({
+    required String name,
+    required String mediaUrl,
+  }) async {
+    if (_sending || _recording) return;
+    _beginSending(status: 'Отправка…');
+    try {
+      final msg = await ChatService.sendFile(
+        conversationId: widget.conversationId,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        fileName: name,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+      });
+      _endSending();
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      _endSending();
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить файл');
     }
   }
 
@@ -2693,6 +2744,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _endSending();
       _scrollToBottom();
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      unawaited(_rememberRecentFile(
+        name: fileName,
+        file: file,
+        mediaUrl: fileUrl,
+      ));
     } catch (e) {
       if (!mounted) return;
       _endSending();
@@ -2704,6 +2760,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ));
       showErrorSnackBar(context, e, fallback: 'Не удалось отправить файл');
     }
+  }
+
+  Future<void> _rememberRecentFile({
+    required String name,
+    required XFile file,
+    required String mediaUrl,
+  }) async {
+    var size = 0;
+    try {
+      size = await file.length();
+    } catch (_) {}
+    await ChatRecentFilesStore.remember(
+      name: name,
+      sizeBytes: size,
+      mediaUrl: mediaUrl,
+    );
   }
 
   Future<void> _pickImage({required ImageSource source}) async {

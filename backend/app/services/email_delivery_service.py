@@ -14,6 +14,10 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+class EmailDeliveryError(RuntimeError):
+    """Письмо не удалось отправить (SMTP/Resend или конфиг)."""
+
+
 def _from_header() -> str:
     if settings.EMAIL_FROM_NAME and settings.EMAIL_FROM:
         return f"{settings.EMAIL_FROM_NAME} <{settings.EMAIL_FROM}>"
@@ -133,3 +137,17 @@ def send_transactional_email(
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, e, exc_info=True)
         return False
+
+
+def send_transactional_email_or_raise(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: Optional[str] = None,
+) -> None:
+    if send_transactional_email(to_email, subject, text_body, html_body):
+        return
+    provider = (settings.EMAIL_PROVIDER or "smtp").strip().lower()
+    if not email_delivery_configured():
+        raise EmailDeliveryError("Email delivery is not configured")
+    raise EmailDeliveryError(f"Email delivery failed via {provider}")

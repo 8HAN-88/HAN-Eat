@@ -34,7 +34,11 @@ class VideoPlayerHelper {
   static bool _shouldUseFileCache(String url) {
     if (!_useFileCache || _isHlsUrl(url)) return false;
     final lower = url.toLowerCase();
-    if (lower.contains('_480p') || lower.contains('_720p')) return true;
+    if (lower.contains('_480p') ||
+        lower.contains('_720p') ||
+        lower.contains('_1080p')) {
+      return true;
+    }
     // Оригинал — не качаем целиком в фоне.
     return false;
   }
@@ -122,25 +126,29 @@ class VideoPlayerHelper {
     return controller;
   }
 
-  /// После старта 480p — переключиться на 720p/оригинал (как Instagram).
+  /// После старта 720p — переключиться на 1080p при хорошей сети (auto).
   static void scheduleQualityUpgrade({
     required VideoPlayerController current,
     required String upgradeUrl,
     required void Function(VideoPlayerController upgraded) onUpgraded,
+    bool Function()? shouldAutoPlay,
     Duration delay = const Duration(milliseconds: 1800),
   }) {
     unawaited(Future<void>.delayed(delay, () async {
       if (!current.value.isInitialized || current.value.hasError) return;
+      if (shouldAutoPlay != null && !shouldAutoPlay()) return;
       final position = current.value.position;
       final wasPlaying = current.value.isPlaying;
       final volume = current.value.volume;
       final looping = current.value.isLooping;
+      final autoPlay =
+          wasPlaying && (shouldAutoPlay?.call() ?? true);
       try {
         final next = await _createControllerForUrl(
           upgradeUrl,
           loop: looping,
           muted: volume < 0.5,
-          autoPlay: wasPlaying,
+          autoPlay: autoPlay,
           prefetchInBackground: _shouldUseFileCache(upgradeUrl),
         );
         if (position > Duration.zero) {
@@ -185,9 +193,13 @@ class VideoPlayerHelper {
     }
   }
 
-  static Future<void> ensurePlaying(VideoPlayerController controller) async {
+  static Future<void> ensurePlaying(
+    VideoPlayerController controller, {
+    bool Function()? shouldContinue,
+  }) async {
     if (!controller.value.isInitialized) return;
     for (var attempt = 0; attempt < 4; attempt++) {
+      if (shouldContinue != null && !shouldContinue()) return;
       if (controller.value.isPlaying) return;
       if (controller.value.hasError) {
         debugPrint('VideoPlayer error: ${controller.value.errorDescription}');

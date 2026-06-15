@@ -245,11 +245,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return FeedRoute.path;
       }
       if (isAuth) return null;
+      final locBase = loc.split('?').first;
+      if (locBase == ProfileAuthRoute.path) {
+        return LoginRoute.path;
+      }
       if (routeAllowsGuestAccess(loc)) return null;
       final isAuthRoute = loc == LoginRoute.path ||
           loc == RegisterRoute.path ||
           loc == '/invite' ||
-          loc == ProfileAuthRoute.path ||
           loc == ForgotPasswordRoute.path ||
           loc == ResetPasswordRoute.path ||
           loc.startsWith(VerifyEmailRoute.path) ||

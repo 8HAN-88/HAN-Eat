@@ -54,6 +54,31 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   final Set<int> _likeBusy = {};
   final Map<int, DateTime> _likeTouchedAt = {};
 
+  bool _shouldPlayReelAt(int index) =>
+      index == _currentIndex && !(_isPaused[index] ?? false);
+
+  void _playReelAt(int index) {
+    final controller = _videoControllers[index];
+    if (controller == null) return;
+    unawaited(
+      VideoPlayerHelper.ensurePlaying(
+        controller,
+        shouldContinue: () => mounted && _shouldPlayReelAt(index),
+      ),
+    );
+  }
+
+  Future<void> _reloadReelVideo(int index) async {
+    if (index < 0 || index >= _reels.length) return;
+    final controller = _videoControllers.remove(index);
+    await controller?.dispose();
+    if (!mounted) return;
+    await _initSingleVideo(index);
+    if (mounted && _shouldPlayReelAt(index)) {
+      _playReelAt(index);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -155,7 +180,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     if (sources.isEmpty) return;
 
     try {
-      final shouldPlay = i == _currentIndex;
+      final shouldPlay = _shouldPlayReelAt(i);
       final qualityPref = ref.read(videoPlaybackProvider);
       final playback = await VideoPlayerHelper.createReelPlayback(
         sources: sources,
@@ -179,6 +204,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
         VideoPlayerHelper.scheduleQualityUpgrade(
           current: controllerRef,
           upgradeUrl: upgradeUrl,
+          shouldAutoPlay: () => _shouldPlayReelAt(i),
           onUpgraded: (upgraded) {
             if (!mounted) {
               upgraded.dispose();
@@ -189,6 +215,9 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
               return;
             }
             setState(() => _videoControllers[i] = upgraded);
+            if (!_shouldPlayReelAt(i)) {
+              unawaited(upgraded.pause());
+            }
           },
         );
       }
@@ -248,12 +277,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     _startReelExposure(index);
 
     if (_videoControllers.containsKey(index)) {
-      VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
+      _playReelAt(index);
     } else {
       unawaited(
         _initializeVideos(index, 1, priorityIndex: index).then((_) {
-          final c = _videoControllers[index];
-          if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
+          if (mounted) _playReelAt(index);
         }),
       );
     }
@@ -548,6 +576,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
                   }
                 },
                 onReport: () => reportPostWithDialog(context, reel.id),
+                onQualityChanged: () => _reloadReelVideo(index),
               );
             },
           ),

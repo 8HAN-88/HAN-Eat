@@ -12,6 +12,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
+import '../../../models/video_quality_preference.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
@@ -89,6 +90,34 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   int get _controllerRetainDistance => kIsWeb ? 1 : 2;
 
+  bool _shouldPlayReelAt(int index) =>
+      index == _currentIndex &&
+      widget.isTabVisible &&
+      !(_isPaused[index] ?? false);
+
+  void _playReelAt(int index) {
+    final controller = _videoControllers[index];
+    if (controller == null) return;
+    unawaited(
+      VideoPlayerHelper.ensurePlaying(
+        controller,
+        shouldContinue: () => mounted && _shouldPlayReelAt(index),
+      ),
+    );
+  }
+
+  Future<void> _reloadReelVideo(int index) async {
+    if (index < 0 || index >= _reels.length) return;
+    final controller = _videoControllers.remove(index);
+    await controller?.dispose();
+    if (!mounted) return;
+    setState(() => _videoInitFailed.remove(index));
+    await _initSingleVideo(index);
+    if (mounted && _shouldPlayReelAt(index)) {
+      _playReelAt(index);
+    }
+  }
+
   Future<void> _initSingleVideo(int i) async {
     if (!mounted || !widget.isTabVisible) return;
     if (_videoControllers.containsKey(i)) return;
@@ -101,7 +130,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       return;
     }
     try {
-      final shouldPlay = i == _currentIndex && widget.isTabVisible;
+      final shouldPlay = _shouldPlayReelAt(i);
       final qualityPref = ref.read(videoPlaybackProvider);
       final playback = await VideoPlayerHelper.createReelPlayback(
         sources: sources,
@@ -126,6 +155,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         VideoPlayerHelper.scheduleQualityUpgrade(
           current: controllerRef,
           upgradeUrl: upgradeUrl,
+          shouldAutoPlay: () => _shouldPlayReelAt(i),
           onUpgraded: (upgraded) {
             if (!mounted) {
               upgraded.dispose();
@@ -136,6 +166,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
               return;
             }
             setState(() => _videoControllers[i] = upgraded);
+            if (!_shouldPlayReelAt(i)) {
+              unawaited(upgraded.pause());
+            }
           },
         );
       }
@@ -239,7 +272,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           priorityIndex: _currentIndex,
         );
         final c = _videoControllers[_currentIndex];
-        if (c != null) VideoPlayerHelper.ensurePlaying(c);
+        if (c != null) _playReelAt(_currentIndex);
       }
     } else if (!widget.isTabVisible && oldWidget.isTabVisible) {
       _pauseAllVideos();
@@ -490,12 +523,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     _startReelExposure(index);
 
     if (_videoControllers.containsKey(index)) {
-      VideoPlayerHelper.ensurePlaying(_videoControllers[index]!);
+      _playReelAt(index);
     } else {
       unawaited(
         _initializeVideos(index, 1, priorityIndex: index).then((_) {
-          final c = _videoControllers[index];
-          if (mounted && c != null) VideoPlayerHelper.ensurePlaying(c);
+          if (mounted) _playReelAt(index);
         }),
       );
     }
@@ -722,6 +754,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
                 }
               },
               onReport: () => reportPostWithDialog(context, reel.id),
+              onQualityChanged: () => _reloadReelVideo(index),
             );
           },
         ),
@@ -889,7 +922,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   }
 }
 
-class ReelCard extends StatefulWidget {
+class ReelCard extends ConsumerStatefulWidget {
   final PostModel reel;
   final int index;
   final VideoPlayerController? videoController;
@@ -909,6 +942,7 @@ class ReelCard extends StatefulWidget {
   final void Function(String tagWithoutHash) onHashtagTap;
   final void Function(String usernameWithoutAt, PostModel reel) onMentionTap;
   final VoidCallback onReport;
+  final VoidCallback? onQualityChanged;
 
   const ReelCard({
     super.key,
@@ -931,15 +965,17 @@ class ReelCard extends StatefulWidget {
     required this.onHashtagTap,
     required this.onMentionTap,
     required this.onReport,
+    this.onQualityChanged,
   });
 
   @override
-  State<ReelCard> createState() => _ReelCardState();
+  ConsumerState<ReelCard> createState() => _ReelCardState();
 }
 
-class _ReelCardState extends State<ReelCard>
+class _ReelCardState extends ConsumerState<ReelCard>
     with SingleTickerProviderStateMixin {
   DateTime? _lastTap;
+  Timer? _singleTapTimer;
   bool _showLikeAnimation = false;
   late AnimationController _likeAnimationController;
   late Animation<double> _likeScaleAnimation;
@@ -950,6 +986,7 @@ class _ReelCardState extends State<ReelCard>
   static const double _igActionGap = 18;
   static const double _igRightInset = 12;
   static const double _igRailWidth = 52;
+  static const Duration _doubleTapWindow = Duration(milliseconds: 300);
 
   @override
   void initState() {
@@ -974,6 +1011,7 @@ class _ReelCardState extends State<ReelCard>
 
   @override
   void dispose() {
+    _singleTapTimer?.cancel();
     _clearDescriptionRecognizers();
     _likeAnimationController.dispose();
     super.dispose();
@@ -987,6 +1025,8 @@ class _ReelCardState extends State<ReelCard>
   }
 
   void _showMoreMenu() {
+    final scheme = Theme.of(context).colorScheme;
+    final currentQuality = ref.watch(videoPlaybackProvider);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -994,6 +1034,39 @@ class _ReelCardState extends State<ReelCard>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Качество видео',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ),
+            ...VideoQualityPreference.values.map((pref) {
+              final selected = currentQuality == pref;
+              return ListTile(
+                dense: true,
+                leading: Icon(
+                  selected
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: selected ? scheme.primary : scheme.outline,
+                ),
+                title: Text(pref.labelRu),
+                subtitle: Text(pref.subtitleRu),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (pref == ref.read(videoPlaybackProvider)) return;
+                  await ref
+                      .read(videoPlaybackProvider.notifier)
+                      .setPreference(pref);
+                  widget.onQualityChanged?.call();
+                },
+              );
+            }),
+            const Divider(height: 1),
             ListTile(
               leading: Icon(
                 (widget.reel.isSaved ?? false)
@@ -1046,18 +1119,25 @@ class _ReelCardState extends State<ReelCard>
   void _handleSingleTap() {
     final now = DateTime.now();
     if (_lastTap != null &&
-        now.difference(_lastTap!) < const Duration(milliseconds: 300)) {
+        now.difference(_lastTap!) < _doubleTapWindow) {
+      _singleTapTimer?.cancel();
+      _singleTapTimer = null;
       _handleDoubleTap();
       _lastTap = null;
       return;
     }
     _lastTap = now;
+    _singleTapTimer?.cancel();
+    _singleTapTimer = Timer(_doubleTapWindow, _togglePlayback);
+  }
 
-    if (widget.videoController != null) {
-      VideoPlayerHelper.toggleOrStart(widget.videoController!).then((paused) {
-        if (mounted) widget.onPauseToggle(paused);
-      });
-    }
+  Future<void> _togglePlayback() async {
+    _singleTapTimer = null;
+    _lastTap = null;
+    if (widget.videoController == null) return;
+    final paused =
+        await VideoPlayerHelper.toggleOrStart(widget.videoController!);
+    if (mounted) widget.onPauseToggle(paused);
   }
 
   Widget _buildVideoPlaceholder() {

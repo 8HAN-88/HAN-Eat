@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 import '../models/video_quality_preference.dart';
 import 'server_config.dart';
 
@@ -32,7 +30,7 @@ class ReelVideoSources {
   String? get anyUrl =>
       mp4_1080p ?? mp4_720p ?? mp4_480p ?? hls ?? original;
 
-  /// Быстрый старт: минимальный размер для мгновенного воспроизведения.
+  /// Быстрый старт: 720p для авто, фиксированные профили — как выбрано.
   String? fastStartUrl(VideoQualityPreference pref) {
     switch (pref) {
       case VideoQualityPreference.dataSaver:
@@ -44,25 +42,18 @@ class ReelVideoSources {
       case VideoQualityPreference.max:
         return mp4_1080p ?? original ?? mp4_720p ?? mp4_480p ?? hls;
       case VideoQualityPreference.auto:
-        if (!kIsWeb && hls != null && hls!.isNotEmpty) {
-          return hls;
-        }
-        return mp4_480p ?? mp4_720p ?? mp4_1080p ?? original ?? hls;
+        return mp4_720p ?? mp4_480p ?? mp4_1080p ?? original ?? hls;
     }
   }
 
-  /// Целевое качество после старта (только для auto без HLS).
+  /// Целевое качество после прогрузки (только auto: Wi‑Fi → 1080p).
   String? upgradeUrl(VideoQualityPreference pref, {required bool onWifi}) {
     if (pref != VideoQualityPreference.auto) return null;
-    if (!kIsWeb && hls != null && hls!.isNotEmpty) return null;
 
     final start = fastStartUrl(pref);
-    String? target;
-    if (onWifi) {
-      target = mp4_1080p ?? mp4_720p ?? original;
-    } else {
-      target = mp4_720p ?? mp4_1080p ?? mp4_480p ?? original;
-    }
+    final target = onWifi
+        ? (mp4_1080p ?? original)
+        : null;
     if (target == null || target == start) return null;
     return target;
   }
@@ -78,7 +69,7 @@ class ReelVideoSources {
       case VideoQualityPreference.dataSaver:
         return mp4_480p;
       case VideoQualityPreference.auto:
-        return mp4_480p ?? mp4_720p;
+        return mp4_720p ?? mp4_480p;
     }
   }
 
