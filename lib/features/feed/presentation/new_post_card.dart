@@ -136,7 +136,10 @@ class _NewPostCardState extends State<NewPostCard> {
       _feedChannelRepostOrigFuture = null;
       _displayPost = widget.post;
     } else if (oldWidget.post != widget.post) {
-      _displayPost = widget.post;
+      _displayPost = applyIncomingPostPreservingLocalPoll(
+        _displayPost,
+        widget.post,
+      );
     }
     _isLiked = widget.post.isLiked;
     _likesCount = widget.post.likesCount;

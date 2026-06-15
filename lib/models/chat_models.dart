@@ -1,3 +1,7 @@
+import 'chat_poll.dart';
+
+export 'chat_poll.dart' show ChatPollMessage, parseChatPollFromContent, chatPollPreviewText, patchChatPollClosedInContent;
+
 int _parseInt(dynamic v) {
   if (v is int) return v;
   if (v is num) return v.toInt();
@@ -110,6 +114,9 @@ class ChatMessage {
 
   bool get isEdited => editedAt != null;
 
+  ChatPollMessage? get poll =>
+      type == 'poll' ? parseChatPollFromContent(content) : null;
+
   int? get voiceDurationSec {
     if (type != 'voice') return null;
     return int.tryParse(content.trim());
@@ -171,6 +178,25 @@ class ChatMessage {
       reactions: reactions ?? this.reactions,
     );
   }
+}
+
+/// Не затирает локально закрытый опрос устаревшими данными чата/кэша.
+ChatMessage applyIncomingChatMessagePreservingLocalPoll(
+  ChatMessage local,
+  ChatMessage incoming,
+) {
+  if (local.type != 'poll' || incoming.type != 'poll') return incoming;
+  final localPoll = local.poll;
+  final incomingPoll = incoming.poll;
+  if (localPoll == null ||
+      incomingPoll == null ||
+      !localPoll.isClosed ||
+      incomingPoll.isClosed) {
+    return incoming;
+  }
+  return incoming.copyWith(
+    content: patchChatPollClosedInContent(incoming.content, isClosed: true),
+  );
 }
 
 class ChatConversation {

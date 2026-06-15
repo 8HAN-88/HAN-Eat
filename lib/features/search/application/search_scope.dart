@@ -1,8 +1,10 @@
-/// Контекст поиска — три основных раздела приложения.
+/// Контекст поиска — разделы приложения.
 enum SearchScope {
   main,
   channels,
   menu,
+  /// Чаты: люди и каталог каналов (кнопка поиска в разделе «Чаты»).
+  chats,
 }
 
 SearchScope? searchScopeFromQuery(String? raw) {
@@ -14,6 +16,8 @@ SearchScope? searchScopeFromQuery(String? raw) {
       return SearchScope.channels;
     case 'menu':
       return SearchScope.menu;
+    case 'chats':
+      return SearchScope.chats;
     // Старые значения из предыдущей версии → общий поиск ленты.
     case 'subscriptions':
     case 'recommendations':
@@ -47,6 +51,8 @@ extension SearchScopeLabels on SearchScope {
         return 'Поиск каналов';
       case SearchScope.menu:
         return 'Поиск рецептов';
+      case SearchScope.chats:
+        return 'Поиск';
     }
   }
 
@@ -58,8 +64,12 @@ extension SearchScopeLabels on SearchScope {
         return 'Название или описание канала…';
       case SearchScope.menu:
         return 'Название, ингредиенты, теги…';
+      case SearchScope.chats:
+        return 'Имя, @username или название канала…';
     }
   }
 
   bool get usesRecipeSearch => this == SearchScope.menu;
+
+  bool get usesChatsHubSearch => this == SearchScope.chats;
 }

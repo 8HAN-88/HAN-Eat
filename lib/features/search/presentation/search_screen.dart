@@ -83,23 +83,29 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   bool get _channelsOnlyMode => widget.scope == SearchScope.channels;
 
+  bool get _chatsHubMode => widget.scope?.usesChatsHubSearch ?? false;
+
   bool get _unifiedPeopleSearch =>
       !_recipeSearch &&
       !_channelsOnlyMode &&
+      !_chatsHubMode &&
       (widget.scope == null || widget.scope == SearchScope.main);
 
   bool get _searchPosts =>
       !_channelsOnlyMode &&
+      !_chatsHubMode &&
       (!_unifiedPeopleSearch ||
           _mainTab == _MainSearchTab.all ||
           _mainTab == _MainSearchTab.posts);
 
   bool get _searchPeople =>
-      _unifiedPeopleSearch &&
-      (_mainTab == _MainSearchTab.all || _mainTab == _MainSearchTab.people);
+      (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
+      (_unifiedPeopleSearch &&
+          (_mainTab == _MainSearchTab.all || _mainTab == _MainSearchTab.people));
 
   bool get _searchChannels =>
       _channelsOnlyMode ||
+      (_chatsHubMode && _mainTab == _MainSearchTab.channels) ||
       (_unifiedPeopleSearch &&
           (_mainTab == _MainSearchTab.all ||
               _mainTab == _MainSearchTab.channels));
@@ -118,6 +124,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _scrollController.addListener(_onScroll);
     _loadRecentQueries();
     if (_channelsOnlyMode) _mainTab = _MainSearchTab.channels;
+    if (_chatsHubMode) _mainTab = _MainSearchTab.people;
     final q = widget.initialQuery?.trim();
     if (q != null && q.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -186,12 +193,41 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Future<void> _performSearch({bool reset = true}) async {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
+      if (_chatsHubMode && _mainTab == _MainSearchTab.channels) {
+        if (reset) {
+          setState(() {
+            _isLoading = true;
+            _error = null;
+            _people = [];
+            _channels = [];
+          });
+        }
+        try {
+          final resp = await ChannelService.listChannels(
+            limit: 40,
+            catalog: true,
+          );
+          if (!mounted) return;
+          setState(() {
+            _channels = resp.items;
+            _isLoading = false;
+          });
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            _error = userVisibleError(e);
+            _isLoading = false;
+          });
+        }
+        return;
+      }
       setState(() {
         _posts = [];
         _people = [];
         _channels = [];
         _total = 0;
         _error = null;
+        _isLoading = false;
       });
       return;
     }
@@ -404,7 +440,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         }
                       },
                     ),
-                    if (_unifiedPeopleSearch) ...[
+                    if (_chatsHubMode) ...[
+                      const SizedBox(height: 12),
+                      SegmentedButton<_MainSearchTab>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _MainSearchTab.people,
+                            label: Text('Люди'),
+                            icon: Icon(Icons.person_search_outlined, size: 18),
+                          ),
+                          ButtonSegment(
+                            value: _MainSearchTab.channels,
+                            label: Text('Каналы'),
+                            icon: Icon(Icons.explore_outlined, size: 18),
+                          ),
+                        ],
+                        selected: {_mainTab},
+                        onSelectionChanged: (selection) {
+                          setState(() => _mainTab = selection.first);
+                          _performSearch();
+                        },
+                      ),
+                    ] else if (_unifiedPeopleSearch) ...[
                       const SizedBox(height: 12),
                       SegmentedButton<_MainSearchTab>(
                         segments: const [
@@ -735,9 +792,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final showPeople = _searchPeople && _people.isNotEmpty;
     final showPosts = _searchPosts && _posts.isNotEmpty;
     final showChannels = _searchChannels && _channels.isNotEmpty;
-    final peopleOnly = _unifiedPeopleSearch && _mainTab == _MainSearchTab.people;
+    final peopleOnly =
+        (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
+        (_unifiedPeopleSearch && _mainTab == _MainSearchTab.people);
     final channelsOnly =
-        _channelsOnlyMode || (_unifiedPeopleSearch && _mainTab == _MainSearchTab.channels);
+        _channelsOnlyMode ||
+        (_chatsHubMode && _mainTab == _MainSearchTab.channels) ||
+        (_unifiedPeopleSearch && _mainTab == _MainSearchTab.channels);
 
     if (_isLoading &&
         _posts.isEmpty &&
@@ -796,7 +857,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(height: 16),
             Text(
               query.isEmpty
-                  ? 'Введите запрос для поиска'
+                  ? (_chatsHubMode && _mainTab == _MainSearchTab.people
+                      ? 'Введите имя или @username'
+                      : 'Введите запрос для поиска')
                   : 'Ничего не найдено',
               style: Theme.of(context).textTheme.titleLarge,
             ),

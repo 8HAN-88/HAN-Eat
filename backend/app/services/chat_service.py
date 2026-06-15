@@ -737,6 +737,8 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "video" and not media_url:
             raise ValueError("missing_media")
+        if msg_type == "poll" and not content.strip():
+            raise ValueError("empty_poll")
 
         msg = Message(
             conversation_id=conversation_id,
@@ -770,6 +772,9 @@ class ChatService:
             preview = f"📎 {name[:80]}"
         elif msg_type == "video":
             preview = "🎬 Видео"
+        elif msg_type == "poll":
+            from app.services.chat_poll_service import poll_preview_text
+            preview = poll_preview_text(content)
         else:
             preview = content[:120] if content else ""
         notif = NotificationService(self.db)

@@ -85,10 +85,18 @@ class PinMessageRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    type: str = Field(default="text", pattern="^(text|image|voice|file|video)$")
+    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll)$")
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
+    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_description: Optional[str] = Field(default=None, max_length=500)
+    poll_options: Optional[List[str]] = None
+    poll_settings: Optional[dict] = None
+
+
+class ChatPollVoteRequest(BaseModel):
+    option_index: int = Field(..., ge=0, le=11)
 
 
 class DirectChatRequest(BaseModel):

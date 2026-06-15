@@ -23,6 +23,11 @@ class ChatHubTile extends StatelessWidget {
       return chat.isSaved ? 'Сохраняйте сообщения и заметки' : 'Нет сообщений';
     }
     if (msg.type == 'voice') return '🎤 Голосовое';
+    if (msg.type == 'poll') {
+      final poll = msg.poll;
+      if (poll != null) return chatPollPreviewText(poll);
+      return '📊 Опрос';
+    }
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
     if (msg.type == 'file') {

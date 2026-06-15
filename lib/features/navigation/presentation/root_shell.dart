@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../application/feed_scroll_chrome.dart';
-import '../../chat/application/chats_hub_search.dart';
 import '../application/app_search_context.dart';
 import '../application/shell_tab_visibility.dart';
 import '../application/root_shell_chrome.dart';
@@ -306,8 +305,7 @@ class _RootShellState extends ConsumerState<RootShell> {
             compact ? kShellNavCompactHeight : kShellNavExpandedHeight;
         final iconSize = compact ? 22.0 : 26.0;
         final searchPath = contextualSearchPath(shellIndex);
-        final chatsInlineSearch = usesChatsHubInlineSearch(shellIndex);
-        final showSearchButton = searchPath != null || chatsInlineSearch;
+        final showSearchButton = searchPath != null;
         final navDuration =
             compact ? kShellNavCompactDuration : kShellNavExpandDuration;
 
@@ -376,13 +374,7 @@ class _RootShellState extends ConsumerState<RootShell> {
                   child: IconButton(
                     tooltip: 'Поиск',
                     icon: Icon(Icons.search_rounded, size: iconSize),
-                    onPressed: () {
-                      if (chatsInlineSearch) {
-                        requestChatsHubSearchOpen();
-                        return;
-                      }
-                      context.push(searchPath!);
-                    },
+                    onPressed: () => context.push(searchPath),
                   ),
                 ),
               ],
@@ -505,8 +497,8 @@ class _ShellNavGlassPill extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final radius = height / 2;
     final fill = isDark
-        ? Colors.black.withValues(alpha: compact ? 0.52 : 0.62)
-        : scheme.surface.withValues(alpha: compact ? 0.68 : 0.78);
+        ? Colors.black.withValues(alpha: compact ? 0.36 : 0.44)
+        : scheme.surface.withValues(alpha: compact ? 0.48 : 0.56);
     final blur = compact ? 14.0 : 20.0;
 
     return AnimatedContainer(
@@ -517,7 +509,7 @@ class _ShellNavGlassPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
             blurRadius: compact ? 12 : 20,
             offset: const Offset(0, 6),
           ),
@@ -532,7 +524,7 @@ class _ShellNavGlassPill extends StatelessWidget {
               color: fill,
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
-                color: scheme.onSurface.withValues(alpha: isDark ? 0.12 : 0.08),
+                color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
               ),
             ),
             child: child,

@@ -340,6 +340,24 @@ class PostModel {
   }
 }
 
+/// Не затирает локально закрытый опрос устаревшими данными ленты/кэша.
+PostModel applyIncomingPostPreservingLocalPoll(
+  PostModel local,
+  PostModel incoming,
+) {
+  final localPoll = local.poll;
+  final incomingPoll = incoming.poll;
+  if (localPoll == null ||
+      incomingPoll == null ||
+      !localPoll.isClosed ||
+      incomingPoll.isClosed) {
+    return incoming;
+  }
+  final body = Map<String, dynamic>.from(incoming.body ?? {});
+  body['poll'] = localPoll.toJson();
+  return incoming.copyWith(body: body);
+}
+
 class PostAuthorModel {
   final int id;
   final String name;

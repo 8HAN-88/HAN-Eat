@@ -40,6 +40,8 @@ import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
+import 'widgets/chat_poll_bubble.dart';
+import 'widgets/create_chat_poll_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
@@ -213,6 +215,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _suppressMarkRead = false;
   bool _selectionMode = false;
   final _selectedMessageIds = <int>{};
+  final _votingPollIds = <int>{};
+  final _closingPollIds = <int>{};
+  final _composerPanelKey = GlobalKey();
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
@@ -381,8 +386,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _replaceMessage(ChatMessage updated) {
     setState(() {
       final idx = _messages.indexWhere((m) => m.id == updated.id);
-      if (idx >= 0) _messages[idx] = updated;
-      if (_pinnedMessage?.id == updated.id) _pinnedMessage = updated;
+      if (idx >= 0) {
+        _messages[idx] = applyIncomingChatMessagePreservingLocalPoll(
+          _messages[idx],
+          updated,
+        );
+      }
+      if (_pinnedMessage?.id == updated.id) {
+        _pinnedMessage = applyIncomingChatMessagePreservingLocalPoll(
+          _pinnedMessage!,
+          updated,
+        );
+      }
     });
   }
 
@@ -451,7 +466,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
     );
     if (idx >= 0) {
-      _messages[idx] = msg;
+      _messages[idx] =
+          applyIncomingChatMessagePreservingLocalPoll(_messages[idx], msg);
       return false;
     }
     _messages.add(msg);
@@ -1391,6 +1407,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'poll') {
+      final poll = msg.poll;
+      if (poll != null) return chatPollPreviewText(poll);
+      return '📊 Опрос';
+    }
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
@@ -1895,6 +1916,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String? replyQuote,
     VoidCallback? onReplyTap,
     bool interactive = true,
+    bool wrapWithAlign = true,
+    ValueChanged<int>? onPollVote,
+    bool pollVoting = false,
+    VoidCallback? onPollClose,
+    bool pollClosing = false,
   }) {
     return _Bubble(
       message: msg,
@@ -1905,6 +1931,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       showSenderName: isGroup && !msg.isMine,
       senderLabel: msg.senderName ?? _senderNames[msg.senderId],
       isConversationPinned: _pinnedMessage?.id == msg.id,
+      wrapWithAlign: wrapWithAlign,
+      onPollVote: onPollVote,
+      pollVoting: pollVoting,
+      onPollClose: onPollClose,
+      pollClosing: pollClosing,
       onImageTap: interactive && msg.type == 'image' && msg.mediaUrl != null
           ? () => _openImage(msg.mediaUrl!)
           : null,
@@ -1918,15 +1949,81 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  double _overlayComposerReserve() {
+    final panelBox =
+        _composerPanelKey.currentContext?.findRenderObject() as RenderBox?;
+    if (panelBox != null && panelBox.hasSize) {
+      return panelBox.size.height + 8;
+    }
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    const composerRow = 56.0;
+    const bannerRow = 52.0;
+    var reserve = bottom + composerRow + 12;
+    if (_replyTo != null) reserve += bannerRow;
+    if (_editingMessage != null) reserve += bannerRow;
+    if (_recording) reserve += 96;
+    if (_sending) reserve += 40;
+    return reserve;
+  }
+
   Future<void> _showMessageActionOverlay(
     ChatMessage msg,
     RenderBox bubbleBox,
   ) async {
     if (_selectionMode) return;
-    final rect = Rect.fromPoints(
+    var rect = Rect.fromPoints(
       bubbleBox.localToGlobal(Offset.zero),
       bubbleBox.localToGlobal(bubbleBox.size.bottomRight(Offset.zero)),
     );
+    final composerReserve = _overlayComposerReserve();
+    final screenH = MediaQuery.sizeOf(context).height;
+    final padding = MediaQuery.paddingOf(context);
+    final targetBottom = screenH - composerReserve - 16;
+    final menuItemCount = 4 +
+        (msg.isMine && msg.type == 'text' ? 1 : 0) +
+        (_copyableText(msg).isNotEmpty ? 1 : 0) +
+        (msg.isMine ? 1 : 0) +
+        1; // reply, pin, forward, select + optional
+    final preLayout = ChatMessageOverlayLayout.compute(
+      messageRect: rect,
+      screenSize: MediaQuery.sizeOf(context),
+      padding: padding,
+      menuItemCount: menuItemCount,
+      hasDivider: msg.isMine,
+      reactionCount: _overlayReactions.length,
+      isOutgoing: msg.isMine,
+      bottomComposerReserve: composerReserve,
+    );
+    final menuH = menuItemCount * 46 + (msg.isMine ? 8 : 0);
+    final clusterOverflow =
+        preLayout.menuTop + menuH - (targetBottom - 8);
+    if (clusterOverflow > 0 && _scroll.hasClients) {
+      await _scroll.animateTo(
+        (_scroll.offset + clusterOverflow)
+            .clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+      );
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      rect = Rect.fromPoints(
+        bubbleBox.localToGlobal(Offset.zero),
+        bubbleBox.localToGlobal(bubbleBox.size.bottomRight(Offset.zero)),
+      );
+    } else if (rect.bottom > targetBottom - 80 && _scroll.hasClients) {
+      final delta = rect.bottom - (targetBottom - 80);
+      await _scroll.animateTo(
+        (_scroll.offset + delta).clamp(0.0, _scroll.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+      );
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      rect = Rect.fromPoints(
+        bubbleBox.localToGlobal(Offset.zero),
+        bubbleBox.localToGlobal(bubbleBox.size.bottomRight(Offset.zero)),
+      );
+    }
     final isPinned = _pinnedMessage?.id == msg.id;
     final scheme = Theme.of(context).colorScheme;
     final searching = _threadSearchQuery.trim().isNotEmpty;
@@ -1939,13 +2036,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await ChatMessageActionOverlay.show(
       context: context,
       messageRect: rect,
-      messagePreview: _messageBubbleWidget(
-        msg: msg,
-        scheme: scheme,
-        searching: searching,
-        isGroup: isGroup,
-        replyQuote: replyQuote,
-        onReplyTap: null,
+      isOutgoing: msg.isMine,
+      bottomComposerReserve: composerReserve,
+      messagePreview: SizedBox(
+        width: rect.width,
+        child: _messageBubbleWidget(
+          msg: msg,
+          scheme: scheme,
+          searching: searching,
+          isGroup: isGroup,
+          replyQuote: replyQuote,
+          onReplyTap: null,
+          wrapWithAlign: false,
+        ),
       ),
       quickReactions: _overlayReactions,
       canEdit: msg.isMine && msg.type == 'text',
@@ -2017,9 +2120,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted || seq != _messageLoadSeq) return;
       setState(() {
         if (refresh) {
+          final closedPolls = <int, ChatMessage>{
+            for (final m in _messages)
+              if (m.type == 'poll' && (m.poll?.isClosed ?? false)) m.id: m,
+          };
           _messages
             ..clear()
-            ..addAll(result.items);
+            ..addAll(
+              result.items.map((incoming) {
+                final local = closedPolls[incoming.id];
+                if (local == null) return incoming;
+                return applyIncomingChatMessagePreservingLocalPoll(
+                  local,
+                  incoming,
+                );
+              }),
+            );
           _pinnedMessage = result.pinnedMessage;
         } else {
           _messages.insertAll(0, result.items);
@@ -2243,6 +2359,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: const Text('Выбрать файл'),
               onTap: () => Navigator.pop(ctx, 'file'),
             ),
+            ListTile(
+              leading: const Icon(Icons.poll_outlined),
+              title: const Text('Опрос'),
+              subtitle: const Text('Создать голосование'),
+              onTap: () => Navigator.pop(ctx, 'poll'),
+            ),
           ],
         ),
       ),
@@ -2255,6 +2377,105 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await _pickImage(source: ImageSource.camera);
       case 'file':
         await _pickFile();
+      case 'poll':
+        await _createAndSendPoll();
+    }
+  }
+
+  Future<void> _createAndSendPoll() async {
+    if (_sending || _recording) return;
+    final draft = await CreateChatPollSheet.show(context);
+    if (!mounted || draft == null) return;
+    _beginSending(status: 'Отправка опроса…');
+    try {
+      final msg = await ChatService.sendPoll(
+        conversationId: widget.conversationId,
+        question: draft.question,
+        description: draft.description,
+        options: draft.options,
+        settings: draft.settings.toJson(),
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+      });
+      _endSending();
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      _endSending();
+      showErrorSnackBar(context, e, fallback: 'Не удалось отправить опрос');
+    }
+  }
+
+  Future<void> _votePoll(ChatMessage msg, int optionIndex) async {
+    if (_votingPollIds.contains(msg.id)) return;
+    setState(() => _votingPollIds.add(msg.id));
+    try {
+      final updated = await ChatService.votePoll(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        optionIndex: optionIndex,
+      );
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == msg.id);
+        if (i >= 0) _messages[i] = updated;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, e, fallback: 'Не удалось проголосовать');
+      }
+    } finally {
+      if (mounted) setState(() => _votingPollIds.remove(msg.id));
+    }
+  }
+
+  Future<void> _closePoll(ChatMessage msg) async {
+    if (_closingPollIds.contains(msg.id)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Закрыть опрос?'),
+        content: const Text(
+          'После закрытия голосовать будет нельзя. Результаты останутся видны.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _closingPollIds.add(msg.id));
+    try {
+      final updated = await ChatService.closePoll(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == msg.id);
+        if (i >= 0) _messages[i] = updated;
+        if (_pinnedMessage?.id == msg.id) _pinnedMessage = updated;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, e, fallback: 'Не удалось закрыть опрос');
+      }
+    } finally {
+      if (mounted) setState(() => _closingPollIds.remove(msg.id));
     }
   }
 
@@ -2796,49 +3017,79 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               ? CrossAxisAlignment.end
                                               : CrossAxisAlignment.start,
                                           children: [
-                                            Builder(
-                                              builder: (bubbleContext) =>
-                                                  GestureDetector(
-                                                behavior: HitTestBehavior.opaque,
-                                                onTap: _selectionMode
-                                                    ? () =>
-                                                        _toggleMessageSelection(
-                                                          msg.id,
-                                                        )
-                                                    : null,
-                                                onLongPress: _selectionMode
-                                                    ? null
-                                                    : () {
-                                                        final box =
-                                                            bubbleContext
-                                                                    .findRenderObject()
-                                                                as RenderBox?;
-                                                        if (box != null) {
-                                                          unawaited(
-                                                            _showMessageActionOverlay(
-                                                              msg,
-                                                              box,
-                                                            ),
-                                                          );
-                                                        }
-                                                      },
-                                                child: Opacity(
-                                                  opacity: failed ? 0.55 : 1,
-                                                  child: _messageBubbleWidget(
-                                                    msg: msg,
-                                                    scheme: scheme,
-                                                    searching: searching,
-                                                    isGroup: isGroup,
-                                                    replyQuote: replyQuote,
-                                                    interactive: !_selectionMode,
-                                                    onReplyTap:
-                                                        msg.replyToMessageId !=
-                                                                null
-                                                            ? () =>
-                                                                _scrollToReplyMessage(
-                                                                  msg.replyToMessageId!,
-                                                                )
-                                                            : null,
+                                            Align(
+                                              alignment: msg.isMine
+                                                  ? Alignment.centerRight
+                                                  : Alignment.centerLeft,
+                                              child: Builder(
+                                                builder: (bubbleContext) =>
+                                                    GestureDetector(
+                                                  behavior:
+                                                      HitTestBehavior.opaque,
+                                                  onTap: _selectionMode
+                                                      ? () =>
+                                                          _toggleMessageSelection(
+                                                            msg.id,
+                                                          )
+                                                      : null,
+                                                  onLongPress: _selectionMode
+                                                      ? null
+                                                      : () {
+                                                          final box =
+                                                              bubbleContext
+                                                                      .findRenderObject()
+                                                                  as RenderBox?;
+                                                          if (box != null &&
+                                                              box.hasSize) {
+                                                            unawaited(
+                                                              _showMessageActionOverlay(
+                                                                msg,
+                                                                box,
+                                                              ),
+                                                            );
+                                                          }
+                                                        },
+                                                  child: Opacity(
+                                                    opacity: failed ? 0.55 : 1,
+                                                    child: _messageBubbleWidget(
+                                                      msg: msg,
+                                                      scheme: scheme,
+                                                      searching: searching,
+                                                      isGroup: isGroup,
+                                                      replyQuote: replyQuote,
+                                                      interactive:
+                                                          !_selectionMode,
+                                                      wrapWithAlign: false,
+                                                      onPollVote:
+                                                          !_selectionMode
+                                                              ? (idx) =>
+                                                                  _votePoll(
+                                                                    msg,
+                                                                    idx,
+                                                                  )
+                                                              : null,
+                                                      pollVoting: _votingPollIds
+                                                          .contains(msg.id),
+                                                      onPollClose: (!_selectionMode &&
+                                                              msg.isMine &&
+                                                              msg.type ==
+                                                                  'poll' &&
+                                                              msg.poll != null &&
+                                                              !msg.poll!
+                                                                  .isClosed)
+                                                          ? () => _closePoll(msg)
+                                                          : null,
+                                                      pollClosing: _closingPollIds
+                                                          .contains(msg.id),
+                                                      onReplyTap:
+                                                          msg.replyToMessageId !=
+                                                                  null
+                                                              ? () =>
+                                                                  _scrollToReplyMessage(
+                                                                    msg.replyToMessageId!,
+                                                                  )
+                                                              : null,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -2891,7 +3142,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onShare: _shareSelectedMessages,
               onForward: _forwardSelectedMessages,
             )
-          else ...[
+          else
+            KeyedSubtree(
+              key: _composerPanelKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
           if (_sending)
             Material(
               color: scheme.secondaryContainer.withValues(alpha: 0.55),
@@ -3129,7 +3385,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
           ),
-          ],
+                ],
+              ),
+            ),
         ],
       ),
       ),
@@ -3187,6 +3445,11 @@ class _Bubble extends StatelessWidget {
     this.onVideoTap,
     this.onFileTap,
     this.onReactionTap,
+    this.wrapWithAlign = true,
+    this.onPollVote,
+    this.pollVoting = false,
+    this.onPollClose,
+    this.pollClosing = false,
   });
 
   final ChatMessage message;
@@ -3201,6 +3464,11 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onVideoTap;
   final VoidCallback? onFileTap;
   final ValueChanged<String>? onReactionTap;
+  final bool wrapWithAlign;
+  final ValueChanged<int>? onPollVote;
+  final bool pollVoting;
+  final VoidCallback? onPollClose;
+  final bool pollClosing;
 
   @override
   Widget build(BuildContext context) {
@@ -3211,26 +3479,24 @@ class _Bubble extends StatelessWidget {
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
 
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+    final bubble = Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(16),
+          topRight: const Radius.circular(16),
+          bottomLeft: Radius.circular(mine ? 16 : 4),
+          bottomRight: Radius.circular(mine ? 4 : 16),
         ),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(mine ? 16 : 4),
-            bottomRight: Radius.circular(mine ? 4 : 16),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             if (showSenderName &&
                 (senderLabel?.isNotEmpty ?? false)) ...[
               Text(
@@ -3284,6 +3550,19 @@ class _Bubble extends StatelessWidget {
                 foregroundColor: fg,
                 accentColor: scheme.primary,
                 activeColor: mine ? scheme.primary : scheme.secondary,
+              )
+            else if (message.type == 'poll' && message.poll != null)
+              ChatPollBubble(
+                poll: message.poll!,
+                foregroundColor: fg,
+                accentColor: scheme.primary,
+                mutedColor: fg.withValues(alpha: 0.65),
+                optionBackground: quoteBg,
+                onVote: onPollVote,
+                voting: pollVoting,
+                canClose: onPollClose != null,
+                onClose: onPollClose,
+                closing: pollClosing,
               )
             else if (message.type == 'file' && message.mediaUrl != null)
               Material(
@@ -3454,7 +3733,12 @@ class _Bubble extends StatelessWidget {
             ),
           ],
         ),
-      ),
+    );
+
+    if (!wrapWithAlign) return bubble;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: bubble,
     );
   }
 }

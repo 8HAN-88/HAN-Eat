@@ -1,0 +1,324 @@
+"""Опросы в сообщениях чата."""
+from __future__ import annotations
+
+import copy
+import json
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.models.message_poll_vote import MessagePollVote
+
+
+def _default_settings() -> Dict[str, Any]:
+    return {
+        "show_voter_names": True,
+        "multiple_choice": False,
+        "allow_add_options": False,
+        "allow_change_vote": True,
+        "random_order": False,
+        "quiz_mode": False,
+        "correct_option_indices": [],
+        "time_limit_enabled": False,
+        "duration_hours": 24,
+        "hide_results_until_closed": False,
+    }
+
+
+def build_poll_content(
+    question: str,
+    option_texts: List[str],
+    description: str = "",
+    settings: Optional[Dict[str, Any]] = None,
+) -> str:
+    q = (question or "").strip()
+    desc = (description or "").strip()
+    opts = [t.strip() for t in option_texts if t and t.strip()]
+    if len(q) < 1:
+        raise ValueError("poll_question_required")
+    if len(opts) < 2:
+        raise ValueError("poll_options_required")
+    if len(opts) > 12:
+        raise ValueError("poll_too_many_options")
+
+    merged_settings = _default_settings()
+    if settings:
+        merged_settings.update({k: v for k, v in settings.items() if k in merged_settings})
+
+    closes_at = None
+    if merged_settings.get("time_limit_enabled"):
+        hours = int(merged_settings.get("duration_hours") or 24)
+        closes_at = (
+            datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=hours)
+        ).isoformat()
+
+    payload = {
+        "poll": {
+            "question": q,
+            "description": desc,
+            "options": [{"index": i, "text": text} for i, text in enumerate(opts)],
+            "settings": merged_settings,
+            "is_closed": False,
+            "closes_at": closes_at,
+        }
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def parse_poll_content(content: str) -> Optional[Dict[str, Any]]:
+    if not content or not content.strip():
+        return None
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    poll = data.get("poll")
+    if not isinstance(poll, dict):
+        return None
+    return data
+
+
+def _vote_counts(db: Session, message_ids: List[int]) -> Dict[int, Dict[int, int]]:
+    if not message_ids:
+        return {}
+    rows = (
+        db.query(
+            MessagePollVote.message_id,
+            MessagePollVote.option_index,
+            func.count(MessagePollVote.id),
+        )
+        .filter(MessagePollVote.message_id.in_(message_ids))
+        .group_by(MessagePollVote.message_id, MessagePollVote.option_index)
+        .all()
+    )
+    out: Dict[int, Dict[int, int]] = {}
+    for message_id, option_index, cnt in rows:
+        out.setdefault(message_id, {})[option_index] = int(cnt)
+    return out
+
+
+def _user_votes(
+    db: Session, message_ids: List[int], user_id: Optional[int]
+) -> Dict[int, List[int]]:
+    if not message_ids or user_id is None:
+        return {}
+    rows = (
+        db.query(MessagePollVote.message_id, MessagePollVote.option_index)
+        .filter(
+            MessagePollVote.message_id.in_(message_ids),
+            MessagePollVote.user_id == user_id,
+        )
+        .all()
+    )
+    out: Dict[int, List[int]] = {}
+    for message_id, option_index in rows:
+        out.setdefault(message_id, []).append(option_index)
+    return out
+
+
+def enrich_poll_content(
+    db: Session,
+    message_id: int,
+    content: str,
+    viewer_user_id: Optional[int],
+    vote_counts: Optional[Dict[int, int]] = None,
+    voted_indices: Optional[List[int]] = None,
+) -> str:
+    data = parse_poll_content(content)
+    if not data:
+        return content
+
+    poll = data["poll"]
+    stored_opts = poll.get("options")
+    if not isinstance(stored_opts, list):
+        return content
+
+    if vote_counts is None:
+        vote_counts = _vote_counts(db, [message_id]).get(message_id, {})
+    if voted_indices is None and viewer_user_id is not None:
+        voted_indices = _user_votes(db, [message_id], viewer_user_id).get(message_id, [])
+
+    total = sum(vote_counts.values())
+    options_out = []
+    for raw in stored_opts:
+        if not isinstance(raw, dict):
+            continue
+        idx = int(raw.get("index", 0))
+        text = raw.get("text") or ""
+        votes = vote_counts.get(idx, 0)
+        pct = round((votes / total) * 100, 1) if total > 0 else 0.0
+        options_out.append(
+            {
+                "index": idx,
+                "text": text,
+                "votes": votes,
+                "percentage": pct,
+            }
+        )
+
+    poll_out = copy.deepcopy(poll)
+    poll_out["options"] = options_out
+    poll_out["total_votes"] = total
+    if voted_indices:
+        poll_out["voted_option_indices"] = sorted(voted_indices)
+        if len(voted_indices) == 1:
+            poll_out["voted_option_index"] = voted_indices[0]
+    data["poll"] = poll_out
+    return json.dumps(data, ensure_ascii=False)
+
+
+def enrich_messages_poll_batch(
+    db: Session,
+    messages: List[Any],
+    viewer_user_id: Optional[int],
+) -> Dict[int, str]:
+    poll_ids = [m.id for m in messages if getattr(m, "type", None) == "poll"]
+    if not poll_ids:
+        return {}
+    counts = _vote_counts(db, poll_ids)
+    user_votes = _user_votes(db, poll_ids, viewer_user_id)
+    out: Dict[int, str] = {}
+    for m in messages:
+        if m.id not in poll_ids:
+            continue
+        out[m.id] = enrich_poll_content(
+            db,
+            m.id,
+            m.content,
+            viewer_user_id,
+            vote_counts=counts.get(m.id, {}),
+            voted_indices=user_votes.get(m.id, []),
+        )
+    return out
+
+
+def vote_on_message_poll(
+    db: Session,
+    message_id: int,
+    user_id: int,
+    option_index: int,
+) -> str:
+    from app.models.conversation import Message
+
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg or msg.type != "poll":
+        raise ValueError("not_poll_message")
+
+    data = parse_poll_content(msg.content)
+    if not data:
+        raise ValueError("invalid_poll")
+
+    poll = data["poll"]
+    if poll.get("is_closed"):
+        raise ValueError("poll_closed")
+
+    closes_at = poll.get("closes_at")
+    if closes_at:
+        try:
+            deadline = datetime.fromisoformat(str(closes_at))
+            if datetime.now(timezone.utc).replace(tzinfo=None) >= deadline:
+                poll["is_closed"] = True
+                data["poll"] = poll
+                msg.content = json.dumps(data, ensure_ascii=False)
+                raise ValueError("poll_closed")
+        except ValueError:
+            pass
+
+    stored_opts = poll.get("options") or []
+    valid_indices = {
+        int(o.get("index", i))
+        for i, o in enumerate(stored_opts)
+        if isinstance(o, dict)
+    }
+    if option_index not in valid_indices:
+        raise ValueError("invalid_option")
+
+    settings = poll.get("settings") or {}
+    multiple = bool(settings.get("multiple_choice"))
+    allow_change = bool(settings.get("allow_change_vote", True))
+
+    existing = (
+        db.query(MessagePollVote)
+        .filter(
+            MessagePollVote.message_id == message_id,
+            MessagePollVote.user_id == user_id,
+        )
+        .all()
+    )
+    existing_indices = {v.option_index for v in existing}
+
+    if option_index in existing_indices:
+        if not allow_change:
+            raise ValueError("vote_locked")
+        for v in existing:
+            if v.option_index == option_index:
+                db.delete(v)
+        db.flush()
+    elif existing and not multiple:
+        if not allow_change:
+            raise ValueError("vote_locked")
+        for v in existing:
+            db.delete(v)
+        db.flush()
+        db.add(
+            MessagePollVote(
+                message_id=message_id,
+                user_id=user_id,
+                option_index=option_index,
+            )
+        )
+    else:
+        db.add(
+            MessagePollVote(
+                message_id=message_id,
+                user_id=user_id,
+                option_index=option_index,
+            )
+        )
+
+    db.flush()
+    return enrich_poll_content(db, message_id, msg.content, user_id)
+
+
+def close_message_poll(
+    db: Session,
+    message_id: int,
+    user_id: int,
+) -> str:
+    from app.models.conversation import Message
+
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg or msg.type != "poll":
+        raise ValueError("not_poll_message")
+
+    if msg.sender_id != user_id:
+        raise ValueError("forbidden")
+
+    data = parse_poll_content(msg.content)
+    if not data:
+        raise ValueError("invalid_poll")
+
+    poll = data["poll"]
+    if poll.get("is_closed"):
+        raise ValueError("poll_already_closed")
+
+    poll["is_closed"] = True
+    data["poll"] = poll
+    msg.content = json.dumps(data, ensure_ascii=False)
+    db.flush()
+    return enrich_poll_content(db, message_id, msg.content, user_id)
+
+
+def poll_preview_text(content: str) -> str:
+    data = parse_poll_content(content)
+    if not data:
+        return "📊 Опрос"
+    question = (data.get("poll") or {}).get("question") or ""
+    q = question.strip()
+    if q:
+        return f"📊 {q[:80]}"
+    return "📊 Опрос"

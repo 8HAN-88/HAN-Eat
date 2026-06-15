@@ -37,9 +37,13 @@ class _PostPollSectionState extends State<PostPollSection> {
   @override
   void didUpdateWidget(covariant PostPollSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.poll != widget.poll) {
+    if (oldWidget.poll == widget.poll) return;
+    if (widget.poll.isClosed) {
       _poll = widget.poll;
+      return;
     }
+    if (_poll.isClosed && !widget.poll.isClosed) return;
+    _poll = widget.poll;
   }
 
   Future<void> _vote(int optionIndex) async {

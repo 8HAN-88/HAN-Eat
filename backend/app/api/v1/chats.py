@@ -42,6 +42,7 @@ from app.schemas.chat import (
     PhoneSyncRequest,
     PhoneSyncResponse,
     SendMessageRequest,
+    ChatPollVoteRequest,
     UserSearchItem,
     UserSearchResponse,
 )
@@ -66,6 +67,18 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
         "reactions": reactions or [],
     }
+
+
+def _enriched_content(
+    db: Session, msg, viewer_user_id: int, cache: Optional[Dict[int, str]] = None
+) -> str:
+    if getattr(msg, "type", None) != "poll":
+        return msg.content
+    if cache is not None and msg.id in cache:
+        return cache[msg.id]
+    from app.services.chat_poll_service import enrich_poll_content
+
+    return enrich_poll_content(db, msg.id, msg.content, viewer_user_id)
 
 
 def _reaction_summaries(
@@ -124,6 +137,8 @@ def _message_response(
     svc: Optional[ChatService] = None,
     sender: Optional[User] = None,
     reactions: Optional[List[MessageReactionSummary]] = None,
+    db: Optional[Session] = None,
+    poll_content_cache: Optional[Dict[int, str]] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
     if is_mine and conv and conv.type == "group" and svc:
@@ -138,13 +153,16 @@ def _message_response(
         is_read = True
     else:
         is_read = False
+    content = msg.content
+    if db is not None and getattr(msg, "type", None) == "poll":
+        content = _enriched_content(db, msg, current_user_id, poll_content_cache)
     return MessageResponse(
         id=msg.id,
         conversation_id=msg.conversation_id,
         sender_id=msg.sender_id,
         sender_name=_sender_name(sender),
         type=msg.type,
-        content=msg.content,
+        content=content,
         media_url=msg.media_url,
         reply_to_message_id=msg.reply_to_message_id,
         created_at=msg.created_at,
@@ -529,6 +547,9 @@ async def list_messages(
     } if sender_ids else {}
     message_ids = [m.id for m in messages]
     reactions_map = _reaction_summaries(svc, message_ids, current_user.id)
+    from app.services.chat_poll_service import enrich_messages_poll_batch
+
+    poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
 
     items = [
         _message_response(
@@ -540,6 +561,8 @@ async def list_messages(
             svc,
             senders.get(m.sender_id),
             reactions=reactions_map.get(m.id, []),
+            db=db,
+            poll_content_cache=poll_cache,
         )
         for m in messages
     ]
@@ -563,6 +586,8 @@ async def list_messages(
             svc,
             pinned_sender,
             reactions=pinned_reactions,
+            db=db,
+            poll_content_cache=poll_cache,
         )
     next_cursor = None
     if after_id is None:
@@ -583,12 +608,29 @@ async def send_message(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    content = body.content
+    if body.type == "poll":
+        from app.services.chat_poll_service import build_poll_content
+
+        if not body.poll_question or not body.poll_options:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "poll_fields_required"
+            )
+        try:
+            content = build_poll_content(
+                body.poll_question,
+                body.poll_options,
+                description=body.poll_description or "",
+                settings=body.poll_settings,
+            )
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     try:
         msg = svc.send_message(
             conversation_id=conversation_id,
             sender_id=current_user.id,
             msg_type=body.type,
-            content=body.content,
+            content=content,
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
         )
@@ -599,7 +641,7 @@ async def send_message(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-        if code in ("empty_message", "missing_media"):
+        if code in ("empty_message", "missing_media", "empty_poll"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
@@ -632,6 +674,170 @@ async def send_message(
         conv,
         svc,
         sender,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/poll/vote",
+    response_model=MessageResponse,
+)
+async def vote_chat_poll(
+    conversation_id: int,
+    message_id: int,
+    body: ChatPollVoteRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    from app.services.chat_poll_service import vote_on_message_poll
+
+    try:
+        enriched = vote_on_message_poll(
+            db, message_id, current_user.id, body.option_index
+        )
+        from app.models.conversation import Message
+
+        msg = (
+            db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if not msg:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        msg.content = enriched
+        db.commit()
+        db.refresh(msg)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_poll_message":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("poll_closed", "invalid_option", "vote_locked", "invalid_poll"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
+    return _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        reactions=reactions,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/poll/close",
+    response_model=MessageResponse,
+)
+async def close_chat_poll(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    from app.services.chat_poll_service import close_message_poll
+
+    try:
+        enriched = close_message_poll(db, message_id, current_user.id)
+        from app.models.conversation import Message
+
+        msg = (
+            db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if not msg:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        msg.content = enriched
+        db.commit()
+        db.refresh(msg)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_poll_message":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code in ("poll_already_closed", "invalid_poll"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
+    return _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        reactions=reactions,
+        db=db,
     )
 
 

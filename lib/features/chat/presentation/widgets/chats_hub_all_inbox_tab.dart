@@ -35,7 +35,7 @@ import 'inbox_hub_entries.dart';
 class ChatsHubAllInboxTab extends ConsumerStatefulWidget {
   const ChatsHubAllInboxTab({
     super.key,
-    required this.searchQuery,
+    this.searchQuery = '',
     required this.onSwitchToContacts,
   });
 

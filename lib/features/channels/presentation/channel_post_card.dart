@@ -168,7 +168,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       _channelRepostOriginalFuture = null;
       _displayPost = widget.post;
     } else if (oldWidget.post != widget.post) {
-      _displayPost = widget.post;
+      _displayPost = applyIncomingPostPreservingLocalPoll(
+        _displayPost,
+        widget.post,
+      );
     }
     if (oldWidget.post.id == widget.post.id && oldWidget.post != widget.post) {
       _isLiked = widget.post.isLiked;

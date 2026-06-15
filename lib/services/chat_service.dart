@@ -458,6 +458,64 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendPoll({
+    required int conversationId,
+    required String question,
+    required List<String> options,
+    String description = '',
+    Map<String, dynamic>? settings,
+    int? replyToMessageId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/messages');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'type': 'poll',
+        'poll_question': question,
+        'poll_description': description,
+        'poll_options': options,
+        if (settings != null) 'poll_settings': settings,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+      }),
+    );
+    _ensureOk(response, 'Не удалось отправить опрос');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> votePoll({
+    required int conversationId,
+    required int messageId,
+    required int optionIndex,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/poll/vote',
+    );
+    final response = await _post(
+      uri,
+      body: jsonEncode({'option_index': optionIndex}),
+    );
+    _ensureOk(response, 'Не удалось проголосовать');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> closePoll({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/poll/close',
+    );
+    final response = await _post(uri, body: jsonEncode({}));
+    _ensureOk(response, 'Не удалось закрыть опрос');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatMessage> _send({
     required int conversationId,
     required String type,

@@ -9,7 +9,6 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
-import '../application/chats_hub_search.dart';
 import 'chat_archived_screen.dart';
 import 'chat_create_group_screen.dart';
 import 'chat_people_search_screen.dart';
@@ -28,16 +27,12 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   int _lastTabIndex = 0;
-  final _searchController = TextEditingController();
-  bool _searchOpen = false;
-  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
     _tabs.addListener(_onTabChanged);
-    chatsHubSearchOpenRequest.addListener(_onExternalSearchOpen);
   }
 
   void _onTabChanged() {
@@ -49,26 +44,9 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
 
   @override
   void dispose() {
-    chatsHubSearchOpenRequest.removeListener(_onExternalSearchOpen);
     _tabs.removeListener(_onTabChanged);
-    _searchController.dispose();
     _tabs.dispose();
     super.dispose();
-  }
-
-  void _onExternalSearchOpen() {
-    if (!mounted || _searchOpen) return;
-    setState(() => _searchOpen = true);
-  }
-
-  void _toggleSearch() {
-    setState(() {
-      _searchOpen = !_searchOpen;
-      if (!_searchOpen) {
-        _searchQuery = '';
-        _searchController.clear();
-      }
-    });
   }
 
   Future<void> _openPeopleSearch() async {
@@ -116,6 +94,14 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
                 _openCreateGroup();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text('Создать канал'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _createChannel();
+              },
+            ),
           ],
         ),
       ),
@@ -142,75 +128,20 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Чаты'),
-        bottom: PreferredSize(
-          preferredSize: Size.fromHeight(_searchOpen ? 104 : 48),
-          child: Column(
-            children: [
-              if (_searchOpen)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    decoration: InputDecoration(
-                      hintText: 'Чаты, каналы, контакты',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: _toggleSearch,
-                      ),
-                      isDense: true,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-              TabBar(
-                controller: _tabs,
-                tabs: const [
-                  Tab(text: 'Все'),
-                  Tab(text: 'Контакты'),
-                ],
-              ),
-            ],
-          ),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: const [
+            Tab(text: 'Все'),
+            Tab(text: 'Контакты'),
+          ],
         ),
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Ещё',
             onSelected: (v) {
-              if (v == 'people') _openPeopleSearch();
-              if (v == 'channels') context.push(ChannelsManagementRoute.path);
-              if (v == 'create_channel') _createChannel();
               if (v == 'archive') _openArchived();
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'people',
-                child: _hubMenuRow(
-                  Icons.person_search_outlined,
-                  'Найти людей',
-                ),
-              ),
-              PopupMenuItem(
-                value: 'channels',
-                child: _hubMenuRow(
-                  Icons.explore_outlined,
-                  'Каталог каналов',
-                ),
-              ),
-              PopupMenuItem(
-                value: 'create_channel',
-                child: _hubMenuRow(
-                  Icons.add_circle_outline,
-                  'Создать канал',
-                ),
-              ),
-              const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'archive',
                 child: _hubMenuRow(
@@ -226,13 +157,11 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
         controller: _tabs,
         children: [
           ChatsHubAllInboxTab(
-            searchQuery: _searchQuery,
             onSwitchToContacts: () =>
                 _tabs.animateTo(ChatsHubContactsTab.contactsTabIndex),
           ),
           ChatsHubContactsTab(
             tabController: _tabs,
-            searchQuery: _searchQuery,
           ),
         ],
       ),

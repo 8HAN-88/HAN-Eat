@@ -19,7 +19,7 @@ class ChatsHubContactsTab extends StatefulWidget {
   const ChatsHubContactsTab({
     super.key,
     required this.tabController,
-    required this.searchQuery,
+    this.searchQuery = '',
   });
 
   static const contactsTabIndex = 1;
