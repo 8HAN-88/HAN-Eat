@@ -116,17 +116,24 @@ class VideoTranscodingService:
             )
             results["mp4_480p"] = str(mp4_480p_path)
             
-            # 4. HLS (для адаптивного стриминга)
+            # 4. HLS (для адаптивного стриминга; не блокирует MP4 при ошибке)
             hls_dir = output_dir_path / f"{upload_id}_hls"
             hls_dir.mkdir(exist_ok=True)
             hls_playlist = hls_dir / "playlist.m3u8"
-            self._transcode_to_hls(
-                input_file_path,
-                str(hls_playlist),
-                hls_dir,
-                include_1080p=include_1080p,
-            )
-            results["hls"] = str(hls_playlist)
+            try:
+                self._transcode_to_hls(
+                    input_file_path,
+                    str(hls_playlist),
+                    hls_dir,
+                    include_1080p=include_1080p,
+                )
+                results["hls"] = str(hls_playlist)
+            except Exception as hls_err:
+                logger.warning(
+                    "HLS transcode skipped for %s: %s",
+                    upload_id,
+                    hls_err,
+                )
             
             # 5. Thumbnail (кадр на 1 секунде)
             thumbnail_path = output_dir_path / f"{upload_id}_thumb.jpg"
@@ -154,6 +161,14 @@ class VideoTranscodingService:
                     pass
             raise
     
+    def _scale_pad_filter(self, width: int, height: int) -> str:
+        """Чётные размеры для libx264 (вертикальные рилсы)."""
+        return (
+            f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
+            "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        )
+
     def _transcode_to_mp4(
         self,
         input_path: str,
@@ -166,7 +181,7 @@ class VideoTranscodingService:
         cmd = [
             self.ffmpeg_path,
             "-i", input_path,
-            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+            "-vf", self._scale_pad_filter(width, height),
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "23",
@@ -218,7 +233,9 @@ class VideoTranscodingService:
             cmd = [
                 self.ffmpeg_path,
                 "-i", input_path,
-                "-vf", f"scale={quality['width']}:{quality['height']}:force_original_aspect_ratio=decrease",
+                "-vf", self._scale_pad_filter(
+                    quality["width"], quality["height"]
+                ),
                 "-c:v", "libx264",
                 "-preset", "medium",
                 "-crf", "23",
