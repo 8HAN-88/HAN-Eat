@@ -1,17 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
-import '../../../core/config/google_auth_config.dart';
 import '../../../services/user_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/sign_out_helper.dart';
 import '../../../utils/api_error_parser.dart';
-import '../../../services/push_notification_service.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
-import '../../../widgets/legal_consent_checkbox.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -164,12 +159,8 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     final user = AuthService.instance.currentUser;
     final profile = UserService.instance.profile.value;
 
-    // Если пользователь не авторизован, показываем форму входа/регистрации
     if (user == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Вход в аккаунт')),
-        body: _LoginForm(),
-      );
+      return const _RedirectToLoginGate();
     }
 
     // Если профиль еще не загружен, создаем его автоматически с uid
@@ -348,280 +339,28 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 }
 
-class _LoginForm extends StatefulWidget {
+/// Без встроенной формы входа — иначе при выходе мигает «логин» на долю секунды.
+class _RedirectToLoginGate extends StatefulWidget {
+  const _RedirectToLoginGate();
+
   @override
-  State<_LoginForm> createState() => _LoginFormState();
+  State<_RedirectToLoginGate> createState() => _RedirectToLoginGateState();
 }
 
-class _LoginFormState extends State<_LoginForm> {
-  final _emailCtl = TextEditingController();
-  final _passCtl = TextEditingController();
-  bool _loading = false;
-  bool _legalAccepted = false;
-
+class _RedirectToLoginGateState extends State<_RedirectToLoginGate> {
   @override
-  void dispose() {
-    _emailCtl.dispose();
-    _passCtl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _signIn() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    final email = _emailCtl.text.trim();
-    final password = _passCtl.text.trim();
-    if (email.isEmpty || password.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите email и пароль')),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance.signInWithEmail(email, password);
-      // Профиль уже обновлен в AuthService.signInWithEmail, но убедимся
-      if (UserService.isInitialized) {
-        await UserService.instance.ensureProfileLoaded();
-      }
-      if (mounted) {
-        context.go(FeedRoute.path);
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        if (e.isEmailNotVerified) {
-          context.push(VerifyEmailRoute.withEmail(_emailCtl.text.trim()));
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e, fallback: 'Не удалось войти'))),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _register() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    final email = _emailCtl.text.trim();
-    final password = _passCtl.text.trim();
-    if (email.isEmpty || password.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Введите email и пароль')),
-        );
-      }
-      return;
-    }
-    if (!_legalAccepted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Примите политику конфиденциальности и пользовательское соглашение',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance.createUserWithEmail(
-        email,
-        password,
-        acceptLegal: true,
-      );
-      unawaited(
-        PushNotificationService.syncTokenAfterAuth().catchError(
-          (Object e) => debugPrint('FCM after register: $e'),
-        ),
-      );
-      // Профиль уже обновлен в AuthService.createUserWithEmail, но убедимся
-      if (UserService.isInitialized) {
-        await UserService.instance.ensureProfileLoaded();
-      }
-      if (mounted) {
-        context.go(FeedRoute.path);
-      }
-    } catch (e) {
-      if (mounted) {
-        final scheme = Theme.of(context).colorScheme;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось зарегистрироваться'),
-              style: TextStyle(color: scheme.onError),
-            ),
-            backgroundColor: scheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
-  }
-
-  Future<void> _google() async {
-    if (!AuthService.isInitialized) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Сервис авторизации не инициализирован')),
-        );
-      }
-      return;
-    }
-    if (!_legalAccepted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Отметьте согласие с политикой и соглашением перед входом через Google',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      await AuthService.instance.signInWithGoogle(acceptLegal: true);
-      unawaited(
-        PushNotificationService.syncTokenAfterAuth().catchError(
-          (Object e) => debugPrint('FCM after Google: $e'),
-        ),
-      );
-      // Профиль уже обновлен в AuthService.signInWithGoogle, но убедимся
-      if (UserService.isInitialized) {
-        await UserService.instance.ensureProfileLoaded();
-      }
-      if (mounted) {
-        context.go(FeedRoute.path);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось войти через Google'))),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
-    }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(LoginRoute.path);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Войдите в аккаунт',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 32),
-          TextField(
-            controller: _emailCtl,
-            decoration: const InputDecoration(
-              labelText: 'Эл. почта',
-            ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _passCtl,
-            decoration: const InputDecoration(
-              labelText: 'Пароль',
-            ),
-            obscureText: true,
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: _loading
-                  ? null
-                  : () => context.push(
-                        ForgotPasswordRoute.withEmail(_emailCtl.text.trim()),
-                      ),
-              child: const Text('Забыли пароль?'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          LegalConsentCheckbox(
-            value: _legalAccepted,
-            onChanged: _loading
-                ? null
-                : (v) => setState(() => _legalAccepted = v ?? false),
-          ),
-          const SizedBox(height: 8),
-          if (_loading)
-            const CircularProgressIndicator()
-          else ...[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _signIn,
-                child: const Text('Войти'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed:
-                    _loading ? null : () => context.push(RegisterRoute.path),
-                child: const Text('Зарегистрироваться'),
-              ),
-            ),
-            if (GoogleAuthConfig.isConfigured) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.login),
-                  label: const Text('Войти через Google'),
-                  onPressed: _google,
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

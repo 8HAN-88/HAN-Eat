@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
+import '../../app/router_keys.dart';
 import '../../services/auth_service.dart';
 import '../../services/user_service.dart';
 import '../../utils/api_error_parser.dart';
@@ -11,9 +12,9 @@ Future<void> confirmAndSignOut(BuildContext context) async {
   await showDialog<bool>(
     context: context,
     barrierDismissible: false,
+    useRootNavigator: true,
     builder: (ctx) => const _SignOutDialog(),
   );
-  // Навигация выполняется внутри диалога до его закрытия — без повторного «мигания» экрана.
 }
 
 class _SignOutDialog extends StatefulWidget {
@@ -25,6 +26,12 @@ class _SignOutDialog extends StatefulWidget {
 
 class _SignOutDialogState extends State<_SignOutDialog> {
   bool _working = false;
+
+  GoRouter _router() {
+    final root = hanEatRootNavigatorKey.currentContext;
+    if (root != null) return GoRouter.of(root);
+    return GoRouter.of(context);
+  }
 
   Future<void> _signOut() async {
     if (_working) return;
@@ -40,16 +47,25 @@ class _SignOutDialogState extends State<_SignOutDialog> {
 
     setState(() => _working = true);
     try {
-      await AuthService.instance.signOut();
+      await AuthService.instance.signOut(notifySession: false);
       if (UserService.isInitialized) {
         UserService.instance.profile.value = null;
       }
       if (!mounted) return;
+
+      final router = _router();
       final loc = GoRouterState.of(context).matchedLocation.split('?').first;
       if (loc != LoginRoute.path) {
-        GoRouter.of(context).go(LoginRoute.path);
+        router.go(LoginRoute.path);
       }
-      Navigator.of(context).pop(true);
+
+      AuthService.instance.notifySessionCleared();
+
+      if (!mounted) return;
+      final nav = Navigator.of(context, rootNavigator: true);
+      if (nav.canPop()) {
+        nav.pop(true);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _working = false);
@@ -81,7 +97,8 @@ class _SignOutDialogState extends State<_SignOutDialog> {
             ? null
             : [
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
+                  onPressed: () =>
+                      Navigator.of(context, rootNavigator: true).pop(false),
                   child: const Text('Отмена'),
                 ),
                 FilledButton(

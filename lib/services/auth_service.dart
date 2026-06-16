@@ -390,8 +390,9 @@ class AuthService {
     }
   }
   
-  /// Выйти из аккаунта
-  Future<void> signOut() async {
+  /// Выйти из аккаунта.
+  /// [notifySession] — false при выходе через [confirmAndSignOut]: сначала go(/login), потом notify.
+  Future<void> signOut({bool notifySession = true}) async {
     _cachedUser = null;
     try {
       await _googleSignIn?.signOut();
@@ -405,6 +406,13 @@ class AuthService {
     // Совпадает с PushNotificationService — после входа FCM снова уйдёт на сервер.
     await prefs.remove('fcm_token');
     debugPrint('✅ Выход выполнен, токены и пользователь очищены');
+    if (notifySession) {
+      _dispatchSessionChanged(null);
+    }
+  }
+
+  /// После [signOut](notifySession: false) и перехода на /login — обновить GoRouter.
+  void notifySessionCleared() {
     _dispatchSessionChanged(null);
   }
 

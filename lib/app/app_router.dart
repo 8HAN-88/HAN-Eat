@@ -332,8 +332,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: SettingsRoute.path,
         name: SettingsRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: SettingsScreen()),
+        pageBuilder: (context, state) => const NoTransitionPage(
+          key: ValueKey('settings'),
+          child: SettingsScreen(),
+        ),
       ),
       // Отдельный маршрут для плана питания
       GoRoute(
@@ -444,8 +446,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: ProfileAuthRoute.path,
         name: ProfileAuthRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: ProfileAuthScreen()),
+        pageBuilder: (context, state) => const NoTransitionPage(
+          key: ValueKey('profile_auth'),
+          child: ProfileAuthScreen(),
+        ),
       ),
       GoRoute(
         path: AllergiesRoute.path,
