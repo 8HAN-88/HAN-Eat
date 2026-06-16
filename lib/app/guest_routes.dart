@@ -5,6 +5,7 @@ bool routeAllowsGuestAccess(String location) {
       loc == '/register' ||
       loc == '/invite' ||
       loc.startsWith('/shopping-import') ||
+      loc == '/profile-auth' ||
       loc == '/forgot-password' ||
       loc == '/reset-password' ||
       loc.startsWith('/verify-email') ||

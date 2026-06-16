@@ -59,13 +59,13 @@ class _SignOutDialogState extends State<_SignOutDialog> {
         router.go(LoginRoute.path);
       }
 
-      AuthService.instance.notifySessionCleared();
-
       if (!mounted) return;
       final nav = Navigator.of(context, rootNavigator: true);
       if (nav.canPop()) {
         nav.pop(true);
       }
+
+      AuthService.instance.notifySessionCleared();
     } catch (e) {
       if (!mounted) return;
       setState(() => _working = false);

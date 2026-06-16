@@ -245,10 +245,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return FeedRoute.path;
       }
       if (isAuth) return null;
-      final locBase = loc.split('?').first;
-      if (locBase == ProfileAuthRoute.path) {
-        return LoginRoute.path;
-      }
       if (routeAllowsGuestAccess(loc)) return null;
       final isAuthRoute = loc == LoginRoute.path ||
           loc == RegisterRoute.path ||
@@ -332,10 +328,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: SettingsRoute.path,
         name: SettingsRoute.name,
-        pageBuilder: (context, state) => const NoTransitionPage(
-          key: ValueKey('settings'),
-          child: SettingsScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: SettingsScreen()),
       ),
       // Отдельный маршрут для плана питания
       GoRoute(
@@ -446,10 +440,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: ProfileAuthRoute.path,
         name: ProfileAuthRoute.name,
-        pageBuilder: (context, state) => const NoTransitionPage(
-          key: ValueKey('profile_auth'),
-          child: ProfileAuthScreen(),
-        ),
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: ProfileAuthScreen()),
       ),
       GoRoute(
         path: AllergiesRoute.path,
