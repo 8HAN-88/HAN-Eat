@@ -60,7 +60,7 @@ class WebAppUpdateService {
       );
       _reloadScheduled = true;
       stop();
-      await reload.reloadWebPage();
+      await reload.reloadWebPage(build: remote);
     } catch (e) {
       debugPrint('WebAppUpdateService: $e');
     } finally {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/web_app_update_service.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -60,7 +62,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showAboutDialog(
       context: context,
       applicationName: 'H.A.N. Eat',
-      applicationVersion: '1.0.0',
+      applicationVersion: kIsWeb && WebAppUpdateService.embeddedBuild.isNotEmpty
+          ? '1.0.0 (${WebAppUpdateService.embeddedBuild})'
+          : '1.0.0',
       applicationLegalese: '© H.A.N. Eat. Рецепты, план питания и сообщество.',
     );
   }

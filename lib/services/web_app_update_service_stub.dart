@@ -1,1 +1,1 @@
-Future<void> reloadWebPage() async {}
+Future<void> reloadWebPage({String? build}) async {}

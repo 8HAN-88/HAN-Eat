@@ -78,9 +78,12 @@
   </div>
   <script>
     (function () {
-      var KEY = 'haneat_web_build_v2';
-      var LEGACY_KEY = 'haneat_web_build';
+      var SCHEMA = 3;
+      var SCHEMA_KEY = 'haneat_web_schema';
+      var KEY = 'haneat_web_build_v3';
+      var LEGACY_KEYS = ['haneat_web_build_v2', 'haneat_web_build'];
       var flutterStarted = false;
+      var VERSION_TIMEOUT_MS = 5000;
 
       function loadFlutter(build) {
         if (flutterStarted) return;
@@ -93,7 +96,8 @@
 
       function clearCachesAndReload(build) {
         localStorage.setItem(KEY, build);
-        localStorage.removeItem(LEGACY_KEY);
+        localStorage.setItem(SCHEMA_KEY, String(SCHEMA));
+        LEGACY_KEYS.forEach(function (k) { localStorage.removeItem(k); });
         var tasks = [];
         if ('serviceWorker' in navigator) {
           tasks.push(
@@ -112,34 +116,49 @@
         Promise.all(tasks).finally(function () {
           var url = new URL(location.href);
           url.searchParams.set('v', build);
+          url.searchParams.set('_cb', String(Date.now()));
           location.replace(url.toString());
         });
       }
 
-      var cachedBuild = localStorage.getItem(KEY) || '';
-      // Не ждём version.json — Flutter стартует сразу, проверка версии параллельно.
-      loadFlutter(cachedBuild || String(Date.now()));
+      function shouldForceReload(build) {
+        if (localStorage.getItem(SCHEMA_KEY) !== String(SCHEMA)) return true;
+        for (var i = 0; i < LEGACY_KEYS.length; i++) {
+          if (localStorage.getItem(LEGACY_KEYS[i])) return true;
+        }
+        var prev = localStorage.getItem(KEY);
+        var urlBuild = new URL(location.href).searchParams.get('v');
+        return (prev && prev !== build) || (urlBuild && urlBuild !== build);
+      }
+
+      function startWithBuild(build) {
+        if (!build) {
+          loadFlutter(localStorage.getItem(KEY) || String(Date.now()));
+          return;
+        }
+        if (shouldForceReload(build)) {
+          clearCachesAndReload(build);
+          return;
+        }
+        localStorage.setItem(KEY, build);
+        localStorage.setItem(SCHEMA_KEY, String(SCHEMA));
+        loadFlutter(build);
+      }
+
+      var versionTimer = setTimeout(function () {
+        startWithBuild(localStorage.getItem(KEY) || '');
+      }, VERSION_TIMEOUT_MS);
 
       fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
+          clearTimeout(versionTimer);
           var build = String(v.build_number || v.version || '');
-          if (!build) {
-            loadFlutter('');
-            return;
-          }
-          var prev = localStorage.getItem(KEY);
-          var legacy = localStorage.getItem(LEGACY_KEY);
-          var urlBuild = new URL(location.href).searchParams.get('v');
-          if (legacy || (prev && prev !== build) || (urlBuild && urlBuild !== build)) {
-            clearCachesAndReload(build);
-            return;
-          }
-          localStorage.setItem(KEY, build);
-          loadFlutter(build);
+          startWithBuild(build);
         })
         .catch(function () {
-          loadFlutter(cachedBuild || '');
+          clearTimeout(versionTimer);
+          startWithBuild(localStorage.getItem(KEY) || '');
         });
     })();
   </script>

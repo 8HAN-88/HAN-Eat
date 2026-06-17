@@ -1,6 +1,6 @@
 import 'dart:html' as html;
 
-Future<void> reloadWebPage() async {
+Future<void> reloadWebPage({String? build}) async {
   try {
     final sw = html.window.navigator.serviceWorker;
     if (sw != null) {
@@ -21,10 +21,11 @@ Future<void> reloadWebPage() async {
   } catch (_) {}
 
   final uri = Uri.parse(html.window.location.href);
-  final build = uri.queryParameters['v'];
+  final params = Map<String, String>.from(uri.queryParameters);
   if (build != null && build.isNotEmpty) {
-    html.window.location.replace(uri.toString());
-  } else {
-    html.window.location.reload();
+    params['v'] = build;
   }
+  params['_cb'] = DateTime.now().millisecondsSinceEpoch.toString();
+  final next = uri.replace(queryParameters: params);
+  html.window.location.replace(next.toString());
 }
