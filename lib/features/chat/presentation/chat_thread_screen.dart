@@ -2359,7 +2359,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       case ChatAttachResult.contact:
         final contact = selection.contact;
-        if (contact != null) await _sendContact(contact);
+        final phoneName = selection.contactPhoneName;
+        final phoneE164 = selection.contactPhoneE164;
+        if (contact != null) {
+          await _sendContact(contact);
+        } else if (phoneName != null && phoneE164 != null) {
+          await _sendPhoneContact(
+            displayName: phoneName,
+            phoneE164: phoneE164,
+          );
+        }
       case ChatAttachResult.resendFile:
         final url = selection.resendFileUrl;
         final name = selection.resendFileName;
@@ -2402,7 +2411,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (username != null && username.isNotEmpty) {
       lines.add(username.startsWith('@') ? username : '@$username');
     }
-    final text = lines.join('\n');
+    await _sendContactText(lines.join('\n'));
+  }
+
+  Future<void> _sendPhoneContact({
+    required String displayName,
+    required String phoneE164,
+  }) async {
+    if (_sending || _recording) return;
+    final lines = <String>['👤 Контакт', displayName.trim(), phoneE164.trim()];
+    await _sendContactText(lines.join('\n'));
+  }
+
+  Future<void> _sendContactText(String text) async {
     _beginSending(status: 'Отправка контакта…');
     try {
       final msg = await ChatService.sendText(

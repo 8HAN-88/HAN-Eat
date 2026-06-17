@@ -31,6 +31,8 @@ class ChatAttachSelection {
     required this.kind,
     this.galleryFiles = const [],
     this.contact,
+    this.contactPhoneName,
+    this.contactPhoneE164,
     this.pollDraft,
     this.resendFileName,
     this.resendFileUrl,
@@ -41,6 +43,8 @@ class ChatAttachSelection {
   final ChatAttachResult kind;
   final List<XFile> galleryFiles;
   final ChatContact? contact;
+  final String? contactPhoneName;
+  final String? contactPhoneE164;
   final ChatPollDraft? pollDraft;
   final String? resendFileName;
   final String? resendFileUrl;
@@ -57,6 +61,16 @@ class ChatAttachSelection {
       ChatAttachSelection._(
         kind: ChatAttachResult.contact,
         contact: contact,
+      );
+
+  factory ChatAttachSelection.phoneContact({
+    required String displayName,
+    required String phoneE164,
+  }) =>
+      ChatAttachSelection._(
+        kind: ChatAttachResult.contact,
+        contactPhoneName: displayName,
+        contactPhoneE164: phoneE164,
       );
 
   factory ChatAttachSelection.simple(ChatAttachResult kind) =>
@@ -107,6 +121,71 @@ class _ChatAttachSheet extends StatefulWidget {
   State<_ChatAttachSheet> createState() => _ChatAttachSheetState();
 }
 
+class _AttachSheetContact {
+  const _AttachSheetContact._({this.hanEat, this.phone})
+      : assert(hanEat != null || phone != null);
+
+  final ChatContact? hanEat;
+  final PhoneBookContact? phone;
+
+  factory _AttachSheetContact.fromSaved(ChatContact contact) =>
+      _AttachSheetContact._(hanEat: contact);
+
+  factory _AttachSheetContact.fromPhone(PhoneBookContact contact) =>
+      _AttachSheetContact._(phone: contact);
+
+  String get displayName {
+    if (hanEat != null) return hanEat!.user.displayName;
+    return phone!.displayName;
+  }
+
+  String get subtitle {
+    if (hanEat != null) {
+      final username = hanEat!.user.username;
+      return username != null ? '@$username' : 'в списке контактов';
+    }
+    final matched = phone!.matchedUser;
+    if (matched != null) {
+      final label = matched.username ?? matched.name;
+      if (label == null || label.isEmpty) return 'в HAN Eat';
+      return label.startsWith('@') ? label : '@$label';
+    }
+    return phone!.phoneE164;
+  }
+
+  ChatUserBrief? get avatarUser {
+    if (hanEat != null) return hanEat!.user;
+    return phone!.matchedUser?.brief;
+  }
+
+  ChatAttachSelection toSelection() {
+    if (hanEat != null) {
+      return ChatAttachSelection.contact(hanEat!);
+    }
+    final entry = phone!;
+    final matched = entry.matchedUser;
+    if (matched != null) {
+      final bookName = entry.displayName.trim();
+      return ChatAttachSelection.contact(
+        ChatContact(
+          id: 0,
+          user: ChatUserBrief(
+            id: matched.id,
+            name: bookName.isNotEmpty ? bookName : matched.name,
+            username: matched.username,
+            avatarUrl: matched.avatarUrl,
+          ),
+          createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      );
+    }
+    return ChatAttachSelection.phoneContact(
+      displayName: entry.displayName,
+      phoneE164: entry.phoneE164,
+    );
+  }
+}
+
 class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   ChatAttachTab _tab = ChatAttachTab.gallery;
   final _picker = ImagePicker();
@@ -114,7 +193,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   final _searchController = TextEditingController();
 
   final List<XFile> _gallerySelection = [];
-  List<ChatContact> _contacts = [];
+  List<_AttachSheetContact> _contacts = [];
   List<ChatRecentFileEntry> _recentFiles = [];
   bool _contactsLoading = false;
   bool _recentLoading = true;
@@ -171,7 +250,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
     if (!mounted) return;
 
-    final merged = _mergeAttachContacts(saved: saved, phoneBook: phoneBook);
+    final merged = _buildAttachContacts(saved: saved, phoneBook: phoneBook);
     setState(() {
       _contacts = merged;
       _contactsLoading = false;
@@ -181,37 +260,34 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     });
   }
 
-  static List<ChatContact> _mergeAttachContacts({
+  static List<_AttachSheetContact> _buildAttachContacts({
     required List<ChatContact> saved,
     required List<PhoneBookContact> phoneBook,
   }) {
-    final byUserId = <int, ChatContact>{
-      for (final contact in saved) contact.user.id: contact,
-    };
+    final out = <_AttachSheetContact>[];
+    final seenUserIds = <int>{};
+    final seenPhones = <String>{};
 
-    for (final entry in phoneBook) {
-      final matched = entry.matchedUser;
-      if (matched == null || byUserId.containsKey(matched.id)) continue;
-
-      final bookName = entry.displayName.trim();
-      byUserId[matched.id] = ChatContact(
-        id: 0,
-        user: ChatUserBrief(
-          id: matched.id,
-          name: bookName.isNotEmpty ? bookName : matched.name,
-          username: matched.username,
-          avatarUrl: matched.avatarUrl,
-        ),
-        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
-      );
+    for (final contact in saved) {
+      seenUserIds.add(contact.user.id);
+      out.add(_AttachSheetContact.fromSaved(contact));
     }
 
-    final out = byUserId.values.toList()
-      ..sort(
-        (a, b) => a.user.displayName
-            .toLowerCase()
-            .compareTo(b.user.displayName.toLowerCase()),
-      );
+    for (final entry in phoneBook) {
+      if (seenPhones.contains(entry.phoneE164)) continue;
+      seenPhones.add(entry.phoneE164);
+
+      final matched = entry.matchedUser;
+      if (matched != null && seenUserIds.contains(matched.id)) continue;
+      if (matched != null) seenUserIds.add(matched.id);
+
+      out.add(_AttachSheetContact.fromPhone(entry));
+    }
+
+    out.sort(
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
     return out;
   }
 
@@ -341,12 +417,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     _close(ChatAttachSelection.pollDraft(draft));
   }
 
-  List<ChatContact> get _filteredContacts {
+  List<_AttachSheetContact> get _filteredContacts {
     if (_searchQuery.isEmpty) return _contacts;
     return _contacts.where((c) {
-      final name = c.user.displayName.toLowerCase();
-      final username = c.user.username?.toLowerCase() ?? '';
-      return name.contains(_searchQuery) || username.contains(_searchQuery);
+      final name = c.displayName.toLowerCase();
+      final subtitle = c.subtitle.toLowerCase();
+      return name.contains(_searchQuery) || subtitle.contains(_searchQuery);
     }).toList();
   }
 
@@ -486,7 +562,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           loading: _contactsLoading,
           error: _contactsError,
           onRetry: _loadContacts,
-          onSelect: (c) => _close(ChatAttachSelection.contact(c)),
+          onSelect: (c) => _close(c.toSelection()),
           isDark: isDark,
         );
     }
@@ -933,11 +1009,11 @@ class _ContactsPanel extends StatelessWidget {
   });
 
   final ScrollController scrollController;
-  final List<ChatContact> contacts;
+  final List<_AttachSheetContact> contacts;
   final bool loading;
   final String? error;
   final VoidCallback onRetry;
-  final ValueChanged<ChatContact> onSelect;
+  final ValueChanged<_AttachSheetContact> onSelect;
   final bool isDark;
 
   @override
@@ -962,8 +1038,8 @@ class _ContactsPanel extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'Нет контактов в HAN Eat.\nДобавьте людей в разделе «Контакты» '
-            'или синхронизируйте телефонную книгу.',
+            'Нет контактов.\nДобавьте людей в разделе «Контакты» '
+            'или импортируйте телефонную книгу.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -1035,10 +1111,12 @@ class _ContactsPanel extends StatelessWidget {
     );
   }
 
-  Map<String, List<ChatContact>> _groupContacts(List<ChatContact> items) {
-    final map = <String, List<ChatContact>>{};
+  Map<String, List<_AttachSheetContact>> _groupContacts(
+    List<_AttachSheetContact> items,
+  ) {
+    final map = <String, List<_AttachSheetContact>>{};
     for (final contact in items) {
-      final name = contact.user.displayName.trim();
+      final name = contact.displayName.trim();
       final first = name.isNotEmpty ? name[0].toUpperCase() : '#';
       final key = RegExp(r'[A-ZА-ЯЁ]', caseSensitive: false).hasMatch(first)
           ? first
@@ -1047,9 +1125,9 @@ class _ContactsPanel extends StatelessWidget {
     }
     for (final list in map.values) {
       list.sort(
-        (a, b) => a.user.displayName
+        (a, b) => a.displayName
             .toLowerCase()
-            .compareTo(b.user.displayName.toLowerCase()),
+            .compareTo(b.displayName.toLowerCase()),
       );
     }
     return map;
@@ -1065,25 +1143,32 @@ class _ContactsPanel extends StatelessWidget {
 class _ContactTile extends StatelessWidget {
   const _ContactTile({required this.contact, required this.onTap});
 
-  final ChatContact contact;
+  final _AttachSheetContact contact;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final subtitle = contact.user.username != null
-        ? '@${contact.user.username}'
-        : 'в списке контактов';
+    final avatarUser = contact.avatarUser;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      leading: ChatHubUserAvatar(user: contact.user),
+      leading: avatarUser != null
+          ? ChatHubUserAvatar(user: avatarUser)
+          : CircleAvatar(
+              backgroundColor:
+                  theme.colorScheme.surfaceContainerHighest,
+              child: Icon(
+                Icons.person_outline,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
       title: Text(
-        contact.user.displayName,
+        contact.displayName,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
       ),
       subtitle: Text(
-        subtitle,
+        contact.subtitle,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
