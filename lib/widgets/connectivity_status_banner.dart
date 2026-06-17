@@ -7,7 +7,7 @@ import '../../../core/haptics/app_haptics.dart';
 import '../services/api_reachability_service.dart';
 import '../services/feed_sync_service.dart';
 
-/// Глобальный баннер: нет сети / сервер недоступен / восстановление.
+/// Тонкая полоска статуса сети (как «Подключение…» в Telegram).
 class ConnectivityStatusBanner extends StatefulWidget {
   const ConnectivityStatusBanner({super.key});
 
@@ -17,113 +17,71 @@ class ConnectivityStatusBanner extends StatefulWidget {
 }
 
 class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
-  bool? _lastDeviceOnline;
-  bool? _lastApiReachable;
+  bool? _lastHealthy;
   Timer? _recoveredTimer;
-  Timer? _apiDownGraceTimer;
   bool _showRecovered = false;
-  bool _showApiDown = false;
 
-  static const Duration _apiDownGrace = Duration(seconds: 10);
-
-  late final VoidCallback _onConnectivityChanged;
+  late final VoidCallback _onStatusChanged;
 
   @override
   void initState() {
     super.initState();
-    _onConnectivityChanged = _handleConnectivityChanged;
-    FeedSyncService.onlineListenable.addListener(_onConnectivityChanged);
+    _onStatusChanged = _handleStatusChanged;
+    FeedSyncService.onlineListenable.addListener(_onStatusChanged);
     ApiReachabilityService.instance.isApiReachable
-        .addListener(_onConnectivityChanged);
+        .addListener(_onStatusChanged);
+    ApiReachabilityService.instance.isApiConnecting
+        .addListener(_onStatusChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleConnectivityChanged();
+      _handleStatusChanged();
     });
   }
 
   @override
   void dispose() {
     _recoveredTimer?.cancel();
-    _apiDownGraceTimer?.cancel();
-    FeedSyncService.onlineListenable.removeListener(_onConnectivityChanged);
+    FeedSyncService.onlineListenable.removeListener(_onStatusChanged);
     ApiReachabilityService.instance.isApiReachable
-        .removeListener(_onConnectivityChanged);
+        .removeListener(_onStatusChanged);
+    ApiReachabilityService.instance.isApiConnecting
+        .removeListener(_onStatusChanged);
     super.dispose();
   }
 
-  void _handleConnectivityChanged() {
+  bool get _deviceOnline => FeedSyncService.onlineListenable.value;
+
+  bool get _apiReachable => ApiReachabilityService.instance.isApiReachable.value;
+
+  bool get _isHealthy => _deviceOnline && _apiReachable;
+
+  void _handleStatusChanged() {
     if (!mounted) return;
-    final deviceOnline = FeedSyncService.onlineListenable.value;
-    final apiReachable = ApiReachabilityService.instance.isApiReachable.value;
 
-    if (deviceOnline && apiReachable) {
-      _apiDownGraceTimer?.cancel();
-      _apiDownGraceTimer = null;
-      if (_showApiDown) {
-        setState(() => _showApiDown = false);
-      }
-    } else if (deviceOnline && !apiReachable) {
-      _apiDownGraceTimer ??= Timer(_apiDownGrace, () {
-        if (!mounted) return;
-        if (!FeedSyncService.onlineListenable.value ||
-            ApiReachabilityService.instance.isApiReachable.value) {
-          return;
-        }
-        setState(() => _showApiDown = true);
+    final healthy = _isHealthy;
+    if (_lastHealthy == false && healthy) {
+      AppHaptics.light();
+      _recoveredTimer?.cancel();
+      setState(() => _showRecovered = true);
+      _recoveredTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted) setState(() => _showRecovered = false);
       });
-    } else {
-      _apiDownGraceTimer?.cancel();
-      _apiDownGraceTimer = null;
-      if (_showApiDown) {
-        setState(() => _showApiDown = false);
-      }
+    } else if (!healthy && _lastHealthy == true) {
+      AppHaptics.medium();
     }
 
-    final wasOffline = _lastDeviceOnline == false ||
-        (_lastDeviceOnline == true && _lastApiReachable == false);
-    final isHealthy = deviceOnline && apiReachable;
-
-    if (_lastDeviceOnline != null) {
-      if (!isHealthy &&
-          (_lastDeviceOnline != deviceOnline ||
-              _lastApiReachable != apiReachable)) {
-        if (!deviceOnline || (deviceOnline && !apiReachable)) {
-          AppHaptics.medium();
-        }
-      } else if (wasOffline && isHealthy) {
-        AppHaptics.light();
-        _recoveredTimer?.cancel();
-        setState(() => _showRecovered = true);
-        _recoveredTimer = Timer(const Duration(seconds: 3), () {
-          if (mounted) setState(() => _showRecovered = false);
-        });
-        _lastDeviceOnline = deviceOnline;
-        _lastApiReachable = apiReachable;
-        return;
-      }
-    }
-
-    if (_lastDeviceOnline != deviceOnline ||
-        _lastApiReachable != apiReachable ||
-        _showRecovered) {
-      setState(() {
-        _lastDeviceOnline = deviceOnline;
-        _lastApiReachable = apiReachable;
-      });
+    if (_lastHealthy != healthy || _showRecovered) {
+      setState(() => _lastHealthy = healthy);
     } else {
-      _lastDeviceOnline = deviceOnline;
-      _lastApiReachable = apiReachable;
+      _lastHealthy = healthy;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final deviceOnline = FeedSyncService.onlineListenable.value;
-    final apiReachable = ApiReachabilityService.instance.isApiReachable.value;
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    if (_showRecovered && deviceOnline && apiReachable) {
-      if (kIsWeb) return const SizedBox.shrink();
+    if (_showRecovered && _isHealthy) {
       return _BannerShell(
         color: scheme.tertiaryContainer,
         foreground: scheme.onTertiaryContainer,
@@ -133,40 +91,29 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
       );
     }
 
-    if (deviceOnline && apiReachable) {
+    if (_isHealthy &&
+        !ApiReachabilityService.instance.isApiConnecting.value) {
       return const SizedBox.shrink();
     }
 
-    if (!deviceOnline) {
+    if (!_deviceOnline) {
       return _BannerShell(
-        color: scheme.errorContainer,
-        foreground: scheme.onErrorContainer,
+        color: scheme.surfaceContainerHighest,
+        foreground: scheme.onSurfaceVariant,
         icon: Icons.wifi_off_rounded,
-        message:
-            'Нет интернета. Лента, избранное и недавние чаты доступны офлайн.',
+        message: 'Ожидание сети…',
         textTheme: textTheme,
+        showSpinner: false,
       );
     }
 
-    if (!_showApiDown) {
-      return const SizedBox.shrink();
-    }
-
     return _BannerShell(
-      color: scheme.errorContainer,
-      foreground: scheme.onErrorContainer,
-      icon: Icons.cloud_off_outlined,
-      message:
-          'Сервер временно недоступен. Показываем сохранённые данные, подключимся автоматически.',
+      color: scheme.surfaceContainerHighest,
+      foreground: scheme.onSurfaceVariant,
+      icon: Icons.sync_rounded,
+      message: 'Подключение…',
       textTheme: textTheme,
-      action: TextButton(
-        onPressed: () =>
-            unawaited(ApiReachabilityService.instance.checkNow()),
-        child: Text(
-          'Повторить',
-          style: TextStyle(color: scheme.onErrorContainer),
-        ),
-      ),
+      showSpinner: true,
     );
   }
 }
@@ -178,7 +125,7 @@ class _BannerShell extends StatelessWidget {
     required this.icon,
     required this.message,
     required this.textTheme,
-    this.action,
+    this.showSpinner = false,
   });
 
   final Color color;
@@ -186,7 +133,7 @@ class _BannerShell extends StatelessWidget {
   final IconData icon;
   final String message;
   final TextTheme textTheme;
-  final Widget? action;
+  final bool showSpinner;
 
   @override
   Widget build(BuildContext context) {
@@ -199,24 +146,32 @@ class _BannerShell extends StatelessWidget {
         child: SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: foreground),
+                if (showSpinner)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: foreground,
+                    ),
+                  )
+                else
+                  Icon(icon, size: 16, color: foreground),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     message,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(
+                    style: textTheme.labelMedium?.copyWith(
                       color: foreground,
-                      height: 1.2,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
-                if (action != null) action!,
               ],
             ),
           ),

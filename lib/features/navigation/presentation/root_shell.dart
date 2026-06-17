@@ -389,6 +389,7 @@ class _RootShellState extends ConsumerState<RootShell> {
             listenable: Listenable.merge([
               FeedSyncService.onlineListenable,
               ApiReachabilityService.instance.isApiReachable,
+              ApiReachabilityService.instance.isApiConnecting,
             ]),
             builder: (context, _) {
               final online = FeedSyncService.onlineListenable.value;

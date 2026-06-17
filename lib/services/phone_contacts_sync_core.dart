@@ -1,6 +1,7 @@
 import '../core/phone/phone_hash.dart';
 import '../models/chat_models.dart';
 import 'chat_service.dart';
+import 'phone_contacts_match_cache.dart';
 import 'phone_contacts_types.dart';
 
 const _maxInvitees = 500;
@@ -36,8 +37,10 @@ Future<PhoneContactsSyncResult> buildPhoneContactsSyncResult({
   List<ChatUserSearchItem> users = [];
   try {
     users = await matchPhoneHashesInBatches(hashes.toList());
+    await PhoneContactsMatchCache.merge(users);
   } catch (e) {
     apiError = e;
+    users = await PhoneContactsMatchCache.loadForHashes(hashes);
   }
 
   final hashToUser = <String, ChatUserSearchItem>{};

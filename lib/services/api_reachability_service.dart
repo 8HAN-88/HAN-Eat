@@ -35,12 +35,36 @@ class ApiReachabilityService {
       if (online) {
         unawaited(svc.warmUp());
       } else {
+        svc.isApiConnecting.value = false;
         svc._applyReachable(false);
       }
     });
   }
 
   final ValueNotifier<bool> isApiReachable = ValueNotifier(true);
+
+  /// true — устройство в сети, но API ещё не ответил (как «Подключение…» в Telegram).
+  final ValueNotifier<bool> isApiConnecting = ValueNotifier(false);
+
+  final List<VoidCallback> _reconnectedListeners = [];
+
+  static void addReconnectedListener(VoidCallback listener) {
+    instance._reconnectedListeners.add(listener);
+  }
+
+  static void removeReconnectedListener(VoidCallback listener) {
+    instance._reconnectedListeners.remove(listener);
+  }
+
+  void _notifyReconnected() {
+    for (final listener in List<VoidCallback>.from(_reconnectedListeners)) {
+      try {
+        listener();
+      } catch (e) {
+        if (kDebugMode) debugPrint('reconnected listener: $e');
+      }
+    }
+  }
 
   Timer? _timer;
   bool _started = false;
@@ -73,6 +97,9 @@ class ApiReachabilityService {
   }
 
   Future<bool> checkNow() async {
+    if (FeedSyncService.onlineListenable.value) {
+      isApiConnecting.value = !isApiReachable.value;
+    }
     try {
       final uri = Uri.parse('${ServerConfig.baseUrl}/health');
       final response = await HanEatHttpClient.shared
@@ -81,10 +108,14 @@ class ApiReachabilityService {
       if (response.statusCode == 200) {
         _consecutiveFailures = 0;
         _applyReachable(true);
+        isApiConnecting.value = false;
         return true;
       }
     } catch (e) {
       if (kDebugMode) debugPrint('ApiReachabilityService: $e');
+      if (FeedSyncService.onlineListenable.value) {
+        isApiConnecting.value = true;
+      }
       await ApiEndpointResolver.revalidateIfNeeded();
       try {
         final uri = Uri.parse('${ServerConfig.baseUrl}/health');
@@ -94,6 +125,7 @@ class ApiReachabilityService {
         if (response.statusCode == 200) {
           _consecutiveFailures = 0;
           _applyReachable(true);
+          isApiConnecting.value = false;
           return true;
         }
       } catch (e2) {
@@ -105,6 +137,9 @@ class ApiReachabilityService {
     if (_consecutiveFailures >= _failuresBeforeDown) {
       _applyReachable(false);
     }
+    if (FeedSyncService.onlineListenable.value && !isApiReachable.value) {
+      isApiConnecting.value = true;
+    }
     return isApiReachable.value;
   }
 
@@ -113,6 +148,8 @@ class ApiReachabilityService {
     final changed = wasReachable != reachable;
     if (changed) {
       isApiReachable.value = reachable;
+      isApiConnecting.value =
+          !reachable && FeedSyncService.onlineListenable.value;
       if (!reachable) {
         _consecutiveFailures = _failuresBeforeDown;
       }
@@ -123,8 +160,11 @@ class ApiReachabilityService {
         );
       }
       if (reachable && !wasReachable) {
+        isApiConnecting.value = false;
         unawaited(_onReconnected());
       }
+    } else if (reachable) {
+      isApiConnecting.value = false;
     }
   }
 
@@ -145,6 +185,7 @@ class ApiReachabilityService {
         } catch (e) {
           if (kDebugMode) debugPrint('reconnect feed sync: $e');
         }
+        _notifyReconnected();
       }
     } catch (e) {
       if (kDebugMode) debugPrint('ApiReachabilityService reconnect: $e');

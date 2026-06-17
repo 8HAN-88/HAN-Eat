@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
+import '../../../../services/api_reachability_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../application/chat_recent_files_store.dart';
@@ -201,6 +203,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   bool _pollCanSend = false;
   bool _searchVisible = false;
   String _searchQuery = '';
+  VoidCallback? _reconnectedListener;
 
   static const _sheetBgDark = Color(0xFF1C1C1E);
   static const _groupBgDark = Color(0xFF2C2C2E);
@@ -212,6 +215,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     super.initState();
     _loadContacts();
     _loadRecentFiles();
+    _reconnectedListener = () {
+      if (!mounted) return;
+      unawaited(_loadContacts());
+    };
+    ApiReachabilityService.addReconnectedListener(_reconnectedListener!);
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
     });
@@ -219,6 +227,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
   @override
   void dispose() {
+    if (_reconnectedListener != null) {
+      ApiReachabilityService.removeReconnectedListener(_reconnectedListener!);
+    }
     _searchController.dispose();
     super.dispose();
   }

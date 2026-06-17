@@ -7,6 +7,7 @@ import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../core/phone/phone_hash.dart';
 import '../../../../models/chat_models.dart';
+import '../../../../services/api_reachability_service.dart';
 import '../../../../services/app_invite_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/chat_service.dart';
@@ -42,11 +43,18 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
   Object? _phoneSyncError;
   int? _contactActionUserId;
   int _contactsLoadSeq = 0;
+  VoidCallback? _reconnectedListener;
 
   @override
   void initState() {
     super.initState();
     widget.tabController.addListener(_onSubTabChanged);
+    _reconnectedListener = () {
+      if (!mounted || !_isContactsSubTabVisible) return;
+      unawaited(_fetchPhoneContacts());
+      unawaited(_fetchContacts());
+    };
+    ApiReachabilityService.addReconnectedListener(_reconnectedListener!);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onSubTabChanged());
   }
 
@@ -89,6 +97,9 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
 
   @override
   void dispose() {
+    if (_reconnectedListener != null) {
+      ApiReachabilityService.removeReconnectedListener(_reconnectedListener!);
+    }
     widget.tabController.removeListener(_onSubTabChanged);
     super.dispose();
   }
@@ -137,6 +148,14 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         _phonePermissionDenied = false;
         _phoneSyncError = result.apiError;
       });
+      if (result.apiError != null &&
+          ApiReachabilityService.instance.isApiReachable.value) {
+        // Повторим сопоставление через несколько секунд, если API снова доступен.
+        Future<void>.delayed(const Duration(seconds: 4), () {
+          if (!mounted || _phoneSyncError == null) return;
+          unawaited(_fetchPhoneContacts());
+        });
+      }
     } on PhoneContactsPermissionDenied {
       if (!mounted) return;
       setState(() {
@@ -615,23 +634,14 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
               onTap: _addPhoneContact,
             ),
           ),
-          if (_phoneSyncError != null)
+          if (_phoneSyncError != null && _phoneBook.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: MaterialBanner(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                content: Text(
-                  'Не удалось проверить, кто уже в HAN Eat: '
-                  '${userVisibleError(_phoneSyncError!)}. '
-                  'Контакты из телефона показаны ниже.',
-                ),
-                leading: const Icon(Icons.info_outline),
-                actions: [
-                  TextButton(
-                    onPressed: _retryPhonePermission,
-                    child: const Text('Повторить'),
-                  ),
-                ],
+              child: Text(
+                'Пока не удалось загрузить контакты. Подключение восстановится автоматически.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ),
           if (phoneBook.isNotEmpty) ...[

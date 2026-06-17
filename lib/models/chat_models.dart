@@ -372,6 +372,15 @@ class ChatUserSearchItem {
       phoneHash: json['phone_hash'] as String?,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (name != null) 'name': name,
+        if (username != null) 'username': username,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+        'is_contact': isContact,
+        if (phoneHash != null) 'phone_hash': phoneHash,
+      };
 }
 
 class ChatFolderFilters {
