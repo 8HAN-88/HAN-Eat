@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/phone_contacts_service.dart';
 import '../../application/chat_recent_files_store.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
@@ -124,6 +126,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   static const _sheetBgDark = Color(0xFF1C1C1E);
   static const _groupBgDark = Color(0xFF2C2C2E);
   static const _telegramBlue = Color(0xFF007AFF);
+  static const _brandAccent = AppColors.primary;
 
   @override
   void initState() {
@@ -146,20 +149,70 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       _contactsLoading = true;
       _contactsError = null;
     });
+
+    List<ChatContact> saved = [];
+    Object? savedError;
+    List<PhoneBookContact> phoneBook = [];
+
     try {
-      final items = await ChatService.listContacts();
-      if (!mounted) return;
-      setState(() {
-        _contacts = items;
-        _contactsLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _contactsLoading = false;
-        _contactsError = 'Не удалось загрузить контакты';
-      });
+      saved = await ChatService.listContacts();
+    } catch (e) {
+      savedError = e;
     }
+
+    try {
+      final result = await PhoneContactsService.syncFromDevice();
+      phoneBook = result.phoneBook;
+    } on PhoneContactsPermissionDenied {
+      // Телефонная книга недоступна — показываем только сохранённые контакты.
+    } catch (_) {
+      // Ошибка сопоставления с сервером не блокирует локальный список.
+    }
+
+    if (!mounted) return;
+
+    final merged = _mergeAttachContacts(saved: saved, phoneBook: phoneBook);
+    setState(() {
+      _contacts = merged;
+      _contactsLoading = false;
+      _contactsError = merged.isEmpty && savedError != null
+          ? 'Не удалось загрузить контакты'
+          : null;
+    });
+  }
+
+  static List<ChatContact> _mergeAttachContacts({
+    required List<ChatContact> saved,
+    required List<PhoneBookContact> phoneBook,
+  }) {
+    final byUserId = <int, ChatContact>{
+      for (final contact in saved) contact.user.id: contact,
+    };
+
+    for (final entry in phoneBook) {
+      final matched = entry.matchedUser;
+      if (matched == null || byUserId.containsKey(matched.id)) continue;
+
+      final bookName = entry.displayName.trim();
+      byUserId[matched.id] = ChatContact(
+        id: 0,
+        user: ChatUserBrief(
+          id: matched.id,
+          name: bookName.isNotEmpty ? bookName : matched.name,
+          username: matched.username,
+          avatarUrl: matched.avatarUrl,
+        ),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    }
+
+    final out = byUserId.values.toList()
+      ..sort(
+        (a, b) => a.user.displayName
+            .toLowerCase()
+            .compareTo(b.user.displayName.toLowerCase()),
+      );
+    return out;
   }
 
   Future<void> _loadRecentFiles() async {
@@ -485,7 +538,7 @@ class _TelegramHeader extends StatelessWidget {
               onPressed: sendEnabled ? onSend : null,
               style: FilledButton.styleFrom(
                 backgroundColor: sendEnabled
-                    ? _ChatAttachSheetState._telegramBlue
+                    ? _ChatAttachSheetState._brandAccent
                     : theme.colorScheme.surfaceContainerHighest,
                 foregroundColor: sendEnabled
                     ? Colors.white
@@ -640,11 +693,11 @@ class _FileActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
-      leading: Icon(icon, color: _ChatAttachSheetState._telegramBlue, size: 24),
+      leading: Icon(icon, color: _ChatAttachSheetState._brandAccent, size: 24),
       title: Text(
         label,
         style: const TextStyle(
-          color: _ChatAttachSheetState._telegramBlue,
+          color: _ChatAttachSheetState._brandAccent,
           fontSize: 17,
         ),
       ),
@@ -719,7 +772,7 @@ class _RecentFileTile extends StatelessWidget {
       case 'HEIC':
         return const Color(0xFF34C759);
       default:
-        return const Color(0xFF007AFF);
+        return AppColors.primary;
     }
   }
 }
@@ -909,7 +962,8 @@ class _ContactsPanel extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-            'Нет контактов.\nДобавьте людей в разделе «Контакты».',
+            'Нет контактов в HAN Eat.\nДобавьте людей в разделе «Контакты» '
+            'или синхронизируйте телефонную книгу.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -1159,7 +1213,7 @@ class _DockItem extends StatelessWidget {
                 height: 52,
                 decoration: BoxDecoration(
                   color: selected
-                      ? _ChatAttachSheetState._telegramBlue
+                      ? _ChatAttachSheetState._brandAccent
                           .withValues(alpha: isDark ? 0.22 : 0.14)
                       : (isDark
                           ? _ChatAttachSheetState._groupBgDark
@@ -1170,7 +1224,7 @@ class _DockItem extends StatelessWidget {
                   icon,
                   size: 26,
                   color: selected
-                      ? _ChatAttachSheetState._telegramBlue
+                      ? _ChatAttachSheetState._brandAccent
                       : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -1179,7 +1233,7 @@ class _DockItem extends StatelessWidget {
                 label,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: selected
-                      ? _ChatAttachSheetState._telegramBlue
+                      ? _ChatAttachSheetState._brandAccent
                       : theme.colorScheme.onSurfaceVariant,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                 ),
