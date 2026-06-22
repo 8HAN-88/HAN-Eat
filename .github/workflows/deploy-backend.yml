@@ -40,6 +40,10 @@ jobs:
             --exclude 'dev.db' \
             backend/ \
             root@89.19.216.60:/root/HAN-Eat/backend/
+          rsync -avz \
+            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
+            scripts/ensure_server_email_env.sh \
+            root@89.19.216.60:/root/HAN-Eat/scripts/ensure_server_email_env.sh
 
       - name: Remote pip, migrations, restart
         run: |
