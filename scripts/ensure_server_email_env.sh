@@ -22,17 +22,13 @@ set_kv() {
 # Resend: ключ уже в .env; включаем провайдер явно.
 set_kv EMAIL_PROVIDER resend
 
-# После верификации домена haneat.app в Resend — в .env на сервере:
-#   RESEND_DOMAIN_VERIFIED=true
-#   EMAIL_FROM=noreply@haneat.app
-if grep -q '^RESEND_DOMAIN_VERIFIED=true' "$ENV" 2>/dev/null; then
-  set_kv EMAIL_FROM noreply@haneat.app
-elif grep -q '^EMAIL_FROM=noreply@haneat.app' "$ENV" 2>/dev/null; then
-  :
-elif grep -q '^EMAIL_FROM=.*@haneat.app' "$ENV" 2>/dev/null; then
-  :
-else
+# Resend: по умолчанию noreply@haneat.app (домен верифицирован).
+# Тестовый режим только при явном RESEND_DOMAIN_VERIFIED=false.
+if grep -q '^RESEND_DOMAIN_VERIFIED=false' "$ENV" 2>/dev/null; then
   set_kv EMAIL_FROM onboarding@resend.dev
+else
+  set_kv EMAIL_FROM noreply@haneat.app
+  set_kv RESEND_DOMAIN_VERIFIED true
 fi
 
 grep -q '^EMAIL_FROM_NAME=' "$ENV" 2>/dev/null || set_kv EMAIL_FROM_NAME "HAN Eat"
