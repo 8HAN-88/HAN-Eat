@@ -23,7 +23,7 @@ class WebAppUpdateService {
   static void start() {
     if (!kIsWeb || embeddedBuild.isEmpty) return;
     _pollTimer?.cancel();
-    unawaited(checkForUpdate());
+    // Не проверяем сразу при старте — иначе цикл reload при устаревшем кэше main.dart.js.
     _pollTimer = Timer.periodic(
       const Duration(minutes: 5),
       (_) => unawaited(checkForUpdate()),

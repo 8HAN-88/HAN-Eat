@@ -78,30 +78,7 @@
   </div>
   <script>
     (function () {
-      var SCHEMA = 3;
-      var SCHEMA_KEY = 'haneat_web_schema';
-      var KEY = 'haneat_web_build_v3';
-      var LEGACY_KEYS = ['haneat_web_build_v2', 'haneat_web_build'];
       var flutterStarted = false;
-      var VERSION_TIMEOUT_MS = 5000;
-      var RELOAD_GUARD_KEY = 'haneat_web_reload_guard';
-
-      function storageGet(kind, key) {
-        try {
-          return kind.getItem(key);
-        } catch (e) {
-          return null;
-        }
-      }
-
-      function storageSet(kind, key, value) {
-        try {
-          kind.setItem(key, value);
-          return true;
-        } catch (e) {
-          return false;
-        }
-      }
 
       function unregisterServiceWorkers() {
         if (!('serviceWorker' in navigator)) {
@@ -112,10 +89,23 @@
         }).catch(function () {});
       }
 
+      function blockServiceWorkerRegistration() {
+        if (!('serviceWorker' in navigator)) return;
+        try {
+          navigator.serviceWorker.register = function () {
+            return Promise.reject(new Error('HAN Eat: service worker disabled'));
+          };
+          navigator.serviceWorker.getRegistration = function () {
+            return Promise.resolve(undefined);
+          };
+        } catch (e) {}
+      }
+
       function loadFlutter(build) {
         if (flutterStarted) return;
         flutterStarted = true;
         var start = function () {
+          blockServiceWorkerRegistration();
           var s = document.createElement('script');
           s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
           s.async = true;
@@ -124,72 +114,14 @@
         unregisterServiceWorkers().finally(start);
       }
 
-      function clearCachesAndReload(build) {
-        if (storageGet(sessionStorage, RELOAD_GUARD_KEY) === build) {
-          loadFlutter(build);
-          return;
-        }
-        storageSet(sessionStorage, RELOAD_GUARD_KEY, build);
-        storageSet(localStorage, KEY, build);
-        storageSet(localStorage, SCHEMA_KEY, String(SCHEMA));
-        LEGACY_KEYS.forEach(function (k) {
-          try { localStorage.removeItem(k); } catch (e) {}
-        });
-        var tasks = [unregisterServiceWorkers()];
-        if (window.caches && caches.keys) {
-          tasks.push(
-            caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            })
-          );
-        }
-        Promise.all(tasks).finally(function () {
-          var url = new URL(location.href);
-          url.searchParams.set('v', build);
-          url.searchParams.set('_cb', String(Date.now()));
-          location.replace(url.toString());
-        });
-      }
-
-      function shouldForceReload(build) {
-        if (storageGet(sessionStorage, RELOAD_GUARD_KEY) === build) return false;
-        if (storageGet(localStorage, SCHEMA_KEY) !== String(SCHEMA)) return true;
-        for (var i = 0; i < LEGACY_KEYS.length; i++) {
-          if (storageGet(localStorage, LEGACY_KEYS[i])) return true;
-        }
-        var prev = storageGet(localStorage, KEY);
-        return !!(prev && prev !== build);
-      }
-
-      function startWithBuild(build) {
-        if (!build) {
-          loadFlutter(storageGet(localStorage, KEY) || String(Date.now()));
-          return;
-        }
-        if (shouldForceReload(build)) {
-          clearCachesAndReload(build);
-          return;
-        }
-        storageSet(localStorage, KEY, build);
-        storageSet(localStorage, SCHEMA_KEY, String(SCHEMA));
-        try { sessionStorage.removeItem(RELOAD_GUARD_KEY); } catch (e) {}
-        loadFlutter(build);
-      }
-
-      var versionTimer = setTimeout(function () {
-        startWithBuild(localStorage.getItem(KEY) || '');
-      }, VERSION_TIMEOUT_MS);
-
       fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
-          clearTimeout(versionTimer);
-          var build = String(v.build_number || v.version || '');
-          startWithBuild(build);
+          var build = String(v.build_number || v.version || Date.now());
+          loadFlutter(build);
         })
         .catch(function () {
-          clearTimeout(versionTimer);
-          startWithBuild(localStorage.getItem(KEY) || '');
+          loadFlutter(String(Date.now()));
         });
     })();
   </script>

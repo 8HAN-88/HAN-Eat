@@ -1,6 +1,17 @@
 import 'dart:html' as html;
 
+String _reloadGuardKey(String? build) =>
+    'haneat_web_update_reload_${build ?? 'unknown'}';
+
 Future<void> reloadWebPage({String? build}) async {
+  try {
+    final guardKey = _reloadGuardKey(build);
+    if (html.window.sessionStorage[guardKey] == '1') {
+      return;
+    }
+    html.window.sessionStorage[guardKey] = '1';
+  } catch (_) {}
+
   try {
     final sw = html.window.navigator.serviceWorker;
     if (sw != null) {

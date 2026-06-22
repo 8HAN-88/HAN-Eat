@@ -49,8 +49,8 @@ server {
         try_files $uri =404;
     }
 
-    # Без immutable: иначе браузер годами держит старый main.dart.js после деплоя.
-    location = /main.dart.js {
+    # ^~ чтобы main.dart.js?v=… не попадал под immutable-regex ниже.
+    location ^~ /main.dart.js {
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
     }

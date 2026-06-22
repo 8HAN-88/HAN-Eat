@@ -73,8 +73,11 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
             root@89.19.216.60 \
             "chown -R www-data:www-data /var/www/haneat-web 2>/dev/null || true; \
-             if [[ -f /etc/nginx/sites-available/haneat-web ]] && ! grep -q 'location \^~ /icons/' /etc/nginx/sites-available/haneat-web; then \
-               python3 -c \"from pathlib import Path; p=Path('/etc/nginx/sites-available/haneat-web'); t=p.read_text(); b='    location ^~ /icons/ {\\n        add_header Cache-Control \\\"no-cache, must-revalidate\\\";\\n        try_files \\\$uri =404;\\n    }\\n\\n'; t=t.replace('    location = /main.dart.js {', b+'    location = /main.dart.js {') if 'location ^~ /icons/' not in t else t; p.write_text(t)\"; \
+             if [[ -f /etc/nginx/sites-available/haneat-web ]]; then \
+               python3 -c \"from pathlib import Path; import re; p=Path('/etc/nginx/sites-available/haneat-web'); t=p.read_text(); \
+t=re.sub(r'location = /main\\.dart\\.js \\{[^}]+\\}', 'location ^~ /main.dart.js {\\n        add_header Cache-Control \\\"no-cache, must-revalidate\\\";\\n        try_files \\\$uri =404;\\n    }', t); \
+if 'location ^~ /icons/' not in t: t=t.replace('location ^~ /main.dart.js {', 'location ^~ /icons/ {\\n        add_header Cache-Control \\\"no-cache, must-revalidate\\\";\\n        try_files \\\$uri =404;\\n    }\\n\\n    location ^~ /main.dart.js {'); \
+p.write_text(t)\"; \
                nginx -t && systemctl reload nginx; \
              fi"
 
