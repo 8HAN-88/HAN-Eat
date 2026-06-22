@@ -3588,6 +3588,182 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onPollClose;
   final bool pollClosing;
 
+  static const _metaReserveWidth = 54.0;
+
+  BorderRadius _bubbleRadius(bool mine) => BorderRadius.only(
+        topLeft: const Radius.circular(12),
+        topRight: const Radius.circular(12),
+        bottomLeft: Radius.circular(mine ? 12 : 4),
+        bottomRight: Radius.circular(mine ? 4 : 12),
+      );
+
+  Widget _messageMeta({
+    required Color fg,
+    required bool mine,
+    bool onMedia = false,
+  }) {
+    final timeColor = onMedia
+        ? Colors.white.withValues(alpha: 0.92)
+        : fg.withValues(alpha: 0.55);
+    final editedColor = onMedia
+        ? Colors.white.withValues(alpha: 0.75)
+        : fg.withValues(alpha: 0.45);
+    final statusColor = onMedia
+        ? Colors.white.withValues(alpha: message.isRead ? 0.95 : 0.7)
+        : (message.isRead ? scheme.primary : fg.withValues(alpha: 0.45));
+
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isConversationPinned) ...[
+          Icon(
+            Icons.push_pin,
+            size: 11,
+            color: onMedia ? Colors.white.withValues(alpha: 0.9) : scheme.primary,
+          ),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          formatChatMessageTime(message.createdAt),
+          style: TextStyle(color: timeColor, fontSize: 11, height: 1.1),
+        ),
+        if (message.isEdited) ...[
+          const SizedBox(width: 3),
+          Text(
+            'изм.',
+            style: TextStyle(
+              color: editedColor,
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+              height: 1.1,
+            ),
+          ),
+        ],
+        if (mine) ...[
+          const SizedBox(width: 3),
+          Icon(
+            message.isRead ? Icons.done_all : Icons.done,
+            size: 13,
+            color: statusColor,
+          ),
+        ],
+      ],
+    );
+
+    if (!onMedia) return row;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: row,
+      ),
+    );
+  }
+
+  Widget _withBottomMeta({
+    required Color fg,
+    required bool mine,
+    required Widget child,
+    bool onMedia = false,
+  }) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(
+            right: onMedia ? 0 : _metaReserveWidth,
+            bottom: onMedia ? 0 : 1,
+          ),
+          child: child,
+        ),
+        Positioned(
+          right: onMedia ? 6 : 0,
+          bottom: onMedia ? 4 : 0,
+          child: _messageMeta(fg: fg, mine: mine, onMedia: onMedia),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReactions(Color fg, Color quoteBg) {
+    if (message.reactions.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: message.reactions
+            .where((r) => r.emoji.isNotEmpty && r.count > 0)
+            .map(
+              (r) => Material(
+                color: r.reactedByMe
+                    ? scheme.primary.withValues(alpha: 0.18)
+                    : quoteBg,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: onReactionTap == null
+                      ? null
+                      : () => onReactionTap!(r.emoji),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      '${r.emoji} ${r.count}',
+                      style: TextStyle(color: fg, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildReplyQuote(Color fg, Color quoteBg) {
+    if (replyQuote == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onReplyTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: quoteBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border(
+                left: BorderSide(color: scheme.primary, width: 3),
+              ),
+            ),
+            child: HighlightedText(
+              text: replyQuote!,
+              query: highlightQuery,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: fg.withValues(alpha: 0.85),
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mine = message.isMine;
@@ -3597,27 +3773,225 @@ class _Bubble extends StatelessWidget {
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
 
+    final isImage = message.type == 'image' && message.mediaUrl != null;
+    final isVideo = message.type == 'video' && message.mediaUrl != null;
+    final isMedia = isImage || isVideo;
+    final hasCaption = message.content.trim().isNotEmpty;
+    final isFullBleedMedia = isMedia && !hasCaption;
+    final bubbleRadius = _bubbleRadius(mine);
+    final contentPadding = isMedia
+        ? EdgeInsets.zero
+        : const EdgeInsets.fromLTRB(8, 5, 8, 4);
+    final bubbleNeedsBackground = !isFullBleedMedia ||
+        replyQuote != null ||
+        (showSenderName && (senderLabel?.isNotEmpty ?? false)) ||
+        message.reactions.isNotEmpty;
+
+    Widget mainContent;
+    if (message.type == 'voice' && message.mediaUrl != null) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: ChatVoiceBubble(
+          message: message,
+          foregroundColor: fg,
+          accentColor: scheme.primary,
+          activeColor: mine ? scheme.primary : scheme.secondary,
+        ),
+      );
+    } else if (message.type == 'poll' && message.poll != null) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: ChatPollBubble(
+          poll: message.poll!,
+          foregroundColor: fg,
+          accentColor: scheme.primary,
+          mutedColor: fg.withValues(alpha: 0.65),
+          optionBackground: quoteBg,
+          onVote: onPollVote,
+          voting: pollVoting,
+          canClose: onPollClose != null,
+          onClose: onPollClose,
+          closing: pollClosing,
+        ),
+      );
+    } else if (message.type == 'file' && message.mediaUrl != null) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: Material(
+          color: quoteBg,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: onFileTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file_outlined, color: fg, size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: HighlightedText(
+                      text: message.content.trim().isEmpty
+                          ? 'Файл'
+                          : message.content.trim(),
+                      query: highlightQuery,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: fg),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (isImage) {
+      final image = GestureDetector(
+        onTap: onImageTap,
+        child: CachedNetworkImage(
+          imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+            ServerConfig.resolveMediaUrl(message.mediaUrl!),
+          ),
+          fit: BoxFit.cover,
+          memCacheWidth: 720,
+          maxWidthDiskCache: 720,
+          errorWidget: (_, __, ___) => SizedBox(
+            height: 120,
+            child: ColoredBox(
+              color: quoteBg,
+              child: Icon(
+                Icons.broken_image_outlined,
+                color: fg.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      if (hasCaption) {
+        mainContent = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            image,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              child: _withBottomMeta(
+                fg: fg,
+                mine: mine,
+                child: HighlightedText(
+                  text: message.content,
+                  query: highlightQuery,
+                  style: TextStyle(color: fg, height: 1.25),
+                ),
+              ),
+            ),
+          ],
+        );
+      } else {
+        mainContent = _withBottomMeta(
+          fg: fg,
+          mine: mine,
+          onMedia: true,
+          child: image,
+        );
+      }
+    } else if (isVideo) {
+      final video = ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 280),
+        child: InlineVideoPlayer(
+          videoUrl: message.mediaUrl!,
+          onTap: onVideoTap,
+        ),
+      );
+
+      if (hasCaption) {
+        mainContent = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            video,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              child: _withBottomMeta(
+                fg: fg,
+                mine: mine,
+                child: HighlightedText(
+                  text: message.content,
+                  query: highlightQuery,
+                  style: TextStyle(color: fg, height: 1.25),
+                ),
+              ),
+            ),
+          ],
+        );
+      } else {
+        mainContent = _withBottomMeta(
+          fg: fg,
+          mine: mine,
+          onMedia: true,
+          child: video,
+        );
+      }
+    } else if (message.content.isNotEmpty && message.type != 'voice') {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            HighlightedText(
+              text: message.content,
+              query: highlightQuery,
+              style: TextStyle(color: fg, height: 1.25),
+            ),
+            if (extractFirstHttpUrl(message.content) case final url?)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ChatLinkPreview(
+                  url: url,
+                  foregroundColor: fg,
+                  accentColor: scheme.primary,
+                  backgroundColor: quoteBg,
+                ),
+              ),
+          ],
+        ),
+      );
+    } else {
+      mainContent = Align(
+        alignment: Alignment.centerRight,
+        child: _messageMeta(fg: fg, mine: mine),
+      );
+    }
+
     final bubble = Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: contentPadding,
+      clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.78,
       ),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.only(
-          topLeft: const Radius.circular(16),
-          topRight: const Radius.circular(16),
-          bottomLeft: Radius.circular(mine ? 16 : 4),
-          bottomRight: Radius.circular(mine ? 4 : 16),
-        ),
+        color: bubbleNeedsBackground ? bg : Colors.transparent,
+        borderRadius: bubbleRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-            if (showSenderName &&
-                (senderLabel?.isNotEmpty ?? false)) ...[
-              Text(
+          if (showSenderName && (senderLabel?.isNotEmpty ?? false)) ...[
+            Padding(
+              padding: isMedia
+                  ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
+                  : EdgeInsets.zero,
+              child: Text(
                 senderLabel!,
                 style: TextStyle(
                   color: scheme.primary,
@@ -3625,232 +3999,25 @@ class _Bubble extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 4),
-            ],
-            if (replyQuote != null) ...[
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onReplyTap,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: quoteBg,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border(
-                        left: BorderSide(
-                          color: scheme.primary,
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    child: HighlightedText(
-                      text: replyQuote!,
-                      query: highlightQuery,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: fg.withValues(alpha: 0.85),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-            ],
-            if (message.type == 'voice' && message.mediaUrl != null)
-              ChatVoiceBubble(
-                message: message,
-                foregroundColor: fg,
-                accentColor: scheme.primary,
-                activeColor: mine ? scheme.primary : scheme.secondary,
-              )
-            else if (message.type == 'poll' && message.poll != null)
-              ChatPollBubble(
-                poll: message.poll!,
-                foregroundColor: fg,
-                accentColor: scheme.primary,
-                mutedColor: fg.withValues(alpha: 0.65),
-                optionBackground: quoteBg,
-                onVote: onPollVote,
-                voting: pollVoting,
-                canClose: onPollClose != null,
-                onClose: onPollClose,
-                closing: pollClosing,
-              )
-            else if (message.type == 'file' && message.mediaUrl != null)
-              Material(
-                color: quoteBg,
-                borderRadius: BorderRadius.circular(10),
-                child: InkWell(
-                  onTap: onFileTap,
-                  borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.insert_drive_file_outlined, color: fg),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: HighlightedText(
-                            text: message.content.trim().isEmpty
-                                ? 'Файл'
-                                : message.content.trim(),
-                            query: highlightQuery,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: fg),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-            else if (message.type == 'image' && message.mediaUrl != null)
-              GestureDetector(
-                onTap: onImageTap,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-                      ServerConfig.resolveMediaUrl(message.mediaUrl!),
-                    ),
-                    fit: BoxFit.cover,
-                    memCacheWidth: 720,
-                    maxWidthDiskCache: 720,
-                    errorWidget: (_, __, ___) => SizedBox(
-                      height: 120,
-                      child: ColoredBox(
-                        color: quoteBg,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: fg.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            else if (message.type == 'video' && message.mediaUrl != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 280),
-                  child: InlineVideoPlayer(
-                    videoUrl: message.mediaUrl!,
-                    onTap: onVideoTap,
-                  ),
-                ),
-              ),
-              if (message.content.trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
-                HighlightedText(
-                  text: message.content,
-                  query: highlightQuery,
-                  style: TextStyle(color: fg),
-                ),
-              ],
-            ]
-            else if (message.content.isNotEmpty && message.type != 'voice') ...[
-              HighlightedText(
-                text: message.content,
-                query: highlightQuery,
-                style: TextStyle(color: fg),
-              ),
-              if (extractFirstHttpUrl(message.content) case final url?)
-                ChatLinkPreview(
-                  url: url,
-                  foregroundColor: fg,
-                  accentColor: scheme.primary,
-                  backgroundColor: quoteBg,
-                ),
-            ],
-            if (message.reactions.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: message.reactions
-                    .where((r) => r.emoji.isNotEmpty && r.count > 0)
-                    .map(
-                      (r) => Material(
-                        color: r.reactedByMe
-                            ? scheme.primary.withValues(alpha: 0.18)
-                            : quoteBg,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: onReactionTap == null
-                              ? null
-                              : () => onReactionTap!(r.emoji),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            child: Text(
-                              '${r.emoji} ${r.count}',
-                              style: TextStyle(
-                                color: fg,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isConversationPinned) ...[
-                  Icon(Icons.push_pin, size: 12, color: scheme.primary),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  formatChatMessageTime(message.createdAt),
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.65),
-                    fontSize: 11,
-                  ),
-                ),
-                if (message.isEdited) ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    'изм.',
-                    style: TextStyle(
-                      color: fg.withValues(alpha: 0.55),
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                if (mine) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    message.isRead ? Icons.done_all : Icons.done,
-                    size: 14,
-                    color: message.isRead
-                        ? scheme.primary
-                        : fg.withValues(alpha: 0.55),
-                  ),
-                ],
-              ],
             ),
+            SizedBox(height: isMedia ? 4 : 4),
           ],
-        ),
+          if (replyQuote != null)
+            Padding(
+              padding: isMedia
+                  ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
+                  : EdgeInsets.zero,
+              child: _buildReplyQuote(fg, quoteBg),
+            ),
+          mainContent,
+          Padding(
+            padding: isMedia
+                ? const EdgeInsets.fromLTRB(8, 0, 8, 4)
+                : EdgeInsets.zero,
+            child: _buildReactions(fg, quoteBg),
+          ),
+        ],
+      ),
     );
 
     if (!wrapWithAlign) return bubble;
