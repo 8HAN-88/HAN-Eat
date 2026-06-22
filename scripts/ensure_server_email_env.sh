@@ -12,11 +12,10 @@ fi
 set_kv() {
   local key="$1"
   local val="$2"
-  if grep -q "^${key}=" "$ENV" 2>/dev/null; then
-    sed -i "s|^${key}=.*|${key}=${val}|" "$ENV"
-  else
-    echo "${key}=${val}" >> "$ENV"
-  fi
+  # Убираем все дубликаты ключа — иначе pydantic/dotenv может взять старое значение.
+  grep -v "^${key}=" "$ENV" > "${ENV}.tmp" || true
+  mv "${ENV}.tmp" "$ENV"
+  echo "${key}=${val}" >> "$ENV"
 }
 
 # Resend: ключ уже в .env; включаем провайдер явно.
@@ -33,6 +32,6 @@ fi
 
 grep -q '^EMAIL_FROM_NAME=' "$ENV" 2>/dev/null || set_kv EMAIL_FROM_NAME "HAN Eat"
 
-echo "ensure_server_email_env: EMAIL_PROVIDER=$(grep '^EMAIL_PROVIDER=' "$ENV" | cut -d= -f2-)"
-echo "ensure_server_email_env: EMAIL_FROM=$(grep '^EMAIL_FROM=' "$ENV" | cut -d= -f2-)"
+echo "ensure_server_email_env: EMAIL_PROVIDER=$(grep '^EMAIL_PROVIDER=' "$ENV" | tail -1 | cut -d= -f2-)"
+echo "ensure_server_email_env: EMAIL_FROM=$(grep '^EMAIL_FROM=' "$ENV" | tail -1 | cut -d= -f2-)"
 echo "ensure_server_email_env: RESEND_API_KEY set=$(grep -c '^RESEND_API_KEY=.' "$ENV" || true)"
