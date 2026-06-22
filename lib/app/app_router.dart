@@ -241,6 +241,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return LegalConsentRoute.path;
       }
       if (isAuth &&
+          user.emailVerified &&
           (loc == LoginRoute.path || loc == RegisterRoute.path)) {
         return FeedRoute.path;
       }

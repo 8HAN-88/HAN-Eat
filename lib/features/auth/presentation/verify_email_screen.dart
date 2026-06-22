@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 
@@ -113,6 +114,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
+  Future<void> _returnToLogin() async {
+    await AuthService.instance.signOut(notifySession: false);
+    if (UserService.isInitialized) {
+      UserService.instance.profile.value = null;
+    }
+    if (!mounted) return;
+    context.go(LoginRoute.path);
+    AuthService.instance.notifySessionCleared();
+  }
+
   @override
   Widget build(BuildContext context) {
     final email = widget.email ?? '';
@@ -175,7 +186,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => context.go(LoginRoute.path),
+                  onPressed: _loading ? null : _returnToLogin,
                   child: const Text('Ко входу'),
                 ),
               ],
