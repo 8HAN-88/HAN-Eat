@@ -113,6 +113,7 @@ async def health():
         "redis": redis_cfg,
         "email_smtp_configured": email_delivery_configured(),
         "email_provider": provider,
+        "email_from": settings.EMAIL_FROM or None,
     }
 
 
