@@ -14,6 +14,7 @@ on:
       - 'web/**'
       - 'scripts/build_web_release.sh'
       - 'scripts/patch_web_cache_bust.sh'
+      - 'scripts/patch_web_service_worker.sh'
       - 'scripts/generate_web_pwa_icons.py'
       - '.github/workflows/deploy-web.yml'
 

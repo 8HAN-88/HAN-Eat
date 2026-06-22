@@ -18,12 +18,13 @@ HANEAT_API_BASE="$API_BASE" ./scripts/with_dart_defines.sh \
   flutter build web \
   --release \
   --base-href / \
-  --pwa-strategy offline-first \
+  --pwa-strategy none \
   --no-web-resources-cdn \
   --no-wasm-dry-run \
   --dart-define=WEB_BUILD_ID="$BUILD_ID"
 
 bash "$ROOT/scripts/patch_web_cache_bust.sh" "$BUILD_ID"
+bash "$ROOT/scripts/patch_web_service_worker.sh"
 
 echo ""
 echo "✓ Web build: build/web/"

@@ -84,28 +84,58 @@
       var LEGACY_KEYS = ['haneat_web_build_v2', 'haneat_web_build'];
       var flutterStarted = false;
       var VERSION_TIMEOUT_MS = 5000;
+      var RELOAD_GUARD_KEY = 'haneat_web_reload_guard';
+
+      function storageGet(kind, key) {
+        try {
+          return kind.getItem(key);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function storageSet(kind, key, value) {
+        try {
+          kind.setItem(key, value);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      function unregisterServiceWorkers() {
+        if (!('serviceWorker' in navigator)) {
+          return Promise.resolve();
+        }
+        return navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }).catch(function () {});
+      }
 
       function loadFlutter(build) {
         if (flutterStarted) return;
         flutterStarted = true;
-        var s = document.createElement('script');
-        s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
-        s.async = true;
-        document.body.appendChild(s);
+        var start = function () {
+          var s = document.createElement('script');
+          s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
+          s.async = true;
+          document.body.appendChild(s);
+        };
+        unregisterServiceWorkers().finally(start);
       }
 
       function clearCachesAndReload(build) {
-        localStorage.setItem(KEY, build);
-        localStorage.setItem(SCHEMA_KEY, String(SCHEMA));
-        LEGACY_KEYS.forEach(function (k) { localStorage.removeItem(k); });
-        var tasks = [];
-        if ('serviceWorker' in navigator) {
-          tasks.push(
-            navigator.serviceWorker.getRegistrations().then(function (regs) {
-              return Promise.all(regs.map(function (r) { return r.unregister(); }));
-            })
-          );
+        if (storageGet(sessionStorage, RELOAD_GUARD_KEY) === build) {
+          loadFlutter(build);
+          return;
         }
+        storageSet(sessionStorage, RELOAD_GUARD_KEY, build);
+        storageSet(localStorage, KEY, build);
+        storageSet(localStorage, SCHEMA_KEY, String(SCHEMA));
+        LEGACY_KEYS.forEach(function (k) {
+          try { localStorage.removeItem(k); } catch (e) {}
+        });
+        var tasks = [unregisterServiceWorkers()];
         if (window.caches && caches.keys) {
           tasks.push(
             caches.keys().then(function (keys) {
@@ -122,26 +152,27 @@
       }
 
       function shouldForceReload(build) {
-        if (localStorage.getItem(SCHEMA_KEY) !== String(SCHEMA)) return true;
+        if (storageGet(sessionStorage, RELOAD_GUARD_KEY) === build) return false;
+        if (storageGet(localStorage, SCHEMA_KEY) !== String(SCHEMA)) return true;
         for (var i = 0; i < LEGACY_KEYS.length; i++) {
-          if (localStorage.getItem(LEGACY_KEYS[i])) return true;
+          if (storageGet(localStorage, LEGACY_KEYS[i])) return true;
         }
-        var prev = localStorage.getItem(KEY);
-        var urlBuild = new URL(location.href).searchParams.get('v');
-        return (prev && prev !== build) || (urlBuild && urlBuild !== build);
+        var prev = storageGet(localStorage, KEY);
+        return !!(prev && prev !== build);
       }
 
       function startWithBuild(build) {
         if (!build) {
-          loadFlutter(localStorage.getItem(KEY) || String(Date.now()));
+          loadFlutter(storageGet(localStorage, KEY) || String(Date.now()));
           return;
         }
         if (shouldForceReload(build)) {
           clearCachesAndReload(build);
           return;
         }
-        localStorage.setItem(KEY, build);
-        localStorage.setItem(SCHEMA_KEY, String(SCHEMA));
+        storageSet(localStorage, KEY, build);
+        storageSet(localStorage, SCHEMA_KEY, String(SCHEMA));
+        try { sessionStorage.removeItem(RELOAD_GUARD_KEY); } catch (e) {}
         loadFlutter(build);
       }
 
