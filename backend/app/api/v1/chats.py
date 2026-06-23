@@ -48,6 +48,7 @@ from app.models.conversation import Conversation, ConversationMember
 from app.services.chat_event_bus import publish as publish_chat_event
 from app.services.chat_event_bus import subscribe as subscribe_chat_events
 from app.services.chat_service import ChatService
+from app.services.user_event_bus import publish_user_event
 
 router = APIRouter()
 
@@ -91,6 +92,26 @@ def _reaction_summaries(
 
 def _emit(conversation_id: int, event: Dict[str, Any]) -> None:
     publish_chat_event(conversation_id, event)
+
+
+def _notify_chat_inbox(
+    db: Session, conversation_id: int, sender_id: int
+) -> None:
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == conversation_id)
+        .all()
+    )
+    for (user_id,) in member_ids:
+        if user_id == sender_id:
+            continue
+        publish_user_event(
+            user_id,
+            {
+                "event": "chat.inbox",
+                "conversation_id": conversation_id,
+            },
+        )
 
 
 def _brief(user: User) -> ChatUserBrief:
@@ -649,6 +670,7 @@ async def send_message(
         conversation_id,
         {"type": "message.new", "message": _message_payload(msg)},
     )
+    _notify_chat_inbox(db, conversation_id, current_user.id)
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)

@@ -16,6 +16,7 @@ import '../../../../services/chat_cache_service.dart';
 import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/user_realtime_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
@@ -58,7 +59,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   int? _hubActionChatId;
   Timer? _pollTimer;
   StreamSubscription<void>? _signalSub;
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
   VoidCallback? _apiReachabilityListener;
+  VoidCallback? _realtimeConnectedListener;
   bool _appPaused = false;
   List<ChatFolder> _folders = [];
   int? _selectedFolderId;
@@ -283,6 +286,26 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         _load(silent: true);
       }
     });
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted || !_started || !ShellTabVisibility.chatsActive || _loading) {
+        return;
+      }
+      if (event.event == 'chat.inbox' ||
+          event.event == 'sync' ||
+          (event.event == 'notification.new' &&
+              event.notificationType == 'message')) {
+        _load(silent: true);
+      }
+    });
+    _realtimeConnectedListener = () {
+      if (!mounted) return;
+      _resetPollTimer();
+      if (_started && ShellTabVisibility.chatsActive && !_loading) {
+        _load(silent: true);
+      }
+    };
+    UserRealtimeService.instance.connected
+        .addListener(_realtimeConnectedListener!);
     _apiReachabilityListener = () {
       if (!ApiReachabilityService.instance.isApiReachable.value) return;
       if (mounted && _started && ShellTabVisibility.chatsActive && !_loading) {
@@ -304,13 +327,19 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (!ShellTabVisibility.chatsActive) return;
     if (_started) return;
     _started = true;
+    _resetPollTimer();
+    _load();
+  }
+
+  void _resetPollTimer() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+    if (!_started) return;
+    final seconds = UserRealtimeService.instance.connected.value ? 90 : 45;
+    _pollTimer = Timer.periodic(Duration(seconds: seconds), (_) {
       if (!_appPaused && !_loading && ShellTabVisibility.chatsActive) {
         _load(silent: true);
       }
     });
-    _load();
   }
 
   @override
@@ -319,6 +348,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _signalSub?.cancel();
+    _realtimeSub?.cancel();
+    if (_realtimeConnectedListener != null) {
+      UserRealtimeService.instance.connected
+          .removeListener(_realtimeConnectedListener!);
+    }
     if (_apiReachabilityListener != null) {
       ApiReachabilityService.instance.isApiReachable
           .removeListener(_apiReachabilityListener!);
@@ -331,6 +365,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     _appPaused = state != AppLifecycleState.resumed;
     if (!_appPaused) {
       unawaited(ApiReachabilityService.instance.warmUp());
+      UserRealtimeService.instance.resumeFromBackground();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      UserRealtimeService.instance.pauseForBackground();
     }
   }
 

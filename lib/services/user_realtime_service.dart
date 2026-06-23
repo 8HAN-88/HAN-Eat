@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/haneat_http_client.dart';
+import '../core/platform/web_page_visibility.dart';
 import '../features/chat/application/chat_realtime_signals.dart';
 import 'api_reachability_service.dart';
 import 'auth_service.dart';
@@ -58,6 +59,7 @@ class UserRealtimeService {
   StreamSubscription<List<int>>? _subscription;
   http.Client? _client;
   bool _disposed = false;
+  bool _backgroundPaused = false;
   String _buffer = '';
   Timer? _reconnectTimer;
   Timer? _watchdogTimer;
@@ -82,6 +84,13 @@ class UserRealtimeService {
     _reconnectListener = () => instance.resume();
     ApiReachabilityService.addReconnectedListener(_reconnectListener!);
 
+    if (kIsWeb) {
+      registerWebPageVisibilityListener(
+        () => instance.resumeFromBackground(),
+        onHidden: () => instance.pauseForBackground(),
+      );
+    }
+
     if (AuthService.instance.currentUser != null) {
       instance.connect();
     }
@@ -93,6 +102,18 @@ class UserRealtimeService {
     }
     _reconnectTimer?.cancel();
     unawaited(_openStream());
+  }
+
+  void pauseForBackground() {
+    _backgroundPaused = true;
+    _reconnectTimer?.cancel();
+    pause();
+  }
+
+  void resumeFromBackground() {
+    if (_disposed || AuthService.instance.currentUser == null) return;
+    _backgroundPaused = false;
+    connect();
   }
 
   void pause() {
@@ -157,6 +178,7 @@ class UserRealtimeService {
         connected.value = true;
       }
       _events.add(const UserRealtimeEvent(event: 'sync'));
+      ChatRealtimeSignals.instance.notifyNewMessage();
 
       _buffer = '';
       _subscription = response.stream.listen(
@@ -224,7 +246,7 @@ class UserRealtimeService {
   }
 
   void _scheduleReconnect() {
-    if (_disposed) return;
+    if (_disposed || _backgroundPaused) return;
     if (AuthService.instance.currentUser == null) return;
     _reconnectTimer?.cancel();
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);

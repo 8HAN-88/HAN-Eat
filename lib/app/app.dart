@@ -12,6 +12,7 @@ import '../core/theme/app_theme.dart';
 import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
+import '../services/user_realtime_service.dart';
 import '../services/web_app_update_service.dart';
 import '../features/settings/application/subscription_status_provider.dart';
 
@@ -65,11 +66,15 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      UserRealtimeService.instance.resumeFromBackground();
       unawaited(ApiReachabilityService.instance.checkNow());
       unawaited(AuthService.getAccessTokenForApi());
       if (kIsWeb) {
         unawaited(WebAppUpdateService.checkForUpdate());
       }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      UserRealtimeService.instance.pauseForBackground();
     }
   }
 

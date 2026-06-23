@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import DefaultDict, Dict, Optional
 
-from sqlalchemy import event
+from sqlalchemy import event, func
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
@@ -26,11 +26,21 @@ def _publish_after_commit(session: Session) -> None:
     sid = id(session)
     entries = _pending.pop(sid, {})
     for user_id, notification_type in entries.items():
+        unread = (
+            session.query(func.count(Notification.id))
+            .filter(
+                Notification.user_id == user_id,
+                Notification.is_read == False,
+            )
+            .scalar()
+            or 0
+        )
         publish_user_event(
             user_id,
             {
                 "event": "notification.new",
                 "notification_type": notification_type,
+                "notifications": unread,
             },
         )
 

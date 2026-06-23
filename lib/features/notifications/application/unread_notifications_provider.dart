@@ -38,7 +38,15 @@ class UnreadNotificationsNotifier extends StateNotifier<int> {
       state = event.notifications!;
       return;
     }
-    if (event.event == 'notification.new' || event.event == 'sync') {
+    if (event.event == 'notification.new') {
+      if (event.notifications != null) {
+        state = event.notifications!;
+        return;
+      }
+      unawaited(refresh());
+      return;
+    }
+    if (event.event == 'sync') {
       unawaited(refresh());
     }
   }
