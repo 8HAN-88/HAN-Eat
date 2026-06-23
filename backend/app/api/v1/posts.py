@@ -360,57 +360,50 @@ async def close_poll(
     db: Session = Depends(get_db),
 ):
     """Закрыть опрос (только автор поста)."""
-    from app.models.post import Post
-    from app.services.post_poll_service import enrich_body_poll
+    from app.services.post_poll_service import close_post_poll
 
-    post = (
-        db.query(Post)
-        .filter(Post.id == post_id, Post.deleted_at.is_(None))
-        .first()
-    )
-    if not post or post.type != "poll":
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Poll not found",
-        )
-    if post.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not allowed",
-        )
-
-    body = post.body or {}
-    raw = body.get("poll") or {}
-    if isinstance(raw, dict):
-        raw["is_closed"] = True
-        body["poll"] = raw
-        post.body = body
-        db.commit()
-
-        # Инвалидируем кэш ленты автора (и подписчиков автора), чтобы закрытие отобразилось сразу
-        try:
-            from app.core.redis_client import get_redis
-            from app.models.follower import Follower
-            from app.services.feed_service import FeedService
-
-            redis_client = get_redis()
-            feed_service = FeedService(db, redis_client)
-
-            followers = (
-                db.query(Follower.follower_id)
-                .filter(Follower.followee_id == current_user.id)
-                .all()
+    try:
+        poll = close_post_poll(db, post_id, current_user.id)
+    except ValueError as e:
+        msg = str(e)
+        if msg == "Not allowed":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=msg,
             )
-            follower_ids = [row[0] for row in followers]
-            for follower_id in follower_ids:
-                feed_service.invalidate_feed_cache(follower_id)
-            feed_service.invalidate_feed_cache(current_user.id)
-        except Exception:
-            # Кэш не критичен — закрытие всё равно сохранено в БД.
-            pass
+        if "not found" in msg.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=msg,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg,
+        )
 
-    poll = enrich_body_poll(db, post_id, post.body, current_user.id)
-    return {"poll": poll.get("poll", {}) if poll else {}}
+    # Инвалидируем кэш ленты автора (и подписчиков автора), чтобы закрытие отобразилось сразу
+    try:
+        from app.core.redis_client import get_redis
+        from app.models.follower import Follower
+        from app.services.feed_service import FeedService
+
+        redis_client = get_redis()
+        feed_service = FeedService(db, redis_client)
+
+        followers = (
+            db.query(Follower.follower_id)
+            .filter(Follower.followee_id == current_user.id)
+            .all()
+        )
+        follower_ids = [row[0] for row in followers]
+        for follower_id in follower_ids:
+            feed_service.invalidate_feed_cache(follower_id)
+        feed_service.invalidate_feed_cache(current_user.id)
+    except Exception:
+        # Кэш не критичен — закрытие всё равно сохранено в БД.
+        pass
+
+    return {"poll": poll}
 
 
 @router.get("/{post_id}/poll/voters", response_model=dict)

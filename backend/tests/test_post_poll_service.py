@@ -74,10 +74,11 @@ def test_update_poll_in_post_ok_without_votes():
 
     from app.services.post_poll_service import update_poll_in_post
 
-    update_poll_in_post(_Db(), _Post(), "Новое?", ["X", "Y", "Z"])
-    assert _Post.body["poll"]["question"] == "Новое?"
-    assert len(_Post.body["poll"]["options"]) == 3
-    assert _Post.body["poll"]["options"][2]["text"] == "Z"
+    post = _Post()
+    update_poll_in_post(_Db(), post, "Новое?", ["X", "Y", "Z"])
+    assert post.body["poll"]["question"] == "Новое?"
+    assert len(post.body["poll"]["options"]) == 3
+    assert post.body["poll"]["options"][2]["text"] == "Z"
 
 
 def test_update_poll_in_post_rejects_when_votes_exist():
@@ -136,3 +137,45 @@ def test_enrich_body_poll_includes_voted_index():
     )
     assert enriched is not None
     assert enriched["poll"]["voted_option_index"] == 0
+
+
+def test_close_post_poll_sets_is_closed_and_replaces_body():
+    class _Post:
+        type = "poll"
+        id = 9
+        user_id = 3
+        body = build_poll_body("Q?", ["A", "B"])
+
+    class _Db:
+        def __init__(self):
+            self.committed = False
+            self.post = _Post()
+
+        def query(self, *_args, **_kwargs):
+            return self
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def group_by(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            return self.post
+
+        def all(self):
+            return []
+
+        def commit(self):
+            self.committed = True
+
+        def refresh(self, _post):
+            pass
+
+    from app.services.post_poll_service import close_post_poll
+
+    db = _Db()
+    result = close_post_poll(db, 9, 3)
+    assert db.committed is True
+    assert db.post.body["poll"]["is_closed"] is True
+    assert result["is_closed"] is True

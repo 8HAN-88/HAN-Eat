@@ -10,6 +10,18 @@ from sqlalchemy.orm import Session
 from app.models.post_poll_vote import PostPollVote
 
 
+def _assign_post_body(post: Any, body: Dict[str, Any]) -> None:
+    """Persist JSON body changes (SQLAlchemy does not track in-place dict edits)."""
+    from sqlalchemy.orm import attributes
+
+    post.body = body
+    try:
+        attributes.instance_state(post)
+        attributes.flag_modified(post, "body")
+    except (AttributeError, KeyError):
+        pass
+
+
 def build_poll_body(question: str, option_texts: List[str]) -> Dict[str, Any]:
     q = (question or "").strip()
     opts = [t.strip() for t in option_texts if t and t.strip()]
@@ -159,7 +171,7 @@ def update_poll_in_post(
     """Обновить вопрос/варианты только пока нет голосов и опрос открыт."""
     if getattr(post, "type", None) != "poll":
         raise ValueError("Not a poll post")
-    body = post.body or {}
+    body = copy.deepcopy(post.body or {})
     raw = body.get("poll") or {}
     if not isinstance(raw, dict):
         raise ValueError("Invalid poll body")
@@ -171,7 +183,43 @@ def update_poll_in_post(
     new_poll = build_poll_body(question, option_texts)["poll"]
     new_poll["is_closed"] = bool(raw.get("is_closed", False))
     body["poll"] = new_poll
-    post.body = body
+    _assign_post_body(post, body)
+
+
+def close_post_poll(
+    db: Session,
+    post_id: int,
+    user_id: int,
+) -> Dict[str, Any]:
+    """Закрыть опрос поста и сохранить is_closed в JSON body."""
+    from app.models.post import Post
+
+    post = (
+        db.query(Post)
+        .filter(Post.id == post_id, Post.deleted_at.is_(None))
+        .first()
+    )
+    if not post:
+        raise ValueError("Post not found")
+    if post.type != "poll":
+        raise ValueError("Not a poll post")
+    if post.user_id != user_id:
+        raise ValueError("Not allowed")
+
+    body = copy.deepcopy(post.body or {})
+    raw = body.get("poll") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("Invalid poll body")
+
+    if not bool(raw.get("is_closed", False)):
+        raw["is_closed"] = True
+        body["poll"] = raw
+        _assign_post_body(post, body)
+        db.commit()
+        db.refresh(post)
+
+    enriched = enrich_body_poll(db, post_id, post.body, user_id)
+    return enriched.get("poll") if enriched else {}
 
 
 def vote_on_poll(
