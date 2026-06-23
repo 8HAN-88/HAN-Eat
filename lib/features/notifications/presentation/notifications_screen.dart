@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +9,9 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/notification_cache_service.dart';
 import '../../../services/notification_service.dart';
+import '../../../services/user_realtime_service.dart';
 import '../../../services/user_service.dart' as user_service;
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -33,16 +37,41 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   final ScrollController _scrollController = ScrollController();
   final Set<int> _followingActorIds = {};
   final Set<int> _followLoadingIds = {};
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
 
   @override
   void initState() {
     super.initState();
-    _loadNotifications(refresh: true);
     _scrollController.addListener(_onScroll);
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted) return;
+      if (event.event == 'notification.new') {
+        unawaited(_loadNotifications(refresh: true));
+      } else if (event.event == 'unread_counts' && event.notifications != null) {
+        setState(() => _unreadCount = event.notifications!);
+      }
+    });
+    unawaited(_hydrateFromCache());
+    _loadNotifications(refresh: true);
+  }
+
+  Future<void> _hydrateFromCache() async {
+    final cached = await NotificationCacheService.load();
+    if (!mounted || cached == null) return;
+    setState(() {
+      _notifications = cached.notifications;
+      _offset = cached.notifications.length;
+      _hasMore = cached.hasMore;
+      _unreadCount = cached.unreadCount;
+    });
+    if (cached.unreadCount > 0) {
+      ref.read(unreadNotificationsCountProvider.notifier).refresh();
+    }
   }
 
   @override
   void dispose() {
+    _realtimeSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }

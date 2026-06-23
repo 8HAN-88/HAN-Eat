@@ -28,6 +28,7 @@ import '../core/config/legacy_firestore_config.dart';
 import '../core/crash_reporting.dart';
 import '../services/server_config.dart';
 import '../services/api_service.dart';
+import '../services/user_realtime_service.dart';
 import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/storage/hive_bootstrap.dart';
@@ -323,6 +324,7 @@ Future<void> bootstrapServicesDeferred() async {
     safeInit(UserService.init(), 'UserService'),
     safeInit(FeedSyncService.init(), 'FeedSyncService'),
     safeInit(SavedPostsService.init(), 'SavedPostsService'),
+    safeInit(UserRealtimeService.init(), 'UserRealtimeService'),
   ];
   if (!kIsWeb) {
     criticalInits.addAll([

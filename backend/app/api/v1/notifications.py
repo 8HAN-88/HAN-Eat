@@ -15,6 +15,7 @@ from app.models.notification import Notification
 from app.models.post import Post
 from app.services.push_service import get_push_service
 from app.services.notification_preview_service import post_preview_for_notifications
+from app.services.user_event_bus import publish_user_event
 
 router = APIRouter()
 
@@ -151,7 +152,16 @@ async def mark_notification_read(
         notification.read_at = None
     
     db.commit()
-    
+
+    unread_count = db.query(func.count(Notification.id)).filter(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    ).scalar() or 0
+    publish_user_event(
+        current_user.id,
+        {"event": "unread_counts", "notifications": unread_count},
+    )
+
     return {
         "id": notification.id,
         "is_read": notification.is_read,
@@ -173,7 +183,12 @@ async def mark_all_read(
     })
     
     db.commit()
-    
+
+    publish_user_event(
+        current_user.id,
+        {"event": "unread_counts", "notifications": 0},
+    )
+
     return {
         "marked_read": updated,
         "message": f"Marked {updated} notifications as read"

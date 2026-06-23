@@ -1,4 +1,5 @@
 // Сервис для работы с уведомлениями
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'auth_service.dart';
+import 'notification_cache_service.dart';
 import 'server_config.dart';
 
 class NotificationService {
@@ -237,6 +239,7 @@ class NotificationService {
 
     if (response.statusCode == 200) {
       try {
+        unawaited(NotificationCacheService.saveFromResponseBody(response.body));
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return NotificationsResponse.fromJson(data);
       } catch (e, st) {
