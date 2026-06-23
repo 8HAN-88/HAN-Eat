@@ -215,7 +215,7 @@ async def register(
         email=request.email,
         password_hash=get_password_hash(request.password),
         name=request.name,
-        username=request.username,
+        username=request.username or _generate_unique_username(db, request.email),
         scan_credits=FREE_START,
         last_scan_credit_at=datetime.utcnow(),
     )

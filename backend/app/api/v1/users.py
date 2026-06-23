@@ -28,6 +28,7 @@ from app.schemas.user import (
 from app.schemas.post import PostResponse
 from app.schemas.notification_preferences import NotificationPreferencesResponse, UpdateNotificationPreferencesRequest
 from app.models.notification_preferences import NotificationPreferences
+from app.schemas.chat import UserSearchItem, UserSearchResponse
 
 router = APIRouter()
 
@@ -122,6 +123,29 @@ async def ping_presence(
     current_user.last_seen_at = now
     db.commit()
     return {"ok": True, "last_seen_at": now.isoformat()}
+
+
+@router.get("/search", response_model=UserSearchResponse)
+async def search_users(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, ge=1, le=50),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Поиск пользователей по имени или @username."""
+    svc = ChatService(db)
+    rows = svc.search_users(current_user.id, q, limit)
+    items = [
+        UserSearchItem(
+            id=r["user"].id,
+            name=r["user"].name,
+            username=r["user"].username,
+            avatar_url=r["user"].avatar_url,
+            is_contact=r["is_contact"],
+        )
+        for r in rows
+    ]
+    return UserSearchResponse(items=items)
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)

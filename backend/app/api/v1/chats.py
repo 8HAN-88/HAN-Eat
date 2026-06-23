@@ -43,8 +43,6 @@ from app.schemas.chat import (
     PhoneSyncResponse,
     SendMessageRequest,
     ChatPollVoteRequest,
-    UserSearchItem,
-    UserSearchResponse,
 )
 from app.models.conversation import Conversation, ConversationMember
 from app.services.chat_event_bus import publish as publish_chat_event
@@ -1427,23 +1425,4 @@ async def remove_contact(
     return {"ok": True}
 
 
-@router.get("/users/search", response_model=UserSearchResponse)
-async def search_users(
-    q: str = Query(..., min_length=2),
-    limit: int = Query(20, ge=1, le=50),
-    current_user: User = Depends(get_current_user_required),
-    db: Session = Depends(get_db),
-):
-    svc = ChatService(db)
-    rows = svc.search_users(current_user.id, q, limit)
-    items = [
-        UserSearchItem(
-            id=r["user"].id,
-            name=r["user"].name,
-            username=r["user"].username,
-            avatar_url=r["user"].avatar_url,
-            is_contact=r["is_contact"],
-        )
-        for r in rows
-    ]
-    return UserSearchResponse(items=items)
+# User search lives in users.router at GET /api/v1/users/search (before /{user_id}).

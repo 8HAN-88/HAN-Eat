@@ -1146,23 +1146,38 @@ class ChatService:
         return True
 
     def search_users(self, current_user_id: int, query: str, limit: int = 20) -> List[dict]:
+        from app.services.search_normalization import (
+            escaped_like_pattern,
+            normalize_search_text,
+        )
+
         q = query.strip().lstrip("@")
         if len(q) < 2:
             return []
 
-        pattern = f"%{q}%"
+        pattern = escaped_like_pattern(q)
+        norm_q = normalize_search_text(q)
+        norm_pattern = escaped_like_pattern(norm_q)
+        name_normalized = func.replace(func.lower(User.name), "ё", "е")
+
+        match_filters = [
+            User.username.ilike(pattern, escape="\\"),
+            User.name.ilike(pattern, escape="\\"),
+            name_normalized.ilike(norm_pattern, escape="\\"),
+            func.lower(func.coalesce(User.username, "")).ilike(
+                norm_pattern, escape="\\"
+            ),
+        ]
+
         users = (
             self.db.query(User)
             .filter(
                 User.deleted_at.is_(None),
                 User.banned_at.is_(None),
                 User.id != current_user_id,
-                or_(
-                    User.username.ilike(pattern),
-                    User.name.ilike(pattern),
-                ),
+                or_(*match_filters),
             )
-            .order_by(User.username.asc().nullslast())
+            .order_by(User.username.asc().nullslast(), User.name.asc())
             .limit(limit)
             .all()
         )
