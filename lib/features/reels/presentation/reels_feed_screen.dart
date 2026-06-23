@@ -151,6 +151,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
         _videoInitFailed.remove(i);
       });
 
+      if (i == _currentIndex) {
+        _prefetchAdjacentReelFiles(i);
+        _scheduleNeighborControllers(i);
+      }
+
       final upgradeUrl = playback.upgradeUrl;
       if (upgradeUrl != null) {
         final controllerRef = playback.controller;
@@ -202,10 +207,39 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   }
 
   void _prefetchAdjacentReelFiles(int index) {
-    if (index + 1 >= _reels.length) return;
+    if (index < 0 || index >= _reels.length) return;
     final pref = ref.read(videoPlaybackProvider);
-    final url = _reels[index + 1].reelVideoSources.prefetchUrl(pref);
-    prefetchReelVideoUrls([url]);
+    final urls = <String?>[
+      if (index > 0)
+        _reels[index - 1].reelVideoSources.prefetchUrl(pref),
+      if (index + 1 < _reels.length)
+        _reels[index + 1].reelVideoSources.prefetchUrl(pref),
+      if (index + 2 < _reels.length)
+        _reels[index + 2].reelVideoSources.prefetchUrl(pref),
+    ];
+    prefetchReelVideoUrls(urls);
+  }
+
+  /// Инициализация соседних контроллеров после старта текущего (без борьбы за сеть).
+  void _scheduleNeighborControllers(int index) {
+    if (!mounted || !widget.isTabVisible) return;
+    final retain = _controllerRetainDistance;
+
+    void schedule(int neighbor, Duration delay) {
+      if (neighbor < 0 || neighbor >= _reels.length) return;
+      if (_videoControllers.containsKey(neighbor)) return;
+      unawaited(
+        Future<void>.delayed(delay, () async {
+          if (!mounted || !widget.isTabVisible) return;
+          if (_videoControllers.containsKey(neighbor)) return;
+          if ((neighbor - _currentIndex).abs() > retain) return;
+          await _initSingleVideo(neighbor);
+        }),
+      );
+    }
+
+    schedule(index + 1, const Duration(milliseconds: 450));
+    schedule(index - 1, const Duration(milliseconds: 620));
   }
 
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {
@@ -549,17 +583,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       _loadReels();
     }
 
-    // Предзагружаем следующие видео без конкуренции за канал с текущим
-    if (_lookaheadVideoPreloadCount > 0 && index + 1 < _reels.length) {
-      unawaited(
-        _initializeVideos(
-          index + 1,
-          _lookaheadVideoPreloadCount,
-          priorityIndex: index,
-        ),
-      );
-    }
     _prefetchAdjacentReelFiles(index);
+    if (_lookaheadVideoPreloadCount > 0) {
+      _scheduleNeighborControllers(index);
+    }
     _trimVideoControllers();
   }
 

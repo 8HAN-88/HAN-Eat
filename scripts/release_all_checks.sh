@@ -34,14 +34,17 @@ fi
 
 if [[ "$RUN_PROD_SMOKE" == "1" ]]; then
   echo ""
-  echo "========== 5/6 Production API smoke =========="
+  echo "========== 5/7 Production API smoke =========="
   ./scripts/verify_production_api.sh "$PROD_API"
   echo ""
-  echo "========== 6/6 Web production smoke =========="
+  echo "========== 6/7 Stability production smoke =========="
+  ./scripts/verify_stability_prod.sh
+  echo ""
+  echo "========== 7/7 Web production smoke =========="
   ./scripts/verify_web_prod.sh
 else
   echo ""
-  echo "========== 5/6 Production smoke (пропуск) =========="
+  echo "========== 5/7 Production smoke (пропуск) =========="
   echo "  Запустите: RUN_PROD_SMOKE=1 ./scripts/release_all_checks.sh"
 fi
 

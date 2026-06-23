@@ -246,6 +246,8 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   void _prefetchAdjacentReelFiles(int index) {
     final pref = ref.read(videoPlaybackProvider);
     final urls = <String?>[
+      if (index > 0)
+        _reels[index - 1].reelVideoSources.prefetchUrl(pref),
       if (index + 1 < _reels.length)
         _reels[index + 1].reelVideoSources.prefetchUrl(pref),
       if (index + 2 < _reels.length)

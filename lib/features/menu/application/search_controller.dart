@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/recipe.dart';
 import '../../../services/api_service.dart';
 import '../../../services/history_storage.dart';
+import '../../../services/menu_search_cache.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../settings/application/analysis_mode_controller.dart';
 
@@ -84,8 +87,28 @@ class SearchController extends StateNotifier<SearchState> {
     if (trimmed.isEmpty) return;
     final requestId = ++_requestId;
     final settings = _ref.read(analysisSettingsProvider);
-
-    state = state.copyWith(loading: true, error: null);
+    final cacheKey = MenuSearchCache.buildKey(
+      query: trimmed,
+      mode: settings.mode.name,
+      language: settings.language,
+      tags: tags?.join(','),
+      maxReadyTime: maxReadyTime,
+    );
+    final cached = MenuSearchCache.peek(cacheKey);
+    if (cached != null && cached.recipes.isNotEmpty) {
+      state = state.copyWith(
+        recipes: cached.recipes,
+        loading: true,
+        error: null,
+        hasSearched: true,
+        recipeTranslationEnabled: cached.recipeTranslationEnabled,
+        recipeTranslationRequiresAi: cached.recipeTranslationRequiresAi,
+        recipeTranslationApiSupported: cached.recipeTranslationApiSupported,
+        source: cached.source,
+      );
+    } else {
+      state = state.copyWith(loading: true, error: null);
+    }
     try {
       final result = await ApiService.searchRecipesResult(
         trimmed,
@@ -96,6 +119,7 @@ class SearchController extends StateNotifier<SearchState> {
         maxReadyTime: maxReadyTime,
       );
       if (requestId != _requestId) return;
+      unawaited(MenuSearchCache.save(cacheKey, result));
       state = state.copyWith(
         recipes: result.recipes,
         loading: false,
@@ -109,6 +133,19 @@ class SearchController extends StateNotifier<SearchState> {
       await HistoryStorage.addQuery(trimmed, settings.mode);
     } catch (e) {
       if (requestId != _requestId) return;
+      if (cached != null && cached.recipes.isNotEmpty) {
+        state = state.copyWith(
+          recipes: cached.recipes,
+          loading: false,
+          error: null,
+          hasSearched: true,
+          recipeTranslationEnabled: cached.recipeTranslationEnabled,
+          recipeTranslationRequiresAi: cached.recipeTranslationRequiresAi,
+          recipeTranslationApiSupported: cached.recipeTranslationApiSupported,
+          source: cached.source,
+        );
+        return;
+      }
       state = state.copyWith(
         loading: false,
         error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),
@@ -133,16 +170,39 @@ class SearchController extends StateNotifier<SearchState> {
       {int? maxReadyTime}) async {
     final requestId = ++_requestId;
     final settings = _ref.read(analysisSettingsProvider);
-    state = state.copyWith(loading: true, error: null);
+    final effectiveQuery = query.trim().isEmpty ? tag : query.trim();
+    final cacheKey = MenuSearchCache.buildKey(
+      query: effectiveQuery,
+      mode: settings.mode.name,
+      language: settings.language,
+      tags: tag,
+      maxReadyTime: maxReadyTime,
+    );
+    final cached = MenuSearchCache.peek(cacheKey);
+    if (cached != null && cached.recipes.isNotEmpty) {
+      state = state.copyWith(
+        recipes: cached.recipes,
+        loading: true,
+        error: null,
+        hasSearched: true,
+        recipeTranslationEnabled: cached.recipeTranslationEnabled,
+        recipeTranslationRequiresAi: cached.recipeTranslationRequiresAi,
+        recipeTranslationApiSupported: cached.recipeTranslationApiSupported,
+        source: cached.source,
+      );
+    } else {
+      state = state.copyWith(loading: true, error: null);
+    }
     try {
       final result = await ApiService.searchRecipesResult(
-        query.trim().isEmpty ? tag : query,
+        effectiveQuery,
         mode: settings.mode,
         language: settings.language,
         tags: [tag],
         maxReadyTime: maxReadyTime,
       );
       if (requestId != _requestId) return;
+      unawaited(MenuSearchCache.save(cacheKey, result));
       state = state.copyWith(
         recipes: result.recipes,
         loading: false,
@@ -153,10 +213,22 @@ class SearchController extends StateNotifier<SearchState> {
         recipeTranslationApiSupported: result.recipeTranslationApiSupported,
         source: result.source,
       );
-      await HistoryStorage.addQuery(
-          query.trim().isEmpty ? tag : query, settings.mode);
+      await HistoryStorage.addQuery(effectiveQuery, settings.mode);
     } catch (e) {
       if (requestId != _requestId) return;
+      if (cached != null && cached.recipes.isNotEmpty) {
+        state = state.copyWith(
+          recipes: cached.recipes,
+          loading: false,
+          error: null,
+          hasSearched: true,
+          recipeTranslationEnabled: cached.recipeTranslationEnabled,
+          recipeTranslationRequiresAi: cached.recipeTranslationRequiresAi,
+          recipeTranslationApiSupported: cached.recipeTranslationApiSupported,
+          source: cached.source,
+        );
+        return;
+      }
       state = state.copyWith(
         loading: false,
         error: userVisibleError(e, fallback: 'Не удалось выполнить поиск'),

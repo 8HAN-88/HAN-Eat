@@ -26,6 +26,8 @@ import '../services/saved_posts_service.dart';
 import '../services/chat_cache_service.dart';
 import '../services/profile_cache_service.dart';
 import '../services/menu_recommendations_cache.dart';
+import '../services/menu_search_cache.dart';
+import '../services/global_search_cache.dart';
 import '../services/subscription_status_cache.dart';
 import '../services/api_reachability_service.dart';
 import '../services/history_storage.dart';
@@ -145,6 +147,12 @@ Future<void> bootstrapServicesForFirstFrame() async {
       }),
       MenuRecommendationsCache.warmUp().catchError((Object e) {
         debugPrint('MenuRecommendationsCache warmUp: $e');
+      }),
+      MenuSearchCache.warmUp().catchError((Object e) {
+        debugPrint('MenuSearchCache warmUp: $e');
+      }),
+      GlobalSearchCache.warmUp().catchError((Object e) {
+        debugPrint('GlobalSearchCache warmUp: $e');
       }),
       SubscriptionStatusCache.warmUp().catchError((Object e) {
         debugPrint('SubscriptionStatusCache warmUp: $e');

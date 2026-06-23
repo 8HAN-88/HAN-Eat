@@ -6,6 +6,7 @@ import '../../../models/post_types.dart';
 import '../../../services/api_service.dart';
 import '../../../services/feed_blocked_authors_store.dart';
 import '../../../services/feed_cache_service.dart';
+import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_service.dart';
 import '../../../services/feed_sync_service.dart';
 
@@ -88,7 +89,10 @@ class FeedController extends StateNotifier<FeedState> {
 
     try {
       await FeedCacheService.init();
-      final cached = FeedCacheService.instance.getCachedPosts();
+      final apiCached = FeedApiCache.peek('rec_all_personalized');
+      final cached = apiCached.isNotEmpty
+          ? apiCached.map((pm) => pm.toPost()).toList()
+          : FeedCacheService.instance.getCachedPosts();
       if (cached.isNotEmpty) {
         final blockedEarly = await _blockedAuthors();
         final visibleEarly = _withoutBlockedAuthors(cached, blockedEarly);

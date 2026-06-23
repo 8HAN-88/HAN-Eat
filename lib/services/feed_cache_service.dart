@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/post.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
+import 'feed_api_cache.dart';
 
 /// Сервис для кеширования ленты оффлайн
 class FeedCacheService {
@@ -26,6 +28,7 @@ class FeedCacheService {
   static const String _cacheKey = 'feed_cache_v1';
   static const String _cacheTimestampKey = 'feed_cache_timestamp';
   static const String _lastSyncKey = 'feed_last_sync';
+  static const String _legacyApiVariant = 'rec_all_personalized';
   
   final ValueNotifier<List<PostModel>> cachedPosts = ValueNotifier([]);
   final ValueNotifier<DateTime?> lastSyncTime = ValueNotifier(null);
@@ -52,6 +55,8 @@ class FeedCacheService {
       if (lastSync != null) {
         lastSyncTime.value = DateTime.fromMillisecondsSinceEpoch(lastSync);
       }
+
+      _mirrorLegacyToApiCache();
     } catch (e) {
       if (kDebugMode) debugPrint('Error loading feed cache: $e');
       cachedPosts.value = [];
@@ -80,6 +85,8 @@ class FeedCacheService {
       cachedPosts.value = posts;
       lastSyncTime.value = now;
 
+      unawaited(FeedApiCache.save(_legacyApiVariant, posts));
+
       if (kDebugMode) {
         debugPrint('Cached ${posts.length} posts at ${now.toIso8601String()}');
       }
@@ -102,7 +109,7 @@ class FeedCacheService {
     for (final post in cachedPosts.value) {
       if (post.id == postId) return post;
     }
-    return null;
+    return FeedApiCache.findPost(postId);
   }
 
   /// Проверить, нужна ли синхронизация
@@ -127,6 +134,7 @@ class FeedCacheService {
     if (idx < 0) return;
     cached[idx] = pm;
     await cachePosts(cached);
+    unawaited(FeedApiCache.patchPost(pm));
   }
 
   /// Удалить пост из кеша
@@ -136,6 +144,7 @@ class FeedCacheService {
     final cached = List<PostModel>.from(cachedPosts.value);
     cached.removeWhere((p) => p.id == postIdInt);
     await cachePosts(cached);
+    unawaited(FeedApiCache.removePost(postIdInt));
   }
 
   /// Очистить кеш
@@ -148,6 +157,7 @@ class FeedCacheService {
       
       cachedPosts.value = [];
       lastSyncTime.value = null;
+      unawaited(FeedApiCache.clear(_legacyApiVariant));
     } catch (e) {
       if (kDebugMode) debugPrint('Error clearing cache: $e');
     }
@@ -211,6 +221,12 @@ class FeedCacheService {
 
   PostStatus _parsePostStatus(String? status) {
     return PostStatus.fromString(status) ?? PostStatus.published;
+  }
+
+  void _mirrorLegacyToApiCache() {
+    if (cachedPosts.value.isEmpty) return;
+    if (FeedApiCache.peek(_legacyApiVariant).isNotEmpty) return;
+    unawaited(FeedApiCache.save(_legacyApiVariant, cachedPosts.value));
   }
 }
 

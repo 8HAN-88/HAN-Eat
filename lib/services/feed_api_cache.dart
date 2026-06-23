@@ -61,6 +61,43 @@ class FeedApiCache {
     }
   }
 
+  /// Обновить пост во всех закэшированных вариантах ленты.
+  static Future<void> patchPost(PostModel pm) async {
+    for (final variant in _memory.keys.toList()) {
+      final posts = _memory[variant];
+      if (posts == null) continue;
+      final idx = posts.indexWhere((p) => p.id == pm.id);
+      if (idx < 0) continue;
+      final next = List<PostModel>.from(posts);
+      next[idx] = pm;
+      await save(variant, next);
+    }
+  }
+
+  /// Удалить пост из всех закэшированных вариантов.
+  static Future<void> removePost(int postId) async {
+    for (final variant in _memory.keys.toList()) {
+      final posts = _memory[variant];
+      if (posts == null || !posts.any((p) => p.id == postId)) continue;
+      final next = posts.where((p) => p.id != postId).toList();
+      if (next.isEmpty) {
+        await clear(variant);
+      } else {
+        await save(variant, next);
+      }
+    }
+  }
+
+  /// Поиск поста по id среди прогретых вариантов (для saved_posts и т.п.).
+  static PostModel? findPost(int postId) {
+    for (final posts in _memory.values) {
+      for (final post in posts) {
+        if (post.id == postId) return post;
+      }
+    }
+    return null;
+  }
+
   static Future<List<PostModel>> load(String variant) async {
     if (_memory.containsKey(variant)) {
       return List<PostModel>.from(_memory[variant]!);

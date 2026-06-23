@@ -4,38 +4,47 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../services/video_cache_service.dart';
 
-/// Предзагрузка контроллеров рилсов: приоритет текущему и соседям.
+/// Предзагрузка контроллеров рилсов: сначала текущий, соседи — с задержкой.
 Future<void> initializeReelVideosStaggered({
   required List<int> indices,
   required int priorityIndex,
   required Future<void> Function(int index) initSingle,
+  Duration neighborDelay = const Duration(milliseconds: 400),
 }) async {
   if (indices.isEmpty) return;
-  final pending = [...indices];
+  final pending = indices.toSet();
 
   if (pending.remove(priorityIndex)) {
     await initSingle(priorityIndex);
   }
 
+  Future<void> initNeighbor(int i) async {
+    if (!pending.remove(i)) return;
+    await initSingle(i);
+  }
+
   final next = priorityIndex + 1;
-  if (pending.remove(next)) {
-    unawaited(initSingle(next));
+  if (pending.contains(next)) {
+    unawaited(
+      Future<void>.delayed(neighborDelay, () => initNeighbor(next)),
+    );
   }
 
   final prev = priorityIndex - 1;
-  if (pending.remove(prev)) {
-    unawaited(initSingle(prev));
-  }
-
-  for (final i in pending) {
-    if ((i - priorityIndex).abs() > 1) continue;
-    final delayMs = 180 * (i - priorityIndex).abs();
+  if (pending.contains(prev)) {
     unawaited(
       Future<void>.delayed(
-        Duration(milliseconds: delayMs),
-        () => initSingle(i),
+        neighborDelay + const Duration(milliseconds: 140),
+        () => initNeighbor(prev),
       ),
     );
+  }
+
+  for (final i in pending.toList()) {
+    if ((i - priorityIndex).abs() > 1) continue;
+    final delay = neighborDelay +
+        Duration(milliseconds: 180 * (i - priorityIndex).abs());
+    unawaited(Future<void>.delayed(delay, () => initNeighbor(i)));
   }
 }
 

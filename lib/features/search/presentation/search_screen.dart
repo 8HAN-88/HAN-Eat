@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../services/search_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/channel_service.dart';
+import '../../../../services/global_search_cache.dart';
 import '../../../../services/server_config.dart';
 import '../../../../models/post_model.dart';
 import '../../../../models/chat_models.dart';
@@ -190,6 +191,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
   }
 
+  String _buildSearchCacheKey(String query) {
+    return GlobalSearchCache.buildKey(
+      scope: widget.scope?.name,
+      mainTab: _mainTab.name,
+      query: query,
+      followingOnly: _followingOnly,
+      postType: _selectedPostType,
+      sortBy: _selectedSortBy,
+      tags: _selectedTags.isNotEmpty ? _selectedTags.join(',') : null,
+      dateFrom: _dateFrom?.toIso8601String().split('T').first,
+      dateTo: _dateTo?.toIso8601String().split('T').first,
+      minLikes: _minLikes,
+      minComments: _minComments,
+      recipeSearch: _recipeSearch,
+    );
+  }
+
+  void _applyCachedSearch(GlobalSearchCachedResult cached) {
+    _posts = List<PostModel>.from(cached.posts);
+    _people = List<ChatUserSearchItem>.from(cached.people);
+    _channels = List<Channel>.from(cached.channels);
+    _total = cached.total;
+    _offset = cached.posts.length;
+  }
+
   Future<void> _performSearch({bool reset = true}) async {
     final query = _searchController.text.trim();
     if (query.isEmpty) {
@@ -239,6 +265,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (_searchChannels) _channels = [];
     }
 
+    GlobalSearchCachedResult? cachedResult;
+    if (reset) {
+      cachedResult = GlobalSearchCache.peek(_buildSearchCacheKey(query));
+      if (cachedResult != null && cachedResult.hasContent) {
+        _applyCachedSearch(cachedResult);
+      }
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -269,6 +303,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             _offset = _offset + response.recipes.length;
             _isLoading = false;
           });
+          if (reset) {
+            unawaited(
+              GlobalSearchCache.save(
+                _buildSearchCacheKey(query),
+                GlobalSearchCachedResult(
+                  posts: response.recipes,
+                  total: response.total,
+                ),
+              ),
+            );
+            unawaited(_rememberQuery(query));
+          }
         }
         return;
       }
@@ -305,7 +351,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             if (channelsResult != null) _channels = channelsResult;
             _isLoading = false;
           });
-          if (reset) unawaited(_rememberQuery(query));
+          if (reset) {
+            unawaited(
+              GlobalSearchCache.save(
+                _buildSearchCacheKey(query),
+                GlobalSearchCachedResult(
+                  people: peopleResult ?? const [],
+                  channels: channelsResult ?? const [],
+                ),
+              ),
+            );
+            unawaited(_rememberQuery(query));
+          }
         }
         return;
       }
@@ -341,10 +398,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           _offset = _offset + response.posts.length;
           _isLoading = false;
         });
-        if (reset) unawaited(_rememberQuery(query));
+        if (reset) {
+          unawaited(
+            GlobalSearchCache.save(
+              _buildSearchCacheKey(query),
+              GlobalSearchCachedResult(
+                posts: response.posts,
+                total: response.total,
+                people: peopleResult ?? const [],
+                channels: channelsResult ?? const [],
+              ),
+            ),
+          );
+          unawaited(_rememberQuery(query));
+        }
       }
     } catch (e) {
       if (mounted) {
+        if (cachedResult != null && cachedResult.hasContent) {
+          _applyCachedSearch(cachedResult);
+          setState(() {
+            _error = null;
+            _isLoading = false;
+          });
+          return;
+        }
         setState(() {
           _error = userVisibleError(e, fallback: 'Не удалось выполнить поиск');
           _isLoading = false;
