@@ -177,6 +177,22 @@ class AuthService {
       );
     }
   }
+
+  /// Обновить данные текущего пользователя с сервера (GET /users/me).
+  static Future<void> refreshMeFromApi() async {
+    final token = await getAccessTokenForApi();
+    if (token == null) return;
+    final uri = Uri.parse('$baseUrl/users/me');
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) return;
+    final user = User.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+    await persistUpdatedUser(user);
+  }
   
   /// Проверить, инициализирован ли сервис
   static bool get isInitialized => true;
@@ -1124,6 +1140,8 @@ class User {
       'legal_consent_required': legalConsentRequired,
       if (legalConsentVersion != null)
         'legal_consent_version': legalConsentVersion,
+      'phone_linked': phoneLinked,
+      if (phone != null) 'phone': phone,
     };
   }
 
