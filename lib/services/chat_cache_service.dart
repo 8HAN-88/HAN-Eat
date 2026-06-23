@@ -12,7 +12,28 @@ class ChatCacheService {
   static const _threadPrefix = 'chat_cache_thread_v1_';
   static const _draftPrefix = 'chat_draft_v1_';
 
+  static List<ChatConversation>? _memoryConversations;
+
+  static List<ChatConversation>? peekConversations() {
+    final cached = _memoryConversations;
+    if (cached == null || cached.isEmpty) return null;
+    return List<ChatConversation>.from(cached);
+  }
+
+  static Future<void> warmUp() async {
+    _memoryConversations = await _loadConversationsFromDisk();
+  }
+
   static Future<List<ChatConversation>?> loadConversations() async {
+    if (_memoryConversations != null && _memoryConversations!.isNotEmpty) {
+      return List<ChatConversation>.from(_memoryConversations!);
+    }
+    final loaded = await _loadConversationsFromDisk();
+    _memoryConversations = loaded;
+    return loaded == null ? null : List<ChatConversation>.from(loaded);
+  }
+
+  static Future<List<ChatConversation>?> _loadConversationsFromDisk() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_conversationsKey);
@@ -33,6 +54,7 @@ class ChatCacheService {
 
   static Future<void> saveConversations(List<ChatConversation> items) async {
     if (items.isEmpty) return;
+    _memoryConversations = List<ChatConversation>.from(items);
     try {
       final prefs = await SharedPreferences.getInstance();
       final encoded = jsonEncode(

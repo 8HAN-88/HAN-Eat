@@ -276,10 +276,24 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         updatedAt: DateTime.now(),
       );
 
+  void _hydrateFromCache() {
+    final cached = ChatCacheService.peekConversations();
+    if (cached == null || cached.isEmpty) return;
+    final cachedSaved = _extractSavedChat(cached);
+    final cachedRest = _withoutSavedChat(cached, cachedSaved);
+    if (cachedSaved != null) _savedChat = cachedSaved;
+    _entries
+      ..clear()
+      ..addAll(cachedRest.map(ChatInboxEntry.new));
+    _servingFromCache = true;
+    _loading = false;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _hydrateFromCache();
     ShellTabVisibility.activeIndex.addListener(_onShellTabChanged);
     _signalSub = ChatRealtimeSignals.instance.hubRefresh.listen((_) {
       if (mounted && _started && ShellTabVisibility.chatsActive && !_loading) {
@@ -412,7 +426,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   Future<void> _load({bool silent = false}) async {
     final seq = ++_loadSeq;
     if (!silent) {
-      final cached = await ChatCacheService.loadConversations();
+      final cached =
+          ChatCacheService.peekConversations() ??
+          await ChatCacheService.loadConversations();
       if (!mounted || seq != _loadSeq) return;
       if (cached != null && cached.isNotEmpty) {
         final cachedSaved = _extractSavedChat(cached);
