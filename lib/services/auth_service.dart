@@ -144,9 +144,37 @@ class AuthService {
         detail is String ? detail : 'Не удалось привязать номер',
       );
     }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final linkedPhone = body['phone'] as String?;
     final user = instance.currentUser;
     if (user != null) {
-      await persistUpdatedUser(user.copyWith(phoneLinked: true));
+      await persistUpdatedUser(
+        user.copyWith(phoneLinked: true, phone: linkedPhone),
+      );
+    }
+  }
+
+  /// Отвязать номер телефона.
+  static Future<void> unlinkPhone() async {
+    final token = await getAccessTokenForApi();
+    if (token == null) throw AuthException('Войдите в аккаунт');
+    final uri = Uri.parse('$baseUrl/users/me/phone');
+    final response = await http.delete(
+      uri,
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final detail = body?['detail'];
+      throw AuthException(
+        detail is String ? detail : 'Не удалось удалить номер',
+      );
+    }
+    final user = instance.currentUser;
+    if (user != null) {
+      await persistUpdatedUser(
+        user.copyWith(phoneLinked: false, clearPhone: true),
+      );
     }
   }
   
@@ -1031,6 +1059,7 @@ class User {
   final bool legalConsentRequired;
   final String? legalConsentVersion;
   final bool phoneLinked;
+  final String? phone;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1052,6 +1081,7 @@ class User {
     this.legalConsentRequired = false,
     this.legalConsentVersion,
     this.phoneLinked = false,
+    this.phone,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1072,6 +1102,7 @@ class User {
       legalConsentRequired: json['legal_consent_required'] as bool? ?? false,
       legalConsentVersion: json['legal_consent_version'] as String?,
       phoneLinked: json['phone_linked'] as bool? ?? false,
+      phone: json['phone'] as String?,
     );
   }
 
@@ -1104,6 +1135,8 @@ class User {
     bool? legalConsentRequired,
     String? legalConsentVersion,
     bool? phoneLinked,
+    String? phone,
+    bool clearPhone = false,
   }) {
     return User(
       id: id,
@@ -1124,6 +1157,7 @@ class User {
       legalConsentVersion:
           legalConsentVersion ?? this.legalConsentVersion,
       phoneLinked: phoneLinked ?? this.phoneLinked,
+      phone: clearPhone ? null : (phone ?? this.phone),
     );
   }
 }

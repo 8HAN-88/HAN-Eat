@@ -47,6 +47,7 @@ class User(Base):
     country_code = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2 код страны (RU, US, etc.)
     last_seen_at = Column(DateTime, nullable=True)
     phone_hash = Column(String(64), nullable=True, unique=True, index=True)
+    phone_e164 = Column(String(20), nullable=True)
     phone_linked_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

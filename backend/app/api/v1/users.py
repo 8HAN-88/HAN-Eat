@@ -48,6 +48,9 @@ def _profile_wall_owned_clause():
     )
 
 
+_USER_ME_CONTEXT = {"include_phone": True}
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user_required),
@@ -55,7 +58,7 @@ async def get_current_user_profile(
 ):
     """Получить профиль текущего пользователя (кредиты AI scan начисляются по суткам)."""
     user = AiScanCreditsService(db).refresh_user(current_user.id)
-    return UserResponse.model_validate(user)
+    return UserResponse.model_validate(user, context=_USER_ME_CONTEXT)
 
 
 @router.post("/me/phone", response_model=LinkPhoneResponse)
@@ -90,9 +93,10 @@ async def link_phone(
         )
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     current_user.phone_hash = phone_hash
+    current_user.phone_e164 = e164
     current_user.phone_linked_at = now
     db.commit()
-    return LinkPhoneResponse(ok=True, phone_linked=True)
+    return LinkPhoneResponse(ok=True, phone_linked=True, phone=e164)
 
 
 @router.delete("/me/phone")
@@ -102,6 +106,7 @@ async def unlink_phone(
 ):
     """Отвязать номер — вас не найдут через синхронизацию контактов."""
     current_user.phone_hash = None
+    current_user.phone_e164 = None
     current_user.phone_linked_at = None
     db.commit()
     return {"ok": True, "phone_linked": False}
@@ -293,7 +298,7 @@ async def update_user_profile(
     db.commit()
     db.refresh(current_user)
     
-    return UserResponse.model_validate(current_user)
+    return UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
 
 
 @router.get("/{user_id}/posts")

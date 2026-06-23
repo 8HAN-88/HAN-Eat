@@ -7,6 +7,7 @@ import '../../../services/auth_service.dart';
 import '../../auth/sign_out_helper.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../../widgets/phone/profile_phone_tile.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -35,6 +36,11 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       _syncFieldsFromProfile();
       UserService.instance.profile.addListener(_onProfileChanged);
     }
+    AuthService.profileVersion.addListener(_onAuthProfileChanged);
+  }
+
+  void _onAuthProfileChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onProfileChanged() {
@@ -49,6 +55,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     if (UserService.isInitialized) {
       UserService.instance.profile.removeListener(_onProfileChanged);
     }
+    AuthService.profileVersion.removeListener(_onAuthProfileChanged);
     _nameCtl.dispose();
     _bioCtl.dispose();
     super.dispose();
@@ -238,6 +245,12 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               title: const Text('Эл. почта'),
               subtitle: Text(user.email),
             ),
+          ),
+          const SizedBox(height: 12),
+          ProfilePhoneTile(
+            phone: user.phone,
+            phoneLinked: user.phoneLinked,
+            onChanged: () => setState(() {}),
           ),
           const SizedBox(height: 16),
           const Card(

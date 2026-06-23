@@ -25,23 +25,32 @@ class UserResponse(BaseModel):
     legal_consent_version: Optional[str] = None
     legal_consent_at: Optional[datetime] = None
     phone_linked: bool = False
+    phone: Optional[str] = None
 
     @model_validator(mode="wrap")
     @classmethod
-    def _email_verified_from_orm(cls, data: Any, handler):
+    def _from_orm(cls, data: Any, handler, info):
+        result = handler(data)
+        updates = {}
         if hasattr(data, "email_verified_at"):
-            result = handler(data)
             verified = getattr(data, "email_verified_at", None) is not None
             linked = bool(getattr(data, "phone_hash", None))
-            updates = {}
             if result.email_verified != verified:
                 updates["email_verified"] = verified
             if result.phone_linked != linked:
                 updates["phone_linked"] = linked
-            if updates:
-                return result.model_copy(update=updates)
-            return result
-        return handler(data)
+        include_phone = bool((getattr(info, "context", None) or {}).get(
+            "include_phone", False
+        ))
+        if include_phone and hasattr(data, "phone_e164"):
+            phone = getattr(data, "phone_e164", None)
+            if result.phone != phone:
+                updates["phone"] = phone
+        elif result.phone is not None:
+            updates["phone"] = None
+        if updates:
+            return result.model_copy(update=updates)
+        return result
 
     class Config:
         from_attributes = True
@@ -68,6 +77,7 @@ class LinkPhoneRequest(BaseModel):
 class LinkPhoneResponse(BaseModel):
     ok: bool = True
     phone_linked: bool = True
+    phone: Optional[str] = None
 
 
 class UpdateUserRequest(BaseModel):

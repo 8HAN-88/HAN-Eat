@@ -8,6 +8,7 @@ import '../../../../app/app_router.dart';
 import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../core/phone/phone_hash.dart';
+import '../../../../widgets/phone/profile_phone_tile.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/app_invite_service.dart';
@@ -224,79 +225,10 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
   }
 
   Future<void> _linkMyPhone() async {
-    final phoneController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    try {
-      final saved = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Привязать ваш номер'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Друзья из телефонной книги смогут найти вас в HAN Eat.',
-                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Ваш номер',
-                    hintText: '+7 900 123-45-67',
-                  ),
-                  validator: (value) {
-                    final raw = value?.trim() ?? '';
-                    if (raw.isEmpty) return 'Введите номер';
-                    if (normalizePhoneE164(raw) == null) {
-                      return 'Некорректный номер';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() != true) return;
-                Navigator.pop(ctx, true);
-              },
-              child: const Text('Привязать'),
-            ),
-          ],
-        ),
-      );
-      if (saved != true || !mounted) return;
-
-      await AuthService.linkPhone(phoneController.text.trim());
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Номер привязан')),
-      );
-      setState(() {});
-      await _fetchPhoneContacts();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    } finally {
-      phoneController.dispose();
-    }
+    final ok = await showLinkPhoneDialog(context);
+    if (!ok || !mounted) return;
+    setState(() {});
+    await _fetchPhoneContacts();
   }
 
   Future<void> _addPhoneContact() async {

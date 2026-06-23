@@ -72,7 +72,7 @@ _AUTH_OPEN_PURPOSES = frozenset(
 def _user_response(user: User) -> UserResponse:
     from app.services.legal_consent_service import user_legal_fields
 
-    data = UserResponse.model_validate(user)
+    data = UserResponse.model_validate(user, context={"include_phone": True})
     legal = user_legal_fields(user)
     return data.model_copy(
         update={
