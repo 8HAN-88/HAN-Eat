@@ -253,7 +253,10 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
           ProfilePhoneTile(
             phone: user.phone,
             phoneLinked: user.phoneLinked,
-            onChanged: () => setState(() {}),
+            onChanged: () async {
+              await AuthService.refreshMeFromApi();
+              if (mounted) setState(() {});
+            },
           ),
           const SizedBox(height: 16),
           const Card(

@@ -18,7 +18,6 @@ import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/app_gradient_background.dart';
-import '../../../../widgets/phone/profile_phone_tile.dart';
 import '../../content/create_content_actions.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -111,21 +110,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       _loadProfile();
     };
     AuthService.registerSessionListener(_onSessionChanged);
-    AuthService.profileVersion.addListener(_onAuthProfileChanged);
     if (widget.userId == null) {
       final cached = AuthService.instance.currentUser;
       if (cached != null) {
         _profile = _userProfileFromAuthUser(cached);
         _isLoading = false;
       }
-      unawaited(AuthService.refreshMeFromApi());
     }
     ShellTabVisibility.activeIndex.addListener(_onShellTabChanged);
     _maybeStartProfileLoading();
-  }
-
-  void _onAuthProfileChanged() {
-    if (mounted) setState(() {});
   }
 
   void _onShellTabChanged() {
@@ -148,7 +141,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   @override
   void dispose() {
     ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
-    AuthService.profileVersion.removeListener(_onAuthProfileChanged);
     AuthService.unregisterSessionListener(_onSessionChanged);
     _tabController.dispose();
     super.dispose();
@@ -454,15 +446,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             Text(
               user.bio!,
               textAlign: TextAlign.center,
-            ),
-          ],
-          if (isOwnProfile) ...[
-            const SizedBox(height: 16),
-            ProfilePhoneTile(
-              phone: AuthService.instance.currentUser?.phone,
-              phoneLinked:
-                  AuthService.instance.currentUser?.phoneLinked ?? false,
-              onChanged: () => setState(() {}),
             ),
           ],
           const SizedBox(height: 20),

@@ -15,6 +15,7 @@ import '../../../../services/app_invite_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/phone_contacts_service.dart';
+import '../../../../services/phone_link_prompt_store.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import 'chats_hub_tiles.dart';
@@ -46,6 +47,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
   Object? _phoneSyncError;
   int? _contactActionUserId;
   int _contactsLoadSeq = 0;
+  bool _contactsPhonePromptScheduled = false;
   VoidCallback? _reconnectedListener;
 
   @override
@@ -66,9 +68,38 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     if (_isContactsSubTabVisible && !_loadStarted) {
       _loadStarted = true;
       _loadAll();
+      _scheduleContactsPhonePrompt();
       return;
     }
+    if (_isContactsSubTabVisible) {
+      _scheduleContactsPhonePrompt();
+    }
     setState(() {});
+  }
+
+  void _scheduleContactsPhonePrompt() {
+    if (_contactsPhonePromptScheduled) return;
+    _contactsPhonePromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowContactsPhonePrompt());
+    });
+  }
+
+  Future<void> _maybeShowContactsPhonePrompt() async {
+    if (!mounted || !_isContactsSubTabVisible) return;
+    final user = AuthService.instance.currentUser;
+    if (user == null || user.phoneLinked) return;
+    if (await PhoneLinkPromptStore.wasPromptedInContacts()) return;
+
+    await PhoneLinkPromptStore.markPromptedInContacts();
+    if (!mounted) return;
+
+    await showLinkPhoneDialog(context);
+    if (!mounted) return;
+    setState(() {});
+    if (AuthService.instance.currentUser?.phoneLinked == true) {
+      await _fetchPhoneContacts();
+    }
   }
 
   bool get _isContactsSubTabVisible =>
@@ -222,13 +253,6 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     });
     await _fetchPhoneContacts();
     if (mounted) setState(() => _syncingPhone = false);
-  }
-
-  Future<void> _linkMyPhone() async {
-    final ok = await showLinkPhoneDialog(context);
-    if (!ok || !mounted) return;
-    setState(() {});
-    await _fetchPhoneContacts();
   }
 
   Future<void> _addPhoneContact() async {
@@ -435,8 +459,6 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       );
     }
 
-    final user = AuthService.instance.currentUser;
-    final showLinkPhone = user != null && !user.phoneLinked;
     final phoneBook = _visiblePhoneBook;
     final items = _visibleItems;
     final searching = _query.isNotEmpty;
@@ -464,37 +486,6 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       child: ListView(
         padding: EdgeInsets.only(bottom: floatingBottomPadding(context)),
         children: [
-          if (showLinkPhone)
-            Card(
-              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: ListTile(
-                leading: Icon(
-                  Icons.phone_android_outlined,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-                title: Text(
-                  'Привяжите номер',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                subtitle: Text(
-                  'Найдём друзей из телефонной книги и покажем, кто уже в HAN Eat',
-                  style: TextStyle(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onPrimaryContainer
-                        .withValues(alpha: 0.85),
-                  ),
-                ),
-                trailing: FilledButton.tonal(
-                  onPressed: _linkMyPhone,
-                  child: const Text('Привязать'),
-                ),
-              ),
-            ),
           if (_syncingPhone && !_loading)
             const LinearProgressIndicator(minHeight: 2),
           if (_phonePermissionDenied)

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../core/config/google_auth_config.dart';
+import '../core/phone/phone_hash.dart';
 import '../core/network/haneat_http_client.dart';
 import 'account_session_service.dart';
 import 'server_config.dart';
@@ -126,6 +127,10 @@ class AuthService {
 
   /// Привязать номер телефона — друзья из адресной книги смогут вас найти.
   static Future<void> linkPhone(String phone) async {
+    final normalized = normalizePhoneE164(phone.trim());
+    if (normalized == null) {
+      throw AuthException('Некорректный номер телефона');
+    }
     final token = await getAccessTokenForApi();
     if (token == null) throw AuthException('Войдите в аккаунт');
     final uri = Uri.parse('$baseUrl/users/me/phone');
@@ -145,11 +150,20 @@ class AuthService {
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final linkedPhone = body['phone'] as String?;
+    final linkedPhone = (body['phone'] as String?)?.trim();
+    final savedPhone =
+        (linkedPhone != null && linkedPhone.isNotEmpty) ? linkedPhone : normalized;
     final user = instance.currentUser;
     if (user != null) {
       await persistUpdatedUser(
-        user.copyWith(phoneLinked: true, phone: linkedPhone),
+        user.copyWith(phoneLinked: true, phone: savedPhone),
+      );
+    }
+    await refreshMeFromApi();
+    final after = instance.currentUser;
+    if (after != null && (after.phone == null || after.phone!.isEmpty)) {
+      await persistUpdatedUser(
+        after.copyWith(phoneLinked: true, phone: savedPhone),
       );
     }
   }
@@ -188,10 +202,18 @@ class AuthService {
       headers: {'Authorization': 'Bearer $token'},
     );
     if (response.statusCode != 200) return;
-    final user = User.fromJson(
+    var remote = User.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
-    await persistUpdatedUser(user);
+    final local = instance.currentUser;
+    if (local != null &&
+        (remote.phone == null || remote.phone!.isEmpty) &&
+        local.phone != null &&
+        local.phone!.isNotEmpty &&
+        (remote.phoneLinked || local.phoneLinked)) {
+      remote = remote.copyWith(phone: local.phone, phoneLinked: true);
+    }
+    await persistUpdatedUser(remote);
   }
   
   /// Проверить, инициализирован ли сервис

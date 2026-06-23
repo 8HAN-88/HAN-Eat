@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +12,6 @@ import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
-import '../../../widgets/phone/profile_phone_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -34,18 +31,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     _loadUnreadCount();
     _checkAdminStatus();
-    unawaited(AuthService.refreshMeFromApi());
-    AuthService.profileVersion.addListener(_onAuthProfileChanged);
-  }
-
-  void _onAuthProfileChanged() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    AuthService.profileVersion.removeListener(_onAuthProfileChanged);
-    super.dispose();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -250,15 +235,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 24),
             _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
-            if (AuthService.instance.currentUser != null) ...[
-              ProfilePhoneTile(
-                phone: AuthService.instance.currentUser?.phone,
-                phoneLinked: AuthService.instance.currentUser?.phoneLinked ??
-                    false,
-                onChanged: () => setState(() {}),
-              ),
-              const SizedBox(height: 12),
-            ],
             const Card(
               child: AiScanCreditsTile(),
             ),

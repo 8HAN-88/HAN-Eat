@@ -183,7 +183,8 @@ class ProfilePhoneTile extends StatelessWidget {
   final VoidCallback onChanged;
 
   Future<void> _onTap(BuildContext context) async {
-    if (phoneLinked && phone != null && phone!.isNotEmpty) {
+    final hasDisplayPhone = phone != null && phone!.isNotEmpty;
+    if (phoneLinked && hasDisplayPhone) {
       await showPhoneManageSheet(
         context,
         phoneE164: phone!,
@@ -197,8 +198,8 @@ class ProfilePhoneTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhone = phoneLinked && phone != null && phone!.isNotEmpty;
-    final subtitle = hasPhone
+    final hasDisplayPhone = phone != null && phone!.isNotEmpty;
+    final subtitle = hasDisplayPhone
         ? formatPhoneForDisplay(phone!)
         : 'Добавить номер телефона';
 
