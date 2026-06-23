@@ -11,6 +11,8 @@ import '../../../utils/api_error_parser.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/phone/profile_phone_tile.dart';
+import '../../../widgets/account/profile_email_tile.dart';
+import '../../../widgets/account/profile_password_tile.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -243,13 +245,13 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          // Email
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.email_outlined),
-              title: const Text('Эл. почта'),
-              subtitle: Text(user.email),
-            ),
+          ProfileEmailTile(
+            email: user.email,
+            emailVerified: user.emailVerified,
+            onChanged: () async {
+              await AuthService.refreshMeFromApi();
+              if (mounted) setState(() {});
+            },
           ),
           const SizedBox(height: 12),
           ProfilePhoneTile(
@@ -260,6 +262,8 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               if (mounted) setState(() {});
             },
           ),
+          const SizedBox(height: 12),
+          const ProfilePasswordTile(),
           const SizedBox(height: 16),
           const Card(
             child: AiScanCreditsTile(),

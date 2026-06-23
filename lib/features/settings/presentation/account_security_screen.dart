@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../services/auth_service.dart';
-import '../../../utils/api_error_parser.dart';
-import '../../../widgets/app_gradient_background.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
+
+/// Раньше отдельный экран — теперь всё в настройках профиля.
 class AccountSecurityScreen extends StatefulWidget {
   const AccountSecurityScreen({super.key});
 
@@ -11,195 +12,19 @@ class AccountSecurityScreen extends StatefulWidget {
 }
 
 class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
-  final _currentPasswordController = TextEditingController();
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _newEmailController = TextEditingController();
-  final _emailPasswordController = TextEditingController();
-  bool _loading = false;
-  static const _obscure = true;
-
   @override
-  void dispose() {
-    _currentPasswordController.dispose();
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
-    _newEmailController.dispose();
-    _emailPasswordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _changePassword() async {
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Пароли не совпадают')),
-      );
-      return;
-    }
-    if (_newPasswordController.text.length < 8) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Новый пароль — минимум 8 символов')),
-      );
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      final result = await AuthService.changePassword(
-        currentPassword: _currentPasswordController.text,
-        newPassword: _newPasswordController.text,
-      );
-      if (mounted) {
-        _currentPasswordController.clear();
-        _newPasswordController.clear();
-        _confirmPasswordController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message)),
-        );
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось сменить пароль'),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _changeEmail() async {
-    final email = _newEmailController.text.trim();
-    if (!email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Введите корректный email')),
-      );
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      final result = await AuthService.changeEmailRequest(
-        newEmail: email,
-        password: _emailPasswordController.text,
-      );
-      if (mounted) {
-        _newEmailController.clear();
-        _emailPasswordController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message)),
-        );
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              userVisibleError(e, fallback: 'Не удалось запросить смену email'),
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(ProfileAuthRoute.path);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthService.instance.currentUser;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Безопасность аккаунта')),
-      body: AppGradientBackground(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (user != null)
-              ListTile(
-                leading: const Icon(Icons.email_outlined),
-                title: Text(user.email),
-                subtitle: Text(
-                  user.emailVerified
-                      ? 'Email подтверждён'
-                      : 'Email не подтверждён',
-                ),
-              ),
-            const SizedBox(height: 8),
-            Text('Смена пароля',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _currentPasswordController,
-              obscureText: _obscure,
-              decoration: const InputDecoration(
-                labelText: 'Текущий пароль',
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _newPasswordController,
-              obscureText: _obscure,
-              decoration: const InputDecoration(
-                labelText: 'Новый пароль',
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _confirmPasswordController,
-              obscureText: _obscure,
-              decoration: const InputDecoration(
-                labelText: 'Повторите новый пароль',
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _loading ? null : _changePassword,
-              child: const Text('Сохранить пароль'),
-            ),
-            const Divider(height: 32),
-            Text('Смена email', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text(
-              'На новый адрес придёт письмо с подтверждением. До подтверждения вход остаётся по старому email.',
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _newEmailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Новый email',
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _emailPasswordController,
-              obscureText: _obscure,
-              decoration: const InputDecoration(
-                labelText: 'Пароль для подтверждения',
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: _loading ? null : _changeEmail,
-              child: const Text('Запросить смену email'),
-            ),
-          ],
-        ),
-      ),
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }
