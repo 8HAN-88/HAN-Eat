@@ -16,6 +16,7 @@ import '../../../models/video_quality_preference.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
+import '../../../services/user_realtime_service.dart';
 import '../../../services/server_config.dart';
 import 'package:go_router/go_router.dart';
 import '../../../services/like_service.dart';
@@ -80,6 +81,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   final Map<int, DateTime> _likeTouchedAt = {};
 
   bool _followingOnly = false;
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
 
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
@@ -238,6 +240,16 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   void initState() {
     super.initState();
     _followingOnly = widget.externalFollowingOnly;
+    final cached = FeedApiCache.peek(_cacheVariant);
+    if (cached.isNotEmpty) {
+      _reels = cached;
+      _servingFromCache = true;
+    }
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted || event.event != 'sync') return;
+      if (!widget.isTabVisible || _isLoading) return;
+      unawaited(_loadReels(refresh: true));
+    });
     _syncEmbeddedShellNav();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startLoadIfNeeded());
   }
@@ -294,6 +306,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   @override
   void dispose() {
+    _realtimeSub?.cancel();
     _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();
@@ -331,7 +344,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     final requestId = ++_loadGeneration;
 
     if (refresh) {
-      final cached = await FeedApiCache.load(_cacheVariant);
+      var cached = FeedApiCache.peek(_cacheVariant);
+      if (cached.isEmpty) {
+        cached = await FeedApiCache.load(_cacheVariant);
+      }
       if (!mounted || requestId != _loadGeneration) return;
       if (cached.isNotEmpty) {
         setState(() {

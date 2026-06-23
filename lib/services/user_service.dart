@@ -1,10 +1,12 @@
 // Сервис для работы с пользователями
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
+import 'profile_cache_service.dart';
 import 'server_config.dart';
 
 class UserService {
@@ -240,7 +242,12 @@ class UserService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        return UserProfile.fromJson(data);
+        unawaited(ProfileCacheService.save(userId, data));
+        final loaded = UserProfile.fromJson(data);
+        if (userId == AuthService.instance.currentUser?.id) {
+          instance.profile.value = loaded;
+        }
+        return loaded;
       } else {
         throw Exception('Failed to load profile: ${response.statusCode}');
       }

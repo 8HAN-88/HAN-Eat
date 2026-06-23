@@ -14,6 +14,8 @@ class FeedApiCache {
   static const defaultWarmVariants = <String>[
     'rec_all_personalized',
     'following_all_recent',
+    'rec_reels',
+    'rec_reels_following',
   ];
 
   static String _prefsKey(String variant) => 'feed_api_cache_v1_$variant';

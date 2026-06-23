@@ -24,6 +24,7 @@ import '../services/feed_cache_service.dart';
 import '../services/feed_api_cache.dart';
 import '../services/saved_posts_service.dart';
 import '../services/chat_cache_service.dart';
+import '../services/profile_cache_service.dart';
 import '../services/api_reachability_service.dart';
 import '../services/history_storage.dart';
 import '../core/config/app_build_config.dart';
@@ -135,6 +136,10 @@ Future<void> bootstrapServicesForFirstFrame() async {
       }),
       ChatCacheService.warmUp().catchError((Object e) {
         debugPrint('ChatCacheService warmUp: $e');
+      }),
+      ProfileCacheService.warmUp(AuthService.instance.currentUser?.id)
+          .catchError((Object e) {
+        debugPrint('ProfileCacheService warmUp: $e');
       }),
     ]),
   );

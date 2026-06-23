@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/user_service.dart' as user_service;
 import '../../../../services/user_posts_service.dart';
+import '../../../../services/profile_cache_service.dart';
+import '../../../../services/user_posts_cache_service.dart';
 import '../../../../models/post_model.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
@@ -148,9 +150,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       _loadProfile();
     };
     AuthService.registerSessionListener(_onSessionChanged);
+    final targetId = widget.userId ?? AuthService.instance.currentUser?.id;
+    if (targetId != null) {
+      final cached = ProfileCacheService.peek(targetId);
+      if (cached != null) {
+        _profile = cached;
+        _isFollowing = cached.isFollowing ?? false;
+        _isLoading = false;
+      }
+    }
     if (widget.userId == null) {
       final cached = AuthService.instance.currentUser;
-      if (cached != null) {
+      if (cached != null && _profile == null) {
         _profile = _userProfileFromAuthUser(cached);
         _isLoading = false;
       }
@@ -188,10 +199,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   }
 
   Future<void> _loadProfile() async {
-    setState(() {
-      _isLoading = true;
-      _profileLoadError = null;
-    });
+    if (_profile == null) {
+      setState(() {
+        _isLoading = true;
+        _profileLoadError = null;
+      });
+    } else {
+      setState(() => _profileLoadError = null);
+    }
 
     try {
       if (widget.userId == null) {
@@ -226,6 +241,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       } else {
         // Загружаем профиль другого пользователя
         try {
+          if (_profile == null) {
+            final cached = ProfileCacheService.peek(widget.userId!) ??
+                await ProfileCacheService.load(widget.userId!);
+            if (cached != null && mounted) {
+              setState(() {
+                _profile = cached;
+                _isFollowing = cached.isFollowing ?? false;
+                _isLoading = false;
+              });
+            }
+          }
           _profile = await user_service.UserService.getProfile(widget.userId!);
           _isFollowing = _profile?.isFollowing ?? false;
         } catch (e) {
@@ -602,7 +628,14 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   @override
   void initState() {
     super.initState();
-    _loadPosts();
+    final cached = UserPostsCacheService.peek(
+      widget.userId,
+      postType: widget.postType,
+    );
+    if (cached != null && cached.isNotEmpty) {
+      _posts = cached;
+    }
+    _loadPosts(refresh: true);
   }
 
   @override
@@ -621,15 +654,31 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
     if (_isLoading) return;
     final requestId = ++_loadGeneration;
 
-    setState(() {
-      _isLoading = true;
-      if (refresh) {
-        _posts = [];
-        _offset = 0;
-        _hasMore = true;
-        _loadError = null;
+    if (refresh) {
+      final cached = UserPostsCacheService.peek(
+        widget.userId,
+        postType: widget.postType,
+      );
+      if (cached != null && cached.isNotEmpty) {
+        setState(() {
+          _posts = cached;
+          _offset = cached.length;
+          _hasMore = true;
+          _isLoading = true;
+          _loadError = null;
+        });
+      } else {
+        setState(() {
+          _isLoading = true;
+          _posts = [];
+          _offset = 0;
+          _hasMore = true;
+          _loadError = null;
+        });
       }
-    });
+    } else {
+      setState(() => _isLoading = true);
+    }
 
     try {
       final response = await UserPostsService.getUserPosts(
@@ -653,6 +702,15 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         _hasMore = _posts.length < response.total;
         _loadError = null;
       });
+      if (refresh) {
+        unawaited(
+          UserPostsCacheService.save(
+            widget.userId,
+            postType: widget.postType,
+            posts: wallPosts,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
