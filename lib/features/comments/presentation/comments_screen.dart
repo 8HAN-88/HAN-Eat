@@ -7,6 +7,7 @@ import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
@@ -212,10 +213,14 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
               ),
               child: Row(
                 children: [
-                  if (widget.post!.author?.avatarUrl != null)
+                  if (resolvedAvatarImage(widget.post!.author?.avatarUrl) !=
+                      null)
                     CircleAvatar(
                       radius: 20,
-                      backgroundImage: NetworkImage(widget.post!.author!.avatarUrl!),
+                      backgroundImage: resolvedAvatarImage(
+                        widget.post!.author?.avatarUrl,
+                        decodeWidth: 80,
+                      ),
                     )
                   else
                     CircleAvatar(
@@ -585,10 +590,11 @@ class _CommentItemState extends State<_CommentItem> {
             // Аватар
             CircleAvatar(
               radius: 16,
-              backgroundImage: comment.authorAvatar != null
-                  ? NetworkImage(comment.authorAvatar!)
-                  : null,
-              child: comment.authorAvatar == null
+              backgroundImage: resolvedAvatarImage(
+                comment.authorAvatar,
+                decodeWidth: 64,
+              ),
+              child: resolvedAvatarImage(comment.authorAvatar) == null
                   ? Text(
                       comment.authorName?[0].toUpperCase() ?? '?',
                       style: const TextStyle(fontSize: 16),

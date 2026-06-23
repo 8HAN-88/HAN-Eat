@@ -13,6 +13,7 @@ import '../../../services/media_upload_service.dart';
 import '../../../app/app_router.dart';
 import '../application/channels_list_refresh_provider.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../subscription/subscription_copy.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -586,8 +587,10 @@ class _ChannelManagementScreenState
                                 as ImageProvider
                             : null)
                     : (_newAvatarUrl != null || _channel?.avatarUrl != null)
-                        ? NetworkImage(_newAvatarUrl ?? _channel!.avatarUrl!)
-                            as ImageProvider
+                        ? resolvedAvatarImage(
+                            _newAvatarUrl ?? _channel?.avatarUrl,
+                            decodeWidth: 200,
+                          )
                         : null,
                 child: (_selectedAvatar == null &&
                         _newAvatarUrl == null &&
@@ -917,8 +920,8 @@ class _ChannelManagementScreenState
             return Card(
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundImage: avatar != null ? NetworkImage(avatar) : null,
-                  child: avatar == null
+                  backgroundImage: resolvedAvatarImage(avatar, decodeWidth: 96),
+                  child: resolvedAvatarImage(avatar) == null
                       ? Text(name.isNotEmpty ? name[0].toUpperCase() : '?')
                       : null,
                 ),
@@ -961,10 +964,12 @@ class _ChannelManagementScreenState
           ..._members.map((member) {
             return ListTile(
               leading: CircleAvatar(
-                backgroundImage: member['avatar_url'] != null
-                    ? NetworkImage(member['avatar_url'])
-                    : null,
-                child: member['avatar_url'] == null
+                backgroundImage: resolvedAvatarImage(
+                  member['avatar_url'] as String?,
+                  decodeWidth: 96,
+                ),
+                child: resolvedAvatarImage(member['avatar_url'] as String?) ==
+                        null
                     ? Text(member['name']?[0] ?? '?')
                     : null,
               ),

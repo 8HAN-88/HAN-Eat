@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../app/app_router.dart';
 import '../../../models/community_video.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../application/community_controller.dart';
 import '../application/community_search_controller.dart';
@@ -664,10 +665,11 @@ class _CommunityVideoCardState extends State<_CommunityVideoCard> {
                 Row(
                   children: [
                     CircleAvatar(
-                      backgroundImage: widget.video.avatar != null
-                          ? NetworkImage(widget.video.avatar!)
-                          : null,
-                      child: widget.video.avatar == null
+                      backgroundImage: resolvedAvatarImage(
+                        widget.video.avatar,
+                        decodeWidth: 96,
+                      ),
+                      child: resolvedAvatarImage(widget.video.avatar) == null
                           ? const Icon(Icons.person_outline)
                           : null,
                     ),

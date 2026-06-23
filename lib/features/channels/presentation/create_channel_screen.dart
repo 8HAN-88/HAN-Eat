@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/media_upload_service.dart';
+import '../../../widgets/app_avatar.dart';
 import 'package:go_router/go_router.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
@@ -216,8 +217,10 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                                           as ImageProvider
                                       : null)
                               : _uploadedAvatarUrl != null
-                                  ? NetworkImage(_uploadedAvatarUrl!)
-                                      as ImageProvider
+                                  ? resolvedAvatarImage(
+                                      _uploadedAvatarUrl,
+                                      decodeWidth: 200,
+                                    )
                                   : null,
                           child: _selectedAvatar == null &&
                                   _uploadedAvatarUrl == null

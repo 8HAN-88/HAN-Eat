@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../application/unread_notifications_provider.dart';
 
@@ -449,10 +450,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                     children: [
                                       CircleAvatar(
                                         radius: 16,
-                                        backgroundImage: notification.actor!.avatarUrl != null
-                                            ? NetworkImage(notification.actor!.avatarUrl!)
-                                            : null,
-                                        child: notification.actor!.avatarUrl == null
+                                        backgroundImage: resolvedAvatarImage(
+                                          notification.actor!.avatarUrl,
+                                          decodeWidth: 64,
+                                        ),
+                                        child: resolvedAvatarImage(
+                                              notification.actor!.avatarUrl) ==
+                                            null
                                             ? Text(
                                                 notification.actor!.name[0].toUpperCase(),
                                                 style: const TextStyle(fontSize: 14),

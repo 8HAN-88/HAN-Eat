@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/config/legacy_firestore_config.dart';
+import '../../widgets/app_avatar.dart';
 import '../../widgets/app_empty_state.dart';
 import 'public_profile_page.dart';
 
@@ -107,9 +108,11 @@ class _UserSearchPageState extends State<UserSearchPage> {
                           final name = d['displayName'] ?? 'Без имени';
                           final avatar = d['avatarUrl'] as String?;
                           return ListTile(
-                            leading: avatar != null
+                            leading: resolvedAvatarImage(avatar) != null
                                 ? CircleAvatar(
-                                    backgroundImage: NetworkImage(avatar))
+                                    backgroundImage:
+                                        resolvedAvatarImage(avatar),
+                                  )
                                 : const CircleAvatar(child: Icon(Icons.person)),
                             title: Text(name),
                             onTap: () => Navigator.push(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/app_router.dart';
 import '../../services/user_service.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/app_avatar.dart';
 import '../auth/sign_out_helper.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -114,10 +115,11 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               CircleAvatar(
                 radius: 50,
-                backgroundImage: currentUser.avatarUrl != null
-                    ? NetworkImage(currentUser.avatarUrl!)
-                    : null,
-                child: currentUser.avatarUrl == null
+                backgroundImage: resolvedAvatarImage(
+                  currentUser.avatarUrl,
+                  decodeWidth: 200,
+                ),
+                child: resolvedAvatarImage(currentUser.avatarUrl) == null
                     ? Text(_initials(currentUser.name))
                     : null,
               ),
@@ -172,10 +174,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   onTap: _pickAndUploadAvatar,
                   child: CircleAvatar(
                     radius: 48,
-                    backgroundImage: profile.avatarUrl != null
-                        ? NetworkImage(profile.avatarUrl!)
-                        : null,
-                    child: profile.avatarUrl == null
+                    backgroundImage: resolvedAvatarImage(
+                      profile.avatarUrl,
+                      decodeWidth: 192,
+                    ),
+                    child: resolvedAvatarImage(profile.avatarUrl) == null
                         ? Text(_initials(profile.displayName))
                         : null,
                   ),

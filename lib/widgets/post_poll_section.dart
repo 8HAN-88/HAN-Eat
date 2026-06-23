@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/post.dart';
 import '../services/post_service.dart';
 import '../utils/api_error_parser.dart';
+import 'app_avatar.dart';
 
 /// Опрос в посте ленты / канала с возможностью голосования.
 class PostPollSection extends StatefulWidget {
@@ -161,12 +162,12 @@ class _PostPollSectionState extends State<PostPollSection> {
                               contentPadding: EdgeInsets.zero,
                               leading: CircleAvatar(
                                 radius: 16,
-                                backgroundImage: (voter.avatarUrl != null &&
-                                        voter.avatarUrl!.isNotEmpty)
-                                    ? NetworkImage(voter.avatarUrl!)
-                                    : null,
-                                child: (voter.avatarUrl == null ||
-                                        voter.avatarUrl!.isEmpty)
+                                backgroundImage: resolvedAvatarImage(
+                                  voter.avatarUrl,
+                                  decodeWidth: 64,
+                                ),
+                                child: resolvedAvatarImage(voter.avatarUrl) ==
+                                        null
                                     ? const Icon(Icons.person, size: 16)
                                     : null,
                               ),

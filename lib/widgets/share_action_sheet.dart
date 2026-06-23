@@ -9,6 +9,7 @@ import '../services/channel_service.dart';
 import '../services/repost_service.dart';
 import '../services/share_link_service.dart';
 import '../utils/api_error_parser.dart';
+import 'app_avatar.dart';
 
 class ShareActionSheet {
   static Future<void> _shareAfterSheetClosed(
@@ -189,9 +190,8 @@ class _PostShareSheetState extends State<_PostShareSheet> {
               for (final c in channels)
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundImage:
-                        c.avatarUrl != null ? NetworkImage(c.avatarUrl!) : null,
-                    child: c.avatarUrl == null
+                    backgroundImage: resolvedAvatarImage(c.avatarUrl),
+                    child: resolvedAvatarImage(c.avatarUrl) == null
                         ? Text(c.name.isNotEmpty ? c.name[0] : '?')
                         : null,
                   ),

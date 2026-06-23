@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/recipe_network_image.dart';
+import '../widgets/app_avatar.dart';
 import '../models/recipe.dart';
 import '../models/recipe_model.dart';
 import '../features/meal_plan/presentation/add_to_meal_plan_screen.dart';
@@ -1188,12 +1189,12 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                               children: [
                                 CircleAvatar(
                                   radius: 14,
-                                  backgroundImage: r.authorAvatar != null &&
-                                          r.authorAvatar!.isNotEmpty
-                                      ? NetworkImage(r.authorAvatar!)
-                                      : null,
-                                  child: r.authorAvatar == null ||
-                                          r.authorAvatar!.isEmpty
+                                  backgroundImage: resolvedAvatarImage(
+                                    r.authorAvatar,
+                                    decodeWidth: 56,
+                                  ),
+                                  child: resolvedAvatarImage(r.authorAvatar) ==
+                                          null
                                       ? const Icon(Icons.person_outline,
                                           size: 16)
                                       : null,
@@ -1888,12 +1889,14 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                             commentAuthorId),
                                       )
                                   : null,
-                              child: c.authorAvatar != null &&
-                                      c.authorAvatar!.isNotEmpty
+                              child: resolvedAvatarImage(c.authorAvatar) !=
+                                      null
                                   ? CircleAvatar(
                                       radius: 16,
-                                      backgroundImage:
-                                          NetworkImage(c.authorAvatar!),
+                                      backgroundImage: resolvedAvatarImage(
+                                        c.authorAvatar,
+                                        decodeWidth: 64,
+                                      ),
                                       onBackgroundImageError: (_, __) {},
                                     )
                                   : CircleAvatar(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 
 class ChannelSubscribersScreen extends StatefulWidget {
@@ -184,11 +185,11 @@ class _ChannelSubscribersScreenState extends State<ChannelSubscribersScreen> {
                           return ListTile(
                             onTap: () => _openProfile(subscriber),
                             leading: CircleAvatar(
-                              backgroundImage:
-                                  avatarUrl != null && avatarUrl.isNotEmpty
-                                      ? NetworkImage(avatarUrl)
-                                      : null,
-                              child: avatarUrl == null || avatarUrl.isEmpty
+                              backgroundImage: resolvedAvatarImage(
+                                avatarUrl,
+                                decodeWidth: 96,
+                              ),
+                              child: resolvedAvatarImage(avatarUrl) == null
                                   ? Text(name.isNotEmpty
                                       ? name[0].toUpperCase()
                                       : '?')

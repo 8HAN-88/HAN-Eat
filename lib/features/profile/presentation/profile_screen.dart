@@ -13,6 +13,7 @@ import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../widgets/app_avatar.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
@@ -413,9 +414,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           // Аватар (без кнопки смены - она в настройках)
           CircleAvatar(
             radius: 50,
-            backgroundImage:
-                user.avatarUrl != null ? NetworkImage(user.avatarUrl!) : null,
-            child: user.avatarUrl == null
+            backgroundImage: resolvedAvatarImage(
+              user.avatarUrl,
+              decodeWidth: 200,
+            ),
+            child: resolvedAvatarImage(user.avatarUrl) == null
                 ? Text(
                     user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                     style: const TextStyle(fontSize: 40),

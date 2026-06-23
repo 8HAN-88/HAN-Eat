@@ -9,6 +9,7 @@ import '../../../services/auth_service.dart';
 import '../../auth/sign_out_helper.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/phone/profile_phone_tile.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
@@ -190,10 +191,11 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                   radius: 56,
                   backgroundColor:
                       Theme.of(context).colorScheme.primaryContainer,
-                  backgroundImage: currentProfile.avatarUrl != null
-                      ? NetworkImage(currentProfile.avatarUrl!)
-                      : null,
-                  child: currentProfile.avatarUrl == null
+                  backgroundImage: resolvedAvatarImage(
+                    currentProfile.avatarUrl,
+                    decodeWidth: 224,
+                  ),
+                  child: resolvedAvatarImage(currentProfile.avatarUrl) == null
                       ? Text(
                           _initials(currentProfile.displayName),
                           style: TextStyle(

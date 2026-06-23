@@ -22,6 +22,7 @@ import '../../../utils/number_formatter.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/post_poll_section.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/api_service.dart';
 import '../../../app/app_router.dart';
@@ -1026,10 +1027,11 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                       child: CircleAvatar(
                         radius: 18,
                         backgroundColor: scheme.surfaceContainerHighest,
-                        backgroundImage: avatarUrl != null
-                            ? CachedNetworkImageProvider(avatarUrl)
-                            : null,
-                        child: avatarUrl == null
+                        backgroundImage: resolvedAvatarImage(
+                          avatarUrl,
+                          decodeWidth: 72,
+                        ),
+                        child: resolvedAvatarImage(avatarUrl) == null
                             ? Text(
                                 initial,
                                 style: const TextStyle(

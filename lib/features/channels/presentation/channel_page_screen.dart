@@ -7,6 +7,7 @@ import '../../../services/channel_service.dart';
 import '../../../models/post_model.dart';
 import '../../../app/app_router.dart';
 import '../../feed/presentation/new_post_card.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import 'channel_create_content_sheet.dart';
 
@@ -223,10 +224,11 @@ class _ChannelPageScreenState extends ConsumerState<ChannelPageScreen> {
           // Аватар
           CircleAvatar(
             radius: 40,
-            backgroundImage: _channel!.avatarUrl != null
-                ? NetworkImage(_channel!.avatarUrl!)
-                : null,
-            child: _channel!.avatarUrl == null
+            backgroundImage: resolvedAvatarImage(
+              _channel!.avatarUrl,
+              decodeWidth: 160,
+            ),
+            child: resolvedAvatarImage(_channel!.avatarUrl) == null
                 ? Text(
                     _channel!.name[0].toUpperCase(),
                     style: const TextStyle(fontSize: 40),

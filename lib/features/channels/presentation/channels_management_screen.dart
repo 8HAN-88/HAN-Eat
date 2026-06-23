@@ -8,6 +8,7 @@ import '../../../app/app_router.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../services/channel_service.dart';
 import '../../../widgets/channel_list_badges.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 
 class ChannelsManagementScreen extends ConsumerStatefulWidget {
@@ -672,10 +673,11 @@ class _ManagementChannelCard extends StatelessWidget {
                   radius: 28,
                   backgroundColor: scheme.primaryContainer,
                   foregroundColor: scheme.onPrimaryContainer,
-                  backgroundImage: channel.avatarUrl != null
-                      ? NetworkImage(channel.avatarUrl!)
-                      : null,
-                  child: channel.avatarUrl == null
+                  backgroundImage: resolvedAvatarImage(
+                    channel.avatarUrl,
+                    decodeWidth: 112,
+                  ),
+                  child: resolvedAvatarImage(channel.avatarUrl) == null
                       ? Text(
                           channel.name.isNotEmpty
                               ? channel.name[0].toUpperCase()

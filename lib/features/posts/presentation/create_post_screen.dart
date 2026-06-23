@@ -12,6 +12,7 @@ import '../../../../services/auth_service.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../services/media_upload_service.dart';
 import '../../../../utils/file_helper.dart';
+import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/recipe_nutrition_form_section.dart';
 import '../../../../widgets/recipe_visibility_selector.dart';
 import '../../../../widgets/recipe_origin_country_field.dart';
@@ -1058,10 +1059,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 20,
-                                backgroundImage: user.avatarUrl != null
-                                    ? NetworkImage(user.avatarUrl!)
-                                    : null,
-                                child: user.avatarUrl == null
+                                backgroundImage: resolvedAvatarImage(
+                                  user.avatarUrl,
+                                  decodeWidth: 80,
+                                ),
+                                child: resolvedAvatarImage(user.avatarUrl) ==
+                                        null
                                     ? Text(user.name[0].toUpperCase())
                                     : null,
                               ),

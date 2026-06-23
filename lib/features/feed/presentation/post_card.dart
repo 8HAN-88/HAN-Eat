@@ -10,6 +10,7 @@ import '../../../services/auth_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/share_link_service.dart';
 import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/app_avatar.dart';
 
 Future<void> _feedSyncBookmark(
   BuildContext context,
@@ -293,8 +294,11 @@ class _PostHeader extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundImage: authorAvatar != null ? NetworkImage(authorAvatar) : null,
-            child: authorAvatar == null
+            backgroundImage: resolvedAvatarImage(
+              authorAvatar,
+              decodeWidth: 80,
+            ),
+            child: resolvedAvatarImage(authorAvatar) == null
                 ? Text(authorName.substring(0, 1).toUpperCase())
                 : null,
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/api_error_parser.dart';
 import '../../services/user_service.dart';
+import '../../widgets/app_avatar.dart';
 import '../../widgets/app_empty_state.dart';
 
 class PublicProfilePage extends StatefulWidget {
@@ -90,10 +91,11 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
           children: [
             CircleAvatar(
               radius: 48,
-              backgroundImage: profile.avatarUrl != null
-                  ? NetworkImage(profile.avatarUrl!)
-                  : null,
-              child: profile.avatarUrl == null
+              backgroundImage: resolvedAvatarImage(
+                profile.avatarUrl,
+                decodeWidth: 192,
+              ),
+              child: resolvedAvatarImage(profile.avatarUrl) == null
                   ? Text(_initialForName(profile.displayName))
                   : null,
             ),

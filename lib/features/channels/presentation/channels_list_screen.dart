@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/channel_list_badges.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
@@ -319,10 +320,11 @@ class _ChannelCard extends StatelessWidget {
                 // Аватар
                 CircleAvatar(
                   radius: 30,
-                  backgroundImage: channel.avatarUrl != null
-                      ? NetworkImage(channel.avatarUrl!)
-                      : null,
-                  child: channel.avatarUrl == null
+                  backgroundImage: resolvedAvatarImage(
+                    channel.avatarUrl,
+                    decodeWidth: 120,
+                  ),
+                  child: resolvedAvatarImage(channel.avatarUrl) == null
                       ? Text(
                           channel.name[0].toUpperCase(),
                           style: const TextStyle(fontSize: 24),

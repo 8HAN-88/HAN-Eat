@@ -1,10 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
-import '../../../../services/server_config.dart';
+import '../../../../widgets/app_avatar.dart';
 
 class ChatHubTile extends StatelessWidget {
   const ChatHubTile({
@@ -205,23 +204,15 @@ class ChatHubUserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = user.avatarUrl;
-    final resolved = url != null && url.isNotEmpty
-        ? ServerConfig.resolvePublisherAvatarUrl(url)
-        : null;
+    final background = resolvedAvatarImage(user.avatarUrl, decodeWidth: 96);
     final scheme = Theme.of(context).colorScheme;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         CircleAvatar(
           radius: 24,
-          backgroundImage: resolved != null
-              ? ResizeImage(
-                  CachedNetworkImageProvider(resolved),
-                  width: 96,
-                )
-              : null,
-          child: resolved == null
+          backgroundImage: background,
+          child: background == null
               ? Text(
                   chatHubAvatarLetter(user.displayName),
                   style: const TextStyle(fontWeight: FontWeight.w600),
@@ -254,16 +245,11 @@ class ChatHubChannelAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = channel.avatarUrl;
-    final resolved = url != null && url.isNotEmpty
-        ? ServerConfig.resolvePublisherAvatarUrl(url)
-        : null;
+    final background = resolvedAvatarImage(channel.avatarUrl, decodeWidth: 96);
     return CircleAvatar(
       radius: 24,
-      backgroundImage: resolved != null
-          ? ResizeImage(CachedNetworkImageProvider(resolved), width: 96)
-          : null,
-      child: resolved == null
+      backgroundImage: background,
+      child: background == null
           ? Text(
               chatHubAvatarLetter(channel.name),
               style: const TextStyle(fontWeight: FontWeight.w600),

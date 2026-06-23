@@ -5,6 +5,7 @@ import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 
 enum FollowListType { followers, following }
@@ -184,12 +185,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
                             onTap: () =>
                                 context.push(ProfileRoute.withUserId(user.id)),
                             leading: CircleAvatar(
-                              backgroundImage: user.avatarUrl != null &&
-                                      user.avatarUrl!.isNotEmpty
-                                  ? NetworkImage(user.avatarUrl!)
-                                  : null,
-                              child: user.avatarUrl == null ||
-                                      user.avatarUrl!.isEmpty
+                              backgroundImage: resolvedAvatarImage(
+                                user.avatarUrl,
+                                decodeWidth: 96,
+                              ),
+                              child: resolvedAvatarImage(user.avatarUrl) == null
                                   ? Text(name.isNotEmpty
                                       ? name[0].toUpperCase()
                                       : '?')

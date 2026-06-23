@@ -4,11 +4,11 @@ import '../../../utils/api_error_parser.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../app/app_router.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
 import '../../../models/post_model.dart';
+import '../../../widgets/app_avatar.dart';
 import 'channel_post_card.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_search_screen.dart';
@@ -146,10 +146,11 @@ class _ChannelPostsScreenState extends ConsumerState<ChannelPostsScreen> {
               // Аватар канала справа
               CircleAvatar(
                 radius: 16,
-                backgroundImage: _channel!.avatarUrl != null
-                    ? CachedNetworkImageProvider(_channel!.avatarUrl!)
-                    : null,
-                child: _channel!.avatarUrl == null
+                backgroundImage: resolvedAvatarImage(
+                  _channel!.avatarUrl,
+                  decodeWidth: 64,
+                ),
+                child: resolvedAvatarImage(_channel!.avatarUrl) == null
                     ? Text(
                         _channel!.name[0].toUpperCase(),
                         style: const TextStyle(fontSize: 14),
