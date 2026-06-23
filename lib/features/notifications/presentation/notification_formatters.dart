@@ -9,22 +9,70 @@ bool isVisibleNotification(NotificationItem item) {
   return !hiddenNotificationTypes.contains(item.type);
 }
 
-/// Заголовки секций в стиле Instagram.
-String notificationSectionLabel(DateTime createdAt) {
-  final now = DateTime.now();
-  final local = createdAt.toLocal();
-  final today = DateTime(now.year, now.month, now.day);
-  final createdDay = DateTime(local.year, local.month, local.day);
-  final diffDays = today.difference(createdDay).inDays;
-
-  if (diffDays == 0) return 'Сегодня';
-  if (diffDays == 1) return 'Вчера';
-  if (diffDays < 7) return 'Последние 7 дней';
-  if (diffDays < 30) return 'Последние 30 дней';
-  return 'Ранее';
+int? notificationPostId(NotificationItem item) {
+  if (item.entityType == 'post' && item.entityId != null) {
+    return item.entityId;
+  }
+  final raw = item.data?['post_id'];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  return int.tryParse('$raw');
 }
 
-String notificationSectionKey(DateTime createdAt) {
+/// Одна строка в ленте — одно уведомление или сгруппированные лайки на пост.
+class NotificationDisplayItem {
+  const NotificationDisplayItem(this.items);
+
+  final List<NotificationItem> items;
+
+  NotificationItem get primary => items.first;
+  bool get isGrouped => items.length > 1;
+  bool get isRead => items.every((e) => e.isRead);
+  String get type => primary.type;
+  String? get thumbnailUrl {
+    for (final item in items) {
+      final url = item.thumbnailUrl?.trim();
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return null;
+  }
+
+  String? get postType => primary.postType;
+  int? get postId => notificationPostId(primary);
+
+  List<NotificationActor> get actors {
+    final seen = <int>{};
+    final list = <NotificationActor>[];
+    for (final item in items) {
+      final actor = item.actor;
+      if (actor != null && seen.add(actor.id)) {
+        list.add(actor);
+      }
+    }
+    return list;
+  }
+}
+
+String notificationSectionLabel(String sectionKey) {
+  switch (sectionKey) {
+    case 'new':
+      return 'Новое';
+    case 'today':
+      return 'Сегодня';
+    case 'yesterday':
+      return 'Вчера';
+    case 'week':
+      return 'Последние 7 дней';
+    case 'month':
+      return 'Последние 30 дней';
+    default:
+      return 'Ранее';
+  }
+}
+
+String notificationSectionKey(DateTime createdAt, {required bool isUnread}) {
+  if (isUnread) return 'new';
+
   final now = DateTime.now();
   final local = createdAt.toLocal();
   final today = DateTime(now.year, now.month, now.day);
@@ -38,7 +86,9 @@ String notificationSectionKey(DateTime createdAt) {
   return 'older';
 }
 
-/// Короткое время как в Instagram: «18 ч.», «1 дн.», «15 июн.».
+const _sectionOrder = ['new', 'today', 'yesterday', 'week', 'month', 'older'];
+
+/// Короткое время: «18 ч.», «1 дн.», «15 июн.».
 String formatNotificationTime(DateTime? date) {
   if (date == null) return '';
   final local = date.toLocal();
@@ -73,21 +123,29 @@ String formatNotificationTime(DateTime? date) {
   return '${local.day} ${months[local.month - 1]} ${local.year}';
 }
 
-String actorDisplayName(NotificationItem notification) {
-  final actor = notification.actor;
-  if (actor != null) {
-    final username = actor.username?.trim();
-    if (username != null && username.isNotEmpty) return username;
-    return actor.name;
-  }
-  final title = notification.title.trim();
-  if (title.isEmpty) return 'Пользователь';
-  final parts = title.split(' ');
-  return parts.isNotEmpty ? parts.first : title;
+String actorDisplayName(NotificationActor actor) {
+  final username = actor.username?.trim();
+  if (username != null && username.isNotEmpty) return username;
+  return actor.name;
 }
 
-String notificationActionText(NotificationItem notification) {
-  final postType = notification.postType;
+String _actorLabel(NotificationActor actor) => actorDisplayName(actor);
+
+String groupedActorsLabel(List<NotificationActor> actors) {
+  if (actors.isEmpty) return 'Пользователь';
+  if (actors.length == 1) return _actorLabel(actors.first);
+  if (actors.length == 2) {
+    return '${_actorLabel(actors[0])} и ${_actorLabel(actors[1])}';
+  }
+  final extra = actors.length - 2;
+  return '${_actorLabel(actors[0])}, ${_actorLabel(actors[1])} и ещё $extra';
+}
+
+String notificationActionText(NotificationDisplayItem group) {
+  final notification = group.primary;
+  final postType = group.postType;
+  final actors = group.actors;
+
   switch (notification.type) {
     case 'like':
       return _likedTargetLabel(postType);
@@ -96,7 +154,9 @@ String notificationActionText(NotificationItem notification) {
     case 'follow':
       return 'подписался(ась) на вас';
     case 'repost':
-      return 'сделал(а) репост вашей публикации';
+      return group.isGrouped
+          ? 'сделали репост вашей публикации'
+          : 'сделал(а) репост вашей публикации';
     case 'mention':
       return 'упомянул(а) вас';
     case 'message':
@@ -132,6 +192,17 @@ String notificationActionText(NotificationItem notification) {
   }
 }
 
+String notificationLeadText(NotificationDisplayItem group) {
+  final actors = group.actors;
+  if (actors.isEmpty) {
+    return notificationActionText(group);
+  }
+  if (group.type == 'like' || group.type == 'repost') {
+    return '${groupedActorsLabel(actors)} ${notificationActionText(group)}';
+  }
+  return '${_actorLabel(actors.first)} ${notificationActionText(group)}';
+}
+
 String _likedTargetLabel(String? postType) {
   switch (postType) {
     case 'recipe':
@@ -147,27 +218,72 @@ String _likedTargetLabel(String? postType) {
   }
 }
 
+List<NotificationDisplayItem> _groupSectionItems(
+  List<NotificationItem> sectionItems,
+) {
+  final result = <NotificationDisplayItem>[];
+  final used = <int>{};
+
+  for (var i = 0; i < sectionItems.length; i++) {
+    if (used.contains(i)) continue;
+    final item = sectionItems[i];
+
+    if (item.type == 'like' || item.type == 'repost') {
+      final postId = notificationPostId(item);
+      if (postId != null) {
+        final cluster = <NotificationItem>[item];
+        used.add(i);
+        for (var j = i + 1; j < sectionItems.length; j++) {
+          if (used.contains(j)) continue;
+          final other = sectionItems[j];
+          if (other.type == item.type &&
+              notificationPostId(other) == postId) {
+            cluster.add(other);
+            used.add(j);
+          }
+        }
+        cluster.sort(
+          (a, b) => (b.createdAt ?? DateTime(0))
+              .compareTo(a.createdAt ?? DateTime(0)),
+        );
+        result.add(NotificationDisplayItem(cluster));
+        continue;
+      }
+    }
+
+    used.add(i);
+    result.add(NotificationDisplayItem([item]));
+  }
+
+  result.sort(
+    (a, b) => (b.primary.createdAt ?? DateTime(0))
+        .compareTo(a.primary.createdAt ?? DateTime(0)),
+  );
+  return result;
+}
+
 List<NotificationListEntry> buildNotificationSections(
   List<NotificationItem> notifications,
 ) {
   final visible = notifications.where(isVisibleNotification).toList();
   if (visible.isEmpty) return [];
 
-  final entries = <NotificationListEntry>[];
-  String? currentSection;
-
+  final buckets = <String, List<NotificationItem>>{};
   for (final item in visible) {
     final created = item.createdAt ?? DateTime.now();
-    final sectionKey = notificationSectionKey(created);
-    if (sectionKey != currentSection) {
-      currentSection = sectionKey;
-      entries.add(
-        NotificationSectionHeader(
-          label: notificationSectionLabel(created),
-        ),
-      );
+    final key = notificationSectionKey(created, isUnread: !item.isRead);
+    buckets.putIfAbsent(key, () => []).add(item);
+  }
+
+  final entries = <NotificationListEntry>[];
+  for (final key in _sectionOrder) {
+    final sectionItems = buckets[key];
+    if (sectionItems == null || sectionItems.isEmpty) continue;
+
+    entries.add(NotificationSectionHeader(label: notificationSectionLabel(key)));
+    for (final group in _groupSectionItems(sectionItems)) {
+      entries.add(NotificationRowItem(group));
     }
-    entries.add(NotificationRowItem(item));
   }
   return entries;
 }
@@ -181,7 +297,7 @@ class NotificationSectionHeader extends NotificationListEntry {
 }
 
 class NotificationRowItem extends NotificationListEntry {
-  NotificationRowItem(this.notification);
+  NotificationRowItem(this.group);
 
-  final NotificationItem notification;
+  final NotificationDisplayItem group;
 }

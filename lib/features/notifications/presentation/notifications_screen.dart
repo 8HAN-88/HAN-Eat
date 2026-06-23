@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/haptics/app_haptics.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
+import '../../../services/chat_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/user_service.dart' as user_service;
 import '../../../utils/api_error_parser.dart';
@@ -69,7 +71,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
     try {
       final response = await NotificationService.getNotifications(
-        limit: 20,
+        limit: 30,
         offset: refresh ? 0 : _offset,
       );
 
@@ -123,35 +125,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Future<void> _markAsRead(NotificationItem notification) async {
-    if (notification.isRead) return;
+  Future<void> _markGroupAsRead(NotificationDisplayItem group) async {
+    final unread = group.items.where((n) => !n.isRead).toList();
+    if (unread.isEmpty) return;
 
-    try {
-      await NotificationService.markAsRead(
-        notificationId: notification.id,
-        read: true,
-      );
+    for (final notification in unread) {
+      try {
+        await NotificationService.markAsRead(
+          notificationId: notification.id,
+          read: true,
+        );
+      } catch (_) {
+        return;
+      }
+    }
 
-      if (!mounted) return;
-      setState(() {
-        final index = _notifications.indexWhere((n) => n.id == notification.id);
+    if (!mounted) return;
+    setState(() {
+      final now = DateTime.now();
+      for (final notification in unread) {
+        final index =
+            _notifications.indexWhere((n) => n.id == notification.id);
         if (index != -1) {
           _notifications[index] = _copyNotification(
             notification,
             isRead: true,
-            readAt: DateTime.now(),
+            readAt: now,
           );
-          _unreadCount = (_unreadCount - 1).clamp(0, double.infinity).toInt();
         }
-      });
-      ref.read(unreadNotificationsCountProvider.notifier).refresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
+        _unreadCount = (_unreadCount - 1).clamp(0, double.infinity).toInt();
       }
-    }
+    });
+    ref.read(unreadNotificationsCountProvider.notifier).refresh();
   }
 
   Future<void> _markAllAsRead() async {
@@ -169,6 +174,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _unreadCount = 0;
       });
       ref.read(unreadNotificationsCountProvider.notifier).refresh();
+      AppHaptics.medium();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -178,8 +184,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
-  Future<void> _toggleFollow(NotificationItem notification) async {
-    final actorId = notification.actor?.id;
+  Future<void> _toggleFollow(NotificationDisplayItem group) async {
+    final actorId = group.primary.actor?.id;
     if (actorId == null || _followLoadingIds.contains(actorId)) return;
 
     setState(() => _followLoadingIds.add(actorId));
@@ -192,6 +198,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         await user_service.UserService.follow(actorId);
         if (!mounted) return;
         setState(() => _followingActorIds.add(actorId));
+        AppHaptics.light();
       }
     } catch (e) {
       if (mounted) {
@@ -206,18 +213,54 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
-  void _openActorProfile(NotificationItem notification) {
-    final actorId = notification.actor?.id;
+  Future<void> _openMessage(NotificationDisplayItem group) async {
+    final actor = group.primary.actor;
+    if (actor == null) return;
+    try {
+      final conv = await ChatService.openDirectChat(actor.id);
+      if (!mounted) return;
+      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _openActorProfile(NotificationDisplayItem group) {
+    final actorId = group.primary.actor?.id;
     if (actorId == null) return;
     context.push(ProfileRoute.withUserId(actorId));
   }
 
-  void _handleNotificationTap(NotificationItem notification) {
-    if (!notification.isRead) {
-      _markAsRead(notification);
-    }
+  void _openPost(NotificationDisplayItem group) {
+    final notification = group.primary;
+    _navigateForNotification(notification);
+  }
 
-    if (notification.entityType == 'channel' && notification.entityId != null) {
+  void _openReply(NotificationDisplayItem group) {
+    final notification = group.primary;
+    final postId = notificationPostId(notification) ?? notification.entityId;
+    if (postId == null) return;
+    final channelId = notification.data?['channel_id'];
+    if (channelId != null) {
+      context.push('/channel/$channelId/post/$postId/comments');
+    } else {
+      context.push(PostCommentsRoute.pathFor(postId));
+    }
+  }
+
+  void _handleNotificationTap(NotificationDisplayItem group) {
+    if (!group.isRead) {
+      _markGroupAsRead(group);
+    }
+    _navigateForNotification(group.primary);
+  }
+
+  void _navigateForNotification(NotificationItem notification) {
+    if (notification.entityType == 'channel' &&
+        notification.entityId != null) {
       final channelId = notification.entityId;
       final postId = notification.data?['post_id'];
 
@@ -265,6 +308,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           extra: peer,
         );
       }
+    } else if (notification.type == 'follow' && notification.actor != null) {
+      context.push(ProfileRoute.withUserId(notification.actor!.id));
     }
   }
 
@@ -287,21 +332,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         centerTitle: true,
         title: const Text(
           'Уведомления',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
         actions: [
           if (_unreadCount > 0)
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_horiz),
-              onSelected: (value) {
-                if (value == 'read_all') _markAllAsRead();
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'read_all',
-                  child: Text('Отметить все прочитанными'),
-                ),
-              ],
+            TextButton(
+              onPressed: _markAllAsRead,
+              child: const Text('Прочитать все'),
             ),
         ],
       ),
@@ -355,29 +392,37 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   final entry = entries[index];
                   if (entry is NotificationSectionHeader) {
                     return Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
                       child: Text(
                         entry.label,
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
                           color: scheme.onSurface,
                         ),
                       ),
                     );
                   }
 
-                  final notification = (entry as NotificationRowItem).notification;
-                  final actorId = notification.actor?.id;
+                  final group = (entry as NotificationRowItem).group;
+                  final actorId = group.primary.actor?.id;
 
                   return NotificationTile(
-                    notification: notification,
-                    onTap: () => _handleNotificationTap(notification),
+                    group: group,
+                    onTap: () => _handleNotificationTap(group),
+                    onThumbnailTap: () => _openPost(group),
                     onActorTap: actorId == null
                         ? null
-                        : () => _openActorProfile(notification),
-                    onFollowTap: notification.type == 'follow' && actorId != null
-                        ? () => _toggleFollow(notification)
+                        : () => _openActorProfile(group),
+                    onFollowTap: group.type == 'follow' && actorId != null
+                        ? () => _toggleFollow(group)
+                        : null,
+                    onMessageTap: group.type == 'follow' && actorId != null
+                        ? () => _openMessage(group)
+                        : null,
+                    onReplyTap: group.type == 'comment'
+                        ? () => _openReply(group)
                         : null,
                     isFollowing:
                         actorId != null && _followingActorIds.contains(actorId),
