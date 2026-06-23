@@ -9,11 +9,34 @@ import '../models/post_model.dart';
 class FeedApiCache {
   FeedApiCache._();
 
+  static final Map<String, List<PostModel>> _memory = {};
+
+  static const defaultWarmVariants = <String>[
+    'rec_all_personalized',
+    'following_all_recent',
+  ];
+
   static String _prefsKey(String variant) => 'feed_api_cache_v1_$variant';
+
+  /// Синхронно из RAM после [warmUp].
+  static List<PostModel> peek(String variant) {
+    return List<PostModel>.from(_memory[variant] ?? const []);
+  }
+
+  /// Прогрев дискового кэша в память до открытия ленты.
+  static Future<void> warmUp([List<String>? variants]) async {
+    final keys = variants ?? defaultWarmVariants;
+    await Future.wait<void>(
+      keys.map((variant) async {
+        _memory[variant] = await _loadFromDisk(variant);
+      }),
+    );
+  }
 
   /// Сохранить посты (например `rec_all`, `rec_reels`, `following`).
   static Future<void> save(String variant, List<PostModel> posts) async {
     if (posts.isEmpty) return;
+    _memory[variant] = List<PostModel>.from(posts);
     try {
       final prefs = await SharedPreferences.getInstance();
       final payload = jsonEncode({
@@ -27,6 +50,7 @@ class FeedApiCache {
   }
 
   static Future<void> clear(String variant) async {
+    _memory.remove(variant);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefsKey(variant));
@@ -36,6 +60,15 @@ class FeedApiCache {
   }
 
   static Future<List<PostModel>> load(String variant) async {
+    if (_memory.containsKey(variant)) {
+      return List<PostModel>.from(_memory[variant]!);
+    }
+    final posts = await _loadFromDisk(variant);
+    _memory[variant] = posts;
+    return List<PostModel>.from(posts);
+  }
+
+  static Future<List<PostModel>> _loadFromDisk(String variant) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_prefsKey(variant));

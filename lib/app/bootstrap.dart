@@ -20,6 +20,8 @@ import '../services/meal_plan_service.dart';
 import '../services/category_service.dart';
 import '../services/recipe_service.dart';
 import '../services/feed_sync_service.dart';
+import '../services/feed_cache_service.dart';
+import '../services/feed_api_cache.dart';
 import '../services/saved_posts_service.dart';
 import '../services/api_reachability_service.dart';
 import '../services/history_storage.dart';
@@ -121,19 +123,29 @@ Future<void> bootstrapServicesForFirstFrame() async {
   } catch (e) {
     debugPrint('AuthService init error (сессия из кэша сохранена): $e');
   }
-  // Прогрев API — в deferred bootstrap, чтобы не конкурировать с лентой.
-  if (!kIsWeb) {
-    unawaited(
-      Future.wait<void>([
-        ApiReachabilityService.init().catchError((Object e) {
-          debugPrint('ApiReachabilityService early init: $e');
-        }),
-        _warmApiConnection().catchError((Object e) {
-          debugPrint('API warm-up early: $e');
-        }),
-      ]),
-    );
-  }
+
+  unawaited(
+    Future.wait<void>([
+      FeedCacheService.init().catchError((Object e) {
+        debugPrint('FeedCacheService early init: $e');
+      }),
+      FeedApiCache.warmUp().catchError((Object e) {
+        debugPrint('FeedApiCache warmUp: $e');
+      }),
+    ]),
+  );
+
+  // Прогрев API — параллельно с первым кадром, не блокируем UI.
+  unawaited(
+    Future.wait<void>([
+      ApiReachabilityService.init().catchError((Object e) {
+        debugPrint('ApiReachabilityService early init: $e');
+      }),
+      _warmApiConnection().catchError((Object e) {
+        debugPrint('API warm-up early: $e');
+      }),
+    ]),
+  );
 }
 
 bool _firebaseReady = false;

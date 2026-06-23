@@ -10,6 +10,7 @@ import 'feed_service.dart';
 import 'feed_cache_service.dart';
 import 'saved_posts_service.dart';
 import 'api_reachability_service.dart';
+import 'user_realtime_service.dart';
 
 /// Сервис синхронизации ленты (онлайн/оффлайн)
 class FeedSyncService {
@@ -28,6 +29,7 @@ class FeedSyncService {
     await FeedCacheService.init();
     _instance = FeedSyncService._internal();
     _instance!._initConnectivity();
+    _instance!._initRealtimeRefresh();
   }
 
   /// Если UI открылся до [bootstrapServicesDeferred].
@@ -46,6 +48,17 @@ class FeedSyncService {
   }
 
   FeedSyncService._internal();
+
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  FeedSortMode _lastBackgroundSort = FeedSortMode.personalized;
+
+  void _initRealtimeRefresh() {
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (event.event != 'sync') return;
+      if (!_shouldSyncInBackground()) return;
+      unawaited(syncFeedInBackground(sortMode: _lastBackgroundSort));
+    });
+  }
 
   static bool _shouldSyncInBackground() {
     try {
@@ -149,6 +162,7 @@ class FeedSyncService {
     FeedSortMode sortMode = FeedSortMode.personalized,
   }) async {
     if (!isOnline.value) return;
+    _lastBackgroundSort = sortMode;
 
     try {
       final posts = await FeedService.getMainFeed(

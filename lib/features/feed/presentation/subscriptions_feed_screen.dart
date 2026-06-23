@@ -12,6 +12,7 @@ import '../../../models/post_types.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
+import '../../../services/user_realtime_service.dart';
 import 'new_post_card.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
@@ -58,6 +59,7 @@ class _SubscriptionsFeedScreenState
   /// Посты с диска
   bool _servingFromCache = false;
   Object? _cacheLoadError;
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
 
   String _feedType = 'all';
   FeedSortMode _sortMode = FeedSortMode.recent;
@@ -73,6 +75,17 @@ class _SubscriptionsFeedScreenState
     _feedType = widget.externalFeedType ?? 'all';
     _sortMode = widget.externalSortMode ?? FeedSortMode.recent;
     _scrollController.addListener(_onScroll);
+    final cached = FeedApiCache.peek(_cacheVariant);
+    if (cached.isNotEmpty) {
+      _posts = cached;
+      _servingFromCache = true;
+      _loadKickoff = true;
+    }
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted || event.event != 'sync') return;
+      if (_isLoading) return;
+      unawaited(_loadFeed(refresh: true));
+    });
     if (!widget.deferLoad) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -105,6 +118,7 @@ class _SubscriptionsFeedScreenState
 
   @override
   void dispose() {
+    _realtimeSub?.cancel();
     _scrollController.dispose();
     super.dispose();
   }

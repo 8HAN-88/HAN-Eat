@@ -85,8 +85,27 @@ class FeedController extends StateNotifier<FeedState> {
   /// Загрузить ленту (с оффлайн поддержкой)
   Future<void> loadFeed({FeedSortMode? sortMode}) async {
     _currentSortMode = sortMode ?? _currentSortMode;
-    
-    state = state.copyWith(loading: true, error: null);
+
+    try {
+      await FeedCacheService.init();
+      final cached = FeedCacheService.instance.getCachedPosts();
+      if (cached.isNotEmpty) {
+        final blockedEarly = await _blockedAuthors();
+        final visibleEarly = _withoutBlockedAuthors(cached, blockedEarly);
+        state = state.copyWith(
+          posts: visibleEarly.take(20).toList(),
+          loading: true,
+          error: null,
+          hasMore: visibleEarly.length >= 20,
+          lastPostId:
+              visibleEarly.isNotEmpty ? visibleEarly.last.idString : null,
+        );
+      } else {
+        state = state.copyWith(loading: true, error: null);
+      }
+    } catch (_) {
+      state = state.copyWith(loading: true, error: null);
+    }
 
     try {
       final sync = await FeedSyncService.ensureInitialized();
