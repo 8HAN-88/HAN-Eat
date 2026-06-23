@@ -242,15 +242,12 @@ async def get_saved_posts(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user)
 ):
-    """Получить список сохраненных постов пользователя"""
-    # Проверяем доступ (только свои сохраненные или публичный профиль)
+    """Получить список сохраненных постов пользователя (только владелец)."""
     if current_user is None or current_user.id != user_id:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user or user.is_private:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot access saved posts"
-            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot access saved posts",
+        )
     
     # Получаем сохраненные посты (включая рецепты Spoonacular)
     saved_posts = db.query(SavedPost).filter(

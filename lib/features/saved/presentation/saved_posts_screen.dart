@@ -118,12 +118,29 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     }
   }
   
+  bool _canViewSavedPosts() {
+    final target = widget.userId ?? _currentUserId;
+    final me = _currentUserId;
+    return me != null && target == me;
+  }
+
   Future<void> _loadPosts({bool refresh = false}) async {
     if (_isLoading) return;
     
     final userId = widget.userId ?? _currentUserId;
     if (userId == null) {
       // Показываем сообщение о необходимости входа
+      return;
+    }
+    if (!_canViewSavedPosts()) {
+      if (mounted) {
+        setState(() {
+          _posts = [];
+          _hasMore = false;
+          _loadError = null;
+          _isLoading = false;
+        });
+      }
       return;
     }
     
@@ -255,6 +272,13 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
     
     if (userId == null) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (!_canViewSavedPosts()) {
+      return const AppEmptyState(
+        icon: Icons.lock_outline,
+        title: 'Сохранённые недоступны',
+        subtitle: 'Только вы можете видеть свои сохранённые посты',
+      );
     }
 
     final content = Column(

@@ -61,6 +61,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _tabCount = 3;
   user_service.UserProfile? _profile;
   Object? _profileLoadError;
   bool _isLoading = true;
@@ -73,18 +74,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   int _postsRefreshGeneration = 0;
   bool _profileDataStarted = false;
 
+  void _onTabIndexChanged() {
+    if (_tabController.indexIsChanging) return;
+    final idx = _tabController.index;
+    if (_loadedTabs.add(idx) && mounted) {
+      setState(() {});
+    }
+  }
+
+  bool _isOwnProfileView({int? profileUserId}) {
+    final me = AuthService.instance.currentUser?.id;
+    if (me == null) return widget.userId == null;
+    final target = widget.userId ?? profileUserId ?? me;
+    return target == me;
+  }
+
+  bool _tabControllerReady = false;
+
+  void _syncTabController({int? profileUserId}) {
+    final count = _isOwnProfileView(profileUserId: profileUserId) ? 4 : 3;
+    if (_tabControllerReady && _tabCount == count) return;
+
+    final oldIndex = _tabControllerReady
+        ? _tabController.index.clamp(0, count - 1)
+        : 0;
+    if (_tabControllerReady) {
+      _tabController.removeListener(_onTabIndexChanged);
+      _tabController.dispose();
+    }
+    _tabCount = count;
+    _tabController = TabController(
+      length: count,
+      vsync: this,
+      initialIndex: oldIndex,
+    );
+    _tabController.addListener(_onTabIndexChanged);
+    _tabControllerReady = true;
+    if (oldIndex >= count) {
+      _loadedTabs
+        ..clear()
+        ..add(0);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _postsListEpoch = AuthService.instance.currentUser?.id;
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      final idx = _tabController.index;
-      if (_loadedTabs.add(idx) && mounted) {
-        setState(() {});
-      }
-    });
+    _syncTabController();
     _onSessionChanged = (user) {
       if (widget.userId != null || !mounted) return;
       user_service.UserService.instance.profile.value = null;
@@ -143,7 +180,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   void dispose() {
     ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
     AuthService.unregisterSessionListener(_onSessionChanged);
-    _tabController.dispose();
+    if (_tabControllerReady) {
+      _tabController.removeListener(_onTabIndexChanged);
+      _tabController.dispose();
+    }
     super.dispose();
   }
 
@@ -205,6 +245,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       }
     } finally {
       if (mounted) {
+        _syncTabController(profileUserId: _profile?.user.id);
         setState(() => _isLoading = false);
       }
     }
@@ -344,7 +385,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     final user = _profile!.user;
     final stats = _profile!.stats;
-    final isOwnProfile = widget.userId == null;
+    final isOwnProfile = _isOwnProfileView(profileUserId: user.id);
+    final tabs = <Tab>[
+      const Tab(text: 'Общее'),
+      const Tab(text: 'Рецепты'),
+      const Tab(text: 'Рилсы'),
+      if (isOwnProfile) const Tab(text: 'Сохранённые'),
+    ];
+    final tabViews = <Widget>[
+      _buildLazyTab(0, _buildAllTab),
+      _buildLazyTab(1, _buildRecipesTab),
+      _buildLazyTab(2, _buildReelsTab),
+      if (isOwnProfile) _buildLazyTab(3, _buildFavoritesTab),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -380,22 +433,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             children: [
               longLabelTabBar(
                 controller: _tabController,
-                tabs: const [
-                  Tab(text: 'Общее'),
-                  Tab(text: 'Рецепты'),
-                  Tab(text: 'Рилсы'),
-                  Tab(text: 'Сохранённые'),
-                ],
+                tabs: tabs,
               ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
-                  children: [
-                    _buildLazyTab(0, _buildAllTab),
-                    _buildLazyTab(1, _buildRecipesTab),
-                    _buildLazyTab(2, _buildReelsTab),
-                    _buildLazyTab(3, _buildFavoritesTab),
-                  ],
+                  children: tabViews,
                 ),
               ),
             ],

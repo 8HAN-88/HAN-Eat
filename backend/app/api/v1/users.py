@@ -284,6 +284,9 @@ async def get_user_profile(
             Follower.followee_id == current_user.id
         ).first() is not None
     
+    if not current_user or current_user.id != user_id:
+        stats = stats.model_copy(update={"saved_count": 0})
+
     return UserProfileResponse(
         **UserResponse.model_validate(user).model_dump(),
         stats=stats,
