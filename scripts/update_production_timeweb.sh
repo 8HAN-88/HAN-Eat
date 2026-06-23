@@ -80,6 +80,9 @@ else
 fi
 if [[ -f /etc/nginx/sites-available/haneat-api ]]; then
   sed -i 's/client_max_body_size .*/client_max_body_size 1024M;/' /etc/nginx/sites-available/haneat-api
+  if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then
+    bash "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" || true
+  fi
   nginx -t && systemctl reload nginx
 fi
 if [[ ! -f /etc/systemd/system/haneat-video-worker.service ]]; then

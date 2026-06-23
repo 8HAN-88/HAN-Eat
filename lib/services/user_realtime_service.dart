@@ -156,6 +156,7 @@ class UserRealtimeService {
       if (!connected.value) {
         connected.value = true;
       }
+      _events.add(const UserRealtimeEvent(event: 'sync'));
 
       _buffer = '';
       _subscription = response.stream.listen(
@@ -200,7 +201,8 @@ class UserRealtimeService {
           final event = UserRealtimeEvent.fromJson(decoded);
           if (event.event.isEmpty || event.event == 'ping') continue;
           _events.add(event);
-          if (event.notificationType == 'message') {
+          if (event.event == 'chat.inbox' ||
+              event.notificationType == 'message') {
             ChatRealtimeSignals.instance.notifyNewMessage();
           }
         } catch (_) {}

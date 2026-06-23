@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/haptics/app_haptics.dart';
 import '../services/api_reachability_service.dart';
+import '../services/auth_service.dart';
 import '../services/feed_sync_service.dart';
+import '../services/user_realtime_service.dart';
 
 /// Тонкая полоска статуса сети (как «Подключение…» в Telegram).
 class ConnectivityStatusBanner extends StatefulWidget {
@@ -32,6 +34,7 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
         .addListener(_onStatusChanged);
     ApiReachabilityService.instance.isApiConnecting
         .addListener(_onStatusChanged);
+    UserRealtimeService.instance.connected.addListener(_onStatusChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleStatusChanged();
     });
@@ -45,6 +48,7 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
         .removeListener(_onStatusChanged);
     ApiReachabilityService.instance.isApiConnecting
         .removeListener(_onStatusChanged);
+    UserRealtimeService.instance.connected.removeListener(_onStatusChanged);
     super.dispose();
   }
 
@@ -52,7 +56,12 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
 
   bool get _apiReachable => ApiReachabilityService.instance.isApiReachable.value;
 
-  bool get _isHealthy => _deviceOnline && _apiReachable;
+  bool get _realtimeReady {
+    if (AuthService.instance.currentUser == null) return true;
+    return UserRealtimeService.instance.connected.value;
+  }
+
+  bool get _isHealthy => _deviceOnline && _apiReachable && _realtimeReady;
 
   void _handleStatusChanged() {
     if (!mounted) return;

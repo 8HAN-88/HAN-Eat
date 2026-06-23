@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/notification_service.dart';
@@ -8,12 +9,28 @@ import '../../../services/user_realtime_service.dart';
 class UnreadNotificationsNotifier extends StateNotifier<int> {
   UnreadNotificationsNotifier() : super(0) {
     refresh();
-    _timer = Timer.periodic(const Duration(seconds: 90), (_) => refresh());
+    _resetFallbackTimer();
     _realtimeSub = UserRealtimeService.instance.events.listen(_onRealtimeEvent);
+    _connectedListener = () {
+      if (!mounted) return;
+      _resetFallbackTimer();
+      if (UserRealtimeService.instance.connected.value) {
+        unawaited(refresh());
+      }
+    };
+    UserRealtimeService.instance.connected.addListener(_connectedListener!);
   }
 
   Timer? _timer;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  VoidCallback? _connectedListener;
+
+  void _resetFallbackTimer() {
+    _timer?.cancel();
+    final seconds =
+        UserRealtimeService.instance.connected.value ? 180 : 90;
+    _timer = Timer.periodic(Duration(seconds: seconds), (_) => refresh());
+  }
 
   void _onRealtimeEvent(UserRealtimeEvent event) {
     if (!mounted) return;
@@ -21,7 +38,7 @@ class UnreadNotificationsNotifier extends StateNotifier<int> {
       state = event.notifications!;
       return;
     }
-    if (event.event == 'notification.new') {
+    if (event.event == 'notification.new' || event.event == 'sync') {
       unawaited(refresh());
     }
   }
@@ -39,6 +56,9 @@ class UnreadNotificationsNotifier extends StateNotifier<int> {
   void dispose() {
     _timer?.cancel();
     _realtimeSub?.cancel();
+    if (_connectedListener != null) {
+      UserRealtimeService.instance.connected.removeListener(_connectedListener!);
+    }
     super.dispose();
   }
 }

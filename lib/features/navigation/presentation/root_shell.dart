@@ -20,6 +20,7 @@ import '../../../../services/feed_sync_service.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../services/presence_service.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/user_realtime_service.dart';
 import '../../chat/application/channel_inbox_badge.dart';
 import '../../chat/application/chats_hub_refresh_provider.dart';
 import '../../chat/application/chat_realtime_signals.dart';
@@ -119,6 +120,23 @@ class _RootShellState extends ConsumerState<RootShell> {
         ChatRealtimeSignals.instance.hubRefresh.listen((_) {
       if (mounted) _loadChatUnreadCount();
     });
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted) return;
+      if (event.event == 'sync' ||
+          event.event == 'chat.inbox' ||
+          (event.event == 'notification.new' &&
+              event.notificationType == 'message')) {
+        _loadChatUnreadCount();
+      }
+    });
+    _realtimeConnectedListener = () {
+      if (!mounted) return;
+      if (UserRealtimeService.instance.connected.value) {
+        _loadChatUnreadCount();
+      }
+    };
+    UserRealtimeService.instance.connected
+        .addListener(_realtimeConnectedListener!);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (AuthService.instance.currentUser != null) {
         PresenceService.instance.start();
@@ -155,7 +173,10 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 
   void _startPeriodicUpdate() {
-    Future.delayed(const Duration(seconds: 90), () {
+    final interval = UserRealtimeService.instance.connected.value
+        ? const Duration(seconds: 180)
+        : const Duration(seconds: 90);
+    Future.delayed(interval, () {
       if (mounted) {
         unawaited(ApiReachabilityService.instance.checkNow());
         _loadChatUnreadCount();
@@ -165,11 +186,18 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 
   StreamSubscription<void>? _chatSignalsSub;
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  VoidCallback? _realtimeConnectedListener;
   VoidCallback? _apiReachabilityListener;
 
   @override
   void dispose() {
     _chatSignalsSub?.cancel();
+    _realtimeSub?.cancel();
+    if (_realtimeConnectedListener != null) {
+      UserRealtimeService.instance.connected
+          .removeListener(_realtimeConnectedListener!);
+    }
     if (_apiReachabilityListener != null) {
       ApiReachabilityService.instance.isApiReachable
           .removeListener(_apiReachabilityListener!);

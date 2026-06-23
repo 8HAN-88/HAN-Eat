@@ -102,6 +102,12 @@ def test_public() -> None:
     else:
         fail(f"health HTTP {c}")
 
+    c, _ = req("GET", f"{API}/realtime/stream")
+    if c in (401, 403):
+        ok("realtime/stream requires auth")
+    else:
+        fail(f"realtime/stream expected 401/403, got HTTP {c}")
+
     c, ready = req("GET", "/system/readiness")
     if c == 200 and "issues" in ready:
         ok("system/readiness")

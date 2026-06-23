@@ -7,6 +7,7 @@ on:
     paths:
       - 'backend/**'
       - 'scripts/update_production_timeweb.sh'
+      - 'scripts/patch_nginx_realtime_sse.sh'
       - 'scripts/deploy_on_server_console.sh'
       - 'scripts/ensure_server_email_env.sh'
       - '.github/workflows/deploy-backend.yml'
@@ -43,7 +44,8 @@ jobs:
           rsync -avz \
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
             scripts/ensure_server_email_env.sh \
-            root@89.19.216.60:/root/HAN-Eat/scripts/ensure_server_email_env.sh
+            scripts/patch_nginx_realtime_sse.sh \
+            root@89.19.216.60:/root/HAN-Eat/scripts/
 
       - name: Remote pip, migrations, restart
         run: |
@@ -64,6 +66,9 @@ jobs:
           pip install -q -r requirements.txt
           alembic upgrade head
           bash "$APP_DIR/scripts/ensure_server_email_env.sh" "$APP_DIR/backend/.env"
+          if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then
+            bash "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" || true
+          fi
           systemctl daemon-reload
           systemctl restart haneat-api
           systemctl restart haneat-video-worker 2>/dev/null || true

@@ -45,7 +45,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     _scrollController.addListener(_onScroll);
     _realtimeSub = UserRealtimeService.instance.events.listen((event) {
       if (!mounted) return;
-      if (event.event == 'notification.new') {
+      if (event.event == 'notification.new' || event.event == 'sync') {
         unawaited(_loadNotifications(refresh: true));
       } else if (event.event == 'unread_counts' && event.notifications != null) {
         setState(() => _unreadCount = event.notifications!);
