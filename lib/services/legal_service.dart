@@ -93,7 +93,7 @@ class LegalService {
         legalConsentRequired: false,
         legalConsentVersion: data['legal_consent_version'] as String?,
       );
-      await AuthService.instance.updateStoredUser(updated);
+      await AuthService.persistUpdatedUser(updated);
     }
   }
 }

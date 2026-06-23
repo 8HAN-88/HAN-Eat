@@ -66,7 +66,14 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
     setState(() => _submitting = true);
     try {
       await LegalService.acceptConsent();
-      if (mounted) {
+      if (!mounted) return;
+      final from = GoRouterState.of(context).uri.queryParameters['from'];
+      if (from != null &&
+          from.isNotEmpty &&
+          from.startsWith('/') &&
+          !from.startsWith(LegalConsentRoute.path)) {
+        context.go(from);
+      } else {
         context.go(FeedRoute.path);
       }
     } catch (e) {

@@ -237,8 +237,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       if (isAuth &&
           user.legalConsentRequired &&
-          loc != LegalConsentRoute.path) {
-        return LegalConsentRoute.path;
+          loc != LegalConsentRoute.path &&
+          !loc.startsWith('${LegalConsentRoute.path}?')) {
+        final from = Uri.encodeComponent(state.uri.toString());
+        return '${LegalConsentRoute.path}?from=$from';
       }
       if (isAuth &&
           user.emailVerified &&

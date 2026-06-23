@@ -39,6 +39,12 @@ class UserResponse(BaseModel):
                 updates["email_verified"] = verified
             if result.phone_linked != linked:
                 updates["phone_linked"] = linked
+        if hasattr(data, "email"):
+            from app.services.legal_consent_service import consent_required
+
+            required = consent_required(data)
+            if result.legal_consent_required != required:
+                updates["legal_consent_required"] = required
         include_phone = bool((getattr(info, "context", None) or {}).get(
             "include_phone", False
         ))
