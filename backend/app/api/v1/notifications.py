@@ -12,7 +12,9 @@ from app.core.database import get_db
 from app.api.dependencies import get_current_user_required
 from app.models.user import User
 from app.models.notification import Notification
+from app.models.post import Post
 from app.services.push_service import get_push_service
+from app.services.notification_preview_service import post_preview_for_notifications
 
 router = APIRouter()
 
@@ -40,6 +42,25 @@ async def get_notifications(
     notifications = query.order_by(
         Notification.created_at.desc()
     ).limit(limit).offset(offset).all()
+
+    post_ids = set()
+    for notif in notifications:
+        post_id = notif.entity_id if notif.entity_type == "post" else None
+        if post_id is None and isinstance(notif.data, dict):
+            raw = notif.data.get("post_id")
+            if isinstance(raw, int):
+                post_id = raw
+        if post_id:
+            post_ids.add(post_id)
+
+    posts_by_id: dict[int, Post] = {}
+    if post_ids:
+        rows = (
+            db.query(Post)
+            .filter(Post.id.in_(post_ids), Post.deleted_at.is_(None))
+            .all()
+        )
+        posts_by_id = {p.id: p for p in rows}
     
     # Обогащаем данными об акторе
     enriched_notifications = []
@@ -57,6 +78,19 @@ async def get_notifications(
         if payload_data is not None and not isinstance(payload_data, dict):
             payload_data = {"_raw": payload_data}
 
+        post_id = notif.entity_id if notif.entity_type == "post" else None
+        if post_id is None and isinstance(payload_data, dict):
+            raw_post_id = payload_data.get("post_id")
+            if isinstance(raw_post_id, int):
+                post_id = raw_post_id
+
+        thumbnail_url = None
+        post_type = None
+        if post_id and post_id in posts_by_id:
+            preview = post_preview_for_notifications(posts_by_id[post_id])
+            thumbnail_url = preview.get("thumbnail_url")
+            post_type = preview.get("post_type")
+
         enriched_notifications.append({
             "id": notif.id,
             "type": notif.type,
@@ -64,6 +98,8 @@ async def get_notifications(
             "body": notif.body,
             "entity_type": notif.entity_type,
             "entity_id": notif.entity_id,
+            "thumbnail_url": thumbnail_url,
+            "post_type": post_type,
             "actor": {
                 "id": actor.id if actor else None,
                 "name": actor.name if actor else None,

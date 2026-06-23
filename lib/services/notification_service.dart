@@ -359,6 +359,8 @@ class NotificationItem {
   final DateTime? readAt;
   final DateTime? createdAt;
   final Map<String, dynamic>? data;
+  final String? thumbnailUrl;
+  final String? postType;
   
   NotificationItem({
     required this.id,
@@ -372,6 +374,8 @@ class NotificationItem {
     this.readAt,
     this.createdAt,
     this.data,
+    this.thumbnailUrl,
+    this.postType,
   });
   
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
@@ -409,6 +413,8 @@ class NotificationItem {
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
       data: _asStringKeyedMap(json['data']),
+      thumbnailUrl: json['thumbnail_url'] as String?,
+      postType: json['post_type'] as String?,
     );
   }
 
