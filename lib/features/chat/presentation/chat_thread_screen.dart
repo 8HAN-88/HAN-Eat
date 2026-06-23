@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +15,7 @@ import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/chat_models.dart';
@@ -25,6 +27,7 @@ import '../../../services/chat_stream_service.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
@@ -890,6 +893,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     super.dispose();
   }
 
+  void _openUserProfile(int userId) {
+    if (userId <= 0) return;
+    context.push(ProfileRoute.withUserId(userId));
+  }
+
+  void _openPeerProfile() {
+    final peer = _conversation.peer;
+    if (peer != null) _openUserProfile(peer.id);
+  }
+
+  ChatUserBrief? _userBriefForSender(ChatMessage msg) {
+    if (!_conversation.isGroup) return _conversation.peer;
+    for (final member in _groupMembers) {
+      if (member.id == msg.senderId) return member;
+    }
+    for (final member in _conversation.membersPreview) {
+      if (member.id == msg.senderId) return member;
+    }
+    final name = msg.senderName ?? _senderNames[msg.senderId];
+    if (name != null) {
+      return ChatUserBrief(id: msg.senderId, name: name);
+    }
+    return ChatUserBrief(id: msg.senderId, name: '?');
+  }
+
+  Widget _incomingMessageAvatar(ChatMessage msg) {
+    final user = _userBriefForSender(msg);
+    return AppUserAvatar(
+      radius: 16,
+      imageUrl: user?.avatarUrl,
+      displayName: user?.displayName ?? '?',
+      onTap: () => _openUserProfile(msg.senderId),
+    );
+  }
+
   Future<void> _refreshConversation() async {
     try {
       final conv = await ChatService.getConversation(widget.conversationId);
@@ -1132,9 +1170,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
               ..._groupMembers.map(
                 (member) => ListTile(
-                  leading: _ThreadUserAvatar(user: member),
+                  leading: AppUserAvatar(
+                    radius: 20,
+                    imageUrl: member.avatarUrl,
+                    displayName: member.displayName,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openUserProfile(member.id);
+                    },
+                  ),
                   title: Text(member.displayName),
                   subtitle: Text(formatLastSeen(member.lastSeenAt)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openUserProfile(member.id);
+                  },
                 ),
               ),
               if (_groupMembers.isEmpty)
@@ -1932,6 +1982,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onReplyTap: onReplyTap,
       showSenderName: isGroup && !msg.isMine,
       senderLabel: msg.senderName ?? _senderNames[msg.senderId],
+      onSenderTap: isGroup && !msg.isMine
+          ? () => _openUserProfile(msg.senderId)
+          : null,
       isConversationPinned: _pinnedMessage?.id == msg.id,
       wrapWithAlign: wrapWithAlign,
       onPollVote: onPollVote,
@@ -2866,12 +2919,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             )
           : AppBar(
         title: GestureDetector(
-          onTap: isGroup ? _openGroupInfo : null,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          onTap: isSaved
+              ? null
+              : isGroup
+                  ? _openGroupInfo
+                  : _openPeerProfile,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
             children: [
-              Text(_conversation.displayTitle),
-              if (subtitle.isNotEmpty) Text(subtitle, style: subtitleStyle),
+              if (!isSaved && !isGroup && peer != null) ...[
+                AppUserAvatar(
+                  radius: 20,
+                  imageUrl: peer.avatarUrl,
+                  displayName: peer.displayName,
+                  onTap: _openPeerProfile,
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _conversation.displayTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: subtitleStyle,
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -3129,6 +3212,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     children: [
                                       if (_selectionMode)
                                         _selectionIndicator(selected, scheme),
+                                      if (!isSaved && !msg.isMine)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 6,
+                                            bottom: 2,
+                                          ),
+                                          child: _incomingMessageAvatar(msg),
+                                        ),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment: msg.isMine
@@ -3558,6 +3649,7 @@ class _Bubble extends StatelessWidget {
     this.onReplyTap,
     this.showSenderName = false,
     this.senderLabel,
+    this.onSenderTap,
     this.isConversationPinned = false,
     this.onImageTap,
     this.onVideoTap,
@@ -3577,6 +3669,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onReplyTap;
   final bool showSenderName;
   final String? senderLabel;
+  final VoidCallback? onSenderTap;
   final bool isConversationPinned;
   final VoidCallback? onImageTap;
   final VoidCallback? onVideoTap;
@@ -3991,14 +4084,27 @@ class _Bubble extends StatelessWidget {
               padding: isMedia
                   ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
                   : EdgeInsets.zero,
-              child: Text(
-                senderLabel!,
-                style: TextStyle(
-                  color: scheme.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: onSenderTap != null
+                  ? GestureDetector(
+                      onTap: onSenderTap,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        senderLabel!,
+                        style: TextStyle(
+                          color: scheme.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      senderLabel!,
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
             SizedBox(height: isMedia ? 4 : 4),
           ],
@@ -4131,33 +4237,6 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
                     ),
                   ),
       ),
-    );
-  }
-}
-
-class _ThreadUserAvatar extends StatelessWidget {
-  const _ThreadUserAvatar({required this.user});
-
-  final ChatUserBrief user;
-
-  @override
-  Widget build(BuildContext context) {
-    final url = user.avatarUrl;
-    final resolved = url != null && url.isNotEmpty
-        ? ServerConfig.resolvePublisherAvatarUrl(url)
-        : null;
-    final trimmed = user.displayName.trim();
-    final letter = trimmed.isEmpty
-        ? '?'
-        : trimmed.characters.first.toUpperCase();
-    return CircleAvatar(
-      radius: 20,
-      backgroundImage: resolved != null
-          ? ResizeImage(CachedNetworkImageProvider(resolved), width: 80)
-          : null,
-      child: resolved == null
-          ? Text(letter, style: const TextStyle(fontWeight: FontWeight.w600))
-          : null,
     );
   }
 }
