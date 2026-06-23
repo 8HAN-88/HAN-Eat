@@ -28,7 +28,8 @@ Future<void> initializeReelVideosStaggered({
   }
 
   for (final i in pending) {
-    final delayMs = 250 * (i - priorityIndex).abs();
+    if ((i - priorityIndex).abs() > 1) continue;
+    final delayMs = 180 * (i - priorityIndex).abs();
     unawaited(
       Future<void>.delayed(
         Duration(milliseconds: delayMs),

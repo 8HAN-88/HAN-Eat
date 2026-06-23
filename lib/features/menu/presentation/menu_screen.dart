@@ -17,6 +17,7 @@ import '../../../services/recipe_interaction_stats.dart';
 import '../../../services/ai_scan_image.dart';
 import '../../../services/ai_scan_gate.dart';
 import '../../../services/api_service.dart';
+import '../../../services/menu_recommendations_cache.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
@@ -194,6 +195,21 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         _sharedCacheTimestamp != null) {
       _cachedRecommendations = List<Recipe>.from(_sharedRecommendationsCache);
       _cacheTimestamp = _sharedCacheTimestamp;
+    } else {
+      final disk = MenuRecommendationsCache.peek();
+      if (disk != null && disk.recipes.isNotEmpty) {
+        _cachedRecommendations = disk.recipes;
+        _cacheTimestamp = DateTime.now();
+        _sharedRecommendationsCache = List<Recipe>.from(disk.recipes);
+        _sharedCacheTimestamp = _cacheTimestamp;
+        _lastSpoonacularQuotaExhausted = disk.spoonacularQuotaExhausted;
+        _lastSuggestPlusUpgrade = disk.suggestPlusUpgrade;
+        _lastViewerIsPlus = disk.viewerIsPlus;
+        _lastRecipeTranslationEnabled = disk.recipeTranslationEnabled;
+        _lastRecipeTranslationRequiresAi = disk.recipeTranslationRequiresAi;
+        _lastRecipeTranslationApiSupported =
+            disk.recipeTranslationApiSupported;
+      }
     }
 
     _recommendationsFuture = Future.value(_recommendationsFromCacheOnly());
@@ -250,6 +266,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         _cacheTimestamp = DateTime.now();
         _sharedRecommendationsCache = List<Recipe>.from(result.recipes);
         _sharedCacheTimestamp = _cacheTimestamp;
+        unawaited(MenuRecommendationsCache.save(result));
       }
       _lastSpoonacularQuotaExhausted = result.spoonacularQuotaExhausted;
       _lastSuggestPlusUpgrade = result.suggestPlusUpgrade;

@@ -86,11 +86,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
 
-  int get _initialVideoPreloadCount => kIsWeb ? 3 : 4;
+  int get _initialVideoPreloadCount => 1;
 
-  int get _lookaheadVideoPreloadCount => kIsWeb ? 2 : 3;
+  int get _lookaheadVideoPreloadCount => 1;
 
-  int get _controllerRetainDistance => kIsWeb ? 1 : 2;
+  int get _controllerRetainDistance => 1;
 
   bool _shouldPlayReelAt(int index) =>
       index == _currentIndex &&
@@ -202,14 +202,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   }
 
   void _prefetchAdjacentReelFiles(int index) {
+    if (index + 1 >= _reels.length) return;
     final pref = ref.read(videoPlaybackProvider);
-    final urls = <String?>[
-      if (index + 1 < _reels.length)
-        _reels[index + 1].reelVideoSources.prefetchUrl(pref),
-      if (index + 2 < _reels.length)
-        _reels[index + 2].reelVideoSources.prefetchUrl(pref),
-    ];
-    prefetchReelVideoUrls(urls);
+    final url = _reels[index + 1].reelVideoSources.prefetchUrl(pref);
+    prefetchReelVideoUrls([url]);
   }
 
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {

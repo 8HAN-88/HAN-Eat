@@ -14,13 +14,14 @@ final subscriptionStatusFromCacheProvider = StateProvider<bool>((ref) => false);
 final subscriptionStatusProvider =
     FutureProvider<SubscriptionStatusResponse?>((ref) async {
   ref.watch(subscriptionStatusRefreshProvider);
+  final cached =
+      SubscriptionStatusCache.peek() ?? await SubscriptionStatusCache.load();
   try {
     final status = await SubscriptionService.getSubscriptionStatus();
     await SubscriptionStatusCache.save(status);
     ref.read(subscriptionStatusFromCacheProvider.notifier).state = false;
     return status;
   } catch (_) {
-    final cached = await SubscriptionStatusCache.load();
     ref.read(subscriptionStatusFromCacheProvider.notifier).state =
         cached != null;
     return cached;
