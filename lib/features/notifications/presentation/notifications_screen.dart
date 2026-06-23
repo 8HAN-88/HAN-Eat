@@ -135,7 +135,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           notificationId: notification.id,
           read: true,
         );
-      } catch (_) {
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userVisibleError(e))),
+          );
+        }
         return;
       }
     }
