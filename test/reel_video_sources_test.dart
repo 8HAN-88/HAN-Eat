@@ -12,10 +12,10 @@ void main() {
       hls: 'https://cdn/hls/playlist.m3u8',
     );
 
-    test('auto fast start prefers HLS on mobile', () {
+    test('auto fast start prefers 720p', () {
       expect(
         sources.fastStartUrl(VideoQualityPreference.auto),
-        'https://cdn/hls/playlist.m3u8',
+        'https://cdn/720.mp4',
       );
     });
 
@@ -58,14 +58,7 @@ void main() {
       );
     });
 
-    test('auto upgrade skips when HLS available', () {
-      expect(
-        sources.upgradeUrl(VideoQualityPreference.auto, onWifi: true),
-        isNull,
-      );
-    });
-
-    test('auto upgrade to 1080p on wifi without HLS', () {
+    test('auto upgrade to 1080p on wifi', () {
       const noHls = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_480p: 'https://cdn/480.mp4',
@@ -78,15 +71,28 @@ void main() {
       );
     });
 
-    test('auto upgrade to 720p without HLS or 1080p', () {
+    test('auto stays at 720p on cellular', () {
       const noHls = ReelVideoSources(
+        original: 'https://cdn/original.mp4',
+        mp4_480p: 'https://cdn/480.mp4',
+        mp4_720p: 'https://cdn/720.mp4',
+        mp4_1080p: 'https://cdn/1080.mp4',
+      );
+      expect(
+        noHls.upgradeUrl(VideoQualityPreference.auto, onWifi: false),
+        isNull,
+      );
+    });
+
+    test('auto upgrade to original on wifi without 1080p transcode', () {
+      const no1080 = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_480p: 'https://cdn/480.mp4',
         mp4_720p: 'https://cdn/720.mp4',
       );
       expect(
-        noHls.upgradeUrl(VideoQualityPreference.auto, onWifi: true),
-        'https://cdn/720.mp4',
+        no1080.upgradeUrl(VideoQualityPreference.auto, onWifi: true),
+        'https://cdn/original.mp4',
       );
     });
 

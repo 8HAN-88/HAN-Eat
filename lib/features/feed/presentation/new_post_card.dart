@@ -1,4 +1,6 @@
 // Новая карточка поста для нового API
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -790,6 +792,7 @@ class _NewPostCardState extends State<NewPostCard> {
   @override
   Widget build(BuildContext context) {
     final post = _displayPost;
+    final scheme = Theme.of(context).colorScheme;
     final author = post.author; // Автор оригинального поста
     final repostedBy = post.repostedBy; // Тот, кто репостнул
     final channel = post.channel;
@@ -964,39 +967,24 @@ class _NewPostCardState extends State<NewPostCard> {
                   // Аватар (того, кто репостнул, или канала, или автора)
                   GestureDetector(
                     onTap: widget.onAuthorTap,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .outlineVariant
-                              .withValues(alpha: 0.45),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: CircleAvatar(
-                        radius: 20,
-                        backgroundImage: displayAvatar != null
-                            ? ResizeImage(
-                                CachedNetworkImageProvider(
-                                  ServerConfig.resolvePublisherAvatarUrl(
-                                    displayAvatar,
-                                  ),
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundImage: displayAvatar != null
+                          ? ResizeImage(
+                              CachedNetworkImageProvider(
+                                ServerConfig.resolvePublisherAvatarUrl(
+                                  displayAvatar,
                                 ),
-                                width: 80,
-                              )
-                            : null,
-                        child: displayAvatar == null
-                            ? Text(
-                                displayInitial,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              )
-                            : null,
-                      ),
+                              ),
+                              width: 80,
+                            )
+                          : null,
+                      child: displayAvatar == null
+                          ? Text(
+                              displayInitial,
+                              style: const TextStyle(fontSize: 18),
+                            )
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1007,16 +995,30 @@ class _NewPostCardState extends State<NewPostCard> {
                       children: [
                         Row(
                           children: [
-                            GestureDetector(
-                              onTap: widget.onAuthorTap,
-                              child: Text(
-                                displayName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                  letterSpacing: -0.2,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: widget.onAuthorTap,
+                                child: Text(
+                                  displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    letterSpacing: -0.15,
+                                  ),
                                 ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '· ${_formatDate(post.publishedAt ?? post.createdAt)}',
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             // Показываем бейдж "Канал" только для постов из каналов (не репостов)
@@ -1026,14 +1028,14 @@ class _NewPostCardState extends State<NewPostCard> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.1),
+                                  color: scheme.primary.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Канал',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.blue,
+                                    color: scheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1050,7 +1052,7 @@ class _NewPostCardState extends State<NewPostCard> {
                               Icon(
                                 Icons.arrow_downward,
                                 size: 14,
-                                color: Colors.grey[600],
+                                color: scheme.onSurfaceVariant,
                               ),
                               const SizedBox(width: 4),
                               // Аватар оригинального автора (кликабельный)
@@ -1109,7 +1111,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                 child: Text(
                                   originalAuthorName,
                                   style: TextStyle(
-                                    color: Colors.grey[600],
+                                    color: scheme.onSurfaceVariant,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -1121,14 +1123,14 @@ class _NewPostCardState extends State<NewPostCard> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 4, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    color: scheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(3),
                                   ),
-                                  child: const Text(
+                                  child: Text(
                                     'Канал',
                                     style: TextStyle(
                                       fontSize: 9,
-                                      color: Colors.blue,
+                                      color: scheme.primary,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1154,7 +1156,7 @@ class _NewPostCardState extends State<NewPostCard> {
                           Text(
                             channel?.description ?? 'Канал',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: scheme.onSurfaceVariant,
                               fontSize: 12,
                             ),
                             maxLines: 1,
@@ -1165,14 +1167,21 @@ class _NewPostCardState extends State<NewPostCard> {
                           Text(
                             '@${author!.username}',
                             style: TextStyle(
-                              color: Colors.grey[600],
+                              color: scheme.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
                       ],
                     ),
                   ),
-                  _buildOverflowMenuButton(iconSize: 24),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ViewsBadge(count: _formatCount(post.viewsCount)),
+                      const SizedBox(width: 6),
+                      _buildOverflowMenuButton(iconSize: 24),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1185,6 +1194,8 @@ class _NewPostCardState extends State<NewPostCard> {
                   ? FeedVideoAuthorInfo(
                       name: displayName,
                       avatarUrl: displayAvatar,
+                      metaText: _formatDate(post.publishedAt ?? post.createdAt),
+                      viewsText: _formatCount(post.viewsCount),
                       subtitle: isFromChannel && !isRepost
                           ? (channel?.description ?? 'Канал')
                           : (author?.username != null
@@ -1303,74 +1314,28 @@ class _NewPostCardState extends State<NewPostCard> {
                 onPollUpdated: _onPollUpdated,
               ),
           ],
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(
-                  _formatDate(post.publishedAt ?? post.createdAt),
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(Icons.visibility_outlined,
-                    size: 14, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(
-                  _formatCount(post.viewsCount),
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
           // Действия (Instagram-стиль: кнопки снизу)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    // Лайк с счетчиком
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            _isLiked ? Icons.favorite : Icons.favorite_border,
-                            color: _isLiked ? Colors.red : Colors.black,
-                            size: 28,
-                          ),
-                          onPressed: _isLoading ? null : _toggleLike,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(_likesCount),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    _FeedActionButton(
+                      icon: _isLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      label: _formatCount(_likesCount),
+                      color: _isLiked ? const Color(0xFFFF3040) : null,
+                      onTap: _isLoading ? null : _toggleLike,
                     ),
-                    const SizedBox(width: 8),
-                    // Комментарий с счетчиком
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.comment_outlined, size: 28),
-                          onPressed: () async {
+                    const SizedBox(width: 12),
+                    _FeedActionButton(
+                      icon: Icons.mode_comment_outlined,
+                      label: _formatCount(_displayCommentsCount),
+                      onTap: () {
+                        unawaited(() async {
                             if (_isSpoonacularRecipePost) {
                               await _openRecipeFromPost();
                               return;
@@ -1382,56 +1347,26 @@ class _NewPostCardState extends State<NewPostCard> {
                             );
                             await widget.onCommentTap?.call();
                             await _refreshCommentsCount();
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(_displayCommentsCount),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                          }());
+                      },
                     ),
-                    const SizedBox(width: 8),
-                    // Репост с счетчиком
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.send_outlined, size: 28),
-                          onPressed: _isReposting ? null : _openShareSheet,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatCount(_repostsCount),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    _FeedActionButton(
+                      icon: Icons.near_me_outlined,
+                      label: _formatCount(_repostsCount),
+                      onTap: _isReposting ? null : _openShareSheet,
                     ),
                     const Spacer(),
                     if (widget.hideFeedHeader) ...[
                       _buildOverflowMenuButton(iconSize: 28),
                       const SizedBox(width: 4),
                     ],
-                    // Сохранить
-                    IconButton(
-                      icon: Icon(
-                        _isSaved ? Icons.bookmark : Icons.bookmark_border,
-                        color: _isSaved ? Colors.amber : Colors.black,
-                        size: 28,
-                      ),
-                      onPressed: _isSaving ? null : _toggleSave,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                    _FeedIconButton(
+                      icon: _isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      color: _isSaved ? scheme.primary : null,
+                      onTap: _isSaving ? null : _toggleSave,
                     ),
                   ],
                 ),
@@ -1644,20 +1579,16 @@ class _NewPostCardState extends State<NewPostCard> {
           .toList();
 
       if (imageUrls.isNotEmpty) {
-        // Instagram-стиль: квадратные изображения
         final isRecipe = post.type == 'recipe';
         final screenWidth = MediaQuery.of(context).size.width;
-        return AspectRatio(
-          aspectRatio: 1, // Квадратное соотношение как в Instagram
-          child: TelegramPhotoGrid(
-            imageUrls: imageUrls,
-            maxHeight: screenWidth, // Квадратная высота = ширина экрана
-            onTap: isRecipe
-                ? onRecipeTap
-                : null, // Для рецептов используем onTap, для обычных постов - полноэкранный просмотр
-            enableFullscreen:
-                !isRecipe, // Для рецептов отключаем полноэкранный просмотр, для обычных постов - включаем
-          ),
+        final reelHeight = screenWidth * 16 / 9;
+        return TelegramPhotoGrid(
+          imageUrls: imageUrls,
+          maxHeight: reelHeight,
+          singleAspectRatio: 9 / 16,
+          borderRadius: BorderRadius.circular(18),
+          onTap: isRecipe ? onRecipeTap : null,
+          enableFullscreen: !isRecipe,
         );
       }
     }
@@ -1690,7 +1621,11 @@ class _NewPostCardState extends State<NewPostCard> {
       return FeedVideoPlayer(
         videoUrl: videoUrl,
         thumbnailUrl: thumbnailUrl,
-        author: FeedVideoAuthorInfo(name: post.author?.name ?? 'Автор'),
+        author: FeedVideoAuthorInfo(
+          name: post.author?.name ?? 'Автор',
+          metaText: _formatDate(post.publishedAt ?? post.createdAt),
+          viewsText: _formatCount(post.viewsCount),
+        ),
         onOpenFullscreen: () {
           FeedAnalyticsService.openDetail(
             post,
@@ -1730,6 +1665,118 @@ class _NewPostCardState extends State<NewPostCard> {
     }
 
     return null;
+  }
+}
+
+class _ViewsBadge extends StatelessWidget {
+  const _ViewsBadge({required this.count});
+
+  final String count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.5),
+          width: 0.7,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.visibility_outlined,
+            size: 14,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            count,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeedActionButton extends StatelessWidget {
+  const _FeedActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = color ?? scheme.onSurface;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 27, color: onTap == null ? scheme.outline : fg),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: onTap == null ? scheme.outline : scheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.1,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedIconButton extends StatelessWidget {
+  const _FeedIconButton({
+    required this.icon,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(
+          icon,
+          size: 29,
+          color: onTap == null ? scheme.outline : (color ?? scheme.onSurface),
+        ),
+      ),
+    );
   }
 }
 

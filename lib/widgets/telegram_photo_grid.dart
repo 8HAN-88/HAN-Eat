@@ -14,6 +14,7 @@ class TelegramPhotoGrid extends StatelessWidget {
   final BorderRadius? borderRadius;
   final VoidCallback? onTap; // Обработчик клика (для постов - открыть детальную страницу)
   final bool enableFullscreen; // Включить полноэкранный просмотр при клике на фото
+  final double singleAspectRatio;
 
   const TelegramPhotoGrid({
     super.key,
@@ -23,6 +24,7 @@ class TelegramPhotoGrid extends StatelessWidget {
     this.borderRadius,
     this.onTap,
     this.enableFullscreen = true, // По умолчанию включен
+    this.singleAspectRatio = 1,
   });
 
   @override
@@ -41,9 +43,8 @@ class TelegramPhotoGrid extends StatelessWidget {
   }
 
   Widget _buildSingleImage(BuildContext context, String url) {
-    // Для одного изображения используем квадратное соотношение как в Instagram
     final imageWidget = AspectRatio(
-      aspectRatio: 1,
+      aspectRatio: singleAspectRatio,
       child: ClipRRect(
         borderRadius: borderRadius ?? BorderRadius.circular(12),
         child: _buildImage(url, double.infinity, double.infinity),

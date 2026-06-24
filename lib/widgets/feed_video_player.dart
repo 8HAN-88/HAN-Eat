@@ -10,6 +10,8 @@ class FeedVideoAuthorInfo {
     required this.name,
     this.avatarUrl,
     this.subtitle,
+    this.metaText,
+    this.viewsText,
     this.isChannel = false,
     this.onTap,
   });
@@ -17,6 +19,8 @@ class FeedVideoAuthorInfo {
   final String name;
   final String? avatarUrl;
   final String? subtitle;
+  final String? metaText;
+  final String? viewsText;
   final bool isChannel;
   final VoidCallback? onTap;
 }
@@ -122,6 +126,19 @@ class FeedVideoPlayer extends StatelessWidget {
                                         ),
                                       ),
                                     ),
+                                    if (author.metaText != null &&
+                                        author.metaText!.isNotEmpty) ...[
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        '· ${author.metaText}',
+                                        style: TextStyle(
+                                          color:
+                                              Colors.white.withValues(alpha: 0.82),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                     if (author.isChannel) ...[
                                       const SizedBox(width: 6),
                                       Container(
@@ -162,6 +179,11 @@ class FeedVideoPlayer extends StatelessWidget {
                               ],
                             ),
                           ),
+                          if (author.viewsText != null &&
+                              author.viewsText!.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            _VideoViewsBadge(count: author.viewsText!),
+                          ],
                         ],
                       ),
                     ),
@@ -171,6 +193,43 @@ class FeedVideoPlayer extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _VideoViewsBadge extends StatelessWidget {
+  const _VideoViewsBadge({required this.count});
+
+  final String count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.34),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.2),
+          width: 0.7,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.visibility_outlined, size: 14, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            count,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+        ],
       ),
     );
   }
