@@ -28,6 +28,11 @@ _EXEMPT_PREFIXES = (
 )
 
 
+def _is_realtime_stream(path: str) -> bool:
+    """SSE — долгоживущие соединения, не считаем в минутный лимит."""
+    return path.endswith("/stream") and path.startswith("/api/v1/")
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -50,6 +55,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
         if _is_exempt(request.url.path):
+            return await call_next(request)
+        if _is_realtime_stream(request.url.path):
             return await call_next(request)
 
         from app.core.redis_client import REDIS_IS_STUB, get_redis

@@ -213,7 +213,7 @@ class Settings(BaseSettings):
     
     # Rate Limiting (для 100k пользователей)
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_PER_MINUTE: int = 120  # Увеличено для production
+    RATE_LIMIT_PER_MINUTE: int = 300  # Web+PWA: polling + чаты + лента
     RATE_LIMIT_PER_HOUR: int = 5000
     RATE_LIMIT_BURST: int = 20  # Кратковременные всплески
     

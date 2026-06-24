@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/haneat_http_client.dart';
+import '../core/network/api_rate_limit_backoff.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -61,6 +62,10 @@ class ChatStreamService {
   void disconnect() {
     _disposed = true;
     pause();
+    _closeStreamClient();
+  }
+
+  void _closeStreamClient() {
     _client?.close();
     _client = null;
   }
@@ -68,6 +73,8 @@ class ChatStreamService {
   Future<void> _openStream() async {
     if (_disposed) return;
     _subscription?.cancel();
+    _subscription = null;
+    _closeStreamClient();
 
     try {
       final token = await AuthService.getAccessTokenForApi();
@@ -84,7 +91,7 @@ class ChatStreamService {
         'Connection': 'keep-alive',
       });
 
-      _client = HanEatHttpClient.shared;
+      _client = HanEatHttpClient.createStreamClient();
       final response = await _client!.send(request).timeout(
         const Duration(seconds: 20),
         onTimeout: () => throw TimeoutException('SSE connect timeout'),
@@ -92,6 +99,15 @@ class ChatStreamService {
       if (response.statusCode == 401) {
         await AuthService.refreshToken();
         if (!_disposed) _scheduleReconnect();
+        return;
+      }
+      if (response.statusCode == 429) {
+        final retryAfter =
+            int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
+        ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+        if (!_disposed) {
+          _scheduleReconnect(extraDelay: Duration(seconds: retryAfter));
+        }
         return;
       }
       if (response.statusCode != 200) {
@@ -170,13 +186,16 @@ class ChatStreamService {
     }
   }
 
-  void _scheduleReconnect() {
+  void _scheduleReconnect({Duration extraDelay = Duration.zero}) {
     if (_disposed) return;
+    if (ApiRateLimitBackoff.isActive) {
+      extraDelay = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 30);
+    }
     _reconnectTimer?.cancel();
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
     final baseSec = math.min(1 + _reconnectAttempt, 15);
     final jitterMs = _random.nextInt(800);
-    final delay = Duration(seconds: baseSec, milliseconds: jitterMs);
+    final delay = Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
     _reconnectTimer = Timer(delay, connect);
   }
 }

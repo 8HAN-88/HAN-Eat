@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/haneat_http_client.dart';
+import '../core/network/api_rate_limit_backoff.dart';
 import '../core/platform/web_page_visibility.dart';
 import '../features/chat/application/chat_realtime_signals.dart';
 import 'api_reachability_service.dart';
@@ -99,8 +100,8 @@ class UserRealtimeService {
 
   void _startWebKeepalive() {
     if (!kIsWeb) return;
-    Timer.periodic(const Duration(seconds: 4), (_) {
-      if (_disposed || _backgroundPaused) return;
+    Timer.periodic(const Duration(seconds: 20), (_) {
+      if (_disposed || _backgroundPaused || ApiRateLimitBackoff.isActive) return;
       if (AuthService.instance.currentUser == null) return;
       if (!connected.value && _reconnectTimer == null) {
         connect();
@@ -186,6 +187,13 @@ class UserRealtimeService {
         if (!_disposed) _scheduleReconnect();
         return;
       }
+      if (response.statusCode == 429) {
+        final retryAfter =
+            int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
+        ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+        if (!_disposed) _scheduleReconnect(extraDelay: Duration(seconds: retryAfter));
+        return;
+      }
       if (response.statusCode != 200) {
         if (!_disposed) _scheduleReconnect();
         return;
@@ -265,14 +273,18 @@ class UserRealtimeService {
     }
   }
 
-  void _scheduleReconnect() {
+  void _scheduleReconnect({Duration extraDelay = Duration.zero}) {
     if (_disposed || _backgroundPaused) return;
     if (AuthService.instance.currentUser == null) return;
+    if (ApiRateLimitBackoff.isActive) {
+      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 30);
+      extraDelay = wait;
+    }
     _reconnectTimer?.cancel();
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
     final baseSec = math.min(1 + _reconnectAttempt, 15);
     final jitterMs = _random.nextInt(800);
-    final delay = Duration(seconds: baseSec, milliseconds: jitterMs);
+    final delay = Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
     _reconnectTimer = Timer(delay, connect);
   }
 }

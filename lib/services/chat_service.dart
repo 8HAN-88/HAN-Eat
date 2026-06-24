@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../core/network/api_endpoint_resolver.dart';
+import '../core/network/api_rate_limit_backoff.dart';
 import '../core/network/haneat_http_client.dart';
 import '../models/chat_models.dart';
 import '../utils/api_error_parser.dart';
@@ -77,6 +78,15 @@ class ChatService {
     int retries = 3,
     Duration? timeout,
   }) async {
+    if (ApiRateLimitBackoff.isActive) {
+      final sec = ApiRateLimitBackoff.remaining?.inSeconds ?? 60;
+      return http.Response(
+        '{"detail":"Too many requests. Please try again later.","code":"RATE_LIMIT_EXCEEDED"}',
+        429,
+        headers: {'retry-after': '$sec'},
+      );
+    }
+
     final effectiveTimeout = timeout ?? _requestTimeout;
     var headers = await _headersOrNull();
     if (headers == null) {
@@ -111,6 +121,12 @@ class ChatService {
         };
         response = await run(headers);
       }
+    }
+    if (response.statusCode == 429) {
+      final retryAfter =
+          int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
+      ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+      return response;
     }
     if (retries > 0 && _shouldRetry(response.statusCode)) {
       if (response.statusCode == 503 || response.statusCode == 504) {

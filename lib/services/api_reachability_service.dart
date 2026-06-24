@@ -79,7 +79,7 @@ class ApiReachabilityService {
       kIsWeb ? const Duration(seconds: 45) : const Duration(seconds: 50);
 
   Duration get _unhealthyInterval =>
-      kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 10);
+      kIsWeb ? const Duration(seconds: 15) : const Duration(seconds: 10);
 
   Duration get _probeTimeout => isApiReachable.value
       ? (kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 12))

@@ -19,6 +19,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
+import '../../../core/network/api_rate_limit_backoff.dart';
 import '../../../core/network/haneat_http_client.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
@@ -180,6 +181,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   double? _uploadProgress;
   String _sendingStatus = 'Отправка…';
   final Map<int, _PendingTextSend> _failedTextSends = {};
+  final List<_PendingTextSend> _textOutboundQueue = [];
+  bool _textDrainActive = false;
   _PendingMediaSend? _pendingMediaRetry;
   bool _showVoiceHint = false;
   bool _hasMore = false;
@@ -242,6 +245,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_loadCachedMessages());
     unawaited(_restoreDraft());
     unawaited(_restoreVoiceHint());
+    unawaited(AuthService.getAccessTokenForApi());
     _load(refresh: true);
     _startPolling();
     _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -280,7 +284,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollTimer?.cancel();
     final interval = _sseConnected
         ? const Duration(seconds: 60)
-        : const Duration(seconds: 5);
+        : const Duration(seconds: 12);
     _pollTimer = Timer.periodic(interval, (_) {
       if (!_appPaused) _pollNew();
     });
@@ -562,29 +566,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _retryFailedText(int tempId) async {
     final pending = _failedTextSends[tempId];
-    if (pending == null || _sending) return;
+    if (pending == null) return;
     _failedTextSends.remove(tempId);
-    _beginSending();
-    try {
-      final msg = await ChatService.sendText(
-        conversationId: widget.conversationId,
-        content: pending.text,
-        replyToMessageId: pending.replyToMessageId,
-        clientMessageId: pending.clientMessageId,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg, removeTempId: tempId);
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _failedTextSends[tempId] = pending);
-      _endSending();
-      showErrorSnackBar(context, e);
-    }
+    setState(() => _textOutboundQueue.add(pending));
+    unawaited(_drainTextOutboundQueue());
   }
 
   void _discardFailedText(int tempId) {
@@ -2291,9 +2276,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _drainTextOutboundQueue() async {
+    if (_textDrainActive) return;
+    _textDrainActive = true;
+    try {
+      while (_textOutboundQueue.isNotEmpty && mounted) {
+        if (ApiRateLimitBackoff.isActive) {
+          final wait =
+              ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
+          await Future<void>.delayed(wait);
+          continue;
+        }
+        final pending = _textOutboundQueue.first;
+        try {
+          final msg = await ChatService.sendText(
+            conversationId: widget.conversationId,
+            content: pending.text,
+            replyToMessageId: pending.replyToMessageId,
+            clientMessageId: pending.clientMessageId,
+          );
+          if (!mounted) return;
+          _textOutboundQueue.removeAt(0);
+          setState(() {
+            _integrateMessage(msg, removeTempId: pending.tempId);
+          });
+          _scrollToBottom();
+          unawaited(
+            ChatCacheService.saveThread(widget.conversationId, _messages),
+          );
+          unawaited(ChatCacheService.clearDraft(widget.conversationId));
+        } catch (e) {
+          if (!mounted) return;
+          _textOutboundQueue.removeAt(0);
+          setState(() {
+            _failedTextSends[pending.tempId] = pending;
+          });
+          showErrorSnackBar(context, e);
+        }
+      }
+    } finally {
+      _textDrainActive = false;
+      if (mounted && _textOutboundQueue.isNotEmpty) {
+        unawaited(_drainTextOutboundQueue());
+      }
+    }
+  }
+
   Future<void> _sendText() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _recording) return;
     if (_messages.any(
       (m) => m.isMine && m.id < 0 && m.content == text,
     )) {
@@ -2340,7 +2371,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final replyId = _replyTo?.id;
     final uid = AuthService.instance.currentUser?.id ?? 0;
     final clientMessageId = const Uuid().v4();
-    _beginSending();
     _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final optimistic = ChatMessage(
@@ -2353,37 +2383,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isMine: true,
       replyToMessageId: replyId,
     );
+    final pending = _PendingTextSend(
+      text: text,
+      replyToMessageId: replyId,
+      clientMessageId: clientMessageId,
+      tempId: tempId,
+    );
     setState(() {
       _messages.add(optimistic);
       _replyTo = null;
+      _textOutboundQueue.add(pending);
     });
-    try {
-      final msg = await ChatService.sendText(
-        conversationId: widget.conversationId,
-        content: text,
-        replyToMessageId: replyId,
-        clientMessageId: clientMessageId,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg, removeTempId: tempId);
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-      unawaited(ChatCacheService.clearDraft(widget.conversationId));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _failedTextSends[tempId] = _PendingTextSend(
-          text: text,
-          replyToMessageId: replyId,
-          clientMessageId: clientMessageId,
-        );
-      });
-      _endSending();
-      showErrorSnackBar(context, e);
-    }
+    _scrollToBottom();
+    unawaited(_drainTextOutboundQueue());
   }
 
   void _openImage(String url) {
@@ -3588,7 +3600,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   const SizedBox(width: 4),
                   if (_hasText && !_recording)
                     IconButton.filled(
-                      onPressed: _sending || _recording ? null : _sendText,
+                      onPressed: _recording ? null : _sendText,
                       icon: _sending
                           ? SizedBox(
                               width: 18,
@@ -3646,11 +3658,13 @@ class _PendingTextSend {
   const _PendingTextSend({
     required this.text,
     required this.clientMessageId,
+    required this.tempId,
     this.replyToMessageId,
   });
 
   final String text;
   final String clientMessageId;
+  final int tempId;
   final int? replyToMessageId;
 }
 
