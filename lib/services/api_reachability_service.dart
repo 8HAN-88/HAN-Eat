@@ -105,7 +105,8 @@ class ApiReachabilityService {
       final response = await HanEatHttpClient.withShared(
         (client) => client.get(uri).timeout(_probeTimeout),
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 &&
+          ApiEndpointResolver.isHealthJson(response.body)) {
         _consecutiveFailures = 0;
         _applyReachable(true);
         isApiConnecting.value = false;
@@ -123,7 +124,8 @@ class ApiReachabilityService {
         final response = await HanEatHttpClient.withShared(
           (client) => client.get(uri).timeout(_probeTimeout),
         );
-        if (response.statusCode == 200) {
+        if (response.statusCode == 200 &&
+          ApiEndpointResolver.isHealthJson(response.body)) {
           _consecutiveFailures = 0;
           _applyReachable(true);
           isApiConnecting.value = false;

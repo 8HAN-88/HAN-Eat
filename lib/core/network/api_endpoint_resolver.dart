@@ -41,7 +41,11 @@ class ApiEndpointResolver {
     }
 
     if (kIsWeb || host != productionHost) {
-      _resolvedRoot = configured;
+      if (kIsWeb) {
+        await _resolveWebSameOriginOrFallback();
+      } else {
+        _resolvedRoot = configured;
+      }
       return;
     }
 
@@ -84,6 +88,18 @@ class ApiEndpointResolver {
     final configured = AppBuildConfig.apiBaseRoot;
     final uri = Uri.tryParse(configured);
     final host = (uri?.host ?? '').toLowerCase();
+    if (kIsWeb) {
+      final previous = _resolvedRoot;
+      _resolvedRoot = null;
+      usingIpFallback = false;
+      await resolve();
+      if (previous != _resolvedRoot) {
+        // ignore: invalid_use_of_visible_for_testing_member
+        HanEatHttpClient.resetForTest();
+        debugPrint('📡 API: endpoint switched → $resolvedRoot');
+      }
+      return;
+    }
     if (host != productionHost) return;
 
     final previous = _resolvedRoot;
@@ -97,17 +113,69 @@ class ApiEndpointResolver {
     }
   }
 
+  static bool _isHealthJson(String body) =>
+      body.contains('"status"') && !body.trimLeft().startsWith('<!');
+
+  static bool isHealthJson(String body) => _isHealthJson(body);
+
+  /// На web: same-origin API, если nginx проксирует /health; иначе api.haneat.app.
+  static Future<void> _resolveWebSameOriginOrFallback() async {
+    final page = Uri.base;
+    if (page.scheme == 'file' || page.host.isEmpty) {
+      _resolvedRoot = AppBuildConfig.apiBaseRoot;
+      return;
+    }
+
+    final sameOrigin = '${page.scheme}://${page.host}';
+    final configured = AppBuildConfig.apiBaseRoot;
+    final configuredHost = Uri.tryParse(configured)?.host.toLowerCase() ?? '';
+    final onProductionWeb = page.host == 'haneat.app' ||
+        page.host == 'www.haneat.app' ||
+        configuredHost == 'haneat.app' ||
+        configuredHost == 'www.haneat.app';
+
+    if (!onProductionWeb) {
+      _resolvedRoot = configured;
+      return;
+    }
+
+    if (await _probeHealthJson(sameOrigin)) {
+      _resolvedRoot = sameOrigin;
+      debugPrint('📡 Web API: same-origin $sameOrigin');
+      return;
+    }
+
+    _resolvedRoot = 'https://$productionHost';
+    debugPrint(
+      '📡 Web API: nginx proxy not ready on $sameOrigin → $productionHost',
+    );
+  }
+
+  static Future<bool> _probeHealthJson(String root) async {
+    try {
+      final uri = Uri.parse('$root/health');
+      final response = await HanEatHttpClient.withShared(
+        (client) => client.get(uri).timeout(const Duration(seconds: 5)),
+      );
+      return response.statusCode == 200 && _isHealthJson(response.body);
+    } catch (_) {
+      return false;
+    }
+  }
+
   static bool hostNeedsSslRelaxation(String host) =>
       usingIpFallback && host == productionFallbackIp;
 
-  /// Подмена api.haneat.app → IP в URL с бэкенда, пока DNS не починен.
-  /// На web haneat.app — same-origin для Safari.
+  /// На web haneat.app — same-origin для Safari, только если resolver выбрал page host.
   static String rewriteProductionHost(String url) {
     if (url.isEmpty) return url;
     if (kIsWeb) {
       try {
         final page = Uri.base;
-        if (page.host == 'haneat.app' || page.host == 'www.haneat.app') {
+        final root = Uri.tryParse(resolvedRoot);
+        if (root != null &&
+            (page.host == 'haneat.app' || page.host == 'www.haneat.app') &&
+            root.host == page.host) {
           final uri = Uri.parse(url);
           if (uri.host.toLowerCase() == productionHost) {
             return uri.replace(host: page.host, scheme: page.scheme).toString();

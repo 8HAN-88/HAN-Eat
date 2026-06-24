@@ -1,0 +1,34 @@
+name: Patch nginx (haneat.app API proxy)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.TIMEWEB_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 89.19.216.60 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Patch nginx on Timeweb
+        run: |
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            scripts/patch_nginx_web_api_proxy.sh \
+            scripts/setup_nginx_haneat_web.sh \
+            root@89.19.216.60:/tmp/
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            root@89.19.216.60 \
+            "bash /tmp/patch_nginx_web_api_proxy.sh"
+
+      - name: Smoke
+        run: |
+          curl -sf https://haneat.app/health | grep -q '"status"'
+          curl -sf https://haneat.app/api/v1/system/readiness | grep -q '"app_env"'
+          curl -sf https://www.haneat.app/health | grep -q '"status"'

@@ -26,7 +26,7 @@ class ServerConfig {
   static String get baseUrl {
     final root = _ipv4Loopback(_configuredRoot);
 
-    // В браузере — same-origin API на production (Safari iOS ломается на cross-origin).
+    // В браузере — API из resolver (same-origin или fallback api.haneat.app).
     if (kIsWeb) {
       try {
         final page = Uri.base;
@@ -36,9 +36,6 @@ class ServerConfig {
             final port = apiUri.hasPort ? apiUri.port : 5001;
             final scheme = page.scheme == 'https' ? 'https' : 'http';
             return Uri(scheme: scheme, host: page.host, port: port).toString();
-          }
-          if (page.host == 'haneat.app' || page.host == 'www.haneat.app') {
-            return '${page.scheme}://${page.host}';
           }
         }
       } catch (_) {}
