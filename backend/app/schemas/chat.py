@@ -89,6 +89,7 @@ class SendMessageRequest(BaseModel):
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
+    client_message_id: Optional[str] = Field(default=None, max_length=64)
     poll_question: Optional[str] = Field(default=None, max_length=300)
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None

@@ -713,7 +713,21 @@ class ChatService:
         content: str,
         media_url: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
-    ) -> Message:
+        client_message_id: Optional[str] = None,
+    ) -> tuple[Message, bool]:
+        if client_message_id:
+            existing = (
+                self.db.query(Message)
+                .filter(
+                    Message.conversation_id == conversation_id,
+                    Message.sender_id == sender_id,
+                    Message.client_message_id == client_message_id,
+                )
+                .first()
+            )
+            if existing:
+                return existing, False
+
         if not self._is_member(conversation_id, sender_id):
             raise ValueError("forbidden")
 
@@ -747,6 +761,7 @@ class ChatService:
             content=content.strip() if content else "",
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
+            client_message_id=client_message_id,
         )
         self.db.add(msg)
 
@@ -798,7 +813,7 @@ class ChatService:
                 },
             )
 
-        return msg
+        return msg, True
 
     def delete_message(
         self, conversation_id: int, message_id: int, user_id: int

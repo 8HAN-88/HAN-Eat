@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
@@ -569,6 +570,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         content: pending.text,
         replyToMessageId: pending.replyToMessageId,
+        clientMessageId: pending.clientMessageId,
       );
       if (!mounted) return;
       setState(() {
@@ -2337,6 +2339,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final replyId = _replyTo?.id;
     final uid = AuthService.instance.currentUser?.id ?? 0;
+    final clientMessageId = const Uuid().v4();
     _beginSending();
     _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
@@ -2359,6 +2362,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         content: text,
         replyToMessageId: replyId,
+        clientMessageId: clientMessageId,
       );
       if (!mounted) return;
       setState(() {
@@ -2374,6 +2378,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _failedTextSends[tempId] = _PendingTextSend(
           text: text,
           replyToMessageId: replyId,
+          clientMessageId: clientMessageId,
         );
       });
       _endSending();
@@ -3640,10 +3645,12 @@ class _PendingMediaSend {
 class _PendingTextSend {
   const _PendingTextSend({
     required this.text,
+    required this.clientMessageId,
     this.replyToMessageId,
   });
 
   final String text;
+  final String clientMessageId;
   final int? replyToMessageId;
 }
 

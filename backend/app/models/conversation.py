@@ -66,6 +66,7 @@ class Message(Base):
     content = Column(String(4000), nullable=False, default="")
     media_url = Column(String(512), nullable=True)
     reply_to_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    client_message_id = Column(String(64), nullable=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)

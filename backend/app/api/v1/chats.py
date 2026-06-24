@@ -645,13 +645,14 @@ async def send_message(
         except ValueError as e:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     try:
-        msg = svc.send_message(
+        msg, is_new = svc.send_message(
             conversation_id=conversation_id,
             sender_id=current_user.id,
             msg_type=body.type,
             content=content,
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
+            client_message_id=body.client_message_id,
         )
         db.commit()
         db.refresh(msg)
@@ -666,11 +667,12 @@ async def send_message(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
         raise
 
-    _emit(
-        conversation_id,
-        {"type": "message.new", "message": _message_payload(msg)},
-    )
-    _notify_chat_inbox(db, conversation_id, current_user.id)
+    if is_new:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(msg)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)

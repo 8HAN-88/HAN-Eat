@@ -14,6 +14,7 @@ import 'server_config.dart';
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
   static const _requestTimeout = Duration(seconds: 12);
+  static const _sendTimeout = Duration(seconds: 25);
 
   static bool _shouldRetry(int statusCode) =>
       statusCode == 401 ||
@@ -74,7 +75,9 @@ class ChatService {
       Map<String, String> headers,
     ) request, {
     int retries = 3,
+    Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? _requestTimeout;
     var headers = await _headersOrNull();
     if (headers == null) {
       if (!await AuthService.isAuthenticated()) {
@@ -87,7 +90,7 @@ class ChatService {
       try {
         return await HanEatHttpClient.withShared(
           (client) => request(client, h).timeout(
-            _requestTimeout,
+            effectiveTimeout,
             onTimeout: () => http.Response('{"detail":"timeout"}', 504),
           ),
         );
@@ -120,6 +123,7 @@ class ChatService {
       return _request(
         request,
         retries: retries - 1,
+        timeout: timeout,
       );
     }
     return response;
@@ -129,9 +133,16 @@ class ChatService {
         (client, headers) => client.get(uri, headers: headers),
       );
 
-  static Future<http.Response> _post(Uri uri, {Object? body}) => _request(
-        (client, headers) =>
-            client.post(uri, headers: headers, body: body),
+  static Future<http.Response> _post(
+    Uri uri, {
+    Object? body,
+    int retries = 3,
+    Duration? timeout,
+  }) =>
+      _request(
+        (client, headers) => client.post(uri, headers: headers, body: body),
+        retries: retries,
+        timeout: timeout,
       );
 
   static Future<http.Response> _delete(Uri uri) => _request(
@@ -408,12 +419,14 @@ class ChatService {
     required int conversationId,
     required String content,
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     return _send(
       conversationId: conversationId,
       type: 'text',
       content: content,
       replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
     );
   }
 
@@ -488,6 +501,8 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
+      retries: 0,
+      timeout: _sendTimeout,
       body: jsonEncode({
         'type': 'poll',
         'poll_question': question,
@@ -541,15 +556,19 @@ class ChatService {
     required String content,
     String? mediaUrl,
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
+      retries: 0,
+      timeout: _sendTimeout,
       body: jsonEncode({
         'type': type,
         'content': content,
         if (mediaUrl != null) 'media_url': mediaUrl,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
