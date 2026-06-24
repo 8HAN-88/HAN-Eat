@@ -102,9 +102,9 @@ class ApiReachabilityService {
     }
     try {
       final uri = Uri.parse('${ServerConfig.baseUrl}/health');
-      final response = await HanEatHttpClient.shared
-          .get(uri)
-          .timeout(_probeTimeout);
+      final response = await HanEatHttpClient.withShared(
+        (client) => client.get(uri).timeout(_probeTimeout),
+      );
       if (response.statusCode == 200) {
         _consecutiveFailures = 0;
         _applyReachable(true);
@@ -120,9 +120,9 @@ class ApiReachabilityService {
       await ApiEndpointResolver.revalidateIfNeeded();
       try {
         final uri = Uri.parse('${ServerConfig.baseUrl}/health');
-        final response = await HanEatHttpClient.shared
-            .get(uri)
-            .timeout(_probeTimeout);
+        final response = await HanEatHttpClient.withShared(
+          (client) => client.get(uri).timeout(_probeTimeout),
+        );
         if (response.statusCode == 200) {
           _consecutiveFailures = 0;
           _applyReachable(true);
@@ -205,6 +205,7 @@ class ApiReachabilityService {
     }
     _warmUpInFlight = true;
     _lastWarmUpAt = now;
+    HanEatHttpClient.ensureHealthy();
     try {
       final ok = await checkNow();
       if (!ok || AuthService.instance.currentUser == null) return;

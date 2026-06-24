@@ -18,6 +18,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
+import '../../../core/network/haneat_http_client.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
@@ -1440,6 +1441,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_cancelRecording());
       }
     } else {
+      HanEatHttpClient.ensureHealthy();
       unawaited(ApiReachabilityService.instance.warmUp());
       _stream?.resume();
       _pollNew();
@@ -2290,6 +2292,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendText() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
+    if (_messages.any(
+      (m) => m.isMine && m.id < 0 && m.content == text,
+    )) {
+      return;
+    }
+    if (_failedTextSends.values.any((p) => p.text == text)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Сообщение не отправлено — нажмите «Повторить» ниже'),
+          ),
+        );
+      }
+      return;
+    }
     final editing = _editingMessage;
     if (editing != null) {
       setState(() => _sending = true);

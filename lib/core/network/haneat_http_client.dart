@@ -50,6 +50,9 @@ class HanEatHttpClient {
     platform.resetHanEatHttpClientForTest();
   }
 
+  /// Вызвать при старте / возврате из фона — сброс «закрытого» singleton.
+  static void ensureHealthy() => recreateShared();
+
   @visibleForTesting
   static void resetForTest() {
     recreateShared();

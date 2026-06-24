@@ -207,10 +207,13 @@ Future<bool> _initFirebase() async {
 /// Прогрев TLS/TCP к API (не блокирует UI).
 Future<void> _warmApiConnection() async {
   try {
+    HanEatHttpClient.ensureHealthy();
     final uri = Uri.parse('${ServerConfig.baseUrl}/health');
-    await HanEatHttpClient.shared
-        .get(uri)
-        .timeout(kIsWeb ? const Duration(seconds: 6) : const Duration(seconds: 8));
+    await HanEatHttpClient.withShared(
+      (client) => client.get(uri).timeout(
+        kIsWeb ? const Duration(seconds: 6) : const Duration(seconds: 8),
+      ),
+    );
     if (kDebugMode) debugPrint('API warm-up: OK');
   } catch (e) {
     if (kDebugMode) debugPrint('API warm-up: $e');
