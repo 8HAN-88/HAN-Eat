@@ -13,6 +13,14 @@ http.Client createHanEatHttpClient() {
   final existing = _ioInstance;
   if (existing != null) return existing;
 
+  _ioInstance = _buildIoClient();
+  return _ioInstance!;
+}
+
+/// Отдельный клиент для долгих SSE-потоков (не закрывать [createHanEatHttpClient]).
+http.Client createHanEatStreamClient() => _buildIoClient();
+
+IOClient _buildIoClient() {
   final ioClient = HttpClient()
     ..connectionTimeout = const Duration(seconds: 25)
     ..idleTimeout = const Duration(seconds: 90);
@@ -32,8 +40,9 @@ http.Client createHanEatHttpClient() {
     };
   }
 
-  _ioInstance = IOClient(ioClient);
-  return _ioInstance!;
+  return IOClient(ioClient);
 }
 
 void resetHanEatHttpClientForTest() => _ioInstance = null;
+
+http.Client createHanEatUploadClient() => _buildIoClient();

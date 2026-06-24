@@ -2320,6 +2320,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final replyId = _replyTo?.id;
     final uid = AuthService.instance.currentUser?.id ?? 0;
+    _beginSending();
+    _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final optimistic = ChatMessage(
       id: tempId,
@@ -2335,8 +2337,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages.add(optimistic);
       _replyTo = null;
     });
-    _beginSending();
-    _controller.clear();
     try {
       final msg = await ChatService.sendText(
         conversationId: widget.conversationId,

@@ -15,9 +15,25 @@ class HanEatHttpClient {
     return _instance ??= platform.createHanEatHttpClient();
   }
 
-  @visibleForTesting
-  static void resetForTest() {
+  /// Долгоживущие SSE — отдельный клиент, его можно закрывать без влияния на API.
+  static http.Client createStreamClient() =>
+      platform.createHanEatStreamClient();
+
+  /// Одноразовый клиент для загрузки файлов (S3 PUT / mock API).
+  static http.Client createUploadClient() =>
+      platform.createHanEatUploadClient();
+
+  /// Пересоздать shared после случайного close (защита от регрессий).
+  static void recreateShared() {
+    try {
+      _instance?.close();
+    } catch (_) {}
     _instance = null;
     platform.resetHanEatHttpClientForTest();
+  }
+
+  @visibleForTesting
+  static void resetForTest() {
+    recreateShared();
   }
 }

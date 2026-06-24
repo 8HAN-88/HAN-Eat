@@ -63,6 +63,7 @@ class MediaUploadService {
             'file_type': fileType,
             'content_type': contentType,
             'file_size': fileSize,
+            'prefer_api': preferApiUpload,
           }),
         );
       } catch (e) {
@@ -106,7 +107,7 @@ class MediaUploadService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await HanEatHttpClient.shared.put(
+    final response = await _putUpload(
       Uri.parse(effectiveUrl),
       headers: headers,
       body: fileBytes,
@@ -121,6 +122,29 @@ class MediaUploadService {
         );
       }
       throw Exception('Failed to upload file: ${response.statusCode} - $errorBody');
+    }
+  }
+
+  static Future<http.Response> _putUpload(
+    Uri uri, {
+    required Map<String, String> headers,
+    required List<int> body,
+  }) async {
+    Future<http.Response> send() async {
+      final client = HanEatHttpClient.createUploadClient();
+      try {
+        return await client.put(uri, headers: headers, body: body);
+      } finally {
+        client.close();
+      }
+    }
+
+    try {
+      return await send();
+    } on http.ClientException catch (e) {
+      if (!e.message.contains('already closed')) rethrow;
+      HanEatHttpClient.recreateShared();
+      return await send();
     }
   }
   
@@ -246,28 +270,19 @@ class MediaUploadService {
     bool waitForProcessing = true,
   }) async {
     try {
-      // На iOS/Android прямой PUT в S3 часто падает (ClientLoad failed).
-      final preferApi = !kIsWeb;
+      // Загрузка через API надёжнее прямого PUT в S3 (CORS, закрытый HTTP-клиент).
       return await _uploadMediaFileOnce(
         file: file,
         fileType: fileType,
         onProgress: onProgress,
         waitForProcessing: waitForProcessing,
-        preferApiUpload: preferApi,
+        preferApiUpload: true,
       );
     } catch (e) {
-      if (!kIsWeb) rethrow;
-      try {
-        return await _uploadMediaFileOnce(
-          file: file,
-          fileType: fileType,
-          onProgress: onProgress,
-          waitForProcessing: waitForProcessing,
-          preferApiUpload: true,
-        );
-      } catch (_) {
+      if (kIsWeb) {
         throw Exception('Upload failed: $e');
       }
+      rethrow;
     }
   }
 
