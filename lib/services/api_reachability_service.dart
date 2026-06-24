@@ -113,6 +113,7 @@ class ApiReachabilityService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('ApiReachabilityService: $e');
+      HanEatHttpClient.recreateShared();
       if (FeedSyncService.onlineListenable.value) {
         isApiConnecting.value = true;
       }

@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../core/config/google_auth_config.dart';
 import '../core/phone/phone_hash.dart';
 import '../core/network/haneat_http_client.dart';
+import '../core/network/api_endpoint_resolver.dart';
 import 'account_session_service.dart';
 import 'server_config.dart';
 
@@ -18,6 +19,7 @@ bool _apiUnreachable(Object e) {
       s.contains('Failed to fetch') ||
       s.contains('SocketException') ||
       s.contains('ClientException') ||
+      s.contains('already closed') ||
       s.contains('Network is unreachable') ||
       s.contains('No route to host') ||
       s.contains('Connection reset');
@@ -554,6 +556,12 @@ class AuthService {
         'Проверьте интернет или попробуйте через Wi‑Fi.',
       );
 
+  static Future<void> _recoverNetworkBeforeRetry() async {
+    HanEatHttpClient.recreateShared();
+    await ApiEndpointResolver.revalidateIfNeeded();
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  }
+
   /// Вход пользователя
   static Future<AuthResponse> login({
     required String email,
@@ -574,14 +582,14 @@ class AuthService {
             e.message.contains('подключиться');
         if (attempt == 0 && retryable) {
           if (kDebugMode) debugPrint('🔐 login retry (${attempt + 2}/2)');
-          await Future<void>.delayed(const Duration(milliseconds: 800));
+          await _recoverNetworkBeforeRetry();
           continue;
         }
         rethrow;
       } on TimeoutException catch (e) {
         lastError = e;
         if (attempt == 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 800));
+          await _recoverNetworkBeforeRetry();
           continue;
         }
         throw _loginTimeoutException();
@@ -589,7 +597,7 @@ class AuthService {
         lastError = e;
         if (attempt == 0 &&
             (e is http.ClientException || _apiUnreachable(e))) {
-          await Future<void>.delayed(const Duration(milliseconds: 800));
+          await _recoverNetworkBeforeRetry();
           continue;
         }
         if (e is http.ClientException || _apiUnreachable(e)) {
@@ -607,21 +615,23 @@ class AuthService {
     String email,
     String password,
   ) async {
-    final response = await HanEatHttpClient.shared
-        .post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'email': email,
-            'password': password,
-          }),
-        )
-        .timeout(
-          _authRequestTimeout,
-          onTimeout: () {
-            throw _loginTimeoutException();
-          },
-        );
+    final response = await HanEatHttpClient.withShared(
+      (client) => client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'password': password,
+            }),
+          )
+          .timeout(
+            _authRequestTimeout,
+            onTimeout: () {
+              throw _loginTimeoutException();
+            },
+          ),
+    );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;

@@ -15,6 +15,24 @@ class HanEatHttpClient {
     return _instance ??= platform.createHanEatHttpClient();
   }
 
+  /// Выполнить запрос через shared-клиент; при close — пересоздать и повторить.
+  static Future<T> withShared<T>(
+    Future<T> Function(http.Client client) action,
+  ) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await action(shared);
+      } on http.ClientException {
+        if (attempt == 0) {
+          recreateShared();
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw StateError('HanEatHttpClient.withShared unreachable');
+  }
+
   /// Долгоживущие SSE — отдельный клиент, его можно закрывать без влияния на API.
   static http.Client createStreamClient() =>
       platform.createHanEatStreamClient();
