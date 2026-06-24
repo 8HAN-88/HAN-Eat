@@ -26,17 +26,20 @@ class ServerConfig {
   static String get baseUrl {
     final root = _ipv4Loopback(_configuredRoot);
 
-    // В браузере совмещаем хост со страницей (localhost vs 127.0.0.1), иначе часть проверок/CORS ведёт себя неожиданно.
+    // В браузере — same-origin API на production (Safari iOS ломается на cross-origin).
     if (kIsWeb) {
       try {
         final page = Uri.base;
-        if (page.scheme != 'file' &&
-            page.host.isNotEmpty &&
-            (page.host == 'localhost' || page.host == '127.0.0.1')) {
-          final apiUri = Uri.parse(root);
-          final port = apiUri.hasPort ? apiUri.port : 5001;
-          final scheme = page.scheme == 'https' ? 'https' : 'http';
-          return Uri(scheme: scheme, host: page.host, port: port).toString();
+        if (page.scheme != 'file' && page.host.isNotEmpty) {
+          if (page.host == 'localhost' || page.host == '127.0.0.1') {
+            final apiUri = Uri.parse(root);
+            final port = apiUri.hasPort ? apiUri.port : 5001;
+            final scheme = page.scheme == 'https' ? 'https' : 'http';
+            return Uri(scheme: scheme, host: page.host, port: port).toString();
+          }
+          if (page.host == 'haneat.app' || page.host == 'www.haneat.app') {
+            return '${page.scheme}://${page.host}';
+          }
         }
       } catch (_) {}
       return root;

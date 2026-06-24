@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../core/network/haneat_http_client.dart';
+import '../core/network/api_endpoint_resolver.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -13,13 +14,14 @@ class MediaUploadService {
 
   /// Подменить хост в URL на тот, с которого доступен сервер (для эмулятора — 10.0.2.2)
   static String _fixUploadUrl(String uploadUrl) {
+    final fixed = ApiEndpointResolver.rewriteProductionHost(uploadUrl);
     final base = ServerConfig.baseUrl;
-    final uri = Uri.parse(uploadUrl);
+    final uri = Uri.parse(fixed);
     if (uri.host == 'localhost' || uri.host == '127.0.0.1') {
-      final fixed = Uri.parse(base).replace(path: uri.path, query: uri.query, fragment: uri.fragment);
-      return fixed.toString();
+      final resolved = Uri.parse(base).replace(path: uri.path, query: uri.query, fragment: uri.fragment);
+      return resolved.toString();
     }
-    return uploadUrl;
+    return fixed;
   }
 
   /// Инициализация загрузки (получение presigned URL или API URL)

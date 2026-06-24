@@ -43,6 +43,11 @@ class HanEatHttpClient {
 
   /// Пересоздать shared после случайного close (защита от регрессий).
   static void recreateShared() {
+    if (kIsWeb) {
+      _instance = null;
+      platform.resetHanEatHttpClientForTest();
+      return;
+    }
     try {
       _instance?.close();
     } catch (_) {}
@@ -50,8 +55,10 @@ class HanEatHttpClient {
     platform.resetHanEatHttpClientForTest();
   }
 
-  /// Вызвать при старте / возврате из фона — сброс «закрытого» singleton.
-  static void ensureHealthy() => recreateShared();
+  /// Вызвать при старте / возврате из фона — только на mobile/desktop.
+  static void ensureHealthy() {
+    if (!kIsWeb) recreateShared();
+  }
 
   @visibleForTesting
   static void resetForTest() {

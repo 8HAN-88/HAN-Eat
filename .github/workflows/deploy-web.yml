@@ -14,7 +14,8 @@ on:
       - 'web/**'
       - 'scripts/build_web_release.sh'
       - 'scripts/patch_web_cache_bust.sh'
-      - 'scripts/patch_web_service_worker.sh'
+      - 'scripts/patch_nginx_web_api_proxy.sh'
+      - 'scripts/setup_nginx_haneat_web.sh'
       - 'scripts/generate_web_pwa_icons.py'
       - '.github/workflows/deploy-web.yml'
 
@@ -45,7 +46,7 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.prebuilt_tag == '' }}
         run: ./scripts/build_web_release.sh
         env:
-          HANEAT_API_BASE: https://api.haneat.app
+          HANEAT_API_BASE: https://haneat.app
 
       - name: Download prebuilt web tarball
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.prebuilt_tag != '' }}
@@ -74,7 +75,17 @@ jobs:
             root@89.19.216.60 \
             "chown -R www-data:www-data /var/www/haneat-web 2>/dev/null || true"
 
+      - name: Patch nginx (same-origin API for Safari Web)
+        run: |
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            scripts/patch_nginx_web_api_proxy.sh \
+            root@89.19.216.60:/tmp/patch_nginx_web_api_proxy.sh
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
+            root@89.19.216.60 \
+            "bash /tmp/patch_nginx_web_api_proxy.sh"
+
       - name: Smoke
         run: |
           curl -sf https://haneat.app/version.json
+          curl -sf https://haneat.app/health
           curl -sfI https://haneat.app/flutter_bootstrap.js | grep -i cache-control

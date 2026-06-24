@@ -101,7 +101,20 @@ class ApiEndpointResolver {
       usingIpFallback && host == productionFallbackIp;
 
   /// Подмена api.haneat.app → IP в URL с бэкенда, пока DNS не починен.
+  /// На web haneat.app — same-origin для Safari.
   static String rewriteProductionHost(String url) {
+    if (url.isEmpty) return url;
+    if (kIsWeb) {
+      try {
+        final page = Uri.base;
+        if (page.host == 'haneat.app' || page.host == 'www.haneat.app') {
+          final uri = Uri.parse(url);
+          if (uri.host.toLowerCase() == productionHost) {
+            return uri.replace(host: page.host, scheme: page.scheme).toString();
+          }
+        }
+      } catch (_) {}
+    }
     if (!usingIpFallback || url.isEmpty) return url;
     try {
       final uri = Uri.parse(url);
