@@ -205,8 +205,6 @@ class UserRealtimeService {
       if (!connected.value) {
         connected.value = true;
       }
-      _events.add(const UserRealtimeEvent(event: 'sync'));
-      ChatRealtimeSignals.instance.notifyNewMessage();
 
       _buffer = '';
       _subscription = response.stream.listen(

@@ -3821,8 +3821,6 @@ class _PendingMediaSend {
     this.fileName,
     this.replyToMessageId,
     this.voiceDurationSec,
-    this.uploadedMediaUrl,
-    this.attempts = 0,
   });
 
   final _PendingMediaKind kind;
@@ -3832,7 +3830,7 @@ class _PendingMediaSend {
   final int? replyToMessageId;
   final int? voiceDurationSec;
   String? uploadedMediaUrl;
-  int attempts;
+  int attempts = 0;
 }
 
 class _PendingTextSend {
@@ -3841,14 +3839,13 @@ class _PendingTextSend {
     required this.clientMessageId,
     required this.tempId,
     this.replyToMessageId,
-    this.attempts = 0,
   });
 
   final String text;
   final String clientMessageId;
   final int tempId;
   final int? replyToMessageId;
-  int attempts;
+  int attempts = 0;
 }
 
 Widget _threadMenuRow(IconData icon, String label) {

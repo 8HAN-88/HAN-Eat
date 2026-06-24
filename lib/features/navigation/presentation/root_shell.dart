@@ -178,7 +178,6 @@ class _RootShellState extends ConsumerState<RootShell> {
         : const Duration(seconds: 90);
     Future.delayed(interval, () {
       if (mounted) {
-        unawaited(ApiReachabilityService.instance.checkNow());
         _loadChatUnreadCount();
         _startPeriodicUpdate();
       }

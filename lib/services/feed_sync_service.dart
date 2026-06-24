@@ -51,6 +51,10 @@ class FeedSyncService {
 
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
   FeedSortMode _lastBackgroundSort = FeedSortMode.personalized;
+  bool _backgroundSyncInFlight = false;
+  DateTime? _lastBackgroundSyncAt;
+
+  static const Duration _backgroundSyncMinInterval = Duration(minutes: 2);
 
   void _initRealtimeRefresh() {
     _realtimeSub = UserRealtimeService.instance.events.listen((event) {
@@ -162,12 +166,22 @@ class FeedSyncService {
     FeedSortMode sortMode = FeedSortMode.personalized,
   }) async {
     if (!isOnline.value) return;
+    if (!ApiReachabilityService.instance.isApiReachable.value) return;
+    if (_backgroundSyncInFlight) return;
+    if (!FeedCacheService.instance.needsSync()) return;
+    final lastSync = _lastBackgroundSyncAt;
+    if (lastSync != null &&
+        DateTime.now().difference(lastSync) < _backgroundSyncMinInterval) {
+      return;
+    }
     _lastBackgroundSort = sortMode;
+    _backgroundSyncInFlight = true;
+    _lastBackgroundSyncAt = DateTime.now();
 
     try {
       final posts = await FeedService.getMainFeed(
         mode: sortMode,
-        limit: 50,
+        limit: 20,
       );
 
       await FeedCacheService.instance.cachePosts(posts, sortMode: sortMode);
@@ -177,6 +191,8 @@ class FeedSyncService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Background sync failed: $e');
+    } finally {
+      _backgroundSyncInFlight = false;
     }
   }
 

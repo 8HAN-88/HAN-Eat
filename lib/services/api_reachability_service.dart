@@ -25,7 +25,7 @@ class ApiReachabilityService {
     if (svc._started) return;
     svc._started = true;
 
-    registerWebPageVisibilityListener(() => svc.warmUp(force: true));
+    registerWebPageVisibilityListener(svc._scheduleVisibilityWarmUp);
 
     unawaited(svc.checkNow());
     svc._schedulePeriodicCheck();
@@ -71,6 +71,7 @@ class ApiReachabilityService {
   int _consecutiveFailures = 0;
   bool _reconnectInFlight = false;
   bool _warmUpInFlight = false;
+  Timer? _visibilityWarmUpDebounce;
   DateTime? _lastWarmUpAt;
 
   static const Duration _warmUpMinInterval = Duration(seconds: 20);
@@ -114,9 +115,8 @@ class ApiReachabilityService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('ApiReachabilityService: $e');
-      HanEatHttpClient.recreateShared();
-      if (FeedSyncService.onlineListenable.value) {
-        isApiConnecting.value = true;
+      if (!kIsWeb) {
+        HanEatHttpClient.recreateShared();
       }
       await ApiEndpointResolver.revalidateIfNeeded();
       try {
@@ -220,5 +220,12 @@ class ApiReachabilityService {
     } finally {
       _warmUpInFlight = false;
     }
+  }
+
+  void _scheduleVisibilityWarmUp() {
+    _visibilityWarmUpDebounce?.cancel();
+    _visibilityWarmUpDebounce = Timer(const Duration(milliseconds: 450), () {
+      unawaited(warmUp());
+    });
   }
 }
