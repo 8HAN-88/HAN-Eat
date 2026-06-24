@@ -15,7 +15,7 @@ import 'server_config.dart';
 class ChatService {
   static String get _base => ServerConfig.apiBaseUrl;
   static const _requestTimeout = Duration(seconds: 12);
-  static const _sendTimeout = Duration(seconds: 25);
+  static const _sendTimeout = Duration(seconds: 35);
 
   static bool _shouldRetry(int statusCode) =>
       statusCode == 401 ||
@@ -593,7 +593,7 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
-      retries: 1,
+      retries: 2,
       timeout: _sendTimeout,
       body: jsonEncode({
         'type': type,

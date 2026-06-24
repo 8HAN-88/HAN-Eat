@@ -185,6 +185,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<int, _PendingTextSend> _failedTextSends = {};
   final List<_PendingTextSend> _textOutboundQueue = [];
   bool _textDrainActive = false;
+  final List<_PendingMediaSend> _mediaOutboundQueue = [];
+  bool _mediaDrainActive = false;
   _PendingMediaSend? _pendingMediaRetry;
   final Set<String> _inFlightMediaClientIds = {};
   bool _voiceSending = false;
@@ -313,6 +315,185 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted || _appPaused) return;
     if (_textOutboundQueue.isNotEmpty) {
       unawaited(_drainTextOutboundQueue());
+    }
+    if (_mediaOutboundQueue.isNotEmpty) {
+      unawaited(_drainMediaOutboundQueue());
+    } else if (_pendingMediaRetry != null) {
+      unawaited(_retryPendingMedia());
+    }
+  }
+
+  bool _isRetryableSendError(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('too many requests') ||
+        s.contains('rate_limit') ||
+        s.contains('429') ||
+        s.contains('503') ||
+        s.contains('504') ||
+        s.contains('timeout') ||
+        s.contains('network') ||
+        s.contains('connection') ||
+        s.contains('socket') ||
+        s.contains('offline');
+  }
+
+  String _mediaStatusLabel(_PendingMediaSend pending) {
+    return switch (pending.kind) {
+      _PendingMediaKind.image => 'Загрузка фото…',
+      _PendingMediaKind.video => 'Загрузка видео…',
+      _PendingMediaKind.file => 'Загрузка файла…',
+      _PendingMediaKind.voice => 'Загрузка голосового…',
+    };
+  }
+
+  void _enqueueMediaSend(_PendingMediaSend pending) {
+    if (_mediaOutboundQueue
+        .any((p) => p.clientMessageId == pending.clientMessageId)) {
+      return;
+    }
+    setState(() => _mediaOutboundQueue.add(pending));
+    unawaited(_drainMediaOutboundQueue());
+  }
+
+  Future<void> _drainMediaOutboundQueue() async {
+    if (_mediaDrainActive) return;
+    _mediaDrainActive = true;
+    try {
+      while (_mediaOutboundQueue.isNotEmpty && mounted) {
+        while (ApiRateLimitBackoff.isActive) {
+          final wait =
+              ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
+          await Future<void>.delayed(wait);
+          if (!mounted) return;
+        }
+        final pending = _mediaOutboundQueue.first;
+        if (!_sending) {
+          _beginSending(status: _mediaStatusLabel(pending));
+        }
+        try {
+          await _deliverMediaPending(pending);
+          _mediaOutboundQueue.removeAt(0);
+          if (_pendingMediaRetry?.clientMessageId == pending.clientMessageId) {
+            setState(() => _pendingMediaRetry = null);
+          }
+          if (_mediaOutboundQueue.isEmpty) {
+            _endSending();
+          } else if (mounted) {
+            _beginSending(status: _mediaStatusLabel(_mediaOutboundQueue.first));
+          }
+          _scrollToBottom();
+        } catch (e) {
+          pending.attempts++;
+          if (_isRetryableSendError(e) && pending.attempts < 8) {
+            final waitSec = (2 * pending.attempts).clamp(2, 45);
+            if (mounted) {
+              setState(() {
+                _sendingStatus = 'Повтор через $waitSec с…';
+              });
+            }
+            await Future<void>.delayed(Duration(seconds: waitSec));
+            continue;
+          }
+          _mediaOutboundQueue.removeAt(0);
+          _endSending();
+          _rememberFailedMedia(pending);
+          if (mounted) {
+            final fallback = switch (pending.kind) {
+              _PendingMediaKind.image => 'Не удалось отправить фото',
+              _PendingMediaKind.video => 'Не удалось отправить видео',
+              _PendingMediaKind.file => 'Не удалось отправить файл',
+              _PendingMediaKind.voice => 'Не удалось отправить голосовое',
+            };
+            showErrorSnackBar(context, e, fallback: fallback);
+          }
+        }
+      }
+    } finally {
+      _mediaDrainActive = false;
+      if (mounted && _mediaOutboundQueue.isNotEmpty) {
+        unawaited(_drainMediaOutboundQueue());
+      }
+    }
+  }
+
+  Future<void> _deliverMediaPending(_PendingMediaSend pending) async {
+    _inFlightMediaClientIds.add(pending.clientMessageId);
+    try {
+      final reply = pending.replyToMessageId ?? _replyTo?.id;
+      String? mediaUrl = pending.uploadedMediaUrl;
+      if (mediaUrl == null) {
+        final fileType = switch (pending.kind) {
+          _PendingMediaKind.image => 'image',
+          _PendingMediaKind.video => 'video',
+          _PendingMediaKind.file => 'document',
+          _PendingMediaKind.voice => 'audio',
+        };
+        final uploaded = await MediaUploadService.uploadMediaFile(
+          file: pending.file,
+          fileType: fileType,
+          clientUploadId: pending.clientMessageId,
+          waitForProcessing: pending.kind != _PendingMediaKind.video,
+          onProgress: (p) =>
+              _setUploadProgress(p, status: _mediaStatusLabel(pending)),
+        );
+        final url = uploaded.url;
+        if (url == null || url.isEmpty) throw Exception('Нет URL файла');
+        mediaUrl = pending.kind == _PendingMediaKind.voice
+            ? ServerConfig.resolveVoiceMediaUrl(url)
+            : ServerConfig.resolveMediaUrl(url);
+        pending.uploadedMediaUrl = mediaUrl;
+      }
+      _setUploadProgress(1, status: 'Отправка…');
+      final ChatMessage msg;
+      switch (pending.kind) {
+        case _PendingMediaKind.image:
+          msg = await ChatService.sendImage(
+            conversationId: widget.conversationId,
+            mediaUrl: mediaUrl,
+            replyToMessageId: reply,
+            clientMessageId: pending.clientMessageId,
+          );
+        case _PendingMediaKind.video:
+          msg = await ChatService.sendVideo(
+            conversationId: widget.conversationId,
+            mediaUrl: mediaUrl,
+            replyToMessageId: reply,
+            clientMessageId: pending.clientMessageId,
+          );
+        case _PendingMediaKind.file:
+          msg = await ChatService.sendFile(
+            conversationId: widget.conversationId,
+            mediaUrl: mediaUrl,
+            fileName: pending.fileName ?? 'file',
+            replyToMessageId: reply,
+            clientMessageId: pending.clientMessageId,
+          );
+        case _PendingMediaKind.voice:
+          msg = await ChatService.sendVoice(
+            conversationId: widget.conversationId,
+            mediaUrl: mediaUrl,
+            durationSec: pending.voiceDurationSec ?? 1,
+            replyToMessageId: reply,
+            clientMessageId: pending.clientMessageId,
+          );
+      }
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(msg);
+        _replyTo = null;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      if (pending.kind == _PendingMediaKind.file &&
+          pending.fileName != null &&
+          pending.uploadedMediaUrl != null) {
+        unawaited(_rememberRecentFile(
+          name: pending.fileName!,
+          file: pending.file,
+          mediaUrl: pending.uploadedMediaUrl!,
+        ));
+      }
+    } finally {
+      _inFlightMediaClientIds.remove(pending.clientMessageId);
     }
   }
 
@@ -612,6 +793,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final pending = _failedTextSends[tempId];
     if (pending == null) return;
     _failedTextSends.remove(tempId);
+    pending.attempts = 0;
     setState(() => _textOutboundQueue.add(pending));
     unawaited(_drainTextOutboundQueue());
   }
@@ -634,35 +816,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _retryPendingMedia() async {
     final pending = _pendingMediaRetry;
-    if (pending == null || _sending) return;
-    if (_inFlightMediaClientIds.contains(pending.clientMessageId)) return;
+    if (pending == null) return;
     while (ApiRateLimitBackoff.isActive) {
       final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
       await Future<void>.delayed(wait);
       if (!mounted) return;
     }
     setState(() => _pendingMediaRetry = null);
-    switch (pending.kind) {
-      case _PendingMediaKind.image:
-        await _sendPickedImage(
-          pending.file,
-          replyToId: pending.replyToMessageId,
-          clientMessageId: pending.clientMessageId,
-        );
-      case _PendingMediaKind.video:
-        await _sendPickedVideo(
-          pending.file,
-          replyToId: pending.replyToMessageId,
-          clientMessageId: pending.clientMessageId,
-        );
-      case _PendingMediaKind.file:
-        await _sendPickedFile(
-          pending.file,
-          fileName: pending.fileName ?? 'file',
-          replyToId: pending.replyToMessageId,
-          clientMessageId: pending.clientMessageId,
-        );
-    }
+    pending.attempts = 0;
+    _enqueueMediaSend(pending);
   }
 
   Widget _pendingMediaRetryBanner(ColorScheme scheme) {
@@ -672,6 +834,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.image => 'фото',
       _PendingMediaKind.video => 'видео',
       _PendingMediaKind.file => 'файл',
+      _PendingMediaKind.voice => 'голосовое',
     };
     return Material(
       color: scheme.errorContainer.withValues(alpha: 0.55),
@@ -1691,59 +1854,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       if (durationSec < 1) return;
       if (!kIsWeb && (path == null || path.isEmpty)) return;
-      if (_inFlightMediaClientIds.contains(clientMessageId)) return;
-      _inFlightMediaClientIds.add(clientMessageId);
 
-      _beginSending(status: 'Загрузка голосового…');
-      try {
-        final XFile file;
-        if (kIsWeb) {
-          if (path == null || path.isEmpty) {
-            throw Exception('Не удалось сохранить запись');
-          }
-          final bytes = await XFile(path).readAsBytes();
-          if (bytes.isEmpty) throw Exception('Пустая запись');
-          file = XFile.fromData(
-            bytes,
-            name: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
-            mimeType: 'audio/webm',
-          );
-        } else {
-          file = XFile(path!);
+      final XFile file;
+      if (kIsWeb) {
+        if (path == null || path.isEmpty) {
+          throw Exception('Не удалось сохранить запись');
         }
-        final uploaded = await MediaUploadService.uploadMediaFile(
-          file: file,
-          fileType: 'audio',
-          clientUploadId: clientMessageId,
-          onProgress: (p) =>
-              _setUploadProgress(p, status: 'Загрузка голосового…'),
+        final bytes = await XFile(path).readAsBytes();
+        if (bytes.isEmpty) throw Exception('Пустая запись');
+        file = XFile.fromData(
+          bytes,
+          name: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
+          mimeType: 'audio/webm',
         );
-        final url = uploaded.url;
-        if (url == null || url.isEmpty) throw Exception('Нет URL файла');
-        final resolved = ServerConfig.resolveVoiceMediaUrl(url);
-        _setUploadProgress(1, status: 'Отправка…');
-        final msg = await ChatService.sendVoice(
-          conversationId: widget.conversationId,
-          mediaUrl: resolved,
-          durationSec: durationSec,
-          replyToMessageId: _replyTo?.id,
-          clientMessageId: clientMessageId,
-        );
-        if (!mounted) return;
-        setState(() {
-          _integrateMessage(msg);
-          _replyTo = null;
-        });
-        _endSending();
-        _scrollToBottom();
-        unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-      } catch (e) {
-        if (!mounted) return;
-        _endSending();
-        showErrorSnackBar(context, e, fallback: 'Не удалось отправить голосовое');
-      } finally {
-        _inFlightMediaClientIds.remove(clientMessageId);
+      } else {
+        file = XFile(path!);
       }
+      _enqueueMediaSend(_PendingMediaSend(
+        kind: _PendingMediaKind.voice,
+        file: file,
+        clientMessageId: clientMessageId,
+        voiceDurationSec: durationSec,
+        replyToMessageId: _replyTo?.id,
+      ));
     } finally {
       _voiceSending = false;
     }
@@ -2416,6 +2549,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(ChatCacheService.clearDraft(widget.conversationId));
         } catch (e) {
           if (!mounted) return;
+          pending.attempts++;
+          if (_isRetryableSendError(e) && pending.attempts < 6) {
+            final waitSec = (2 * pending.attempts).clamp(2, 30);
+            await Future<void>.delayed(Duration(seconds: waitSec));
+            continue;
+          }
           _textOutboundQueue.removeAt(0);
           setState(() {
             _failedTextSends[pending.tempId] = pending;
@@ -2532,7 +2671,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _showAttachMenu() async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final selection = await showChatAttachSheet(context);
     if (!mounted || selection == null) return;
     switch (selection.kind) {
@@ -2782,7 +2921,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickFromMediaLibrary() async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final picker = ImagePicker();
     final file = await picker.pickMedia(
       imageQuality: 85,
@@ -2814,49 +2953,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
-    final cid = clientMessageId ?? const Uuid().v4();
-    if (_inFlightMediaClientIds.contains(cid)) return;
-    _inFlightMediaClientIds.add(cid);
-    final reply = replyToId ?? _replyTo?.id;
-    _beginSending(status: 'Загрузка фото…');
-    try {
-      final uploaded = await MediaUploadService.uploadMediaFile(
-        file: file,
-        fileType: 'image',
-        clientUploadId: cid,
-        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка фото…'),
-      );
-      final url = uploaded.url;
-      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
-      final resolved = ServerConfig.resolveMediaUrl(url);
-      _setUploadProgress(1, status: 'Отправка…');
-      final msg = await ChatService.sendImage(
-        conversationId: widget.conversationId,
-        mediaUrl: resolved,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      _rememberFailedMedia(_PendingMediaSend(
-        kind: _PendingMediaKind.image,
-        file: file,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      ));
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить фото');
-    } finally {
-      _inFlightMediaClientIds.remove(cid);
-    }
+    _enqueueMediaSend(_PendingMediaSend(
+      kind: _PendingMediaKind.image,
+      file: file,
+      clientMessageId: clientMessageId ?? const Uuid().v4(),
+      replyToMessageId: replyToId ?? _replyTo?.id,
+    ));
   }
 
   Future<void> _sendPickedVideo(
@@ -2864,50 +2966,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
-    final cid = clientMessageId ?? const Uuid().v4();
-    if (_inFlightMediaClientIds.contains(cid)) return;
-    _inFlightMediaClientIds.add(cid);
-    final reply = replyToId ?? _replyTo?.id;
-    _beginSending(status: 'Загрузка видео…');
-    try {
-      final uploaded = await MediaUploadService.uploadMediaFile(
-        file: file,
-        fileType: 'video',
-        waitForProcessing: false,
-        clientUploadId: cid,
-        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка видео…'),
-      );
-      final url = uploaded.url;
-      if (url == null || url.isEmpty) throw Exception('Нет URL файла');
-      final resolved = ServerConfig.resolveMediaUrl(url);
-      _setUploadProgress(1, status: 'Отправка…');
-      final msg = await ChatService.sendVideo(
-        conversationId: widget.conversationId,
-        mediaUrl: resolved,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      _rememberFailedMedia(_PendingMediaSend(
-        kind: _PendingMediaKind.video,
-        file: file,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      ));
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить видео');
-    } finally {
-      _inFlightMediaClientIds.remove(cid);
-    }
+    _enqueueMediaSend(_PendingMediaSend(
+      kind: _PendingMediaKind.video,
+      file: file,
+      clientMessageId: clientMessageId ?? const Uuid().v4(),
+      replyToMessageId: replyToId ?? _replyTo?.id,
+    ));
   }
 
   /// На web браузер часто отдаёт webm без расширения в имени — бэкенд тогда отклоняет upload.
@@ -2928,7 +2992,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickFile() async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -2959,57 +3023,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
-    final cid = clientMessageId ?? const Uuid().v4();
-    if (_inFlightMediaClientIds.contains(cid)) return;
-    _inFlightMediaClientIds.add(cid);
-    final reply = replyToId ?? _replyTo?.id;
-    _beginSending(status: 'Загрузка файла…');
-    try {
-      final uploaded = await MediaUploadService.uploadMediaFile(
-        file: file,
-        fileType: 'document',
-        clientUploadId: cid,
-        onProgress: (p) => _setUploadProgress(p, status: 'Загрузка файла…'),
-      );
-      final fileUrl = uploaded.url;
-      if (fileUrl == null || fileUrl.isEmpty) {
-        throw Exception('Не удалось загрузить файл');
-      }
-      _setUploadProgress(1, status: 'Отправка…');
-      final msg = await ChatService.sendFile(
-        conversationId: widget.conversationId,
-        mediaUrl: ServerConfig.resolveMediaUrl(fileUrl),
-        fileName: fileName,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-      unawaited(_rememberRecentFile(
-        name: fileName,
-        file: file,
-        mediaUrl: fileUrl,
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      _rememberFailedMedia(_PendingMediaSend(
-        kind: _PendingMediaKind.file,
-        file: file,
-        fileName: fileName,
-        replyToMessageId: reply,
-        clientMessageId: cid,
-      ));
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить файл');
-    } finally {
-      _inFlightMediaClientIds.remove(cid);
-    }
+    _enqueueMediaSend(_PendingMediaSend(
+      kind: _PendingMediaKind.file,
+      file: file,
+      fileName: fileName,
+      clientMessageId: clientMessageId ?? const Uuid().v4(),
+      replyToMessageId: replyToId ?? _replyTo?.id,
+    ));
   }
 
   Future<void> _rememberRecentFile({
@@ -3029,7 +3049,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickImage({required ImageSource source}) async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final picker = ImagePicker();
     final file = await picker.pickImage(
       source: source,
@@ -3713,7 +3733,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: _sending || _recording ? null : _showAttachMenu,
+                    onPressed: _recording ? null : _showAttachMenu,
                     icon: const Icon(Icons.attach_file_outlined),
                     tooltip: 'Вложение',
                   ),
@@ -3791,15 +3811,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 }
 
-enum _PendingMediaKind { image, video, file }
+enum _PendingMediaKind { image, video, file, voice }
 
 class _PendingMediaSend {
-  const _PendingMediaSend({
+  _PendingMediaSend({
     required this.kind,
     required this.file,
     required this.clientMessageId,
     this.fileName,
     this.replyToMessageId,
+    this.voiceDurationSec,
+    this.uploadedMediaUrl,
+    this.attempts = 0,
   });
 
   final _PendingMediaKind kind;
@@ -3807,20 +3830,25 @@ class _PendingMediaSend {
   final String clientMessageId;
   final String? fileName;
   final int? replyToMessageId;
+  final int? voiceDurationSec;
+  String? uploadedMediaUrl;
+  int attempts;
 }
 
 class _PendingTextSend {
-  const _PendingTextSend({
+  _PendingTextSend({
     required this.text,
     required this.clientMessageId,
     required this.tempId,
     this.replyToMessageId,
+    this.attempts = 0,
   });
 
   final String text;
   final String clientMessageId;
   final int tempId;
   final int? replyToMessageId;
+  int attempts;
 }
 
 Widget _threadMenuRow(IconData icon, String label) {

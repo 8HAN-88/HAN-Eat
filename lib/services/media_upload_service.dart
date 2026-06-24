@@ -295,7 +295,7 @@ class MediaUploadService {
     String? clientUploadId,
   }) async {
     Object? lastError;
-    for (var attempt = 0; attempt < 4; attempt++) {
+    for (var attempt = 0; attempt < 6; attempt++) {
       try {
         await _waitForRateLimit();
         return await _uploadMediaFileOnce(
@@ -312,7 +312,7 @@ class MediaUploadService {
         final isRateLimited = lower.contains('too many requests') ||
             lower.contains('rate_limit') ||
             lower.contains('429');
-        if (isRateLimited && attempt < 3) {
+        if (isRateLimited && attempt < 5) {
           await _waitForRateLimit();
           await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
           continue;
