@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/haneat_http_client.dart';
 import '../models/chat_models.dart';
 import '../utils/api_error_parser.dart';
@@ -68,7 +69,10 @@ class ChatService {
   }
 
   static Future<http.Response> _request(
-    Future<http.Response> Function(Map<String, String> headers) request, {
+    Future<http.Response> Function(
+      http.Client client,
+      Map<String, String> headers,
+    ) request, {
     int retries = 3,
   }) async {
     var headers = await _headersOrNull();
@@ -81,11 +85,15 @@ class ChatService {
 
     Future<http.Response> run(Map<String, String> h) async {
       try {
-        return await request(h).timeout(
-          _requestTimeout,
-          onTimeout: () => http.Response('{"detail":"timeout"}', 504),
+        return await HanEatHttpClient.withShared(
+          (client) => request(client, h).timeout(
+            _requestTimeout,
+            onTimeout: () => http.Response('{"detail":"timeout"}', 504),
+          ),
         );
       } catch (_) {
+        HanEatHttpClient.recreateShared();
+        await ApiEndpointResolver.revalidateIfNeeded();
         return http.Response('{"detail":"network_error"}', 503);
       }
     }
@@ -102,27 +110,37 @@ class ChatService {
       }
     }
     if (retries > 0 && _shouldRetry(response.statusCode)) {
+      if (response.statusCode == 503 || response.statusCode == 504) {
+        HanEatHttpClient.recreateShared();
+        await ApiEndpointResolver.revalidateIfNeeded();
+      }
       await Future<void>.delayed(
         Duration(milliseconds: 350 * (4 - retries)),
       );
-      return _request(request, retries: retries - 1);
+      return _request(
+        request,
+        retries: retries - 1,
+      );
     }
     return response;
   }
 
-  static Future<http.Response> _get(Uri uri) =>
-      _request((headers) => HanEatHttpClient.shared.get(uri, headers: headers));
+  static Future<http.Response> _get(Uri uri) => _request(
+        (client, headers) => client.get(uri, headers: headers),
+      );
 
   static Future<http.Response> _post(Uri uri, {Object? body}) => _request(
-        (headers) => HanEatHttpClient.shared.post(uri, headers: headers, body: body),
+        (client, headers) =>
+            client.post(uri, headers: headers, body: body),
       );
 
   static Future<http.Response> _delete(Uri uri) => _request(
-        (headers) => HanEatHttpClient.shared.delete(uri, headers: headers),
+        (client, headers) => client.delete(uri, headers: headers),
       );
 
   static Future<http.Response> _patch(Uri uri, {Object? body}) => _request(
-        (headers) => HanEatHttpClient.shared.patch(uri, headers: headers, body: body),
+        (client, headers) =>
+            client.patch(uri, headers: headers, body: body),
       );
 
   static Future<List<ChatConversation>> listConversations({
@@ -296,11 +314,12 @@ class ChatService {
   static Future<bool> checkServerReachable() async {
     try {
       final uri = Uri.parse('${ServerConfig.baseUrl}/health');
-      final response = await HanEatHttpClient.shared
-          .get(uri)
-          .timeout(const Duration(seconds: 5));
+      final response = await HanEatHttpClient.withShared(
+        (client) => client.get(uri).timeout(const Duration(seconds: 5)),
+      );
       return response.statusCode == 200;
     } catch (_) {
+      HanEatHttpClient.recreateShared();
       return false;
     }
   }
