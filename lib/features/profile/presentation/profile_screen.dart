@@ -21,6 +21,8 @@ import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/app_gradient_background.dart';
+import '../../../../widgets/app_avatar_ring.dart';
+import '../../../../core/theme/app_card_decorations.dart';
 import '../../content/create_content_actions.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -427,7 +429,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(user.name),
+        title: Text(isOwnProfile ? 'Профиль' : user.name),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor:
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
         actions: isOwnProfile
             ? [
                 // Кнопка создать пост
@@ -458,6 +464,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           body: Column(
             children: [
               longLabelTabBar(
+                context: context,
                 controller: _tabController,
                 tabs: tabs,
               ),
@@ -476,84 +483,104 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   Widget _buildProfileHeader(
       User user, user_service.UserStats stats, bool isOwnProfile) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final avatarImage = resolvedAvatarImage(user.avatarUrl, decodeWidth: 200);
+
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Аватар (без кнопки смены - она в настройках)
-          CircleAvatar(
-            radius: 50,
-            backgroundImage: resolvedAvatarImage(
-              user.avatarUrl,
-              decodeWidth: 200,
-            ),
-            child: resolvedAvatarImage(user.avatarUrl) == null
-                ? Text(
-                    user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                    style: const TextStyle(fontSize: 40),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 16),
-          // Имя и username
-          Text(
-            user.name,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (user.username != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '@${user.username}',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 16,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: AppElevatedCard(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        child: Column(
+          children: [
+            AppAvatarRing(
+              size: 96,
+              child: ColoredBox(
+                color: scheme.primaryContainer.withValues(alpha: 0.35),
+                child: avatarImage == null
+                    ? Center(
+                        child: Text(
+                          user.name.isNotEmpty
+                              ? user.name[0].toUpperCase()
+                              : '?',
+                          style: textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onPrimaryContainer,
+                          ),
+                        ),
+                      )
+                    : Image(
+                        image: avatarImage,
+                        fit: BoxFit.cover,
+                      ),
               ),
             ),
-          ],
-          if (user.bio != null && user.bio!.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
-              user.bio!,
+              user.name,
               textAlign: TextAlign.center,
+              style: textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
             ),
+            if (user.username != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                '@${user.username}',
+                style: textTheme.bodyLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            if (user.bio != null && user.bio!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                user.bio!,
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurface.withValues(alpha: 0.88),
+                  height: 1.45,
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
+            _ProfileStatsRow(
+              postsCount: stats.postsCount,
+              followersCount: stats.followersCount,
+              followingCount: stats.followingCount,
+              onFollowersTap: () => context.push(
+                ProfileFollowersRoute.withUserId(_effectiveUserId),
+              ),
+              onFollowingTap: () => context.push(
+                ProfileFollowingRoute.withUserId(_effectiveUserId),
+              ),
+            ),
+            if (!isOwnProfile) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed:
+                          _isFollowActionRunning ? null : _toggleFollow,
+                      child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isOpeningChat ? null : () => _openChat(user),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('Написать'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-          const SizedBox(height: 20),
-          _ProfileStatsRow(
-            postsCount: stats.postsCount,
-            followersCount: stats.followersCount,
-            followingCount: stats.followingCount,
-            onFollowersTap: () => context.push(
-              ProfileFollowersRoute.withUserId(_effectiveUserId),
-            ),
-            onFollowingTap: () => context.push(
-              ProfileFollowingRoute.withUserId(_effectiveUserId),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Кнопки действий
-          if (!isOwnProfile)
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _isFollowActionRunning ? null : _toggleFollow,
-                    child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _isOpeningChat ? null : () => _openChat(user),
-                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                    label: const Text('Написать'),
-                  ),
-                ),
-              ],
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -858,12 +885,12 @@ class _ProfileStatsRow extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+        color: scheme.primaryContainer.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.25),
+          color: scheme.primary.withValues(alpha: 0.12),
         ),
       ),
       child: IntrinsicHeight(

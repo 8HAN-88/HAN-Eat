@@ -964,24 +964,39 @@ class _NewPostCardState extends State<NewPostCard> {
                   // Аватар (того, кто репостнул, или канала, или автора)
                   GestureDetector(
                     onTap: widget.onAuthorTap,
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundImage: displayAvatar != null
-                          ? ResizeImage(
-                              CachedNetworkImageProvider(
-                                ServerConfig.resolvePublisherAvatarUrl(
-                                  displayAvatar,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withValues(alpha: 0.45),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundImage: displayAvatar != null
+                            ? ResizeImage(
+                                CachedNetworkImageProvider(
+                                  ServerConfig.resolvePublisherAvatarUrl(
+                                    displayAvatar,
+                                  ),
                                 ),
-                              ),
-                              width: 80,
-                            )
-                          : null,
-                      child: displayAvatar == null
-                          ? Text(
-                              displayInitial,
-                              style: const TextStyle(fontSize: 18),
-                            )
-                          : null,
+                                width: 80,
+                              )
+                            : null,
+                        child: displayAvatar == null
+                            ? Text(
+                                displayInitial,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -996,9 +1011,11 @@ class _NewPostCardState extends State<NewPostCard> {
                               onTap: widget.onAuthorTap,
                               child: Text(
                                 displayName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  letterSpacing: -0.2,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                             ),

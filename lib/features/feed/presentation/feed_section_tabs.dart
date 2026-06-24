@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/post_types.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../../../widgets/app_modern_tabs.dart';
 import 'feed_filter_menu.dart';
 
 /// Вкладки ленты: стандартный [TabBar] с плавным индикатором (как в «Чатах»).
@@ -87,30 +88,16 @@ class FeedSectionTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        return TabBar(
+        return appModernTabBar(
+          context: context,
           controller: controller,
-          indicatorSize: TabBarIndicatorSize.label,
-          dividerColor: Colors.transparent,
-          splashFactory: InkRipple.splashFactory,
-          labelColor: scheme.onSurface,
-          unselectedLabelColor: scheme.onSurfaceVariant.withValues(alpha: 0.82),
-          labelStyle: textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-          ),
-          unselectedLabelStyle: textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
           tabs: [
             for (var i = 0; i < _labels.length; i++)
               Tab(
-                height: 46,
+                height: 44,
                 child: _TabLabel(
                   label: _labels[i],
                   filterArrow: controller.index == i

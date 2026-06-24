@@ -100,9 +100,10 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
         height: kFeedChromeHeaderHeight,
         child: DecoratedBox(
           decoration: BoxDecoration(
+            color: scheme.surface.withValues(alpha: 0.88),
             border: Border(
               bottom: BorderSide(
-                color: scheme.outlineVariant.withValues(alpha: 0.35),
+                color: scheme.outlineVariant.withValues(alpha: 0.28),
               ),
             ),
           ),

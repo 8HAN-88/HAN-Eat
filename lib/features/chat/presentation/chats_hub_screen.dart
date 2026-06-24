@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/app_modern_tabs.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
@@ -126,14 +128,24 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     }
 
     return Scaffold(
+      extendBody: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Чаты'),
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(text: 'Все'),
-            Tab(text: 'Контакты'),
-          ],
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: appModernTabBar(
+            context: context,
+            controller: _tabs,
+            tabs: const [
+              Tab(text: 'Все', height: 44),
+              Tab(text: 'Контакты', height: 44),
+            ],
+          ),
         ),
         actions: [
           PopupMenuButton<String>(
@@ -153,17 +165,19 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
           ),
         ],
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          ChatsHubAllInboxTab(
-            onSwitchToContacts: () =>
-                _tabs.animateTo(ChatsHubContactsTab.contactsTabIndex),
-          ),
-          ChatsHubContactsTab(
-            tabController: _tabs,
-          ),
-        ],
+      body: AppGradientBackground(
+        child: TabBarView(
+          controller: _tabs,
+          children: [
+            ChatsHubAllInboxTab(
+              onSwitchToContacts: () =>
+                  _tabs.animateTo(ChatsHubContactsTab.contactsTabIndex),
+            ),
+            ChatsHubContactsTab(
+              tabController: _tabs,
+            ),
+          ],
+        ),
       ),
       floatingActionButton: Padding(
         padding: EdgeInsets.only(bottom: fabExtraBottomPadding(context)),

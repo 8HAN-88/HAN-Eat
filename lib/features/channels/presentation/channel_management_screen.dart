@@ -531,6 +531,7 @@ class _ChannelManagementScreenState
             ],
           ),
           bottom: longLabelTabBar(
+            context: context,
             tabs: const [
               Tab(text: 'Основное'),
               Tab(text: 'Настройки'),

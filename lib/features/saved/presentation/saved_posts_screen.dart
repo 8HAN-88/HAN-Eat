@@ -327,6 +327,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             ),
           ),
         longLabelTabBar(
+          context: context,
           controller: _tabController,
           tabs: const [
             Tab(text: 'Общее'),

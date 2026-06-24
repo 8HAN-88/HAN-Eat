@@ -12,6 +12,7 @@ import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../../core/theme/app_card_decorations.dart';
 import '../../../widgets/app_gradient_background.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -163,10 +164,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           children: [
             _SettingsSectionHeader(title: 'Внешний вид'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
+            AppElevatedCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -183,12 +183,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
-            ),
             const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
+            AppElevatedCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -226,15 +224,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
-            ),
             const SizedBox(height: 24),
             _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
-            const Card(
+            const AppElevatedCard(
               child: AiScanCreditsTile(),
             ),
             const SizedBox(height: 12),
-            Card(
-              clipBehavior: Clip.antiAlias,
+            AppElevatedCard(
               child: Column(
                 children: [
                   for (var i = 0; i < serviceItems.length; i++) ...[

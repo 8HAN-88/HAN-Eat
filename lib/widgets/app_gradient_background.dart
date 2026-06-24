@@ -23,9 +23,31 @@ class AppGradientBackground extends StatelessWidget {
         if (isDark)
           const _DarkBackground()
         else
-          const ColoredBox(color: AppColors.backgroundLight),
+          const _LightBackground(),
         child,
       ],
+    );
+  }
+}
+
+class _LightBackground extends StatelessWidget {
+  const _LightBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.primary.withValues(alpha: 0.04),
+            AppColors.backgroundLight,
+            const Color(0xFFEEF1F6),
+          ],
+          stops: const [0.0, 0.35, 1.0],
+        ),
+      ),
     );
   }
 }

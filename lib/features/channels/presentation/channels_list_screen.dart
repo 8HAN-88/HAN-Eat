@@ -174,6 +174,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen>
         ),
       ),
       child: longLabelTabBar(
+        context: context,
         controller: _tabController,
         tabAlignment: TabAlignment.start,
         labelPadding: const EdgeInsets.symmetric(horizontal: 10),
