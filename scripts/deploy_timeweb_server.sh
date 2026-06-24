@@ -121,7 +121,7 @@ DATABASE_URL=postgresql://haneat:${DB_PASS}@127.0.0.1:5432/haneat
 REDIS_URL=redis://127.0.0.1:6379/0
 REDIS_ENABLED=true
 RATE_LIMIT_ENABLED=true
-RATE_LIMIT_PER_MINUTE=120
+RATE_LIMIT_PER_MINUTE=300
 API_PUBLIC_BASE_URL=https://${API_DOMAIN}
 ALLOWED_ORIGINS=["https://haneat.app","https://www.haneat.app"]
 FRONTEND_URL=https://haneat.app
@@ -148,7 +148,7 @@ upsert_env "DATABASE_URL" "postgresql://haneat:${DB_PASS}@127.0.0.1:5432/haneat"
 upsert_env "REDIS_URL" "redis://127.0.0.1:6379/0"
 upsert_env "REDIS_ENABLED" "true"
 upsert_env "RATE_LIMIT_ENABLED" "true"
-upsert_env "RATE_LIMIT_PER_MINUTE" "120"
+upsert_env "RATE_LIMIT_PER_MINUTE" "300"
 upsert_env "API_PUBLIC_BASE_URL" "https://${API_DOMAIN}"
 upsert_env "ALLOWED_ORIGINS" "https://haneat.app,https://www.haneat.app"
 upsert_env "FRONTEND_URL" "https://haneat.app"

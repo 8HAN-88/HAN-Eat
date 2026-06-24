@@ -29,6 +29,7 @@ class ChatStreamService {
   StreamSubscription<List<int>>? _subscription;
   http.Client? _client;
   bool _disposed = false;
+  bool _backgroundPaused = false;
   bool connected = false;
   String _buffer = '';
   Timer? _reconnectTimer;
@@ -54,8 +55,20 @@ class ChatStreamService {
     }
   }
 
-  void resume() {
+  void pauseForBackground() {
+    _backgroundPaused = true;
+    pause();
+  }
+
+  void resumeFromBackground() {
     if (_disposed) return;
+    _backgroundPaused = false;
+    _reconnectAttempt = 0;
+    resume();
+  }
+
+  void resume() {
+    if (_disposed || _backgroundPaused) return;
     connect();
   }
 
@@ -141,7 +154,7 @@ class ChatStreamService {
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed || !connected) return;
       final idle = DateTime.now().difference(_lastActivity);
-      if (idle > const Duration(seconds: 50)) {
+      if (idle > const Duration(seconds: 90)) {
         debugPrint('ChatStreamService: idle ${idle.inSeconds}s, reconnecting');
         _handleDisconnect(forceReconnect: true);
       }
@@ -187,7 +200,7 @@ class ChatStreamService {
   }
 
   void _scheduleReconnect({Duration extraDelay = Duration.zero}) {
-    if (_disposed) return;
+    if (_disposed || _backgroundPaused) return;
     if (ApiRateLimitBackoff.isActive) {
       extraDelay = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 30);
     }

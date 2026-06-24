@@ -138,6 +138,11 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (raw.isEmpty) return fallback;
   if (raw == 'Not authenticated') return 'Войдите в аккаунт';
   final lower = raw.toLowerCase();
+  if (lower.contains('too many requests') ||
+      lower.contains('rate_limit') ||
+      lower.contains('429')) {
+    return 'Слишком много запросов. Подождите минуту и нажмите «Повторить».';
+  }
   if (lower.contains('broken pipe') || lower.contains('socketwrite failed')) {
     return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова.';
   }

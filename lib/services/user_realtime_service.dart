@@ -226,7 +226,7 @@ class UserRealtimeService {
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed || !connected.value) return;
       final idle = DateTime.now().difference(_lastActivity);
-      if (idle > const Duration(seconds: 50)) {
+      if (idle > const Duration(seconds: 90)) {
         debugPrint('UserRealtimeService: idle ${idle.inSeconds}s, reconnecting');
         _handleDisconnect(forceReconnect: true);
       }

@@ -45,6 +45,11 @@ def _client_ip(request: Request) -> str:
 def _is_exempt(path: str) -> bool:
     if path == "/":
         return True
+    if path.startswith("/api/v1/uploads/"):
+        return True
+    # Чтение чата (polling) — не считаем в минутный лимит.
+    if "/chats/" in path and path.endswith("/messages") and "/messages/" not in path:
+        return True
     return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
 
 

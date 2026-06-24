@@ -64,6 +64,11 @@ jobs:
             source venv/bin/activate
           fi
           pip install -q -r requirements.txt
+          if grep -q '^RATE_LIMIT_PER_MINUTE=' .env 2>/dev/null; then
+            sed -i 's/^RATE_LIMIT_PER_MINUTE=.*/RATE_LIMIT_PER_MINUTE=300/' .env
+          else
+            echo 'RATE_LIMIT_PER_MINUTE=300' >> .env
+          fi
           alembic upgrade head
           bash "$APP_DIR/scripts/ensure_server_email_env.sh" "$APP_DIR/backend/.env"
           if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then

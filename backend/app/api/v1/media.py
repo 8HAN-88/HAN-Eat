@@ -1,6 +1,7 @@
 """
 API endpoints для загрузки медиа
 """
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from pydantic import BaseModel
@@ -22,6 +23,33 @@ router = APIRouter()
 _upload_id_to_file_key: Dict[str, str] = {}
 _MOCK_UPLOAD_REDIS_PREFIX = "upload:mock:"
 _MOCK_UPLOAD_TTL_SEC = 7200
+_CLIENT_UPLOAD_PREFIX = "upload:client:"
+_CLIENT_UPLOAD_TTL_SEC = 3600
+
+
+def _client_upload_cache_key(user_id: int, client_upload_id: str) -> str:
+    return f"{_CLIENT_UPLOAD_PREFIX}{user_id}:{client_upload_id}"
+
+
+def _lookup_client_upload(user_id: int, client_upload_id: str) -> Optional[dict]:
+    try:
+        raw = redis_client.get(_client_upload_cache_key(user_id, client_upload_id))
+        if raw:
+            return json.loads(raw)
+    except Exception as e:
+        logger.debug("client upload cache lookup failed: %s", e)
+    return None
+
+
+def _store_client_upload(user_id: int, client_upload_id: str, payload: dict) -> None:
+    try:
+        redis_client.setex(
+            _client_upload_cache_key(user_id, client_upload_id),
+            _CLIENT_UPLOAD_TTL_SEC,
+            json.dumps(payload),
+        )
+    except Exception as e:
+        logger.debug("client upload cache store failed: %s", e)
 
 
 def _remember_mock_upload(upload_id: str, file_key: str) -> None:
@@ -55,6 +83,7 @@ class InitUploadRequest(BaseModel):
     content_type: str  # image/jpeg, video/mp4, etc.
     file_size: int  # размер в байтах
     prefer_api: bool = False  # загрузка через API (надёжнее с мобильных)
+    client_upload_id: Optional[str] = None  # идемпотентность при повторе клиента
 
 
 class CompleteUploadRequest(BaseModel):
@@ -75,6 +104,14 @@ async def init_upload(
     затем отправляет file_key в запросе создания поста.
     """
     try:
+        if request.client_upload_id:
+            cached = _lookup_client_upload(
+                current_user.id,
+                request.client_upload_id,
+            )
+            if cached:
+                return cached
+
         media_service = MediaService()
         result = media_service.generate_presigned_url(
             file_type=request.file_type,
@@ -86,6 +123,8 @@ async def init_upload(
         # API-загрузка: запоминаем upload_id → file_key
         if result.get("upload_via") == "api":
             _remember_mock_upload(result["upload_id"], result["file_key"])
+        if request.client_upload_id:
+            _store_client_upload(current_user.id, request.client_upload_id, result)
         return result
     except ValueError as e:
         raise HTTPException(
@@ -114,6 +153,8 @@ async def complete_upload(
     """
     from app.services.video_queue_service import VideoQueueService
     from app.services.image_queue_service import ImageQueueService
+    from app.models.image_processing import ImageProcessing
+    from app.models.video_processing import VideoProcessing
     
     try:
         media_service = MediaService()
@@ -123,9 +164,45 @@ async def complete_upload(
             file_type=request.file_type,
             user_id=current_user.id
         )
+
+        if request.file_type == "image":
+            existing = (
+                db.query(ImageProcessing)
+                .filter(
+                    ImageProcessing.upload_id == request.upload_id,
+                    ImageProcessing.user_id == current_user.id,
+                )
+                .first()
+            )
+            if existing:
+                if existing.medium_url:
+                    result["url"] = existing.medium_url
+                elif existing.large_url:
+                    result["url"] = existing.large_url
+                elif existing.thumbnail_url:
+                    result["url"] = existing.thumbnail_url
+                result["status"] = "completed"
+                result["processing"] = False
+                result["upload_id"] = request.upload_id
+                return result
         
         # Если это видео, добавляем в очередь обработки
         if request.file_type == "video":
+            existing_video = (
+                db.query(VideoProcessing)
+                .filter(
+                    VideoProcessing.upload_id == request.upload_id,
+                    VideoProcessing.user_id == current_user.id,
+                )
+                .first()
+            )
+            if existing_video:
+                if existing_video.mp4_720p_url:
+                    result["url"] = existing_video.mp4_720p_url
+                result["status"] = "completed"
+                result["processing"] = False
+                result["upload_id"] = request.upload_id
+                return result
             video_processing = VideoQueueService.enqueue_video_processing(
                 db=db,
                 upload_id=request.upload_id,

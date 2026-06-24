@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import '../core/network/haneat_http_client.dart';
 import '../core/network/api_endpoint_resolver.dart';
+import '../core/network/api_rate_limit_backoff.dart';
+import '../core/network/haneat_http_client.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -24,55 +25,90 @@ class MediaUploadService {
     return fixed;
   }
 
+  static Future<void> _waitForRateLimit() async {
+    while (ApiRateLimitBackoff.isActive) {
+      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
+      await Future<void>.delayed(wait);
+    }
+  }
+
+  static void _registerRateLimit(http.Response response) {
+    if (response.statusCode != 429) return;
+    final retryAfter =
+        int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
+    ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+  }
+
+  static Future<http.Response> _apiPost(
+    Uri uri, {
+    required Map<String, dynamic> body,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    await _waitForRateLimit();
+    var token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated. Please log in first.');
+    }
+
+    Future<http.Response> run(String authToken) async {
+      try {
+        return await HanEatHttpClient.withShared(
+          (client) => client
+              .post(
+                uri,
+                headers: {
+                  'Authorization': 'Bearer $authToken',
+                  'Content-Type': 'application/json',
+                },
+                body: jsonEncode(body),
+              )
+              .timeout(timeout),
+        );
+      } catch (_) {
+        HanEatHttpClient.recreateShared();
+        await ApiEndpointResolver.revalidateIfNeeded();
+        rethrow;
+      }
+    }
+
+    var response = await run(token);
+    if (response.statusCode == 401) {
+      try {
+        token = await AuthService.refreshToken();
+        response = await run(token);
+      } catch (e) {
+        throw Exception('Authentication failed. Please log in again.');
+      }
+    }
+
+    _registerRateLimit(response);
+    if (response.statusCode == 429) {
+      await _waitForRateLimit();
+      return _apiPost(uri, body: body, timeout: timeout);
+    }
+    return response;
+  }
+
   /// Инициализация загрузки (получение presigned URL или API URL)
   static Future<UploadInitResponse> initUpload({
     required String fileType, // 'image', 'video', 'audio' or 'document'
     required String contentType, // 'image/jpeg', 'video/mp4', etc.
     required int fileSize,
     bool preferApiUpload = false,
+    String? clientUploadId,
   }) async {
-    var token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated. Please log in first.');
-    }
-    
     final uri = Uri.parse('$baseUrl/uploads/init');
-    var response = await http.post(
+    final response = await _apiPost(
       uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
+      body: {
         'file_type': fileType,
         'content_type': contentType,
         'file_size': fileSize,
         'prefer_api': preferApiUpload,
-      }),
+        if (clientUploadId != null) 'client_upload_id': clientUploadId,
+      },
     );
-    
-    // Если получили 401, пытаемся обновить токен и повторить запрос
-    if (response.statusCode == 401) {
-      try {
-        token = await AuthService.refreshToken();
-        response = await http.post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'file_type': fileType,
-            'content_type': contentType,
-            'file_size': fileSize,
-            'prefer_api': preferApiUpload,
-          }),
-        );
-      } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
-      }
-    }
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return UploadInitResponse.fromJson(data);
@@ -132,21 +168,13 @@ class MediaUploadService {
     required Map<String, String> headers,
     required List<int> body,
   }) async {
-    Future<http.Response> send() async {
-      final client = HanEatHttpClient.createUploadClient();
-      try {
-        return await client.put(uri, headers: headers, body: body);
-      } finally {
-        client.close();
-      }
-    }
-
+    final client = HanEatHttpClient.createUploadClient();
     try {
-      return await send();
-    } on http.ClientException catch (e) {
-      if (!e.message.contains('already closed')) rethrow;
-      HanEatHttpClient.recreateShared();
-      return await send();
+      return await client
+          .put(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: 120));
+    } finally {
+      client.close();
     }
   }
   
@@ -156,25 +184,17 @@ class MediaUploadService {
     required String fileKey,
     required String fileType,
   }) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-    
     final uri = Uri.parse('$baseUrl/uploads/complete');
-    final response = await http.post(
+    final response = await _apiPost(
       uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
+      timeout: const Duration(seconds: 90),
+      body: {
         'upload_id': uploadId,
         'file_key': fileKey,
         'file_type': fileType,
-      }),
+      },
     );
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return UploadCompleteResponse.fromJson(data);
@@ -214,6 +234,7 @@ class MediaUploadService {
     Function(double)? onProgress,
     required bool waitForProcessing,
     required bool preferApiUpload,
+    String? clientUploadId,
   }) async {
     final filePath = file.path;
     final fileSize = await file.length();
@@ -228,6 +249,7 @@ class MediaUploadService {
       contentType: contentType,
       fileSize: fileSize,
       preferApiUpload: preferApiUpload,
+      clientUploadId: clientUploadId,
     );
 
     if (onProgress != null) onProgress(0.1);
@@ -270,22 +292,35 @@ class MediaUploadService {
     required String fileType,
     Function(double)? onProgress,
     bool waitForProcessing = true,
+    String? clientUploadId,
   }) async {
-    try {
-      // Загрузка через API надёжнее прямого PUT в S3 (CORS, закрытый HTTP-клиент).
-      return await _uploadMediaFileOnce(
-        file: file,
-        fileType: fileType,
-        onProgress: onProgress,
-        waitForProcessing: waitForProcessing,
-        preferApiUpload: true,
-      );
-    } catch (e) {
-      if (kIsWeb) {
-        throw Exception('Upload failed: $e');
+    Object? lastError;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        await _waitForRateLimit();
+        return await _uploadMediaFileOnce(
+          file: file,
+          fileType: fileType,
+          onProgress: onProgress,
+          waitForProcessing: waitForProcessing,
+          preferApiUpload: true,
+          clientUploadId: clientUploadId,
+        );
+      } catch (e) {
+        lastError = e;
+        final lower = e.toString().toLowerCase();
+        final isRateLimited = lower.contains('too many requests') ||
+            lower.contains('rate_limit') ||
+            lower.contains('429');
+        if (isRateLimited && attempt < 3) {
+          await _waitForRateLimit();
+          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+          continue;
+        }
+        rethrow;
       }
-      rethrow;
     }
+    throw Exception(lastError ?? 'Не удалось загрузить файл');
   }
 
   /// Дождаться транскодинга (720p/480p) после загрузки видео.

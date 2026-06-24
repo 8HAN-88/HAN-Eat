@@ -451,6 +451,7 @@ class ChatService {
     required String mediaUrl,
     required int durationSec,
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -458,6 +459,7 @@ class ChatService {
       content: '$durationSec',
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
     );
   }
 
@@ -466,6 +468,7 @@ class ChatService {
     required String mediaUrl,
     String caption = '',
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -473,6 +476,7 @@ class ChatService {
       content: caption,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
     );
   }
 
@@ -481,6 +485,7 @@ class ChatService {
     required String mediaUrl,
     required String fileName,
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -488,6 +493,7 @@ class ChatService {
       content: fileName,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
     );
   }
 
@@ -496,6 +502,7 @@ class ChatService {
     required String mediaUrl,
     String caption = '',
     int? replyToMessageId,
+    String? clientMessageId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -503,6 +510,7 @@ class ChatService {
       content: caption,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
     );
   }
 
@@ -566,6 +574,13 @@ class ChatService {
     );
   }
 
+  static Future<void> _waitForRateLimit() async {
+    while (ApiRateLimitBackoff.isActive) {
+      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
+      await Future<void>.delayed(wait);
+    }
+  }
+
   static Future<ChatMessage> _send({
     required int conversationId,
     required String type,
@@ -574,10 +589,11 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
   }) async {
+    await _waitForRateLimit();
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
-      retries: 0,
+      retries: 1,
       timeout: _sendTimeout,
       body: jsonEncode({
         'type': type,
