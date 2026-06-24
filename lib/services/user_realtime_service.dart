@@ -89,11 +89,23 @@ class UserRealtimeService {
         () => instance.resumeFromBackground(),
         onHidden: () => instance.pauseForBackground(),
       );
+      instance._startWebKeepalive();
     }
 
     if (AuthService.instance.currentUser != null) {
       instance.connect();
     }
+  }
+
+  void _startWebKeepalive() {
+    if (!kIsWeb) return;
+    Timer.periodic(const Duration(seconds: 4), (_) {
+      if (_disposed || _backgroundPaused) return;
+      if (AuthService.instance.currentUser == null) return;
+      if (!connected.value && _reconnectTimer == null) {
+        connect();
+      }
+    });
   }
 
   void connect() {
@@ -113,6 +125,7 @@ class UserRealtimeService {
   void resumeFromBackground() {
     if (_disposed || AuthService.instance.currentUser == null) return;
     _backgroundPaused = false;
+    _reconnectAttempt = 0;
     connect();
   }
 
@@ -129,12 +142,17 @@ class UserRealtimeService {
   void resume() {
     if (_disposed) return;
     if (AuthService.instance.currentUser == null) return;
+    if (_backgroundPaused) return;
     connect();
   }
 
   void disconnect() {
     _disposed = true;
     pause();
+    _closeStreamClient();
+  }
+
+  void _closeStreamClient() {
     _client?.close();
     _client = null;
   }
@@ -142,6 +160,8 @@ class UserRealtimeService {
   Future<void> _openStream() async {
     if (_disposed) return;
     _subscription?.cancel();
+    _subscription = null;
+    _closeStreamClient();
 
     try {
       final token = await AuthService.getAccessTokenForApi();
@@ -156,7 +176,7 @@ class UserRealtimeService {
         'Connection': 'keep-alive',
       });
 
-      _client = HanEatHttpClient.shared;
+      _client = HanEatHttpClient.createStreamClient();
       final response = await _client!.send(request).timeout(
         const Duration(seconds: 20),
         onTimeout: () => throw TimeoutException('SSE connect timeout'),

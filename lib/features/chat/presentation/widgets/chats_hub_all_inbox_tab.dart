@@ -378,11 +378,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appPaused = state != AppLifecycleState.resumed;
     if (!_appPaused) {
-      unawaited(ApiReachabilityService.instance.warmUp());
-      UserRealtimeService.instance.resumeFromBackground();
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      UserRealtimeService.instance.pauseForBackground();
+      unawaited(ApiReachabilityService.instance.warmUp(force: kIsWeb));
     }
   }
 

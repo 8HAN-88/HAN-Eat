@@ -65,13 +65,20 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (kIsWeb) {
+      // На web lifecycle ненадёжен (маршруты, клавиатура) — realtime только через visibility API.
+      if (state == AppLifecycleState.resumed) {
+        UserRealtimeService.instance.resumeFromBackground();
+        unawaited(ApiReachabilityService.instance.warmUp(force: true));
+        unawaited(AuthService.getAccessTokenForApi());
+        unawaited(WebAppUpdateService.checkForUpdate());
+      }
+      return;
+    }
     if (state == AppLifecycleState.resumed) {
       UserRealtimeService.instance.resumeFromBackground();
       unawaited(ApiReachabilityService.instance.checkNow());
       unawaited(AuthService.getAccessTokenForApi());
-      if (kIsWeb) {
-        unawaited(WebAppUpdateService.checkForUpdate());
-      }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       UserRealtimeService.instance.pauseForBackground();

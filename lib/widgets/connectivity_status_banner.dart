@@ -58,6 +58,10 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
 
   bool get _realtimeReady {
     if (AuthService.instance.currentUser == null) return true;
+    if (kIsWeb && ApiReachabilityService.instance.isApiReachable.value) {
+      // На web SSE может догонять API — не блокируем UI баннером «Подключение…».
+      return true;
+    }
     return UserRealtimeService.instance.connected.value;
   }
 

@@ -25,7 +25,7 @@ class ApiReachabilityService {
     if (svc._started) return;
     svc._started = true;
 
-    registerWebPageVisibilityListener(svc.warmUp);
+    registerWebPageVisibilityListener(() => svc.warmUp(force: true));
 
     unawaited(svc.checkNow());
     svc._schedulePeriodicCheck();
@@ -197,11 +197,12 @@ class ApiReachabilityService {
     }
   }
 
-  /// Прогрев сессии после возврата из фона / на вкладку (не чаще раза в 20 с).
-  Future<void> warmUp() async {
+  /// Прогрев сессии после возврата из фона / на вкладку.
+  Future<void> warmUp({bool force = false}) async {
     final now = DateTime.now();
     if (_warmUpInFlight) return;
-    if (_lastWarmUpAt != null &&
+    if (!force &&
+        _lastWarmUpAt != null &&
         now.difference(_lastWarmUpAt!) < _warmUpMinInterval) {
       return;
     }
