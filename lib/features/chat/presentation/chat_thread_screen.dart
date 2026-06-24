@@ -171,6 +171,7 @@ class ChatThreadScreen extends StatefulWidget {
 class _ChatThreadScreenState extends State<ChatThreadScreen>
     with WidgetsBindingObserver {
   final _controller = TextEditingController();
+  final _inputFocusNode = FocusNode();
   final _threadSearchController = TextEditingController();
   final _scroll = ScrollController();
   final _messages = <ChatMessage>[];
@@ -240,6 +241,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _muted = widget.conversation.muted;
     ActiveChatSession.instance.setOpen(widget.conversationId);
     WidgetsBinding.instance.addObserver(this);
+    _inputFocusNode.addListener(_onComposerFocusChanged);
     _scroll.addListener(_onScrollChanged);
     _controller.addListener(_onInputChanged);
     unawaited(_loadCachedMessages());
@@ -661,6 +663,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
+  void _onComposerFocusChanged() {
+    if (!_inputFocusNode.hasFocus) return;
+    _scrollToBottomAfterKeyboard();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+      if (keyboard > 0 && (_inputFocusNode.hasFocus || _isNearBottom())) {
+        _scrollToBottomAfterKeyboard();
+      }
+    });
+  }
+
   void _onScrollChanged() {
     if (!_scroll.hasClients || _selectionMode) return;
     final nearBottom = _isNearBottom();
@@ -875,6 +894,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ChatCacheService.saveDraft(widget.conversationId, _controller.text),
     );
     _controller.removeListener(_onInputChanged);
+    _inputFocusNode.removeListener(_onComposerFocusChanged);
+    _inputFocusNode.dispose();
     _controller.dispose();
     _threadSearchController.dispose();
     _scroll.dispose();
@@ -2000,9 +2021,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return panelBox.size.height + 8;
     }
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     const composerRow = 56.0;
     const bannerRow = 52.0;
-    var reserve = bottom + composerRow + 12;
+    var reserve = bottom + keyboard + composerRow + 12;
     if (_replyTo != null) reserve += bannerRow;
     if (_editingMessage != null) reserve += bannerRow;
     if (_recording) reserve += 96;
@@ -2263,17 +2285,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animated = true}) {
     if (!_scroll.hasClients) return;
-    _scroll.animateTo(
-      _scroll.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
+    final target = _scroll.position.maxScrollExtent;
+    if (animated) {
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scroll.jumpTo(target);
+    }
     if (_suppressMarkRead) {
       setState(() => _suppressMarkRead = false);
       _scheduleMarkRead();
     }
+  }
+
+  void _scrollToBottomAfterKeyboard() {
+    _scrollToBottom(animated: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scrollToBottom(animated: false);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 180), () {
+      if (mounted) _scrollToBottom(animated: false);
+    });
   }
 
   Future<void> _drainTextOutboundQueue() async {
@@ -2931,6 +2969,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final visibleMessages = _visibleMessages;
     final searching = _threadSearchQuery.trim().isNotEmpty;
     final mediaCount = _mediaMessageCount();
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return PopScope(
       canPop: !_selectionMode,
@@ -2938,6 +2977,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (!didPop && _selectionMode) _exitSelectionMode();
       },
       child: Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: _selectionMode
           ? AppBar(
               leading: TextButton(
@@ -3143,7 +3183,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ],
       ),
-      body: Column(
+      body: AnimatedPadding(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: Column(
         children: [
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           if (_pinnedMessage != null)
@@ -3207,6 +3251,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ? const Center(child: Text('Ничего не найдено'))
                             : ListView.builder(
                                 controller: _scroll,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
                                   vertical: 8,
@@ -3570,10 +3616,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   Expanded(
                     child: TextField(
                       controller: _controller,
+                      focusNode: _inputFocusNode,
                       enabled: !_recording,
                       minLines: 1,
                       maxLines: 5,
                       textInputAction: TextInputAction.send,
+                      scrollPadding: const EdgeInsets.only(bottom: 96),
                       onSubmitted: (_) => _hasText ? _sendText() : null,
                       decoration: InputDecoration(
                         hintText: _recording
@@ -3632,6 +3680,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               ),
             ),
         ],
+      ),
       ),
       ),
     );
