@@ -580,9 +580,14 @@ class _CommentItemState extends State<_CommentItem> {
   Widget build(BuildContext context) {
     final comment = widget.comment;
     final isLongText = comment.text.length > 130;
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Material(
+        color: Theme.of(context).colorScheme.surface,
+        elevation: 1,
+        shadowColor: Theme.of(context).shadowColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(9, 8, 9, 4),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -713,7 +718,8 @@ class _CommentItemState extends State<_CommentItem> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
