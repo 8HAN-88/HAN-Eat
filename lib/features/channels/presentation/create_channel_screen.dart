@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/app_gradient_background.dart';
 import 'package:go_router/go_router.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
@@ -186,11 +187,14 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Создать канал'),
-      ),
-      body: SafeArea(
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Создать канал'),
+        ),
+        body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
@@ -400,6 +404,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
