@@ -525,9 +525,9 @@ class _ShellNavGlassPill extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final radius = height / 2;
     final fill = isDark
-        ? Colors.black.withValues(alpha: compact ? 0.36 : 0.44)
-        : scheme.surface.withValues(alpha: compact ? 0.48 : 0.56);
-    final blur = compact ? 14.0 : 20.0;
+        ? Colors.black.withValues(alpha: compact ? 0.38 : 0.48)
+        : scheme.surface.withValues(alpha: compact ? 0.52 : 0.62);
+    final blur = compact ? 16.0 : 24.0;
 
     return AnimatedContainer(
       duration: duration,
@@ -537,9 +537,9 @@ class _ShellNavGlassPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.08),
-            blurRadius: compact ? 12 : 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.10),
+            blurRadius: compact ? 14 : 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),

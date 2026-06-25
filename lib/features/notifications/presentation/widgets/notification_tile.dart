@@ -82,13 +82,17 @@ class _NotificationTileState extends State<NotificationTile> {
     final showThumbnail = !showFollow && _shouldShowThumbnail();
     final isComment = notification.type == 'comment';
 
-    final bg = widget.group.isRead
-        ? scheme.surface
-        : scheme.primaryContainer.withValues(alpha: 0.14);
+    final isUnread = !widget.group.isRead;
 
     return Material(
-      color: bg,
+      color: isUnread
+          ? scheme.primaryContainer.withValues(alpha: 0.18)
+          : scheme.surface,
+      elevation: isUnread ? 1 : 0,
+      shadowColor: scheme.shadow.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           AppHaptics.light();
           widget.onTap();

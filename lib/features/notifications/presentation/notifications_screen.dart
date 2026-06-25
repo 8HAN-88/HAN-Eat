@@ -15,6 +15,7 @@ import '../../../services/user_realtime_service.dart';
 import '../../../services/user_service.dart' as user_service;
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/app_gradient_background.dart';
 import '../application/unread_notifications_provider.dart';
 import 'notification_formatters.dart';
 import 'widgets/notification_tile.dart';
@@ -364,23 +365,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final entries = buildNotificationSections(_notifications);
     final visibleCount = _notifications.where(isVisibleNotification).length;
 
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      appBar: AppBar(
-        centerTitle: true,
-        title: const Text(
-          'Уведомления',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          centerTitle: true,
+          title: const Text(
+            'Уведомления',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+          ),
+          actions: [
+            if (_unreadCount > 0)
+              TextButton(
+                onPressed: _markAllAsRead,
+                child: const Text('Прочитать все'),
+              ),
+          ],
         ),
-        actions: [
-          if (_unreadCount > 0)
-            TextButton(
-              onPressed: _markAllAsRead,
-              child: const Text('Прочитать все'),
-            ),
-        ],
-      ),
-      body: RefreshIndicator(
+        body: RefreshIndicator(
         onRefresh: () => _loadNotifications(refresh: true),
         child: visibleCount == 0 && !_isLoading
             ? ListView(
@@ -470,6 +472,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 },
               ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -4,7 +4,7 @@ import '../core/theme/color_schemes.dart';
 
 /// Фон для основных вкладок.
 ///
-/// Светлая тема — ровный нейтральный canvas; тёмная — мягкий вертикальный градиент.
+/// Светлая тема — мягкий брендовый canvas; тёмная — глубокий вертикальный градиент.
 class AppGradientBackground extends StatelessWidget {
   const AppGradientBackground({
     super.key,
@@ -35,17 +35,17 @@ class _LightBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppColors.primary.withValues(alpha: 0.04),
-            AppColors.backgroundLight,
-            const Color(0xFFEEF1F6),
+            Color(0xFFFFFBF7),
+            Color(0xFFFFF9F5),
+            Color(0xFFF8F6F3),
           ],
-          stops: const [0.0, 0.35, 1.0],
+          stops: [0.0, 0.35, 1.0],
         ),
       ),
     );
@@ -63,11 +63,11 @@ class _DarkBackground extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color(0xFF0F1319),
-            Color(0xFF141A22),
-            Color(0xFF0D1015),
+            Color(0xFF0B0E14),
+            Color(0xFF10151D),
+            Color(0xFF0C0F16),
           ],
-          stops: [0.0, 0.52, 1.0],
+          stops: [0.0, 0.42, 1.0],
         ),
       ),
     );
