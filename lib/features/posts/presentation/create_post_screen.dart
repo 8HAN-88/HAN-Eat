@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/recipe/recipe_nutrition_input.dart';
+import '../../../../widgets/app_gradient_background.dart';
 import '../../../../features/settings/application/subscription_status_provider.dart';
 import '../../../../services/post_service.dart';
 import '../../../../utils/api_error_parser.dart';
@@ -789,10 +790,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Пост'),
-        actions: [
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Пост'),
+          actions: [
           if (_isLoading && _loadingStatus != null)
             Center(
               child: Padding(
@@ -1103,8 +1107,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _setContentType(String type) {
     setState(() {
