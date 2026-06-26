@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/color_schemes.dart';
-
 /// Фон для основных вкладок.
 ///
 /// Светлая тема — мягкий брендовый canvas; тёмная — глубокий вертикальный градиент.
@@ -20,10 +18,7 @@ class AppGradientBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (isDark)
-          const _DarkBackground()
-        else
-          const _LightBackground(),
+        if (isDark) const _DarkBackground() else const _LightBackground(),
         child,
       ],
     );
@@ -38,14 +33,14 @@ class _LightBackground extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
+            Color(0xFFFFF0E7),
             Color(0xFFFFFBF7),
-            Color(0xFFFFF9F5),
-            Color(0xFFF8F6F3),
+            Color(0xFFF3F6FF),
           ],
-          stops: [0.0, 0.35, 1.0],
+          stops: [0.0, 0.48, 1.0],
         ),
       ),
     );
@@ -60,14 +55,14 @@ class _DarkBackground extends StatelessWidget {
     return const DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
           colors: [
-            Color(0xFF0B0E14),
-            Color(0xFF10151D),
-            Color(0xFF0C0F16),
+            Color(0xFF101827),
+            Color(0xFF11151F),
+            Color(0xFF070A10),
           ],
-          stops: [0.0, 0.42, 1.0],
+          stops: [0.0, 0.5, 1.0],
         ),
       ),
     );

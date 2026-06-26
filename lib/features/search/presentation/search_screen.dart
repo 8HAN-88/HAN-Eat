@@ -15,6 +15,7 @@ import '../../../../models/chat_models.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../../../widgets/post_card_skeleton.dart';
 import '../../../../widgets/highlighted_text.dart';
+import '../../../../widgets/app_gradient_background.dart';
 import '../../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
 import '../application/search_scope.dart';
@@ -43,11 +44,11 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   bool _isLoading = false;
   bool _showFilters = false;
   String? _error;
-  
+
   // Результаты поиска
   List<PostModel> _posts = [];
   List<ChatUserSearchItem> _people = [];
@@ -56,9 +57,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   int _total = 0;
   int _offset = 0;
   static const int _limit = 20;
-  
+
   _MainSearchTab _mainTab = _MainSearchTab.all;
-  
+
   // Фильтры
   String? _selectedPostType;
   String? _selectedSortBy = 'relevance';
@@ -67,7 +68,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   int? _minLikes;
   int? _minComments;
   List<String> _selectedTags = [];
-  
+
   // Автодополнение
   List<String> _suggestions = [];
   bool _showSuggestions = false;
@@ -76,8 +77,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   late final bool _recipeSearch;
   late final bool _lockPostTypeFilter;
 
-  String get _screenTitle =>
-      widget.scope?.title ?? 'Поиск';
+  String get _screenTitle => widget.scope?.title ?? 'Поиск';
 
   String get _searchHint =>
       widget.scope?.hint ?? 'Посты, люди, рилсы, рецепты…';
@@ -102,7 +102,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool get _searchPeople =>
       (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
       (_unifiedPeopleSearch &&
-          (_mainTab == _MainSearchTab.all || _mainTab == _MainSearchTab.people));
+          (_mainTab == _MainSearchTab.all ||
+              _mainTab == _MainSearchTab.people));
 
   bool get _searchChannels =>
       _channelsOnlyMode ||
@@ -119,8 +120,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _followingOnly = widget.followingOnly;
     _recipeSearch = widget.scope?.usesRecipeSearch ?? false;
     _selectedPostType = feedFilterToPostType(widget.feedType);
-    _lockPostTypeFilter =
-        widget.feedType != null && widget.feedType != 'all';
+    _lockPostTypeFilter = widget.feedType != null && widget.feedType != 'all';
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
     _loadRecentQueries();
@@ -464,168 +464,175 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_screenTitle),
-        actions: [
-          if (!_unifiedPeopleSearch || _mainTab != _MainSearchTab.people)
-            IconButton(
-              icon: Icon(
-                  _showFilters ? Icons.filter_alt : Icons.filter_alt_outlined),
-              onPressed: () {
-                setState(() => _showFilters = !_showFilters);
-              },
-            ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return Column(
-            children: [
-              // Поисковая строка
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: _searchHint,
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() {
-                                    _posts = [];
-                                    _people = [];
-                                    _channels = [];
-                                    _total = 0;
-                                    _error = null;
-                                  });
-                                },
-                              )
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: Text(_screenTitle),
+          actions: [
+            if (!_unifiedPeopleSearch || _mainTab != _MainSearchTab.people)
+              IconButton(
+                icon: Icon(_showFilters
+                    ? Icons.filter_alt
+                    : Icons.filter_alt_outlined),
+                onPressed: () {
+                  setState(() => _showFilters = !_showFilters);
+                },
+              ),
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return Column(
+              children: [
+                // Поисковая строка
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: _searchHint,
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _posts = [];
+                                      _people = [];
+                                      _channels = [];
+                                      _total = 0;
+                                      _error = null;
+                                    });
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                      ),
-                      onSubmitted: (_) => _performSearch(),
-                      onTap: () {
-                        if (_searchController.text.length >= 2) {
-                          setState(() => _showSuggestions = true);
-                        }
-                      },
-                    ),
-                    if (_chatsHubMode) ...[
-                      const SizedBox(height: 12),
-                      SegmentedButton<_MainSearchTab>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _MainSearchTab.people,
-                            label: Text('Люди'),
-                            icon: Icon(Icons.person_search_outlined, size: 18),
-                          ),
-                          ButtonSegment(
-                            value: _MainSearchTab.channels,
-                            label: Text('Каналы'),
-                            icon: Icon(Icons.explore_outlined, size: 18),
-                          ),
-                        ],
-                        selected: {_mainTab},
-                        onSelectionChanged: (selection) {
-                          setState(() => _mainTab = selection.first);
-                          _performSearch();
-                        },
-                      ),
-                    ] else if (_unifiedPeopleSearch) ...[
-                      const SizedBox(height: 12),
-                      SegmentedButton<_MainSearchTab>(
-                        segments: const [
-                          ButtonSegment(
-                            value: _MainSearchTab.all,
-                            label: Text('Все'),
-                          ),
-                          ButtonSegment(
-                            value: _MainSearchTab.posts,
-                            label: Text('Посты'),
-                          ),
-                          ButtonSegment(
-                            value: _MainSearchTab.people,
-                            label: Text('Люди'),
-                          ),
-                          ButtonSegment(
-                            value: _MainSearchTab.channels,
-                            label: Text('Каналы'),
-                          ),
-                        ],
-                        selected: {_mainTab},
-                        onSelectionChanged: (selection) {
-                          setState(() => _mainTab = selection.first);
-                          if (_searchController.text.trim().isNotEmpty) {
-                            _performSearch();
+                        onSubmitted: (_) => _performSearch(),
+                        onTap: () {
+                          if (_searchController.text.length >= 2) {
+                            setState(() => _showSuggestions = true);
                           }
                         },
                       ),
-                    ],
-                    if (_searchController.text.trim().isEmpty &&
-                        _recentQueries.isNotEmpty &&
-                        !_recipeSearch)
-                      _buildRecentQueries(),
-                    // Автодополнение
-                    if (_showSuggestions && _suggestions.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                      if (_chatsHubMode) ...[
+                        const SizedBox(height: 12),
+                        SegmentedButton<_MainSearchTab>(
+                          segments: const [
+                            ButtonSegment(
+                              value: _MainSearchTab.people,
+                              label: Text('Люди'),
+                              icon:
+                                  Icon(Icons.person_search_outlined, size: 18),
+                            ),
+                            ButtonSegment(
+                              value: _MainSearchTab.channels,
+                              label: Text('Каналы'),
+                              icon: Icon(Icons.explore_outlined, size: 18),
                             ),
                           ],
-                        ),
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: _suggestions.length,
-                          itemBuilder: (context, index) {
-                            final suggestion = _suggestions[index];
-                            return ListTile(
-                              leading: const Icon(Icons.search, size: 20),
-                              title: Text(suggestion),
-                              onTap: () {
-                                _searchController.text = suggestion;
-                                setState(() => _showSuggestions = false);
-                                _performSearch();
-                              },
-                            );
+                          selected: {_mainTab},
+                          onSelectionChanged: (selection) {
+                            setState(() => _mainTab = selection.first);
+                            _performSearch();
                           },
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              if (_showFilters)
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: (constraints.maxHeight * 0.48).clamp(120.0, 420.0),
+                      ] else if (_unifiedPeopleSearch) ...[
+                        const SizedBox(height: 12),
+                        SegmentedButton<_MainSearchTab>(
+                          segments: const [
+                            ButtonSegment(
+                              value: _MainSearchTab.all,
+                              label: Text('Все'),
+                            ),
+                            ButtonSegment(
+                              value: _MainSearchTab.posts,
+                              label: Text('Посты'),
+                            ),
+                            ButtonSegment(
+                              value: _MainSearchTab.people,
+                              label: Text('Люди'),
+                            ),
+                            ButtonSegment(
+                              value: _MainSearchTab.channels,
+                              label: Text('Каналы'),
+                            ),
+                          ],
+                          selected: {_mainTab},
+                          onSelectionChanged: (selection) {
+                            setState(() => _mainTab = selection.first);
+                            if (_searchController.text.trim().isNotEmpty) {
+                              _performSearch();
+                            }
+                          },
+                        ),
+                      ],
+                      if (_searchController.text.trim().isEmpty &&
+                          _recentQueries.isNotEmpty &&
+                          !_recipeSearch)
+                        _buildRecentQueries(),
+                      // Автодополнение
+                      if (_showSuggestions && _suggestions.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _suggestions.length,
+                            itemBuilder: (context, index) {
+                              final suggestion = _suggestions[index];
+                              return ListTile(
+                                leading: const Icon(Icons.search, size: 20),
+                                title: Text(suggestion),
+                                onTap: () {
+                                  _searchController.text = suggestion;
+                                  setState(() => _showSuggestions = false);
+                                  _performSearch();
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.paddingOf(context).bottom + 8,
+                ),
+                if (_showFilters)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight:
+                          (constraints.maxHeight * 0.48).clamp(120.0, 420.0),
                     ),
-                    child: _buildFilters(),
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.paddingOf(context).bottom + 8,
+                      ),
+                      child: _buildFilters(),
+                    ),
                   ),
+                Expanded(
+                  child: _buildResults(),
                 ),
-              Expanded(
-                child: _buildResults(),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -777,7 +784,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     ),
                     onChanged: (value) {
                       setState(() {
-                        _minComments = value.isEmpty ? null : int.tryParse(value);
+                        _minComments =
+                            value.isEmpty ? null : int.tryParse(value);
                       });
                     },
                   ),
@@ -870,18 +878,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final showPeople = _searchPeople && _people.isNotEmpty;
     final showPosts = _searchPosts && _posts.isNotEmpty;
     final showChannels = _searchChannels && _channels.isNotEmpty;
-    final peopleOnly =
-        (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
+    final peopleOnly = (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
         (_unifiedPeopleSearch && _mainTab == _MainSearchTab.people);
-    final channelsOnly =
-        _channelsOnlyMode ||
+    final channelsOnly = _channelsOnlyMode ||
         (_chatsHubMode && _mainTab == _MainSearchTab.channels) ||
         (_unifiedPeopleSearch && _mainTab == _MainSearchTab.channels);
 
-    if (_isLoading &&
-        _posts.isEmpty &&
-        _people.isEmpty &&
-        _channels.isEmpty) {
+    if (_isLoading && _posts.isEmpty && _people.isEmpty && _channels.isEmpty) {
       if (peopleOnly) {
         return const Center(child: CircularProgressIndicator());
       }
@@ -919,10 +922,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
 
-    if (_posts.isEmpty &&
-        _people.isEmpty &&
-        _channels.isEmpty &&
-        !_isLoading) {
+    if (_posts.isEmpty && _people.isEmpty && _channels.isEmpty && !_isLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -960,8 +960,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: _people.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 72),
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
           itemBuilder: (context, index) =>
               _buildPersonTile(_people[index], query),
         ),
@@ -974,8 +973,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: _channels.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 72),
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
           itemBuilder: (context, index) =>
               _buildChannelTile(_channels[index], query),
         ),
@@ -1160,4 +1158,3 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 }
-
