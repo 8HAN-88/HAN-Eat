@@ -37,11 +37,11 @@ void main() {
     );
     expect(
       post.videoUrlFor(VideoQualityPreference.max),
-      'https://api.haneat.app/uploads/original.mp4',
+      'https://api.haneat.app/uploads/original_720p.mp4',
     );
     expect(
       post.videoUrlFor(VideoQualityPreference.hd1080),
-      'https://api.haneat.app/uploads/original.mp4',
+      'https://api.haneat.app/uploads/original_720p.mp4',
     );
   });
 }
