@@ -3,8 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../app/app_router.dart';
 import '../../core/share/system_share.dart';
 import '../../models/post_model.dart';
 import '../../models/meal_plan.dart';
@@ -103,7 +105,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
       MaterialPageRoute(
         builder: (_) => _RecipeSourceListScreen(
           recipes: recipes,
-          onAddIngredients: (ingredients, group) => _addRecipeIngredients(ingredients, group: group),
+          onAddIngredients: (ingredients, group) =>
+              _addRecipeIngredients(ingredients, group: group),
         ),
       ),
     );
@@ -116,7 +119,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
     if (ingredients.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('В рецепте нет ингредиентов для добавления')),
+          const SnackBar(
+              content: Text('В рецепте нет ингредиентов для добавления')),
         );
       }
       return;
@@ -160,11 +164,13 @@ class _ShoppingPageState extends State<ShoppingPage> {
         final mapped = _mapSavedPostToRecipeModel(post);
         if (mapped != null) {
           final key = 'fav:saved:${mapped.id}';
-          merged.putIfAbsent(key, () => _RecipeSourceItem(
-            recipe: mapped,
-            sourceLabel: 'Избранное',
-            isMealPlan: false,
-          ));
+          merged.putIfAbsent(
+              key,
+              () => _RecipeSourceItem(
+                    recipe: mapped,
+                    sourceLabel: 'Избранное',
+                    isMealPlan: false,
+                  ));
         }
       }
     }
@@ -220,7 +226,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
 
     final rawIngredients = (body['translated_ingredients'] is List)
         ? body['translated_ingredients'] as List<dynamic>
-        : ((body['ingredients'] is List) ? body['ingredients'] as List<dynamic> : const <dynamic>[]);
+        : ((body['ingredients'] is List)
+            ? body['ingredients'] as List<dynamic>
+            : const <dynamic>[]);
     final ingredients = rawIngredients
         .map((e) => e?.toString().trim() ?? '')
         .where((e) => e.isNotEmpty)
@@ -228,13 +236,20 @@ class _ShoppingPageState extends State<ShoppingPage> {
 
     final rawSteps = (body['translated_steps'] is List)
         ? body['translated_steps'] as List<dynamic>
-        : ((body['steps'] is List) ? body['steps'] as List<dynamic> : const <dynamic>[]);
-    final steps = rawSteps.map((step) {
-      if (step is Map<String, dynamic>) {
-        return (step['step'] ?? step['text'] ?? step['instruction'] ?? '').toString().trim();
-      }
-      return step.toString().trim();
-    }).where((e) => e.isNotEmpty).toList();
+        : ((body['steps'] is List)
+            ? body['steps'] as List<dynamic>
+            : const <dynamic>[]);
+    final steps = rawSteps
+        .map((step) {
+          if (step is Map<String, dynamic>) {
+            return (step['step'] ?? step['text'] ?? step['instruction'] ?? '')
+                .toString()
+                .trim();
+          }
+          return step.toString().trim();
+        })
+        .where((e) => e.isNotEmpty)
+        .toList();
 
     String? image;
     final img = body['image']?.toString();
@@ -295,7 +310,14 @@ class _ShoppingPageState extends State<ShoppingPage> {
               Wrap(
                 spacing: 6,
                 runSpacing: 4,
-                children: ['Овощи', 'Фрукты', 'Молочное', 'Мясо', 'Рыба', 'Бакалея'].map((g) {
+                children: [
+                  'Овощи',
+                  'Фрукты',
+                  'Молочное',
+                  'Мясо',
+                  'Рыба',
+                  'Бакалея'
+                ].map((g) {
                   return ActionChip(
                     label: Text(g),
                     onPressed: () {
@@ -369,7 +391,14 @@ class _ShoppingPageState extends State<ShoppingPage> {
   }
 
   static const _departmentOrderList = [
-    'Овощи', 'Фрукты', 'Молочное', 'Мясо', 'Рыба', 'Бакалея', 'Заморозка', 'Напитки',
+    'Овощи',
+    'Фрукты',
+    'Молочное',
+    'Мясо',
+    'Рыба',
+    'Бакалея',
+    'Заморозка',
+    'Напитки',
   ];
 
   int _departmentOrder(String? key) {
@@ -393,7 +422,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
     final link = kIsWeb
         ? 'https://haneat.app/shopping-import?data=${Uri.encodeComponent(data)}'
         : 'haneat://shopping/import?data=$data';
-    final text = 'Список покупок — откройте в приложении H.A.N. Eat и добавьте к себе:\n$link';
+    final text =
+        'Список покупок — откройте в приложении H.A.N. Eat и добавьте к себе:\n$link';
     await SystemShare.shareText(
       context,
       text: text,
@@ -440,8 +470,12 @@ class _ShoppingPageState extends State<ShoppingPage> {
                 builder: (c) => AlertDialog(
                   title: const Text('Очистить список?'),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Нет')),
-                    FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Да')),
+                    TextButton(
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('Нет')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('Да')),
                   ],
                 ),
               );
@@ -462,7 +496,30 @@ class _ShoppingPageState extends State<ShoppingPage> {
                   child: AppEmptyState(
                     icon: Icons.shopping_cart_outlined,
                     title: 'Список пуст',
-                    subtitle: 'Добавьте продукты вручную или из рецепта',
+                    subtitle:
+                        'Добавьте продукты вручную, из рецепта или из плана питания.',
+                    action: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: _addFromRecipe,
+                          icon: const Icon(Icons.restaurant_menu_outlined),
+                          label: const Text('Из рецепта'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => context.push(MealPlanRoute.path),
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          label: const Text('План'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => context.push(MenuRoute.path),
+                          icon: const Icon(Icons.search_rounded),
+                          label: const Text('Найти блюда'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 bar,
@@ -471,7 +528,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
           }
           final grouped = ShoppingService.instance.getGrouped();
           final keys = grouped.keys.toList()
-            ..sort((a, b) => _departmentOrder(a).compareTo(_departmentOrder(b)));
+            ..sort(
+                (a, b) => _departmentOrder(a).compareTo(_departmentOrder(b)));
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -483,7 +541,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
                   itemBuilder: (context, i) {
                     final key = keys[i];
                     final itemsInGroup = grouped[key]!;
-                    final groupLabel = key == null || key.isEmpty ? 'Без группы' : key;
+                    final groupLabel =
+                        key == null || key.isEmpty ? 'Без группы' : key;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
@@ -492,7 +551,10 @@ class _ShoppingPageState extends State<ShoppingPage> {
                           padding: const EdgeInsets.only(top: 12, bottom: 6),
                           child: Text(
                             groupLabel,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
                                   color: Theme.of(context).colorScheme.primary,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -535,7 +597,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
                                   : null,
                               trailing: IconButton(
                                 icon: const Icon(Icons.remove_circle_outline),
-                                onPressed: () => ShoppingService.instance.removeItem(item),
+                                onPressed: () =>
+                                    ShoppingService.instance.removeItem(item),
                               ),
                             )),
                       ],
@@ -554,7 +617,8 @@ class _ShoppingPageState extends State<ShoppingPage> {
 
 class _RecipeSourceListScreen extends StatelessWidget {
   final List<_RecipeSourceItem> recipes;
-  final Future<void> Function(List<String> ingredients, String? group) onAddIngredients;
+  final Future<void> Function(List<String> ingredients, String? group)
+      onAddIngredients;
 
   const _RecipeSourceListScreen({
     required this.recipes,
@@ -570,8 +634,7 @@ class _RecipeSourceListScreen extends StatelessWidget {
       final key = _dayKey(item.mealDate);
       mealByDay.putIfAbsent(key, () => []).add(item);
     }
-    final dayKeys = mealByDay.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final dayKeys = mealByDay.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return DefaultTabController(
       length: 2,
@@ -611,7 +674,8 @@ class _RecipeSourceListScreen extends StatelessWidget {
           child: ExpansionTile(
             initiallyExpanded: true,
             title: Text(_dayLabel(day)),
-            children: items.map((item) => _buildRecipeTile(context, item)).toList(),
+            children:
+                items.map((item) => _buildRecipeTile(context, item)).toList(),
           ),
         );
       }).toList(),
@@ -688,7 +752,8 @@ class _RecipeSourceListScreen extends StatelessWidget {
 
 class _RecipeIngredientsCardScreen extends StatefulWidget {
   final _RecipeSourceItem item;
-  final Future<void> Function(List<String> ingredients, String? group) onAddIngredients;
+  final Future<void> Function(List<String> ingredients, String? group)
+      onAddIngredients;
 
   const _RecipeIngredientsCardScreen({
     required this.item,
@@ -696,10 +761,12 @@ class _RecipeIngredientsCardScreen extends StatefulWidget {
   });
 
   @override
-  State<_RecipeIngredientsCardScreen> createState() => _RecipeIngredientsCardScreenState();
+  State<_RecipeIngredientsCardScreen> createState() =>
+      _RecipeIngredientsCardScreenState();
 }
 
-class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScreen> {
+class _RecipeIngredientsCardScreenState
+    extends State<_RecipeIngredientsCardScreen> {
   final _groupController = TextEditingController();
   final _scrollController = ScrollController();
   late final List<String> _ingredients;
@@ -709,7 +776,9 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
   @override
   void initState() {
     super.initState();
-    _ingredients = widget.item.recipe.ingredients.where((e) => e.trim().isNotEmpty).toList();
+    _ingredients = widget.item.recipe.ingredients
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
     _selected = {for (int i = 0; i < _ingredients.length; i++) i};
   }
 
@@ -744,20 +813,26 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                             height: 170,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            errorBuilder: (_, __, ___) =>
+                                const SizedBox.shrink(),
                           ),
                         ),
                       ),
                     Text(
                       recipe.title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(top: 6, bottom: 16),
                       child: Text(
                         widget.item.sourceLabel,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                       ),
                     ),
@@ -772,7 +847,10 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                       padding: const EdgeInsets.only(top: 16),
                       child: Text(
                         'Ингредиенты',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ),
                     Padding(
@@ -785,7 +863,8 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                             onPressed: () => setState(() {
                               _selected
                                 ..clear()
-                                ..addAll(List.generate(_ingredients.length, (i) => i));
+                                ..addAll(List.generate(
+                                    _ingredients.length, (i) => i));
                             }),
                           ),
                           ActionChip(
@@ -802,15 +881,22 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                               alignment: Alignment.topLeft,
                               child: Text(
                                 'Ингредиенты не найдены',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                               ),
                             )
                           : ListView.builder(
-                              key: const PageStorageKey('shopping-recipe-ingredients-scroll'),
+                              key: const PageStorageKey(
+                                  'shopping-recipe-ingredients-scroll'),
                               controller: _scrollController,
-                              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
                               physics: const ClampingScrollPhysics(),
                               itemCount: _ingredients.length,
                               itemBuilder: (context, i) {
@@ -820,7 +906,8 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                                   contentPadding: EdgeInsets.zero,
                                   value: _selected.contains(i),
                                   title: Text(ing),
-                                  controlAffinity: ListTileControlAffinity.leading,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                   onChanged: (v) {
                                     setState(() {
                                       if (v == true) {
@@ -831,9 +918,11 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
                                     });
                                   },
                                   secondary: IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline),
+                                    icon:
+                                        const Icon(Icons.remove_circle_outline),
                                     tooltip: 'Убрать из добавления',
-                                    onPressed: () => setState(() => _selected.remove(i)),
+                                    onPressed: () =>
+                                        setState(() => _selected.remove(i)),
                                   ),
                                 );
                               },
@@ -844,24 +933,30 @@ class _RecipeIngredientsCardScreenState extends State<_RecipeIngredientsCardScre
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 12 + MediaQuery.paddingOf(context).bottom),
+              padding: EdgeInsets.fromLTRB(
+                  16, 8, 16, 12 + MediaQuery.paddingOf(context).bottom),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: _saving
                       ? null
                       : () async {
-                          final selectedIngredients = _selected.map((i) => _ingredients[i]).toList();
+                          final selectedIngredients =
+                              _selected.map((i) => _ingredients[i]).toList();
                           if (selectedIngredients.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Выберите хотя бы один ингредиент')),
+                              const SnackBar(
+                                  content:
+                                      Text('Выберите хотя бы один ингредиент')),
                             );
                             return;
                           }
                           setState(() => _saving = true);
                           await widget.onAddIngredients(
                             selectedIngredients,
-                            _groupController.text.trim().isEmpty ? null : _groupController.text.trim(),
+                            _groupController.text.trim().isEmpty
+                                ? null
+                                : _groupController.text.trim(),
                           );
                           if (mounted) {
                             setState(() => _saving = false);

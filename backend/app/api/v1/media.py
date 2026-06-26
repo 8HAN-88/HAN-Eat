@@ -27,6 +27,33 @@ _CLIENT_UPLOAD_PREFIX = "upload:client:"
 _CLIENT_UPLOAD_TTL_SEC = 3600
 
 
+def _enforce_upload_rate_limit(user_id: int, action: str, limit: int) -> None:
+    if not getattr(settings, "RATE_LIMIT_ENABLED", True):
+        return
+    from app.core.redis_client import REDIS_IS_STUB, get_redis
+
+    if REDIS_IS_STUB:
+        return
+    key = f"rl:upload:{action}:{user_id}:minute"
+    try:
+        count = get_redis().incr(key)
+        if count == 1:
+            get_redis().expire(key, 60)
+        if count > limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": "UPLOAD_RATE_LIMIT_EXCEEDED",
+                    "message": "Too many uploads. Please try again later.",
+                },
+                headers={"Retry-After": "60"},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        return
+
+
 def _client_upload_cache_key(user_id: int, client_upload_id: str) -> str:
     return f"{_CLIENT_UPLOAD_PREFIX}{user_id}:{client_upload_id}"
 
@@ -103,6 +130,7 @@ async def init_upload(
     Клиент получает presigned URL и загружает файл напрямую в S3,
     затем отправляет file_key в запросе создания поста.
     """
+    _enforce_upload_rate_limit(current_user.id, "init", 30)
     try:
         if request.client_upload_id:
             cached = _lookup_client_upload(
@@ -156,6 +184,7 @@ async def complete_upload(
     from app.models.image_processing import ImageProcessing
     from app.models.video_processing import VideoProcessing
     
+    _enforce_upload_rate_limit(current_user.id, "complete", 45)
     try:
         media_service = MediaService()
         result = media_service.complete_upload(
@@ -403,6 +432,7 @@ async def mock_upload(
     import os
     from botocore.exceptions import ClientError
     
+    _enforce_upload_rate_limit(current_user.id, "mock_put", 30)
     try:
         # Получаем file_key (память + Redis, чтобы пережить перезапуск API)
         file_key = _lookup_mock_file_key(upload_id)

@@ -19,6 +19,8 @@ class WebAppUpdateService {
   static Timer? _pollTimer;
   static bool _checking = false;
   static bool _reloadScheduled = false;
+  static final ValueNotifier<String?> availableUpdateBuild =
+      ValueNotifier<String?>(null);
 
   static void start() {
     if (!kIsWeb || embeddedBuild.isEmpty) return;
@@ -43,12 +45,10 @@ class WebAppUpdateService {
       final uri = Uri.parse(
         '/version.json?nocache=${DateTime.now().millisecondsSinceEpoch}',
       );
-      final response = await http
-          .get(
-            uri,
-            headers: const {'Cache-Control': 'no-cache'},
-          )
-          .timeout(const Duration(seconds: 8));
+      final response = await http.get(
+        uri,
+        headers: const {'Cache-Control': 'no-cache'},
+      ).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return;
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -56,15 +56,22 @@ class WebAppUpdateService {
       if (remote.isEmpty || remote == embeddedBuild) return;
 
       debugPrint(
-        'WebAppUpdateService: новый билд $remote (текущий $embeddedBuild) — перезагрузка',
+        'WebAppUpdateService: новый билд $remote (текущий $embeddedBuild)',
       );
-      _reloadScheduled = true;
+      availableUpdateBuild.value = remote;
       stop();
-      await reload.reloadWebPage(build: remote);
     } catch (e) {
       debugPrint('WebAppUpdateService: $e');
     } finally {
       _checking = false;
     }
+  }
+
+  static Future<void> reloadNow() async {
+    if (!kIsWeb || _reloadScheduled) return;
+    final build = availableUpdateBuild.value;
+    _reloadScheduled = true;
+    stop();
+    await reload.reloadWebPage(build: build);
   }
 }

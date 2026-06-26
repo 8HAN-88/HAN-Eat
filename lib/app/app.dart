@@ -23,7 +23,8 @@ class HanEatApp extends ConsumerStatefulWidget {
   ConsumerState<HanEatApp> createState() => _HanEatAppState();
 }
 
-class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserver {
+class _HanEatAppState extends ConsumerState<HanEatApp>
+    with WidgetsBindingObserver {
   StreamSubscription<Uri>? _deepLinkSubscription;
   late final void Function(User?) _onAccountSessionChanged;
 
@@ -126,7 +127,8 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(height: 16),
-                      CircularProgressIndicator(color: theme.colorScheme.primary),
+                      CircularProgressIndicator(
+                          color: theme.colorScheme.primary),
                       const SizedBox(height: 16),
                       Text(
                         'Загрузка HAN Eat…',
@@ -149,7 +151,27 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: theme.colorScheme.onSurface),
-                child: content,
+                child: Stack(
+                  children: [
+                    content,
+                    if (kIsWeb)
+                      ValueListenableBuilder<String?>(
+                        valueListenable:
+                            WebAppUpdateService.availableUpdateBuild,
+                        builder: (context, build, _) {
+                          if (build == null || build.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return Positioned(
+                            left: 12,
+                            right: 12,
+                            top: media.padding.top + 8,
+                            child: _WebUpdateBanner(buildNumber: build),
+                          );
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
           );
@@ -184,5 +206,57 @@ class _HanEatAppState extends ConsumerState<HanEatApp> with WidgetsBindingObserv
         ),
       );
     }
+  }
+}
+
+class _WebUpdateBanner extends StatelessWidget {
+  const _WebUpdateBanner({required this.buildNumber});
+
+  final String buildNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(18),
+      color: scheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.system_update_alt_rounded,
+                color: scheme.onPrimaryContainer),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Доступна новая версия HAN Eat',
+                    style: TextStyle(
+                      color: scheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'Build $buildNumber',
+                    style: TextStyle(
+                      color: scheme.onPrimaryContainer.withValues(alpha: 0.78),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: WebAppUpdateService.reloadNow,
+              child: const Text('Обновить'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

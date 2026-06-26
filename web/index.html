@@ -80,6 +80,9 @@
     (function () {
       var flutterStarted = false;
 
+      // HAN Eat deploy strategy: keep web updates predictable by disabling the
+      // Flutter service worker. We still keep manifest/icons for installability,
+      // while version.json + in-app banner handles visible updates.
       function unregisterServiceWorkers() {
         if (!('serviceWorker' in navigator)) {
           return Promise.resolve();

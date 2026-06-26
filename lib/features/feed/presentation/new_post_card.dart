@@ -34,6 +34,7 @@ import '../../../services/feed_cache_service.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/paid_features_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'widgets/paid_content_paywall_card.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -281,8 +282,7 @@ class _NewPostCardState extends State<NewPostCard> {
     if (body == null) return;
     try {
       final recipe = Recipe.fromPostModel(post);
-      final isFavorite =
-          FavoritesService.safeIsFavorite(recipe.id.toString());
+      final isFavorite = FavoritesService.safeIsFavorite(recipe.id.toString());
       if (!mounted) return;
       FeedAnalyticsService.openDetail(
         post,
@@ -1265,8 +1265,7 @@ class _NewPostCardState extends State<NewPostCard> {
                                 child: originalAuthorAvatar != null
                                     ? CircleAvatar(
                                         radius: 10,
-                                        backgroundImage:
-                                            ResizeImage(
+                                        backgroundImage: ResizeImage(
                                           CachedNetworkImageProvider(
                                             ServerConfig
                                                 .resolvePublisherAvatarUrl(
@@ -1317,7 +1316,8 @@ class _NewPostCardState extends State<NewPostCard> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 4, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: scheme.primary.withValues(alpha: 0.1),
+                                    color:
+                                        scheme.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(3),
                                   ),
                                   child: Text(
@@ -1444,7 +1444,8 @@ class _NewPostCardState extends State<NewPostCard> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: CachedNetworkImage(
-                                imageUrl: ServerConfig.resolvePublisherAvatarUrl(
+                                imageUrl:
+                                    ServerConfig.resolvePublisherAvatarUrl(
                                   post.linkImage!,
                                 ),
                                 height: 150,
@@ -1532,18 +1533,18 @@ class _NewPostCardState extends State<NewPostCard> {
                       label: _formatCount(_displayCommentsCount),
                       onTap: () {
                         unawaited(() async {
-                            if (_isSpoonacularRecipePost) {
-                              await _openRecipeFromPost();
-                              return;
-                            }
-                            FeedAnalyticsService.openDetail(
-                              widget.post,
-                              source: 'post_card',
-                              target: 'comments',
-                            );
-                            await widget.onCommentTap?.call();
-                            await _refreshCommentsCount();
-                          }());
+                          if (_isSpoonacularRecipePost) {
+                            await _openRecipeFromPost();
+                            return;
+                          }
+                          FeedAnalyticsService.openDetail(
+                            widget.post,
+                            source: 'post_card',
+                            target: 'comments',
+                          );
+                          await widget.onCommentTap?.call();
+                          await _refreshCommentsCount();
+                        }());
                       },
                     ),
                     const SizedBox(width: 12),
@@ -1615,86 +1616,12 @@ class _NewPostCardState extends State<NewPostCard> {
 
   /// Построить виджет для отображения медиа поста
   Widget _buildPaidContentPaywall(PostModel post) {
-    final scheme = Theme.of(context).colorScheme;
     final mediaCount = post.body?['media_count'] as int? ?? 0;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              scheme.primaryContainer.withValues(alpha: 0.72),
-              scheme.secondaryContainer.withValues(alpha: 0.52),
-              scheme.surfaceContainerHighest.withValues(alpha: 0.78),
-            ],
-          ),
-          border: Border.all(color: scheme.primary.withValues(alpha: 0.18)),
-          boxShadow: [
-            BoxShadow(
-              color: scheme.shadow.withValues(alpha: 0.10),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: scheme.surface.withValues(alpha: 0.72),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.lock_rounded, color: scheme.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Эксклюзивный контент',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                ),
-                Text(
-                  '${post.priceStars} ★',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: scheme.primary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              mediaCount > 0
-                  ? 'Внутри $mediaCount медиа. Откройте пост за звёзды и смотрите без ограничений.'
-                  : 'Откройте пост за звёзды, чтобы увидеть полный контент.',
-              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _isLoading ? null : _purchasePaidContent,
-              icon: _isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.stars_rounded),
-              label: Text(_isLoading ? 'Открываем...' : 'Купить за ${post.priceStars} ★'),
-            ),
-          ],
-        ),
-      ),
+    return PaidContentPaywallCard(
+      priceStars: post.priceStars,
+      mediaCount: mediaCount,
+      isLoading: _isLoading,
+      onPurchase: _purchasePaidContent,
     );
   }
 

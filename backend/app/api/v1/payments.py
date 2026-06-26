@@ -629,6 +629,20 @@ async def yookassa_webhook(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid webhook payload"
         )
+
+    signature = (
+        request.headers.get("X-YooKassa-Signature")
+        or request.headers.get("X-Yookassa-Signature")
+        or request.headers.get("X-Webhook-Signature")
+        or ""
+    )
+    if settings.APP_ENV == "production" or settings.YOOKASSA_WEBHOOK_SIGNATURE_REQUIRED:
+        if not yookassa_service.verify_webhook_event(event, signature):
+            logger.warning("YooKassa webhook: invalid or missing signature")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid webhook signature",
+            )
     
     # Обрабатываем событие
     result = yookassa_service.handle_webhook_event(event)

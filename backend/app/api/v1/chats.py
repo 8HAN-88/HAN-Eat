@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.chat import (
@@ -51,6 +52,33 @@ from app.services.chat_service import ChatService
 from app.services.user_event_bus import publish_user_event
 
 router = APIRouter()
+
+
+def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> None:
+    if not getattr(settings, "RATE_LIMIT_ENABLED", True):
+        return
+    from app.core.redis_client import REDIS_IS_STUB, get_redis
+
+    if REDIS_IS_STUB:
+        return
+    key = f"rl:chat:{action}:{user_id}:minute"
+    try:
+        count = get_redis().incr(key)
+        if count == 1:
+            get_redis().expire(key, 60)
+        if count > limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": "CHAT_RATE_LIMIT_EXCEEDED",
+                    "message": "Too many chat actions. Please try again later.",
+                },
+                headers={"Retry-After": "60"},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        return
 
 
 def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, Any]:
@@ -255,6 +283,7 @@ async def list_chats(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _enforce_chat_action_rate_limit(current_user.id, "send", 45)
     svc = ChatService(db)
     rows = svc.list_conversations(current_user.id, archived_only=archived)
     db.commit()
@@ -282,6 +311,7 @@ async def get_saved_chat(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _enforce_chat_action_rate_limit(current_user.id, "typing", 120)
     svc = ChatService(db)
     conv = svc.get_or_create_saved(current_user.id)
     db.commit()

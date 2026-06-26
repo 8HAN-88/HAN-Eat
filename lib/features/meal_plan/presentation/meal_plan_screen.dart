@@ -12,6 +12,7 @@ import '../../../services/server_config.dart';
 import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import 'add_to_meal_plan_screen.dart';
+import 'meal_plan_nutrition_settings_screen.dart';
 
 class _DayNutritionTotals {
   final double calories;
@@ -38,11 +39,11 @@ class MealPlanScreen extends StatefulWidget {
 
 class _MealPlanScreenState extends State<MealPlanScreen> {
   late DateTime _selectedDate;
+
   /// Понедельник отображаемой недели (локальный календарь).
   late DateTime _visibleWeekStart;
 
-  static DateTime _dateOnly(DateTime d) =>
-      DateTime(d.year, d.month, d.day);
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   DateTime _mondayOf(DateTime d) {
     final date = _dateOnly(d);
@@ -60,7 +61,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: duration,
-        margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + floatingBottomPadding(context)),
+        margin:
+            EdgeInsets.fromLTRB(12, 0, 12, 12 + floatingBottomPadding(context)),
         backgroundColor: cs.surfaceContainerHigh,
         content: Text(
           message,
@@ -181,6 +183,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             onPressed: () => context.push(MealPlanAnalyticsRoute.path),
           ),
           IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Настройки питания',
+            onPressed: () => context.push(MealPlanNutritionSettingsRoute.path),
+          ),
+          IconButton(
             icon: const Icon(Icons.auto_awesome_outlined),
             tooltip: 'AI-план питания',
             onPressed: () => context.push(AiMealPlanRoute.path),
@@ -290,39 +297,56 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         child: Padding(
           padding: EdgeInsets.only(bottom: bottom),
           child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.restaurant_menu,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Нет запланированных блюд',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Нажмите + чтобы добавить рецепт',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.restaurant_menu,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Нет запланированных блюд',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Начните с рецепта, AI-плана или скана блюда.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddDialog(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Выбрать рецепт'),
                   ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _showAddDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Добавить рецепт'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => context.push(AiMealPlanRoute.path),
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('Создать AI-план'),
-            ),
-          ],
-        ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(AiMealPlanRoute.path),
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    label: const Text('AI-план'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(MenuRoute.path),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Сканировать'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(ShoppingListRoute.path),
+                    icon: const Icon(Icons.shopping_cart_outlined),
+                    label: const Text('Покупки'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -528,8 +552,13 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     final selectedEntries = await _selectEntriesForShopping(plan.entries);
     if (!mounted || selectedEntries == null || selectedEntries.isEmpty) return;
 
-    final selectedIngredients = await _selectIngredientsForShopping(selectedEntries);
-    if (!mounted || selectedIngredients == null || selectedIngredients.isEmpty) return;
+    final selectedIngredients =
+        await _selectIngredientsForShopping(selectedEntries);
+    if (!mounted ||
+        selectedIngredients == null ||
+        selectedIngredients.isEmpty) {
+      return;
+    }
 
     int added = 0;
     final byRecipe = <String, List<String>>{};
@@ -587,7 +616,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                         ),
                         ActionChip(
                           label: const Text('Снять все'),
-                          onPressed: () => setLocalState(() => selected.clear()),
+                          onPressed: () =>
+                              setLocalState(() => selected.clear()),
                         ),
                       ],
                     ),
@@ -629,8 +659,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                   onPressed: selected.isEmpty
                       ? null
                       : () {
-                          final result =
-                              entries.where((e) => selected.contains(e.id)).toList();
+                          final result = entries
+                              .where((e) => selected.contains(e.id))
+                              .toList();
                           Navigator.of(context).pop(result);
                         },
                   child: const Text('Добавить'),
@@ -688,7 +719,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                         ),
                         ActionChip(
                           label: const Text('Снять все'),
-                          onPressed: () => setLocalState(() => selected.clear()),
+                          onPressed: () =>
+                              setLocalState(() => selected.clear()),
                         ),
                       ],
                     ),
@@ -730,7 +762,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                   onPressed: selected.isEmpty
                       ? null
                       : () {
-                          final result = all.where((e) => selected.contains(e.id)).toList();
+                          final result = all
+                              .where((e) => selected.contains(e.id))
+                              .toList();
                           Navigator.of(context).pop(result);
                         },
                   child: const Text('Добавить'),
@@ -789,12 +823,15 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     sb.writeln('');
     for (var d = 0; d < 7; d++) {
       final date = _dateOnly(weekStart.add(Duration(days: d)));
-      final dayEntries = entries.where((e) => _isSameDate(e.date, date)).toList()
+      final dayEntries = entries
+          .where((e) => _isSameDate(e.date, date))
+          .toList()
         ..sort((a, b) => a.mealType.index.compareTo(b.mealType.index));
       if (dayEntries.isEmpty) continue;
       sb.writeln(DateFormat('EEEE, d MMM', 'ru').format(date));
       for (final e in dayEntries) {
-        sb.writeln('  ${e.mealType.displayName}: ${e.recipe.title} (${e.servings} порц.)');
+        sb.writeln(
+            '  ${e.mealType.displayName}: ${e.recipe.title} (${e.servings} порц.)');
       }
       sb.writeln('');
     }
@@ -805,7 +842,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
-  double? _getNutritionValue(Map<String, dynamic> nutrition, List<String> keys) {
+  double? _getNutritionValue(
+      Map<String, dynamic> nutrition, List<String> keys) {
     for (final key in keys) {
       final value = nutrition[key];
       if (value != null) {
@@ -848,4 +886,3 @@ class _IngredientPick {
     required this.ingredient,
   });
 }
-

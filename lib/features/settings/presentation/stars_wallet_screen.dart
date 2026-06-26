@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
 import '../../../widgets/app_gradient_background.dart';
+import 'widgets/stars_wallet_widgets.dart';
 
 class StarsWalletScreen extends StatefulWidget {
   const StarsWalletScreen({super.key});
@@ -14,6 +15,7 @@ class StarsWalletScreen extends StatefulWidget {
 class _StarsWalletScreenState extends State<StarsWalletScreen> {
   late Future<_WalletData> _future;
   bool _checkoutLoading = false;
+  WalletFilter _filter = WalletFilter.all;
 
   @override
   void initState() {
@@ -92,12 +94,20 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             final data = snapshot.data!;
+            final filteredTransactions = data.transactions
+                .where((tx) => _filter.matches(tx.type, tx.amount))
+                .toList();
             return RefreshIndicator(
               onRefresh: _refreshAndWait,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                 children: [
-                  _BalanceCard(balance: data.balance),
+                  StarsBalanceCard(balance: data.balance),
+                  const SizedBox(height: 12),
+                  CreatorDashboardCard(
+                    balance: data.balance,
+                    transactions: data.transactions,
+                  ),
                   const SizedBox(height: 18),
                   Text(
                     'Купить звёзды',
@@ -111,10 +121,12 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                       child: ListTile(
                         leading: const Icon(Icons.stars_rounded),
                         title: Text(package.title),
-                        subtitle: Text('${package.stars} ★ за ${package.priceRub} ₽'),
+                        subtitle:
+                            Text('${package.stars} ★ за ${package.priceRub} ₽'),
                         trailing: FilledButton(
-                          onPressed:
-                              _checkoutLoading ? null : () => _buyPackage(package),
+                          onPressed: _checkoutLoading
+                              ? null
+                              : () => _buyPackage(package),
                           child: const Text('Купить'),
                         ),
                       ),
@@ -127,7 +139,23 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                         ),
                   ),
                   const SizedBox(height: 10),
-                  if (data.transactions.isEmpty)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final filter in WalletFilter.values) ...[
+                          FilterChip(
+                            selected: _filter == filter,
+                            label: Text(filter.label),
+                            onSelected: (_) => setState(() => _filter = filter),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (filteredTransactions.isEmpty)
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
@@ -138,7 +166,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                       ),
                     )
                   else
-                    for (final tx in data.transactions)
+                    for (final tx in filteredTransactions)
                       Card(
                         child: ListTile(
                           leading: Icon(
@@ -196,60 +224,6 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
   String _date(DateTime date) {
     if (date.millisecondsSinceEpoch == 0) return '';
     return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
-  }
-}
-
-class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.balance});
-
-  final StarsBalance balance;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            scheme.primaryContainer,
-            scheme.secondaryContainer.withValues(alpha: 0.72),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: scheme.shadow.withValues(alpha: 0.10),
-            blurRadius: 26,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Баланс',
-            style: TextStyle(color: scheme.onPrimaryContainer),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${balance.balance} ★',
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: scheme.onPrimaryContainer,
-                ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Авторский баланс: ${balance.creatorAvailableStars} ★',
-            style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.78)),
-          ),
-        ],
-      ),
-    );
   }
 }
 

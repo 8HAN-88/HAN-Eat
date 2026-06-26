@@ -3,6 +3,7 @@
 """
 import json
 import logging
+import time
 from typing import Dict, Optional
 from app.core.redis_client import redis_client
 from app.models.video_processing import VideoProcessing
@@ -16,6 +17,8 @@ class VideoQueueService:
     
     QUEUE_KEY = "video:processing:queue"
     STATUS_KEY_PREFIX = "video:status:"
+    WORKER_HEARTBEAT_KEY = "video:worker:heartbeat"
+    WORKER_HEARTBEAT_TTL_SECONDS = 120
     
     @staticmethod
     def enqueue_video_processing(
@@ -170,4 +173,26 @@ class VideoQueueService:
         except Exception as e:
             logger.error(f"Failed to get processing status: {e}")
         return None
+
+    @staticmethod
+    def update_worker_heartbeat() -> None:
+        try:
+            redis_client.setex(
+                VideoQueueService.WORKER_HEARTBEAT_KEY,
+                VideoQueueService.WORKER_HEARTBEAT_TTL_SECONDS,
+                str(int(time.time())),
+            )
+        except Exception as e:
+            logger.error("Failed to update video worker heartbeat: %s", e)
+
+    @staticmethod
+    def worker_heartbeat_age_seconds() -> Optional[int]:
+        try:
+            raw = redis_client.get(VideoQueueService.WORKER_HEARTBEAT_KEY)
+            if raw is None:
+                return None
+            return max(0, int(time.time()) - int(raw))
+        except Exception as e:
+            logger.error("Failed to read video worker heartbeat: %s", e)
+            return None
 

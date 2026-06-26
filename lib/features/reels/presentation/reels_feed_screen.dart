@@ -209,8 +209,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     if (index < 0 || index >= _reels.length) return;
     final pref = ref.read(videoPlaybackProvider);
     final urls = <String?>[
-      if (index > 0)
-        _reels[index - 1].reelVideoSources.prefetchUrl(pref),
+      if (index > 0) _reels[index - 1].reelVideoSources.prefetchUrl(pref),
       if (index + 1 < _reels.length)
         _reels[index + 1].reelVideoSources.prefetchUrl(pref),
       if (index + 2 < _reels.length)
@@ -318,6 +317,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       }
     } else if (!widget.isTabVisible && oldWidget.isTabVisible) {
       _pauseAllVideos();
+      _disposeAllControllers();
     }
   }
 
@@ -463,9 +463,8 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       final prevLen = _reels.length;
       final fetched =
           refresh ? response.items : <PostModel>[..._reels, ...response.items];
-      final nextReels = refresh
-          ? _mergePreservingRecentLikes(fetched)
-          : fetched;
+      final nextReels =
+          refresh ? _mergePreservingRecentLikes(fetched) : fetched;
       if (refresh) {
         _retainMatchingControllerOnRefresh(nextReels);
       }
@@ -626,16 +625,17 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   void _finishCurrentReelExposure() {
     final startedAt = _currentReelStartedAt;
-    if (startedAt == null || _currentIndex < 0 || _currentIndex >= _reels.length) {
+    if (startedAt == null ||
+        _currentIndex < 0 ||
+        _currentIndex >= _reels.length) {
       return;
     }
     final reel = _reels[_currentIndex];
     final watched = DateTime.now().difference(startedAt);
     final controller = _videoControllers[_currentIndex];
-    final duration =
-        controller != null && controller.value.isInitialized
-            ? controller.value.duration
-            : null;
+    final duration = controller != null && controller.value.isInitialized
+        ? controller.value.duration
+        : null;
     FeedAnalyticsService.reelProgress(
       reel,
       watched: watched,
@@ -1113,7 +1113,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
                     : Icons.bookmark_border,
               ),
               title: Text(
-                (widget.reel.isSaved ?? false) ? 'Убрать из сохранённых' : 'Сохранить',
+                (widget.reel.isSaved ?? false)
+                    ? 'Убрать из сохранённых'
+                    : 'Сохранить',
               ),
               onTap: () {
                 Navigator.pop(ctx);
@@ -1157,8 +1159,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
 
   void _handleSingleTap() {
     final now = DateTime.now();
-    if (_lastTap != null &&
-        now.difference(_lastTap!) < _doubleTapWindow) {
+    if (_lastTap != null && now.difference(_lastTap!) < _doubleTapWindow) {
       _singleTapTimer?.cancel();
       _singleTapTimer = null;
       _handleDoubleTap();
@@ -1248,7 +1249,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
               color: Colors.black,
               child: Center(child: _buildVideoPlaceholder()),
             ),
-
           if (widget.isPaused)
             Positioned.fill(
               child: IgnorePointer(
@@ -1257,7 +1257,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
                 ),
               ),
             ),
-
           if (widget.isPaused && widget.videoController != null)
             Positioned.fill(
               child: Center(
@@ -1305,7 +1304,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
                 ),
               ),
             ),
-
           if (_showLikeAnimation)
             Center(
               child: AnimatedBuilder(
@@ -1325,7 +1323,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
                 },
               ),
             ),
-
           Positioned(
             bottom: 0,
             left: 0,
@@ -1345,7 +1342,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
               ),
             ),
           ),
-
           Positioned(
             right: _igRightInset,
             bottom: railBottom,
@@ -1360,7 +1356,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
                         : Icons.favorite_border,
                     count: widget.reel.likesCount,
                     onTap: widget.onLike,
-                    color: widget.reel.isLiked ? const Color(0xFFFF3040) : Colors.white,
+                    color: widget.reel.isLiked
+                        ? const Color(0xFFFF3040)
+                        : Colors.white,
                   ),
                   const SizedBox(height: _igActionGap),
                   _IgReelAction(
@@ -1395,7 +1393,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
               ),
             ),
           ),
-
           Positioned(
             left: 12,
             right: _igRailWidth + _igRightInset + 8,
@@ -1527,7 +1524,6 @@ class _ReelCardState extends ConsumerState<ReelCard>
               ],
             ),
           ),
-
           if (widget.videoController != null)
             Positioned(
               left: 0,

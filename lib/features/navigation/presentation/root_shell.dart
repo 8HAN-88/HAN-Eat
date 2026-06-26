@@ -116,8 +116,7 @@ class _RootShellState extends ConsumerState<RootShell> {
       }
     });
     _startPeriodicUpdate();
-    _chatSignalsSub =
-        ChatRealtimeSignals.instance.hubRefresh.listen((_) {
+    _chatSignalsSub = ChatRealtimeSignals.instance.hubRefresh.listen((_) {
       if (mounted) _loadChatUnreadCount();
     });
     _realtimeSub = UserRealtimeService.instance.events.listen((event) {
@@ -326,122 +325,133 @@ class _RootShellState extends ConsumerState<RootShell> {
         return ValueListenableBuilder<bool>(
           valueListenable: shellNavCompact,
           builder: (context, compact, _) {
-        final shellIndex =
-            _clampShellIndex(widget.navigationShell.currentIndex);
-        final navHeight =
-            compact ? kShellNavCompactHeight : kShellNavExpandedHeight;
-        final iconSize = compact ? 22.0 : 26.0;
-        final searchPath = contextualSearchPath(shellIndex);
-        final showSearchButton = searchPath != null;
-        final navDuration =
-            compact ? kShellNavCompactDuration : kShellNavExpandDuration;
+            final shellIndex =
+                _clampShellIndex(widget.navigationShell.currentIndex);
+            final navHeight =
+                compact ? kShellNavCompactHeight : kShellNavExpandedHeight;
+            final iconSize = compact ? 22.0 : 26.0;
+            final searchPath = contextualSearchPath(shellIndex);
+            final showSearchButton = searchPath != null;
+            final navDuration =
+                compact ? kShellNavCompactDuration : kShellNavExpandDuration;
 
-        final navBar = SafeArea(
-          minimum: EdgeInsets.only(
-            left: kShellNavSideMargin,
-            right: kShellNavSideMargin,
-            bottom: compact
-                ? kShellNavBottomMarginCompact
-                : kShellNavBottomMarginExpanded,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: _ShellNavGlassPill(
-                  height: navHeight,
-                  compact: compact,
-                  duration: navDuration,
-                  child: NavigationBarTheme(
-                    data: NavigationBarThemeData(
+            final navBar = SafeArea(
+              minimum: EdgeInsets.only(
+                left: kShellNavSideMargin,
+                right: kShellNavSideMargin,
+                bottom: compact
+                    ? kShellNavBottomMarginCompact
+                    : kShellNavBottomMarginExpanded,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: _ShellNavGlassPill(
                       height: navHeight,
-                      labelTextStyle:
-                          WidgetStateProperty.all(const TextStyle(fontSize: 0)),
-                      iconTheme: WidgetStateProperty.resolveWith(
-                        (states) => IconThemeData(
-                          size: states.contains(WidgetState.selected)
-                              ? iconSize + 1
-                              : iconSize,
+                      compact: compact,
+                      duration: navDuration,
+                      child: NavigationBarTheme(
+                        data: NavigationBarThemeData(
+                          height: navHeight,
+                          labelTextStyle:
+                              WidgetStateProperty.resolveWith((states) {
+                            final selected =
+                                states.contains(WidgetState.selected);
+                            return TextStyle(
+                              fontSize: compact ? 0 : 11,
+                              height: compact ? 0 : 1,
+                              fontWeight:
+                                  selected ? FontWeight.w800 : FontWeight.w600,
+                              letterSpacing: -0.2,
+                            );
+                          }),
+                          iconTheme: WidgetStateProperty.resolveWith(
+                            (states) => IconThemeData(
+                              size: states.contains(WidgetState.selected)
+                                  ? iconSize + 1
+                                  : iconSize,
+                            ),
+                          ),
+                        ),
+                        child: NavigationBar(
+                          height: navHeight,
+                          labelBehavior: compact
+                              ? NavigationDestinationLabelBehavior.alwaysHide
+                              : NavigationDestinationLabelBehavior.alwaysShow,
+                          selectedIndex: shellIndex,
+                          onDestinationSelected: _onDestinationSelected,
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          surfaceTintColor: Colors.transparent,
+                          indicatorColor:
+                              scheme.primary.withValues(alpha: 0.18),
+                          destinations: [
+                            for (var i = 0;
+                                i < RootShell._destinations.length;
+                                i++)
+                              _buildNavigationDestination(
+                                RootShell._destinations[i],
+                                badgeLabel: _badgeLabelForTab(i),
+                                badgeTooltip:
+                                    i == 1 ? _chatTabBadgeTooltip() : null,
+                              ),
+                          ],
                         ),
                       ),
                     ),
-                    child: NavigationBar(
+                  ),
+                  if (showSearchButton) ...[
+                    const SizedBox(width: 10),
+                    _ShellNavGlassPill(
                       height: navHeight,
-                      labelBehavior:
-                          NavigationDestinationLabelBehavior.alwaysHide,
-                      selectedIndex: shellIndex,
-                      onDestinationSelected: _onDestinationSelected,
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      surfaceTintColor: Colors.transparent,
-                      indicatorColor: scheme.primary.withValues(alpha: 0.18),
-                      destinations: [
-                        for (var i = 0;
-                            i < RootShell._destinations.length;
-                            i++)
-                          _buildNavigationDestination(
-                            RootShell._destinations[i],
-                            badgeLabel: _badgeLabelForTab(i),
-                            badgeTooltip: i == 1
-                                ? _chatTabBadgeTooltip()
-                                : null,
-                          ),
-                      ],
+                      compact: compact,
+                      duration: navDuration,
+                      child: IconButton(
+                        tooltip: 'Поиск',
+                        icon: Icon(Icons.search_rounded, size: iconSize),
+                        onPressed: () => context.push(searchPath),
+                      ),
                     ),
-                  ),
-                ),
-              ),
-              if (showSearchButton) ...[
-                const SizedBox(width: 10),
-                _ShellNavGlassPill(
-                  height: navHeight,
-                  compact: compact,
-                  duration: navDuration,
-                  child: IconButton(
-                    tooltip: 'Поиск',
-                    icon: Icon(Icons.search_rounded, size: iconSize),
-                    onPressed: () => context.push(searchPath),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-
-        return Scaffold(
-          backgroundColor: pageBg,
-          extendBody: true,
-          body: ListenableBuilder(
-            listenable: Listenable.merge([
-              FeedSyncService.onlineListenable,
-              ApiReachabilityService.instance.isApiReachable,
-              ApiReachabilityService.instance.isApiConnecting,
-            ]),
-            builder: (context, _) {
-              final online = FeedSyncService.onlineListenable.value;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const ConnectivityStatusBanner(),
-                  const PwaInstallBanner(),
-                  _subscriptionStaleBanner(context),
-                  Expanded(
-                    child: _navigationContent(context, online: online),
-                  ),
+                  ],
                 ],
-              );
-            },
-          ),
-          bottomNavigationBar: hideBottomNav
-              ? null
-              : AnimatedSlide(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  offset: Offset.zero,
-                  child: navBar,
-                ),
-        );
+              ),
+            );
+
+            return Scaffold(
+              backgroundColor: pageBg,
+              extendBody: true,
+              body: ListenableBuilder(
+                listenable: Listenable.merge([
+                  FeedSyncService.onlineListenable,
+                  ApiReachabilityService.instance.isApiReachable,
+                  ApiReachabilityService.instance.isApiConnecting,
+                ]),
+                builder: (context, _) {
+                  final online = FeedSyncService.onlineListenable.value;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const ConnectivityStatusBanner(),
+                      const PwaInstallBanner(),
+                      _subscriptionStaleBanner(context),
+                      Expanded(
+                        child: _navigationContent(context, online: online),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              bottomNavigationBar: hideBottomNav
+                  ? null
+                  : AnimatedSlide(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      offset: Offset.zero,
+                      child: navBar,
+                    ),
+            );
           },
         );
       },
@@ -499,7 +509,7 @@ class _RootShellState extends ConsumerState<RootShell> {
       child: NavigationDestination(
         icon: icon,
         selectedIcon: selectedIcon,
-        label: '',
+        label: destination.label,
       ),
     );
   }

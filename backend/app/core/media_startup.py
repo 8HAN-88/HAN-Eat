@@ -23,6 +23,15 @@ def video_queue_depth() -> int | None:
         return None
 
 
+def video_worker_heartbeat_age_seconds() -> int | None:
+    try:
+        from app.services.video_queue_service import VideoQueueService
+
+        return VideoQueueService.worker_heartbeat_age_seconds()
+    except Exception:
+        return None
+
+
 def media_upload_mode() -> str:
     """s3 — прямая загрузка в объектное хранилище; api — через диск VPS."""
     if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
@@ -60,6 +69,12 @@ def collect_media_issues() -> list[str]:
             issues.append(
                 "FFmpeg не установлен — видео сохраняются в S3, но без транскодинга 720p/480p"
             )
+        if getattr(settings, "REDIS_ENABLED", True):
+            age = video_worker_heartbeat_age_seconds()
+            if age is None:
+                issues.append("Video worker heartbeat отсутствует — транскодинг видео может не работать")
+            elif age > 120:
+                issues.append(f"Video worker heartbeat устарел ({age}s) — транскодинг видео может зависнуть")
     return issues
 
 

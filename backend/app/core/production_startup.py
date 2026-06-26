@@ -27,6 +27,16 @@ def collect_production_issues() -> list[str]:
         issues.append("API_PUBLIC_BASE_URL указывает на localhost")
     if not settings.S3_BUCKET:
         issues.append("S3_BUCKET не задан — загрузки медиа через mock")
+    if not getattr(settings, "REDIS_ENABLED", True):
+        issues.append("REDIS_ENABLED=false в production — realtime/cache/locks/video queue деградируют")
+    else:
+        try:
+            from app.core.redis_client import REDIS_IS_STUB
+
+            if REDIS_IS_STUB:
+                issues.append("Redis работает в stub mode — realtime/cache/locks/video queue недоступны")
+        except Exception as e:
+            issues.append(f"Redis readiness check failed: {e}")
     try:
         from app.api.v1.recipes import TRANSLATOR_AVAILABLE
 

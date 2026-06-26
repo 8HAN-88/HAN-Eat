@@ -402,6 +402,15 @@ class FeedService:
         
         # Получаем паттерны просмотров для персонализации
         viewing_patterns = self._get_user_viewing_patterns(user_id)
+        author_ids = list({post.user_id for post in posts if post.user_id})
+        preferred_types = self._get_user_preferred_post_types(user_id)
+        author_interaction_scores = self._get_author_interaction_scores(
+            user_id, author_ids
+        )
+        skipped_author_ids = self._get_frequently_skipped_author_ids(
+            user_id, author_ids
+        )
+        viewed_author_ids = self._get_viewed_author_ids(user_id, author_ids)
         
         scored_posts = []
         for post in posts:
@@ -415,7 +424,13 @@ class FeedService:
             
             # Персонализация на основе истории просмотров
             personalization_boost = self._calculate_personalization_boost(
-                user_id, post, viewing_patterns
+                user_id,
+                post,
+                viewing_patterns,
+                preferred_types=preferred_types,
+                author_interaction_scores=author_interaction_scores,
+                skipped_author_ids=skipped_author_ids,
+                viewed_author_ids=viewed_author_ids,
             )
             score *= personalization_boost
             
@@ -551,31 +566,206 @@ class FeedService:
         self,
         user_id: int,
         post: Post,
-        viewing_patterns: Dict[str, Any]
+        viewing_patterns: Dict[str, Any],
+        preferred_types: Optional[Dict[str, float]] = None,
+        author_interaction_scores: Optional[Dict[int, float]] = None,
+        skipped_author_ids: Optional[set[int]] = None,
+        viewed_author_ids: Optional[set[int]] = None,
     ) -> float:
         """Вычислить boost персонализации на основе истории просмотров"""
         boost = 1.0
         
         # 1. Учитываем предпочтения по авторам
-        author_interaction_score = self._get_author_interaction_score(user_id, post.user_id)
+        if author_interaction_scores is not None:
+            author_interaction_score = author_interaction_scores.get(post.user_id, 0.0)
+        else:
+            author_interaction_score = self._get_author_interaction_score(user_id, post.user_id)
         if author_interaction_score > 0.5:
             boost *= (1.0 + author_interaction_score * 0.2)  # До 20% boost
         
         # 2. Учитываем предпочтения по типам постов
-        preferred_types = self._get_user_preferred_post_types(user_id)
+        preferred_types = preferred_types or self._get_user_preferred_post_types(user_id)
         if post.type in preferred_types:
             type_preference = preferred_types[post.type]
             boost *= (1.0 + type_preference * 0.15)  # До 15% boost
         
         # 3. Штраф за часто пропускаемые авторы
-        if self._is_author_frequently_skipped(user_id, post.user_id):
+        if (
+            post.user_id in skipped_author_ids
+            if skipped_author_ids is not None
+            else self._is_author_frequently_skipped(user_id, post.user_id)
+        ):
             boost *= 0.7  # 30% штраф
         
         # 4. Буст для новых авторов (которых пользователь еще не видел)
-        if not self._has_user_viewed_author_posts(user_id, post.user_id):
+        has_viewed_author = (
+            post.user_id in viewed_author_ids
+            if viewed_author_ids is not None
+            else self._has_user_viewed_author_posts(user_id, post.user_id)
+        )
+        if not has_viewed_author:
             boost *= 1.1  # 10% boost для новых авторов
         
         return boost
+
+    def _get_author_interaction_scores(
+        self, user_id: int, author_ids: List[int]
+    ) -> Dict[int, float]:
+        """Batch score взаимодействия с авторами для ранжирования ленты."""
+        if not author_ids:
+            return {}
+        from app.models.like import Like
+        from app.models.saved_post import SavedPost
+        from app.models.comment import Comment
+        from app.models.analytics_event import AnalyticsEvent
+
+        recent_date = datetime.utcnow() - timedelta(days=30)
+        scores = {author_id: 0.0 for author_id in author_ids}
+
+        for author_id, count in (
+            self.db.query(Post.user_id, func.count(Like.id))
+            .join(Post, Like.post_id == Post.id)
+            .filter(
+                Like.user_id == user_id,
+                Post.user_id.in_(author_ids),
+                Post.published_at >= recent_date,
+            )
+            .group_by(Post.user_id)
+            .all()
+        ):
+            scores[author_id] += count * 3.0
+
+        for author_id, count in (
+            self.db.query(Post.user_id, func.count(SavedPost.id))
+            .join(Post, SavedPost.post_id == Post.id)
+            .filter(
+                SavedPost.user_id == user_id,
+                Post.user_id.in_(author_ids),
+                Post.published_at >= recent_date,
+            )
+            .group_by(Post.user_id)
+            .all()
+        ):
+            scores[author_id] += count * 2.5
+
+        for author_id, count in (
+            self.db.query(Post.user_id, func.count(Comment.id))
+            .join(Post, Comment.post_id == Post.id)
+            .filter(
+                Comment.user_id == user_id,
+                Post.user_id.in_(author_ids),
+                Post.published_at >= recent_date,
+            )
+            .group_by(Post.user_id)
+            .all()
+        ):
+            scores[author_id] += count * 4.0
+
+        good_views = (
+            self.db.query(Post.user_id, AnalyticsEvent.event_metadata)
+            .join(
+                Post,
+                and_(
+                    AnalyticsEvent.entity_id == Post.id,
+                    AnalyticsEvent.entity_type == "post",
+                ),
+            )
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.event_type.in_(FeedService.GOOD_VIEW_EVENT_TYPES),
+                Post.user_id.in_(author_ids),
+                AnalyticsEvent.created_at >= recent_date,
+            )
+            .limit(300)
+            .all()
+        )
+        for author_id, metadata in good_views:
+            metadata = metadata or {}
+            duration = (
+                metadata.get("duration_seconds")
+                or metadata.get("watched_seconds")
+                or 0
+            )
+            if duration and duration >= 3.0:
+                scores[author_id] += 1.0
+
+        return {author_id: min(score / 10.0, 1.0) for author_id, score in scores.items()}
+
+    def _get_frequently_skipped_author_ids(
+        self, user_id: int, author_ids: List[int]
+    ) -> set[int]:
+        if not author_ids:
+            return set()
+        from app.models.analytics_event import AnalyticsEvent
+
+        recent_date = datetime.utcnow() - timedelta(days=30)
+        rows = (
+            self.db.query(
+                Post.user_id,
+                AnalyticsEvent.event_type,
+                AnalyticsEvent.event_metadata,
+            )
+            .join(
+                Post,
+                and_(
+                    AnalyticsEvent.entity_id == Post.id,
+                    AnalyticsEvent.entity_type == "post",
+                ),
+            )
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.event_type.in_(("feed_skip", *FeedService.VIEW_EVENT_TYPES)),
+                Post.user_id.in_(author_ids),
+                AnalyticsEvent.created_at >= recent_date,
+            )
+            .limit(600)
+            .all()
+        )
+        totals: Dict[int, int] = {}
+        skips: Dict[int, int] = {}
+        for author_id, event_type, metadata in rows:
+            totals[author_id] = totals.get(author_id, 0) + 1
+            metadata = metadata or {}
+            duration = (
+                metadata.get("duration_seconds")
+                or metadata.get("watched_seconds")
+                or 0
+            )
+            if event_type == "feed_skip" or (duration and duration < 1.0):
+                skips[author_id] = skips.get(author_id, 0) + 1
+
+        return {
+            author_id
+            for author_id, total in totals.items()
+            if total >= 3 and (skips.get(author_id, 0) / total) > 0.7
+        }
+
+    def _get_viewed_author_ids(self, user_id: int, author_ids: List[int]) -> set[int]:
+        if not author_ids:
+            return set()
+        from app.models.analytics_event import AnalyticsEvent
+
+        rows = (
+            self.db.query(Post.user_id)
+            .join(
+                AnalyticsEvent,
+                and_(
+                    AnalyticsEvent.entity_id == Post.id,
+                    AnalyticsEvent.entity_type == "post",
+                ),
+            )
+            .filter(
+                AnalyticsEvent.user_id == user_id,
+                AnalyticsEvent.entity_type == "post",
+                AnalyticsEvent.event_type.in_(FeedService.VIEW_EVENT_TYPES),
+                Post.user_id.in_(author_ids),
+            )
+            .distinct()
+            .all()
+        )
+        return {row[0] for row in rows}
     
     def _get_author_interaction_score(self, user_id: int, author_id: int) -> float:
         """Вычислить score взаимодействия с автором"""

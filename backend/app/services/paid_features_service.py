@@ -62,6 +62,16 @@ class PaidFeaturesService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _lock_user_wallet(self, user_id: int) -> None:
+        user = (
+            self.db.query(User.id)
+            .filter(User.id == user_id, User.deleted_at.is_(None))
+            .with_for_update()
+            .first()
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     def star_balance(self, user_id: int) -> int:
         total = (
             self.db.query(func.coalesce(func.sum(StarTransaction.amount), 0))
@@ -148,6 +158,7 @@ class PaidFeaturesService:
                 ):
                     _raise_idempotency_conflict()
                 return existing
+        self._lock_user_wallet(user_id)
         if self.star_balance(user_id) < amount:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,

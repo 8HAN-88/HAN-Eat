@@ -169,7 +169,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   String? _selectedIngredients;
   int? _selectedMaxReadyTime; // Фильтр по времени готовки (мин)
   bool _hideMenuButtons = false;
-  static const _scrollThreshold = 60.0;
   @override
   void initState() {
     super.initState();
@@ -207,8 +206,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         _lastViewerIsPlus = disk.viewerIsPlus;
         _lastRecipeTranslationEnabled = disk.recipeTranslationEnabled;
         _lastRecipeTranslationRequiresAi = disk.recipeTranslationRequiresAi;
-        _lastRecipeTranslationApiSupported =
-            disk.recipeTranslationApiSupported;
+        _lastRecipeTranslationApiSupported = disk.recipeTranslationApiSupported;
       }
     }
 
@@ -887,7 +885,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
           child: NotificationListener<ScrollNotification>(
             onNotification: (ScrollNotification n) {
               if (n is ScrollUpdateNotification) {
-                final hide = n.metrics.pixels > _scrollThreshold;
+                // High-value actions stay visible; hiding them made core food flows hard to discover.
+                const hide = false;
                 if (hide != _hideMenuButtons && mounted) {
                   // Нельзя вызывать setState из уведомления прокрутки во время layout
                   // (внутри GridView это ломает _RenderLayoutBuilder).
@@ -917,6 +916,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         icon: const Icon(Icons.history),
                         tooltip: 'История запросов',
                         onPressed: () => _showHistoryDrawer(context),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.favorite_border_rounded),
+                        tooltip: 'Избранные рецепты',
+                        onPressed: () =>
+                            context.push(LegacyFavoritesRoute.path),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -964,8 +969,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     ],
                   ),
                 ),
-                // Кнопки скрываются при прокрутке вниз (duration всегда константа —
-                // смена Duration.zero ↔ animated ломает RenderAnimatedSize при layout).
+                // Core food flow actions stay visible so users can always jump to plan,
+                // shopping list, or scan without hunting through the screen.
                 AnimatedSize(
                   duration: const Duration(milliseconds: 200),
                   curve: Curves.easeInOut,
@@ -1825,11 +1830,11 @@ class _QuickFilterChip extends StatelessWidget {
           if (isNutritionFilter) ...[
             const SizedBox(width: 4),
             Icon(
-              nutritionLocked ? Icons.lock_outline : Icons.workspace_premium_outlined,
+              nutritionLocked
+                  ? Icons.lock_outline
+                  : Icons.workspace_premium_outlined,
               size: 16,
-              color: nutritionLocked
-                  ? scheme.onSurfaceVariant
-                  : scheme.primary,
+              color: nutritionLocked ? scheme.onSurfaceVariant : scheme.primary,
             ),
           ],
         ],

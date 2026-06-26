@@ -49,6 +49,7 @@ class VideoWorker:
         logger.info("Video worker started. Waiting for tasks...")
         
         while True:
+            VideoQueueService.update_worker_heartbeat()
             if max_tasks and tasks_processed >= max_tasks:
                 logger.info(f"Processed {tasks_processed} tasks. Stopping.")
                 break

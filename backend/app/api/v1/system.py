@@ -11,6 +11,7 @@ from app.core.media_startup import (
     ffmpeg_available,
     media_upload_mode,
     video_queue_depth,
+    video_worker_heartbeat_age_seconds,
 )
 from app.core.payments_startup import collect_payments_issues
 from app.core.production_startup import collect_production_issues
@@ -53,6 +54,7 @@ async def system_readiness():
             "bucket": settings.S3_BUCKET,
             "ffmpeg_available": ffmpeg_available(),
             "video_queue_depth": video_queue_depth(),
+            "video_worker_heartbeat_age_seconds": video_worker_heartbeat_age_seconds(),
             "max_video_size_mb": settings.MAX_VIDEO_SIZE_MB,
             "issues": media,
         },

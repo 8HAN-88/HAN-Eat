@@ -480,7 +480,8 @@ class _PrivateChannelPostsLocked extends StatefulWidget {
       _PrivateChannelPostsLockedState();
 }
 
-class _PrivateChannelPostsLockedState extends State<_PrivateChannelPostsLocked> {
+class _PrivateChannelPostsLockedState
+    extends State<_PrivateChannelPostsLocked> {
   bool _loading = false;
 
   Future<void> _subscribe() async {
@@ -511,8 +512,8 @@ class _PrivateChannelPostsLockedState extends State<_PrivateChannelPostsLocked> 
     final message = paidLocked
         ? 'Канал доступен по платной подписке. Оформите доступ за звёзды и читайте все посты.'
         : channel.isPending
-        ? 'Заявка на подписку на рассмотрении. Посты появятся после одобрения.'
-        : 'Это приватный канал. Откройте информацию о канале и запросите подписку.';
+            ? 'Заявка на подписку на рассмотрении. Посты появятся после одобрения.'
+            : 'Это приватный канал. Откройте информацию о канале и запросите подписку.';
 
     return Center(
       child: Padding(
@@ -541,9 +542,23 @@ class _PrivateChannelPostsLockedState extends State<_PrivateChannelPostsLocked> 
                 Text(
                   message,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
+                  style:
+                      TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
                 ),
                 if (paidLocked) ...[
+                  const SizedBox(height: 16),
+                  _PaidChannelBenefitRow(
+                    icon: Icons.lock_open_rounded,
+                    text: 'Мгновенный доступ ко всем постам канала',
+                  ),
+                  _PaidChannelBenefitRow(
+                    icon: Icons.restaurant_menu_rounded,
+                    text: 'Эксклюзивные рецепты, советы и материалы автора',
+                  ),
+                  _PaidChannelBenefitRow(
+                    icon: Icons.calendar_month_rounded,
+                    text: 'Подписка действует 1 месяц и продлевается вручную',
+                  ),
                   const SizedBox(height: 18),
                   FilledButton.icon(
                     onPressed: _loading ? null : _subscribe,
@@ -565,6 +580,37 @@ class _PrivateChannelPostsLockedState extends State<_PrivateChannelPostsLocked> 
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PaidChannelBenefitRow extends StatelessWidget {
+  const _PaidChannelBenefitRow({
+    required this.icon,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.25),
+            ),
+          ),
+        ],
       ),
     );
   }

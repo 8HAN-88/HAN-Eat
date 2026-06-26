@@ -58,6 +58,11 @@ jobs:
           tar xzf /tmp/haneat-web.tgz -C build
           test -f build/web/index.html
 
+      - name: Verify web build artifacts
+        run: python3 scripts/check_web_build_artifacts.py
+        env:
+          HANEAT_API_BASE: https://haneat.app
+
       - name: Setup SSH key
         run: |
           install -m 700 -d ~/.ssh

@@ -30,13 +30,15 @@ class InlineVideoPlayer extends StatefulWidget {
   State<InlineVideoPlayer> createState() => _InlineVideoPlayerState();
 }
 
-class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
+class _InlineVideoPlayerState extends State<InlineVideoPlayer>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   bool _isVisible = false;
   bool _isMuted = true;
   bool _initialized = false;
   bool _hasError = false;
   String? _initKey;
+  Timer? _disposeWhenHiddenTimer;
 
   static const double _visibilityThresholdPlay = 0.25;
   static const double _visibilityThresholdPause = 0.08;
@@ -49,9 +51,12 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       if (_isVisible) {
         _isVisible = false;
         _pause();
+        _scheduleDisposeWhenHidden();
       }
       return;
     }
+
+    _disposeWhenHiddenTimer?.cancel();
 
     if (fraction >= _visibilityThresholdPreload && _controller == null) {
       unawaited(_ensurePlaying());
@@ -78,7 +83,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
       final controller = await VideoPlayerHelper.createPreparedController(
         widget.videoUrl,
         muted: _isMuted,
-        autoPlay: true,
+        autoPlay: _isVisible,
       );
 
       if (!mounted) {
@@ -109,6 +114,19 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
     _controller?.pause();
   }
 
+  void _scheduleDisposeWhenHidden() {
+    _disposeWhenHiddenTimer?.cancel();
+    _disposeWhenHiddenTimer = Timer(const Duration(seconds: 18), () {
+      if (!mounted || _isVisible) return;
+      final controller = _controller;
+      _controller = null;
+      _initialized = false;
+      _initKey = null;
+      unawaited(controller?.dispose());
+      if (mounted) setState(() {});
+    });
+  }
+
   void _handleTap() {
     if (widget.onTap != null) {
       widget.onTap!();
@@ -119,7 +137,26 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _pause();
+    } else if (state == AppLifecycleState.resumed && _isVisible) {
+      unawaited(_ensurePlaying());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _disposeWhenHiddenTimer?.cancel();
     _controller?.dispose();
     _controller = null;
     super.dispose();
@@ -161,7 +198,6 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
                   _placeholder(),
               ] else if (!_hasError && _controller != null)
                 CoverNetworkVideo(controller: _controller!),
-
               if (_hasError)
                 Stack(
                   fit: StackFit.expand,
@@ -185,7 +221,6 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
                     ),
                   ],
                 ),
-
               if (_initialized && !_hasError)
                 Positioned(
                   bottom: 8,
@@ -220,7 +255,8 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   Widget _placeholder() => Container(
         color: Colors.black,
         child: const Center(
-          child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
+          child:
+              CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
         ),
       );
 }

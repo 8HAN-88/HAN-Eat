@@ -306,6 +306,16 @@ class YooKassaService:
             logger.error("Error verifying YooKassa webhook signature: %s", e)
             return False
 
+    def verify_webhook_event(self, event: Dict[str, Any], signature: str) -> bool:
+        payment_data = event.get("object") or {}
+        event_type = str(event.get("event") or "")
+        payment_id = str(payment_data.get("id") or payment_data.get("payment_id") or "")
+        if event_type == "refund.succeeded":
+            payment_id = str(payment_data.get("payment_id") or payment_id)
+        if not payment_id or not event_type or not signature:
+            return False
+        return self.verify_webhook_signature(payment_id, event_type, signature)
+
     def handle_webhook_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         event_type = event.get("event")
         payment_data = event.get("object", {})

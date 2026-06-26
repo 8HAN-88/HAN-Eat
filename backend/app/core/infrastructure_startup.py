@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
-from app.core.redis_client import get_redis
+from app.core.redis_client import REDIS_IS_STUB, get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,11 @@ def check_database() -> tuple[bool, str | None]:
 
 def check_redis() -> tuple[bool, str | None]:
     if not getattr(settings, "REDIS_ENABLED", True):
+        if settings.APP_ENV == "production":
+            return False, "Redis disabled in production"
         return True, None
+    if REDIS_IS_STUB:
+        return False, "Redis is running in stub mode"
     client = get_redis()
     try:
         client.ping()
@@ -66,19 +70,16 @@ def collect_infrastructure_issues() -> list[str]:
     if not db_ok and db_err:
         issues.append(db_err)
 
-    if getattr(settings, "REDIS_ENABLED", True):
-        redis_ok, redis_err = check_redis()
-        if not redis_ok and redis_err:
-            issues.append(redis_err)
+    redis_ok, redis_err = check_redis()
+    if not redis_ok and redis_err:
+        issues.append(redis_err)
     issues.extend(collect_firebase_issues())
     return issues
 
 
 def infrastructure_status() -> dict:
     db_ok, db_err = check_database()
-    redis_ok, redis_err = (True, None)
-    if getattr(settings, "REDIS_ENABLED", True):
-        redis_ok, redis_err = check_redis()
+    redis_ok, redis_err = check_redis()
     firebase_issues = collect_firebase_issues()
     push_enabled = False
     try:
@@ -92,6 +93,7 @@ def infrastructure_status() -> dict:
         "database": {"ok": db_ok, "error": db_err},
         "redis": {
             "enabled": getattr(settings, "REDIS_ENABLED", True),
+            "stub": REDIS_IS_STUB,
             "ok": redis_ok,
             "error": redis_err,
         },

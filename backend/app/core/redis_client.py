@@ -33,6 +33,15 @@ class _RedisStub:
     def rpop(self, name):
         return None
 
+    def llen(self, name):
+        return 0
+
+    def publish(self, channel, message):
+        return 0
+
+    def pubsub(self, *args, **kwargs):
+        raise RuntimeError("Redis pub/sub unavailable: Redis client is running in stub mode")
+
     def incr(self, key, amount=1):
         if not hasattr(self, "_counts"):
             self._counts = {}

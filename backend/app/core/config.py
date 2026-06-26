@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     YOOKASSA_ENABLED: bool = False
     YOOKASSA_SHOP_ID: str = ""  # Shop ID из личного кабинета ЮKassa
     YOOKASSA_SECRET_KEY: str = ""  # Secret Key из личного кабинета ЮKassa
+    YOOKASSA_WEBHOOK_SIGNATURE_REQUIRED: bool = True
     # sbp — только СБП; any — страница ЮKassa со всеми способами (карты, кошельки)
     YOOKASSA_PAYMENT_METHOD: str = "sbp"
     # СБП: автопродление (после релиза и подключения рекуррента в ЛК ЮKassa).

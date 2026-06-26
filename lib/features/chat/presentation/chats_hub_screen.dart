@@ -132,15 +132,20 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: const Text('Чаты'),
+          title: const Text('Сообщения'),
           bottom: TabBar(
             controller: _tabs,
             tabs: const [
-              Tab(text: 'Все'),
+              Tab(text: 'Чаты и каналы'),
               Tab(text: 'Контакты'),
             ],
           ),
           actions: [
+            IconButton(
+              tooltip: 'Создать канал',
+              onPressed: _createChannel,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
             PopupMenuButton<String>(
               tooltip: 'Ещё',
               onSelected: (v) {

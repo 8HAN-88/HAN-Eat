@@ -47,9 +47,6 @@ def _is_exempt(path: str) -> bool:
         return True
     if path.startswith("/api/v1/uploads/"):
         return True
-    # Весь чат (отправка, polling, typing, read) — без IP rate limit.
-    if path.startswith("/api/v1/chats/"):
-        return True
     return any(path.startswith(prefix) for prefix in _EXEMPT_PREFIXES)
 
 

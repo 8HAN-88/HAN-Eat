@@ -11,6 +11,7 @@ class ChatCacheService {
   static const _conversationsKey = 'chat_cache_conversations_v1';
   static const _threadPrefix = 'chat_cache_thread_v1_';
   static const _draftPrefix = 'chat_draft_v1_';
+  static const _failedTextPrefix = 'chat_failed_text_v1_';
 
   static List<ChatConversation>? _memoryConversations;
 
@@ -97,6 +98,38 @@ class ChatCacheService {
         slice.map(_messageToJson).toList(growable: false),
       );
       await prefs.setString('$_threadPrefix$conversationId', encoded);
+    } catch (_) {}
+  }
+
+  static Future<List<Map<String, dynamic>>> loadFailedTextSends(
+    int conversationId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('$_failedTextPrefix$conversationId');
+      if (raw == null || raw.isEmpty) return const [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return [
+        for (final item in list)
+          if (item is Map<String, dynamic>) item,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> saveFailedTextSends(
+    int conversationId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_failedTextPrefix$conversationId';
+      if (items.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, jsonEncode(items));
+      }
     } catch (_) {}
   }
 

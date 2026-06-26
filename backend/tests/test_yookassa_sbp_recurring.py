@@ -1,5 +1,7 @@
 """Тесты СБП-рекуррента через ЮKassa API."""
 from unittest.mock import MagicMock, patch
+import hmac
+import hashlib
 
 import pytest
 
@@ -125,3 +127,26 @@ def test_create_autopayment_uses_payment_method_id(yk_enabled):
     assert captured["payload"]["payment_method_id"] == "pm-abc"
     assert "confirmation" not in captured["payload"]
     assert captured["payload"]["metadata"]["renewal"] == "1"
+
+
+def test_verify_webhook_event_accepts_valid_signature(yk_enabled):
+    event = {
+        "event": "payment.succeeded",
+        "object": {"id": "pay-123"},
+    }
+    signature = hmac.new(
+        b"secret",
+        b"pay-123|payment.succeeded",
+        hashlib.sha256,
+    ).hexdigest()
+
+    assert yk_enabled.verify_webhook_event(event, signature)
+
+
+def test_verify_webhook_event_rejects_invalid_signature(yk_enabled):
+    event = {
+        "event": "payment.succeeded",
+        "object": {"id": "pay-123"},
+    }
+
+    assert not yk_enabled.verify_webhook_event(event, "bad-signature")
