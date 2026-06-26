@@ -86,11 +86,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   String get _cacheVariant =>
       _followingOnly ? 'rec_reels_following' : 'rec_reels';
 
-  int get _initialVideoPreloadCount => 1;
+  int get _initialVideoPreloadCount => 2;
 
-  int get _lookaheadVideoPreloadCount => 1;
+  int get _lookaheadVideoPreloadCount => 2;
 
-  int get _controllerRetainDistance => 1;
+  int get _controllerRetainDistance => 2;
 
   bool _shouldPlayReelAt(int index) =>
       index == _currentIndex &&
@@ -165,17 +165,16 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
           shouldAutoPlay: () => _shouldPlayReelAt(i),
           onUpgraded: (upgraded) {
             if (!mounted) {
-              upgraded.dispose();
-              return;
+              return false;
             }
             if (_videoControllers[i] != controllerRef) {
-              upgraded.dispose();
-              return;
+              return false;
             }
             setState(() => _videoControllers[i] = upgraded);
             if (!_shouldPlayReelAt(i)) {
               unawaited(upgraded.pause());
             }
+            return true;
           },
         );
       }
@@ -238,8 +237,9 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       );
     }
 
-    schedule(index + 1, const Duration(milliseconds: 450));
-    schedule(index - 1, const Duration(milliseconds: 620));
+    schedule(index + 1, const Duration(milliseconds: 180));
+    schedule(index - 1, const Duration(milliseconds: 420));
+    schedule(index + 2, const Duration(milliseconds: 760));
   }
 
   void _retainMatchingControllerOnRefresh(List<PostModel> nextReels) {

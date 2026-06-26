@@ -115,6 +115,54 @@ class AppTheme {
           ),
         ),
       ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.label,
+        labelColor: scheme.onSurface,
+        unselectedLabelColor: scheme.onSurfaceVariant.withValues(alpha: 0.82),
+        labelStyle: textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
+        unselectedLabelStyle: textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        minLeadingWidth: 48,
+        titleTextStyle: textTheme.titleMedium?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        subtitleTextStyle: textTheme.bodyMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+          height: 1.25,
+        ),
+        iconColor: scheme.onSurfaceVariant,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        elevation: 8,
+        focusElevation: 10,
+        hoverElevation: 10,
+        highlightElevation: 12,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: scheme.onSurfaceVariant,
+          hoverColor: scheme.primary.withValues(alpha: 0.08),
+          highlightColor: scheme.primary.withValues(alpha: 0.12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: scheme.surfaceContainerHigh,
@@ -312,6 +360,54 @@ class AppTheme {
             color: states.contains(WidgetState.selected)
                 ? scheme.primary
                 : scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.label,
+        labelColor: scheme.onSurface,
+        unselectedLabelColor: scheme.onSurfaceVariant.withValues(alpha: 0.78),
+        labelStyle: textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.2,
+        ),
+        unselectedLabelStyle: textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        minLeadingWidth: 48,
+        titleTextStyle: textTheme.titleMedium?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+        ),
+        subtitleTextStyle: textTheme.bodyMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+          height: 1.25,
+        ),
+        iconColor: scheme.onSurfaceVariant,
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
+        elevation: 8,
+        focusElevation: 10,
+        hoverElevation: 10,
+        highlightElevation: 12,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: scheme.onSurfaceVariant,
+          hoverColor: scheme.primary.withValues(alpha: 0.12),
+          highlightColor: scheme.primary.withValues(alpha: 0.16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
         ),
       ),

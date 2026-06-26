@@ -30,30 +30,75 @@ class ReelVideoSources {
   String? get anyUrl =>
       mp4_1080p ?? mp4_720p ?? mp4_480p ?? hls ?? original;
 
-  /// Быстрый старт: 720p для авто, фиксированные профили — как выбрано.
+  /// Быстрый старт: лёгкий MP4 для авто, фиксированные профили — как выбрано.
   String? fastStartUrl(VideoQualityPreference pref) {
     switch (pref) {
       case VideoQualityPreference.dataSaver:
-        return mp4_480p ?? mp4_720p ?? mp4_1080p ?? original;
+        return mp4_480p ?? mp4_720p ?? hls ?? mp4_1080p ?? original;
       case VideoQualityPreference.hd720:
-        return mp4_720p ?? mp4_1080p ?? mp4_480p ?? original;
+        return mp4_720p ?? mp4_480p ?? hls ?? mp4_1080p ?? original;
       case VideoQualityPreference.hd1080:
-        return mp4_1080p ?? original ?? mp4_720p ?? mp4_480p;
+        return mp4_1080p ?? mp4_720p ?? mp4_480p ?? hls ?? original;
       case VideoQualityPreference.max:
-        return mp4_1080p ?? original ?? mp4_720p ?? mp4_480p ?? hls;
+        return mp4_1080p ?? mp4_720p ?? mp4_480p ?? hls ?? original;
       case VideoQualityPreference.auto:
-        return mp4_720p ?? mp4_480p ?? mp4_1080p ?? original ?? hls;
+        return mp4_480p ?? mp4_720p ?? hls ?? mp4_1080p ?? original;
     }
   }
 
-  /// Целевое качество после прогрузки (только auto: Wi‑Fi → 1080p).
+  /// URL-ы для последовательной попытки запуска видео.
+  List<String> playbackUrls(VideoQualityPreference pref) {
+    final urls = switch (pref) {
+      VideoQualityPreference.dataSaver => [
+          mp4_480p,
+          mp4_720p,
+          hls,
+          mp4_1080p,
+          original,
+        ],
+      VideoQualityPreference.hd720 => [
+          mp4_720p,
+          mp4_480p,
+          hls,
+          mp4_1080p,
+          original,
+        ],
+      VideoQualityPreference.hd1080 => [
+          mp4_1080p,
+          mp4_720p,
+          mp4_480p,
+          hls,
+          original,
+        ],
+      VideoQualityPreference.max => [
+          mp4_1080p,
+          mp4_720p,
+          mp4_480p,
+          hls,
+          original,
+        ],
+      VideoQualityPreference.auto => [
+          mp4_480p,
+          mp4_720p,
+          hls,
+          mp4_1080p,
+          original,
+        ],
+    };
+
+    final seen = <String>{};
+    return [
+      for (final url in urls)
+        if (url != null && url.isNotEmpty && seen.add(url)) url,
+    ];
+  }
+
+  /// Целевое качество после прогрузки (auto: Wi-Fi → 720p, без тяжёлого скачка на original).
   String? upgradeUrl(VideoQualityPreference pref, {required bool onWifi}) {
     if (pref != VideoQualityPreference.auto) return null;
 
     final start = fastStartUrl(pref);
-    final target = onWifi
-        ? (mp4_1080p ?? original)
-        : null;
+    final target = onWifi ? (mp4_720p ?? mp4_1080p) : null;
     if (target == null || target == start) return null;
     return target;
   }

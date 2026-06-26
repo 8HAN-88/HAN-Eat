@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_poll.dart';
 import 'create_chat_poll_sheet.dart';
 
@@ -170,14 +171,14 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
                   children: [
                     Icon(
                       Icons.add,
-                      color: theme.colorScheme.primary,
+                      color: AppColors.primary,
                       size: 22,
                     ),
                     const SizedBox(width: 12),
                     Text(
                       'Добавить ответ',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: theme.colorScheme.primary,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],

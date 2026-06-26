@@ -14,6 +14,8 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../core/theme/app_card_decorations.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
@@ -21,8 +23,6 @@ import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/app_gradient_background.dart';
-import '../../../../widgets/app_avatar_ring.dart';
-import '../../../../core/theme/app_card_decorations.dart';
 import '../../content/create_content_actions.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -429,11 +429,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isOwnProfile ? 'Профиль' : user.name),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor:
-            Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
+        title: Text(user.name),
         actions: isOwnProfile
             ? [
                 // Кнопка создать пост
@@ -464,7 +460,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           body: Column(
             children: [
               longLabelTabBar(
-                context: context,
                 controller: _tabController,
                 tabs: tabs,
               ),
@@ -483,103 +478,142 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 
   Widget _buildProfileHeader(
       User user, user_service.UserStats stats, bool isOwnProfile) {
-    final scheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final avatarImage = resolvedAvatarImage(user.avatarUrl, decodeWidth: 200);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: AppElevatedCard(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-        child: Column(
-          children: [
-            AppAvatarRing(
-              size: 96,
-              child: ColoredBox(
-                color: scheme.primaryContainer.withValues(alpha: 0.35),
-                child: avatarImage == null
-                    ? Center(
-                        child: Text(
-                          user.name.isNotEmpty
-                              ? user.name[0].toUpperCase()
-                              : '?',
-                          style: textTheme.displaySmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: scheme.onPrimaryContainer,
-                          ),
-                        ),
-                      )
-                    : Image(
-                        image: avatarImage,
-                        fit: BoxFit.cover,
-                      ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              user.name,
-              textAlign: TextAlign.center,
-              style: textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.4,
-              ),
-            ),
-            if (user.username != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                '@${user.username}',
-                style: textTheme.bodyLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
+    return AppElevatedCard(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: EdgeInsets.zero,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              scheme.primary.withValues(alpha: 0.13),
+              scheme.surface.withValues(alpha: 0.96),
+              scheme.secondaryContainer.withValues(alpha: 0.18),
+            ],
+            stops: const [0, 0.58, 1],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      scheme.primary.withValues(alpha: 0.88),
+                      scheme.tertiary.withValues(alpha: 0.58),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: scheme.primary.withValues(alpha: 0.18),
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: scheme.surface,
+                  ),
+                  child: AppUserAvatar(
+                    imageUrl: user.avatarUrl,
+                    displayName: user.name,
+                    radius: 50,
+                    fontSize: 38,
+                  ),
                 ),
               ),
-            ],
-            if (user.bio != null && user.bio!.isNotEmpty) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.lg),
               Text(
-                user.bio!,
+                user.name,
                 textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurface.withValues(alpha: 0.88),
-                  height: 1.45,
+                style: textTheme.headlineSmall?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.7,
                 ),
               ),
-            ],
-            const SizedBox(height: 20),
-            _ProfileStatsRow(
-              postsCount: stats.postsCount,
-              followersCount: stats.followersCount,
-              followingCount: stats.followingCount,
-              onFollowersTap: () => context.push(
-                ProfileFollowersRoute.withUserId(_effectiveUserId),
-              ),
-              onFollowingTap: () => context.push(
-                ProfileFollowingRoute.withUserId(_effectiveUserId),
-              ),
-            ),
-            if (!isOwnProfile) ...[
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
-                      onPressed:
-                          _isFollowActionRunning ? null : _toggleFollow,
-                      child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
+              if (user.username != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: 0.16),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isOpeningChat ? null : () => _openChat(user),
-                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                      label: const Text('Написать'),
+                  child: Text(
+                    '@${user.username}',
+                    style: textTheme.labelLarge?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ],
+                ),
+              ],
+              if (user.bio != null && user.bio!.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  user.bio!,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              _ProfileStatsRow(
+                postsCount: stats.postsCount,
+                followersCount: stats.followersCount,
+                followingCount: stats.followingCount,
+                onFollowersTap: () => context.push(
+                  ProfileFollowersRoute.withUserId(_effectiveUserId),
+                ),
+                onFollowingTap: () => context.push(
+                  ProfileFollowingRoute.withUserId(_effectiveUserId),
+                ),
               ),
+              const SizedBox(height: AppSpacing.lg),
+              if (!isOwnProfile)
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed:
+                            _isFollowActionRunning ? null : _toggleFollow,
+                        child:
+                            Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isOpeningChat ? null : () => _openChat(user),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                        label: const Text('Написать'),
+                      ),
+                    ),
+                  ],
+                ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -883,16 +917,11 @@ class _ProfileStatsRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dividerColor = scheme.outlineVariant.withValues(alpha: 0.45);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.12),
-        ),
-      ),
+    return AppElevatedCard(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      radius: AppRadius.md,
+      color: scheme.surface.withValues(alpha: 0.72),
+      showShadow: false,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,

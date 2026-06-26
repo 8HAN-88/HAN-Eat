@@ -12,7 +12,6 @@ import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
-import '../../../core/theme/app_card_decorations.dart';
 import '../../../widgets/app_gradient_background.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -164,9 +163,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           children: [
             _SettingsSectionHeader(title: 'Внешний вид'),
-            AppElevatedCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -183,10 +183,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
+            ),
             const SizedBox(height: 12),
-            AppElevatedCard(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -224,13 +226,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               ),
+            ),
             const SizedBox(height: 24),
             _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
-            const AppElevatedCard(
+            const Card(
               child: AiScanCreditsTile(),
             ),
             const SizedBox(height: 12),
-            AppElevatedCard(
+            Card(
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   for (var i = 0; i < serviceItems.length; i++) ...[

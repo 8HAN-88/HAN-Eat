@@ -579,7 +579,6 @@ class _RecipeSourceListScreen extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Выберите рецепт'),
           bottom: longLabelTabBar(
-            context: context,
             tabs: const [
               Tab(text: 'Избранные'),
               Tab(text: 'План питания'),

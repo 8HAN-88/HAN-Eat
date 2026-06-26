@@ -50,7 +50,7 @@ class VideoPlayerHelper {
     );
   }
 
-  /// Рилс: быстрый старт + опциональный апгрейд (auto без HLS).
+  /// Рилс: быстрый старт + fallback на другие варианты видео.
   static Future<ReelPlaybackHandle> createReelPlayback({
     required ReelVideoSources sources,
     required VideoQualityPreference qualityPref,
@@ -59,18 +59,32 @@ class VideoPlayerHelper {
     bool autoPlay = false,
   }) async {
     final onWifi = await deviceOnWifiOrEthernet();
-    final startUrl = sources.fastStartUrl(qualityPref);
-    if (startUrl == null || startUrl.isEmpty) {
+    final startUrls = sources.playbackUrls(qualityPref);
+    if (startUrls.isEmpty) {
       throw Exception('no video url');
     }
 
-    final controller = await _createControllerForUrl(
-      startUrl,
-      loop: loop,
-      muted: muted,
-      autoPlay: autoPlay,
-      prefetchInBackground: true,
-    );
+    Object? lastError;
+    VideoPlayerController? controller;
+    for (final url in startUrls) {
+      try {
+        controller = await _createControllerForUrl(
+          url,
+          loop: loop,
+          muted: muted,
+          autoPlay: autoPlay,
+          prefetchInBackground: false,
+        );
+        break;
+      } catch (e) {
+        lastError = e;
+        debugPrint('Reel video init failed for $url: $e');
+      }
+    }
+
+    if (controller == null) {
+      throw Exception('video init failed: $lastError');
+    }
 
     final upgrade = sources.upgradeUrl(qualityPref, onWifi: onWifi);
     return ReelPlaybackHandle(
@@ -126,13 +140,13 @@ class VideoPlayerHelper {
     return controller;
   }
 
-  /// После старта 720p — переключиться на 1080p при хорошей сети (auto).
+  /// После быстрого старта — переключиться на более чёткий MP4 при хорошей сети.
   static void scheduleQualityUpgrade({
     required VideoPlayerController current,
     required String upgradeUrl,
-    required void Function(VideoPlayerController upgraded) onUpgraded,
+    required bool Function(VideoPlayerController upgraded) onUpgraded,
     bool Function()? shouldAutoPlay,
-    Duration delay = const Duration(milliseconds: 1800),
+    Duration delay = const Duration(milliseconds: 3500),
   }) {
     unawaited(Future<void>.delayed(delay, () async {
       if (!current.value.isInitialized || current.value.hasError) return;
@@ -154,8 +168,12 @@ class VideoPlayerHelper {
         if (position > Duration.zero) {
           await next.seekTo(position);
         }
-        await current.dispose();
-        onUpgraded(next);
+        final accepted = onUpgraded(next);
+        if (accepted) {
+          await current.dispose();
+        } else {
+          await next.dispose();
+        }
       } catch (e) {
         debugPrint('Video quality upgrade failed: $e');
       }

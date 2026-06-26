@@ -207,17 +207,16 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
           shouldAutoPlay: () => _shouldPlayReelAt(i),
           onUpgraded: (upgraded) {
             if (!mounted) {
-              upgraded.dispose();
-              return;
+              return false;
             }
             if (_videoControllers[i] != controllerRef) {
-              upgraded.dispose();
-              return;
+              return false;
             }
             setState(() => _videoControllers[i] = upgraded);
             if (!_shouldPlayReelAt(i)) {
               unawaited(upgraded.pause());
             }
+            return true;
           },
         );
       }
@@ -292,7 +291,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
       _loadMoreReels();
     }
     if (index + 1 < _reels.length) {
-      unawaited(_initializeVideos(index + 1, 3, priorityIndex: index));
+      unawaited(_initializeVideos(index + 1, 2, priorityIndex: index + 1));
     }
     _prefetchAdjacentReelFiles(index);
     _trimVideoControllers();

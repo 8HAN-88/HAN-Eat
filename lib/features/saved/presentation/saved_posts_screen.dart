@@ -11,6 +11,7 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/app_gradient_background.dart';
 
 class SavedPostsScreen extends ConsumerStatefulWidget {
   final int? userId; // Если null, то текущий пользователь
@@ -327,7 +328,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             ),
           ),
         longLabelTabBar(
-          context: context,
           controller: _tabController,
           tabs: const [
             Tab(text: 'Общее'),
@@ -350,23 +350,27 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
 
     if (widget.embedded) return content;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Сохранённые'),
-        actions: [
-          if (_isOffline)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Icon(Icons.cloud_off, color: Colors.orange, size: 20),
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Сохранённые'),
+          backgroundColor: Colors.transparent,
+          actions: [
+            if (_isOffline)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Icon(Icons.cloud_off, color: Colors.orange, size: 20),
+              ),
+            IconButton(
+              icon: const Icon(Icons.sync),
+              onPressed: _isOffline ? null : () => _syncWithServer(),
+              tooltip: 'Синхронизировать',
             ),
-          IconButton(
-            icon: const Icon(Icons.sync),
-            onPressed: _isOffline ? null : () => _syncWithServer(),
-            tooltip: 'Синхронизировать',
-          ),
-        ],
+          ],
+        ),
+        body: content,
       ),
-      body: content,
     );
   }
 }

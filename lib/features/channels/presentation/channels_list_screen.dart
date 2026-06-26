@@ -10,6 +10,7 @@ import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/channel_list_badges.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../core/theme/app_card_decorations.dart';
+import '../../../widgets/app_gradient_background.dart';
 
 class ChannelsListScreen extends ConsumerStatefulWidget {
   const ChannelsListScreen({super.key});
@@ -145,19 +146,23 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Каналы'),
-      ),
-      body: Column(
-        children: [
-          // Вкладки
-          _buildTabs(),
-          // Контент вкладок
-          Expanded(
-            child: _buildTabContent(),
-          ),
-        ],
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Каналы'),
+          backgroundColor: Colors.transparent,
+        ),
+        body: Column(
+          children: [
+            // Вкладки
+            _buildTabs(),
+            // Контент вкладок
+            Expanded(
+              child: _buildTabContent(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -174,7 +179,6 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen>
         ),
       ),
       child: longLabelTabBar(
-        context: context,
         controller: _tabController,
         tabAlignment: TabAlignment.start,
         labelPadding: const EdgeInsets.symmetric(horizontal: 10),

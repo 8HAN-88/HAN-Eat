@@ -816,10 +816,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   Future<void> _deleteChatFromHub(ChatConversation chat) async {
+    if (_hubActionChatId != null) return;
+    setState(() => _hubActionChatId = chat.id);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить чат?'),
+        title: Text(chat.isGroup ? 'Выйти из группы?' : 'Удалить чат?'),
         content: Text(
           chat.isGroup
               ? 'Вы выйдете из «${chat.displayTitle}». История останется у других участников.'
@@ -832,14 +834,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
+            child: Text(chat.isGroup ? 'Выйти' : 'Удалить'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
-    if (_hubActionChatId != null) return;
-    setState(() => _hubActionChatId = chat.id);
+    if (ok != true || !mounted) {
+      if (mounted) setState(() => _hubActionChatId = null);
+      return;
+    }
     try {
       await ChatService.deleteConversation(conversationId: chat.id);
       unawaited(ChatCacheService.clearDraft(chat.id));
@@ -847,7 +850,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       await _load(silent: true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('«${chat.displayTitle}» удалён')),
+        SnackBar(
+          content: Text(
+            chat.isGroup
+                ? 'Вы вышли из «${chat.displayTitle}»'
+                : '«${chat.displayTitle}» удалён',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -937,11 +946,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               ),
               ListTile(
                 leading: Icon(
-                  Icons.delete_outline,
+                  chat.isGroup ? Icons.logout : Icons.delete_outline,
                   color: Theme.of(ctx).colorScheme.error,
                 ),
                 title: Text(
-                  'Удалить чат',
+                  chat.isGroup ? 'Выйти из группы' : 'Удалить чат',
                   style: TextStyle(color: Theme.of(ctx).colorScheme.error),
                 ),
                 onTap: () {

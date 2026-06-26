@@ -10,6 +10,7 @@ import 'server_config.dart';
 /// Скачивает видео в temp-кэш — надёжнее AVPlayer streaming на физическом iOS.
 class VideoCacheService {
   static const _minValidBytes = 4096;
+  static const _maxParallelPrefetches = 2;
   static final Set<String> _prefetchInFlight = {};
 
   /// Уже скачанный файл (без сети).
@@ -29,6 +30,7 @@ class VideoCacheService {
   static void prefetchInBackground(String url) {
     final resolved = ServerConfig.resolveMediaUrl(url);
     if (_prefetchInFlight.contains(resolved)) return;
+    if (_prefetchInFlight.length >= _maxParallelPrefetches) return;
     _prefetchInFlight.add(resolved);
     unawaited(() async {
       try {
@@ -46,11 +48,16 @@ class VideoCacheService {
     final cacheDir = await _cacheDir();
     final name = md5.convert(resolved.codeUnits).toString();
     final file = File('${cacheDir.path}/$name.mp4');
+    final tempFile = File('${cacheDir.path}/$name.part');
 
     if (await file.exists()) {
       final len = await file.length();
       if (len > _minValidBytes) return file;
       await file.delete();
+    }
+
+    if (await tempFile.exists()) {
+      await tempFile.delete();
     }
 
     final client = HttpClient();
@@ -61,7 +68,7 @@ class VideoCacheService {
       if (response.statusCode != 200 && response.statusCode != 206) {
         throw HttpException('Video HTTP ${response.statusCode} for $resolved');
       }
-      final sink = file.openWrite();
+      final sink = tempFile.openWrite();
       try {
         await for (final chunk in response) {
           sink.add(chunk);
@@ -69,10 +76,11 @@ class VideoCacheService {
       } finally {
         await sink.close();
       }
-      if (await file.length() < _minValidBytes) {
-        await file.delete();
+      if (await tempFile.length() < _minValidBytes) {
+        await tempFile.delete();
         throw const HttpException('Video file too small');
       }
+      await tempFile.rename(file.path);
       if (kDebugMode) {
         debugPrint('VideoCache: saved ${await file.length()} bytes');
       }

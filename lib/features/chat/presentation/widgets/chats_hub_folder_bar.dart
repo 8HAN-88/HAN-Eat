@@ -35,13 +35,6 @@ class ChatHubFolderBar extends StatelessWidget {
             child: FilterChip(
               label: const Text('Все чаты'),
               selected: selectedFolderId == null,
-              showCheckmark: false,
-              selectedColor: scheme.primaryContainer.withValues(alpha: 0.75),
-              side: BorderSide(
-                color: selectedFolderId == null
-                    ? scheme.primary.withValues(alpha: 0.35)
-                    : scheme.outlineVariant.withValues(alpha: 0.5),
-              ),
               onSelected: (_) {
                 AppHaptics.selection();
                 onSelectFolder(null);
@@ -59,13 +52,6 @@ class ChatHubFolderBar extends StatelessWidget {
                 child: FilterChip(
                   label: Text(folder.displayLabel),
                   selected: selectedFolderId == folder.id,
-                  showCheckmark: false,
-                  selectedColor: scheme.primaryContainer.withValues(alpha: 0.75),
-                  side: BorderSide(
-                    color: selectedFolderId == folder.id
-                        ? scheme.primary.withValues(alpha: 0.35)
-                        : scheme.outlineVariant.withValues(alpha: 0.5),
-                  ),
                   onSelected: (_) {
                     AppHaptics.selection();
                     onSelectFolder(folder.id);

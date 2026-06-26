@@ -5,11 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../widgets/app_gradient_background.dart';
-import '../../../widgets/app_modern_tabs.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
+import '../../../widgets/app_gradient_background.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
 import 'chat_archived_screen.dart';
 import 'chat_create_group_screen.dart';
@@ -126,47 +125,40 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
         body: Center(child: CircularProgressIndicator()),
       );
     }
+    final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Чаты'),
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.88),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: appModernTabBar(
-            context: context,
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Чаты'),
+          bottom: TabBar(
             controller: _tabs,
             tabs: const [
-              Tab(text: 'Все', height: 44),
-              Tab(text: 'Контакты', height: 44),
+              Tab(text: 'Все'),
+              Tab(text: 'Контакты'),
             ],
           ),
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            tooltip: 'Ещё',
-            onSelected: (v) {
-              if (v == 'archive') _openArchived();
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'archive',
-                child: _hubMenuRow(
-                  Icons.archive_outlined,
-                  'Архив',
+          actions: [
+            PopupMenuButton<String>(
+              tooltip: 'Ещё',
+              onSelected: (v) {
+                if (v == 'archive') _openArchived();
+              },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'archive',
+                  child: _hubMenuRow(
+                    Icons.archive_outlined,
+                    'Архив',
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: AppGradientBackground(
-        child: TabBarView(
+              ],
+            ),
+          ],
+        ),
+        body: TabBarView(
           controller: _tabs,
           children: [
             ChatsHubAllInboxTab(
@@ -178,13 +170,20 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
             ),
           ],
         ),
-      ),
-      floatingActionButton: Padding(
-        padding: EdgeInsets.only(bottom: fabExtraBottomPadding(context)),
-        child: FloatingActionButton(
-          onPressed: _showNewChatMenu,
-          tooltip: 'Новый чат',
-          child: const Icon(Icons.edit_outlined),
+        floatingActionButton: Padding(
+          padding: EdgeInsets.only(bottom: fabExtraBottomPadding(context)),
+          child: FloatingActionButton.extended(
+            onPressed: _showNewChatMenu,
+            tooltip: 'Новый чат',
+            icon: const Icon(Icons.edit_outlined),
+            label: Text(
+              'Новый',
+              style: TextStyle(
+                color: scheme.onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         ),
       ),
     );

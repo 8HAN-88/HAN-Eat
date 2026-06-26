@@ -230,6 +230,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _newMessagesBelow = 0;
   bool _suppressMarkRead = false;
   bool _selectionMode = false;
+  bool _chatExitActionRunning = false;
   final _selectedMessageIds = <int>{};
   final _votingPollIds = <int>{};
   final _closingPollIds = <int>{};
@@ -1077,6 +1078,144 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _showThreadActionsSheet() {
+    final scheme = Theme.of(context).colorScheme;
+    final isGroup = _conversation.isGroup;
+    final isSaved = _conversation.isSaved;
+    final peer = _conversation.peer;
+    final mediaCount = _messages.where((m) => m.mediaUrl != null).length;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: scheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Действия',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(
+                _threadSearchOpen ? Icons.search_off : Icons.search,
+                color: scheme.onSurfaceVariant,
+              ),
+              title: Text(_threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleThreadSearch();
+              },
+            ),
+            if (mediaCount > 0)
+              ListTile(
+                leading: Icon(Icons.photo_library_outlined, color: scheme.onSurfaceVariant),
+                title: Text('Медиа ($mediaCount)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openMediaGallery();
+                },
+              ),
+            if (!isSaved) ...[
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              ListTile(
+                leading: Icon(
+                  _pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  color: scheme.onSurfaceVariant,
+                ),
+                title: Text(_pinned ? 'Открепить' : 'Закрепить'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _togglePin();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  _muted ? Icons.notifications_off_outlined : Icons.notifications_outlined,
+                  color: scheme.onSurfaceVariant,
+                ),
+                title: Text(_muted ? 'Включить уведомления' : 'Без звука'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _toggleMute();
+                },
+              ),
+              if (isGroup)
+                ListTile(
+                  leading: Icon(Icons.info_outline, color: scheme.onSurfaceVariant),
+                  title: const Text('О группе'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openGroupInfo();
+                  },
+                ),
+              if (!isGroup && peer != null)
+                ListTile(
+                  leading: Icon(Icons.block_outlined, color: scheme.error),
+                  title: Text('Заблокировать', style: TextStyle(color: scheme.error)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _blockPeer();
+                  },
+                ),
+              if (isGroup)
+                ListTile(
+                  leading: Icon(Icons.logout, color: scheme.error),
+                  title: Text('Выйти из группы', style: TextStyle(color: scheme.error)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _leaveGroup();
+                  },
+                ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              ListTile(
+                leading: Icon(Icons.mark_chat_unread_outlined, color: scheme.onSurfaceVariant),
+                title: const Text('Пометить непрочитанным'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _markUnread();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.archive_outlined, color: scheme.onSurfaceVariant),
+                title: const Text('В архив'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _archiveChat();
+                },
+              ),
+              if (!isGroup)
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: scheme.error),
+                  title: Text(
+                    'Удалить чат',
+                    style: TextStyle(color: scheme.error),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _deleteChat();
+                  },
+                ),
+            ],
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _applyReadReceipt(int readUpToId) {
     setState(() {
       for (var i = 0; i < _messages.length; i++) {
@@ -1287,6 +1426,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _deleteChat() async {
+    if (_conversation.isGroup) {
+      await _leaveGroup();
+      return;
+    }
+    if (_chatExitActionRunning) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1309,6 +1453,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
+    setState(() => _chatExitActionRunning = true);
     try {
       await ChatService.deleteConversation(conversationId: widget.conversationId);
       unawaited(ChatCacheService.clearDraft(widget.conversationId));
@@ -1324,6 +1469,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    } finally {
+      if (mounted) setState(() => _chatExitActionRunning = false);
     }
   }
 
@@ -1629,6 +1776,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _leaveGroup() async {
+    if (_chatExitActionRunning) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1647,6 +1795,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
+    setState(() => _chatExitActionRunning = true);
     try {
       await ChatService.leaveGroup(conversationId: widget.conversationId);
       if (!mounted) return;
@@ -1656,6 +1805,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    } finally {
+      if (mounted) setState(() => _chatExitActionRunning = false);
     }
   }
 
@@ -3206,104 +3357,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               )
             : null,
         actions: [
-          PopupMenuButton<String>(
+          IconButton(
             tooltip: 'Ещё',
-            onSelected: (v) {
-              if (v == 'search') _toggleThreadSearch();
-              if (v == 'media') _openMediaGallery();
-              if (v == 'mute') _toggleMute();
-              if (v == 'pin') _togglePin();
-              if (v == 'group') _openGroupInfo();
-              if (v == 'block') _blockPeer();
-              if (v == 'leave') _leaveGroup();
-              if (v == 'unread') _markUnread();
-              if (v == 'delete') _deleteChat();
-              if (v == 'archive') _archiveChat();
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'search',
-                child: _threadMenuRow(
-                  _threadSearchOpen ? Icons.search_off : Icons.search,
-                  _threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате',
-                ),
-              ),
-              if (mediaCount > 0) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'media',
-                  child: _threadMenuRow(
-                    Icons.photo_library_outlined,
-                    'Медиа ($mediaCount)',
-                  ),
-                ),
-              ],
-              if (!isSaved) ...[
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'pin',
-                  child: _threadMenuRow(
-                    _pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                    _pinned ? 'Открепить' : 'Закрепить',
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'mute',
-                  child: _threadMenuRow(
-                    _muted
-                        ? Icons.notifications_off_outlined
-                        : Icons.notifications_outlined,
-                    _muted ? 'Включить уведомления' : 'Без звука',
-                  ),
-                ),
-                if (isGroup)
-                  PopupMenuItem(
-                    value: 'group',
-                    child: _threadMenuRow(
-                      Icons.info_outline,
-                      'О группе',
-                    ),
-                  ),
-                if (!isGroup && peer != null)
-                  PopupMenuItem(
-                    value: 'block',
-                    child: _threadMenuRow(
-                      Icons.block_outlined,
-                      'Заблокировать',
-                    ),
-                  ),
-                if (isGroup)
-                  PopupMenuItem(
-                    value: 'leave',
-                    child: _threadMenuRow(
-                      Icons.logout,
-                      'Выйти из группы',
-                    ),
-                  ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'unread',
-                  child: _threadMenuRow(
-                    Icons.mark_chat_unread_outlined,
-                    'Пометить непрочитанным',
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'archive',
-                  child: _threadMenuRow(
-                    Icons.archive_outlined,
-                    'В архив',
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: _threadMenuRow(
-                    Icons.delete_outline,
-                    'Удалить чат',
-                  ),
-                ),
-              ],
-            ],
+            icon: const Icon(Icons.more_vert),
+            onPressed: _showThreadActionsSheet,
           ),
         ],
       ),
@@ -3728,14 +3785,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: scheme.shadow.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: Row(
                 children: [
                   IconButton(
                     onPressed: _recording ? null : _showAttachMenu,
                     icon: const Icon(Icons.attach_file_outlined),
                     tooltip: 'Вложение',
+                    color: scheme.onSurfaceVariant,
                   ),
                   Expanded(
                     child: TextField(
@@ -3757,21 +3827,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     : 'Сообщение или удержите 🎤')),
                         filled: true,
                         fillColor: scheme.surfaceContainerHighest
-                            .withValues(alpha: 0.5),
+                            .withValues(alpha: 0.6),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(22),
                           borderSide: BorderSide.none,
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 10,
+                          vertical: 11,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 2),
                   if (_hasText && !_recording)
                     IconButton.filled(
+                      style: IconButton.styleFrom(
+                        backgroundColor: scheme.primary,
+                        foregroundColor: scheme.onPrimary,
+                        shape: const CircleBorder(),
+                      ),
                       onPressed: _recording ? null : _sendText,
                       icon: _sending
                           ? SizedBox(
@@ -3846,16 +3921,6 @@ class _PendingTextSend {
   final int tempId;
   final int? replyToMessageId;
   int attempts = 0;
-}
-
-Widget _threadMenuRow(IconData icon, String label) {
-  return Row(
-    children: [
-      Icon(icon, size: 20),
-      const SizedBox(width: 12),
-      Expanded(child: Text(label)),
-    ],
-  );
 }
 
 class _Bubble extends StatelessWidget {

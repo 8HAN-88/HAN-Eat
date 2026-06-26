@@ -92,10 +92,10 @@ class AppCardDecorations {
       boxShadow: [
         BoxShadow(
           color: isDark
-              ? Colors.black.withValues(alpha: 0.32)
-              : scheme.shadow.withValues(alpha: 0.08),
-          blurRadius: isDark ? 10 : 18,
-          offset: Offset(0, isDark ? 3 : 6),
+              ? Colors.black.withValues(alpha: 0.35)
+              : scheme.shadow.withValues(alpha: 0.1),
+          blurRadius: isDark ? 8 : 12,
+          offset: Offset(0, isDark ? 2 : 4),
         ),
       ],
     );
