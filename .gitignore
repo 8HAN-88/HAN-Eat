@@ -29,8 +29,22 @@ backend/firebase-credentials.json
 firebase-credentials.json
 *firebase*adminsdk*.json
 
+### Flutter / Dart generated ###
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+coverage/
+flutter_application_1/
+
 ### VS Code ###
 .vscode/
 
 ### Mac OS ###
 .DS_Store
+
+### Python generated ###
+.pytest_cache/
+.pycache_compile/
+__pycache__/
+*.py[cod]
