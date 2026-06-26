@@ -76,6 +76,7 @@ jobs:
             "chown -R www-data:www-data /var/www/haneat-web 2>/dev/null || true"
 
       - name: Patch nginx (same-origin API for Safari Web)
+        continue-on-error: true
         run: |
           scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
             scripts/patch_nginx_web_api_proxy.sh \
