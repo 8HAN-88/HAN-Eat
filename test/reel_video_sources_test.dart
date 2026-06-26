@@ -12,10 +12,10 @@ void main() {
       hls: 'https://cdn/hls/playlist.m3u8',
     );
 
-    test('auto fast start prefers 720p', () {
+    test('auto fast start prefers 480p', () {
       expect(
         sources.fastStartUrl(VideoQualityPreference.auto),
-        'https://cdn/720.mp4',
+        'https://cdn/480.mp4',
       );
     });
 
@@ -33,14 +33,14 @@ void main() {
       );
     });
 
-    test('max without 1080p falls back to original', () {
+    test('max without 1080p falls back to 720p', () {
       const no1080 = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_720p: 'https://cdn/720.mp4',
       );
       expect(
         no1080.fastStartUrl(VideoQualityPreference.max),
-        'https://cdn/original.mp4',
+        'https://cdn/720.mp4',
       );
     });
 
@@ -58,7 +58,7 @@ void main() {
       );
     });
 
-    test('auto upgrade to 1080p on wifi', () {
+    test('auto upgrade to 720p on wifi', () {
       const noHls = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_480p: 'https://cdn/480.mp4',
@@ -67,11 +67,11 @@ void main() {
       );
       expect(
         noHls.upgradeUrl(VideoQualityPreference.auto, onWifi: true),
-        'https://cdn/1080.mp4',
+        'https://cdn/720.mp4',
       );
     });
 
-    test('auto stays at 720p on cellular', () {
+    test('auto stays at 480p on cellular', () {
       const noHls = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_480p: 'https://cdn/480.mp4',
@@ -84,7 +84,7 @@ void main() {
       );
     });
 
-    test('auto upgrade to original on wifi without 1080p transcode', () {
+    test('auto upgrade to 720p on wifi without 1080p transcode', () {
       const no1080 = ReelVideoSources(
         original: 'https://cdn/original.mp4',
         mp4_480p: 'https://cdn/480.mp4',
@@ -92,7 +92,20 @@ void main() {
       );
       expect(
         no1080.upgradeUrl(VideoQualityPreference.auto, onWifi: true),
-        'https://cdn/original.mp4',
+        'https://cdn/720.mp4',
+      );
+    });
+
+    test('playback urls are ordered for fast fallback', () {
+      expect(
+        sources.playbackUrls(VideoQualityPreference.auto),
+        [
+          'https://cdn/480.mp4',
+          'https://cdn/720.mp4',
+          'https://cdn/hls/playlist.m3u8',
+          'https://cdn/1080.mp4',
+          'https://cdn/original.mp4',
+        ],
       );
     });
 
