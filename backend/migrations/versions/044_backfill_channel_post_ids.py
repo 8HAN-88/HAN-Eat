@@ -21,6 +21,8 @@ def upgrade() -> None:
                    CAST(regexp_replace(elem, '^channel:', '') AS INTEGER) AS cid
             FROM posts AS p2,
                  unnest(p2.publish_to) AS elem
+                 JOIN channels AS c
+                   ON c.id = CAST(regexp_replace(elem, '^channel:', '') AS INTEGER)
             WHERE p2.channel_id IS NULL
               AND p2.publish_to IS NOT NULL
               AND elem LIKE 'channel:%'

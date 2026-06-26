@@ -1,11 +1,11 @@
 """Unique provider payment id for subscriptions
 
-Revision ID: 061_subscription_payment_id_unique_v1
+Revision ID: 061_sub_payment_unique_v1
 Revises: 060_telegram_paid_features_v1
 """
 from alembic import op
 
-revision = "061_subscription_payment_id_unique_v1"
+revision = "061_sub_payment_unique_v1"
 down_revision = "060_telegram_paid_features_v1"
 branch_labels = None
 depends_on = None
