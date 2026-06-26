@@ -43,6 +43,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   String _recipeVisibility = 'public';
   String? _channelVisibilityMode;
   String? _originCountryCode;
+  bool _isPaidContent = false;
 
   // Медиа файлы
   final ImagePicker _imagePicker = ImagePicker();
@@ -68,6 +69,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _tagsController = TextEditingController();
   final _linkUrlController = TextEditingController();
   final _linkPreviewController = TextEditingController();
+  final _priceStarsController = TextEditingController(text: '50');
   final _pollQuestionController = TextEditingController();
   final List<TextEditingController> _pollOptionControllers = [
     TextEditingController(),
@@ -76,6 +78,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   bool get _isPollMode => _selectedType == 'poll';
   bool get _isLinkMode => _selectedType == 'link';
+  int get _paidPriceStars =>
+      _isPaidContent ? (int.tryParse(_priceStarsController.text.trim()) ?? 0) : 0;
   Timer? _linkPreviewDebounce;
   bool _isLoadingLinkPreview = false;
   Map<String, dynamic>? _linkPreviewMeta;
@@ -113,6 +117,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     _linkUrlController.removeListener(_scheduleLinkPreviewLoad);
     _linkUrlController.dispose();
     _linkPreviewController.dispose();
+    _priceStarsController.dispose();
     _pollQuestionController.dispose();
     for (var ctrl in _pollOptionControllers) {
       ctrl.dispose();
@@ -615,6 +620,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           channelId: _selectedChannelId,
           linkUrl: linkUrl,
           linkPreview: linkPreview,
+          isPaid: _isPaidContent,
+          priceStars: _paidPriceStars,
         );
       } else if (_selectedType == 'recipe') {
         final ingredients = _ingredientControllers
@@ -695,6 +702,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           visibility: _recipeVisibility,
           channelId: _selectedChannelId,
           originCountryCode: _originCountryCode,
+          isPaid: _isPaidContent,
+          priceStars: _paidPriceStars,
         );
       } else {
         if ((_selectedImages.isNotEmpty || _selectedVideo != null) &&
@@ -750,6 +759,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           channelId: _selectedChannelId,
           media: mediaForPost,
           tags: tags.isNotEmpty ? tags : null,
+          isPaid: _isPaidContent,
+          priceStars: _paidPriceStars,
         );
       }
 
@@ -995,6 +1006,48 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     labelText: 'Теги (через запятую)',
                     hintText: 'выпечка, здоровое, завтрак',
                     border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _isPaidContent,
+                          onChanged: (value) =>
+                              setState(() => _isPaidContent = value),
+                          title: const Text('Платный контент'),
+                          subtitle: const Text(
+                            'Показывать превью и открывать полный пост за звёзды',
+                          ),
+                          secondary: const Icon(Icons.lock_rounded),
+                        ),
+                        if (_isPaidContent) ...[
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _priceStarsController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Цена в звёздах',
+                              prefixIcon: Icon(Icons.stars_rounded),
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (!_isPaidContent) return null;
+                              final price = int.tryParse((value ?? '').trim());
+                              if (price == null || price <= 0) {
+                                return 'Укажите цену больше 0';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),

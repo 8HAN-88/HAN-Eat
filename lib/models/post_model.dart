@@ -28,6 +28,10 @@ class PostModel {
   final bool isPromoted;
   final bool isPinned;
   final bool isExclusive;
+  final bool isPaid;
+  final int priceStars;
+  final String previewMode;
+  final bool purchased;
   final bool isLiked;
   final bool? isSaved;
   final bool? isReposted;
@@ -110,6 +114,10 @@ class PostModel {
     this.isPromoted = false,
     this.isPinned = false,
     this.isExclusive = false,
+    this.isPaid = false,
+    this.priceStars = 0,
+    this.previewMode = 'teaser',
+    this.purchased = true,
     required this.isLiked,
     this.isSaved,
     this.isReposted,
@@ -138,6 +146,10 @@ class PostModel {
       repostsCount: p.repostsCount ?? 0,
       viewsCount: p.reactions.views,
       isPromoted: p.isPromoted,
+      isPaid: false,
+      priceStars: 0,
+      previewMode: 'teaser',
+      purchased: true,
       isLiked: p.isLiked,
       isSaved: p.isSaved,
       isReposted: null,
@@ -215,6 +227,10 @@ class PostModel {
       isPromoted: json['is_promoted'] as bool? ??
           json['isPromoted'] as bool? ??
           false,
+      isPaid: json['is_paid'] as bool? ?? false,
+      priceStars: json['price_stars'] as int? ?? 0,
+      previewMode: json['preview_mode'] as String? ?? 'teaser',
+      purchased: json['purchased'] as bool? ?? !(json['is_paid'] as bool? ?? false),
       isLiked: json['is_liked'] as bool? ?? false,
       isSaved: json['is_saved'] as bool?,
       isReposted: json['is_reposted'] as bool?,
@@ -251,6 +267,10 @@ class PostModel {
       'is_promoted': isPromoted,
       'is_pinned': isPinned,
       'is_exclusive': isExclusive,
+      'is_paid': isPaid,
+      'price_stars': priceStars,
+      'preview_mode': previewMode,
+      'purchased': purchased,
       'is_liked': isLiked,
       'is_saved': isSaved,
       'is_reposted': isReposted,
@@ -270,6 +290,7 @@ class PostModel {
     bool? isLiked,
     bool? isSaved,
     bool? isReposted,
+    bool? purchased,
   }) {
     return PostModel(
       id: id,
@@ -290,6 +311,10 @@ class PostModel {
       isPromoted: isPromoted,
       isPinned: isPinned,
       isExclusive: isExclusive,
+      isPaid: isPaid,
+      priceStars: priceStars,
+      previewMode: previewMode,
+      purchased: purchased ?? this.purchased,
       isLiked: isLiked ?? this.isLiked,
       isSaved: isSaved ?? this.isSaved,
       isReposted: isReposted ?? this.isReposted,

@@ -43,6 +43,38 @@ class PaymentService {
     }
   }
 
+  static Future<CheckoutSessionResponse> createStarsCheckout({
+    required String packageId,
+    String? successUrl,
+    String? cancelUrl,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final uri = Uri.parse('$baseUrl/payments/stars/checkout');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'package_id': packageId,
+        if (successUrl != null) 'success_url': successUrl,
+        if (cancelUrl != null) 'cancel_url': cancelUrl,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return CheckoutSessionResponse.fromJson(data);
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>;
+    throw Exception(error['detail'] ?? 'Failed to create stars checkout');
+  }
+
   static Future<SubscriptionPricesResponse> getPrices() async {
     final token = await AuthService.getAccessTokenForApi();
     final uri = Uri.parse('$baseUrl/payments/prices');

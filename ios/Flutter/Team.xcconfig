@@ -1,0 +1,3 @@
+// Team ID из сертификата (OU) и provisioning profile — airat8446@gmail.com / Airat Hadiev.
+// CN сертификата показывает (4534W53S2H), но подпись и профиль привязаны к 94NCHYWGB8.
+DEVELOPMENT_TEAM=94NCHYWGB8

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_cache_service.dart';
+import '../../../services/paid_features_service.dart';
 import '../../../models/post_model.dart';
 import '../../../core/share/system_share.dart';
 import '../../../services/server_config.dart';
@@ -342,7 +343,10 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
                 channel: c,
                 postType: null,
               )
-            : _PrivateChannelPostsLocked(channel: c),
+            : _PrivateChannelPostsLocked(
+                channel: c,
+                onUnlocked: () => _loadChannel(forceRefresh: true),
+              ),
       ),
       floatingActionButton: c.canCreatePosts
           ? FloatingActionButton(
@@ -462,24 +466,104 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   }
 }
 
-class _PrivateChannelPostsLocked extends StatelessWidget {
-  const _PrivateChannelPostsLocked({required this.channel});
+class _PrivateChannelPostsLocked extends StatefulWidget {
+  const _PrivateChannelPostsLocked({
+    required this.channel,
+    required this.onUnlocked,
+  });
 
   final ChannelDetail channel;
+  final VoidCallback onUnlocked;
+
+  @override
+  State<_PrivateChannelPostsLocked> createState() =>
+      _PrivateChannelPostsLockedState();
+}
+
+class _PrivateChannelPostsLockedState extends State<_PrivateChannelPostsLocked> {
+  bool _loading = false;
+
+  Future<void> _subscribe() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      await PaidFeaturesService.subscribeChannel(widget.channel.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подписка оформлена')),
+      );
+      widget.onUnlocked();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final message = channel.isPending
+    final channel = widget.channel;
+    final scheme = Theme.of(context).colorScheme;
+    final paidLocked = channel.isPaid && !channel.paidAccess;
+    final message = paidLocked
+        ? 'Канал доступен по платной подписке. Оформите доступ за звёзды и читайте все посты.'
+        : channel.isPending
         ? 'Заявка на подписку на рассмотрении. Посты появятся после одобрения.'
         : 'Это приватный канал. Откройте информацию о канале и запросите подписку.';
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge,
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  paidLocked
+                      ? Icons.workspace_premium_rounded
+                      : Icons.lock_outline_rounded,
+                  color: paidLocked ? scheme.primary : scheme.onSurfaceVariant,
+                  size: 42,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  paidLocked ? 'Платный канал' : 'Канал закрыт',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
+                ),
+                if (paidLocked) ...[
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: _loading ? null : _subscribe,
+                    icon: _loading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.stars_rounded),
+                    label: Text(
+                      _loading
+                          ? 'Оформляем...'
+                          : 'Подписаться за ${channel.monthlyPriceStars} ★/мес',
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

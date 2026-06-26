@@ -1,0 +1,10 @@
+# Generated / local
+local.properties
+build/
+app/build/
+.gradle/
+*.apk
+*.aab
+manifest-checksum.txt
+
+# Keep twa-manifest.json and README in git; app/ regenerated via bubblewrap update

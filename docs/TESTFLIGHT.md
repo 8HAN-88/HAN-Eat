@@ -13,6 +13,8 @@
 - [ ] `ios/Runner/GoogleService-Info.plist` (Firebase)
 - [ ] `android/key.properties` для release (Android — Internal testing в Play Console)
 - [ ] Backend: `./scripts/smoke_launch.sh https://api.haneat.app` — exit 0
+- [ ] Клиент: `./scripts/check_client_stability.sh` — exit 0
+- [ ] На устройстве: чеклист [STABILITY.md](STABILITY.md)
 
 ## iOS: сборка и загрузка
 
@@ -20,8 +22,11 @@
 # 1. Версия в pubspec.yaml (version: x.y.z+build)
 flutter pub get
 
-# 2. Release IPA
+# 2. Release IPA (API + Google OAuth из корневого .env)
 ./scripts/build_ios_release.sh https://api.haneat.app
+
+# Android AAB (те же define)
+./scripts/build_android_release.sh https://api.haneat.app
 
 # 3. Загрузка в App Store Connect
 open build/ios/archive/Runner.xcarchive

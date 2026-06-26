@@ -111,6 +111,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push('/subscription'),
       ),
       _SettingsItem(
+        title: 'Звёзды и кошелёк',
+        icon: Icons.stars_rounded,
+        subtitle: 'Баланс, донаты, покупки контента и бусты',
+        onTap: () => context.push(StarsWalletRoute.path),
+      ),
+      _SettingsItem(
         title: 'Настройки питания',
         icon: Icons.monitor_heart_outlined,
         subtitle: 'Цель, калории, повторы — для AI-плана',

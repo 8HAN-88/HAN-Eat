@@ -6,7 +6,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -78,6 +78,7 @@ app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(search.router, prefix="/api/v1", tags=["Search"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
+app.include_router(paid_features.router, prefix="/api/v1/paid", tags=["Paid Features"])
 app.include_router(ai_scan.router, prefix="/api/v1/ai-scan", tags=["AI Scan"])
 app.include_router(meal_plans.router, prefix="/api/v1/meal-plans", tags=["Meal Plans"])
 # Роутер для рецептов с префиксом /api/v1
@@ -162,6 +163,7 @@ async def _background_maintenance_loop() -> None:
     from app.core.maintenance_lock import try_acquire_maintenance_lock
     from app.core.redis_client import get_redis
     from app.services.post_publish_service import publish_due_scheduled_posts
+    from app.services.paid_features_service import expire_due_post_boosts
     from app.services.subscription_maintenance_service import SubscriptionMaintenanceService
 
     while True:
@@ -171,10 +173,13 @@ async def _background_maintenance_loop() -> None:
         db = SessionLocal()
         try:
             published = publish_due_scheduled_posts(db)
+            expired_boosts = expire_due_post_boosts(db)
             SubscriptionMaintenanceService(db).run()
             db.commit()
             if published:
                 logger.info("Published %s scheduled posts", published)
+            if expired_boosts:
+                logger.info("Expired %s post boosts", expired_boosts)
         except Exception:
             db.rollback()
             logger.exception("Background maintenance loop error")

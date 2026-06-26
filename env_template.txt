@@ -11,6 +11,23 @@
 SPOONACULAR_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_SPOONACULAR_API_KEY
 
 # ============================================
-# BACKEND API URL (опционально)
-# API_BASE_URL=http://localhost:8000
+# OPENAI API KEY (анализ фото блюда, GPT Vision — GptAnalyzeService)
+# 🔗 https://platform.openai.com/api-keys
+OPENAI_API_KEY=ЗАМЕНИТЕ_НА_ВАШ_OPENAI_API_KEY
+# Модель для КБЖУ по фото (по умолчанию gpt-4.1-nano; ещё дешевле: gpt-5-nano)
+# OPENAI_FOOD_SCAN_MODEL=gpt-4.1-nano
+
+# ============================================
+# GOOGLE SIGN-IN (Firebase → Authentication → Google)
+# Web client ID → тот же в backend GOOGLE_OAUTH_CLIENT_IDS
+# iOS: или GOOGLE_IOS_CLIENT_ID, или GoogleService-Info.plist в ios/Runner/
+# GOOGLE_WEB_CLIENT_ID=xxxx.apps.googleusercontent.com
+# GOOGLE_IOS_CLIENT_ID=yyyy.apps.googleusercontent.com
+
+# ============================================
+# BACKEND API URL
+# Продакшен (Timeweb): https://api.haneat.app
+# Локально: http://127.0.0.1:5001
+HANEAT_API_BASE=https://api.haneat.app
+# или: flutter run --dart-define=HANEAT_API_BASE=https://api.haneat.app
 

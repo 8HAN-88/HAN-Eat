@@ -54,6 +54,8 @@ cd backend && python -m pytest tests/ -q
 
 ## Ручной чеклист (Flutter)
 
+### Мобильные (iOS / Android)
+
 - [ ] Гость: лента и каналы без входа
 - [ ] Вход email / Google
 - [ ] Лента: при отключении сети — баннер + кеш (если был онлайн-заход)
@@ -64,3 +66,12 @@ cd backend && python -m pytest tests/ -q
 - [ ] AI meal plan: лимиты free / cooldown
 - [ ] Release-сборка: нет клиентского Spoonacular / OpenAI
 - [ ] `/community` открывает главную ленту (redirect)
+
+### Web (https://haneat.app)
+
+- [ ] Первая загрузка < 15 с на 4G
+- [ ] Google Sign-In (authorized origin haneat.app)
+- [ ] Лента, каналы, чаты (текст + медиа)
+- [ ] Подписка: «Оплата скоро»
+- [ ] Privacy / Terms из приложения
+- [ ] Нет ошибок CORS в консоли браузера

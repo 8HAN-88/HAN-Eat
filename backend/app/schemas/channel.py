@@ -17,6 +17,8 @@ class CreateChannelRequest(BaseModel):
     category: Optional[str] = None  # Категория канала (итальянская, азиатская, веган и т.д.)
     tags: Optional[List[str]] = None  # Теги канала (#выпечка, #здоровое)
     auto_publish_reels: bool = True
+    is_paid: bool = False
+    monthly_price_stars: int = 0
 
 
 class UpdateChannelRequest(BaseModel):
@@ -42,6 +44,8 @@ class UpdateChannelRequest(BaseModel):
         max_length=16,
         description="HEX-цвет акцента канала (Creator / Pro)",
     )
+    is_paid: Optional[bool] = None
+    monthly_price_stars: Optional[int] = None
 
 
 class ChannelResponse(BaseModel):
@@ -59,6 +63,9 @@ class ChannelResponse(BaseModel):
     posts_count: int
     created_at: datetime
     auto_publish_reels: bool = True
+    is_paid: bool = False
+    monthly_price_stars: int = 0
+    paid_access: bool = True
     membership_status: Optional[str] = None
     pending_join_requests_count: Optional[int] = None
     has_creator_badge: bool = False

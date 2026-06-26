@@ -20,10 +20,25 @@ from app.models.video_processing import VideoProcessing
 from app.models.image_processing import ImageProcessing
 from app.models.conversation import Conversation, ConversationMember, Message, Contact, MessageReaction
 from app.models.user_block import UserBlock
+from app.models.paid_features import (
+    CreatorBalance,
+    PaidChannelSubscription,
+    PaidContentPurchase,
+    PostBoost,
+    StarTransaction,
+)
 
 # Для обратной совместимости
 Community = Channel
 CommunityMember = ChannelMember
 
-__all__ = ["User", "Post", "PostView", "Channel", "Follower", "ChannelMember", "SavedPost", "Like", "Comment", "Repost", "ModerationQueue", "ContentReport", "ModerationAuditLog", "AnalyticsEvent", "Notification", "Subscription", "SupportTicket", "NotificationPreferences", "VideoProcessing", "ImageProcessing", "Community", "CommunityMember", "BaseRecipe"]
+__all__ = [
+    "User", "Post", "PostView", "Channel", "Follower", "ChannelMember",
+    "SavedPost", "Like", "Comment", "Repost", "ModerationQueue",
+    "ContentReport", "ModerationAuditLog", "AnalyticsEvent", "Notification",
+    "Subscription", "SupportTicket", "NotificationPreferences",
+    "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
+    "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
+    "PaidChannelSubscription", "PostBoost",
+]
 

@@ -17,6 +17,7 @@ import '../features/settings/presentation/profile_auth_screen.dart';
 import '../features/settings/presentation/allergies_screen.dart';
 import '../features/settings/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
+import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
 import '../features/settings/presentation/support_security_screen.dart';
@@ -513,6 +514,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: SubscriptionScreen(initialProduct: product),
           );
         },
+      ),
+      GoRoute(
+        path: StarsWalletRoute.path,
+        name: StarsWalletRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StarsWalletScreen()),
       ),
       GoRoute(
         path: SubscriptionSuccessRoute.path,
@@ -1239,6 +1246,11 @@ class SubscriptionRoute {
 
   static String pathWithProduct(String product) =>
       '$path?product=${Uri.encodeComponent(product)}';
+}
+
+class StarsWalletRoute {
+  static const path = '/paid/wallet';
+  static const name = 'stars_wallet';
 }
 
 class SubscriptionSuccessRoute {

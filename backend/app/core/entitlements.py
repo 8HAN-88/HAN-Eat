@@ -60,6 +60,12 @@ def subscription_entitlements(tier: SubscriptionTier) -> Dict[str, bool]:
         "creator_scheduled_posts": tier_includes_creator(tier),
         "offline_recipes": tier_includes_ai(tier),
         "priority_support": tier == "pro",
+        "premium_badge": tier != "free",
+        "exclusive_reactions": tier != "free",
+        "profile_decoration": tier != "free",
+        "larger_uploads": tier != "free",
+        "priority_reels_quality": tier != "free",
+        "advanced_stats": tier_includes_creator(tier),
         # backward compat
         "is_plus": tier_includes_ai(tier),
     }

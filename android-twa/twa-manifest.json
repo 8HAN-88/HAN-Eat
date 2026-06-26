@@ -1,0 +1,45 @@
+{
+  "packageId": "com.haneat.app",
+  "host": "haneat.app",
+  "name": "HAN Eat",
+  "launcherName": "HAN Eat",
+  "display": "standalone",
+  "themeColor": "#2D5016",
+  "themeColorDark": "#1A3310",
+  "navigationColor": "#2D5016",
+  "navigationColorDark": "#1A3310",
+  "navigationDividerColor": "#2D5016",
+  "navigationDividerColorDark": "#1A3310",
+  "backgroundColor": "#FAFAF8",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://haneat.app/icons/Icon-512.png",
+  "maskableIconUrl": "https://haneat.app/icons/Icon-maskable-512.png",
+  "monochromeIconUrl": "https://haneat.app/icons/Icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../android/upload-keystore.jks",
+    "alias": "upload"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://haneat.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 23,
+  "orientation": "portrait-primary",
+  "fingerprints": [
+    {
+      "name": "upload",
+      "value": "a245926e5c5b37164ab12b8ca2922362f281a87643563f0469909c935aa56c17"
+    }
+  ]
+}

@@ -35,6 +35,9 @@ class Post(Base):
     is_promoted = Column(Boolean, default=False, nullable=False, index=True)  # Продвижение в ленте
     is_pinned = Column(Boolean, default=False, nullable=False, index=True)  # Закрепление в канале
     is_exclusive = Column(Boolean, default=False, nullable=False, index=True)  # Эксклюзив H.A.N. Pro
+    is_paid = Column(Boolean, default=False, nullable=False, index=True)  # Платный контент за звёзды
+    price_stars = Column(Integer, default=0, nullable=False)
+    preview_mode = Column(String(20), default="teaser", nullable=False)  # teaser | blurred | hidden
     hidden_from_recommendations = Column(Boolean, default=False, nullable=False)
 
     # Relationships для оптимизации запросов (eager loading)

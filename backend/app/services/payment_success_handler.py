@@ -55,6 +55,49 @@ def process_payment_succeeded(
         )
         return
 
+    if product == "stars":
+        try:
+            stars = int(metadata.get("stars") or 0)
+        except (TypeError, ValueError):
+            stars = 0
+        if stars <= 0:
+            logger.error("%s payment %s missing stars metadata", payment_provider, payment_id)
+            return
+        from app.services.paid_features_service import PaidFeaturesService
+
+        PaidFeaturesService(db).add_stars(
+            user_id,
+            stars,
+            tx_type="purchase",
+            provider=payment_provider,
+            provider_payment_id=payment_id,
+            idempotency_key=f"{payment_provider}:stars:{payment_id}",
+            meta={
+                "package_id": metadata.get("package_id"),
+                "amount_rub": payment_info.get("amount"),
+            },
+        )
+        AnalyticsService(db).log_event(
+            event_type="stars_purchase_success",
+            entity_type="user",
+            entity_id=user_id,
+            user_id=user_id,
+            metadata={
+                "stars": stars,
+                "package_id": metadata.get("package_id"),
+                "provider": payment_provider,
+                "amount": payment_info.get("amount"),
+            },
+        )
+        logger.info(
+            "Credited %s stars to user %s via %s payment %s",
+            stars,
+            user_id,
+            payment_provider,
+            payment_id,
+        )
+        return
+
     amount = float(payment_info.get("amount") or 0)
     if amount <= 0:
         amount = float(subscription_service.price_for_product(product, plan))

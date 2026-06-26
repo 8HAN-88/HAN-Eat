@@ -1,0 +1,15 @@
+HAN Eat на iOS — это Flutter-приложение. Нативная точка входа: Runner + CocoaPods.
+
+Если в Xcode ошибка "Cannot find ContentView" и файл HAN_EatApp.swift — вы открыли НЕ ЭТОТ проект,
+а отдельный шаблон SwiftUI (другая папка на диске). Закройте его.
+
+Открывайте ТОЛЬКО:
+  ios/Runner.xcworkspace
+из корня репозитория HAN-Eat (где лежит pubspec.yaml).
+
+В проекте Runner главный файл — AppDelegate.swift (не HAN_EatApp, не ContentView).
+
+Запуск:
+  • Двойной клик: HAN-Eat-iOS.command в корне репозитория
+  • Или: ./tool/open_ios_flutter.sh
+  • Или: flutter run

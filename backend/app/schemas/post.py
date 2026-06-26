@@ -59,6 +59,9 @@ class CreatePostRequest(BaseModel):
     scheduled_publish_at: Optional[datetime] = None
     poll: Optional[PollCreate] = None
     link: Optional[LinkCreate] = None
+    is_paid: bool = False
+    price_stars: int = 0
+    preview_mode: str = "teaser"
 
 
 class PollVoteRequest(BaseModel):
@@ -87,6 +90,9 @@ class UpdatePostRequest(BaseModel):
     origin_country_code: Optional[str] = None
     origin_country_name: Optional[str] = None
     poll: Optional[PollCreate] = None
+    is_paid: Optional[bool] = None
+    price_stars: Optional[int] = None
+    preview_mode: Optional[str] = None
 
 
 class PostAuthorResponse(BaseModel):
@@ -137,6 +143,10 @@ class PostResponse(BaseModel):
     is_promoted: bool = False
     is_pinned: bool = False
     is_exclusive: bool = False
+    is_paid: bool = False
+    price_stars: int = 0
+    preview_mode: str = "teaser"
+    purchased: bool = True
     is_liked: bool = False
     is_saved: bool = False
     published_at: Optional[datetime] = None
@@ -173,6 +183,10 @@ class PostResponse(BaseModel):
             'is_promoted': bool(getattr(obj, 'is_promoted', False)),
             'is_pinned': bool(getattr(obj, 'is_pinned', False)),
             'is_exclusive': bool(getattr(obj, 'is_exclusive', False)),
+            'is_paid': bool(getattr(obj, 'is_paid', False)),
+            'price_stars': int(getattr(obj, 'price_stars', 0) or 0),
+            'preview_mode': getattr(obj, 'preview_mode', None) or 'teaser',
+            'purchased': True,
             'is_liked': getattr(obj, 'is_liked', False),
             'is_saved': getattr(obj, 'is_saved', False),
         }

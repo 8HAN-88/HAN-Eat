@@ -1573,6 +1573,23 @@ class FeedService:
             p.id: poll_bodies.get(p.id, p.body) for p in posts
         }
         video_bodies = enrich_posts_video_media_batch(self.db, bodies_for_video)
+        from app.models.paid_features import PaidContentPurchase
+
+        paid_post_ids = [p.id for p in posts if getattr(p, "is_paid", False)]
+        purchased_post_ids = set()
+        if paid_post_ids:
+            purchased_post_ids = {
+                row[0]
+                for row in (
+                    self.db.query(PaidContentPurchase.post_id)
+                    .filter(
+                        PaidContentPurchase.user_id == user_id,
+                        PaidContentPurchase.post_id.in_(paid_post_ids),
+                        PaidContentPurchase.status == "completed",
+                    )
+                    .all()
+                )
+            }
 
         # Формируем результат
         enriched = []
@@ -1582,6 +1599,18 @@ class FeedService:
             from app.core.media_urls import normalize_post_body_media
 
             post_body = normalize_post_body_media(video_bodies.get(post.id, post.body))
+            purchased = (
+                not bool(getattr(post, "is_paid", False))
+                or post.user_id == user_id
+                or post.id in purchased_post_ids
+            )
+            if bool(getattr(post, "is_paid", False)) and not purchased:
+                media_count = len((post_body or {}).get("media") or []) if isinstance(post_body, dict) else 0
+                post_body = {
+                    "preview_locked": True,
+                    "preview_mode": getattr(post, "preview_mode", "teaser") or "teaser",
+                    "media_count": media_count,
+                }
 
             enriched.append({
                 "id": post.id,
@@ -1595,6 +1624,10 @@ class FeedService:
                 "channel_id": post.channel_id,
                 "community_id": post.channel_id,  # Для обратной совместимости
                 "is_promoted": bool(getattr(post, "is_promoted", False)),
+                "is_paid": bool(getattr(post, "is_paid", False)),
+                "price_stars": int(getattr(post, "price_stars", 0) or 0),
+                "preview_mode": getattr(post, "preview_mode", None) or "teaser",
+                "purchased": purchased,
                 "body": post_body,
                 "tags": post.tags,
                 "likes_count": likes_counts_dict.get(post.id, 0),

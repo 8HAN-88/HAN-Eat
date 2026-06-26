@@ -1,0 +1,81 @@
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
+
+
+class StarsBalanceResponse(BaseModel):
+    balance: int
+    creator_available_stars: int = 0
+    creator_pending_stars: int = 0
+
+
+class StarPackage(BaseModel):
+    id: str
+    stars: int
+    price_rub: int
+    title: str
+
+
+class StarPackagesResponse(BaseModel):
+    packages: List[StarPackage]
+
+
+class PurchasePostRequest(BaseModel):
+    idempotency_key: Optional[str] = None
+
+
+class PurchasePostResponse(BaseModel):
+    post_id: int
+    purchased: bool
+    amount_stars: int
+    balance: int
+
+
+class DonateStarsRequest(BaseModel):
+    recipient_id: int
+    amount_stars: int = Field(gt=0, le=100000)
+    message: Optional[str] = None
+
+
+class DonateStarsResponse(BaseModel):
+    transaction_id: int
+    balance: int
+
+
+class SubscribeChannelRequest(BaseModel):
+    months: int = Field(default=1, ge=1, le=12)
+
+
+class SubscribeChannelResponse(BaseModel):
+    channel_id: int
+    expires_at: datetime
+    amount_stars: int
+    balance: int
+
+
+class BoostPostRequest(BaseModel):
+    amount_stars: int = Field(gt=0, le=100000)
+    duration_days: int = Field(default=7, ge=1, le=30)
+
+
+class BoostPostResponse(BaseModel):
+    boost_id: int
+    post_id: int
+    expires_at: Optional[datetime]
+    balance: int
+
+
+class StarTransactionResponse(BaseModel):
+    id: int
+    amount: int
+    type: str
+    status: str
+    reference_type: Optional[str] = None
+    reference_id: Optional[int] = None
+    meta: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

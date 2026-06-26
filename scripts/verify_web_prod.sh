@@ -80,6 +80,19 @@ for path in privacy terms; do
 done
 
 echo ""
+echo "-- version.json --"
+if curl -sf --max-time 10 "$WEB_ORIGIN/version.json" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+assert d.get('build_number'), d
+print('build', d['build_number'])
+" 2>/dev/null; then
+  check "version.json"
+else
+  fail_msg "version.json"
+fi
+
+echo ""
 echo "-- API reachability --"
 if curl -sf --max-time 10 "$API_BASE/health" | grep -q '"status"'; then
   check "$API_BASE/health"

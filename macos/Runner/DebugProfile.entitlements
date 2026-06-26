@@ -8,5 +8,13 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Исходящие запросы к API (localhost / интернет); без этого вход и фид падают с ClientException -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Чтение файлов, выбранных в диалоге / фото (image_picker); без этого загрузка падает в sandbox -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
 </dict>
 </plist>

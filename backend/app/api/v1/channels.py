@@ -67,6 +67,22 @@ def _require_can_view_posts(
     db: Session, channel: Channel, user: Optional[User]
 ) -> ChannelMember:
     member = get_membership(db, channel.id, user.id) if user else None
+    from app.services.paid_features_service import PaidFeaturesService
+
+    if not PaidFeaturesService(db).has_paid_channel_access(user.id if user else None, channel):
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "PAID_CHANNEL_REQUIRED",
+                "message": "Для доступа к каналу нужна платная подписка",
+                "price_stars": int(getattr(channel, "monthly_price_stars", 0) or 0),
+            },
+        )
     if not can_view_channel_posts(channel, user, member):
         if not user:
             raise HTTPException(
@@ -132,9 +148,16 @@ def _build_channel_response(
     current_user: Optional[User],
 ) -> ChannelResponse:
     from app.services.channel_presentation_service import channel_presentation_fields
+    from app.services.paid_features_service import PaidFeaturesService
 
     presentation = channel_presentation_fields(db, channel)
-    item = ChannelResponse.model_validate(channel).model_copy(update=presentation)
+    paid_access = PaidFeaturesService(db).has_paid_channel_access(
+        current_user.id if current_user else None,
+        channel,
+    )
+    item = ChannelResponse.model_validate(channel).model_copy(
+        update={**presentation, "paid_access": paid_access}
+    )
     if not current_user:
         return item
     member = get_membership(db, channel.id, current_user.id)
@@ -167,6 +190,7 @@ def _build_channel_response(
             "is_favorite": is_favorite,
             "inbox_archived": inbox_archived,
             "show_in_feed": show_in_feed,
+            "paid_access": paid_access,
             **presentation,
         }
     )
@@ -238,6 +262,8 @@ async def create_channel(
             allow_reposts=True,
             role_permissions=default_role_permissions(),
             auto_publish_reels=request.auto_publish_reels,
+            is_paid=bool(request.is_paid),
+            monthly_price_stars=max(0, int(request.monthly_price_stars or 0)),
         )
         
         db.add(channel)
@@ -357,6 +383,10 @@ async def update_channel(
         channel.allow_reposts = request.allow_reposts
     if request.auto_publish_reels is not None:
         channel.auto_publish_reels = request.auto_publish_reels
+    if request.is_paid is not None:
+        channel.is_paid = bool(request.is_paid)
+    if request.monthly_price_stars is not None:
+        channel.monthly_price_stars = max(0, int(request.monthly_price_stars or 0))
     if request.role_permissions is not None:
         if not is_channel_owner(channel, current_user):
             raise HTTPException(
@@ -516,7 +546,13 @@ async def get_channel(
         get_membership(db, channel_id, current_user.id) if current_user else None
     )
     m_status = membership_status_for_user(member, channel, current_user)
-    can_posts = can_view_channel_posts(channel, current_user, member)
+    from app.services.paid_features_service import PaidFeaturesService
+
+    paid_access = PaidFeaturesService(db).has_paid_channel_access(
+        current_user.id if current_user else None,
+        channel,
+    )
+    can_posts = can_view_channel_posts(channel, current_user, member) and paid_access
 
     is_member = m_status == MEMBER_STATUS_ACTIVE
     is_owner = is_channel_owner(channel, current_user)
@@ -579,6 +615,9 @@ async def get_channel(
         is_moderator=is_moderator,
         members_count=channel.members_count if channel.members_count is not None else 0,
         posts_count=channel.posts_count if channel.posts_count is not None else 0,
+        is_paid=bool(getattr(channel, "is_paid", False)),
+        monthly_price_stars=int(getattr(channel, "monthly_price_stars", 0) or 0),
+        paid_access=paid_access,
         created_at=channel.created_at,
         admin_user={
             "id": admin.id,

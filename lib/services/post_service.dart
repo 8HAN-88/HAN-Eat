@@ -21,6 +21,9 @@ class PostService {
     List<String>? publishTo,
     String? linkUrl,
     String? linkPreview,
+    bool isPaid = false,
+    int priceStars = 0,
+    String previewMode = 'teaser',
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -43,6 +46,9 @@ class PostService {
         if (channelId != null) 'channel_id': channelId,
         if (media != null) 'media': media,
         if (publishTo != null) 'publish_to': publishTo,
+        'is_paid': isPaid,
+        'price_stars': priceStars,
+        'preview_mode': previewMode,
         if (type == 'link' && linkUrl != null)
           'link': {
             'url': linkUrl,
@@ -254,6 +260,9 @@ class PostService {
     String? visibility,
     int? channelId,
     String? originCountryCode,
+    bool isPaid = false,
+    int priceStars = 0,
+    String previewMode = 'teaser',
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -281,6 +290,9 @@ class PostService {
       if (media != null && media.isNotEmpty) 'media': media,
       if (visibility != null) 'visibility': visibility,
       if (channelId != null) 'channel_id': channelId,
+      'is_paid': isPaid,
+      'price_stars': priceStars,
+      'preview_mode': previewMode,
       if (originCountryCode != null && originCountryCode.isNotEmpty)
         'origin_country_code': originCountryCode,
     };

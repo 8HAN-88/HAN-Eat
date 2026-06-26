@@ -42,6 +42,20 @@ python app_simple.py
 flutter run
 ```
 
+### iOS и Xcode — если ошибка `Cannot find 'ContentView'`
+
+Это **не** этот проект: вы открыли **другой** Xcode-проект (шаблон SwiftUI с `HAN_EatApp.swift`). У Flutter-приложения HAN Eat вход — **`ios/Runner`**, не `ContentView`.
+
+**Сделайте так:**
+
+1. Полностью **закройте** текущее окно Xcode с ошибкой (`HAN_EatApp` / SwiftUI).
+2. Открывайте **только** файл  
+   **` ios/Runner.xcworkspace `**  
+   внутри этого репозитория (рядом с `pubspec.yaml`), а не отдельную папку «HAN Eat» из другого места.
+3. В навигаторе слева должен быть проект **Runner**, а главный Swift-файл — **`AppDelegate.swift`**, не `HAN_EatApp.swift`.
+4. Либо в терминале из корня репозитория: `./tool/open_ios_flutter.sh` — скрипт сам подготовит Pods и откроет нужный workspace.
+5. На macOS можно один раз сделать двойной клик по **`HAN-Eat-iOS.command`** в корне репозитория — откроется тот же правильный workspace.
+
 ## 📱 Функции
 
 - 🔍 Поиск рецептов по ингредиентам

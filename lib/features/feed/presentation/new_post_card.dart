@@ -32,6 +32,7 @@ import '../../../services/api_service.dart';
 import '../../../services/post_service.dart';
 import '../../../services/feed_cache_service.dart';
 import '../../../services/feed_analytics_service.dart';
+import '../../../services/paid_features_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
@@ -181,6 +182,27 @@ class _NewPostCardState extends State<NewPostCard> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _purchasePaidContent() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await PaidFeaturesService.purchaseContent(_displayPost.id);
+      await _reloadDisplayPost();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Контент открыт')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _onPollUpdated(PollData poll) {
@@ -476,6 +498,72 @@ class _NewPostCardState extends State<NewPostCard> {
       }
     } else if (value == 'delete') {
       await _confirmAndDeletePost();
+    } else if (value == 'boost') {
+      await _showBoostDialog();
+    }
+  }
+
+  Future<void> _showBoostDialog() async {
+    final amountController = TextEditingController(text: '100');
+    final daysController = TextEditingController(text: '7');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Бустить пост'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Бюджет в звёздах',
+                prefixIcon: Icon(Icons.stars_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: daysController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Срок, дней',
+                prefixIcon: Icon(Icons.schedule_rounded),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Запустить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final amount = int.tryParse(amountController.text.trim()) ?? 0;
+    final days = int.tryParse(daysController.text.trim()) ?? 7;
+    if (amount <= 0) return;
+    try {
+      await PaidFeaturesService.boostPost(
+        postId: _displayPost.id,
+        amountStars: amount,
+        durationDays: days,
+      );
+      await _reloadDisplayPost();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Буст запущен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     }
   }
 
@@ -530,6 +618,16 @@ class _NewPostCardState extends State<NewPostCard> {
   List<PopupMenuEntry<String>> _overflowMenuEntries() {
     return [
       if (_isAuthor && widget.post.channelId == null) ...[
+        const PopupMenuItem(
+          value: 'boost',
+          child: Row(
+            children: [
+              Icon(Icons.rocket_launch_outlined, size: 20),
+              SizedBox(width: 8),
+              Text('Бустить за звёзды'),
+            ],
+          ),
+        ),
         const PopupMenuItem(
           value: 'edit',
           child: Row(
@@ -1187,6 +1285,8 @@ class _NewPostCardState extends State<NewPostCard> {
             ),
           if (isFeedChannelRepostWrapper)
             _buildFeedChannelRepostBody(post)
+          else if (post.isPaid && !post.purchased)
+            _buildPaidContentPaywall(post)
           else ...[
             _buildMedia(
               post,
@@ -1409,6 +1509,90 @@ class _NewPostCardState extends State<NewPostCard> {
   }
 
   /// Построить виджет для отображения медиа поста
+  Widget _buildPaidContentPaywall(PostModel post) {
+    final scheme = Theme.of(context).colorScheme;
+    final mediaCount = post.body?['media_count'] as int? ?? 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              scheme.primaryContainer.withValues(alpha: 0.72),
+              scheme.secondaryContainer.withValues(alpha: 0.52),
+              scheme.surfaceContainerHighest.withValues(alpha: 0.78),
+            ],
+          ),
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.18)),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: 0.10),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: scheme.surface.withValues(alpha: 0.72),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.lock_rounded, color: scheme.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Эксклюзивный контент',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                Text(
+                  '${post.priceStars} ★',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              mediaCount > 0
+                  ? 'Внутри $mediaCount медиа. Откройте пост за звёзды и смотрите без ограничений.'
+                  : 'Откройте пост за звёзды, чтобы увидеть полный контент.',
+              style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _isLoading ? null : _purchasePaidContent,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.stars_rounded),
+              label: Text(_isLoading ? 'Открываем...' : 'Купить за ${post.priceStars} ★'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMedia(
     PostModel post, {
     FeedVideoAuthorInfo? feedVideoAuthor,

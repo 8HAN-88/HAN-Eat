@@ -28,5 +28,18 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Не открывать второй процесс того же приложения (иначе Hive/Firestore LOCK → падение, Menu не грузится) -->
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Приложению нужен доступ к фото, чтобы добавлять изображения в посты, рецепты и профиль.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Приложению нужен доступ к камере, чтобы снимать блюда и публиковать их.</string>
+	<!-- Иначе HTTP к 127.0.0.1 / локальной сети для превью может блокироваться -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

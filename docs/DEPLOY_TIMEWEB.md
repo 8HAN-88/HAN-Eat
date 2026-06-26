@@ -57,7 +57,87 @@ scp -i ~/.ssh/haneat_timeweb firebase-adminsdk.json root@IP:/etc/haneat/firebase
 
 ## Обновление
 
-### С Mac (рекомендуется — заливает локальный код, в т.ч. незакоммиченный)
+### Без Mac — только браузер Timeweb (рекомендуется, если SSH с Mac не работает)
+
+**Где:** [Timeweb Cloud](https://timeweb.cloud) → сервер **haneat-api-01** → вкладка **Консоль**  
+**Логин:** `root` + пароль из вкладки **Доступ** на карточке сервера.
+
+#### Шаг 0 — код должен попасть на сервер
+
+Выберите один способ:
+
+| Способ | Когда использовать |
+|--------|-------------------|
+| **A. git pull** | Изменения уже **запушены** в GitHub `8HAN-88/HAN-Eat` |
+| **B. архив backend** | Код ещё **не на GitHub** или нужно залить локальные правки без push |
+
+**A — код на GitHub** (push можно сделать с Mac/Windows — это GitHub, не сервер):
+
+```bash
+git add backend/
+git commit -m "Backend: chat folders and filters"
+git push origin main
+```
+
+**B — архив без push:** на любом ПК, где есть репозиторий:
+
+```bash
+bash scripts/pack_backend_for_timeweb.sh
+# создаст /tmp/haneat-backend.tgz
+```
+
+Загрузите `haneat-backend.tgz` на сервер через **SFTP / файловый менеджер Timeweb** в `/root/`.
+
+#### Шаг 1 — деплой (вставить в консоль Timeweb)
+
+**Если код на GitHub (способ A):**
+
+```bash
+cd /root/HAN-Eat && git pull origin main && bash scripts/deploy_on_server_console.sh
+```
+
+**Если загрузили архив (способ B):**
+
+```bash
+cd /root/HAN-Eat && tar xzf /root/haneat-backend.tgz && bash scripts/deploy_on_server_console.sh
+```
+
+Скрипт сам: `pip install`, `alembic upgrade head`, перезапуск `haneat-api` и video-worker, проверка `/health`.
+
+#### Шаг 2 — проверка в той же консоли
+
+```bash
+curl -sf https://api.haneat.app/health && echo OK
+curl -s -o /dev/null -w 'folders HTTP %{http_code}\n' \
+  -H 'Authorization: Bearer ВАШ_ТОКЕН' \
+  https://api.haneat.app/api/v1/chats/folders
+```
+
+Ожидаем: `health` → JSON с `"status":"ok"`, folders → **200** (не 404).
+
+Проверка миграций:
+
+```bash
+cd /root/HAN-Eat/backend && source venv/bin/activate && alembic current
+# должно быть не ниже 054_chat_folder_filters
+```
+
+#### Если что-то пошло не так
+
+```bash
+journalctl -u haneat-api -n 80 --no-pager
+systemctl status haneat-api
+```
+
+Починить SSH (чтобы потом можно было с Mac): в консоли Timeweb:
+
+```bash
+bash /root/HAN-Eat/scripts/fix_ssh_timeweb_console.sh
+```
+
+---
+
+### С Mac (если SSH работает)
 
 ```bash
 bash scripts/update_production_timeweb.sh
@@ -65,7 +145,7 @@ bash scripts/update_production_timeweb.sh
 
 Скрипт: `rsync` backend → сервер, `alembic upgrade head`, `systemctl restart haneat-api`, проверка `https://api.haneat.app`.
 
-### На сервере (если код уже в GitHub)
+### На сервере вручную (без deploy-скрипта)
 
 ```bash
 cd /root/HAN-Eat && git pull
@@ -75,7 +155,7 @@ python3 scripts/create_all_test_accounts.py
 systemctl restart haneat-api
 ```
 
-Миграции для приватных каналов и видимости рецептов: `034_recipe_visibility_v1`, `035_channel_member_status_v1`.
+Актуальные миграции чатов: `053_chat_folders`, `054_chat_folder_filters`.
 
 ### Проверка, что новый API на проде
 

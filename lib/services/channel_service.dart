@@ -30,6 +30,8 @@ class ChannelService {
     String? avatarUrl,
     bool isPublic = true,
     String? category,
+    bool isPaid = false,
+    int monthlyPriceStars = 0,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
@@ -51,6 +53,8 @@ class ChannelService {
         if (avatarUrl != null) 'avatar_url': avatarUrl,
         'is_public': isPublic,
         if (category != null && category.isNotEmpty) 'category': category,
+        'is_paid': isPaid,
+        'monthly_price_stars': monthlyPriceStars,
       }),
     );
 
@@ -1241,6 +1245,9 @@ class Channel {
   final String? avatarUrl;
   final int adminUserId;
   final bool isPublic;
+  final bool isPaid;
+  final int monthlyPriceStars;
+  final bool paidAccess;
   final bool hasCreatorBadge;
   final String? accentColor;
   final String? category;
@@ -1273,6 +1280,9 @@ class Channel {
     this.avatarUrl,
     required this.adminUserId,
     required this.isPublic,
+    this.isPaid = false,
+    this.monthlyPriceStars = 0,
+    this.paidAccess = true,
     this.hasCreatorBadge = false,
     this.accentColor,
     this.category,
@@ -1297,6 +1307,9 @@ class Channel {
       avatarUrl: _resolveChannelMediaUrl(json['avatar_url'] as String?),
       adminUserId: json['admin_user_id'] as int,
       isPublic: json['is_public'] as bool,
+      isPaid: json['is_paid'] as bool? ?? false,
+      monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+      paidAccess: json['paid_access'] as bool? ?? true,
       hasCreatorBadge: json['has_creator_badge'] as bool? ?? false,
       accentColor: json['accent_color'] as String?,
       category: json['category'] as String?,
@@ -1344,6 +1357,9 @@ class ChannelDetail extends Channel {
     super.avatarUrl,
     required super.adminUserId,
     required super.isPublic,
+    super.isPaid,
+    super.monthlyPriceStars,
+    super.paidAccess,
     super.hasCreatorBadge,
     super.accentColor,
     super.category,
@@ -1382,6 +1398,9 @@ class ChannelDetail extends Channel {
       avatarUrl: _resolveChannelMediaUrl(json['avatar_url'] as String?),
       adminUserId: json['admin_user_id'] as int,
       isPublic: json['is_public'] as bool,
+      isPaid: json['is_paid'] as bool? ?? false,
+      monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+      paidAccess: json['paid_access'] as bool? ?? true,
       hasCreatorBadge: json['has_creator_badge'] as bool? ?? false,
       accentColor: json['accent_color'] as String?,
       category: json['category'] as String?,
@@ -1440,6 +1459,9 @@ class ChannelDetail extends Channel {
       'avatar_url': avatarUrl,
       'admin_user_id': adminUserId,
       'is_public': isPublic,
+      'is_paid': isPaid,
+      'monthly_price_stars': monthlyPriceStars,
+      'paid_access': paidAccess,
       'category': category,
       'members_count': membersCount,
       'posts_count': postsCount,

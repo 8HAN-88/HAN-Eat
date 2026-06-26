@@ -165,6 +165,12 @@ class CreatePaymentRequest(BaseModel):
     success_url: Optional[str] = None
 
 
+class CreateStarsCheckoutRequest(BaseModel):
+    package_id: str
+    success_url: Optional[str] = None
+    cancel_url: Optional[str] = None
+
+
 class RefundRequestBody(BaseModel):
     subscription_id: int
     reason: Optional[str] = None
@@ -191,6 +197,134 @@ class CheckoutSessionResponse(BaseModel):
     provider: str  # "stripe" | "tbank" | "yookassa" | "sbp"
     currency: str = "USD"
     payment_method: Optional[str] = None
+
+
+STAR_PACKAGES = {
+    "stars_100": {"stars": 100, "price_rub": 99, "title": "100 звёзд"},
+    "stars_500": {"stars": 500, "price_rub": 449, "title": "500 звёзд"},
+    "stars_1200": {"stars": 1200, "price_rub": 990, "title": "1200 звёзд"},
+}
+
+
+@router.post("/stars/checkout", response_model=CheckoutSessionResponse)
+async def create_stars_checkout(
+    request: CreateStarsCheckoutRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.legal_consent_service import consent_required
+
+    if consent_required(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "LEGAL_CONSENT_REQUIRED",
+                "message": "Примите документы перед оплатой",
+            },
+        )
+    package = STAR_PACKAGES.get(request.package_id)
+    if not package:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown stars package")
+
+    country_code = current_user.country_code or CountryService.get_country_from_request(http_request)
+    if not current_user.country_code:
+        current_user.country_code = country_code
+        db.commit()
+    provider = CountryService.get_payment_provider_for_country(country_code)
+    if provider not in ("tbank", "yookassa"):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "PAYMENTS_UNAVAILABLE",
+                "message": "Покупка звёзд временно доступна только через RU-платежи",
+            },
+        )
+
+    amount = float(package["price_rub"])
+    stars = int(package["stars"])
+    description = f"H.A.N. Stars: {stars} звёзд"
+    metadata_extra = {
+        "package_id": request.package_id,
+        "stars": str(stars),
+    }
+    success_url = request.success_url or f"{settings.FRONTEND_URL}/paid/success"
+    fail_url = request.cancel_url or f"{settings.FRONTEND_URL}/paid/cancel"
+
+    try:
+        if provider == "tbank":
+            tbank_service = get_tbank_service()
+            if not tbank_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Payment service (T-Bank) is not available",
+                )
+            result = tbank_service.create_payment(
+                user_id=current_user.id,
+                amount=amount,
+                plan=request.package_id,
+                description=description,
+                success_url=success_url,
+                fail_url=fail_url,
+                product="stars",
+                metadata_extra=metadata_extra,
+                recurrent=False,
+            )
+            checkout_provider = "sbp"
+        else:
+            yookassa_service = get_yookassa_service()
+            if not yookassa_service.enabled:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Payment service (YooKassa) is not available",
+                )
+            result = yookassa_service.create_payment(
+                user_id=current_user.id,
+                user_email=current_user.email,
+                amount=amount,
+                plan=request.package_id,
+                description=description,
+                return_url=success_url,
+                product="stars",
+                receipt_description=description[:128],
+                metadata_extra=metadata_extra,
+                save_payment_method=False,
+            )
+            checkout_provider = (
+                "sbp"
+                if (settings.YOOKASSA_PAYMENT_METHOD or "sbp").strip().lower() == "sbp"
+                else "yookassa"
+            )
+
+        AnalyticsService(db).log_event(
+            event_type="stars_checkout_start",
+            entity_type="user",
+            entity_id=current_user.id,
+            user_id=current_user.id,
+            metadata={
+                "package_id": request.package_id,
+                "stars": stars,
+                "amount": amount,
+                "provider": provider,
+            },
+        )
+        db.commit()
+        return CheckoutSessionResponse(
+            payment_id=result["payment_id"],
+            url=result["confirmation_url"],
+            customer_email=current_user.email,
+            provider=checkout_provider,
+            currency="RUB",
+            payment_method="sbp" if checkout_provider == "sbp" else settings.YOOKASSA_PAYMENT_METHOD,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to create stars checkout: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create stars checkout",
+        )
 
 
 @router.post("/checkout", response_model=CheckoutSessionResponse)

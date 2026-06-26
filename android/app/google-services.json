@@ -7,12 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:834367201092:android:f13234698206e38acf0111",
+        "mobilesdk_app_id": "1:834367201092:android:ee1be768d2fc9540cf0111",
         "android_client_info": {
-          "package_name": "com.example.han_eat"
+          "package_name": "com.haneat.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "834367201092-cm08nk8p5u5vkhffbofd600trki4g673.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.haneat.app",
+            "certificate_hash": "6deaf732b1bf5e45898008ab2ec16e8d849757e8"
+          }
+        },
+        {
+          "client_id": "834367201092-hq55g0prmcrssdi4m7pgb5a9qvns5vi4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC99fIetu5nEz71-iLgheuA5U0aJJRO1Ww"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "834367201092-hq55g0prmcrssdi4m7pgb5a9qvns5vi4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "834367201092-7lepjspraf1e2ucf1hkiu6vh3ht9d89h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.haneat.app"
+              }
+            }
+          ]
         }
       }
     }

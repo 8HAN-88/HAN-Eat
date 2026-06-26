@@ -1,0 +1,68 @@
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|585|7|24|The declaration '_ChannelDescriptionBlock' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_FIELD|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|695|7|7|The value of the field '_offset' isn't used.
+WARNING|STATIC_WARNING|UNUSED_FIELD|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_management_screen.dart|52|10|14|The value of the field '_selectedCover' isn't used.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_management_screen.dart|177|16|10|The declaration '_pickCover' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_post_card.dart|639|12|10|The declaration 'onMediaTap' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_FIELD|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_posts_screen.dart|178|7|7|The value of the field '_offset' isn't used.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/channels/presentation/create_channel_post_screen.dart|965|10|18|The declaration '_buildPhotoSection' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/channels/presentation/create_channel_post_screen.dart|1192|10|18|The declaration '_buildVideoSection' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/comments/presentation/comments_screen.dart|142|10|11|The declaration '_formatDate' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/community/presentation/community_screen.dart|275|10|24|The declaration '_buildRecommendationsTab' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/community/presentation/reels_feed_screen.dart|705|16|18|The declaration '_isFollowingStream' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/feed/presentation/new_post_card.dart|851|12|10|The declaration 'onMediaTap' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/meal_plan_screen.dart|382|11|18|The declaration '_getNutritionValue' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/meal_plan_screen.dart|396|10|14|The declaration '_buildStatItem' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/menu/presentation/menu_screen.dart|257|16|21|The declaration '_runSearchFromHistory' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/menu/presentation/menu_screen.dart|1167|7|11|The declaration '_RecipeCard' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_FIELD|/Users/han/HAN-Eat/lib/features/posts/presentation/create_post_screen.dart|35|10|15|The value of the field '_uploadProgress' isn't used.
+WARNING|STATIC_WARNING|UNUSED_FIELD|/Users/han/HAN-Eat/lib/features/posts/presentation/create_post_screen.dart|36|8|12|The value of the field '_isUploading' isn't used.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/features/settings/presentation/support_security_screen.dart|6|16|12|The declaration '_launchEmail' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/screens/detail_page.dart|61|12|14|The declaration '_canSaveRecipe' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/services/auth_service.dart|22|8|17|The declaration '_updateCachedUser' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/services/feed_cache_service.dart|154|24|12|The declaration '_postToCache' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/services/feed_cache_service.dart|187|8|14|The declaration '_postFromCache' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/services/feed_cache_service.dart|193|12|14|The declaration '_parsePostType' isn't referenced.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/services/feed_cache_service.dart|197|14|16|The declaration '_parsePostStatus' isn't referenced.
+WARNING|STATIC_WARNING|SDK_VERSION_SINCE|/Users/han/HAN-Eat/lib/services/gpt_analyze_service.dart|126|10|11|This API is available since SDK 3.0.0, but constraints '>=2.18.0 <4.0.0' don't guarantee it.
+WARNING|STATIC_WARNING|UNUSED_ELEMENT|/Users/han/HAN-Eat/lib/widgets/modern_recipe_card.dart|469|8|13|The declaration '_hasNutrition' isn't referenced.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|1291|58|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|1322|60|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|1363|62|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|1369|54|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_detail_screen.dart|1373|62|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_post_card.dart|231|7|16|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_post_card.dart|504|54|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_settings_bottom_sheet.dart|176|42|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channel_settings_bottom_sheet.dart|182|42|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/channels/presentation/channels_main_screen.dart|121|15|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/comments/presentation/comments_screen.dart|274|58|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/comments_page.dart|124|44|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|50|46|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|59|46|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|70|46|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|79|46|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|139|50|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/moderator_page.dart|152|50|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/community/presentation/enhanced_comments_page.dart|162|46|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/feed/home_page.dart|109|40|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/feed/presentation/feed_screen.dart|280|26|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/feed/presentation/new_post_card.dart|219|7|16|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/feed/presentation/new_post_card.dart|599|46|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/feed/presentation/new_post_card.dart|732|54|7|Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check.
+INFO|HINT|DEPRECATED_MEMBER_USE|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/add_to_meal_plan_screen.dart|188|23|10|'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre.
+INFO|HINT|DEPRECATED_MEMBER_USE|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/add_to_meal_plan_screen.dart|189|23|9|'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre.
+INFO|HINT|DEPRECATED_MEMBER_USE|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/add_to_meal_plan_screen.dart|346|15|10|'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre.
+INFO|HINT|DEPRECATED_MEMBER_USE|/Users/han/HAN-Eat/lib/features/meal_plan/presentation/add_to_meal_plan_screen.dart|347|15|9|'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/profile/profile_page.dart|49|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/profile/profile_page.dart|52|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/profile/profile_page.dart|67|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/profile/profile_page.dart|70|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/profile/profile_page.dart|205|30|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/reels/presentation/reels_feed_screen.dart|413|32|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/reels/presentation/reels_feed_screen.dart|417|32|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/reels/presentation/reels_fullscreen_screen.dart|306|32|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/features/reels/presentation/reels_fullscreen_screen.dart|310|32|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/screens/detail_page.dart|158|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/screens/detail_page.dart|209|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/screens/detail_page.dart|223|28|7|Don't use 'BuildContext's across async gaps.
+INFO|LINT|USE_BUILD_CONTEXT_SYNCHRONOUSLY|/Users/han/HAN-Eat/lib/screens/detail_page.dart|227|28|7|Don't use 'BuildContext's across async gaps.

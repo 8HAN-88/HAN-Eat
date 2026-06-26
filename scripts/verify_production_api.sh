@@ -27,5 +27,16 @@ for i in (d.get('issues') or []):
 " 2>/dev/null || echo "  (parse skip)"
 
 echo ""
+echo "-- realtime SSE --"
+rt_code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+  "$BASE/api/v1/realtime/stream")"
+if [[ "$rt_code" == "401" || "$rt_code" == "403" ]]; then
+  echo "  OK realtime/stream requires auth ($rt_code)"
+else
+  echo "  FAIL realtime/stream expected 401/403, got $rt_code"
+  exit 1
+fi
+
+echo ""
 echo "-- smoke_launch --"
 "$ROOT/scripts/smoke_launch.sh" "$BASE"

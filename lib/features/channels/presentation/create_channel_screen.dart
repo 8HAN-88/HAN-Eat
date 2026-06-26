@@ -29,8 +29,10 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
   final _descriptionController = TextEditingController();
   late final TextEditingController _categoryController =
       TextEditingController();
+  final _monthlyPriceStarsController = TextEditingController(text: '100');
   bool _isLoading = false;
   bool _isPublic = true;
+  bool _isPaid = false;
 
   // Медиа
   final ImagePicker _imagePicker = ImagePicker();
@@ -61,6 +63,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
     _slugController.dispose();
     _descriptionController.dispose();
     _categoryController.dispose();
+    _monthlyPriceStarsController.dispose();
     super.dispose();
   }
 
@@ -161,6 +164,10 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
         category: _categoryController.text.trim().isEmpty
             ? null
             : _categoryController.text.trim(),
+        isPaid: _isPaid,
+        monthlyPriceStars: _isPaid
+            ? (int.tryParse(_monthlyPriceStarsController.text.trim()) ?? 0)
+            : 0,
       );
 
       if (mounted) {
@@ -356,6 +363,45 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     onChanged: (value) {
                       setState(() => _isPublic = value);
                     },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Платный канал'),
+                          subtitle: const Text(
+                            'Доступ к постам по месячной подписке за звёзды',
+                          ),
+                          value: _isPaid,
+                          onChanged: (value) => setState(() => _isPaid = value),
+                        ),
+                        if (_isPaid) ...[
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _monthlyPriceStarsController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Цена в звёздах в месяц',
+                              prefixIcon: Icon(Icons.stars_rounded),
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (value) {
+                              if (!_isPaid) return null;
+                              final price = int.tryParse((value ?? '').trim());
+                              if (price == null || price <= 0) {
+                                return 'Укажите цену больше 0';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
                 if (!_isPublic) ...[

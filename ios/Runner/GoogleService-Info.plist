@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>834367201092-7lepjspraf1e2ucf1hkiu6vh3ht9d89h.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.834367201092-7lepjspraf1e2ucf1hkiu6vh3ht9d89h</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>834367201092-3r78vsnqtpv9pt429o96f0cnmp4orq6m.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyA2YEEwYD36C_34Bq6Cb1AnDHuCSkV2tIg</string>
+	<key>GCM_SENDER_ID</key>
+	<string>834367201092</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.haneat.app</string>
+	<key>PROJECT_ID</key>
+	<string>han-eat</string>
+	<key>STORAGE_BUCKET</key>
+	<string>han-eat.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:834367201092:ios:297f6b4e449dc345cf0111</string>
+</dict>
+</plist>

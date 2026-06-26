@@ -27,9 +27,31 @@ def _apply_viewer_post_flags(
     """Персональные is_liked / is_saved для текущего пользователя."""
     from app.models.like import Like
     from app.models.saved_post import SavedPost
+    from app.services.paid_features_service import PaidFeaturesService
 
+    post = db.query(Post).filter(Post.id == post_id).first()
+    paid_service = PaidFeaturesService(db)
+    purchased = paid_service.has_purchased_post(
+        current_user.id if current_user else None,
+        post,
+    ) if post else True
+    body = response.body
+    if post and getattr(post, "is_paid", False) and not purchased:
+        media_count = len((body or {}).get("media") or []) if isinstance(body, dict) else 0
+        body = {
+            "preview_locked": True,
+            "preview_mode": getattr(post, "preview_mode", "teaser") or "teaser",
+            "media_count": media_count,
+        }
     if current_user is None:
-        return response.model_copy(update={"is_liked": False, "is_saved": False})
+        return response.model_copy(
+            update={
+                "is_liked": False,
+                "is_saved": False,
+                "purchased": purchased,
+                "body": body,
+            }
+        )
     liked = (
         db.query(Like)
         .filter(Like.user_id == current_user.id, Like.post_id == post_id)
@@ -42,7 +64,14 @@ def _apply_viewer_post_flags(
         .first()
         is not None
     )
-    return response.model_copy(update={"is_liked": liked, "is_saved": saved})
+    return response.model_copy(
+        update={
+            "is_liked": liked,
+            "is_saved": saved,
+            "purchased": purchased,
+            "body": body,
+        }
+    )
 
 
 @router.post("/link/preview", response_model=dict)
@@ -237,6 +266,9 @@ async def create_post(
         visibility=request.visibility or "public",
         tags=request.tags or [],
         channel_id=request.channel_id if channel_obj is not None else None,
+        is_paid=bool(request.is_paid),
+        price_stars=max(0, int(request.price_stars or 0)),
+        preview_mode=request.preview_mode or "teaser",
     )
 
     if request.type == "recipe":
@@ -510,6 +542,12 @@ async def update_post(
         post.description = request.description
     if request.tags is not None:
         post.tags = request.tags
+    if request.is_paid is not None:
+        post.is_paid = bool(request.is_paid)
+    if request.price_stars is not None:
+        post.price_stars = max(0, int(request.price_stars or 0))
+    if request.preview_mode is not None:
+        post.preview_mode = request.preview_mode or "teaser"
 
     if post.type == "recipe":
         body = post.body or {}
