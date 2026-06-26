@@ -119,7 +119,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
                 children: [
                   Expanded(
                     child: longLabelTabBar(
-                      context: context,
                       controller: _tabController,
                       tabAlignment: TabAlignment.start,
                       labelPadding: const EdgeInsets.symmetric(horizontal: 8),
