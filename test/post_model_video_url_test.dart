@@ -3,7 +3,7 @@ import 'package:han_eat/models/post_model.dart';
 import 'package:han_eat/models/video_quality_preference.dart';
 
 void main() {
-  test('videoUrl uses auto fast start (480p without HLS)', () {
+  test('videoUrl uses auto fast start (720p without HLS)', () {
     final post = PostModel(
       id: 1,
       type: 'reel',
@@ -29,7 +29,7 @@ void main() {
 
     expect(
       post.videoUrl,
-      'https://api.haneat.app/uploads/original_480p.mp4',
+      'https://api.haneat.app/uploads/original_720p.mp4',
     );
     expect(
       post.videoUrlFor(VideoQualityPreference.hd720),
@@ -37,11 +37,11 @@ void main() {
     );
     expect(
       post.videoUrlFor(VideoQualityPreference.max),
-      'https://api.haneat.app/uploads/original_720p.mp4',
+      'https://api.haneat.app/uploads/original.mp4',
     );
     expect(
       post.videoUrlFor(VideoQualityPreference.hd1080),
-      'https://api.haneat.app/uploads/original_720p.mp4',
+      'https://api.haneat.app/uploads/original.mp4',
     );
   });
 }
