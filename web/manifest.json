@@ -2,7 +2,7 @@
     "id": "https://haneat.app/",
     "name": "HAN Eat",
     "short_name": "HAN Eat",
-    "start_url": "/?ui=20260626",
+    "start_url": "/?ui=20260626-final",
     "scope": "/",
     "display": "standalone",
     "display_override": ["standalone", "minimal-ui"],
