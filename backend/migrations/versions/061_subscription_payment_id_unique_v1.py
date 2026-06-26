@@ -12,13 +12,40 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        "uq_subscriptions_provider_payment_id",
-        "subscriptions",
-        ["payment_provider", "payment_provider_subscription_id"],
-        unique=True,
+    op.execute(
+        """
+        UPDATE subscriptions
+        SET payment_provider_subscription_id = NULL
+        WHERE payment_provider_subscription_id = ''
+        """
+    )
+    op.execute(
+        """
+        WITH ranked AS (
+            SELECT
+                id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY payment_provider, payment_provider_subscription_id
+                    ORDER BY created_at DESC NULLS LAST, id DESC
+                ) AS duplicate_rank
+            FROM subscriptions
+            WHERE payment_provider IS NOT NULL
+              AND payment_provider_subscription_id IS NOT NULL
+        )
+        UPDATE subscriptions AS subscriptions_table
+        SET payment_provider_subscription_id = NULL
+        FROM ranked
+        WHERE subscriptions_table.id = ranked.id
+          AND ranked.duplicate_rank > 1
+        """
+    )
+    op.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_subscriptions_provider_payment_id
+        ON subscriptions (payment_provider, payment_provider_subscription_id)
+        """
     )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_subscriptions_provider_payment_id", table_name="subscriptions")
+    op.execute("DROP INDEX IF EXISTS uq_subscriptions_provider_payment_id")
