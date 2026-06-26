@@ -96,6 +96,7 @@ class _NewPostCardState extends State<NewPostCard> {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isReposting = false;
+  bool _isSendingDonation = false;
   int? _currentUserId;
 
   int? _feedChannelRepostOrigIdCache;
@@ -500,6 +501,90 @@ class _NewPostCardState extends State<NewPostCard> {
       await _confirmAndDeletePost();
     } else if (value == 'boost') {
       await _showBoostDialog();
+    } else if (value == 'donate') {
+      await _showDonateDialog();
+    }
+  }
+
+  Future<void> _showDonateDialog() async {
+    if (_isAuthor || _isSendingDonation) return;
+    final amountController = TextEditingController(text: '25');
+    final messageController = TextEditingController();
+    final authorName = _displayPost.author?.name.trim();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          authorName == null || authorName.isEmpty
+              ? 'Поддержать автора'
+              : 'Поддержать $authorName',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Сумма в звёздах',
+                helperText: 'От 1 до 100 000 ★',
+                prefixIcon: Icon(Icons.stars_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              maxLength: 160,
+              decoration: const InputDecoration(
+                labelText: 'Сообщение автору',
+                hintText: 'Спасибо за классный пост!',
+                prefixIcon: Icon(Icons.favorite_border_rounded),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.volunteer_activism_rounded, size: 18),
+            label: const Text('Отправить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final amount = int.tryParse(amountController.text.trim()) ?? 0;
+    if (amount <= 0 || amount > 100000) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Введите сумму от 1 до 100 000 ★')),
+      );
+      return;
+    }
+
+    setState(() => _isSendingDonation = true);
+    try {
+      final balance = await PaidFeaturesService.donate(
+        recipientId: _displayPost.userId,
+        amountStars: amount,
+        message: messageController.text,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Донат отправлен. Баланс: $balance ★')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _isSendingDonation = false);
     }
   }
 
@@ -649,7 +734,17 @@ class _NewPostCardState extends State<NewPostCard> {
           ),
         ),
       ],
-      if (!_isAuthor)
+      if (!_isAuthor) ...[
+        const PopupMenuItem(
+          value: 'donate',
+          child: Row(
+            children: [
+              Icon(Icons.volunteer_activism_outlined, size: 20),
+              SizedBox(width: 8),
+              Text('Поддержать автора'),
+            ],
+          ),
+        ),
         const PopupMenuItem(
           value: 'report',
           child: Row(
@@ -660,6 +755,7 @@ class _NewPostCardState extends State<NewPostCard> {
             ],
           ),
         ),
+      ],
     ];
   }
 

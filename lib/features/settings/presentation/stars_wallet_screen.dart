@@ -38,6 +38,12 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
     setState(() => _future = _load());
   }
 
+  Future<void> _refreshAndWait() async {
+    final next = _load();
+    setState(() => _future = next);
+    await next;
+  }
+
   Future<void> _buyPackage(StarPackage package) async {
     if (_checkoutLoading) return;
     setState(() => _checkoutLoading = true);
@@ -87,7 +93,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
             }
             final data = snapshot.data!;
             return RefreshIndicator(
-              onRefresh: () async => _refresh(),
+              onRefresh: _refreshAndWait,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
                 children: [
@@ -105,7 +111,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                       child: ListTile(
                         leading: const Icon(Icons.stars_rounded),
                         title: Text(package.title),
-                        subtitle: Text('${package.priceRub} ₽'),
+                        subtitle: Text('${package.stars} ★ за ${package.priceRub} ₽'),
                         trailing: FilledButton(
                           onPressed:
                               _checkoutLoading ? null : () => _buyPackage(package),
@@ -166,6 +172,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
     switch (type) {
       case 'purchase':
         return 'Покупка звёзд';
+      case 'admin_adjust':
+        return 'Начисление звёзд';
       case 'content_purchase':
         return 'Покупка контента';
       case 'content_sale':
@@ -178,6 +186,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
         return 'Буст поста';
       case 'channel_subscription':
         return 'Подписка на канал';
+      case 'channel_subscription_received':
+        return 'Подписка на ваш канал';
       default:
         return type;
     }
