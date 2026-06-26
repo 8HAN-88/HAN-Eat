@@ -18,6 +18,21 @@ from app.schemas.post import (
 router = APIRouter()
 
 
+def _paid_post_fields(is_paid: bool, price_stars: Optional[int], preview_mode: Optional[str]) -> dict:
+    paid = bool(is_paid)
+    price = max(0, int(price_stars or 0))
+    if paid and price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paid content price must be greater than 0 stars",
+        )
+    return {
+        "is_paid": paid,
+        "price_stars": price if paid else 0,
+        "preview_mode": preview_mode or "teaser",
+    }
+
+
 def _apply_viewer_post_flags(
     db: Session,
     post_id: int,
@@ -256,6 +271,12 @@ async def create_post(
         else:
             publish_to = ["feed", "reels"] if request.type == "reel" else ["feed"]
 
+    paid_fields = _paid_post_fields(
+        bool(request.is_paid),
+        request.price_stars,
+        request.preview_mode,
+    )
+
     post = Post(
         user_id=current_user.id,
         type=request.type,
@@ -266,9 +287,7 @@ async def create_post(
         visibility=request.visibility or "public",
         tags=request.tags or [],
         channel_id=request.channel_id if channel_obj is not None else None,
-        is_paid=bool(request.is_paid),
-        price_stars=max(0, int(request.price_stars or 0)),
-        preview_mode=request.preview_mode or "teaser",
+        **paid_fields,
     )
 
     if request.type == "recipe":
@@ -542,12 +561,19 @@ async def update_post(
         post.description = request.description
     if request.tags is not None:
         post.tags = request.tags
-    if request.is_paid is not None:
-        post.is_paid = bool(request.is_paid)
-    if request.price_stars is not None:
-        post.price_stars = max(0, int(request.price_stars or 0))
-    if request.preview_mode is not None:
-        post.preview_mode = request.preview_mode or "teaser"
+    if (
+        request.is_paid is not None
+        or request.price_stars is not None
+        or request.preview_mode is not None
+    ):
+        paid_fields = _paid_post_fields(
+            bool(request.is_paid) if request.is_paid is not None else bool(post.is_paid),
+            request.price_stars if request.price_stars is not None else post.price_stars,
+            request.preview_mode if request.preview_mode is not None else post.preview_mode,
+        )
+        post.is_paid = paid_fields["is_paid"]
+        post.price_stars = paid_fields["price_stars"]
+        post.preview_mode = paid_fields["preview_mode"]
 
     if post.type == "recipe":
         body = post.body or {}

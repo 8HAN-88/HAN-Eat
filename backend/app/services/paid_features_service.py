@@ -19,6 +19,16 @@ from app.models.paid_features import (
 from app.models.post import Post
 
 
+def _invalidate_user_feed_cache(db: Session, user_id: int) -> None:
+    try:
+        from app.core.redis_client import get_redis
+        from app.services.feed_service import FeedService
+
+        FeedService(db, get_redis()).invalidate_feed_cache(user_id)
+    except Exception:
+        pass
+
+
 class PaidFeaturesService:
     def __init__(self, db: Session):
         self.db = db
@@ -199,6 +209,7 @@ class PaidFeaturesService:
             reference_id=post_id,
             counterparty_user_id=user_id,
         )
+        _invalidate_user_feed_cache(self.db, user_id)
         self.db.flush()
         return purchase
 
@@ -269,6 +280,7 @@ class PaidFeaturesService:
             reference_id=channel_id,
             counterparty_user_id=user_id,
         )
+        _invalidate_user_feed_cache(self.db, user_id)
         self.db.flush()
         return sub
 
@@ -313,6 +325,8 @@ class PaidFeaturesService:
             expires_at=datetime.utcnow() + timedelta(days=max(1, duration_days)),
         )
         self.db.add(boost)
+        _invalidate_user_feed_cache(self.db, user_id)
+        _invalidate_user_feed_cache(self.db, post.user_id)
         self.db.flush()
         return boost
 
