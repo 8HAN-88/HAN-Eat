@@ -17,6 +17,7 @@ from app.models.paid_features import (
     StarTransaction,
 )
 from app.models.post import Post
+from app.models.user import User
 
 
 def _invalidate_user_feed_cache(db: Session, user_id: int) -> None:
@@ -27,6 +28,34 @@ def _invalidate_user_feed_cache(db: Session, user_id: int) -> None:
         FeedService(db, get_redis()).invalidate_feed_cache(user_id)
     except Exception:
         pass
+
+
+def _raise_idempotency_conflict() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Этот idempotency key уже использован для другой операции",
+        },
+    )
+
+
+def _matches_transaction(
+    tx: StarTransaction,
+    *,
+    user_id: int,
+    amount: int,
+    tx_type: str,
+    reference_type: Optional[str] = None,
+    reference_id: Optional[int] = None,
+) -> bool:
+    return (
+        tx.user_id == user_id
+        and tx.amount == amount
+        and tx.type == tx_type
+        and (reference_type is None or tx.reference_type == reference_type)
+        and (reference_id is None or tx.reference_id == reference_id)
+    )
 
 
 class PaidFeaturesService:
@@ -72,6 +101,8 @@ class PaidFeaturesService:
                 .first()
             )
             if existing:
+                if not _matches_transaction(existing, user_id=user_id, amount=amount, tx_type=tx_type):
+                    _raise_idempotency_conflict()
                 return existing
         tx = StarTransaction(
             user_id=user_id,
@@ -107,6 +138,15 @@ class PaidFeaturesService:
                 .first()
             )
             if existing:
+                if not _matches_transaction(
+                    existing,
+                    user_id=user_id,
+                    amount=-amount,
+                    tx_type=tx_type,
+                    reference_type=reference_type,
+                    reference_id=reference_id,
+                ):
+                    _raise_idempotency_conflict()
                 return existing
         if self.star_balance(user_id) < amount:
             raise HTTPException(
@@ -185,6 +225,11 @@ class PaidFeaturesService:
         if existing:
             return existing
         amount = int(getattr(post, "price_stars", 0) or 0)
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Paid content price must be greater than 0 stars",
+            )
         self._spend_stars(
             user_id,
             amount,
@@ -214,6 +259,11 @@ class PaidFeaturesService:
         return purchase
 
     def donate(self, sender_id: int, recipient_id: int, amount: int, *, message: Optional[str] = None) -> StarTransaction:
+        if sender_id == recipient_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
+        recipient_exists = self.db.query(User.id).filter(User.id == recipient_id, User.deleted_at.is_(None)).first()
+        if not recipient_exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
         tx = self._spend_stars(
             sender_id,
             amount,
@@ -235,12 +285,14 @@ class PaidFeaturesService:
         return tx
 
     def subscribe_channel(self, user_id: int, channel_id: int, *, months: int = 1) -> PaidChannelSubscription:
+        if months < 1 or months > 12:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Months must be between 1 and 12")
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
         if channel.admin_user_id == user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Owner already has access")
-        price = int(getattr(channel, "monthly_price_stars", 0) or 0) * max(1, months)
+        price = int(getattr(channel, "monthly_price_stars", 0) or 0) * months
         if not getattr(channel, "is_paid", False) or price <= 0:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Channel is not paid")
         now = datetime.utcnow()
@@ -258,7 +310,7 @@ class PaidFeaturesService:
             counterparty_user_id=channel.admin_user_id,
         )
         expires_base = existing.expires_at if existing and existing.expires_at and existing.expires_at > now else now
-        expires_at = expires_base + timedelta(days=30 * max(1, months))
+        expires_at = expires_base + timedelta(days=30 * months)
         if existing:
             existing.amount_stars = price
             existing.status = "active"
@@ -305,6 +357,8 @@ class PaidFeaturesService:
         )
 
     def boost_post(self, user_id: int, post_id: int, amount: int, *, duration_days: int = 7) -> PostBoost:
+        if duration_days < 1 or duration_days > 30:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duration must be between 1 and 30 days")
         post = self.db.query(Post).filter(Post.id == post_id, Post.deleted_at.is_(None)).first()
         if not post:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
@@ -322,7 +376,7 @@ class PaidFeaturesService:
             buyer_id=user_id,
             amount_stars=amount,
             duration_days=duration_days,
-            expires_at=datetime.utcnow() + timedelta(days=max(1, duration_days)),
+            expires_at=datetime.utcnow() + timedelta(days=duration_days),
         )
         self.db.add(boost)
         _invalidate_user_feed_cache(self.db, user_id)
