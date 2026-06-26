@@ -1,13 +1,13 @@
 """Telegram-like paid features: stars, paid content, paid channels, boosts
 
-Revision ID: 043_telegram_paid_features_v1
-Revises: 042_subscription_promises_v1
+Revision ID: 060_telegram_paid_features_v1
+Revises: 059_message_client_id_v1
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "043_telegram_paid_features_v1"
-down_revision = "042_subscription_promises_v1"
+revision = "060_telegram_paid_features_v1"
+down_revision = "059_message_client_id_v1"
 branch_labels = None
 depends_on = None
 
