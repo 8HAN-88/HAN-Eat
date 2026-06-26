@@ -1552,6 +1552,15 @@ class _NewPostCardState extends State<NewPostCard> {
                       label: _formatCount(_repostsCount),
                       onTap: _isReposting ? null : _openShareSheet,
                     ),
+                    if (!_isAuthor) ...[
+                      const SizedBox(width: 12),
+                      _FeedActionButton(
+                        icon: Icons.volunteer_activism_outlined,
+                        label: 'Донат',
+                        color: scheme.primary,
+                        onTap: _isSendingDonation ? null : _showDonateDialog,
+                      ),
+                    ],
                     const Spacer(),
                     if (widget.hideFeedHeader) ...[
                       _buildOverflowMenuButton(iconSize: 28),

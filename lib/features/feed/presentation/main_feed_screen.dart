@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:async';
 
+import '../../../app/app_router.dart';
 import '../../../services/feed_ui_prefs.dart';
 import '../../../models/post_types.dart';
 import 'subscriptions_feed_screen.dart';
@@ -136,6 +138,14 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                     setState(() => _reelsFollowingOnly = followingOnly);
                     unawaited(FeedUiPrefs.saveReelsFollowingOnly(followingOnly));
                   },
+                ),
+              ),
+              IconButton(
+                tooltip: 'Звёзды и кошелёк',
+                onPressed: () => context.push(StarsWalletRoute.path),
+                icon: Icon(
+                  Icons.stars_rounded,
+                  color: scheme.primary,
                 ),
               ),
               const NotificationBellButton(),
