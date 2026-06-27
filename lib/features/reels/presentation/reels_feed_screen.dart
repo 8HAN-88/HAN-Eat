@@ -56,7 +56,8 @@ class ReelsFeedScreen extends ConsumerStatefulWidget {
   ConsumerState<ReelsFeedScreen> createState() => _ReelsFeedScreenState();
 }
 
-class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
+class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen>
+    with WidgetsBindingObserver {
   final PageController _pageController = PageController();
   final Map<int, VideoPlayerController> _videoControllers = {};
   final Map<int, bool> _isPaused = {}; // Состояние паузы для каждого видео
@@ -74,6 +75,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = false;
+  bool _appVisible = true;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
@@ -92,10 +94,10 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   int get _controllerRetainDistance => 2;
 
+  bool get _canPlayVideos => widget.isTabVisible && _appVisible;
+
   bool _shouldPlayReelAt(int index) =>
-      index == _currentIndex &&
-      widget.isTabVisible &&
-      !(_isPaused[index] ?? false);
+      index == _currentIndex && _canPlayVideos && !(_isPaused[index] ?? false);
 
   void _playReelAt(int index) {
     final controller = _videoControllers[index];
@@ -121,7 +123,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   }
 
   Future<void> _initSingleVideo(int i) async {
-    if (!mounted || !widget.isTabVisible) return;
+    if (!mounted || !_canPlayVideos) return;
     if (_videoControllers.containsKey(i)) return;
     if (i < 0 || i >= _reels.length) return;
 
@@ -132,12 +134,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       return;
     }
     try {
-      final shouldPlay = _shouldPlayReelAt(i);
       final qualityPref = ref.read(videoPlaybackProvider);
       final playback = await VideoPlayerHelper.createReelPlayback(
         sources: sources,
         qualityPref: qualityPref,
-        autoPlay: shouldPlay,
+        autoPlay: false,
         muted: _sessionMuted,
       );
 
@@ -154,6 +155,11 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       if (i == _currentIndex) {
         _prefetchAdjacentReelFiles(i);
         _scheduleNeighborControllers(i);
+      }
+      if (_shouldPlayReelAt(i)) {
+        _playReelAt(i);
+      } else {
+        unawaited(playback.controller.pause());
       }
 
       final upgradeUrl = playback.upgradeUrl;
@@ -192,7 +198,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     int count, {
     int? priorityIndex,
   }) async {
-    if (!widget.isTabVisible) return;
+    if (!_canPlayVideos) return;
     final end = math.min(startIndex + count, _reels.length);
     final indices = <int>[
       for (var i = startIndex; i < end; i++)
@@ -220,7 +226,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
 
   /// Инициализация соседних контроллеров после старта текущего (без борьбы за сеть).
   void _scheduleNeighborControllers(int index) {
-    if (!mounted || !widget.isTabVisible) return;
+    if (!mounted || !_canPlayVideos) return;
     final retain = _controllerRetainDistance;
 
     void schedule(int neighbor, Duration delay) {
@@ -228,7 +234,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
       if (_videoControllers.containsKey(neighbor)) return;
       unawaited(
         Future<void>.delayed(delay, () async {
-          if (!mounted || !widget.isTabVisible) return;
+          if (!mounted || !_canPlayVideos) return;
           if (_videoControllers.containsKey(neighbor)) return;
           if ((neighbor - _currentIndex).abs() > retain) return;
           await _initSingleVideo(neighbor);
@@ -268,6 +274,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _followingOnly = widget.externalFollowingOnly;
     final cached = FeedApiCache.peek(_cacheVariant);
     if (cached.isNotEmpty) {
@@ -281,6 +288,20 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     });
     _syncEmbeddedShellNav();
     WidgetsBinding.instance.addPostFrameCallback((_) => _startLoadIfNeeded());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final visible = state == AppLifecycleState.resumed;
+    if (_appVisible == visible) return;
+    _appVisible = visible;
+    if (!visible) {
+      _pauseAllVideos();
+      return;
+    }
+    if (mounted && widget.isTabVisible) {
+      _playReelAt(_currentIndex);
+    }
   }
 
   void _syncEmbeddedShellNav() {
@@ -306,7 +327,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
     }
     if (widget.isTabVisible && !oldWidget.isTabVisible) {
       _startLoadIfNeeded();
-      if (_reels.isNotEmpty) {
+      if (_canPlayVideos && _reels.isNotEmpty) {
         _initializeVideos(
           _currentIndex,
           math.min(_initialVideoPreloadCount, _reels.length - _currentIndex),
@@ -337,6 +358,7 @@ class _ReelsFeedScreenState extends ConsumerState<ReelsFeedScreen> {
   @override
   void dispose() {
     _realtimeSub?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _finishCurrentReelExposure();
     _pageController.dispose();
     _disposeAllControllers();

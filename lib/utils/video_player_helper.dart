@@ -27,8 +27,7 @@ class VideoPlayerHelper {
       (defaultTargetPlatform == TargetPlatform.iOS ||
           defaultTargetPlatform == TargetPlatform.android);
 
-  static bool _isHlsUrl(String url) =>
-      url.toLowerCase().contains('.m3u8');
+  static bool _isHlsUrl(String url) => url.toLowerCase().contains('.m3u8');
 
   /// MP4-транскоды кэшируем; HLS и тяжёлые оригиналы — только стриминг.
   static bool _shouldUseFileCache(String url) {
@@ -155,14 +154,13 @@ class VideoPlayerHelper {
       final wasPlaying = current.value.isPlaying;
       final volume = current.value.volume;
       final looping = current.value.isLooping;
-      final autoPlay =
-          wasPlaying && (shouldAutoPlay?.call() ?? true);
+      final autoPlay = wasPlaying && (shouldAutoPlay?.call() ?? true);
       try {
         final next = await _createControllerForUrl(
           upgradeUrl,
           loop: looping,
           muted: volume < 0.5,
-          autoPlay: autoPlay,
+          autoPlay: false,
           prefetchInBackground: _shouldUseFileCache(upgradeUrl),
         );
         if (position > Duration.zero) {
@@ -171,6 +169,9 @@ class VideoPlayerHelper {
         final accepted = onUpgraded(next);
         if (accepted) {
           await current.dispose();
+          if (autoPlay && (shouldAutoPlay?.call() ?? true)) {
+            await ensurePlaying(next, shouldContinue: shouldAutoPlay);
+          }
         } else {
           await next.dispose();
         }
@@ -224,6 +225,10 @@ class VideoPlayerHelper {
         return;
       }
       await controller.play();
+      if (shouldContinue != null && !shouldContinue()) {
+        await controller.pause();
+        return;
+      }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }

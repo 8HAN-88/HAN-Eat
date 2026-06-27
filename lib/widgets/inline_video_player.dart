@@ -37,12 +37,15 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   bool _isMuted = true;
   bool _initialized = false;
   bool _hasError = false;
+  bool _appVisible = true;
   String? _initKey;
   Timer? _disposeWhenHiddenTimer;
 
   static const double _visibilityThresholdPlay = 0.25;
   static const double _visibilityThresholdPause = 0.08;
   static const double _visibilityThresholdPreload = 0.12;
+
+  bool get _canAutoPlay => _isVisible && _appVisible;
 
   void _onVisibilityChanged(VisibilityInfo info) {
     final fraction = info.visibleFraction;
@@ -65,14 +68,22 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
     if (fraction >= _visibilityThresholdPlay) {
       _isVisible = true;
       if (_controller != null) {
-        unawaited(VideoPlayerHelper.ensurePlaying(_controller!));
+        unawaited(
+          VideoPlayerHelper.ensurePlaying(
+            _controller!,
+            shouldContinue: () => mounted && _canAutoPlay,
+          ),
+        );
       }
     }
   }
 
   Future<void> _ensurePlaying() async {
     if (_controller != null) {
-      await VideoPlayerHelper.ensurePlaying(_controller!);
+      await VideoPlayerHelper.ensurePlaying(
+        _controller!,
+        shouldContinue: () => mounted && _canAutoPlay,
+      );
       return;
     }
 
@@ -83,7 +94,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
       final controller = await VideoPlayerHelper.createPreparedController(
         widget.videoUrl,
         muted: _isMuted,
-        autoPlay: _isVisible,
+        autoPlay: false,
       );
 
       if (!mounted) {
@@ -96,8 +107,13 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
         _initialized = true;
       });
 
-      if (_isVisible) {
-        await VideoPlayerHelper.ensurePlaying(controller);
+      if (_canAutoPlay) {
+        await VideoPlayerHelper.ensurePlaying(
+          controller,
+          shouldContinue: () => mounted && _canAutoPlay,
+        );
+      } else {
+        await controller.pause();
       }
     } catch (e) {
       debugPrint('InlineVideoPlayer init error: $e');
@@ -146,10 +162,15 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
+      _appVisible = false;
       _pause();
-    } else if (state == AppLifecycleState.resumed && _isVisible) {
-      unawaited(_ensurePlaying());
+    } else if (state == AppLifecycleState.resumed) {
+      _appVisible = true;
+      if (_isVisible) {
+        unawaited(_ensurePlaying());
+      }
     }
   }
 

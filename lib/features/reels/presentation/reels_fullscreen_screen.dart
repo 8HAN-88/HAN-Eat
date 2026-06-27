@@ -36,7 +36,8 @@ class ReelsFullscreenScreen extends ConsumerStatefulWidget {
       _ReelsFullscreenScreenState();
 }
 
-class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
+class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen>
+    with WidgetsBindingObserver {
   late PageController _pageController;
   final Map<int, VideoPlayerController> _videoControllers = {};
   final Map<int, bool> _isPaused = {};
@@ -48,14 +49,17 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   DateTime? _currentReelStartedAt;
   final Set<int> _impressedReelIds = {};
   bool _sessionMuted = false;
+  bool _appVisible = true;
 
   static const Duration _likeTouchGrace = Duration(seconds: 20);
 
   final Set<int> _likeBusy = {};
   final Map<int, DateTime> _likeTouchedAt = {};
 
+  bool get _canPlayVideos => _appVisible;
+
   bool _shouldPlayReelAt(int index) =>
-      index == _currentIndex && !(_isPaused[index] ?? false);
+      index == _currentIndex && _canPlayVideos && !(_isPaused[index] ?? false);
 
   void _playReelAt(int index) {
     final controller = _videoControllers[index];
@@ -82,6 +86,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     hideShellBottomNavForFullscreenReels();
     _pageController = PageController(initialPage: 0);
     _reels = [widget.initialPost];
@@ -93,7 +98,22 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final visible = state == AppLifecycleState.resumed;
+    if (_appVisible == visible) return;
+    _appVisible = visible;
+    if (!visible) {
+      _pauseAllVideos();
+      return;
+    }
+    if (mounted) {
+      _playReelAt(_currentIndex);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     clearRootShellBottomNavHide();
     _finishCurrentReelExposure();
     _pageController.dispose();
@@ -106,6 +126,12 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
       c.dispose();
     }
     _videoControllers.clear();
+  }
+
+  void _pauseAllVideos() {
+    for (final c in _videoControllers.values) {
+      c.pause();
+    }
   }
 
   List<PostModel> _mergePreservingRecentLikes(List<PostModel> incoming) {
@@ -171,7 +197,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   }
 
   Future<void> _initSingleVideo(int i) async {
-    if (!mounted) return;
+    if (!mounted || !_canPlayVideos) return;
     if (_videoControllers.containsKey(i)) return;
     if (i < 0 || i >= _reels.length) return;
 
@@ -180,12 +206,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     if (sources.isEmpty) return;
 
     try {
-      final shouldPlay = _shouldPlayReelAt(i);
       final qualityPref = ref.read(videoPlaybackProvider);
       final playback = await VideoPlayerHelper.createReelPlayback(
         sources: sources,
         qualityPref: qualityPref,
-        autoPlay: shouldPlay,
+        autoPlay: false,
         muted: _sessionMuted,
       );
 
@@ -197,6 +222,11 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
       setState(() {
         _videoControllers[i] = playback.controller;
       });
+      if (_shouldPlayReelAt(i)) {
+        _playReelAt(i);
+      } else {
+        unawaited(playback.controller.pause());
+      }
 
       final upgradeUrl = playback.upgradeUrl;
       if (upgradeUrl != null) {
@@ -230,6 +260,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     int count, {
     int? priorityIndex,
   }) async {
+    if (!_canPlayVideos) return;
     final end = math.min(startIndex + count, _reels.length);
     final indices = <int>[
       for (var i = startIndex; i < end; i++)
@@ -245,8 +276,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
   void _prefetchAdjacentReelFiles(int index) {
     final pref = ref.read(videoPlaybackProvider);
     final urls = <String?>[
-      if (index > 0)
-        _reels[index - 1].reelVideoSources.prefetchUrl(pref),
+      if (index > 0) _reels[index - 1].reelVideoSources.prefetchUrl(pref),
       if (index + 1 < _reels.length)
         _reels[index + 1].reelVideoSources.prefetchUrl(pref),
       if (index + 2 < _reels.length)
@@ -282,7 +312,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     } else {
       unawaited(
         _initializeVideos(index, 1, priorityIndex: index).then((_) {
-          if (mounted) _playReelAt(index);
+          if (mounted && _canPlayVideos) _playReelAt(index);
         }),
       );
     }
@@ -290,7 +320,7 @@ class _ReelsFullscreenScreenState extends ConsumerState<ReelsFullscreenScreen> {
     if (index >= _reels.length - 3 && _hasMore && !_isLoading) {
       _loadMoreReels();
     }
-    if (index + 1 < _reels.length) {
+    if (_canPlayVideos && index + 1 < _reels.length) {
       unawaited(_initializeVideos(index + 1, 2, priorityIndex: index + 1));
     }
     _prefetchAdjacentReelFiles(index);
