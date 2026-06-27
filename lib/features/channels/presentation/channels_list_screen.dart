@@ -9,8 +9,8 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/channel_list_badges.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
-import '../../../core/theme/app_card_decorations.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 
 class ChannelsListScreen extends ConsumerStatefulWidget {
   const ChannelsListScreen({super.key});
@@ -279,6 +279,7 @@ class _ChannelsListScreenState extends ConsumerState<ChannelsListScreen>
                       onRefresh: () => _loadChannels(refresh: true),
                       child: ListView.builder(
                         controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(10, 8, 10, 20),
                         itemCount: _channels.length + (_hasMore ? 1 : 0),
                         itemBuilder: (context, index) {
                           if (index == _channels.length) {
@@ -309,35 +310,25 @@ class _ChannelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return AppElevatedCard(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    return TelegramGroupedSurface(
+      margin: const EdgeInsets.symmetric(vertical: 5),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
             context.push(ChannelDetailRoute.pathFor(channel.id));
           },
-          borderRadius: BorderRadius.circular(AppCardDecorations.defaultRadius),
+          borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                // Аватар
-                CircleAvatar(
-                  radius: 30,
-                  backgroundImage: resolvedAvatarImage(
-                    channel.avatarUrl,
-                    decodeWidth: 120,
-                  ),
-                  child: resolvedAvatarImage(channel.avatarUrl) == null
-                      ? Text(
-                          channel.name[0].toUpperCase(),
-                          style: const TextStyle(fontSize: 24),
-                        )
-                      : null,
+                AppUserAvatar(
+                  imageUrl: channel.avatarUrl,
+                  displayName: channel.name,
+                  radius: 27,
                 ),
-                const SizedBox(width: 16),
-                // Информация
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,8 +336,9 @@ class _ChannelCard extends StatelessWidget {
                       Text(
                         channel.name,
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
                         ),
                       ),
                       ChannelListBadges(channel: channel),
@@ -363,7 +355,7 @@ class _ChannelCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 7),
                       Row(
                         children: [
                           Icon(
@@ -398,7 +390,7 @@ class _ChannelCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right),
+                Icon(Icons.chevron_right_rounded, color: scheme.outline),
               ],
             ),
           ),

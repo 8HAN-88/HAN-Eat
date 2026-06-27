@@ -1043,10 +1043,9 @@ class _ReelCardState extends ConsumerState<ReelCard>
   late Animation<double> _likeOpacityAnimation;
   final List<TapGestureRecognizer> _descriptionRecognizers = [];
 
-  static const double _igIconSize = 28;
-  static const double _igActionGap = 18;
+  static const double _igActionGap = 14;
   static const double _igRightInset = 12;
-  static const double _igRailWidth = 52;
+  static const double _igRailWidth = 50;
   static const Duration _doubleTapWindow = Duration(milliseconds: 300);
 
   @override
@@ -1500,10 +1499,10 @@ class _ReelCardState extends ConsumerState<ReelCard>
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.45),
+                            color: Colors.white.withValues(alpha: 0.34),
                           ),
                         ),
                         child: const Text(
@@ -1663,17 +1662,30 @@ class _IgReelAction extends StatelessWidget {
     final showNumber = showCount;
 
     return SizedBox(
-      width: 44,
+      width: 48,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
             onTap: onTap,
             behavior: HitTestBehavior.opaque,
-            child: Icon(
-              icon,
-              color: color ?? Colors.white,
-              size: 28,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.28),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  width: 0.8,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                color: color ?? Colors.white,
+                size: 24,
+              ),
             ),
           ),
           if (showNumber) ...[

@@ -667,7 +667,8 @@ class _RecipeSourceListScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       children: dayKeys.map((day) {
         final items = mealByDay[day] ?? const <_RecipeSourceItem>[];
-        return Card(
+        return TelegramGroupedSurface(
+          margin: const EdgeInsets.only(bottom: 10),
           child: ExpansionTile(
             initiallyExpanded: true,
             title: Text(_dayLabel(day)),
@@ -704,32 +705,35 @@ class _RecipeSourceListScreen extends StatelessWidget {
   }
 
   Widget _buildRecipeTile(BuildContext context, _RecipeSourceItem item) {
-    return ListTile(
-      leading: item.recipe.image != null && item.recipe.image!.isNotEmpty
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                ServerConfig.resolveRecipeImageUrl(item.recipe.image!),
-                width: 52,
-                height: 52,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.restaurant),
+    return TelegramGroupedSurface(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: item.recipe.image != null && item.recipe.image!.isNotEmpty
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  ServerConfig.resolveRecipeImageUrl(item.recipe.image!),
+                  width: 52,
+                  height: 52,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(Icons.restaurant),
+                ),
+              )
+            : const Icon(Icons.restaurant),
+        title: Text(item.recipe.title),
+        subtitle: Text(item.sourceLabel),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => _RecipeIngredientsCardScreen(
+                item: item,
+                onAddIngredients: onAddIngredients,
               ),
-            )
-          : const Icon(Icons.restaurant),
-      title: Text(item.recipe.title),
-      subtitle: Text(item.sourceLabel),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => _RecipeIngredientsCardScreen(
-              item: item,
-              onAddIngredients: onAddIngredients,
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -789,189 +793,201 @@ class _RecipeIngredientsCardScreenState
   @override
   Widget build(BuildContext context) {
     final recipe = widget.item.recipe;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Карточка рецепта')),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (recipe.image != null && recipe.image!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            ServerConfig.resolveRecipeImageUrl(recipe.image!),
-                            height: 170,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                const SizedBox.shrink(),
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Карточка рецепта'),
+        ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (recipe.image != null && recipe.image!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.network(
+                              ServerConfig.resolveRecipeImageUrl(recipe.image!),
+                              height: 170,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
                           ),
                         ),
-                      ),
-                    Text(
-                      recipe.title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge
-                          ?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6, bottom: 16),
-                      child: Text(
-                        widget.item.sourceLabel,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
+                      TelegramGroupedSurface(
+                        margin: EdgeInsets.zero,
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              recipe.title,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
                             ),
-                      ),
-                    ),
-                    TextField(
-                      controller: _groupController,
-                      decoration: const InputDecoration(
-                        labelText: 'Подгруппа (необязательно)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Text(
-                        'Ингредиенты',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Wrap(
-                        spacing: 8,
-                        children: [
-                          ActionChip(
-                            label: const Text('Выбрать все'),
-                            onPressed: () => setState(() {
-                              _selected
-                                ..clear()
-                                ..addAll(List.generate(
-                                    _ingredients.length, (i) => i));
-                            }),
-                          ),
-                          ActionChip(
-                            label: const Text('Убрать все'),
-                            onPressed: () => setState(() => _selected.clear()),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: _ingredients.isEmpty
-                          ? Align(
-                              alignment: Alignment.topLeft,
-                              child: Text(
-                                'Ингредиенты не найдены',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
-                            )
-                          : ListView.builder(
-                              key: const PageStorageKey(
-                                  'shopping-recipe-ingredients-scroll'),
-                              controller: _scrollController,
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              physics: const ClampingScrollPhysics(),
-                              itemCount: _ingredients.length,
-                              itemBuilder: (context, i) {
-                                final ing = _ingredients[i];
-                                return CheckboxListTile(
-                                  key: ValueKey('ingredient-$i-$ing'),
-                                  contentPadding: EdgeInsets.zero,
-                                  value: _selected.contains(i),
-                                  title: Text(ing),
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      if (v == true) {
-                                        _selected.add(i);
-                                      } else {
-                                        _selected.remove(i);
-                                      }
-                                    });
-                                  },
-                                  secondary: IconButton(
-                                    icon:
-                                        const Icon(Icons.remove_circle_outline),
-                                    tooltip: 'Убрать из добавления',
-                                    onPressed: () =>
-                                        setState(() => _selected.remove(i)),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.item.sourceLabel,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                   ),
-                                );
-                              },
                             ),
-                    ),
-                  ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _groupController,
+                        decoration: const InputDecoration(
+                          labelText: 'Подгруппа (необязательно)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const TelegramSectionHeader(
+                        title: 'Ингредиенты',
+                        padding: EdgeInsets.fromLTRB(2, 16, 2, 8),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Wrap(
+                          spacing: 8,
+                          children: [
+                            ActionChip(
+                              label: const Text('Выбрать все'),
+                              onPressed: () => setState(() {
+                                _selected
+                                  ..clear()
+                                  ..addAll(List.generate(
+                                      _ingredients.length, (i) => i));
+                              }),
+                            ),
+                            ActionChip(
+                              label: const Text('Убрать все'),
+                              onPressed: () =>
+                                  setState(() => _selected.clear()),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: _ingredients.isEmpty
+                            ? Align(
+                                alignment: Alignment.topLeft,
+                                child: Text(
+                                  'Ингредиенты не найдены',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                              )
+                            : ListView.builder(
+                                key: const PageStorageKey(
+                                    'shopping-recipe-ingredients-scroll'),
+                                controller: _scrollController,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                physics: const ClampingScrollPhysics(),
+                                itemCount: _ingredients.length,
+                                itemBuilder: (context, i) {
+                                  final ing = _ingredients[i];
+                                  return CheckboxListTile(
+                                    key: ValueKey('ingredient-$i-$ing'),
+                                    contentPadding: EdgeInsets.zero,
+                                    value: _selected.contains(i),
+                                    title: Text(ing),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    onChanged: (v) {
+                                      setState(() {
+                                        if (v == true) {
+                                          _selected.add(i);
+                                        } else {
+                                          _selected.remove(i);
+                                        }
+                                      });
+                                    },
+                                    secondary: IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline),
+                                      tooltip: 'Убрать из добавления',
+                                      onPressed: () =>
+                                          setState(() => _selected.remove(i)),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                  16, 8, 16, 12 + MediaQuery.paddingOf(context).bottom),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _saving
-                      ? null
-                      : () async {
-                          final selectedIngredients =
-                              _selected.map((i) => _ingredients[i]).toList();
-                          if (selectedIngredients.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content:
-                                      Text('Выберите хотя бы один ингредиент')),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                    16, 8, 16, 12 + MediaQuery.paddingOf(context).bottom),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _saving
+                        ? null
+                        : () async {
+                            final selectedIngredients =
+                                _selected.map((i) => _ingredients[i]).toList();
+                            if (selectedIngredients.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Выберите хотя бы один ингредиент')),
+                              );
+                              return;
+                            }
+                            setState(() => _saving = true);
+                            await widget.onAddIngredients(
+                              selectedIngredients,
+                              _groupController.text.trim().isEmpty
+                                  ? null
+                                  : _groupController.text.trim(),
                             );
-                            return;
-                          }
-                          setState(() => _saving = true);
-                          await widget.onAddIngredients(
-                            selectedIngredients,
-                            _groupController.text.trim().isEmpty
-                                ? null
-                                : _groupController.text.trim(),
-                          );
-                          if (mounted) {
-                            setState(() => _saving = false);
-                            Navigator.of(context).pop();
-                          }
-                        },
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.playlist_add),
-                  label: const Text('Добавить продукты в список'),
+                            if (mounted) {
+                              setState(() => _saving = false);
+                              Navigator.of(context).pop();
+                            }
+                          },
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.playlist_add),
+                    label: const Text('Добавить продукты в список'),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

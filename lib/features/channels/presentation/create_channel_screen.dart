@@ -10,6 +10,7 @@ import '../../../services/channel_service.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import 'package:go_router/go_router.dart';
 
 class CreateChannelScreen extends ConsumerStatefulWidget {
@@ -202,255 +203,247 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
           title: const Text('Создать канал'),
         ),
         body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 16),
-                // Аватар
-                Center(
-                  child: GestureDetector(
-                    onTap: _pickAvatar,
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: scheme.surfaceContainerHighest,
-                          backgroundImage: _selectedAvatar != null
-                              ? (kIsWeb && _selectedAvatarBytes != null
-                                  ? MemoryImage(_selectedAvatarBytes!)
-                                      as ImageProvider
-                                  : !kIsWeb
-                                      ? FileImage(File(_selectedAvatar!.path))
-                                          as ImageProvider
-                                      : null)
-                              : _uploadedAvatarUrl != null
-                                  ? resolvedAvatarImage(
-                                      _uploadedAvatarUrl,
-                                      decodeWidth: 200,
-                                    )
-                                  : null,
-                          child: _selectedAvatar == null &&
-                                  _uploadedAvatarUrl == null
-                              ? const Icon(Icons.add_photo_alternate, size: 40)
-                              : null,
-                        ),
-                        if (_isUploadingAvatar)
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                child: CircularProgressIndicator(
-                                    color: Colors.white),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  // Аватар
+                  Center(
+                    child: GestureDetector(
+                      onTap: _pickAvatar,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundColor: scheme.surfaceContainerHighest,
+                            backgroundImage: _selectedAvatar != null
+                                ? (kIsWeb && _selectedAvatarBytes != null
+                                    ? MemoryImage(_selectedAvatarBytes!)
+                                        as ImageProvider
+                                    : !kIsWeb
+                                        ? FileImage(File(_selectedAvatar!.path))
+                                            as ImageProvider
+                                        : null)
+                                : _uploadedAvatarUrl != null
+                                    ? resolvedAvatarImage(
+                                        _uploadedAvatarUrl,
+                                        decodeWidth: 200,
+                                      )
+                                    : null,
+                            child: _selectedAvatar == null &&
+                                    _uploadedAvatarUrl == null
+                                ? const Icon(Icons.add_photo_alternate,
+                                    size: 40)
+                                : null,
+                          ),
+                          if (_isUploadingAvatar)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Center(
-                  child: TextButton(
-                    onPressed: _pickAvatar,
-                    child: const Text('Выбрать аватар'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Название
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Название канала',
-                    hintText: 'Например: Веганские рецепты',
-                    prefixIcon: Icon(Icons.tag),
-                  ),
-                  onChanged: (_) => _updateSlug(),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Введите название';
-                    }
-                    if (value.length < 3) {
-                      return 'Минимум 3 символа';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Slug
-                TextFormField(
-                  controller: _slugController,
-                  decoration: const InputDecoration(
-                    labelText: 'URL идентификатор',
-                    hintText: 'vegan_recipes',
-                    prefixIcon: Icon(Icons.link),
-                    helperText: 'Используется в URL канала',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Введите идентификатор';
-                    }
-                    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(value)) {
-                      return 'Только латиница, цифры и подчеркивание';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                // Описание
-                TextFormField(
-                  controller: _descriptionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Описание (опционально)',
-                    hintText: 'Расскажите о вашем канале...',
-                    alignLabelWithHint: true,
-                  ),
-                  maxLines: 5,
-                  minLines: 3,
-                ),
-                const SizedBox(height: 16),
-                // Категория
-                Autocomplete<String>(
-                  optionsBuilder: (textEditingValue) {
-                    if (textEditingValue.text.isEmpty) {
-                      return _categories;
-                    }
-                    return _categories.where((category) => category
-                        .toLowerCase()
-                        .contains(textEditingValue.text.toLowerCase()));
-                  },
-                  fieldViewBuilder:
-                      (context, controller, focusNode, onFieldSubmitted) {
-                    // Синхронизируем внешний контроллер с внутренним
-                    if (controller.text != _categoryController.text) {
-                      _categoryController.text = controller.text;
-                    }
-                    controller.addListener(() {
-                      _categoryController.text = controller.text;
-                    });
-                    return TextFormField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      decoration: const InputDecoration(
-                        labelText: 'Категория (опционально)',
-                        hintText: 'Выберите или введите категорию',
-                        prefixIcon: Icon(Icons.category),
-                        helperText: 'Например: Итальянская, Веган, Быстрое',
+                        ],
                       ),
-                    );
-                  },
-                  onSelected: (value) {
-                    _categoryController.text = value;
-                  },
-                ),
-                const SizedBox(height: 24),
-                // Публичность
-                Card(
-                  child: SwitchListTile(
-                    title: const Text('Публичный канал'),
-                    subtitle: Text(
-                      _isPublic
-                          ? 'Канал будет виден всем пользователям'
-                          : 'Приватный канал — только для подписчиков',
                     ),
-                    value: _isPublic,
-                    onChanged: (value) {
-                      setState(() => _isPublic = value);
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: _pickAvatar,
+                      child: const Text('Выбрать аватар'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Название
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Название канала',
+                      hintText: 'Например: Веганские рецепты',
+                      prefixIcon: Icon(Icons.tag),
+                    ),
+                    onChanged: (_) => _updateSlug(),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Введите название';
+                      }
+                      if (value.length < 3) {
+                        return 'Минимум 3 символа';
+                      }
+                      return null;
                     },
                   ),
-                ),
-                const SizedBox(height: 12),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Платный канал'),
-                          subtitle: const Text(
-                            'Доступ к постам по месячной подписке за звёзды',
-                          ),
-                          value: _isPaid,
-                          onChanged: (value) => setState(() => _isPaid = value),
+                  const SizedBox(height: 16),
+                  // Slug
+                  TextFormField(
+                    controller: _slugController,
+                    decoration: const InputDecoration(
+                      labelText: 'URL идентификатор',
+                      hintText: 'vegan_recipes',
+                      prefixIcon: Icon(Icons.link),
+                      helperText: 'Используется в URL канала',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Введите идентификатор';
+                      }
+                      if (!RegExp(r'^[a-z0-9_]+$').hasMatch(value)) {
+                        return 'Только латиница, цифры и подчеркивание';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Описание
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Описание (опционально)',
+                      hintText: 'Расскажите о вашем канале...',
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 5,
+                    minLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  // Категория
+                  Autocomplete<String>(
+                    optionsBuilder: (textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return _categories;
+                      }
+                      return _categories.where((category) => category
+                          .toLowerCase()
+                          .contains(textEditingValue.text.toLowerCase()));
+                    },
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                      // Синхронизируем внешний контроллер с внутренним
+                      if (controller.text != _categoryController.text) {
+                        _categoryController.text = controller.text;
+                      }
+                      controller.addListener(() {
+                        _categoryController.text = controller.text;
+                      });
+                      return TextFormField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          labelText: 'Категория (опционально)',
+                          hintText: 'Выберите или введите категорию',
+                          prefixIcon: Icon(Icons.category),
+                          helperText: 'Например: Итальянская, Веган, Быстрое',
                         ),
-                        if (_isPaid) ...[
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _monthlyPriceStarsController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Цена в звёздах в месяц',
-                              prefixIcon: Icon(Icons.stars_rounded),
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (!_isPaid) return null;
-                              final price = int.tryParse((value ?? '').trim());
-                              if (price == null || price <= 0) {
-                                return 'Укажите цену больше 0';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ],
+                      );
+                    },
+                    onSelected: (value) {
+                      _categoryController.text = value;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  // Публичность
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: SwitchListTile(
+                      title: const Text('Публичный канал'),
+                      subtitle: Text(
+                        _isPublic
+                            ? 'Канал будет виден всем пользователям'
+                            : 'Приватный канал — только для подписчиков',
+                      ),
+                      value: _isPublic,
+                      onChanged: (value) {
+                        setState(() => _isPublic = value);
+                      },
                     ),
                   ),
-                ),
-                if (!_isPublic) ...[
                   const SizedBox(height: 12),
-                  Card(
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
                         children: [
-                          Icon(
-                            Icons.lock_outline,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Рецепты в приватном канале — индивидуальный контент: '
-                              'они не попадают в общий Menu и доступны только здесь. '
-                              'Публикация рецептов — с тарифом H.A.N. Creator или Pro.',
-                              style: Theme.of(context).textTheme.bodyMedium,
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Платный канал'),
+                            subtitle: const Text(
+                              'Доступ к постам по месячной подписке за звёзды',
                             ),
+                            value: _isPaid,
+                            onChanged: (value) =>
+                                setState(() => _isPaid = value),
                           ),
+                          if (_isPaid) ...[
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _monthlyPriceStarsController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Цена в звёздах в месяц',
+                                prefixIcon: Icon(Icons.stars_rounded),
+                                border: OutlineInputBorder(),
+                              ),
+                              validator: (value) {
+                                if (!_isPaid) return null;
+                                final price =
+                                    int.tryParse((value ?? '').trim());
+                                if (price == null || price <= 0) {
+                                  return 'Укажите цену больше 0';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
-                ],
-                const SizedBox(height: 32),
-                // Кнопка создания
-                FilledButton(
-                  onPressed: _isLoading ? null : _handleCreate,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  if (!_isPublic) ...[
+                    const SizedBox(height: 12),
+                    TelegramGroupedSurface(
+                      margin: EdgeInsets.zero,
+                      child: TelegramActionRow(
+                        icon: Icons.lock_outline_rounded,
+                        title: 'Приватный канал',
+                        subtitle:
+                            'Рецепты доступны только здесь и не попадают в общий Menu.',
+                        iconColor: Theme.of(context).colorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  // Кнопка создания
+                  FilledButton(
+                    onPressed: _isLoading ? null : _handleCreate,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Создать канал'),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Создать канал'),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }

@@ -9,6 +9,7 @@ import '../../../services/meal_plan_service.dart';
 import '../../../services/shopping_service.dart';
 import '../../../widgets/services_ready_gate.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../../../services/server_config.dart';
 import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -424,7 +425,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   Widget _nutritionDayCard(BuildContext context, _DayNutritionTotals totals) {
     final theme = Theme.of(context);
-    return Card(
+    return TelegramGroupedSurface(
+      margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -459,7 +461,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     MealType mealType,
     List<MealPlanEntry> entries,
   ) {
-    return Card(
+    return TelegramGroupedSurface(
       margin: const EdgeInsets.only(bottom: 16),
       child: ExpansionTile(
         leading: Icon(_getMealIcon(mealType)),
@@ -486,9 +488,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   Widget _buildMealEntry(MealPlanEntry entry) {
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: entry.recipe.image != null && entry.recipe.image!.isNotEmpty
           ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               child: Image.network(
                 ServerConfig.resolveRecipeImageUrl(entry.recipe.image!),
                 width: 50,
@@ -497,7 +500,15 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 errorBuilder: (_, __, ___) => const Icon(Icons.restaurant),
               ),
             )
-          : const Icon(Icons.restaurant),
+          : CircleAvatar(
+              radius: 22,
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+              child: Icon(
+                Icons.restaurant,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
       title: Text(entry.recipe.title),
       subtitle: Text('${entry.servings} порций'),
       trailing: IconButton(

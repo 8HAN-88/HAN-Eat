@@ -7,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../core/config/subscription_checkout_urls.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../../../../services/subscription_service.dart';
 import '../../../../services/payment_service.dart';
 import '../../../../services/product_analytics.dart';
@@ -389,29 +390,19 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
             if (status != null && status.upgradeOptions.isNotEmpty) ...[
               const SizedBox(height: 12),
               ...status.upgradeOptions.map((opt) {
-                return Card(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withValues(alpha: 0.4),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.upgrade,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    title: Text('Улучшить до ${opt.name}'),
-                    subtitle: Text(
-                      [
-                        if (opt.reason != null) opt.reason!,
-                        if (opt.isUpgrade && opt.creditRub > 0)
-                          'К оплате: ${opt.amountDue.toStringAsFixed(0)} ₽ '
-                              '(учтено ${opt.creditRub.toStringAsFixed(0)} ₽ за ${opt.remainingDays} дн.)'
-                        else
-                          '${opt.monthlyPrice.toStringAsFixed(0)} ₽/мес · новый период 30 дней',
-                      ].join('\n'),
-                    ),
-                    isThreeLine: opt.reason != null,
-                    trailing: const Icon(Icons.chevron_right),
+                return TelegramGroupedSurface(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: TelegramActionRow(
+                    icon: Icons.upgrade_rounded,
+                    title: 'Улучшить до ${opt.name}',
+                    subtitle: [
+                      if (opt.reason != null) opt.reason!,
+                      if (opt.isUpgrade && opt.creditRub > 0)
+                        'К оплате: ${opt.amountDue.toStringAsFixed(0)} ₽ · учтено ${opt.creditRub.toStringAsFixed(0)} ₽'
+                      else
+                        '${opt.monthlyPrice.toStringAsFixed(0)} ₽/мес · 30 дней',
+                    ].join(' · '),
+                    trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => setState(() => _selectedProduct = opt.product),
                   ),
                 );
@@ -650,20 +641,18 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
               child: const Text('Позже'),
             ),
             const SizedBox(height: 24),
-            Text(
-              'История оплат',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            const TelegramSectionHeader(
+              title: 'История оплат',
+              padding: EdgeInsets.fromLTRB(2, 0, 2, 8),
             ),
-            const SizedBox(height: 8),
             if (_loadingPayments)
               const Padding(
                 padding: EdgeInsets.all(16),
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_payments.isEmpty)
-              Card(
+              TelegramGroupedSurface(
+                margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
@@ -715,7 +704,8 @@ class _PaymentHistoryTile extends StatelessWidget {
         payment.paymentId != null &&
         !payment.paymentId!.startsWith('trial-');
 
-    return Card(
+    return TelegramGroupedSurface(
+      margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
         child: Column(

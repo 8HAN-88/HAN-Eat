@@ -3,6 +3,8 @@ import '../../utils/api_error_parser.dart';
 import '../../services/user_service.dart';
 import '../../widgets/app_avatar.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_gradient_background.dart';
+import '../../widgets/telegram_ui.dart';
 
 class PublicProfilePage extends StatefulWidget {
   final String uid;
@@ -85,44 +87,66 @@ class _PublicProfilePageState extends State<PublicProfilePage> {
     } else if (profile == null) {
       body = const Center(child: CircularProgressIndicator());
     } else {
-      body = Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            CircleAvatar(
-              radius: 48,
-              backgroundImage: resolvedAvatarImage(
-                profile.avatarUrl,
-                decodeWidth: 192,
-              ),
-              child: resolvedAvatarImage(profile.avatarUrl) == null
-                  ? Text(_initialForName(profile.displayName))
-                  : null,
+      body = ListView(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+        children: [
+          Center(
+            child: AppUserAvatar(
+              imageUrl: profile.avatarUrl,
+              displayName: profile.displayName,
+              radius: 50,
             ),
-            const SizedBox(height: 12),
-            Text(
-              profile.displayName,
-              style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            profile.displayName,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+          ),
+          const SizedBox(height: 18),
+          TelegramGroupedSurface(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                TelegramActionRow(
+                  icon: Icons.person_add_alt_1_rounded,
+                  title: _isFollowing ? 'Вы подписаны' : 'Подписаться',
+                  subtitle: _isFollowing
+                      ? 'Нажмите, чтобы отписаться'
+                      : 'Следите за новыми публикациями',
+                  trailing: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _isFollowing
+                              ? Icons.check_circle_rounded
+                              : Icons.chevron_right_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                  onTap: _loading ? null : _toggleFollow,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _loading ? null : _toggleFollow,
-              child: Text(_isFollowing ? 'Отписаться' : 'Подписаться'),
-            ),
-          ],
-        ),
+          ),
+        ],
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(title: Text(profile?.displayName ?? 'Профиль')),
-      body: body,
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: Text(profile?.displayName ?? 'Профиль'),
+        ),
+        body: body,
+      ),
     );
-  }
-
-  String _initialForName(String name) {
-    final t = name.trim();
-    if (t.isEmpty) return '?';
-    return t[0].toUpperCase();
   }
 }
