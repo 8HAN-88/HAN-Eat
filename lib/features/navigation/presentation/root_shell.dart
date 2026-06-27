@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -335,7 +336,13 @@ class _RootShellState extends ConsumerState<RootShell> {
                 compact ? kShellNavCompactDuration : kShellNavExpandDuration;
 
             final navBar = SafeArea(
-              minimum: EdgeInsets.zero,
+              minimum: EdgeInsets.only(
+                left: kShellNavSideMargin,
+                right: kShellNavSideMargin,
+                bottom: compact
+                    ? kShellNavBottomMarginCompact
+                    : kShellNavBottomMarginExpanded,
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -514,7 +521,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 }
 
-/// Flat Telegram-like bottom navigation: surface + thin divider, no glass.
+/// Instagram-like floating pill: translucent, rounded, and compact on scroll.
 class _ShellNavGlassPill extends StatelessWidget {
   const _ShellNavGlassPill({
     required this.height,
@@ -531,17 +538,46 @@ class _ShellNavGlassPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = height / 2;
+    final fill = isDark
+        ? Colors.black.withValues(alpha: compact ? 0.48 : 0.58)
+        : scheme.surface.withValues(alpha: compact ? 0.58 : 0.72);
+    final blur = compact ? 16.0 : 22.0;
+
     return AnimatedContainer(
       duration: duration,
       curve: kShellNavChromeCurve,
       height: height,
       decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant, width: 0.7),
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.14),
+            blurRadius: compact ? 16 : 26,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.white.withValues(alpha: 0.55),
+                width: 0.8,
+              ),
+            ),
+            child: child,
+          ),
         ),
       ),
-      child: child,
     );
   }
 }

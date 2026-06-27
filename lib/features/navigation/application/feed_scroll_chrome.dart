@@ -23,15 +23,15 @@ const double _kMinOffsetToHide = 48;
 const double kFeedChromeHeaderHeight = 50;
 
 /// Полная высота плавающей нижней панели в [RootShell].
-const double kShellNavExpandedHeight = 54;
+const double kShellNavExpandedHeight = 62;
 
 /// Компактная высота нижней панели при прокрутке вниз.
-const double kShellNavCompactHeight = 44;
+const double kShellNavCompactHeight = 50;
 
 /// Отступ панели от нижнего края (как в Instagram).
-const double kShellNavBottomMarginExpanded = 14;
-const double kShellNavBottomMarginCompact = 10;
-const double kShellNavSideMargin = 20;
+const double kShellNavBottomMarginExpanded = 16;
+const double kShellNavBottomMarginCompact = 12;
+const double kShellNavSideMargin = 24;
 
 double feedChromeTopInset(BuildContext context) {
   final top = MediaQuery.paddingOf(context).top;
