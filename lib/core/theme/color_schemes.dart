@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Telegram-first palette. Orange remains available only as a food accent.
-  static const primary = Color(0xFF3390EC);
-  static const primaryDark = Color(0xFF2B7DCE);
-  static const primaryLight = Color(0xFF6AB3F3);
-  static const foodOrange = Color(0xFFFF6B35);
+  // Telegram-like structure with HAN Eat brand orange as the main accent.
+  static const primary = Color(0xFFFF6B35);
+  static const primaryDark = Color(0xFFE85A2B);
+  static const primaryLight = Color(0xFFFF9D7A);
+  static const foodOrange = primary;
   static const telegramBlue = primary;
   static const telegramBlueDark = primaryDark;
   static const telegramOutgoingLight = Color(0xFFEFFEDD);
-  static const telegramOutgoingDark = Color(0xFF2B5278);
+  static const telegramOutgoingDark = Color(0xFF6A3423);
   static const telegramChatBgLight = Color(0xFFE7EBF0);
   static const telegramChatBgDark = Color(0xFF0E1621);
 
@@ -48,8 +48,8 @@ ColorScheme buildLightColorScheme() {
   return base.copyWith(
     primary: AppColors.telegramBlue,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFDFF1FF),
-    onPrimaryContainer: const Color(0xFF0B5285),
+    primaryContainer: const Color(0xFFFFEEE7),
+    onPrimaryContainer: const Color(0xFF6A321E),
     secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
     secondaryContainer: const Color(0xFFFFEEE7),
@@ -90,8 +90,8 @@ ColorScheme buildDarkColorScheme() {
   return base.copyWith(
     primary: AppColors.telegramBlue,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFF1B4F78),
-    onPrimaryContainer: const Color(0xFFDDF4FF),
+    primaryContainer: const Color(0xFF5A2C20),
+    onPrimaryContainer: const Color(0xFFFFE8E0),
     secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
     secondaryContainer: const Color(0xFF5A2C20),

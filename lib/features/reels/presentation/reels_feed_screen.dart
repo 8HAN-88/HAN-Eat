@@ -1560,6 +1560,7 @@ class _ReelCardState extends ConsumerState<ReelCard>
   Widget _buildDescription(String description) {
     _clearDescriptionRecognizers();
     final words = description.split(' ');
+    final accent = Theme.of(context).colorScheme.primary;
     return RichText(
       text: TextSpan(
         style: const TextStyle(
@@ -1578,8 +1579,8 @@ class _ReelCardState extends ConsumerState<ReelCard>
             _descriptionRecognizers.add(r);
             return TextSpan(
               text: '$word ',
-              style: const TextStyle(
-                color: Colors.lightBlueAccent,
+              style: TextStyle(
+                color: accent,
                 fontWeight: FontWeight.w500,
               ),
               recognizer: r,
@@ -1596,8 +1597,8 @@ class _ReelCardState extends ConsumerState<ReelCard>
             _descriptionRecognizers.add(r);
             return TextSpan(
               text: '$word ',
-              style: const TextStyle(
-                color: Colors.lightBlueAccent,
+              style: TextStyle(
+                color: accent,
                 fontWeight: FontWeight.w500,
               ),
               recognizer: r,
