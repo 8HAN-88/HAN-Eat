@@ -89,15 +89,7 @@ class AppCardDecorations {
         color: scheme.outlineVariant.withValues(alpha: isDark ? 0.65 : 1),
         width: 0.5,
       ),
-      boxShadow: [
-        BoxShadow(
-          color: isDark
-              ? Colors.black.withValues(alpha: 0.35)
-              : scheme.shadow.withValues(alpha: 0.1),
-          blurRadius: isDark ? 8 : 12,
-          offset: Offset(0, isDark ? 2 : 4),
-        ),
-      ],
+      boxShadow: const [],
     );
   }
 }

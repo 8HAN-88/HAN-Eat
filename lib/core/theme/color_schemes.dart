@@ -1,28 +1,33 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // HAN Eat action accent. Telegram blue is used for navigation, links and unread states.
-  static const primary = Color(0xFFFF6B35);
-  static const primaryDark = Color(0xFFE85A2B);
-  static const primaryLight = Color(0xFFFF9D7A);
-  static const telegramBlue = Color(0xFF2AABEE);
-  static const telegramBlueDark = Color(0xFF229ED9);
+  // Telegram-first palette. Orange remains available only as a food accent.
+  static const primary = Color(0xFF3390EC);
+  static const primaryDark = Color(0xFF2B7DCE);
+  static const primaryLight = Color(0xFF6AB3F3);
+  static const foodOrange = Color(0xFFFF6B35);
+  static const telegramBlue = primary;
+  static const telegramBlueDark = primaryDark;
+  static const telegramOutgoingLight = Color(0xFFEFFEDD);
+  static const telegramOutgoingDark = Color(0xFF2B5278);
+  static const telegramChatBgLight = Color(0xFFE7EBF0);
+  static const telegramChatBgDark = Color(0xFF0E1621);
 
   static const secondary = telegramBlue;
   static const secondaryDark = telegramBlueDark;
 
-  /// База светлой темы — ровный нейтральный белый без тёплого градиента.
-  static const backgroundLight = Color(0xFFF4F6F8);
+  /// Telegram light lists are mostly white, with pale gray behind grouped areas.
+  static const backgroundLight = Color(0xFFF4F4F5);
 
-  /// Единый фон тёмной темы: холодный графит.
-  static const backgroundDark = Color(0xFF0F141A);
+  /// Telegram dark base.
+  static const backgroundDark = Color(0xFF0E1621);
 
   /// Карточки и «поднятые» блоки в светлой теме.
   static const surface = Color(0xFFFFFFFF);
-  static const surfaceDark = Color(0xFF18222D);
+  static const surfaceDark = Color(0xFF17212B);
 
   /// Приглушённые блоки (чипы, подложки) — нейтральный серый.
-  static const surfaceVariant = Color(0xFFEFF3F7);
+  static const surfaceVariant = Color(0xFFF1F3F5);
 
   // Акцентные цвета
   static const success = Color(0xFF4CAF50); // Зелёный (свежесть, здоровье)
@@ -36,16 +41,16 @@ class AppColors {
 
 ColorScheme buildLightColorScheme() {
   final base = ColorScheme.fromSeed(
-    seedColor: AppColors.primary,
+    seedColor: AppColors.telegramBlue,
     brightness: Brightness.light,
   );
 
   return base.copyWith(
     primary: AppColors.telegramBlue,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFE7F5FE),
-    onPrimaryContainer: const Color(0xFF0B4F70),
-    secondary: AppColors.primary,
+    primaryContainer: const Color(0xFFDFF1FF),
+    onPrimaryContainer: const Color(0xFF0B5285),
+    secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
     secondaryContainer: const Color(0xFFFFEEE7),
     onSecondaryContainer: const Color(0xFF6A321E),
@@ -59,18 +64,18 @@ ColorScheme buildLightColorScheme() {
     onErrorContainer: const Color(0xFF6B1F1F),
     surface: AppColors.surface,
     surfaceContainerLowest: AppColors.backgroundLight,
-    surfaceContainerLow: const Color(0xFFF8FAFC),
-    surfaceContainer: const Color(0xFFEFF3F7),
-    surfaceContainerHigh: const Color(0xFFE6EDF3),
-    surfaceContainerHighest: const Color(0xFFDDE6EE),
-    onSurface: const Color(0xFF111820),
-    onSurfaceVariant: const Color(0xFF637282),
+    surfaceContainerLow: const Color(0xFFFFFFFF),
+    surfaceContainer: const Color(0xFFF1F3F5),
+    surfaceContainerHigh: const Color(0xFFE6EAEE),
+    surfaceContainerHighest: const Color(0xFFD8DEE5),
+    onSurface: const Color(0xFF111111),
+    onSurfaceVariant: const Color(0xFF707579),
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFF2A2D35),
     onInverseSurface: const Color(0xFFF1F3F6),
     inversePrimary: AppColors.primaryLight,
-    outline: const Color(0xFFD7E0E8),
-    outlineVariant: const Color(0xFFE5EDF4),
+    outline: const Color(0xFFDADCE0),
+    outlineVariant: const Color(0xFFE6E7EA),
     shadow: Colors.black.withValues(alpha: 0.1),
     scrim: Colors.black.withValues(alpha: 0.4),
   );
@@ -78,16 +83,16 @@ ColorScheme buildLightColorScheme() {
 
 ColorScheme buildDarkColorScheme() {
   final base = ColorScheme.fromSeed(
-    seedColor: AppColors.primary,
+    seedColor: AppColors.telegramBlue,
     brightness: Brightness.dark,
   );
 
   return base.copyWith(
     primary: AppColors.telegramBlue,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFF143D54),
+    primaryContainer: const Color(0xFF1B4F78),
     onPrimaryContainer: const Color(0xFFDDF4FF),
-    secondary: AppColors.primary,
+    secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
     secondaryContainer: const Color(0xFF5A2C20),
     onSecondaryContainer: const Color(0xFFFFE8E0),
@@ -101,18 +106,18 @@ ColorScheme buildDarkColorScheme() {
     onErrorContainer: const Color(0xFFFFE8E8),
     surface: AppColors.surfaceDark,
     surfaceContainerLowest: AppColors.backgroundDark,
-    surfaceContainerLow: const Color(0xFF131A22),
-    surfaceContainer: const Color(0xFF18222D),
-    surfaceContainerHigh: const Color(0xFF202C38),
-    surfaceContainerHighest: const Color(0xFF293746),
-    onSurface: const Color(0xFFEFF5FA),
-    onSurfaceVariant: const Color(0xFFA9B7C5),
+    surfaceContainerLow: const Color(0xFF17212B),
+    surfaceContainer: const Color(0xFF1D2A36),
+    surfaceContainerHigh: const Color(0xFF243241),
+    surfaceContainerHighest: const Color(0xFF2E3D4D),
+    onSurface: const Color(0xFFEFF3F7),
+    onSurfaceVariant: const Color(0xFF9AA8B5),
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFFE8EAEF),
     onInverseSurface: const Color(0xFF1A1D22),
     inversePrimary: AppColors.primaryDark,
-    outline: const Color(0xFF405162),
-    outlineVariant: const Color(0xFF2B3A48),
+    outline: const Color(0xFF3A4B5C),
+    outlineVariant: const Color(0xFF253544),
     shadow: Colors.black,
     scrim: Colors.black.withValues(alpha: 0.6),
   );

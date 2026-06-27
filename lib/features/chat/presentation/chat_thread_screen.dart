@@ -17,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../core/network/api_rate_limit_backoff.dart';
@@ -3327,6 +3328,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (!didPop && _selectionMode) _exitSelectionMode();
       },
       child: Scaffold(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? AppColors.telegramChatBgDark
+            : AppColors.telegramChatBgLight,
         resizeToAvoidBottomInset: false,
         appBar: _selectionMode
             ? AppBar(
@@ -3974,8 +3978,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                 ? 'Сообщение'
                                                 : 'Сообщение или удержите 🎤')),
                                     filled: true,
-                                    fillColor: scheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.6),
+                                    fillColor: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? const Color(0xFF242F3D)
+                                        : const Color(0xFFF1F3F5),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(22),
                                       borderSide: BorderSide.none,
@@ -4295,10 +4301,10 @@ class _Bubble extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = mine
         ? (isDark
-            ? scheme.primaryContainer.withValues(alpha: 0.72)
-            : scheme.primaryContainer.withValues(alpha: 0.92))
+            ? AppColors.telegramOutgoingDark
+            : AppColors.telegramOutgoingLight)
         : scheme.surface;
-    final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
+    final fg = mine && isDark ? Colors.white : scheme.onSurface;
     final quoteBg = mine
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
@@ -4511,9 +4517,7 @@ class _Bubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,
         borderRadius: bubbleRadius,
-        border: !mine && bubbleNeedsBackground
-            ? Border.all(color: scheme.outlineVariant, width: 0.6)
-            : null,
+        border: null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

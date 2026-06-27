@@ -95,11 +95,11 @@ class FeedSectionTabs extends StatelessWidget {
       builder: (context, _) {
         return TabBar(
           controller: controller,
-          indicatorSize: TabBarIndicatorSize.tab,
+          indicatorSize: TabBarIndicatorSize.label,
           dividerColor: Colors.transparent,
           splashFactory: InkRipple.splashFactory,
-          indicator: BoxDecoration(
-            color: scheme.primary.withValues(alpha: 0.12),
+          indicator: UnderlineTabIndicator(
+            borderSide: BorderSide(color: scheme.primary, width: 3),
             borderRadius: BorderRadius.circular(999),
           ),
           labelColor: scheme.primary,

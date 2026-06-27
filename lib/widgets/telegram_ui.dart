@@ -58,8 +58,8 @@ class TelegramGroupedSurface extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: scheme.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: scheme.outlineVariant, width: 0.7),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant, width: 0.5),
       ),
       child: child,
     );

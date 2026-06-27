@@ -53,7 +53,7 @@ class AppUserAvatar extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [
                   scheme.primary,
-                  scheme.secondary,
+                  scheme.primary.withValues(alpha: 0.72),
                 ],
               ),
             ),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/color_schemes.dart';
 import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../models/post_model.dart';
@@ -9,7 +10,6 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
-import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/report_content_dialog.dart';
 
 class CommentsScreen extends ConsumerStatefulWidget {
@@ -199,223 +199,222 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
     }
 
     final scheme = Theme.of(context).colorScheme;
-    return AppGradientBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: const Text('Комментарии'),
-        ),
-        resizeToAvoidBottomInset: true,
-        bottomNavigationBar: _buildComposerBar(context),
-        body: Column(
-          children: [
-            // Информация о посте (если есть)
-            if (widget.post != null)
-              Container(
-                margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: scheme.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: scheme.outlineVariant, width: 0.7),
-                ),
-                child: Row(
-                  children: [
-                    AppUserAvatar(
-                      imageUrl: widget.post!.author?.avatarUrl,
-                      displayName: widget.post!.author?.name ?? '?',
-                      radius: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.post!.author?.name ?? 'Неизвестный',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (widget.post!.title != null)
-                            Text(
-                              widget.post!.title!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: scheme.onSurfaceVariant,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+    return Scaffold(
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? AppColors.telegramChatBgDark
+          : AppColors.telegramChatBgLight,
+      appBar: AppBar(
+        backgroundColor: scheme.surface,
+        title: const Text('Комментарии'),
+      ),
+      resizeToAvoidBottomInset: true,
+      bottomNavigationBar: _buildComposerBar(context),
+      body: Column(
+        children: [
+          // Информация о посте (если есть)
+          if (widget.post != null)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: scheme.outlineVariant, width: 0.7),
               ),
-            // Список комментариев
-            Expanded(
-              child: _comments.isEmpty && _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _comments.isEmpty
-                      ? const AppEmptyState(
-                          icon: Icons.comment_outlined,
-                          title: 'Нет комментариев',
-                          subtitle: 'Будьте первым!',
-                        )
-                      : RefreshIndicator(
-                          onRefresh: () => _loadComments(refresh: true),
-                          child: ListView(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
-                            children: [
-                              ...roots.map((root) {
-                                final replies =
-                                    repliesByRoot[root.id] ?? const <Comment>[];
-                                final isExpanded =
-                                    _expandedThreads.contains(root.id);
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _CommentItem(
-                                      comment: root,
-                                      isOwnComment: _isOwnComment(root),
-                                      onReport: () => reportCommentWithDialog(
-                                        context,
-                                        root.id,
-                                      ),
-                                      onReply: () {
-                                        setState(() {
-                                          _replyToCommentId = root.id;
-                                          _replyToAuthor =
-                                              root.authorName ?? 'Пользователь';
-                                        });
-                                        _focusCommentInput();
-                                      },
-                                      onDelete: () async {
-                                        try {
-                                          await CommentService.deleteComment(
-                                              root.id);
-                                          setState(() {
-                                            _comments.removeWhere(
-                                                (c) => c.id == root.id);
-                                          });
-                                        } catch (e) {
-                                          if (mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  userVisibleError(e,
-                                                      fallback:
-                                                          'Не удалось удалить комментарий'),
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
+              child: Row(
+                children: [
+                  AppUserAvatar(
+                    imageUrl: widget.post!.author?.avatarUrl,
+                    displayName: widget.post!.author?.name ?? '?',
+                    radius: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.post!.author?.name ?? 'Неизвестный',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        if (widget.post!.title != null)
+                          Text(
+                            widget.post!.title!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          // Список комментариев
+          Expanded(
+            child: _comments.isEmpty && _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _comments.isEmpty
+                    ? const AppEmptyState(
+                        icon: Icons.comment_outlined,
+                        title: 'Нет комментариев',
+                        subtitle: 'Будьте первым!',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () => _loadComments(refresh: true),
+                        child: ListView(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+                          children: [
+                            ...roots.map((root) {
+                              final replies =
+                                  repliesByRoot[root.id] ?? const <Comment>[];
+                              final isExpanded =
+                                  _expandedThreads.contains(root.id);
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _CommentItem(
+                                    comment: root,
+                                    isOwnComment: _isOwnComment(root),
+                                    onReport: () => reportCommentWithDialog(
+                                      context,
+                                      root.id,
                                     ),
-                                    if (replies.isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 12, bottom: 6),
-                                        child: TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              if (isExpanded) {
-                                                _expandedThreads
-                                                    .remove(root.id);
-                                              } else {
-                                                _expandedThreads.add(root.id);
-                                              }
-                                            });
-                                          },
-                                          style: TextButton.styleFrom(
-                                            padding: EdgeInsets.zero,
-                                            minimumSize: const Size(0, 20),
-                                            tapTargetSize: MaterialTapTargetSize
-                                                .shrinkWrap,
-                                          ),
-                                          child: Text(
-                                            isExpanded
-                                                ? 'Скрыть ответы'
-                                                : 'Показать ответы (${replies.length})',
-                                          ),
+                                    onReply: () {
+                                      setState(() {
+                                        _replyToCommentId = root.id;
+                                        _replyToAuthor =
+                                            root.authorName ?? 'Пользователь';
+                                      });
+                                      _focusCommentInput();
+                                    },
+                                    onDelete: () async {
+                                      try {
+                                        await CommentService.deleteComment(
+                                            root.id);
+                                        setState(() {
+                                          _comments.removeWhere(
+                                              (c) => c.id == root.id);
+                                        });
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                userVisibleError(e,
+                                                    fallback:
+                                                        'Не удалось удалить комментарий'),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
+                                  if (replies.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 12, bottom: 6),
+                                      child: TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            if (isExpanded) {
+                                              _expandedThreads.remove(root.id);
+                                            } else {
+                                              _expandedThreads.add(root.id);
+                                            }
+                                          });
+                                        },
+                                        style: TextButton.styleFrom(
+                                          padding: EdgeInsets.zero,
+                                          minimumSize: const Size(0, 20),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          isExpanded
+                                              ? 'Скрыть ответы'
+                                              : 'Показать ответы (${replies.length})',
                                         ),
                                       ),
-                                    if (replies.isNotEmpty && isExpanded)
-                                      ...replies.map((reply) {
-                                        final parentAuthor = reply.parentId !=
-                                                null
-                                            ? byId[reply.parentId!]?.authorName
-                                            : null;
-                                        final mention = (parentAuthor != null &&
-                                                parentAuthor.isNotEmpty)
-                                            ? '$parentAuthor, '
-                                            : '';
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(left: 18),
-                                          child: _CommentItem(
-                                            comment: reply,
-                                            textPrefix: mention,
-                                            isOwnComment: _isOwnComment(reply),
-                                            onReport: () =>
-                                                reportCommentWithDialog(
-                                              context,
-                                              reply.id,
-                                            ),
-                                            onReply: () {
-                                              setState(() {
-                                                _replyToCommentId = reply.id;
-                                                _replyToAuthor =
-                                                    reply.authorName ??
-                                                        'Пользователь';
-                                              });
-                                              _focusCommentInput();
-                                            },
-                                            onDelete: () async {
-                                              try {
-                                                await CommentService
-                                                    .deleteComment(reply.id);
-                                                setState(() {
-                                                  _comments.removeWhere(
-                                                      (c) => c.id == reply.id);
-                                                });
-                                              } catch (e) {
-                                                if (mounted) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        userVisibleError(e,
-                                                            fallback:
-                                                                'Не удалось удалить комментарий'),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }
-                                              }
-                                            },
+                                    ),
+                                  if (replies.isNotEmpty && isExpanded)
+                                    ...replies.map((reply) {
+                                      final parentAuthor = reply.parentId !=
+                                              null
+                                          ? byId[reply.parentId!]?.authorName
+                                          : null;
+                                      final mention = (parentAuthor != null &&
+                                              parentAuthor.isNotEmpty)
+                                          ? '$parentAuthor, '
+                                          : '';
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(left: 18),
+                                        child: _CommentItem(
+                                          comment: reply,
+                                          textPrefix: mention,
+                                          isOwnComment: _isOwnComment(reply),
+                                          onReport: () =>
+                                              reportCommentWithDialog(
+                                            context,
+                                            reply.id,
                                           ),
-                                        );
-                                      }),
-                                  ],
-                                );
-                              }),
-                              if (_hasMore)
-                                const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: CircularProgressIndicator(),
-                                  ),
+                                          onReply: () {
+                                            setState(() {
+                                              _replyToCommentId = reply.id;
+                                              _replyToAuthor =
+                                                  reply.authorName ??
+                                                      'Пользователь';
+                                            });
+                                            _focusCommentInput();
+                                          },
+                                          onDelete: () async {
+                                            try {
+                                              await CommentService
+                                                  .deleteComment(reply.id);
+                                              setState(() {
+                                                _comments.removeWhere(
+                                                    (c) => c.id == reply.id);
+                                              });
+                                            } catch (e) {
+                                              if (mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      userVisibleError(e,
+                                                          fallback:
+                                                              'Не удалось удалить комментарий'),
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
+                                      );
+                                    }),
+                                ],
+                              );
+                            }),
+                            if (_hasMore)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: CircularProgressIndicator(),
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
-            ),
-          ],
-        ),
+                      ),
+          ),
+        ],
       ),
     );
   }
@@ -591,10 +590,7 @@ class _CommentItemState extends State<_CommentItem> {
       child: Material(
         color: scheme.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: scheme.outlineVariant, width: 0.6),
-        ),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 9, 4),
           child: Row(

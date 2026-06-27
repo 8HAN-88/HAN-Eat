@@ -28,9 +28,9 @@ class PostCardContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       padding: padding,
-      radius: borderRadius ?? 18,
+      radius: borderRadius ?? 12,
       color: backgroundColor,
       borderColor: borderColor,
       showShadow: false,
@@ -61,25 +61,13 @@ class ChannelPostCardContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       padding: padding,
-      radius: borderRadius ?? 18,
+      radius: borderRadius ?? 12,
       color: channelBackgroundColor,
-      child: channelAccentColor != null
-          ? Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    channelAccentColor!.withValues(alpha: 0.05),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-              child: child,
-            )
-          : child,
+      borderColor: channelAccentColor?.withValues(alpha: 0.45),
+      showShadow: false,
+      child: child,
     );
   }
 }
