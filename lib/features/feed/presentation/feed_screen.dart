@@ -52,13 +52,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     final feedState = ref.watch(feedControllerProvider);
 
     final bodyContent = _buildBody(feedState);
-    
+
     final content = widget.hideScaffold
         ? Column(
             children: [
               // Панель управления (если используется без Scaffold)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     // Переключатель режимов
@@ -203,6 +204,8 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.symmetric(vertical: 8),
+      addAutomaticKeepAlives: false,
+      addRepaintBoundaries: true,
       itemCount: state.posts.length + (state.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index >= state.posts.length) {
@@ -218,6 +221,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
 
         final post = state.posts[index];
         return PostCard(
+          key: ValueKey('legacy_feed_post_${post.id}'),
           post: post,
           onLike: () => _toggleLike(post),
           onComment: () => _openComments(post),
@@ -246,7 +250,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       } else {
         await FeedService.likePost(post.id, currentUid);
       }
-      await ref.read(feedControllerProvider.notifier).refreshPost(post.idString);
+      await ref
+          .read(feedControllerProvider.notifier)
+          .refreshPost(post.idString);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -301,4 +307,3 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     reportPostWithDialog(context, post.id);
   }
 }
-

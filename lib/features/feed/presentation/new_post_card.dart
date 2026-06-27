@@ -87,6 +87,9 @@ class NewPostCard extends StatefulWidget {
 }
 
 class _NewPostCardState extends State<NewPostCard> {
+  static int? _cachedCurrentUserId;
+  static Future<int?>? _currentUserIdLoad;
+
   late PostModel _displayPost;
   bool _isLiked = false;
   int _likesCount = 0;
@@ -126,7 +129,11 @@ class _NewPostCardState extends State<NewPostCard> {
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
     _displayCommentsCount = widget.post.commentsCount;
-    _loadCurrentUserId();
+    _currentUserId =
+        AuthService.instance.currentUser?.id ?? _cachedCurrentUserId;
+    if (_currentUserId == null) {
+      _loadCurrentUserId();
+    }
     if (!kIsWeb) {
       _hydrateSpoonacularCommentsCount();
     }
@@ -157,12 +164,18 @@ class _NewPostCardState extends State<NewPostCard> {
 
   Future<void> _loadCurrentUserId() async {
     try {
-      final user = await AuthService.getCurrentUser();
+      _currentUserIdLoad ??= AuthService.getCurrentUser().then((user) {
+        _cachedCurrentUserId = user?.id;
+        return _cachedCurrentUserId;
+      });
+      final userId = await _currentUserIdLoad;
       if (mounted) {
-        setState(() => _currentUserId = user?.id);
+        setState(() => _currentUserId = userId);
       }
     } catch (e) {
       // Игнорируем ошибки
+    } finally {
+      _currentUserIdLoad = null;
     }
   }
 

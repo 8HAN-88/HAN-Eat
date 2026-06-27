@@ -12,8 +12,10 @@ class TelegramPhotoGrid extends StatelessWidget {
   final double maxHeight;
   final double spacing;
   final BorderRadius? borderRadius;
-  final VoidCallback? onTap; // Обработчик клика (для постов - открыть детальную страницу)
-  final bool enableFullscreen; // Включить полноэкранный просмотр при клике на фото
+  final VoidCallback?
+      onTap; // Обработчик клика (для постов - открыть детальную страницу)
+  final bool
+      enableFullscreen; // Включить полноэкранный просмотр при клике на фото
   final double singleAspectRatio;
 
   const TelegramPhotoGrid({
@@ -50,7 +52,7 @@ class TelegramPhotoGrid extends StatelessWidget {
         child: _buildImage(url, double.infinity, double.infinity),
       ),
     );
-    
+
     return GestureDetector(
       onTap: () => _handleImageTap(context, 0),
       child: imageWidget,
@@ -100,10 +102,10 @@ class TelegramPhotoGrid extends StatelessWidget {
         ],
       ),
     );
-    
+
     return content;
   }
-  
+
   void _handleImageTap(BuildContext context, int index) {
     if (enableFullscreen) {
       showFullscreenImageViewer(
@@ -155,7 +157,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               topRight: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[1], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[1], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -171,7 +174,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               bottomRight: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[2], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[2], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -181,7 +185,7 @@ class TelegramPhotoGrid extends StatelessWidget {
         ],
       ),
     );
-    
+
     return content;
   }
 
@@ -205,7 +209,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               topLeft: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[0], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[0], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -221,7 +226,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               topRight: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[1], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[1], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -243,7 +249,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               bottomLeft: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[2], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[2], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -259,7 +266,8 @@ class TelegramPhotoGrid extends StatelessWidget {
                           : const BorderRadius.only(
                               bottomRight: Radius.circular(12),
                             ),
-                      child: _buildImage(urls[3], double.infinity, maxHeight / 2 - spacing / 2),
+                      child: _buildImage(urls[3], double.infinity,
+                          maxHeight / 2 - spacing / 2),
                     ),
                   ),
                 ),
@@ -269,7 +277,7 @@ class TelegramPhotoGrid extends StatelessWidget {
         ],
       ),
     );
-    
+
     return content;
   }
 
@@ -283,36 +291,37 @@ class TelegramPhotoGrid extends StatelessWidget {
       child: Stack(
         children: [
           _buildFourImages(context, displayUrls),
-        if (remaining > 0)
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: borderRadius ?? BorderRadius.circular(12),
-              child: Container(
-                color: Colors.black54,
-                child: Center(
-                  child: Text(
-                    '+$remaining',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+          if (remaining > 0)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: borderRadius ?? BorderRadius.circular(12),
+                child: Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Text(
+                      '+$remaining',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
       ),
     );
-    
+
     return content;
   }
 
   Widget _buildImage(String url, double width, double height) {
     // Проверяем, является ли это локальным файлом или URL
-    final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
-    
+    final isLocalFile =
+        !url.startsWith('http://') && !url.startsWith('https://');
+
     // Локальный API часто отдаёт localhost:5000 — подставляем baseUrl (порт 5001 и т.д.)
     final resolvedUrl = isLocalFile ? url : ServerConfig.resolveMediaUrl(url);
     final optimizedUrl = isLocalFile
@@ -320,7 +329,7 @@ class TelegramPhotoGrid extends StatelessWidget {
         : ServerConfig.resolvePublisherAvatarUrl(
             getOptimizedImageUrl(resolvedUrl),
           );
-    
+
     if (isLocalFile) {
       if (kIsWeb) {
         // На веб используем Image.network с path из XFile
@@ -368,7 +377,7 @@ class TelegramPhotoGrid extends StatelessWidget {
       // Проверяем, что width и height не равны infinity перед преобразованием в int
       final memCacheWidth = width.isFinite ? (width * 2).toInt() : 1200;
       final memCacheHeight = height.isFinite ? (height * 2).toInt() : 800;
-      
+
       return CachedNetworkImage(
         imageUrl: optimizedUrl,
         width: width.isFinite ? width : null,
@@ -388,7 +397,6 @@ class TelegramPhotoGrid extends StatelessWidget {
           width: width.isFinite ? width : double.infinity,
           height: height.isFinite ? height : maxHeight,
           color: Colors.grey[300],
-          child: const Center(child: CircularProgressIndicator()),
         ),
         errorWidget: (context, url, error) => Container(
           width: width.isFinite ? width : double.infinity,
@@ -549,7 +557,8 @@ class _ModernPhotoCarouselState extends State<_ModernPhotoCarousel> {
     double height,
   ) {
     final scheme = Theme.of(context).colorScheme;
-    final isLocalFile = !url.startsWith('http://') && !url.startsWith('https://');
+    final isLocalFile =
+        !url.startsWith('http://') && !url.startsWith('https://');
     final resolvedUrl = isLocalFile ? url : ServerConfig.resolveMediaUrl(url);
     final optimizedUrl = isLocalFile
         ? resolvedUrl
@@ -612,12 +621,6 @@ class _ModernPhotoCarouselState extends State<_ModernPhotoCarousel> {
         width: width.isFinite ? width : double.infinity,
         height: height.isFinite ? height : widget.maxHeight,
         color: scheme.surfaceContainerHighest,
-        child: Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: scheme.primary,
-          ),
-        ),
       ),
       errorWidget: (context, url, error) =>
           fallback(Icons.error_outline, color: scheme.error),

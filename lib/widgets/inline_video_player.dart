@@ -41,9 +41,9 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
   String? _initKey;
   Timer? _disposeWhenHiddenTimer;
 
-  static const double _visibilityThresholdPlay = 0.25;
-  static const double _visibilityThresholdPause = 0.08;
-  static const double _visibilityThresholdPreload = 0.12;
+  static const double _visibilityThresholdPlay = 0.6;
+  static const double _visibilityThresholdPause = 0.18;
+  static const double _visibilityThresholdPreload = 0.45;
 
   bool get _canAutoPlay => _isVisible && _appVisible;
 
@@ -132,7 +132,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
 
   void _scheduleDisposeWhenHidden() {
     _disposeWhenHiddenTimer?.cancel();
-    _disposeWhenHiddenTimer = Timer(const Duration(seconds: 18), () {
+    _disposeWhenHiddenTimer = Timer(const Duration(seconds: 4), () {
       if (!mounted || _isVisible) return;
       final controller = _controller;
       _controller = null;
@@ -207,12 +207,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
                     width: double.infinity,
                     height: double.infinity,
                     memCacheWidth: 640,
-                    placeholder: (_, __) => Container(
-                      color: Colors.black,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                    ),
+                    placeholder: (_, __) => _placeholder(),
                     errorWidget: (_, __, ___) => _placeholder(),
                   )
                 else
@@ -275,9 +270,5 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
 
   Widget _placeholder() => Container(
         color: Colors.black,
-        child: const Center(
-          child:
-              CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
-        ),
       );
 }

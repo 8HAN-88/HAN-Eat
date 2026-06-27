@@ -291,160 +291,166 @@ class _SubscriptionsFeedScreenState
     if (_posts.isEmpty && !_isLoading) {
       return FeedScrollChromeListener(
         child: RefreshIndicator(
-        onRefresh: () => _loadFeed(refresh: true),
-        child: ValueListenableBuilder<bool>(
-          valueListenable: feedScrollChromeHidden,
-          builder: (context, chromeHidden, _) {
-            return CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(
-                bottom: _listBottomPadding(context, chromeHidden),
-              ),
-              sliver: SliverFillRemaining(
-                hasScrollBody: false,
-                child: AppEmptyState(
-                  icon: _lastLoadError != null
-                      ? Icons.cloud_off_outlined
-                      : Icons.subscriptions_outlined,
-                  title: _lastLoadError != null
-                      ? 'Не удалось загрузить ленту'
-                      : 'Подписки',
-                  subtitle: _lastLoadError ??
-                      'Подпишитесь на авторов, чтобы видеть их посты здесь.',
-                  action: _lastLoadError != null
-                      ? FilledButton.icon(
-                          onPressed: () => _loadFeed(refresh: true),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Повторить'),
-                        )
-                      : FilledButton.icon(
-                          onPressed: () => context.push(SearchRoute.path),
-                          icon: const Icon(Icons.search),
-                          label: const Text('Найти авторов'),
-                        ),
-                ),
-              ),
-            ),
-          ],
-        );
-          },
+          onRefresh: () => _loadFeed(refresh: true),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: feedScrollChromeHidden,
+            builder: (context, chromeHidden, _) {
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.only(
+                      bottom: _listBottomPadding(context, chromeHidden),
+                    ),
+                    sliver: SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: AppEmptyState(
+                        icon: _lastLoadError != null
+                            ? Icons.cloud_off_outlined
+                            : Icons.subscriptions_outlined,
+                        title: _lastLoadError != null
+                            ? 'Не удалось загрузить ленту'
+                            : 'Подписки',
+                        subtitle: _lastLoadError ??
+                            'Подпишитесь на авторов, чтобы видеть их посты здесь.',
+                        action: _lastLoadError != null
+                            ? FilledButton.icon(
+                                onPressed: () => _loadFeed(refresh: true),
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Повторить'),
+                              )
+                            : FilledButton.icon(
+                                onPressed: () => context.push(SearchRoute.path),
+                                icon: const Icon(Icons.search),
+                                label: const Text('Найти авторов'),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
-      ),
       );
     }
 
     return FeedScrollChromeListener(
       child: RefreshIndicator(
-      onRefresh: () => _loadFeed(refresh: true),
-      child: _posts.isEmpty && _isLoading
-          ? const PostListSkeletonLoader(itemCount: 5)
-          : ValueListenableBuilder<bool>(
-              valueListenable: feedScrollChromeHidden,
-              builder: (context, chromeHidden, _) {
-                return ListView.builder(
-              controller: _scrollController,
-              cacheExtent: kIsWeb ? 200 : 250,
-              padding: EdgeInsets.only(
-                bottom: _listBottomPadding(context, chromeHidden),
-              ),
-              itemCount: (_servingFromCache ? 1 : 0) +
-                  _posts.length +
-                  (_hasMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                final banner = _servingFromCache ? 1 : 0;
-                if (banner == 1 && index == 0) {
-                  final scheme = Theme.of(context).colorScheme;
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                    child: Material(
-                      color: scheme.secondaryContainer.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.offline_pin_outlined,
-                              size: 20,
-                              color: scheme.onSecondaryContainer,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                FeedLoadHelper.cacheBannerMessage(
-                                  _cacheLoadError ?? '',
-                                ),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: scheme.onSecondaryContainer,
+        onRefresh: () => _loadFeed(refresh: true),
+        child: _posts.isEmpty && _isLoading
+            ? const PostListSkeletonLoader(itemCount: 5)
+            : ValueListenableBuilder<bool>(
+                valueListenable: feedScrollChromeHidden,
+                builder: (context, chromeHidden, _) {
+                  return ListView.builder(
+                    controller: _scrollController,
+                    cacheExtent: kIsWeb ? 200 : 250,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: true,
+                    padding: EdgeInsets.only(
+                      bottom: _listBottomPadding(context, chromeHidden),
+                    ),
+                    itemCount: (_servingFromCache ? 1 : 0) +
+                        _posts.length +
+                        (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      final banner = _servingFromCache ? 1 : 0;
+                      if (banner == 1 && index == 0) {
+                        final scheme = Theme.of(context).colorScheme;
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                          child: Material(
+                            color: scheme.secondaryContainer
+                                .withValues(alpha: 0.95),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.offline_pin_outlined,
+                                    size: 20,
+                                    color: scheme.onSecondaryContainer,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      FeedLoadHelper.cacheBannerMessage(
+                                        _cacheLoadError ?? '',
+                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: scheme.onSecondaryContainer,
+                                          ),
                                     ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                final postIndex = index - banner;
-                if (postIndex >= 0 && postIndex < _posts.length) {
-                  final post = _posts[postIndex];
-                  return FeedExposureTracker(
-                    post: post,
-                    feedSurface: 'following',
-                    position: postIndex,
-                    child: NewPostCard(
-                      post: post,
-                      onCommentTap: () {
-                        FeedAnalyticsService.openDetail(
-                          post,
-                          source: 'following',
-                          target: 'comments',
+                          ),
                         );
-                        return context.push(PostCommentsRoute.pathFor(post.id));
-                      },
-                      onPostDeleted: () {
-                        setState(() {
-                          _posts.removeWhere((p) => p.id == post.id);
-                        });
-                      },
-                      onAuthorTap: () {
-                        if (post.repostedBy != null) {
-                          context.push(
-                              ProfileRoute.withUserId(post.repostedBy!.id));
-                        } else if (post.communityId != null) {
-                          context.push(
-                              ChannelDetailRoute.pathFor(post.communityId!));
-                        } else {
-                          context.push(ProfileRoute.withUserId(post.userId));
-                        }
-                      },
-                    ),
+                      }
+                      final postIndex = index - banner;
+                      if (postIndex >= 0 && postIndex < _posts.length) {
+                        final post = _posts[postIndex];
+                        return FeedExposureTracker(
+                          post: post,
+                          feedSurface: 'following',
+                          position: postIndex,
+                          child: NewPostCard(
+                            key: ValueKey('following_post_${post.id}'),
+                            post: post,
+                            onCommentTap: () {
+                              FeedAnalyticsService.openDetail(
+                                post,
+                                source: 'following',
+                                target: 'comments',
+                              );
+                              return context
+                                  .push(PostCommentsRoute.pathFor(post.id));
+                            },
+                            onPostDeleted: () {
+                              setState(() {
+                                _posts.removeWhere((p) => p.id == post.id);
+                              });
+                            },
+                            onAuthorTap: () {
+                              if (post.repostedBy != null) {
+                                context.push(ProfileRoute.withUserId(
+                                    post.repostedBy!.id));
+                              } else if (post.communityId != null) {
+                                context.push(ChannelDetailRoute.pathFor(
+                                    post.communityId!));
+                              } else {
+                                context
+                                    .push(ProfileRoute.withUserId(post.userId));
+                              }
+                            },
+                          ),
+                        );
+                      }
+                      if (_hasMore && index == banner + _posts.length) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: CircularProgressIndicator(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   );
-                }
-                if (_hasMore && index == banner + _posts.length) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: CircularProgressIndicator(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            );
-              },
-            ),
-    ),
+                },
+              ),
+      ),
     );
   }
 }

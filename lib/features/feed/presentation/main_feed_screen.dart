@@ -14,7 +14,6 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/notification_bell_button.dart';
 import 'feed_section_tabs.dart';
 import '../../navigation/application/feed_scroll_chrome.dart';
-import '../../content/create_content_actions.dart';
 
 /// Главный экран ленты с табами: Подписки, Рекомендации, Рилсы
 class MainFeedScreen extends ConsumerStatefulWidget {
@@ -150,16 +149,6 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                   color: scheme.primary,
                 ),
               ),
-              IconButton.filledTonal(
-                tooltip: 'Создать пост или рилс',
-                onPressed: () => showCreateContentSheet(
-                  context,
-                  ref: ref,
-                  includeReel: true,
-                ),
-                icon: const Icon(Icons.add_rounded),
-              ),
-              const SizedBox(width: 4),
               const NotificationBellButton(),
             ],
           ),
