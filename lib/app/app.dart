@@ -166,7 +166,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                             left: 12,
                             right: 12,
                             top: media.padding.top + 8,
-                            child: _WebUpdateBanner(buildNumber: build),
+                            child: const _WebUpdateBanner(),
                           );
                         },
                       ),
@@ -210,9 +210,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
 }
 
 class _WebUpdateBanner extends StatelessWidget {
-  const _WebUpdateBanner({required this.buildNumber});
-
-  final String buildNumber;
+  const _WebUpdateBanner();
 
   @override
   Widget build(BuildContext context) {
@@ -234,14 +232,14 @@ class _WebUpdateBanner extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Доступна новая версия HAN Eat',
+                    'Доступно обновление',
                     style: TextStyle(
                       color: scheme.onPrimaryContainer,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
-                    'Build $buildNumber',
+                    'Нажмите, чтобы получить последние изменения',
                     style: TextStyle(
                       color: scheme.onPrimaryContainer.withValues(alpha: 0.78),
                       fontSize: 12,
