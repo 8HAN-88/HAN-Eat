@@ -96,3 +96,4 @@ jobs:
           curl -sf https://haneat.app/health | grep -q '"status"'
           curl -sf https://haneat.app/api/v1/system/readiness | grep -q '"app_env"'
           curl -sfI https://haneat.app/flutter_bootstrap.js | grep -i cache-control
+          curl -sfI https://haneat.app/assets/AssetManifest.bin.json | grep -i cache-control | grep -qi no-cache

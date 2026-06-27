@@ -83,6 +83,16 @@ server {
         try_files $uri =404;
     }
 
+    location ^~ /assets/ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location ^~ /canvaskit/ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|wasm)$ {
         add_header Cache-Control "public, max-age=31536000, immutable";
         try_files $uri =404;

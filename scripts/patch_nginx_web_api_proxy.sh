@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Прокси /api/ и /health на haneat.app → backend (same-origin для Safari Web).
+# Прокси /api/ и /health на haneat.app → backend (same-origin для Safari Web)
+# и cache policy, при которой Flutter Web всегда показывает последний deploy.
 # На сервере: bash /root/HAN-Eat/scripts/patch_nginx_web_api_proxy.sh
 set -euo pipefail
 
@@ -18,7 +19,7 @@ from pathlib import Path
 conf = Path("/etc/nginx/sites-available/haneat-web")
 text = conf.read_text()
 
-block = """
+api_block = """
     location = /health {
         proxy_pass http://127.0.0.1:8000/health;
         proxy_http_version 1.1;
@@ -43,13 +44,34 @@ block = """
     }
 """
 
+cache_block = """
+    location ^~ /assets/ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location ^~ /canvaskit/ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+"""
+
 def patch_server_block(block_text: str) -> str:
-    if "location /api/" in block_text:
-        return block_text
-    marker = "    location / {"
-    if marker not in block_text:
-        raise SystemExit("cannot find insertion point in a server block")
-    return block_text.replace(marker, block + "\n" + marker, 1)
+    patched = block_text
+    app_marker = "    location / {"
+    static_marker = "    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|wasm)$ {"
+    if "location /api/" not in patched:
+        if app_marker not in patched:
+            raise SystemExit("cannot find app insertion point in a server block")
+        patched = patched.replace(app_marker, api_block + "\n" + app_marker, 1)
+    if "location ^~ /assets/" not in patched:
+        if static_marker in patched:
+            patched = patched.replace(static_marker, cache_block + "\n" + static_marker, 1)
+        elif app_marker in patched:
+            patched = patched.replace(app_marker, cache_block + "\n" + app_marker, 1)
+        else:
+            raise SystemExit("cannot find cache insertion point in a server block")
+    return patched
 
 parts = re.split(r"(?=\nserver\s*\{)", text)
 if len(parts) == 1:
@@ -70,7 +92,7 @@ if changed:
     conf.write_text(new_text)
     print("patched:", conf)
 else:
-    print("ok: all haneat.app server blocks already have /api/ proxy")
+    print("ok: all haneat.app server blocks already have /api/ proxy and web cache policy")
 PY
 
 nginx -t
@@ -87,3 +109,6 @@ for host in haneat.app www.haneat.app; do
   echo "  OK https://${host}/health"
 done
 echo "✓ haneat.app API same-origin proxy active"
+echo "Verifying Flutter assets revalidate..."
+curl -sfI "https://haneat.app/assets/AssetManifest.bin.json" | grep -i "cache-control" | grep -qi "no-cache"
+echo "✓ haneat.app Flutter asset cache policy active"
