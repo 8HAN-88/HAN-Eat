@@ -8,6 +8,7 @@ import '../../../models/meal_plan.dart';
 import '../../../services/meal_plan_service.dart';
 import '../../../services/shopping_service.dart';
 import '../../../widgets/services_ready_gate.dart';
+import '../../../widgets/app_gradient_background.dart';
 import '../../../services/server_config.dart';
 import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -209,22 +210,24 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           ),
         ],
       ),
-      body: ServicesReadyGate(
-        services: const [DeferredLocalService.mealPlan],
-        child: Column(
-          children: [
-            _buildWeekHeader(),
-            Expanded(
-              child: ValueListenableBuilder<List<MealPlanEntry>>(
-                valueListenable: MealPlanService.instance.allEntries,
-                builder: (context, allEntries, _) {
-                  final dailyPlan =
-                      MealPlanService.instance.getPlanForDate(_selectedDate);
-                  return _buildDayPlan(dailyPlan);
-                },
+      body: AppGradientBackground(
+        child: ServicesReadyGate(
+          services: const [DeferredLocalService.mealPlan],
+          child: Column(
+            children: [
+              _buildWeekHeader(),
+              Expanded(
+                child: ValueListenableBuilder<List<MealPlanEntry>>(
+                  valueListenable: MealPlanService.instance.allEntries,
+                  builder: (context, allEntries, _) {
+                    final dailyPlan =
+                        MealPlanService.instance.getPlanForDate(_selectedDate);
+                    return _buildDayPlan(dailyPlan);
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -237,7 +240,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     final rangeEnd = weekStart.add(const Duration(days: 6));
 
     return Material(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: theme.colorScheme.surface.withValues(alpha: 0.88),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
         child: Column(

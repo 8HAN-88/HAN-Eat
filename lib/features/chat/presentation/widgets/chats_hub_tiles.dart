@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
+import '../../../../widgets/telegram_ui.dart';
 
 class ChatHubTile extends StatelessWidget {
   const ChatHubTile({
@@ -45,7 +46,9 @@ class ChatHubTile extends StatelessWidget {
     final last = chat.lastMessage;
 
     final tile = ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      dense: true,
+      minVerticalPadding: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onTap: onTap,
       onLongPress: onLongPress,
       leading: chat.isSaved
@@ -80,7 +83,8 @@ class ChatHubTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight:
-                    chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.w500,
+                    chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+                letterSpacing: -0.2,
               ),
             ),
           ),
@@ -91,9 +95,8 @@ class ChatHubTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: chat.unreadCount > 0
-              ? scheme.onSurface
-              : scheme.onSurfaceVariant,
+          color:
+              chat.unreadCount > 0 ? scheme.onSurface : scheme.onSurfaceVariant,
         ),
       ),
       trailing: Column(
@@ -108,39 +111,22 @@ class ChatHubTile extends StatelessWidget {
           ),
           if (chat.unreadCount > 0) ...[
             const SizedBox(height: 5),
-            Container(
-              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-              decoration: BoxDecoration(
-                color: scheme.primary,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                chat.unreadCount > 99 ? '99+' : '${chat.unreadCount}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: scheme.onPrimary,
-                  fontWeight: FontWeight.w700,
-                  height: 1.1,
-                ),
-              ),
-            ),
+            TelegramUnreadBadge(count: chat.unreadCount, muted: chat.muted),
           ],
         ],
       ),
     );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       child: Material(
         color: chat.unreadCount > 0
-            ? scheme.primaryContainer.withValues(alpha: 0.35)
+            ? scheme.primaryContainer.withValues(alpha: 0.32)
             : scheme.surface,
         surfaceTintColor: Colors.transparent,
-        elevation: chat.unreadCount > 0 ? 2 : 0.5,
-        shadowColor: scheme.shadow.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(22),
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         child: tile,
       ),
     );
@@ -376,7 +362,9 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
   }
 
   Future<void> _loadLastPostFallback() async {
-    if (_loadingPost || !_channel.canLoadPostsPreview || _channel.postsCount == 0) {
+    if (_loadingPost ||
+        !_channel.canLoadPostsPreview ||
+        _channel.postsCount == 0) {
       return;
     }
     setState(() => _loadingPost = true);

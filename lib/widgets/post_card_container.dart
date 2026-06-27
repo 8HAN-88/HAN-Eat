@@ -28,12 +28,12 @@ class PostCardContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       padding: padding,
-      radius: borderRadius ?? AppCardDecorations.defaultRadius,
+      radius: borderRadius ?? 18,
       color: backgroundColor,
       borderColor: borderColor,
-      showShadow: showShadow,
+      showShadow: false,
       child: child,
     );
   }
@@ -60,11 +60,10 @@ class ChannelPostCardContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = borderRadius ?? AppCardDecorations.defaultRadius;
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       padding: padding,
-      radius: radius,
+      radius: borderRadius ?? 18,
       color: channelBackgroundColor,
       child: channelAccentColor != null
           ? Container(

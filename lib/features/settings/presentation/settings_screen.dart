@@ -13,6 +13,7 @@ import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -382,17 +383,9 @@ class _SettingsSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 10, top: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            ),
-      ),
+    return TelegramSectionHeader(
+      title: title,
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
     );
   }
 }
@@ -409,9 +402,14 @@ class _SettingsTile extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       minLeadingWidth: 40,
-      leading: Icon(
-        item.icon,
-        color: scheme.primary,
+      leading: CircleAvatar(
+        radius: 19,
+        backgroundColor: scheme.primary.withValues(alpha: 0.13),
+        child: Icon(
+          item.icon,
+          size: 20,
+          color: scheme.primary,
+        ),
       ),
       title: Row(
         children: [
@@ -419,12 +417,7 @@ class _SettingsTile extends StatelessWidget {
           if (item.badge != null && item.badge! > 0)
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: Badge(
-                label: Text(
-                  item.badge! > 99 ? '99+' : '${item.badge}',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ),
+              child: TelegramUnreadBadge(count: item.badge!),
             ),
         ],
       ),

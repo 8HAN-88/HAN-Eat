@@ -21,7 +21,9 @@ import '../../services/server_config.dart';
 import '../../core/layout/long_label_tab_bar.dart';
 import '../../utils/api_error_parser.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_gradient_background.dart';
 import '../../widgets/services_ready_gate.dart';
+import '../../widgets/telegram_ui.dart';
 
 class _RecipeSourceItem {
   final RecipeModel recipe;
@@ -484,132 +486,127 @@ class _ShoppingPageState extends State<ShoppingPage> {
           ),
         ],
       ),
-      body: ValueListenableBuilder<List<ShoppingItem>>(
-        valueListenable: ShoppingService.instance.items,
-        builder: (context, list, _) {
-          final bar = _bottomActionsBar(navBottom);
-          if (list.isEmpty) {
+      body: AppGradientBackground(
+        child: ValueListenableBuilder<List<ShoppingItem>>(
+          valueListenable: ShoppingService.instance.items,
+          builder: (context, list, _) {
+            final bar = _bottomActionsBar(navBottom);
+            if (list.isEmpty) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: AppEmptyState(
+                      icon: Icons.shopping_cart_outlined,
+                      title: 'Список пуст',
+                      subtitle:
+                          'Добавьте продукты вручную, из рецепта или из плана питания.',
+                      action: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _addFromRecipe,
+                            icon: const Icon(Icons.restaurant_menu_outlined),
+                            label: const Text('Из рецепта'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push(MealPlanRoute.path),
+                            icon: const Icon(Icons.calendar_today_outlined),
+                            label: const Text('План'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => context.push(MenuRoute.path),
+                            icon: const Icon(Icons.search_rounded),
+                            label: const Text('Найти блюда'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  bar,
+                ],
+              );
+            }
+            final grouped = ShoppingService.instance.getGrouped();
+            final keys = grouped.keys.toList()
+              ..sort(
+                  (a, b) => _departmentOrder(a).compareTo(_departmentOrder(b)));
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: AppEmptyState(
-                    icon: Icons.shopping_cart_outlined,
-                    title: 'Список пуст',
-                    subtitle:
-                        'Добавьте продукты вручную, из рецепта или из плана питания.',
-                    action: Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        FilledButton.icon(
-                          onPressed: _addFromRecipe,
-                          icon: const Icon(Icons.restaurant_menu_outlined),
-                          label: const Text('Из рецепта'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => context.push(MealPlanRoute.path),
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          label: const Text('План'),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => context.push(MenuRoute.path),
-                          icon: const Icon(Icons.search_rounded),
-                          label: const Text('Найти блюда'),
-                        ),
-                      ],
-                    ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    itemCount: keys.length,
+                    itemBuilder: (context, i) {
+                      final key = keys[i];
+                      final itemsInGroup = grouped[key]!;
+                      final groupLabel =
+                          key == null || key.isEmpty ? 'Без группы' : key;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TelegramSectionHeader(
+                            title: groupLabel,
+                            padding: const EdgeInsets.fromLTRB(2, 12, 2, 6),
+                          ),
+                          ...itemsInGroup.map((item) => ListTile(
+                                contentPadding:
+                                    const EdgeInsetsDirectional.only(
+                                  start: 0,
+                                  end: 4,
+                                ),
+                                leading: Checkbox(
+                                  value: item.purchased,
+                                  onChanged: (v) => ShoppingService.instance
+                                      .togglePurchased(item, v ?? false),
+                                ),
+                                title: Text(
+                                  item.name,
+                                  style: item.purchased
+                                      ? TextStyle(
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        )
+                                      : null,
+                                ),
+                                subtitle: item.quantity != null &&
+                                        item.quantity!.isNotEmpty
+                                    ? Text(
+                                        item.quantity!,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      )
+                                    : null,
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () =>
+                                      ShoppingService.instance.removeItem(item),
+                                ),
+                              )),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 bar,
               ],
             );
-          }
-          final grouped = ShoppingService.instance.getGrouped();
-          final keys = grouped.keys.toList()
-            ..sort(
-                (a, b) => _departmentOrder(a).compareTo(_departmentOrder(b)));
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  itemCount: keys.length,
-                  itemBuilder: (context, i) {
-                    final key = keys[i];
-                    final itemsInGroup = grouped[key]!;
-                    final groupLabel =
-                        key == null || key.isEmpty ? 'Без группы' : key;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12, bottom: 6),
-                          child: Text(
-                            groupLabel,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ),
-                        ...itemsInGroup.map((item) => ListTile(
-                              contentPadding: const EdgeInsetsDirectional.only(
-                                start: 0,
-                                end: 4,
-                              ),
-                              leading: Checkbox(
-                                value: item.purchased,
-                                onChanged: (v) => ShoppingService.instance
-                                    .togglePurchased(item, v ?? false),
-                              ),
-                              title: Text(
-                                item.name,
-                                style: item.purchased
-                                    ? TextStyle(
-                                        decoration: TextDecoration.lineThrough,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      )
-                                    : null,
-                              ),
-                              subtitle: item.quantity != null &&
-                                      item.quantity!.isNotEmpty
-                                  ? Text(
-                                      item.quantity!,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    )
-                                  : null,
-                              trailing: IconButton(
-                                icon: const Icon(Icons.remove_circle_outline),
-                                onPressed: () =>
-                                    ShoppingService.instance.removeItem(item),
-                              ),
-                            )),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              bar,
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }

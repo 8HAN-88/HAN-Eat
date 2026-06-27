@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 class AppRadius {
   const AppRadius._();
 
-  static const double xs = 8;
-  static const double sm = 12;
-  static const double md = 16;
-  static const double input = 18;
-  static const double card = 22;
-  static const double sheet = 26;
-  static const double nav = 28;
+  static const double xs = 6;
+  static const double sm = 10;
+  static const double md = 14;
+  static const double input = 16;
+  static const double card = 18;
+  static const double sheet = 22;
+  static const double nav = 24;
+  static const double telegramBubble = 18;
+  static const double telegramTile = 16;
 }
 
 class AppSpacing {
@@ -39,6 +41,9 @@ class AppSizes {
   const AppSizes._();
 
   /// Компактная плавающая панель (ближе к Telegram).
-  static const double floatingNavHeight = 52;
-  static const double floatingNavSearchSize = 52;
+  static const double floatingNavHeight = 50;
+  static const double floatingNavSearchSize = 50;
+  static const double telegramAvatar = 50;
+  static const double telegramAvatarSmall = 42;
+  static const double telegramUnreadBadge = 22;
 }

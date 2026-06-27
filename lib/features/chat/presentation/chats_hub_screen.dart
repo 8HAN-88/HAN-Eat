@@ -27,7 +27,9 @@ class ChatsHubScreen extends ConsumerStatefulWidget {
 class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
+  final TextEditingController _searchController = TextEditingController();
   int _lastTabIndex = 0;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -47,6 +49,7 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   void dispose() {
     _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -163,15 +166,56 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
             ),
           ],
         ),
-        body: TabBarView(
-          controller: _tabs,
+        body: Column(
           children: [
-            ChatsHubAllInboxTab(
-              onSwitchToContacts: () =>
-                  _tabs.animateTo(ChatsHubContactsTab.contactsTabIndex),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchQuery = value),
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Поиск',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Очистить',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                  filled: true,
+                  fillColor: scheme.surface,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide(color: scheme.outlineVariant),
+                  ),
+                ),
+              ),
             ),
-            ChatsHubContactsTab(
-              tabController: _tabs,
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  ChatsHubAllInboxTab(
+                    searchQuery: _searchQuery,
+                    onSwitchToContacts: () =>
+                        _tabs.animateTo(ChatsHubContactsTab.contactsTabIndex),
+                  ),
+                  ChatsHubContactsTab(
+                    tabController: _tabs,
+                  ),
+                ],
+              ),
             ),
           ],
         ),

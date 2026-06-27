@@ -51,12 +51,12 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: scheme.surface,
-        elevation: 1,
-        shadowColor: scheme.shadow.withValues(alpha: 0.12),
+        elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(color: scheme.outlineVariant, width: 0.5),
+          side: BorderSide(color: scheme.outlineVariant, width: 0.7),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -129,8 +129,12 @@ class AppTheme {
         ),
       ),
       listTileTheme: ListTileThemeData(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        minLeadingWidth: 48,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        minLeadingWidth: 42,
+        minVerticalPadding: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.telegramTile),
+        ),
         titleTextStyle: textTheme.titleMedium?.copyWith(
           color: scheme.onSurface,
           fontWeight: FontWeight.w600,
@@ -299,12 +303,12 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: scheme.surface,
-        elevation: 2,
-        shadowColor: Colors.black.withValues(alpha: 0.35),
+        elevation: 0,
+        shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(color: scheme.outlineVariant, width: 0.5),
+          side: BorderSide(color: scheme.outlineVariant, width: 0.7),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -377,8 +381,12 @@ class AppTheme {
         ),
       ),
       listTileTheme: ListTileThemeData(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        minLeadingWidth: 48,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        minLeadingWidth: 42,
+        minVerticalPadding: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.telegramTile),
+        ),
         titleTextStyle: textTheme.titleMedium?.copyWith(
           color: scheme.onSurface,
           fontWeight: FontWeight.w600,

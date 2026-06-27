@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import 'widgets/stars_wallet_widgets.dart';
 
 class StarsWalletScreen extends StatefulWidget {
@@ -109,20 +110,18 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                     transactions: data.transactions,
                   ),
                   const SizedBox(height: 18),
-                  Text(
-                    'Купить звёзды',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                  const TelegramSectionHeader(
+                    title: 'Купить звёзды',
+                    padding: EdgeInsets.fromLTRB(2, 6, 2, 8),
                   ),
-                  const SizedBox(height: 10),
                   for (final package in data.packages)
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.stars_rounded),
-                        title: Text(package.title),
-                        subtitle:
-                            Text('${package.stars} ★ за ${package.priceRub} ₽'),
+                    TelegramGroupedSurface(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: TelegramActionRow(
+                        icon: Icons.stars_rounded,
+                        title: package.title,
+                        subtitle: '${package.stars} ★ за ${package.priceRub} ₽',
+                        iconColor: scheme.secondary,
                         trailing: FilledButton(
                           onPressed: _checkoutLoading
                               ? null
@@ -132,13 +131,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                       ),
                     ),
                   const SizedBox(height: 18),
-                  Text(
-                    'История',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                  const TelegramSectionHeader(
+                    title: 'История',
+                    padding: EdgeInsets.fromLTRB(2, 0, 2, 8),
                   ),
-                  const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -156,7 +152,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                   ),
                   const SizedBox(height: 10),
                   if (filteredTransactions.isEmpty)
-                    Card(
+                    TelegramGroupedSurface(
+                      margin: EdgeInsets.zero,
                       child: Padding(
                         padding: const EdgeInsets.all(18),
                         child: Text(
@@ -167,15 +164,15 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                     )
                   else
                     for (final tx in filteredTransactions)
-                      Card(
-                        child: ListTile(
-                          leading: Icon(
-                            tx.amount >= 0
-                                ? Icons.add_circle_outline_rounded
-                                : Icons.remove_circle_outline_rounded,
-                          ),
-                          title: Text(_txTitle(tx.type)),
-                          subtitle: Text(_date(tx.createdAt)),
+                      TelegramGroupedSurface(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: TelegramActionRow(
+                          icon: tx.amount >= 0
+                              ? Icons.add_circle_outline_rounded
+                              : Icons.remove_circle_outline_rounded,
+                          title: _txTitle(tx.type),
+                          subtitle: _date(tx.createdAt),
+                          iconColor: tx.amount >= 0 ? scheme.primary : null,
                           trailing: Text(
                             '${tx.amount > 0 ? '+' : ''}${tx.amount} ★',
                             style: TextStyle(

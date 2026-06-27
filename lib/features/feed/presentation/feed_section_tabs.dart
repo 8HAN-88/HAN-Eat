@@ -95,10 +95,14 @@ class FeedSectionTabs extends StatelessWidget {
       builder: (context, _) {
         return TabBar(
           controller: controller,
-          indicatorSize: TabBarIndicatorSize.label,
+          indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: Colors.transparent,
           splashFactory: InkRipple.splashFactory,
-          labelColor: scheme.onSurface,
+          indicator: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          labelColor: scheme.primary,
           unselectedLabelColor: scheme.onSurfaceVariant.withValues(alpha: 0.82),
           labelStyle: textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w600,
@@ -110,7 +114,7 @@ class FeedSectionTabs extends StatelessWidget {
           tabs: [
             for (var i = 0; i < _labels.length; i++)
               Tab(
-                height: 46,
+                height: 40,
                 child: _TabLabel(
                   label: _labels[i],
                   filterArrow: controller.index == i

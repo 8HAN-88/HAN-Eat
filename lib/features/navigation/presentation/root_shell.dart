@@ -386,7 +386,7 @@ class _RootShellState extends ConsumerState<RootShell> {
                           shadowColor: Colors.transparent,
                           surfaceTintColor: Colors.transparent,
                           indicatorColor:
-                              scheme.primary.withValues(alpha: 0.18),
+                              scheme.primary.withValues(alpha: 0.12),
                           destinations: [
                             for (var i = 0;
                                 i < RootShell._destinations.length;
@@ -489,16 +489,22 @@ class _RootShellState extends ConsumerState<RootShell> {
 
     if (badgeLabel != null && badgeLabel.isNotEmpty) {
       icon = Badge(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        textColor: Theme.of(context).colorScheme.onPrimary,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         label: Text(
           badgeLabel,
-          style: const TextStyle(fontSize: 10),
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
         ),
         child: icon,
       );
       selectedIcon = Badge(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        textColor: Theme.of(context).colorScheme.onPrimary,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         label: Text(
           badgeLabel,
-          style: const TextStyle(fontSize: 10),
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
         ),
         child: selectedIcon,
       );
@@ -515,7 +521,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 }
 
-/// Полупрозрачная «таблетка» нижней панели (blur + pill), как в Instagram.
+/// Компактная Telegram-like нижняя панель: мягкий blur без тяжёлой тени.
 class _ShellNavGlassPill extends StatelessWidget {
   const _ShellNavGlassPill({
     required this.height,
@@ -535,9 +541,9 @@ class _ShellNavGlassPill extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final radius = height / 2;
     final fill = isDark
-        ? Colors.black.withValues(alpha: compact ? 0.38 : 0.48)
-        : scheme.surface.withValues(alpha: compact ? 0.52 : 0.62);
-    final blur = compact ? 16.0 : 24.0;
+        ? scheme.surface.withValues(alpha: compact ? 0.82 : 0.90)
+        : scheme.surface.withValues(alpha: compact ? 0.86 : 0.94);
+    final blur = compact ? 12.0 : 18.0;
 
     return AnimatedContainer(
       duration: duration,
@@ -547,9 +553,9 @@ class _ShellNavGlassPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.10),
-            blurRadius: compact ? 14 : 24,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.07),
+            blurRadius: compact ? 10 : 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -562,7 +568,9 @@ class _ShellNavGlassPill extends StatelessWidget {
               color: fill,
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(
-                color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
+                color: scheme.outlineVariant
+                    .withValues(alpha: isDark ? 0.70 : 0.90),
+                width: 0.8,
               ),
             ),
             child: child,

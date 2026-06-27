@@ -39,21 +39,35 @@ class AppUserAvatar extends StatelessWidget {
     final background = resolvedAvatarImage(imageUrl, decodeWidth: decodeWidth);
     final name = displayName.trim();
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final scheme = Theme.of(context).colorScheme;
 
-    final avatar = CircleAvatar(
-      radius: radius,
-      backgroundImage: background,
-      child: background == null
-          ? (child ??
-              Text(
-                initial,
-                style: TextStyle(
-                  fontSize: fontSize ?? radius * 0.85,
-                  fontWeight: FontWeight.w600,
+    final avatar = background != null
+        ? CircleAvatar(radius: radius, backgroundImage: background)
+        : Container(
+            width: radius * 2,
+            height: radius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  scheme.primary,
+                  scheme.secondary,
+                ],
+              ),
+            ),
+            alignment: Alignment.center,
+            child: child ??
+                Text(
+                  initial,
+                  style: TextStyle(
+                    fontSize: fontSize ?? radius * 0.85,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
                 ),
-              ))
-          : null,
-    );
+          );
 
     if (onTap == null) return avatar;
     return GestureDetector(

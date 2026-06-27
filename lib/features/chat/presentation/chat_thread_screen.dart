@@ -4115,10 +4115,10 @@ class _Bubble extends StatelessWidget {
   static const _metaReserveWidth = 54.0;
 
   BorderRadius _bubbleRadius(bool mine) => BorderRadius.only(
-        topLeft: const Radius.circular(12),
-        topRight: const Radius.circular(12),
-        bottomLeft: Radius.circular(mine ? 12 : 4),
-        bottomRight: Radius.circular(mine ? 4 : 12),
+        topLeft: const Radius.circular(18),
+        topRight: const Radius.circular(18),
+        bottomLeft: Radius.circular(mine ? 18 : 5),
+        bottomRight: Radius.circular(mine ? 5 : 18),
       );
 
   Widget _messageMeta({
@@ -4292,7 +4292,12 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mine = message.isMine;
-    final bg = mine ? scheme.primaryContainer : scheme.surfaceContainerHigh;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = mine
+        ? (isDark
+            ? scheme.primaryContainer.withValues(alpha: 0.72)
+            : scheme.primaryContainer.withValues(alpha: 0.92))
+        : scheme.surface;
     final fg = mine ? scheme.onPrimaryContainer : scheme.onSurface;
     final quoteBg = mine
         ? scheme.primary.withValues(alpha: 0.12)
@@ -4497,7 +4502,8 @@ class _Bubble extends StatelessWidget {
 
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: contentPadding,
+      padding:
+          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 7, 10, 5),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.78,
@@ -4505,6 +4511,9 @@ class _Bubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,
         borderRadius: bubbleRadius,
+        border: !mine && bubbleNeedsBackground
+            ? Border.all(color: scheme.outlineVariant, width: 0.6)
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
