@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1050,6 +1051,51 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return '↓ $n новых';
     }
     return '↓ $n новых';
+  }
+
+  bool _isSameChatDay(DateTime a, DateTime b) {
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
+  String _chatDateSeparatorLabel(DateTime date) {
+    final local = date.toLocal();
+    final now = DateTime.now();
+    if (_isSameChatDay(local, now)) return 'Сегодня';
+    if (_isSameChatDay(local, now.subtract(const Duration(days: 1)))) {
+      return 'Вчера';
+    }
+    try {
+      return DateFormat('d MMMM yyyy', 'ru').format(local);
+    } catch (_) {
+      return DateFormat('d MMMM yyyy').format(local);
+    }
+  }
+
+  Widget _chatDateSeparator(DateTime date) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.42)
+              : scheme.onSurface.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          _chatDateSeparatorLabel(date),
+          style: TextStyle(
+            color: isDark ? Colors.white : scheme.onSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 
   void _startEdit(ChatMessage msg) {
@@ -3589,121 +3635,145 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           _selectedMessageIds.contains(msg.id);
                                       final failed =
                                           _failedTextSends.containsKey(msg.id);
-                                      return Row(
+                                      final showDateSeparator = msgIndex == 0 ||
+                                          !_isSameChatDay(
+                                            visibleMessages[msgIndex - 1]
+                                                .createdAt,
+                                            msg.createdAt,
+                                          );
+                                      return Column(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.end,
+                                            CrossAxisAlignment.stretch,
                                         children: [
-                                          if (_selectionMode)
-                                            _selectionIndicator(
-                                                selected, scheme),
-                                          if (!isSaved && !msg.isMine)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                right: 6,
-                                                bottom: 2,
-                                              ),
-                                              child:
-                                                  _incomingMessageAvatar(msg),
-                                            ),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: msg.isMine
-                                                  ? CrossAxisAlignment.end
-                                                  : CrossAxisAlignment.start,
-                                              children: [
-                                                Align(
-                                                  alignment: msg.isMine
-                                                      ? Alignment.centerRight
-                                                      : Alignment.centerLeft,
-                                                  child: Builder(
-                                                    builder: (bubbleContext) =>
-                                                        GestureDetector(
-                                                      behavior: HitTestBehavior
-                                                          .opaque,
-                                                      onTap: _selectionMode
-                                                          ? () =>
-                                                              _toggleMessageSelection(
-                                                                msg.id,
-                                                              )
-                                                          : null,
-                                                      onLongPress:
-                                                          _selectionMode
-                                                              ? null
-                                                              : () {
-                                                                  final box = bubbleContext
-                                                                          .findRenderObject()
-                                                                      as RenderBox?;
-                                                                  if (box !=
-                                                                          null &&
-                                                                      box.hasSize) {
-                                                                    unawaited(
-                                                                      _showMessageActionOverlay(
-                                                                        msg,
-                                                                        box,
-                                                                      ),
-                                                                    );
-                                                                  }
-                                                                },
-                                                      child: Opacity(
-                                                        opacity:
-                                                            failed ? 0.55 : 1,
-                                                        child:
-                                                            _messageBubbleWidget(
-                                                          msg: msg,
-                                                          scheme: scheme,
-                                                          searching: searching,
-                                                          isGroup: isGroup,
-                                                          replyQuote:
-                                                              replyQuote,
-                                                          interactive:
-                                                              !_selectionMode,
-                                                          wrapWithAlign: false,
-                                                          onPollVote:
-                                                              !_selectionMode
-                                                                  ? (idx) =>
-                                                                      _votePoll(
-                                                                        msg,
-                                                                        idx,
-                                                                      )
-                                                                  : null,
-                                                          pollVoting:
-                                                              _votingPollIds
-                                                                  .contains(
-                                                                      msg.id),
-                                                          onPollClose: (!_selectionMode &&
-                                                                  msg.isMine &&
-                                                                  msg.type ==
-                                                                      'poll' &&
-                                                                  msg.poll !=
-                                                                      null &&
-                                                                  !msg.poll!
-                                                                      .isClosed)
+                                          if (showDateSeparator)
+                                            _chatDateSeparator(msg.createdAt),
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              if (_selectionMode)
+                                                _selectionIndicator(
+                                                    selected, scheme),
+                                              if (!isSaved && !msg.isMine)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                    right: 6,
+                                                    bottom: 2,
+                                                  ),
+                                                  child: _incomingMessageAvatar(
+                                                      msg),
+                                                ),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: msg.isMine
+                                                      ? CrossAxisAlignment.end
+                                                      : CrossAxisAlignment
+                                                          .start,
+                                                  children: [
+                                                    Align(
+                                                      alignment: msg.isMine
+                                                          ? Alignment
+                                                              .centerRight
+                                                          : Alignment
+                                                              .centerLeft,
+                                                      child: Builder(
+                                                        builder:
+                                                            (bubbleContext) =>
+                                                                GestureDetector(
+                                                          behavior:
+                                                              HitTestBehavior
+                                                                  .opaque,
+                                                          onTap: _selectionMode
                                                               ? () =>
-                                                                  _closePoll(
-                                                                      msg)
+                                                                  _toggleMessageSelection(
+                                                                    msg.id,
+                                                                  )
                                                               : null,
-                                                          pollClosing:
-                                                              _closingPollIds
-                                                                  .contains(
-                                                                      msg.id),
-                                                          onReplyTap:
-                                                              msg.replyToMessageId !=
-                                                                      null
+                                                          onLongPress:
+                                                              _selectionMode
+                                                                  ? null
+                                                                  : () {
+                                                                      final box =
+                                                                          bubbleContext.findRenderObject()
+                                                                              as RenderBox?;
+                                                                      if (box !=
+                                                                              null &&
+                                                                          box.hasSize) {
+                                                                        unawaited(
+                                                                          _showMessageActionOverlay(
+                                                                            msg,
+                                                                            box,
+                                                                          ),
+                                                                        );
+                                                                      }
+                                                                    },
+                                                          child: Opacity(
+                                                            opacity: failed
+                                                                ? 0.55
+                                                                : 1,
+                                                            child:
+                                                                _messageBubbleWidget(
+                                                              msg: msg,
+                                                              scheme: scheme,
+                                                              searching:
+                                                                  searching,
+                                                              isGroup: isGroup,
+                                                              replyQuote:
+                                                                  replyQuote,
+                                                              interactive:
+                                                                  !_selectionMode,
+                                                              wrapWithAlign:
+                                                                  false,
+                                                              onPollVote:
+                                                                  !_selectionMode
+                                                                      ? (idx) =>
+                                                                          _votePoll(
+                                                                            msg,
+                                                                            idx,
+                                                                          )
+                                                                      : null,
+                                                              pollVoting:
+                                                                  _votingPollIds
+                                                                      .contains(
+                                                                          msg.id),
+                                                              onPollClose: (!_selectionMode &&
+                                                                      msg
+                                                                          .isMine &&
+                                                                      msg.type ==
+                                                                          'poll' &&
+                                                                      msg.poll !=
+                                                                          null &&
+                                                                      !msg.poll!
+                                                                          .isClosed)
                                                                   ? () =>
-                                                                      _scrollToReplyMessage(
-                                                                        msg.replyToMessageId!,
-                                                                      )
+                                                                      _closePoll(
+                                                                          msg)
                                                                   : null,
+                                                              pollClosing:
+                                                                  _closingPollIds
+                                                                      .contains(
+                                                                          msg.id),
+                                                              onReplyTap:
+                                                                  msg.replyToMessageId !=
+                                                                          null
+                                                                      ? () =>
+                                                                          _scrollToReplyMessage(
+                                                                            msg.replyToMessageId!,
+                                                                          )
+                                                                      : null,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
+                                                    if (failed)
+                                                      _failedSendActions(
+                                                          msg.id, scheme),
+                                                  ],
                                                 ),
-                                                if (failed)
-                                                  _failedSendActions(
-                                                      msg.id, scheme),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       );
