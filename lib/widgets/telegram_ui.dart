@@ -192,6 +192,207 @@ class TelegramPill extends StatelessWidget {
   }
 }
 
+class NeoGlassCard extends StatelessWidget {
+  const NeoGlassCard({
+    super.key,
+    required this.child,
+    this.margin = const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+    this.padding = EdgeInsets.zero,
+    this.radius = 24,
+    this.gradient,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry margin;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final Gradient? gradient;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: margin,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: dark
+            ? scheme.surfaceContainer.withValues(alpha: 0.72)
+            : scheme.surface.withValues(alpha: 0.92),
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: dark
+              ? Colors.white.withValues(alpha: 0.06)
+              : scheme.outlineVariant.withValues(alpha: 0.74),
+          width: 0.7,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.28 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class NeoCircleAction extends StatelessWidget {
+  const NeoCircleAction({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = selected
+        ? scheme.primary.withValues(alpha: 0.18)
+        : scheme.surfaceContainerHigh.withValues(alpha: 0.72);
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: selected ? scheme.primary : scheme.onSurface,
+        fixedSize: const Size(44, 44),
+        shape: const CircleBorder(),
+        side: BorderSide(
+          color: selected
+              ? scheme.primary.withValues(alpha: 0.22)
+              : scheme.outlineVariant.withValues(alpha: 0.45),
+          width: 0.7,
+        ),
+      ),
+      icon: Icon(icon, size: 22),
+    );
+  }
+}
+
+class NeoFilterChip extends StatelessWidget {
+  const NeoFilterChip({
+    super.key,
+    required this.label,
+    this.icon,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = selected
+        ? scheme.primary.withValues(alpha: 0.13)
+        : scheme.surfaceContainer.withValues(alpha: 0.7);
+    final fg = selected ? scheme.primary : scheme.onSurfaceVariant;
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? scheme.primary.withValues(alpha: 0.18)
+                  : scheme.outlineVariant.withValues(alpha: 0.38),
+              width: 0.7,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 8),
+              ],
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: fg,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NeoUnderlineTabs extends StatelessWidget {
+  const NeoUnderlineTabs({
+    super.key,
+    required this.controller,
+    required this.tabs,
+    this.height = 52,
+    this.padding = const EdgeInsets.symmetric(horizontal: 18),
+  });
+
+  final TabController controller;
+  final List<Widget> tabs;
+  final double height;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: padding,
+      height: height,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer.withValues(alpha: 0.64),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.42),
+          width: 0.7,
+        ),
+      ),
+      child: TabBar(
+        controller: controller,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.label,
+        indicator: UnderlineTabIndicator(
+          borderSide: BorderSide(color: scheme.primary, width: 2.5),
+          borderRadius: BorderRadius.circular(999),
+          insets: const EdgeInsets.only(bottom: 7),
+        ),
+        labelColor: scheme.primary,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+        unselectedLabelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.2,
+            ),
+        tabs: tabs,
+      ),
+    );
+  }
+}
+
 class TelegramActionSheetAction {
   const TelegramActionSheetAction({
     required this.icon,

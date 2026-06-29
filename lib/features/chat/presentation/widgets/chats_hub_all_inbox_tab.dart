@@ -1137,17 +1137,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
-                  if (visible.isNotEmpty) const Divider(height: 1, indent: 72),
                 ],
               ),
             ),
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                if (index.isOdd) {
-                  return const Divider(height: 1, indent: 72);
-                }
-                final entry = visible[index ~/ 2];
+                final entry = visible[index];
                 if (entry is ChatInboxEntry) {
                   final chat = entry.chat;
                   return ChatInboxSlidable(
@@ -1189,7 +1185,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                   ),
                 );
               },
-              childCount: visible.isEmpty ? 0 : visible.length * 2 - 1,
+              childCount: visible.length,
             ),
           ),
           if (visibleRec.isNotEmpty) ...[

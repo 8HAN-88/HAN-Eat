@@ -27,12 +27,20 @@ class PostCardContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       padding: padding,
-      radius: borderRadius ?? 12,
-      color: backgroundColor,
-      borderColor: borderColor,
+      radius: borderRadius ?? 24,
+      color: backgroundColor ??
+          (dark
+              ? scheme.surfaceContainer.withValues(alpha: 0.72)
+              : scheme.surface),
+      borderColor: borderColor ??
+          (dark
+              ? Colors.white.withValues(alpha: 0.06)
+              : scheme.outlineVariant.withValues(alpha: 0.74)),
       showShadow: false,
       child: child,
     );
@@ -60,12 +68,20 @@ class ChannelPostCardContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return AppElevatedCard(
-      margin: margin ?? const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      margin: margin ?? const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       padding: padding,
-      radius: borderRadius ?? 12,
-      color: channelBackgroundColor,
-      borderColor: channelAccentColor?.withValues(alpha: 0.45),
+      radius: borderRadius ?? 24,
+      color: channelBackgroundColor ??
+          (dark
+              ? scheme.surfaceContainer.withValues(alpha: 0.72)
+              : scheme.surface),
+      borderColor: channelAccentColor?.withValues(alpha: 0.45) ??
+          (dark
+              ? Colors.white.withValues(alpha: 0.06)
+              : scheme.outlineVariant.withValues(alpha: 0.74)),
       showShadow: false,
       child: child,
     );

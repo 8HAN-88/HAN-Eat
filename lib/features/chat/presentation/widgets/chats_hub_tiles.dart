@@ -47,8 +47,9 @@ class ChatHubTile extends StatelessWidget {
 
     final tile = ListTile(
       dense: true,
-      minVerticalPadding: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      minVerticalPadding: 12,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       onTap: onTap,
       onLongPress: onLongPress,
       leading: chat.isSaved
@@ -118,16 +119,25 @@ class ChatHubTile extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
       child: Material(
         color: chat.unreadCount > 0
-            ? scheme.primaryContainer.withValues(alpha: 0.32)
-            : scheme.surface,
+            ? scheme.primary.withValues(alpha: 0.11)
+            : scheme.surfaceContainer.withValues(alpha: 0.72),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: tile,
+        borderRadius: BorderRadius.circular(24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.38),
+              width: 0.7,
+            ),
+          ),
+          child: tile,
+        ),
       ),
     );
   }
@@ -417,12 +427,16 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
     final scheme = Theme.of(context).colorScheme;
     final hasUnread = _newPostsCount > 0;
 
-    return ListTile(
+    final tile = ListTile(
       onTap: () async {
         await _markAsSeen();
         widget.onTap();
       },
       onLongPress: widget.onLongPress,
+      dense: true,
+      minVerticalPadding: 12,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       leading: ChatHubChannelAvatar(channel: _channel),
       title: Row(
         children: [
@@ -434,7 +448,8 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+                letterSpacing: -0.2,
               ),
             ),
           ),
@@ -474,6 +489,29 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
             ),
           ],
         ],
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
+      child: Material(
+        color: hasUnread
+            ? scheme.primary.withValues(alpha: 0.11)
+            : scheme.surfaceContainer.withValues(alpha: 0.72),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.38),
+              width: 0.7,
+            ),
+          ),
+          child: tile,
+        ),
       ),
     );
   }

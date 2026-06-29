@@ -1054,9 +1054,8 @@ class _NewPostCardState extends State<NewPostCard> {
     final hasFeedVideo =
         post.videoUrl != null && post.videoUrl!.trim().isNotEmpty;
 
-    // Красивая карточка с тенью и скруглениями
     return PostCardContainer(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

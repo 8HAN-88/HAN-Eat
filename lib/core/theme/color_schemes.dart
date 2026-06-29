@@ -19,12 +19,12 @@ class AppColors {
   /// Telegram light lists are mostly white, with pale gray behind grouped areas.
   static const backgroundLight = Color(0xFFF4F4F5);
 
-  /// Telegram dark base.
-  static const backgroundDark = Color(0xFF0E1621);
+  /// Neo dark base used by the X-inspired mobile screens.
+  static const backgroundDark = Color(0xFF05080E);
 
   /// Карточки и «поднятые» блоки в светлой теме.
   static const surface = Color(0xFFFFFFFF);
-  static const surfaceDark = Color(0xFF17212B);
+  static const surfaceDark = Color(0xFF10151D);
 
   /// Приглушённые блоки (чипы, подложки) — нейтральный серый.
   static const surfaceVariant = Color(0xFFF1F3F5);
@@ -106,18 +106,18 @@ ColorScheme buildDarkColorScheme() {
     onErrorContainer: const Color(0xFFFFE8E8),
     surface: AppColors.surfaceDark,
     surfaceContainerLowest: AppColors.backgroundDark,
-    surfaceContainerLow: const Color(0xFF17212B),
-    surfaceContainer: const Color(0xFF1D2A36),
-    surfaceContainerHigh: const Color(0xFF243241),
-    surfaceContainerHighest: const Color(0xFF2E3D4D),
+    surfaceContainerLow: const Color(0xFF0B1018),
+    surfaceContainer: const Color(0xFF111821),
+    surfaceContainerHigh: const Color(0xFF171F2B),
+    surfaceContainerHighest: const Color(0xFF202A37),
     onSurface: const Color(0xFFEFF3F7),
     onSurfaceVariant: const Color(0xFF9AA8B5),
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFFE8EAEF),
     onInverseSurface: const Color(0xFF1A1D22),
     inversePrimary: AppColors.primaryDark,
-    outline: const Color(0xFF3A4B5C),
-    outlineVariant: const Color(0xFF253544),
+    outline: const Color(0xFF334050),
+    outlineVariant: const Color(0xFF1C2633),
     shadow: Colors.black,
     scrim: Colors.black.withValues(alpha: 0.6),
   );

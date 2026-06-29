@@ -9,6 +9,7 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../../channels/application/channels_list_refresh_provider.dart';
 import 'chat_archived_screen.dart';
 import 'chat_create_group_screen.dart';
@@ -75,40 +76,26 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   }
 
   void _showNewChatMenu() {
-    showModalBottomSheet<void>(
+    showTelegramActionSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.person_add_alt_1_outlined),
-              title: const Text('Новое сообщение'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openPeopleSearch();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.group_add_outlined),
-              title: const Text('Новая группа'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openCreateGroup();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.add_circle_outline),
-              title: const Text('Создать канал'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _createChannel();
-              },
-            ),
-          ],
+      title: 'Новый',
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.person_add_alt_1_outlined,
+          title: 'Новое сообщение',
+          onTap: _openPeopleSearch,
         ),
-      ),
+        TelegramActionSheetAction(
+          icon: Icons.group_add_outlined,
+          title: 'Новая группа',
+          onTap: _openCreateGroup,
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.add_circle_outline,
+          title: 'Создать канал',
+          onTap: _createChannel,
+        ),
+      ],
     );
   }
 
@@ -133,74 +120,19 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     return AppGradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: const Text('Сообщения'),
-          bottom: TabBar(
-            controller: _tabs,
-            tabs: const [
-              Tab(text: 'Чаты и каналы'),
-              Tab(text: 'Контакты'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Создать канал',
-              onPressed: _createChannel,
-              icon: const Icon(Icons.add_circle_outline),
-            ),
-            PopupMenuButton<String>(
-              tooltip: 'Ещё',
-              onSelected: (v) {
-                if (v == 'archive') _openArchived();
-              },
-              itemBuilder: (ctx) => [
-                PopupMenuItem(
-                  value: 'archive',
-                  child: _hubMenuRow(
-                    Icons.archive_outlined,
-                    'Архив',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
         body: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _searchQuery = value),
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Поиск',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchQuery.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Очистить',
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                  filled: true,
-                  fillColor: scheme.surface,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide(color: scheme.outlineVariant),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide(color: scheme.outlineVariant),
-                  ),
-                ),
-              ),
+            _ChatsNeoHeader(
+              controller: _tabs,
+              searchController: _searchController,
+              searchQuery: _searchQuery,
+              onSearchChanged: (value) => setState(() => _searchQuery = value),
+              onClearSearch: () {
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+              },
+              onCreate: _showNewChatMenu,
+              onMore: _openArchived,
             ),
             Expanded(
               child: TabBarView(
@@ -239,12 +171,103 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   }
 }
 
-Widget _hubMenuRow(IconData icon, String label) {
-  return Row(
-    children: [
-      Icon(icon, size: 20),
-      const SizedBox(width: 12),
-      Expanded(child: Text(label)),
-    ],
-  );
+class _ChatsNeoHeader extends StatelessWidget {
+  const _ChatsNeoHeader({
+    required this.controller,
+    required this.searchController,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.onClearSearch,
+    required this.onCreate,
+    required this.onMore,
+  });
+
+  final TabController controller;
+  final TextEditingController searchController;
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onClearSearch;
+  final VoidCallback onCreate;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Сообщения',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.8,
+                        ),
+                  ),
+                ),
+                NeoCircleAction(
+                  icon: Icons.add_rounded,
+                  tooltip: 'Новый чат',
+                  onPressed: onCreate,
+                ),
+                const SizedBox(width: 8),
+                NeoCircleAction(
+                  icon: Icons.more_horiz_rounded,
+                  tooltip: 'Архив',
+                  onPressed: onMore,
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            NeoUnderlineTabs(
+              controller: controller,
+              padding: EdgeInsets.zero,
+              tabs: const [
+                Tab(text: 'Чаты и каналы'),
+                Tab(text: 'Контакты'),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: searchController,
+              onChanged: onSearchChanged,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Поиск',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Очистить',
+                        onPressed: onClearSearch,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                filled: true,
+                fillColor: scheme.surfaceContainer.withValues(alpha: 0.7),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.46),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide(
+                    color: scheme.outlineVariant.withValues(alpha: 0.46),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

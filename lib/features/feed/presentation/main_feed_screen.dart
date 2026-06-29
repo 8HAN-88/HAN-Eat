@@ -12,6 +12,7 @@ import '../../reels/presentation/reels_feed_screen.dart';
 import 'new_feed_screen.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/notification_bell_button.dart';
+import '../../../widgets/telegram_ui.dart';
 import 'feed_section_tabs.dart';
 import '../../navigation/application/feed_scroll_chrome.dart';
 
@@ -94,20 +95,12 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
   }
 
   Widget _buildFeedChromeHeader() {
-    final scheme = Theme.of(context).colorScheme;
-
     return SafeArea(
       bottom: false,
-      child: SizedBox(
-        height: kFeedChromeHeaderHeight,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: scheme.outlineVariant.withValues(alpha: 0.35),
-              ),
-            ),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+        child: SizedBox(
+          height: kFeedChromeHeaderHeight - 16,
           child: Row(
             children: [
               Expanded(
@@ -141,14 +134,14 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                   },
                 ),
               ),
-              IconButton(
+              const SizedBox(width: 10),
+              NeoCircleAction(
                 tooltip: 'Звёзды и кошелёк',
+                icon: Icons.stars_rounded,
+                selected: true,
                 onPressed: () => context.push(StarsWalletRoute.path),
-                icon: Icon(
-                  Icons.stars_rounded,
-                  color: scheme.primary,
-                ),
               ),
+              const SizedBox(width: 8),
               const NotificationBellButton(),
             ],
           ),
@@ -222,7 +215,7 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
                 );
               },
               child: Material(
-                color: scheme.surface.withValues(alpha: 0.97),
+                color: scheme.surfaceContainerLowest.withValues(alpha: 0.96),
                 elevation: 0,
                 shadowColor: Colors.transparent,
                 child: _buildFeedChromeHeader(),

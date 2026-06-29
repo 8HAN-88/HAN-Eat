@@ -42,6 +42,7 @@ class _NotificationBellButtonState extends ConsumerState<NotificationBellButton>
   Widget build(BuildContext context) {
     final count = ref.watch(unreadNotificationsCountProvider);
     final label = count > 99 ? '99+' : '$count';
+    final scheme = Theme.of(context).colorScheme;
 
     return Badge(
       isLabelVisible: count > 0,
@@ -52,10 +53,20 @@ class _NotificationBellButtonState extends ConsumerState<NotificationBellButton>
           fontWeight: FontWeight.w700,
         ),
       ),
-      backgroundColor: Theme.of(context).colorScheme.error,
+      backgroundColor: scheme.error,
       child: IconButton(
         icon: const Icon(Icons.notifications_outlined),
         tooltip: count > 0 ? 'Уведомления ($label)' : 'Уведомления',
+        style: IconButton.styleFrom(
+          backgroundColor: scheme.surfaceContainerHigh.withValues(alpha: 0.72),
+          foregroundColor: scheme.onSurface,
+          fixedSize: const Size(44, 44),
+          shape: const CircleBorder(),
+          side: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: 0.45),
+            width: 0.7,
+          ),
+        ),
         onPressed: () async {
           await context.push(NotificationsRoute.path);
           if (mounted) {

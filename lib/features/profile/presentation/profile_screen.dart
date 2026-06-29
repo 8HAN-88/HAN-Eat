@@ -14,15 +14,14 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
-import '../../../../core/theme/app_card_decorations.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
-import '../../../../core/layout/long_label_tab_bar.dart';
 import '../../../../core/layout/floating_bottom_padding.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/app_gradient_background.dart';
+import '../../../../widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 import '../../../utils/post_publisher_display.dart';
 
@@ -99,9 +98,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final count = _isOwnProfileView(profileUserId: profileUserId) ? 4 : 3;
     if (_tabControllerReady && _tabCount == count) return;
 
-    final oldIndex = _tabControllerReady
-        ? _tabController.index.clamp(0, count - 1)
-        : 0;
+    final oldIndex =
+        _tabControllerReady ? _tabController.index.clamp(0, count - 1) : 0;
     if (_tabControllerReady) {
       _tabController.removeListener(_onTabIndexChanged);
       _tabController.dispose();
@@ -313,7 +311,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось открыть чат'))),
+        SnackBar(
+            content:
+                Text(userVisibleError(e, fallback: 'Не удалось открыть чат'))),
       );
     } finally {
       if (mounted) setState(() => _isOpeningChat = false);
@@ -428,23 +428,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     ];
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         title: Text(user.name),
         actions: isOwnProfile
             ? [
-                // Кнопка создать пост
-                IconButton(
-                  icon: const Icon(Icons.add),
+                NeoCircleAction(
+                  icon: Icons.add,
                   tooltip: 'Создать пост или рилс',
                   onPressed: _openCreateContent,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined),
+                const SizedBox(width: 8),
+                NeoCircleAction(
+                  icon: Icons.settings_outlined,
                   tooltip: 'Настройки приложения',
                   onPressed: () {
                     context.push(SettingsRoute.path);
                   },
                 ),
+                const SizedBox(width: 12),
               ]
             : null,
       ),
@@ -459,9 +463,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           },
           body: Column(
             children: [
-              longLabelTabBar(
-                controller: _tabController,
-                tabs: tabs,
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 10),
+                child: NeoUnderlineTabs(
+                  controller: _tabController,
+                  tabs: tabs,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                ),
               ),
               Expanded(
                 child: TabBarView(
@@ -482,24 +490,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final scheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return AppElevatedCard(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+    return NeoGlassCard(
+      margin: const EdgeInsets.fromLTRB(18, 104, 18, 14),
       padding: EdgeInsets.zero,
+      radius: 28,
+      gradient: RadialGradient(
+        center: const Alignment(0, -0.72),
+        radius: 0.92,
+        colors: [
+          scheme.primary.withValues(alpha: 0.34),
+          scheme.primary.withValues(alpha: 0.10),
+          scheme.surfaceContainer.withValues(alpha: 0.78),
+        ],
+        stops: const [0, 0.42, 1],
+      ),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              scheme.primary.withValues(alpha: 0.13),
-              scheme.surface.withValues(alpha: 0.96),
-              scheme.secondaryContainer.withValues(alpha: 0.18),
-            ],
-            stops: const [0, 0.58, 1],
-          ),
-        ),
+        decoration: const BoxDecoration(),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
           child: Column(
             children: [
               Container(
@@ -514,9 +522,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: scheme.primary.withValues(alpha: 0.18),
-                      blurRadius: 22,
-                      offset: const Offset(0, 8),
+                      color: scheme.primary.withValues(alpha: 0.32),
+                      blurRadius: 34,
+                      offset: const Offset(0, 12),
                     ),
                   ],
                 ),
@@ -524,7 +532,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: scheme.surface,
+                    color: scheme.surfaceContainerLowest,
                   ),
                   child: AppUserAvatar(
                     imageUrl: user.avatarUrl,
@@ -605,7 +613,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _isOpeningChat ? null : () => _openChat(user),
+                        onPressed:
+                            _isOpeningChat ? null : () => _openChat(user),
                         icon: const Icon(Icons.chat_bubble_outline, size: 18),
                         label: const Text('Написать'),
                       ),
@@ -917,11 +926,16 @@ class _ProfileStatsRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dividerColor = scheme.outlineVariant.withValues(alpha: 0.45);
 
-    return AppElevatedCard(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      radius: AppRadius.md,
-      color: scheme.surface.withValues(alpha: 0.72),
-      showShadow: false,
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.42),
+          width: 0.7,
+        ),
+      ),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
