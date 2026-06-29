@@ -920,22 +920,56 @@ class _CreateChannelPostScreenState
         ? 'Опубликовать сразу'
         : 'Запланировано: ${_formatSchedule(_scheduledPublishAt!)}';
 
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.schedule),
-        title: const Text('Время публикации'),
-        subtitle: Text(
-          hasCreator ? label : 'Отложенная публикация — тариф Creator или Pro',
-        ),
-        trailing: _scheduledPublishAt != null
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () => setState(() => _scheduledPublishAt = null),
-              )
-            : null,
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: hasCreator
             ? _pickSchedule
             : () => showCreatorRecipeUpsellSheet(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.schedule_rounded, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Время публикации',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasCreator
+                          ? label
+                          : 'Отложенная публикация — тариф Creator или Pro',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_scheduledPublishAt != null)
+                IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () => setState(() => _scheduledPublishAt = null),
+                )
+              else
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: scheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1422,8 +1456,12 @@ class _CreateChannelPostScreenState
     );
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: scheme.surfaceContainerLowest,
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        backgroundColor: scheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         titleSpacing: 8,
         title: TextButton(
           onPressed: _isSubmitting ? null : () => context.pop(false),
@@ -1568,9 +1606,11 @@ class _CreateChannelPostScreenState
               TextFormField(
                 controller: _tagsController,
                 decoration: const InputDecoration(
-                  labelText: 'Теги (необязательно)',
-                  hintText: 'выпечка, здоровое, завтрак',
-                  border: OutlineInputBorder(),
+                  hintText: 'Теги (необязательно)',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
                 ),
               ),
             ],
@@ -1623,6 +1663,7 @@ class _CreateChannelPostScreenState
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
+                  filled: false,
                   contentPadding: EdgeInsets.zero,
                 ),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
