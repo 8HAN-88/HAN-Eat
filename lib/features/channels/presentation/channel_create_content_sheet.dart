@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 
 /// Меню создания контента внутри канала (пост, рецепт, рилс).
@@ -12,39 +13,34 @@ Future<bool> showChannelCreateContentSheet(
   required int channelId,
   String? channelName,
 }) async {
-  final choice = await showModalBottomSheet<String>(
+  String? choice;
+  await showTelegramActionSheet<void>(
     context: context,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.videocam_outlined),
-            title: const Text('Создать рилс'),
-            subtitle: const Text('Короткое видео в ленту рилсов'),
-            onTap: () => Navigator.of(sheetContext).pop('reel'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.restaurant_menu),
-            title: const Text('Создать рецепт'),
-            subtitle: const Text('Публичный в Menu или приватный в канале'),
-            onTap: () => Navigator.of(sheetContext).pop('recipe'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
-            title: const Text('Пост с фото'),
-            onTap: () => Navigator.of(sheetContext).pop('photo'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.text_fields),
-            title: const Text('Текстовый пост'),
-            onTap: () => Navigator.of(sheetContext).pop('text'),
-          ),
-          const SizedBox(height: 8),
-        ],
+    title: 'Создать',
+    actions: [
+      TelegramActionSheetAction(
+        icon: Icons.videocam_outlined,
+        title: 'Создать рилс',
+        subtitle: 'Короткое видео в ленту рилсов',
+        onTap: () => choice = 'reel',
       ),
-    ),
+      TelegramActionSheetAction(
+        icon: Icons.restaurant_menu,
+        title: 'Создать рецепт',
+        subtitle: 'Публичный в Menu или приватный в канале',
+        onTap: () => choice = 'recipe',
+      ),
+      TelegramActionSheetAction(
+        icon: Icons.photo_library_outlined,
+        title: 'Пост с фото',
+        onTap: () => choice = 'photo',
+      ),
+      TelegramActionSheetAction(
+        icon: Icons.text_fields,
+        title: 'Текстовый пост',
+        onTap: () => choice = 'text',
+      ),
+    ],
   );
 
   if (!context.mounted || choice == null) return false;
@@ -71,7 +67,7 @@ Future<bool> showChannelCreateContentSheet(
     ChannelDetailRoute.createPost(
       channelId,
       channelName: channelName,
-      type: choice,
+      type: choice!,
     ),
   );
   return false;

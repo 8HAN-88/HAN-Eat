@@ -110,7 +110,7 @@ Future<ChatAttachSelection?> showChatAttachSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
-    enableDrag: false,
+    enableDrag: true,
     backgroundColor: Colors.transparent,
     builder: (_) => const _ChatAttachSheet(),
   );
@@ -221,7 +221,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     };
     ApiReachabilityService.addReconnectedListener(_reconnectedListener!);
     _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
+      setState(
+          () => _searchQuery = _searchController.text.trim().toLowerCase());
     });
   }
 
@@ -458,18 +459,18 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       builder: (context, scrollController) {
         return Material(
           color: sheetBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
-                width: 36,
-                height: 4,
+                width: 42,
+                height: 5,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.onSurfaceVariant
                       .withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
               _TelegramHeader(
@@ -501,7 +502,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                       hintText: 'Поиск',
                       prefixIcon: const Icon(Icons.search, size: 20),
                       filled: true,
-                      fillColor: isDark ? _groupBgDark : theme.colorScheme.surfaceContainerHighest,
+                      fillColor: isDark
+                          ? _groupBgDark
+                          : theme.colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -1136,9 +1139,8 @@ class _ContactsPanel extends StatelessWidget {
     }
     for (final list in map.values) {
       list.sort(
-        (a, b) => a.displayName
-            .toLowerCase()
-            .compareTo(b.displayName.toLowerCase()),
+        (a, b) =>
+            a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
       );
     }
     return map;
@@ -1167,8 +1169,7 @@ class _ContactTile extends StatelessWidget {
       leading: avatarUser != null
           ? ChatHubUserAvatar(user: avatarUser)
           : CircleAvatar(
-              backgroundColor:
-                  theme.colorScheme.surfaceContainerHighest,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
               child: Icon(
                 Icons.person_outline,
                 color: theme.colorScheme.onSurfaceVariant,
@@ -1232,7 +1233,9 @@ class _TelegramAttachDock extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? _ChatAttachSheetState._sheetBgDark : theme.colorScheme.surface,
+        color: isDark
+            ? _ChatAttachSheetState._sheetBgDark
+            : theme.colorScheme.surface,
         border: Border(
           top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.2)),
         ),

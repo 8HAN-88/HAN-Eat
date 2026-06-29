@@ -38,6 +38,7 @@ import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chats_hub_refresh_provider.dart';
@@ -1216,148 +1217,78 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _showThreadActionsSheet() {
-    final scheme = Theme.of(context).colorScheme;
     final isGroup = _conversation.isGroup;
     final isSaved = _conversation.isSaved;
     final peer = _conversation.peer;
     final mediaCount = _messages.where((m) => m.mediaUrl != null).length;
 
-    showModalBottomSheet<void>(
+    showTelegramActionSheet<void>(
       context: context,
-      showDragHandle: true,
-      backgroundColor: scheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Действия',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Icon(
-                _threadSearchOpen ? Icons.search_off : Icons.search,
-                color: scheme.onSurfaceVariant,
-              ),
-              title: Text(_threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _toggleThreadSearch();
-              },
-            ),
-            if (mediaCount > 0)
-              ListTile(
-                leading: Icon(Icons.photo_library_outlined,
-                    color: scheme.onSurfaceVariant),
-                title: Text('Медиа ($mediaCount)'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openMediaGallery();
-                },
-              ),
-            if (!isSaved) ...[
-              const Divider(height: 1, indent: 16, endIndent: 16),
-              ListTile(
-                leading: Icon(
-                  _pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                  color: scheme.onSurfaceVariant,
-                ),
-                title: Text(_pinned ? 'Открепить' : 'Закрепить'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _togglePin();
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  _muted
-                      ? Icons.notifications_off_outlined
-                      : Icons.notifications_outlined,
-                  color: scheme.onSurfaceVariant,
-                ),
-                title: Text(_muted ? 'Включить уведомления' : 'Без звука'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _toggleMute();
-                },
-              ),
-              if (isGroup)
-                ListTile(
-                  leading:
-                      Icon(Icons.info_outline, color: scheme.onSurfaceVariant),
-                  title: const Text('О группе'),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _openGroupInfo();
-                  },
-                ),
-              if (!isGroup && peer != null)
-                ListTile(
-                  leading: Icon(Icons.block_outlined, color: scheme.error),
-                  title: Text('Заблокировать',
-                      style: TextStyle(color: scheme.error)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _blockPeer();
-                  },
-                ),
-              if (isGroup)
-                ListTile(
-                  leading: Icon(Icons.logout, color: scheme.error),
-                  title: Text('Выйти из группы',
-                      style: TextStyle(color: scheme.error)),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _leaveGroup();
-                  },
-                ),
-              const Divider(height: 1, indent: 16, endIndent: 16),
-              ListTile(
-                leading: Icon(Icons.mark_chat_unread_outlined,
-                    color: scheme.onSurfaceVariant),
-                title: const Text('Пометить непрочитанным'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _markUnread();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.archive_outlined,
-                    color: scheme.onSurfaceVariant),
-                title: const Text('В архив'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _archiveChat();
-                },
-              ),
-              if (!isGroup)
-                ListTile(
-                  leading: Icon(Icons.delete_outline, color: scheme.error),
-                  title: Text(
-                    'Удалить чат',
-                    style: TextStyle(color: scheme.error),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _deleteChat();
-                  },
-                ),
-            ],
-            const SizedBox(height: 12),
-          ],
+      title: 'Действия',
+      actions: [
+        TelegramActionSheetAction(
+          icon: _threadSearchOpen ? Icons.search_off : Icons.search,
+          title: _threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате',
+          onTap: _toggleThreadSearch,
         ),
-      ),
+        if (mediaCount > 0)
+          TelegramActionSheetAction(
+            icon: Icons.photo_library_outlined,
+            title: 'Медиа ($mediaCount)',
+            onTap: _openMediaGallery,
+          ),
+        if (!isSaved) ...[
+          TelegramActionSheetAction(
+            icon: _pinned ? Icons.push_pin : Icons.push_pin_outlined,
+            title: _pinned ? 'Открепить' : 'Закрепить',
+            onTap: _togglePin,
+          ),
+          TelegramActionSheetAction(
+            icon: _muted
+                ? Icons.notifications_off_outlined
+                : Icons.notifications_outlined,
+            title: _muted ? 'Включить уведомления' : 'Без звука',
+            onTap: _toggleMute,
+          ),
+          if (isGroup)
+            TelegramActionSheetAction(
+              icon: Icons.info_outline,
+              title: 'О группе',
+              onTap: _openGroupInfo,
+            ),
+          if (!isGroup && peer != null)
+            TelegramActionSheetAction(
+              icon: Icons.block_outlined,
+              title: 'Заблокировать',
+              destructive: true,
+              onTap: _blockPeer,
+            ),
+          if (isGroup)
+            TelegramActionSheetAction(
+              icon: Icons.logout,
+              title: 'Выйти из группы',
+              destructive: true,
+              onTap: _leaveGroup,
+            ),
+          TelegramActionSheetAction(
+            icon: Icons.mark_chat_unread_outlined,
+            title: 'Пометить непрочитанным',
+            onTap: _markUnread,
+          ),
+          TelegramActionSheetAction(
+            icon: Icons.archive_outlined,
+            title: 'В архив',
+            onTap: _archiveChat,
+          ),
+          if (!isGroup)
+            TelegramActionSheetAction(
+              icon: Icons.delete_outline,
+              title: 'Удалить чат',
+              destructive: true,
+              onTap: _deleteChat,
+            ),
+        ],
+      ],
     );
   }
 

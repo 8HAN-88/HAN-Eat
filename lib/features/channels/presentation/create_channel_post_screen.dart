@@ -101,6 +101,8 @@ class _CreateChannelPostScreenState
   bool get _isRecipeMode => _selectedPostType == 'recipe';
   bool get _isPollMode => _selectedPostType == 'poll';
   bool get _isLinkMode => _selectedPostType == 'link';
+  bool get _isPlainComposerMode =>
+      !_isRecipeMode && !_isPollMode && !_isLinkMode;
   Timer? _linkPreviewDebounce;
   bool _isLoadingLinkPreview = false;
   Map<String, dynamic>? _linkPreviewMeta;
@@ -572,6 +574,10 @@ class _CreateChannelPostScreenState
 
       if (images.isNotEmpty) {
         setState(() {
+          if (widget.postId == null && !_isRecipeMode) {
+            _selectedPostType = 'text';
+            _clearLinkDraftState();
+          }
           // Добавляем новые изображения к существующим (максимум 10)
           final remainingSlots = 10 - _selectedImages.length;
           if (remainingSlots > 0) {
@@ -592,6 +598,10 @@ class _CreateChannelPostScreenState
 
         if (image != null) {
           setState(() {
+            if (widget.postId == null && !_isRecipeMode) {
+              _selectedPostType = 'text';
+              _clearLinkDraftState();
+            }
             if (_selectedImages.length < 10) {
               _selectedImages.add(image);
             }
@@ -630,6 +640,37 @@ class _CreateChannelPostScreenState
     }
   }
 
+  Future<void> _pickCameraImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+      setState(() {
+        if (widget.postId == null && !_isRecipeMode) {
+          _selectedPostType = 'text';
+          _clearLinkDraftState();
+        }
+        if (_selectedImages.length < 10) {
+          _selectedImages.add(image);
+        }
+        _selectedVideo = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть камеру'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _pickThumbnail() async {
     try {
       final XFile? image = await _imagePicker.pickImage(
@@ -663,6 +704,10 @@ class _CreateChannelPostScreenState
     if (!mounted) return;
     setState(() {
       _selectedVideo = video;
+      if (widget.postId == null) {
+        _selectedPostType = 'reel';
+        _clearLinkDraftState();
+      }
       _thumbnailImage = null;
       _selectedImages.clear();
       _uploadedMediaUrls.clear();
@@ -671,7 +716,7 @@ class _CreateChannelPostScreenState
       _videoPreviewError = false;
       _isPreviewPlaying = false;
       _selectedVideoBytes = null;
-      _sendToReels = _channelAutoPublishReels;
+      _sendToReels = true;
     });
     try {
       final length = await video.length();
@@ -724,6 +769,19 @@ class _CreateChannelPostScreenState
       _selectedVideoBytes = null;
       _sendToReels = _channelAutoPublishReels;
     });
+  }
+
+  void _clearLinkDraftState() {
+    _linkPreviewDebounce?.cancel();
+    _linkPreviewMeta = null;
+    _linkPreviewFailed = false;
+    _isLoadingLinkPreview = false;
+  }
+
+  String _publishButtonLabel() {
+    if (widget.postId != null) return 'Сохранить';
+    if (_selectedVideo != null) return 'В рилсы';
+    return 'Опубликовать';
   }
 
   void _togglePreviewPlayback() {
@@ -922,6 +980,19 @@ class _CreateChannelPostScreenState
 
     // Валидация только для рецепта
     // Для обычных постов медиа опционально
+    if (_isPlainComposerMode) {
+      final hasText = _titleController.text.trim().isNotEmpty ||
+          _descriptionController.text.trim().isNotEmpty;
+      final hasMedia = _selectedImages.isNotEmpty ||
+          _selectedVideo != null ||
+          _uploadedMediaUrls.isNotEmpty;
+      if (!hasText && !hasMedia) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Добавьте текст, фото или видео')),
+        );
+        return;
+      }
+    }
 
     if (_selectedVideo != null &&
         _sendToReels &&
@@ -1349,69 +1420,77 @@ class _CreateChannelPostScreenState
       loading: () => false,
       error: (_, __) => false,
     );
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.postId != null
-              ? (_isLinkMode
-                  ? 'Редактировать ссылку'
-                  : _isRecipeMode
-                      ? 'Редактировать рецепт'
-                      : 'Редактировать пост')
-              : _isRecipeMode
-                  ? 'Рецепт в канале'
-                  : _isPollMode
-                      ? 'Опрос в канале'
-                      : _isLinkMode
-                          ? 'Ссылка в канале'
-                          : 'Пост',
+        automaticallyImplyLeading: false,
+        titleSpacing: 8,
+        title: TextButton(
+          onPressed: _isSubmitting ? null : () => context.pop(false),
+          child: const Text('Отмена'),
         ),
         actions: [
-          if (_isSubmitting)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilledButton(
+              onPressed: _isSubmitting ? null : _submit,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 38),
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                shape: const StadiumBorder(),
               ),
-            )
-          else
-            TextButton(
-              onPressed: _submit,
-              child: Text(widget.postId != null ? 'Сохранить' : 'Опубликовать'),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_publishButtonLabel()),
             ),
+          ),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            if (widget.postId == null) ...[
-              _buildPostTypeSelector(),
-              const SizedBox(height: 24),
+            _buildComposerTextField(),
+            if (_isPlainComposerMode && _selectedImages.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildSelectedImagesPreview(),
             ],
-            if (widget.postId == null) _buildScheduleTile(),
-            if (widget.postId == null) const SizedBox(height: 16),
-
-            // Заголовок
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: 'Заголовок',
+            if (_isPlainComposerMode && _selectedVideo != null) ...[
+              const SizedBox(height: 12),
+              _buildVideoSection(),
+            ],
+            if (widget.postId == null) ...[
+              const SizedBox(height: 10),
+              _buildComposerToolbar(),
+              const SizedBox(height: 12),
+              _buildScheduleTile(),
+            ],
+            if (!_isPlainComposerMode) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _titleController,
+                decoration: InputDecoration(
+                  labelText: _isRecipeMode
+                      ? 'Название рецепта'
+                      : 'Заголовок (необязательно)',
+                  border: const OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (!_isRecipeMode) return null;
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Введите название рецепта';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (_isPollMode || _isLinkMode) return null;
-                if (value == null || value.trim().isEmpty) {
-                  return 'Введите заголовок';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
+            ],
             if (_isPollMode && _canEditPollContent) ...[
+              const SizedBox(height: 16),
               CreatePollFormSection(
                 questionController: _pollQuestionController,
                 optionControllers: _pollOptionControllers,
@@ -1447,11 +1526,13 @@ class _CreateChannelPostScreenState
               const SizedBox(height: 16),
             ],
             if (_isLinkMode) ...[
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _linkUrlController,
                 decoration: const InputDecoration(
                   labelText: 'Ссылка',
                   hintText: 'https://example.com',
+                  border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.url,
                 validator: (value) {
@@ -1464,25 +1545,15 @@ class _CreateChannelPostScreenState
                 controller: _linkPreviewController,
                 decoration: const InputDecoration(
                   labelText: 'Подпись к ссылке (необязательно)',
+                  border: OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
               _buildLinkLivePreviewCard(),
               const SizedBox(height: 16),
             ],
-
-            // Описание
-            TextFormField(
-              controller: _descriptionController,
-              decoration: InputDecoration(
-                labelText:
-                    _isPollMode ? 'Комментарий (необязательно)' : 'Описание',
-              ),
-              maxLines: 5,
-            ),
-            const SizedBox(height: 16),
-
             if (_isRecipeMode) ...[
+              const SizedBox(height: 16),
               RecipeVisibilitySelector(
                 value: _recipeVisibility,
                 hasCreator: hasCreator,
@@ -1491,19 +1562,149 @@ class _CreateChannelPostScreenState
               ),
               const SizedBox(height: 16),
             ],
-
-            // Контент в зависимости от типа
             if (_isRecipeMode) _buildRecipeSection(),
-
-            // Теги
-            TextFormField(
-              controller: _tagsController,
-              decoration: const InputDecoration(
-                labelText: 'Теги (через запятую)',
-                hintText: 'выпечка, здоровое, завтрак',
+            if (!_isPollMode) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _tagsController,
+                decoration: const InputDecoration(
+                  labelText: 'Теги (необязательно)',
+                  hintText: 'выпечка, здоровое, завтрак',
+                  border: OutlineInputBorder(),
+                ),
               ),
+            ],
+            if (_selectedVideo != null && _sendToReels)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Видео будет опубликовано в рилсы канала.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposerTextField() {
+    final scheme = Theme.of(context).colorScheme;
+    final isStructured = !_isPlainComposerMode;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 22,
+          backgroundColor: scheme.primary.withValues(alpha: 0.14),
+          child: Icon(Icons.campaign_rounded, color: scheme.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _descriptionController,
+                minLines: isStructured ? 3 : 8,
+                maxLines: null,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: _isPollMode
+                      ? 'Добавьте комментарий к опросу'
+                      : _isRecipeMode
+                          ? 'Расскажите о рецепте'
+                          : _isLinkMode
+                              ? 'Добавьте комментарий к ссылке'
+                              : 'Что нового?',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      height: 1.35,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.public_rounded, size: 16, color: scheme.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Публикация в канал',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildComposerToolbar() {
+    final disabled = _isSubmitting || _isUploadingMedia;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            _ComposerToolButton(
+              icon: Icons.photo_outlined,
+              tooltip: 'Фото',
+              selected: _selectedImages.isNotEmpty,
+              onPressed: disabled ? null : _pickImage,
             ),
-            const SizedBox(height: 24),
+            _ComposerToolButton(
+              icon: Icons.photo_camera_outlined,
+              tooltip: 'Камера',
+              onPressed: disabled ? null : _pickCameraImage,
+            ),
+            _ComposerToolButton(
+              icon: Icons.play_circle_outline_rounded,
+              tooltip: 'Видео в рилсы',
+              selected: _selectedVideo != null,
+              onPressed: disabled ? null : _pickVideo,
+            ),
+            _ComposerToolButton(
+              icon: Icons.poll_outlined,
+              tooltip: 'Опрос',
+              selected: _isPollMode,
+              onPressed: disabled
+                  ? null
+                  : () => _setContentType(_isPollMode ? 'text' : 'poll'),
+            ),
+            _ComposerToolButton(
+              icon: Icons.link_rounded,
+              tooltip: 'Ссылка',
+              selected: _isLinkMode,
+              onPressed: disabled
+                  ? null
+                  : () => _setContentType(_isLinkMode ? 'text' : 'link'),
+            ),
+            _ComposerToolButton(
+              icon: Icons.restaurant_menu_rounded,
+              tooltip: 'Рецепт',
+              selected: _isRecipeMode,
+              onPressed: disabled
+                  ? null
+                  : () => _setContentType(_isRecipeMode ? 'text' : 'recipe'),
+            ),
           ],
         ),
       ),
@@ -1511,6 +1712,12 @@ class _CreateChannelPostScreenState
   }
 
   void _setContentType(String type) {
+    if (type == 'poll' || type == 'link') {
+      _videoPreviewController?.pause();
+      _videoPreviewController?.dispose();
+      _videoPreviewController = null;
+      _videoPreviewFuture = null;
+    }
     setState(() {
       if (_selectedPostType == 'recipe' && type != 'recipe') {
         for (var ctrl in _ingredientControllers) {
@@ -1524,14 +1731,29 @@ class _CreateChannelPostScreenState
         _stepImages.clear();
       }
       if (type != 'link') {
-        _linkPreviewDebounce?.cancel();
-        _linkPreviewMeta = null;
-        _isLoadingLinkPreview = false;
+        _clearLinkDraftState();
+      }
+      if (type == 'poll' || type == 'link') {
+        _selectedImages.clear();
+        _selectedVideo = null;
+        _thumbnailImage = null;
+        _uploadedMediaUrls.clear();
+        _uploadedVideoThumbnailUrl = null;
+        _videoProcessing = false;
+        _videoPreviewError = false;
+        _isPreviewPlaying = false;
+        _selectedVideoBytes = null;
+        _sendToReels = _channelAutoPublishReels;
       }
       _selectedPostType = type;
       if (type == 'recipe') {
-        if (_ingredientControllers.isEmpty) _addIngredientField();
-        if (_stepControllers.isEmpty) _addStepField();
+        if (_ingredientControllers.isEmpty) {
+          _ingredientControllers.add(TextEditingController());
+        }
+        if (_stepControllers.isEmpty) {
+          _stepControllers.add(TextEditingController());
+          _stepImages.add(null);
+        }
       }
     });
   }
@@ -2194,6 +2416,36 @@ class _PostTypeChip extends StatelessWidget {
       ),
       selected: isSelected,
       onSelected: (_) => onTap(),
+    );
+  }
+}
+
+class _ComposerToolButton extends StatelessWidget {
+  const _ComposerToolButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      color: selected ? scheme.primary : scheme.onSurfaceVariant,
+      style: IconButton.styleFrom(
+        backgroundColor:
+            selected ? scheme.primary.withValues(alpha: 0.12) : null,
+        shape: const CircleBorder(),
+      ),
     );
   }
 }

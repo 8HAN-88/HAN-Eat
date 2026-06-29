@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
 import '../../services/feed_api_cache.dart';
+import '../../widgets/telegram_ui.dart';
 import '../reels/application/reels_feed_refresh_provider.dart';
 
 /// Открыть экран загрузки рилса (community video API).
@@ -41,30 +42,25 @@ Future<bool> showCreateContentSheet(
   WidgetRef? ref,
   bool includeReel = false,
 }) async {
-  final choice = await showModalBottomSheet<String>(
+  String? choice;
+  await showTelegramActionSheet<void>(
     context: context,
-    showDragHandle: true,
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (includeReel)
-            ListTile(
-              leading: const Icon(Icons.videocam_outlined),
-              title: const Text('Рилс'),
-              subtitle: const Text('Короткое видео в ленту рилсов'),
-              onTap: () => Navigator.pop(ctx, 'reel'),
-            ),
-          ListTile(
-            leading: const Icon(Icons.edit_outlined),
-            title: const Text('Пост'),
-            subtitle: const Text('Текст, фото, рецепт, опрос'),
-            onTap: () => Navigator.pop(ctx, 'post'),
-          ),
-          const SizedBox(height: 8),
-        ],
+    title: 'Создать',
+    actions: [
+      if (includeReel)
+        TelegramActionSheetAction(
+          icon: Icons.videocam_outlined,
+          title: 'Рилс',
+          subtitle: 'Короткое видео в ленту рилсов',
+          onTap: () => choice = 'reel',
+        ),
+      TelegramActionSheetAction(
+        icon: Icons.edit_outlined,
+        title: 'Пост',
+        subtitle: 'Текст, фото, рецепт, опрос',
+        onTap: () => choice = 'post',
       ),
-    ),
+    ],
   );
 
   if (!context.mounted || choice == null) return false;

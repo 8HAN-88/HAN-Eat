@@ -20,6 +20,7 @@ import '../../../../services/user_realtime_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
+import '../../../../widgets/telegram_ui.dart';
 import '../../../channels/application/channels_list_refresh_provider.dart';
 import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
 import '../../../navigation/application/shell_tab_visibility.dart';
@@ -693,41 +694,27 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   void _showChannelHubActions(Channel channel) {
-    showModalBottomSheet<void>(
+    showTelegramActionSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.folder_outlined),
-              title: const Text('Добавить в папку'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showAddToFolderSheet(channelId: channel.id);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.archive_outlined),
-              title: const Text('В архив'),
-              subtitle: const Text('Скрыть из списка чатов'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _archiveChannelFromHub(channel);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.open_in_new_outlined),
-              title: const Text('Открыть канал'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openChannel(channel.id);
-              },
-            ),
-          ],
+      title: 'Действия',
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.folder_outlined,
+          title: 'Добавить в папку',
+          onTap: () => _showAddToFolderSheet(channelId: channel.id),
         ),
-      ),
+        TelegramActionSheetAction(
+          icon: Icons.archive_outlined,
+          title: 'В архив',
+          subtitle: 'Скрыть из списка чатов',
+          onTap: () => _archiveChannelFromHub(channel),
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.open_in_new_outlined,
+          title: 'Открыть канал',
+          onTap: () => _openChannel(channel.id),
+        ),
+      ],
     );
   }
 
@@ -905,85 +892,53 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   void _showChatHubActions(ChatConversation chat) {
-    showModalBottomSheet<void>(
+    showTelegramActionSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!chat.isSaved) ...[
-              ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: const Text('Добавить в папку'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showAddToFolderSheet(conversationId: chat.id);
-                },
+      title: 'Действия',
+      actions: chat.isSaved
+          ? [
+              TelegramActionSheetAction(
+                icon: Icons.bookmark_rounded,
+                title: 'Избранное',
+                subtitle: 'Личное хранилище — только вы видите эти сообщения',
+                onTap: () {},
               ),
-              ListTile(
-                leading: Icon(
-                  chat.muted
-                      ? Icons.notifications_outlined
-                      : Icons.notifications_off_outlined,
-                ),
-                title: Text(chat.muted ? 'Включить уведомления' : 'Без звука'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _toggleMuteFromHub(chat);
-                },
+            ]
+          : [
+              TelegramActionSheetAction(
+                icon: Icons.folder_outlined,
+                title: 'Добавить в папку',
+                onTap: () => _showAddToFolderSheet(conversationId: chat.id),
               ),
-              ListTile(
-                leading: Icon(
-                  chat.pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                ),
-                title: Text(chat.pinned ? 'Открепить' : 'Закрепить'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _togglePinFromHub(chat);
-                },
+              TelegramActionSheetAction(
+                icon: chat.muted
+                    ? Icons.notifications_outlined
+                    : Icons.notifications_off_outlined,
+                title: chat.muted ? 'Включить уведомления' : 'Без звука',
+                onTap: () => _toggleMuteFromHub(chat),
               ),
-              ListTile(
-                leading: const Icon(Icons.mark_chat_unread_outlined),
-                title: const Text('Пометить непрочитанным'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _markUnreadFromHub(chat);
-                },
+              TelegramActionSheetAction(
+                icon: chat.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+                title: chat.pinned ? 'Открепить' : 'Закрепить',
+                onTap: () => _togglePinFromHub(chat),
               ),
-              ListTile(
-                leading: const Icon(Icons.archive_outlined),
-                title: const Text('В архив'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _archiveChatFromHub(chat);
-                },
+              TelegramActionSheetAction(
+                icon: Icons.mark_chat_unread_outlined,
+                title: 'Пометить непрочитанным',
+                onTap: () => _markUnreadFromHub(chat),
               ),
-              ListTile(
-                leading: Icon(
-                  chat.isGroup ? Icons.logout : Icons.delete_outline,
-                  color: Theme.of(ctx).colorScheme.error,
-                ),
-                title: Text(
-                  chat.isGroup ? 'Выйти из группы' : 'Удалить чат',
-                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _deleteChatFromHub(chat);
-                },
+              TelegramActionSheetAction(
+                icon: Icons.archive_outlined,
+                title: 'В архив',
+                onTap: () => _archiveChatFromHub(chat),
               ),
-            ] else
-              ListTile(
-                leading: const Icon(Icons.bookmark_rounded),
-                title: const Text('Избранное'),
-                subtitle: const Text(
-                  'Личное хранилище — только вы видите эти сообщения',
-                ),
+              TelegramActionSheetAction(
+                icon: chat.isGroup ? Icons.logout : Icons.delete_outline,
+                title: chat.isGroup ? 'Выйти из группы' : 'Удалить чат',
+                destructive: true,
+                onTap: () => _deleteChatFromHub(chat),
               ),
-          ],
-        ),
-      ),
+            ],
     );
   }
 
@@ -1024,39 +979,27 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   void _onFolderLongPress(ChatFolder folder) {
-    final scheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
+    showTelegramActionSheet<void>(
       context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Изменить папку'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openEditFolder(folder);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: scheme.error),
-              title: Text(
-                'Удалить папку',
-                style: TextStyle(color: scheme.error),
-              ),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await ChatFolderStore.deleteFolder(folder.id);
-                if (!mounted) return;
-                if (_selectedFolderId == folder.id) _selectFolder(null);
-                await _loadFolders();
-              },
-            ),
-          ],
+      title: 'Действия',
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.edit_outlined,
+          title: 'Изменить папку',
+          onTap: () => _openEditFolder(folder),
         ),
-      ),
+        TelegramActionSheetAction(
+          icon: Icons.delete_outline,
+          title: 'Удалить папку',
+          destructive: true,
+          onTap: () async {
+            await ChatFolderStore.deleteFolder(folder.id);
+            if (!mounted) return;
+            if (_selectedFolderId == folder.id) _selectFolder(null);
+            await _loadFolders();
+          },
+        ),
+      ],
     );
   }
 

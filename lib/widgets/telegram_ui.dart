@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 
 import '../core/theme/app_tokens.dart';
 
@@ -183,6 +184,215 @@ class TelegramPill extends StatelessWidget {
                   fontSize: 13,
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class TelegramActionSheetAction {
+  const TelegramActionSheetAction({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.destructive = false,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool destructive;
+  final Widget? trailing;
+}
+
+Future<T?> showTelegramActionSheet<T>({
+  required BuildContext context,
+  required String title,
+  required List<TelegramActionSheetAction> actions,
+  bool isScrollControlled = false,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: isScrollControlled,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.38),
+    builder: (sheetContext) => TelegramActionSheet(
+      title: title,
+      actions: actions,
+    ),
+  );
+}
+
+class TelegramActionSheet extends StatelessWidget {
+  const TelegramActionSheet({
+    super.key,
+    required this.title,
+    required this.actions,
+  });
+
+  final String title;
+  final List<TelegramActionSheetAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fill = dark
+        ? const Color(0xFF1C1D22).withValues(alpha: 0.92)
+        : scheme.surface.withValues(alpha: 0.94);
+    final border = dark
+        ? Colors.white.withValues(alpha: 0.05)
+        : scheme.outlineVariant.withValues(alpha: 0.55);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(color: border, width: 0.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? 0.38 : 0.14),
+                  blurRadius: 28,
+                  offset: const Offset(0, -8),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: scheme.onSurface.withValues(alpha: 0.32),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.1,
+                          ),
+                    ),
+                    const SizedBox(height: 18),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: dark
+                            ? Colors.white.withValues(alpha: 0.025)
+                            : scheme.surfaceContainerHighest
+                                .withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < actions.length; i++) ...[
+                            _TelegramActionSheetRow(action: actions[i]),
+                            if (i != actions.length - 1)
+                              Divider(
+                                height: 1,
+                                thickness: 0.5,
+                                indent: 54,
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: dark ? 0.16 : 0.7),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TelegramActionSheetRow extends StatelessWidget {
+  const _TelegramActionSheetRow({required this.action});
+
+  final TelegramActionSheetAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = action.destructive ? scheme.error : scheme.onSurface;
+    final iconFg = action.destructive ? scheme.error : scheme.onSurfaceVariant;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          Navigator.pop(context);
+          action.onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+          child: Row(
+            children: [
+              Icon(action.icon, color: iconFg, size: 25),
+              const SizedBox(width: 22),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      action.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: fg,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                    if (action.subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          action.subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              action.trailing ??
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: scheme.onSurfaceVariant.withValues(alpha: 0.72),
+                    size: 24,
+                  ),
             ],
           ),
         ),
