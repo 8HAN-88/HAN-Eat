@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
+
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 
@@ -75,5 +78,54 @@ class FeedLoadHelper {
   static Future<void> clearSessionIfExpired(Object e) async {
     if (!isSessionError(e)) return;
     await AuthService.logout();
+  }
+}
+
+/// Подгрузка следующей страницы ленты, когда контент не заполняет экран.
+class FeedPaginationHelper {
+  FeedPaginationHelper._();
+
+  static const double fillViewportThreshold = 32;
+
+  static bool shouldPrefetchMore(ScrollPosition position) {
+    if (!position.hasViewportDimension) return false;
+    if (position.maxScrollExtent <= fillViewportThreshold) return true;
+    return position.pixels >= position.maxScrollExtent * 0.8;
+  }
+
+  static void onScroll({
+    required ScrollController controller,
+    required bool isLoading,
+    required bool hasMore,
+    required VoidCallback loadMore,
+  }) {
+    if (isLoading || !hasMore || !controller.hasClients) return;
+    if (shouldPrefetchMore(controller.position)) {
+      loadMore();
+    }
+  }
+
+  static void scheduleFillViewport({
+    required ScrollController controller,
+    required bool isLoading,
+    required bool hasMore,
+    required VoidCallback loadMore,
+  }) {
+    if (isLoading || !hasMore) return;
+
+    void check() {
+      if (!controller.hasClients) return;
+      if (shouldPrefetchMore(controller.position)) {
+        loadMore();
+      }
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => check());
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => check());
   }
 }

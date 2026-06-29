@@ -124,14 +124,12 @@ class _SubscriptionsFeedScreenState
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final pos = _scrollController.position;
-    if (!pos.hasViewportDimension || pos.maxScrollExtent <= 0) return;
-    if (pos.pixels >= pos.maxScrollExtent * 0.8) {
-      if (!_isLoading && _hasMore) {
-        _loadMore();
-      }
-    }
+    FeedPaginationHelper.onScroll(
+      controller: _scrollController,
+      isLoading: _isLoading,
+      hasMore: _hasMore,
+      loadMore: _loadMore,
+    );
   }
 
   Future<void> _loadFeed({bool refresh = false}) async {
@@ -262,6 +260,14 @@ class _SubscriptionsFeedScreenState
           AuthService.instance.currentUser != null) {
         await _loadFeed(refresh: false);
       }
+      if (stillMounted && _hasMore && !_isLoading) {
+        FeedPaginationHelper.scheduleFillViewport(
+          controller: _scrollController,
+          isLoading: _isLoading,
+          hasMore: _hasMore,
+          loadMore: _loadMore,
+        );
+      }
     }
   }
 
@@ -345,6 +351,7 @@ class _SubscriptionsFeedScreenState
                 builder: (context, chromeHidden, _) {
                   return ListView.builder(
                     controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     cacheExtent: kIsWeb ? 200 : 250,
                     addAutomaticKeepAlives: false,
                     addRepaintBoundaries: true,
@@ -436,6 +443,13 @@ class _SubscriptionsFeedScreenState
                         );
                       }
                       if (_hasMore && index == banner + _posts.length) {
+                        if (!_isLoading) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && !_isLoading && _hasMore) {
+                              _loadMore();
+                            }
+                          });
+                        }
                         return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(16),

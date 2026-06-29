@@ -130,14 +130,12 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final pos = _scrollController.position;
-    if (!pos.hasViewportDimension || pos.maxScrollExtent <= 0) return;
-    if (pos.pixels >= pos.maxScrollExtent * 0.8) {
-      if (!_isLoading && _hasMore) {
-        _loadMore();
-      }
-    }
+    FeedPaginationHelper.onScroll(
+      controller: _scrollController,
+      isLoading: _isLoading,
+      hasMore: _hasMore,
+      loadMore: _loadMore,
+    );
   }
 
   Future<void> _loadFeed({bool refresh = false}) async {
@@ -268,6 +266,17 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
           requestId == _loadGeneration) {
         await _loadFeed(refresh: false);
       }
+      if (stillMounted &&
+          requestId == _loadGeneration &&
+          _hasMore &&
+          !_isLoading) {
+        FeedPaginationHelper.scheduleFillViewport(
+          controller: _scrollController,
+          isLoading: _isLoading,
+          hasMore: _hasMore,
+          loadMore: _loadMore,
+        );
+      }
     }
   }
 
@@ -329,6 +338,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                 builder: (context, chromeHidden, _) {
                   return ListView.builder(
                     controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     cacheExtent: kIsWeb ? 200 : 250,
                     addAutomaticKeepAlives: false,
                     addRepaintBoundaries: true,
@@ -419,6 +429,13 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                         );
                       }
                       if (_hasMore && index == banner + _posts.length) {
+                        if (!_isLoading) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && !_isLoading && _hasMore) {
+                              _loadMore();
+                            }
+                          });
+                        }
                         return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(16),
