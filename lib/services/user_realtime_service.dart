@@ -101,7 +101,9 @@ class UserRealtimeService {
   void _startWebKeepalive() {
     if (!kIsWeb) return;
     Timer.periodic(const Duration(seconds: 20), (_) {
-      if (_disposed || _backgroundPaused || ApiRateLimitBackoff.isActive) return;
+      if (_disposed || _backgroundPaused || ApiRateLimitBackoff.isActive) {
+        return;
+      }
       if (AuthService.instance.currentUser == null) return;
       if (!connected.value && _reconnectTimer == null) {
         connect();
@@ -179,9 +181,9 @@ class UserRealtimeService {
 
       _client = HanEatHttpClient.createStreamClient();
       final response = await _client!.send(request).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('SSE connect timeout'),
-      );
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException('SSE connect timeout'),
+          );
       if (response.statusCode == 401) {
         await AuthService.refreshToken();
         if (!_disposed) _scheduleReconnect();
@@ -191,7 +193,9 @@ class UserRealtimeService {
         final retryAfter =
             int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
         ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
-        if (!_disposed) _scheduleReconnect(extraDelay: Duration(seconds: retryAfter));
+        if (!_disposed) {
+          _scheduleReconnect(extraDelay: Duration(seconds: retryAfter));
+        }
         return;
       }
       if (response.statusCode != 200) {
@@ -204,6 +208,7 @@ class UserRealtimeService {
       _startWatchdog();
       if (!connected.value) {
         connected.value = true;
+        ChatRealtimeSignals.instance.notifyNewMessage();
       }
 
       _buffer = '';
@@ -224,8 +229,9 @@ class UserRealtimeService {
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed || !connected.value) return;
       final idle = DateTime.now().difference(_lastActivity);
-      if (idle > const Duration(seconds: 90)) {
-        debugPrint('UserRealtimeService: idle ${idle.inSeconds}s, reconnecting');
+      if (idle > const Duration(seconds: 75)) {
+        debugPrint(
+            'UserRealtimeService: idle ${idle.inSeconds}s, reconnecting');
         _handleDisconnect(forceReconnect: true);
       }
     });
@@ -263,6 +269,7 @@ class UserRealtimeService {
     _watchdogTimer?.cancel();
     _subscription?.cancel();
     _subscription = null;
+    _closeStreamClient();
     if (connected.value) {
       connected.value = false;
     }
@@ -282,7 +289,8 @@ class UserRealtimeService {
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
     final baseSec = math.min(1 + _reconnectAttempt, 15);
     final jitterMs = _random.nextInt(800);
-    final delay = Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
+    final delay =
+        Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
     _reconnectTimer = Timer(delay, connect);
   }
 }

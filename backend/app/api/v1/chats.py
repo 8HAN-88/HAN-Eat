@@ -691,7 +691,7 @@ async def send_message(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-        if code in ("empty_message", "missing_media", "empty_poll"):
+        if code in ("empty_message", "missing_media", "empty_poll", "invalid_reply"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
@@ -799,7 +799,7 @@ async def vote_chat_poll(
     )
     sender = db.query(User).filter(User.id == msg.sender_id).first()
     reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
-    return _message_response(
+    response = _message_response(
         msg,
         current_user.id,
         member.last_read_message_id if member else None,
@@ -810,6 +810,11 @@ async def vote_chat_poll(
         reactions=reactions,
         db=db,
     )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
 
 
 @router.post(
@@ -880,7 +885,7 @@ async def close_chat_poll(
     )
     sender = db.query(User).filter(User.id == msg.sender_id).first()
     reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
-    return _message_response(
+    response = _message_response(
         msg,
         current_user.id,
         member.last_read_message_id if member else None,
@@ -891,6 +896,11 @@ async def close_chat_poll(
         reactions=reactions,
         db=db,
     )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
 
 
 @router.delete("/chats/{conversation_id}/messages/{message_id}")

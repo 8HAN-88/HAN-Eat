@@ -106,9 +106,9 @@ class ChatStreamService {
 
       _client = HanEatHttpClient.createStreamClient();
       final response = await _client!.send(request).timeout(
-        const Duration(seconds: 20),
-        onTimeout: () => throw TimeoutException('SSE connect timeout'),
-      );
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException('SSE connect timeout'),
+          );
       if (response.statusCode == 401) {
         await AuthService.refreshToken();
         if (!_disposed) _scheduleReconnect();
@@ -154,7 +154,7 @@ class ChatStreamService {
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed || !connected) return;
       final idle = DateTime.now().difference(_lastActivity);
-      if (idle > const Duration(seconds: 90)) {
+      if (idle > const Duration(seconds: 75)) {
         debugPrint('ChatStreamService: idle ${idle.inSeconds}s, reconnecting');
         _handleDisconnect(forceReconnect: true);
       }
@@ -190,6 +190,7 @@ class ChatStreamService {
     _watchdogTimer?.cancel();
     _subscription?.cancel();
     _subscription = null;
+    _closeStreamClient();
     if (connected) {
       connected = false;
       onDisconnected?.call();
@@ -208,7 +209,8 @@ class ChatStreamService {
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
     final baseSec = math.min(1 + _reconnectAttempt, 15);
     final jitterMs = _random.nextInt(800);
-    final delay = Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
+    final delay =
+        Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
     _reconnectTimer = Timer(delay, connect);
   }
 }

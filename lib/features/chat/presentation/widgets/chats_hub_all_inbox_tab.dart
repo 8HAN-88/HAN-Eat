@@ -44,7 +44,8 @@ class ChatsHubAllInboxTab extends ConsumerStatefulWidget {
   final VoidCallback onSwitchToContacts;
 
   @override
-  ConsumerState<ChatsHubAllInboxTab> createState() => _ChatsHubAllInboxTabState();
+  ConsumerState<ChatsHubAllInboxTab> createState() =>
+      _ChatsHubAllInboxTabState();
 }
 
 class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
@@ -145,8 +146,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (!mounted) return;
     if (_folders.isEmpty) {
       await _openCreateFolder(
-        conversationIds:
-            conversationId != null ? [conversationId] : const [],
+        conversationIds: conversationId != null ? [conversationId] : const [],
         channelIds: channelId != null ? [channelId] : const [],
       );
       return;
@@ -179,7 +179,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 leading: const Icon(Icons.folder_outlined),
                 title: Text(folder.displayLabel),
                 trailing: inFolder
-                    ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                    ? Icon(Icons.check,
+                        color: Theme.of(ctx).colorScheme.primary)
                     : null,
                 onTap: () async {
                   Navigator.pop(ctx);
@@ -269,7 +270,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool get _showSavedPinned =>
       widget.searchQuery.trim().isEmpty && _selectedFolderId == null;
 
-  ChatConversation get _savedChatTile => _savedChat ??
+  ChatConversation get _savedChatTile =>
+      _savedChat ??
       ChatConversation(
         id: 0,
         type: 'saved',
@@ -301,7 +303,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
     });
     _realtimeSub = UserRealtimeService.instance.events.listen((event) {
-      if (!mounted || !_started || !ShellTabVisibility.chatsActive || _loading) {
+      if (!mounted ||
+          !_started ||
+          !ShellTabVisibility.chatsActive ||
+          _loading) {
         return;
       }
       if (event.event == 'chat.inbox' ||
@@ -422,8 +427,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   Future<void> _load({bool silent = false}) async {
     final seq = ++_loadSeq;
     if (!silent) {
-      final cached =
-          ChatCacheService.peekConversations() ??
+      final cached = ChatCacheService.peekConversations() ??
           await ChatCacheService.loadConversations();
       if (!mounted || seq != _loadSeq) return;
       if (cached != null && cached.isNotEmpty) {
@@ -454,50 +458,63 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     var favoriteIds = <int>{};
     var archivedChannelIds = <int>{};
 
-    await Future.wait<void>([
-      () async {
-        try {
-          chats = await ChatService.listConversations();
-        } catch (e) {
-          chatsError = e;
-          if (kDebugMode) debugPrint('Chats load failed: $e');
-        }
-      }(),
-      () async {
-        try {
-          await ChannelSheetPrefs.syncFromServer();
-          favoriteIds = (await ChannelSheetPrefs.listFavoriteIds()).toSet();
-          archivedChannelIds = await ChannelSheetPrefs.listArchivedIds();
-          final owned = await ChannelService.listChannels(
-            limit: 50,
-            offset: 0,
-            mine: true,
-            withLastPost: true,
-          );
-          final subscribed = await ChannelService.listChannels(
-            limit: 50,
-            offset: 0,
-            subscribed: true,
-            withLastPost: true,
-          );
-          channels = _uniqueChannels([...owned.items, ...subscribed.items])
-              .where((c) => !archivedChannelIds.contains(c.id))
-              .toList();
-        } catch (e) {
-          channelsError = e;
-          if (kDebugMode) debugPrint('Channels load failed: $e');
-        }
-      }(),
-    ]);
+    final channelsFuture = () async {
+      try {
+        await ChannelSheetPrefs.syncFromServer();
+        favoriteIds = (await ChannelSheetPrefs.listFavoriteIds()).toSet();
+        archivedChannelIds = await ChannelSheetPrefs.listArchivedIds();
+        final owned = await ChannelService.listChannels(
+          limit: 50,
+          offset: 0,
+          mine: true,
+          withLastPost: true,
+        );
+        final subscribed = await ChannelService.listChannels(
+          limit: 50,
+          offset: 0,
+          subscribed: true,
+          withLastPost: true,
+        );
+        channels = _uniqueChannels([...owned.items, ...subscribed.items])
+            .where((c) => !archivedChannelIds.contains(c.id))
+            .toList();
+      } catch (e) {
+        channelsError = e;
+        if (kDebugMode) debugPrint('Channels load failed: $e');
+      }
+    }();
+
+    try {
+      chats = await ChatService.listConversations();
+    } catch (e) {
+      chatsError = e;
+      if (kDebugMode) debugPrint('Chats load failed: $e');
+    }
+    if (!mounted || seq != _loadSeq) return;
+
+    final earlySaved = _extractSavedChat(chats) ?? _savedChat;
+    final earlyChats = _withoutSavedChat(chats, earlySaved);
+    if (earlyChats.isNotEmpty || earlySaved != null) {
+      setState(() {
+        if (earlySaved != null) _savedChat = earlySaved;
+        _entries
+          ..clear()
+          ..addAll(earlyChats.map(ChatInboxEntry.new));
+        _error = null;
+        _chatsPartialError = null;
+        _loading = false;
+        _servingFromCache = false;
+      });
+    }
+
+    await channelsFuture;
 
     if (!mounted || seq != _loadSeq) return;
 
     final resolvedSaved = _extractSavedChat(chats) ?? _savedChat;
     chats = _withoutSavedChat(chats, resolvedSaved);
 
-    if (chats.isEmpty &&
-        channels.isEmpty &&
-        resolvedSaved == null) {
+    if (chats.isEmpty && channels.isEmpty && resolvedSaved == null) {
       final err = chatsError ?? channelsError;
       if (err != null) {
         unawaited(FeedLoadHelper.clearSessionIfExpired(err));
@@ -651,9 +668,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   List<Channel> get _visibleRecommended {
     final q = widget.searchQuery.trim().toLowerCase();
     if (q.isEmpty) return _recommended;
-    return _recommended
-        .where((c) => c.name.toLowerCase().contains(q))
-        .toList();
+    return _recommended.where((c) => c.name.toLowerCase().contains(q)).toList();
   }
 
   Future<void> _openChannel(int channelId) async {
@@ -972,7 +987,6 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     );
   }
 
-
   Widget _hubOfflineBanner() {
     final scheme = Theme.of(context).colorScheme;
     final apiOk = ApiReachabilityService.instance.isApiReachable.value;
@@ -1142,19 +1156,18 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             SliverToBoxAdapter(
               child: ChatsHubGesturesHint(onDismiss: _dismissGesturesHint),
             ),
-          if (_servingFromCache)
-            SliverToBoxAdapter(child: _hubOfflineBanner()),
+          if (_servingFromCache) SliverToBoxAdapter(child: _hubOfflineBanner()),
           if (widget.searchQuery.trim().isEmpty)
             SliverToBoxAdapter(
-            child: ChatHubFolderBar(
-              folders: _folders,
-              selectedFolderId: _selectedFolderId,
-              onSelectFolder: _selectFolder,
-              onCreateFolder: _openCreateFolder,
-              onManageFolders: _openManageFolders,
-              onFolderLongPress: _onFolderLongPress,
+              child: ChatHubFolderBar(
+                folders: _folders,
+                selectedFolderId: _selectedFolderId,
+                onSelectFolder: _selectFolder,
+                onCreateFolder: _openCreateFolder,
+                onManageFolders: _openManageFolders,
+                onFolderLongPress: _onFolderLongPress,
+              ),
             ),
-          ),
           if (_chatsPartialError != null)
             SliverToBoxAdapter(
               child: MaterialBanner(
@@ -1181,8 +1194,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
-                  if (visible.isNotEmpty)
-                    const Divider(height: 1, indent: 72),
+                  if (visible.isNotEmpty) const Divider(height: 1, indent: 72),
                 ],
               ),
             ),
@@ -1219,8 +1231,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 return ChannelInboxSlidable(
                   key: ValueKey('channel_${channelEntry.channel.id}'),
                   channelId: channelEntry.channel.id,
-                  onArchive: () =>
-                      _archiveChannelFromHub(channelEntry.channel),
+                  onArchive: () => _archiveChannelFromHub(channelEntry.channel),
                   onLeave: () => _leaveChannelFromHub(channelEntry.channel),
                   child: ChannelInboxTile(
                     channel: channelEntry.channel,

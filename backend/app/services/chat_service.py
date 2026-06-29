@@ -753,6 +753,18 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "poll" and not content.strip():
             raise ValueError("empty_poll")
+        if reply_to_message_id is not None:
+            reply_target = (
+                self.db.query(Message.id)
+                .filter(
+                    Message.id == reply_to_message_id,
+                    Message.conversation_id == conversation_id,
+                    Message.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if not reply_target:
+                raise ValueError("invalid_reply")
 
         msg = Message(
             conversation_id=conversation_id,
