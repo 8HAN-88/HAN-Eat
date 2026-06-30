@@ -17,6 +17,13 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../bots/data/bot_inline_service.dart';
+import '../../bots/presentation/inline_suggestions.dart';
+import '../../bots/data/bot_models.dart';
+import '../../../services/api_service.dart';
+import '../../calls/presentation/video_call_screen.dart';
+import '../../calls/presentation/voice_room_screen.dart';
+
 import '../../../app/app_router.dart';
 import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
@@ -201,6 +208,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Timer? _presenceTimer;
   Timer? _typingDebounce;
   Timer? _peerTypingClear;
+  Timer? _inlineDebounce;
+  List<InlineResult> _inlineResults = [];
+  OverlayEntry? _inlineOverlayEntry;
+  List<BotListItem> _myBots = [];
+  OverlayEntry? _botAutocompleteOverlayEntry;
   StreamSubscription<void>? _signalSub;
   VoidCallback? _apiReachabilityListener;
   ChatStreamService? _stream;
@@ -260,6 +272,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_restoreDraft());
     unawaited(_restoreVoiceHint());
     unawaited(AuthService.getAccessTokenForApi());
+    unawaited(_loadMyBots());
     _load(refresh: true);
     _startPolling();
     _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -614,11 +627,185 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final has = _controller.text.trim().isNotEmpty;
     if (has != _hasText) setState(() => _hasText = has);
     _scheduleDraftSave();
-    if (!has) return;
+
+    // === Live Inline Mode (@bot) ===
+    _scheduleInlineSuggestions();
+
+    // === Autocomplete @botname from my bots ===
+    _scheduleBotAutocomplete();
+
+    if (!has) {
+      _hideInlineOverlay();
+      _hideBotAutocompleteOverlay();
+      return;
+    }
+
     _typingDebounce?.cancel();
     _typingDebounce = Timer(const Duration(milliseconds: 800), () {
       ChatService.sendTyping(conversationId: widget.conversationId);
     });
+  }
+
+  void _scheduleInlineSuggestions() {
+    _inlineDebounce?.cancel();
+
+    final text = _controller.text.trim();
+    if (!text.startsWith('@')) {
+      _hideInlineOverlay();
+      return;
+    }
+
+    // Извлекаем @botname и query
+    final match = RegExp(r'^@([a-zA-Z0-9_]+)\s*(.*)$').firstMatch(text);
+    if (match == null) {
+      _hideInlineOverlay();
+      return;
+    }
+
+    final botUsername = match.group(1)!;
+    final query = match.group(2) ?? '';
+
+    _inlineDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+      final results = await BotInlineService.getInlineResults(
+        botUsername: botUsername,
+        query: query,
+        limit: 6,
+      );
+      if (!mounted) return;
+
+      if (results.isNotEmpty) {
+        _showInlineOverlay(results);
+      } else {
+        _hideInlineOverlay();
+      }
+    });
+  }
+
+  void _scheduleBotAutocomplete() {
+    if (_myBots.isEmpty) return;
+
+    final text = _controller.text;
+    // Ищем @word в конце строки (или после пробела)
+    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
+    if (match == null) {
+      _hideBotAutocompleteOverlay();
+      return;
+    }
+
+    final query = match.group(1)!.toLowerCase();
+
+    // Фильтруем своих ботов
+    final filtered = _myBots
+        .where((b) => b.username.toLowerCase().contains(query))
+        .take(8)
+        .toList();
+
+    if (filtered.isEmpty) {
+      _hideBotAutocompleteOverlay();
+      return;
+    }
+
+    _showBotAutocompleteOverlay(filtered, query);
+  }
+
+  void _showBotAutocompleteOverlay(List<BotListItem> bots, String query) {
+    _botAutocompleteOverlayEntry?.remove();
+
+    _botAutocompleteOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 16,
+        right: 16,
+        bottom: 90,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 280),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: bots.length,
+              itemBuilder: (context, index) {
+                final bot = bots[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: bot.avatarUrl != null
+                        ? CachedNetworkImageProvider(bot.avatarUrl!)
+                        : null,
+                    child: bot.avatarUrl == null
+                        ? const Icon(Icons.smart_toy_outlined)
+                        : null,
+                  ),
+                  title: Text('@${bot.username}'),
+                  subtitle: bot.name.isNotEmpty ? Text(bot.name) : null,
+                  onTap: () {
+                    _insertBotMention(bot.username);
+                    _hideBotAutocompleteOverlay();
+                  },
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context, rootOverlay: true).insert(_botAutocompleteOverlayEntry!);
+  }
+
+  void _hideBotAutocompleteOverlay() {
+    _botAutocompleteOverlayEntry?.remove();
+    _botAutocompleteOverlayEntry = null;
+  }
+
+  /// Вставляет @username в поле ввода, заменяя текущий @query
+  void _insertBotMention(String username) {
+    final text = _controller.text;
+    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
+    if (match == null) return;
+
+    final start = match.start + (text[match.start] == ' ' ? 1 : 0);
+    final newText = '${text.substring(0, start)}@$username ';
+
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+
+  void _showInlineOverlay(List<InlineResult> results) {
+    _inlineResults = results;
+    _inlineOverlayEntry?.remove();
+
+    _inlineOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: 16,
+        right: 16,
+        bottom: 90, // над полем ввода
+        child: InlineSuggestions(
+          results: _inlineResults,
+          onSelect: _insertInlineResult,
+          maxHeight: 200,
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_inlineOverlayEntry!);
+  }
+
+  void _hideInlineOverlay() {
+    _inlineOverlayEntry?.remove();
+    _inlineOverlayEntry = null;
+    _inlineResults = [];
+  }
+
+  void _insertInlineResult(InlineResult result) {
+    _hideInlineOverlay();
+    _controller.text = result.payload;
+    _controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: _controller.text.length),
+    );
+    // Можно сразу отправить или оставить для редактирования
   }
 
   void _onStreamEvent(Map<String, dynamic> event) {
@@ -976,8 +1163,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onComposerFocusChanged() {
-    if (!_inputFocusNode.hasFocus) return;
-    _scrollToBottomAfterKeyboard();
+    if (!_inputFocusNode.hasFocus) {
+      _hideBotAutocompleteOverlay();
+    } else {
+      _scrollToBottomAfterKeyboard();
+    }
   }
 
   @override
@@ -1312,6 +1502,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _presenceTimer?.cancel();
     _typingDebounce?.cancel();
     _peerTypingClear?.cancel();
+    _inlineDebounce?.cancel();
+    _hideInlineOverlay();
     _markReadDebounce?.cancel();
     _draftSaveDebounce?.cancel();
     _signalSub?.cancel();
@@ -2625,6 +2817,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _loadMyBots() async {
+    try {
+      final bots = await ApiService.getMyBots();
+      if (mounted) {
+        setState(() => _myBots = bots);
+      }
+    } catch (_) {
+      // Игнорируем ошибку — автодополнение просто не появится
+    }
+  }
+
   Future<void> _load({required bool refresh}) async {
     final seq = ++_messageLoadSeq;
     if (refresh) {
@@ -2838,6 +3041,44 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendText() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _recording) return;
+
+    _hideBotAutocompleteOverlay();
+
+    // === Inline Mode: @bot query ===
+    if (text.startsWith('@')) {
+      final match = RegExp(r'^@([a-zA-Z0-9_]+)\s*(.*)$').firstMatch(text);
+      if (match != null) {
+        final botUsername = match.group(1)!;
+        final query = match.group(2) ?? '';
+        _controller.clear();
+        final results = await BotInlineService.getInlineResults(
+          botUsername: botUsername,
+          query: query,
+        );
+        if (!mounted) return;
+        if (results.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Бот @$botUsername не найден или не имеет команд')),
+          );
+          return;
+        }
+        final selected = await showModalBottomSheet<InlineResult>(
+          context: context,
+          builder: (_) => InlineSuggestions(
+            results: results,
+            onSelect: (r) => Navigator.pop(context, r),
+            botUsername: botUsername,
+          ),
+        );
+        if (selected != null) {
+          // Отправляем payload как обычное сообщение
+          _controller.text = selected.payload;
+          // Рекурсивно вызовем _sendText для отправки
+          await _sendText();
+        }
+        return;
+      }
+    }
     if (_messages.any(
       (m) => m.isMine && m.id < 0 && m.content == text,
     )) {
@@ -3479,6 +3720,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       )
                     : null,
                 actions: [
+                  if (!isGroup && peer != null) ...[
+                    IconButton(
+                      tooltip: 'Видео-звонок',
+                      icon: const Icon(Icons.videocam_outlined),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => VideoCallScreen(contactName: peer.displayName),
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      tooltip: 'Голосовая комната',
+                      icon: const Icon(Icons.mic_outlined),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => VoiceRoomScreen(
+                              roomName: 'Комната ${peer.displayName}',
+                              roomId: 'room_${widget.conversationId}',
+                              isCreator: true,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                   IconButton(
                     tooltip: 'Ещё',
                     icon: const Icon(Icons.more_vert),

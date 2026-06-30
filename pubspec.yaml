@@ -48,6 +48,8 @@ dependencies:
   uuid: ^4.3.3
   url_launcher: ^6.2.5
   flutter_inappwebview: ^6.1.5
+  flutter_webrtc: ^0.9.42
+  permission_handler: ^11.3.1
   cached_network_image: ^3.3.1
   flutter_cache_manager: ^3.4.1
   js: ^0.7.1

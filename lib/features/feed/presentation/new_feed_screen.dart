@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/app/app_variant.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
@@ -70,7 +71,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
 
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
-      'rec_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
+      'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
 
   @override
   bool get wantKeepAlive => true;
@@ -502,15 +503,16 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           _feedType == 'photos' ? FontWeight.bold : null),
                 ),
               ),
-              PopupMenuItem(
-                value: 'recipes',
-                child: Text(
-                  'Рецепты',
-                  style: TextStyle(
-                      fontWeight:
-                          _feedType == 'recipes' ? FontWeight.bold : null),
+              if (AppVariant.current.isKitchen)
+                PopupMenuItem(
+                  value: 'recipes',
+                  child: Text(
+                    'Рецепты',
+                    style: TextStyle(
+                        fontWeight:
+                            _feedType == 'recipes' ? FontWeight.bold : null),
+                  ),
                 ),
-              ),
               PopupMenuItem(
                 value: 'reels',
                 child: Text(

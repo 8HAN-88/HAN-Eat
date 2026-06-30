@@ -108,295 +108,310 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final sheetBg = isDark ? const Color(0xFF1C1C1E) : theme.colorScheme.surface;
-    final groupBg =
-        isDark ? const Color(0xFF2C2C2E) : theme.colorScheme.surfaceContainerHighest;
-    final labelColor = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75);
+    final sheetBg =
+        isDark ? const Color(0xFF1C1C1E) : theme.colorScheme.surface;
+    final groupBg = isDark
+        ? const Color(0xFF2C2C2E)
+        : theme.colorScheme.surfaceContainerHighest;
+    final labelColor =
+        theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.92,
-      minChildSize: 0.55,
-      maxChildSize: 0.96,
-      expand: false,
-      builder: (context, scrollController) {
-        return Material(
-          color: sheetBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              _Header(
-                canSend: _canSend,
-                onClose: () => Navigator.pop(context),
-                onSend: _send,
-              ),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  children: [
-                    _SectionLabel('ВОПРОС', color: labelColor),
-                    const SizedBox(height: 8),
-                    _GroupedCard(
-                      color: groupBg,
-                      children: [
-                        _PollTextField(
-                          controller: _questionController,
-                          hint: 'Текст вопроса',
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        Divider(
-                          height: 1,
-                          color: theme.dividerColor.withValues(alpha: 0.25),
-                        ),
-                        _PollTextField(
-                          controller: _descriptionController,
-                          hint: 'Описание (необязательно)',
-                          trailing: Icon(
-                            Icons.attach_file,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _SectionLabel('ВАРИАНТЫ ОТВЕТА', color: labelColor),
-                    const SizedBox(height: 8),
-                    _GroupedCard(
-                      color: groupBg,
-                      children: [
-                        for (var i = 0; i < _optionControllers.length; i++) ...[
-                          if (i > 0)
-                            Divider(
-                              height: 1,
-                              color: theme.dividerColor.withValues(alpha: 0.25),
-                            ),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: keyboardInset),
+      child: DraggableScrollableSheet(
+        initialChildSize: keyboardInset > 0 ? 0.96 : 0.92,
+        minChildSize: 0.55,
+        maxChildSize: 0.96,
+        expand: false,
+        builder: (context, scrollController) {
+          return Material(
+            color: sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                _Header(
+                  canSend: _canSend,
+                  onClose: () => Navigator.pop(context),
+                  onSend: _send,
+                ),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    children: [
+                      _SectionLabel('ВОПРОС', color: labelColor),
+                      const SizedBox(height: 8),
+                      _GroupedCard(
+                        color: groupBg,
+                        children: [
                           _PollTextField(
-                            controller: _optionControllers[i],
-                            hint: 'Ответ',
-                            trailing: _optionControllers.length > 2
-                                ? IconButton(
-                                    icon: const Icon(Icons.close, size: 18),
-                                    onPressed: () => _removeOption(i),
-                                    visualDensity: VisualDensity.compact,
-                                  )
-                                : null,
+                            controller: _questionController,
+                            hint: 'Текст вопроса',
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          Divider(
+                            height: 1,
+                            color: theme.dividerColor.withValues(alpha: 0.25),
+                          ),
+                          _PollTextField(
+                            controller: _descriptionController,
+                            hint: 'Описание (необязательно)',
+                            trailing: Icon(
+                              Icons.attach_file,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                             onChanged: (_) => setState(() {}),
                           ),
                         ],
-                        Divider(
-                          height: 1,
-                          color: theme.dividerColor.withValues(alpha: 0.25),
-                        ),
-                        InkWell(
-                          onTap: _remainingOptions > 0 ? _addOption : null,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.add,
-                                  color: theme.colorScheme.primary,
-                                  size: 22,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Добавить ответ',
-                                  style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_remainingOptions > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8, left: 4),
-                        child: Text(
-                          'Можно добавить ещё $_remainingOptions ${_optionsWord(_remainingOptions)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: labelColor,
-                          ),
-                        ),
                       ),
-                    const SizedBox(height: 24),
-                    _SectionLabel('НАСТРОЙКИ', color: labelColor),
-                    const SizedBox(height: 8),
-                    _GroupedCard(
-                      color: groupBg,
-                      children: [
-                        _PollSettingTile(
-                          icon: Icons.visibility_outlined,
-                          iconColor: const Color(0xFF5AC8FA),
-                          title: 'Имена участников',
-                          subtitle:
-                              'Рядом с ответами отображаются имена голосовавших',
-                          value: _settings.showVoterNames,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              showVoterNames: v,
+                      const SizedBox(height: 24),
+                      _SectionLabel('ВАРИАНТЫ ОТВЕТА', color: labelColor),
+                      const SizedBox(height: 8),
+                      _GroupedCard(
+                        color: groupBg,
+                        children: [
+                          for (var i = 0;
+                              i < _optionControllers.length;
+                              i++) ...[
+                            if (i > 0)
+                              Divider(
+                                height: 1,
+                                color:
+                                    theme.dividerColor.withValues(alpha: 0.25),
+                              ),
+                            _PollTextField(
+                              controller: _optionControllers[i],
+                              hint: 'Ответ',
+                              trailing: _optionControllers.length > 2
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close, size: 18),
+                                      onPressed: () => _removeOption(i),
+                                      visualDensity: VisualDensity.compact,
+                                    )
+                                  : null,
+                              onChanged: (_) => setState(() {}),
                             ),
+                          ],
+                          Divider(
+                            height: 1,
+                            color: theme.dividerColor.withValues(alpha: 0.25),
                           ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.fact_check_outlined,
-                          iconColor: const Color(0xFFFF9500),
-                          title: 'Несколько ответов',
-                          subtitle:
-                              'Участники могут выбрать более одного варианта',
-                          value: _settings.multipleChoice,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              multipleChoice: v,
-                            ),
-                          ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.add_circle_outline,
-                          iconColor: const Color(0xFF64D2FF),
-                          title: 'Добавление вариантов',
-                          subtitle: 'Участники могут предлагать новые варианты',
-                          value: _settings.allowAddOptions,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              allowAddOptions: v,
-                            ),
-                          ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.change_circle_outlined,
-                          iconColor: const Color(0xFFBF5AF2),
-                          title: 'Изменение ответа',
-                          subtitle:
-                              'Участники могут изменить выбранный ответ',
-                          value: _settings.allowChangeVote,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              allowChangeVote: v,
-                            ),
-                          ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.shuffle,
-                          iconColor: const Color(0xFFFF2D55),
-                          title: 'Случайный порядок',
-                          subtitle:
-                              'Ответы отображаются у всех участников в случайном порядке',
-                          value: _settings.randomOrder,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              randomOrder: v,
-                            ),
-                          ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.check_circle_outline,
-                          iconColor: const Color(0xFF34C759),
-                          title: 'Правильный ответ',
-                          subtitle:
-                              'Отметьте один или несколько правильных вариантов',
-                          value: _settings.quizMode,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              quizMode: v,
-                            ),
-                          ),
-                        ),
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.timer_outlined,
-                          iconColor: const Color(0xFFFF3B30),
-                          title: 'Ограничение срока',
-                          subtitle:
-                              'Опрос автоматически завершится в заданное время',
-                          value: _settings.timeLimitEnabled,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              timeLimitEnabled: v,
-                            ),
-                          ),
-                        ),
-                        if (_settings.timeLimitEnabled) ...[
-                          _settingDivider(theme),
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            title: const Text('Срок проведения'),
-                            trailing: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: _settings.durationHours,
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 1,
-                                    child: Text('1 час'),
+                          InkWell(
+                            onTap: _remainingOptions > 0 ? _addOption : null,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.add,
+                                    color: theme.colorScheme.primary,
+                                    size: 22,
                                   ),
-                                  DropdownMenuItem(
-                                    value: 8,
-                                    child: Text('8 часов'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 24,
-                                    child: Text('1 день'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 168,
-                                    child: Text('7 дней'),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Добавить ответ',
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                    ),
                                   ),
                                 ],
-                                onChanged: (v) {
-                                  if (v == null) return;
-                                  setState(
-                                    () => _settings = _settings.copyWith(
-                                      durationHours: v,
-                                    ),
-                                  );
-                                },
                               ),
                             ),
                           ),
                         ],
-                        _settingDivider(theme),
-                        _PollSettingTile(
-                          icon: Icons.visibility_off_outlined,
-                          iconColor: const Color(0xFF8E8E93),
-                          title: 'Скрыть результаты',
-                          subtitle:
-                              'Если включено, результаты будут скрыты до завершения опроса',
-                          value: _settings.hideResultsUntilClosed,
-                          onChanged: (v) => setState(
-                            () => _settings = _settings.copyWith(
-                              hideResultsUntilClosed: v,
+                      ),
+                      if (_remainingOptions > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8, left: 4),
+                          child: Text(
+                            'Можно добавить ещё $_remainingOptions ${_optionsWord(_remainingOptions)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: labelColor,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(height: 24),
+                      _SectionLabel('НАСТРОЙКИ', color: labelColor),
+                      const SizedBox(height: 8),
+                      _GroupedCard(
+                        color: groupBg,
+                        children: [
+                          _PollSettingTile(
+                            icon: Icons.visibility_outlined,
+                            iconColor: const Color(0xFF5AC8FA),
+                            title: 'Имена участников',
+                            subtitle:
+                                'Рядом с ответами отображаются имена голосовавших',
+                            value: _settings.showVoterNames,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                showVoterNames: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.fact_check_outlined,
+                            iconColor: const Color(0xFFFF9500),
+                            title: 'Несколько ответов',
+                            subtitle:
+                                'Участники могут выбрать более одного варианта',
+                            value: _settings.multipleChoice,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                multipleChoice: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.add_circle_outline,
+                            iconColor: const Color(0xFF64D2FF),
+                            title: 'Добавление вариантов',
+                            subtitle:
+                                'Участники могут предлагать новые варианты',
+                            value: _settings.allowAddOptions,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                allowAddOptions: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.change_circle_outlined,
+                            iconColor: const Color(0xFFBF5AF2),
+                            title: 'Изменение ответа',
+                            subtitle:
+                                'Участники могут изменить выбранный ответ',
+                            value: _settings.allowChangeVote,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                allowChangeVote: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.shuffle,
+                            iconColor: const Color(0xFFFF2D55),
+                            title: 'Случайный порядок',
+                            subtitle:
+                                'Ответы отображаются у всех участников в случайном порядке',
+                            value: _settings.randomOrder,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                randomOrder: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.check_circle_outline,
+                            iconColor: const Color(0xFF34C759),
+                            title: 'Правильный ответ',
+                            subtitle:
+                                'Отметьте один или несколько правильных вариантов',
+                            value: _settings.quizMode,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                quizMode: v,
+                              ),
+                            ),
+                          ),
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.timer_outlined,
+                            iconColor: const Color(0xFFFF3B30),
+                            title: 'Ограничение срока',
+                            subtitle:
+                                'Опрос автоматически завершится в заданное время',
+                            value: _settings.timeLimitEnabled,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                timeLimitEnabled: v,
+                              ),
+                            ),
+                          ),
+                          if (_settings.timeLimitEnabled) ...[
+                            _settingDivider(theme),
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              title: const Text('Срок проведения'),
+                              trailing: DropdownButtonHideUnderline(
+                                child: DropdownButton<int>(
+                                  value: _settings.durationHours,
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 1,
+                                      child: Text('1 час'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 8,
+                                      child: Text('8 часов'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 24,
+                                      child: Text('1 день'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 168,
+                                      child: Text('7 дней'),
+                                    ),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v == null) return;
+                                    setState(
+                                      () => _settings = _settings.copyWith(
+                                        durationHours: v,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                          _settingDivider(theme),
+                          _PollSettingTile(
+                            icon: Icons.visibility_off_outlined,
+                            iconColor: const Color(0xFF8E8E93),
+                            title: 'Скрыть результаты',
+                            subtitle:
+                                'Если включено, результаты будут скрыты до завершения опроса',
+                            value: _settings.hideResultsUntilClosed,
+                            onChanged: (v) => setState(
+                              () => _settings = _settings.copyWith(
+                                hideResultsUntilClosed: v,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              _AttachToolbar(
-                selected: _AttachKind.poll,
-                onSelect: (_) {},
-              ),
-            ],
-          ),
-        );
-      },
+                _AttachToolbar(
+                  selected: _AttachKind.poll,
+                  onSelect: (_) {},
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -533,7 +548,10 @@ class _PollTextField extends StatelessWidget {
                 ),
               ),
               maxLength: hint.contains('вопрос') ? 300 : 120,
-              buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+              buildCounter: (_,
+                      {required currentLength,
+                      required isFocused,
+                      maxLength}) =>
                   null,
             ),
           ),

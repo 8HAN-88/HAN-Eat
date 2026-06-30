@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
+
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/api_reachability_service.dart';
@@ -1270,6 +1272,20 @@ class _TelegramAttachDock extends StatelessWidget {
                 label: 'Контакт',
                 selected: selected == ChatAttachTab.contact,
                 onTap: () => onSelect(ChatAttachTab.contact),
+              ),
+              _DockItem(
+                icon: Icons.apps_outlined,
+                label: 'Мини-приложения',
+                selected: false,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  // Открываем каталог мини-приложений
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MiniAppsCatalogScreen(),
+                    ),
+                  );
+                },
               ),
             ],
           ),

@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/app/app_variant.dart';
 import '../models/post_types.dart';
 
 /// Последняя выбранная вкладка и фильтры ленты (между сессиями).
@@ -13,6 +14,11 @@ class FeedUiPrefs {
   static const _subsSortKey = 'feed_subs_sort_v1';
   static const _reelsFollowingKey = 'feed_reels_following_v1';
 
+  static String _normalizeFeedType(String? value) {
+    if (value == 'recipes' && AppVariant.current.isSocial) return 'all';
+    return value ?? 'all';
+  }
+
   static Future<int> loadTabIndex() async {
     final prefs = await SharedPreferences.getInstance();
     return (prefs.getInt(_tabKey) ?? 1).clamp(0, 2);
@@ -25,12 +31,12 @@ class FeedUiPrefs {
 
   static Future<String> loadSubsFeedType() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_subsFilterKey) ?? 'all';
+    return _normalizeFeedType(prefs.getString(_subsFilterKey));
   }
 
   static Future<String> loadRecFeedType() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_recFilterKey) ?? 'all';
+    return _normalizeFeedType(prefs.getString(_recFilterKey));
   }
 
   static Future<FeedSortMode> loadRecSortMode() async {
@@ -52,12 +58,12 @@ class FeedUiPrefs {
 
   static Future<void> saveSubsFeedType(String value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_subsFilterKey, value);
+    await prefs.setString(_subsFilterKey, _normalizeFeedType(value));
   }
 
   static Future<void> saveRecFeedType(String value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_recFilterKey, value);
+    await prefs.setString(_recFilterKey, _normalizeFeedType(value));
   }
 
   static Future<void> saveRecSortMode(FeedSortMode mode) async {

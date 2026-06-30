@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../services/api_service.dart';
 import '../data/bot_models.dart';
+import '../data/bot_token_storage.dart';
 
 /// Экран управления ботом (BotFather detail)
 class BotDetailScreen extends StatefulWidget {
-  const BotDetailScreen({super.key, required this.botId, required this.botUsername});
+  const BotDetailScreen({
+    super.key,
+    required this.botId,
+    required this.botUsername,
+    this.initialToken,
+  });
 
   final int botId;
   final String botUsername;
+  final String? initialToken;
 
   @override
   State<BotDetailScreen> createState() => _BotDetailScreenState();
@@ -16,6 +23,7 @@ class BotDetailScreen extends StatefulWidget {
 
 class _BotDetailScreenState extends State<BotDetailScreen> {
   BotResponse? _bot;
+  String? _token;
   bool _isLoading = true;
   List<BotCommandCreate> _commands = [];
   final _webhookController = TextEditingController();
@@ -23,7 +31,16 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _token = widget.initialToken;
     _loadBot();
+  }
+
+  Future<void> _ensureTokenLoaded() async {
+    if (_token != null && _token!.isNotEmpty) return;
+    final saved = await BotTokenStorage.getToken(widget.botId);
+    if (saved != null && saved.isNotEmpty) {
+      if (mounted) setState(() => _token = saved);
+    }
   }
 
   Future<void> _loadBot() async {
@@ -48,6 +65,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+      await _ensureTokenLoaded();
     }
   }
 
@@ -89,13 +107,19 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   }
 
   Future<void> _copyToken() async {
-    if (_bot == null) return;
-    // В реальном сценарии токен приходит только при создании.
-    // Здесь показываем заглушку. Для продвинутого варианта нужно хранить токен локально при создании.
-    await Clipboard.setData(const ClipboardData(text: 'Токен показывается только при создании'));
+    final tokenToCopy = _token ?? _bot?.botToken;
+    if (tokenToCopy == null || tokenToCopy.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Токен недоступен. Скопируйте его сразу после создания.')),
+        );
+      }
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: tokenToCopy));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Токен показывается только один раз при создании')),
+        const SnackBar(content: Text('Токен скопирован в буфер обмена')),
       );
     }
   }
@@ -132,7 +156,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                     Card(
                       child: ListTile(
                         title: const Text('Токен бота'),
-                        subtitle: const Text('Показывается только при создании'),
+                        subtitle: const Text('Нажмите, чтобы скопировать'),
                         trailing: IconButton(
                           icon: const Icon(Icons.copy),
                           onPressed: _copyToken,

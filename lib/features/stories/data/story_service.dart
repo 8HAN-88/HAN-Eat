@@ -1,0 +1,98 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+
+import '../../../services/api_service.dart';
+import '../../../services/media_upload_service.dart';
+import 'story_models.dart';
+
+class StoryService {
+  static Future<List<StoryDto>> fetchActiveStories({int limit = 100}) async {
+    final response = await http.get(
+      ApiService.uri('/stories', {'limit': '$limit'}),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => StoryDto.fromJson(item as Map<String, dynamic>))
+        .where((story) => !story.isExpired)
+        .toList();
+  }
+
+  static Future<List<StoryDto>> fetchMyStories() async {
+    final response = await http.get(
+      ApiService.uri('/stories/mine'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    final data = jsonDecode(response.body) as List<dynamic>;
+    return data
+        .map((item) => StoryDto.fromJson(item as Map<String, dynamic>))
+        .where((story) => !story.isExpired)
+        .toList();
+  }
+
+  static Future<StoryDto> createStory(StoryCreateRequest request) async {
+    final response = await http.post(
+      ApiService.uri('/stories'),
+      headers: await ApiService.authHeaders(),
+      body: jsonEncode(request.toJson()),
+    );
+    ApiService.ensureSuccess(response);
+    return StoryDto.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  static Future<StoryDto> uploadAndCreateStory({
+    required XFile file,
+    required bool isVideo,
+    String? caption,
+  }) async {
+    final uploaded = await MediaUploadService.uploadMediaFile(
+      file: file,
+      fileType: isVideo ? 'video' : 'image',
+      waitForProcessing: isVideo,
+    );
+    final mediaUrl = uploaded.url;
+    if (mediaUrl == null || mediaUrl.isEmpty) {
+      throw Exception('Не удалось получить URL загруженного медиа');
+    }
+    return createStory(
+      StoryCreateRequest(
+        mediaUrl: mediaUrl,
+        thumbnailUrl: uploaded.thumbnailUrl,
+        mediaType: isVideo ? 'video' : 'image',
+        caption: caption,
+      ),
+    );
+  }
+
+  static Future<void> markViewed(int storyId) async {
+    final response = await http.post(
+      ApiService.uri('/stories/$storyId/view'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+  }
+
+  static Future<void> deleteStory(int storyId) async {
+    final response = await http.delete(
+      ApiService.uri('/stories/$storyId'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+  }
+
+  static List<StoryGroup> groupByAuthor(List<StoryDto> stories) {
+    final map = <int, List<StoryDto>>{};
+    for (final story in stories) {
+      map.putIfAbsent(story.userId, () => []).add(story);
+    }
+    return map.values.map((items) {
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return StoryGroup(author: items.first.author, stories: items);
+    }).toList()
+      ..sort((a, b) => b.latest.createdAt.compareTo(a.latest.createdAt));
+  }
+}

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
+import '../core/app/app_variant.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
 import 'auth_service.dart';
@@ -35,7 +36,7 @@ class FeedService {
         return 'trending';
     }
   }
-  
+
   /// Получить ленту постов
   static Future<FeedResponse> getFeed({
     String? cursor,
@@ -43,6 +44,7 @@ class FeedService {
     String feedType = 'all',
     bool followingOnly = false,
     FeedSortMode sortMode = FeedSortMode.personalized,
+    bool? includeRecipes,
   }) async {
     try {
       var token = await AuthService.getAccessTokenForApi();
@@ -50,10 +52,13 @@ class FeedService {
         throw AuthService.tokenUnavailableException();
       }
 
+      final shouldIncludeRecipes = feedType == 'recipes' ||
+          (includeRecipes ?? AppVariant.current.isKitchen);
       final uri = Uri.parse('$baseUrl/feed').replace(queryParameters: {
         if (cursor != null) 'cursor': cursor,
         'limit': limit.toString(),
         'feed_type': feedType,
+        'include_recipes': shouldIncludeRecipes.toString(),
         'following_only': followingOnly.toString(),
         'sort_by': _toBackendSortBy(sortMode),
       });
@@ -65,27 +70,25 @@ class FeedService {
 
       const timeout = Duration(seconds: 12);
 
-      var response = await HanEatHttpClient.shared
-          .get(uri, headers: headers)
-          .timeout(
-        timeout,
-        onTimeout: () => throw TimeoutException(
-          'Превышено время ожидания ответа от сервера',
-        ),
-      );
+      var response =
+          await HanEatHttpClient.shared.get(uri, headers: headers).timeout(
+                timeout,
+                onTimeout: () => throw TimeoutException(
+                  'Превышено время ожидания ответа от сервера',
+                ),
+              );
 
       // При 401 пробуем обновить токен и повторить запрос
       if (response.statusCode == 401) {
         token = await AuthService.refreshToken();
         headers['Authorization'] = 'Bearer $token';
-        response = await HanEatHttpClient.shared
-            .get(uri, headers: headers)
-            .timeout(
-          timeout,
-          onTimeout: () => throw TimeoutException(
-            'Превышено время ожидания ответа от сервера',
-          ),
-        );
+        response =
+            await HanEatHttpClient.shared.get(uri, headers: headers).timeout(
+                  timeout,
+                  onTimeout: () => throw TimeoutException(
+                    'Превышено время ожидания ответа от сервера',
+                  ),
+                );
       }
 
       if (response.statusCode == 200) {
@@ -102,7 +105,7 @@ class FeedService {
       rethrow;
     }
   }
-  
+
   /// Получить главную ленту (алиас для getFeed с параметрами)
   static Future<List<PostModel>> getMainFeed({
     required FeedSortMode mode,
@@ -117,7 +120,7 @@ class FeedService {
     );
     return response.items;
   }
-  
+
   /// Лайкнуть пост (`POST /posts/{id}/like`).
   static Future<void> likePost(int postId, String userId) async {
     final token = await AuthService.getAccessTokenForApi();
@@ -184,7 +187,8 @@ class FeedService {
   }
 
   /// Пожаловаться на пост (`POST /posts/{id}/report`).
-  static Future<void> reportPost(String postId, String userId, String reason) async {
+  static Future<void> reportPost(
+      String postId, String userId, String reason) async {
     final id = int.tryParse(postId);
     if (id == null) throw Exception('Некорректный id поста');
     final token = await AuthService.getAccessTokenForApi();
@@ -222,13 +226,13 @@ class FeedResponse {
   final List<PostModel> items;
   final String? nextCursor;
   final bool hasMore;
-  
+
   FeedResponse({
     required this.items,
     this.nextCursor,
     required this.hasMore,
   });
-  
+
   factory FeedResponse.fromJson(Map<String, dynamic> json) {
     final itemsList = json['items'] as List<dynamic>? ?? [];
     final posts = <PostModel>[];

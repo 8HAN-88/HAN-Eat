@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/app/app_variant.dart';
 import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
@@ -64,7 +65,8 @@ class _SubscriptionsFeedScreenState
   String _feedType = 'all';
   FeedSortMode _sortMode = FeedSortMode.recent;
 
-  String get _cacheVariant => 'following_${_feedType}_${_sortMode.value}';
+  String get _cacheVariant =>
+      'following_${AppVariant.current.name}_${_feedType}_${_sortMode.value}';
 
   @override
   bool get wantKeepAlive => true;

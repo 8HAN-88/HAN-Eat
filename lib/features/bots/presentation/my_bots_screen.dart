@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
 import '../data/bot_models.dart';
+import '../data/bot_token_storage.dart';
 import 'bot_detail_screen.dart';
 
 /// Экран «Мои боты» (аналог BotFather)
@@ -58,11 +59,17 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
       );
       final created = await ApiService.createBot(req);
 
+      // Сохраняем токен локально, чтобы его можно было скопировать позже
+      await BotTokenStorage.saveToken(created.id, created.botToken);
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Бот создан! Токен: ${created.botToken}'),
-          duration: const Duration(seconds: 10),
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BotDetailScreen(
+            botId: created.id,
+            botUsername: created.username,
+            initialToken: created.botToken,
+          ),
         ),
       );
       _loadBots();

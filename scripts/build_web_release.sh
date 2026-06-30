@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Release-сборка Flutter Web с production API.
-# Использование: ./scripts/build_web_release.sh [API_BASE]
+# Использование: ./scripts/build_web_release.sh [API_BASE] [APP_VARIANT]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API_BASE="${1:-https://api.haneat.app}"
+APP_VARIANT="${2:-${APP_VARIANT:-social}}"
 
 cd "$ROOT"
 BUILD_ID="$(date -u +%Y%m%d%H%M%S)"
-echo "== HAN Eat: flutter build web (API=$API_BASE, build=$BUILD_ID) =="
+echo "== HAN Eat: flutter build web (API=$API_BASE, variant=$APP_VARIANT, build=$BUILD_ID) =="
 
 if [[ -f "$ROOT/assets/app_icon_source.png" ]]; then
   echo "-- PWA icons (black bg) --"
@@ -21,6 +22,7 @@ HANEAT_API_BASE="$API_BASE" ./scripts/with_dart_defines.sh \
   --pwa-strategy none \
   --no-web-resources-cdn \
   --no-wasm-dry-run \
+  --dart-define=APP_VARIANT="$APP_VARIANT" \
   --dart-define=WEB_BUILD_ID="$BUILD_ID"
 
 bash "$ROOT/scripts/patch_web_cache_bust.sh" "$BUILD_ID"

@@ -11,6 +11,8 @@ import '../models/post_model.dart';
 import '../models/recipe.dart';
 import '../models/search_history_entry.dart';
 
+import '../features/bots/data/bot_models.dart';
+import '../features/monetization/data/donation_models.dart';
 import 'server_config.dart';
 import 'auth_service.dart';
 import '../utils/api_error_parser.dart';
@@ -1025,6 +1027,98 @@ class ApiService {
     if (resp.statusCode == 404) return null;
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  // === Bots (BotFather) ===
+
+  static Future<BotResponse> createBot(BotCreateRequest request) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/bots/create'),
+      headers: headers,
+      body: jsonEncode(request.toJson()),
+    );
+    _ensureSuccess(response);
+    return BotResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  static Future<List<BotListItem>> getMyBots() async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/bots/my'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final list = jsonDecode(response.body) as List;
+    return list.map((e) => BotListItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<BotCommandCreate>> getBotCommands(int botId) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/bots/$botId/commands'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final list = jsonDecode(response.body) as List;
+    return list.map((e) => BotCommandCreate(
+          command: (e as Map<String, dynamic>)['command'] as String,
+          description: (e)['description'] as String,
+        )).toList();
+  }
+
+  static Future<void> addBotCommand(int botId, BotCommandCreate cmd) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/bots/$botId/commands'),
+      headers: headers,
+      body: jsonEncode(cmd.toJson()),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> deleteBotCommand(int botId, String command) async {
+    final headers = await authHeaders();
+    final response = await http.delete(
+      _uri('/bots/$botId/commands/$command'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+  }
+
+  // === Donations ===
+
+  static Future<Donation> createDonation(DonationCreateRequest request) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/donations'),
+      headers: headers,
+      body: jsonEncode(request.toJson()),
+    );
+    _ensureSuccess(response);
+    return Donation.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  static Future<List<Donation>> getReceivedDonations({int limit = 50, int offset = 0}) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/donations/received', {'limit': '$limit', 'offset': '$offset'}),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final list = jsonDecode(response.body) as List;
+    return list.map((e) => Donation.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<List<Donation>> getSentDonations({int limit = 50, int offset = 0}) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/donations/sent', {'limit': '$limit', 'offset': '$offset'}),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final list = jsonDecode(response.body) as List;
+    return list.map((e) => Donation.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   static Future<Map<String, dynamic>> getMealPlanAnalytics(

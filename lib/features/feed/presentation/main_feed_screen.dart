@@ -136,6 +136,13 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
               ),
               const SizedBox(width: 10),
               NeoCircleAction(
+                tooltip: 'Моменты',
+                icon: Icons.auto_stories_outlined,
+                selected: false,
+                onPressed: () => context.push(StoriesRoute.path),
+              ),
+              const SizedBox(width: 8),
+              NeoCircleAction(
                 tooltip: 'Звёзды и кошелёк',
                 icon: Icons.stars_rounded,
                 selected: true,

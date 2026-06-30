@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/app/app_variant.dart';
 import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
@@ -93,7 +94,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
       final themeMode = ref.watch(themeModeProvider);
 
       return MaterialApp.router(
-        title: 'HAN Eat',
+        title: AppVariant.current.appTitle,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: themeMode,
@@ -131,7 +132,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                           color: theme.colorScheme.primary),
                       const SizedBox(height: 16),
                       Text(
-                        'Загрузка HAN Eat…',
+                        'Загрузка ${AppVariant.current.appTitle}…',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onSurface,
                         ),

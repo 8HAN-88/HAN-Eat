@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/app_router.dart';
 import '../features/notifications/application/unread_notifications_provider.dart';
+import '../services/user_realtime_service.dart';
 
 /// Кнопка колокольчика с числом непрочитанных уведомлений.
 class NotificationBellButton extends ConsumerStatefulWidget {
@@ -16,6 +19,8 @@ class NotificationBellButton extends ConsumerStatefulWidget {
 
 class _NotificationBellButtonState extends ConsumerState<NotificationBellButton>
     with WidgetsBindingObserver {
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+
   @override
   void initState() {
     super.initState();
@@ -23,11 +28,20 @@ class _NotificationBellButtonState extends ConsumerState<NotificationBellButton>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(unreadNotificationsCountProvider.notifier).refresh();
     });
+
+    // Реал-тайм обновление badge при получении уведомления
+    _realtimeSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted) return;
+      if (event.event == 'notification' || event.event == 'sync') {
+        ref.read(unreadNotificationsCountProvider.notifier).refresh();
+      }
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _realtimeSub?.cancel();
     super.dispose();
   }
 

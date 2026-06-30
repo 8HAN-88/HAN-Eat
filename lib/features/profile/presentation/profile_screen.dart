@@ -14,6 +14,7 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../core/app/app_variant.dart';
 import '../../../../core/theme/app_tokens.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../widgets/app_avatar.dart';
@@ -95,7 +96,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   bool _tabControllerReady = false;
 
   void _syncTabController({int? profileUserId}) {
-    final count = _isOwnProfileView(profileUserId: profileUserId) ? 4 : 3;
+    final includeRecipes = AppVariant.current.isKitchen;
+    final count = 1 +
+        (includeRecipes ? 1 : 0) +
+        1 +
+        (_isOwnProfileView(profileUserId: profileUserId) ? 1 : 0);
     if (_tabControllerReady && _tabCount == count) return;
 
     final oldIndex =
@@ -414,17 +419,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final user = _profile!.user;
     final stats = _profile!.stats;
     final isOwnProfile = _isOwnProfileView(profileUserId: user.id);
+    final includeRecipes = AppVariant.current.isKitchen;
     final tabs = <Tab>[
       const Tab(text: 'Общее'),
-      const Tab(text: 'Рецепты'),
+      if (includeRecipes) const Tab(text: 'Рецепты'),
       const Tab(text: 'Рилсы'),
       if (isOwnProfile) const Tab(text: 'Сохранённые'),
     ];
     final tabViews = <Widget>[
       _buildLazyTab(0, _buildAllTab),
-      _buildLazyTab(1, _buildRecipesTab),
-      _buildLazyTab(2, _buildReelsTab),
-      if (isOwnProfile) _buildLazyTab(3, _buildFavoritesTab),
+      if (includeRecipes) _buildLazyTab(1, _buildRecipesTab),
+      _buildLazyTab(includeRecipes ? 2 : 1, _buildReelsTab),
+      if (isOwnProfile)
+        _buildLazyTab(includeRecipes ? 3 : 2, _buildFavoritesTab),
     ];
 
     return Scaffold(
@@ -695,6 +702,13 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   int _offset = 0;
   int _loadGeneration = 0;
 
+  List<PostModel> _visibleProfilePosts(List<PostModel> posts) {
+    return posts.where((post) {
+      if (AppVariant.current.isSocial && post.type == 'recipe') return false;
+      return !PostPublisherDisplay.isChannel(post);
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -703,7 +717,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
       postType: widget.postType,
     );
     if (cached != null && cached.isNotEmpty) {
-      _posts = cached;
+      _posts = _visibleProfilePosts(cached);
     }
     _loadPosts(refresh: true);
   }
@@ -730,9 +744,10 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
         postType: widget.postType,
       );
       if (cached != null && cached.isNotEmpty) {
+        final visibleCached = _visibleProfilePosts(cached);
         setState(() {
-          _posts = cached;
-          _offset = cached.length;
+          _posts = visibleCached;
+          _offset = visibleCached.length;
           _hasMore = true;
           _isLoading = true;
           _loadError = null;
@@ -759,17 +774,16 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
       );
 
       if (!mounted || requestId != _loadGeneration) return;
-      final wallPosts = response.posts
-          .where((post) => !PostPublisherDisplay.isChannel(post))
-          .toList();
+      final rawCount = response.posts.length;
+      final wallPosts = _visibleProfilePosts(response.posts);
       setState(() {
         if (refresh) {
           _posts = wallPosts;
         } else {
           _posts.addAll(wallPosts);
         }
-        _offset = _posts.length;
-        _hasMore = _posts.length < response.total;
+        _offset = refresh ? rawCount : _offset + rawCount;
+        _hasMore = _offset < response.total;
         _loadError = null;
       });
       if (refresh) {

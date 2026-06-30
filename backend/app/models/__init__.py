@@ -27,6 +27,7 @@ from app.models.paid_features import (
     PostBoost,
     StarTransaction,
 )
+from app.models.story import Story
 
 # Для обратной совместимости
 Community = Channel
@@ -39,6 +40,6 @@ __all__ = [
     "Subscription", "SupportTicket", "NotificationPreferences",
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
-    "PaidChannelSubscription", "PostBoost",
+    "PaidChannelSubscription", "PostBoost", "Story",
 ]
 

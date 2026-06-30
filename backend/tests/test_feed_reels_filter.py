@@ -64,6 +64,7 @@ def test_invalidate_feed_cache_deletes_all_feed_variants():
     service.invalidate_feed_cache(user_id=42, feed_type="reels")
 
     deleted_keys = [call.args[0] for call in redis.delete.call_args_list]
+    assert "feed:v2:42:reels:following_only=True:sort=personalized:hide_promo=True" in deleted_keys
     assert "feed:42:reels:following_only=True:hide_promo=True" in deleted_keys
     assert "feed:42:reels:following_only=False:hide_promo=False" in deleted_keys
     assert "feed:42:reels:following_only=True" in deleted_keys

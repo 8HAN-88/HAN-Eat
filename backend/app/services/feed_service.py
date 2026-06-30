@@ -38,14 +38,16 @@ class FeedService:
         )
 
     @staticmethod
-    def _apply_feed_type_filter(query, feed_type: str):
+    def _apply_feed_type_filter(query, feed_type: str, include_recipes: bool = True):
         """
         Фильтр типа ленты. Для reels — как в профиле: type=reel или видео в body.media.
         feed_type из API: all | photos | recipes | reels (множественное число).
         Post.type в БД: photo | recipe | reel | text.
         """
         if feed_type == "all":
-            return query
+            if include_recipes:
+                return query
+            return query.filter(Post.type != "recipe")
         if feed_type == "reels":
             from sqlalchemy import cast as sa_cast
             from sqlalchemy.dialects.postgresql import JSONB
@@ -72,6 +74,7 @@ class FeedService:
         cursor: Optional[str] = None,
         limit: int = 20,
         feed_type: str = "all",
+        include_recipes: bool = True,
         following_only: bool = False,
         sort_by: str = "personalized",
     ) -> dict:
@@ -96,7 +99,7 @@ class FeedService:
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
-            f"feed:{user_id}:{feed_type}:following_only={following_only}"
+            f"feed:v2:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
             f":sort={sort_by}:hide_promo={hide_promoted}"
         )
         cached_data = None
@@ -131,7 +134,12 @@ class FeedService:
 
         # Получаем посты
         logger.debug(f"Fetching posts for user {user_id}, feed_type={feed_type}, following_only={following_only}")
-        posts = self._fetch_posts(user_id, feed_type, following_only=following_only)
+        posts = self._fetch_posts(
+            user_id,
+            feed_type,
+            include_recipes=include_recipes,
+            following_only=following_only,
+        )
         logger.debug(f"Found {len(posts)} posts for user {user_id}, following_only={following_only}")
 
         # Ранжируем / сортируем
@@ -201,7 +209,13 @@ class FeedService:
         
         return feed_result
     
-    def _fetch_posts(self, user_id: int, feed_type: str, following_only: bool = False) -> List[Post]:
+    def _fetch_posts(
+        self,
+        user_id: int,
+        feed_type: str,
+        include_recipes: bool = True,
+        following_only: bool = False,
+    ) -> List[Post]:
         """Получить посты для ленты (включая репосты и посты из каналов)"""
         from app.models.follower import Follower
         from app.models.repost import Repost
@@ -279,7 +293,7 @@ class FeedService:
                 *FeedService._recommendation_post_filters(),
             )
             
-            query = FeedService._apply_feed_type_filter(query, feed_type)
+            query = FeedService._apply_feed_type_filter(query, feed_type, include_recipes)
             
             original_posts = query.order_by(Post.published_at.desc()).limit(100).all()
             logger.debug(f"User {user_id} (following_only=True): Found {len(original_posts)} posts")
@@ -298,7 +312,11 @@ class FeedService:
                     *FeedService._recommendation_post_filters(),
                 )
                 
-                reposted_query = FeedService._apply_feed_type_filter(reposted_query, feed_type)
+                reposted_query = FeedService._apply_feed_type_filter(
+                    reposted_query,
+                    feed_type,
+                    include_recipes,
+                )
                 
                 reposted_posts_list = reposted_query.order_by(Post.published_at.desc()).limit(50).all()
                 
@@ -338,11 +356,23 @@ class FeedService:
                 Post.channel_id.in_(all_user_channel_ids),
                 Post.channel_id.isnot(None)
             ))
-        # Все публичные посты (не из каналов)
+        # Все публичные посты профилей.
         conditions.append(and_(
             Post.visibility == "public",
-            Post.channel_id.is_(None)  # Посты не из каналов
+            Post.channel_id.is_(None),
         ))
+
+        # Публичные посты из открытых каналов тоже должны попадать в рекомендации,
+        # иначе главная лента выглядит пустой для пользователей без подписок.
+        public_channels = self.db.query(Channel.id).filter(
+            Channel.is_public == True
+        ).all()
+        public_channel_ids = [row[0] for row in public_channels]
+        if public_channel_ids:
+            conditions.append(and_(
+                Post.channel_id.in_(public_channel_ids),
+                Post.is_global_visible.is_(True),
+            ))
         
         # Оптимизация: используем eager loading для избежания N+1 запросов
         query = self.db.query(Post).options(
@@ -355,7 +385,7 @@ class FeedService:
             *FeedService._recommendation_post_filters(),
         )
         
-        query = FeedService._apply_feed_type_filter(query, feed_type)
+        query = FeedService._apply_feed_type_filter(query, feed_type, include_recipes)
         
         original_posts = query.order_by(Post.published_at.desc()).limit(100).all()
         logger.debug(f"User {user_id} (following_only=False): Found {len(original_posts)} posts")
@@ -374,7 +404,11 @@ class FeedService:
                 *FeedService._recommendation_post_filters(),
             )
             
-            reposted_query = FeedService._apply_feed_type_filter(reposted_query, feed_type)
+            reposted_query = FeedService._apply_feed_type_filter(
+                reposted_query,
+                feed_type,
+                include_recipes,
+            )
             
             reposted_posts_list = reposted_query.order_by(Post.published_at.desc()).limit(50).all()
             
@@ -1903,6 +1937,10 @@ class FeedService:
                 for following_only in (True, False):
                     for hide_promo in (True, False):
                         for sort_by in sort_modes:
+                            self.redis.delete(
+                                f"feed:v2:{user_id}:{ft}:following_only={following_only}"
+                                f":sort={sort_by}:hide_promo={hide_promo}"
+                            )
                             self.redis.delete(
                                 f"feed:{user_id}:{ft}:following_only={following_only}"
                                 f":sort={sort_by}:hide_promo={hide_promo}"

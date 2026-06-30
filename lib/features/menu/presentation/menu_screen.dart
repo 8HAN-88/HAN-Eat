@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/analysis_mode.dart';
+import '../../../core/app/app_variant.dart';
 import '../../../models/recipe.dart';
 import '../../../models/search_history_entry.dart';
 import '../../../models/recipe_category.dart';
@@ -961,6 +962,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (AppVariant.current.isKitchen)
+                        IconButton(
+                          icon: const Icon(Icons.add_circle_outline_rounded),
+                          tooltip: 'Опубликовать рецепт',
+                          onPressed: () => context.push(CreateRecipeRoute.path),
+                        ),
                       IconButton(
                         icon: const Icon(Icons.category_outlined),
                         tooltip: 'Категории',
@@ -987,6 +994,17 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                           ),
                           child: Row(
                             children: [
+                              if (AppVariant.current.isKitchen) ...[
+                                Expanded(
+                                  child: _MenuActionCard(
+                                    icon: Icons.add_circle_outline_rounded,
+                                    label: 'Опубликовать',
+                                    onTap: () =>
+                                        context.push(CreateRecipeRoute.path),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
                               Expanded(
                                 child: _MenuActionCard(
                                   icon: Icons.calendar_today_outlined,

@@ -19,7 +19,9 @@ import 'widgets/chats_hub_contacts_tab.dart';
 
 /// Раздел «Чаты»: диалоги, каналы и контакты в одном месте (как в Telegram).
 class ChatsHubScreen extends ConsumerStatefulWidget {
-  const ChatsHubScreen({super.key});
+  const ChatsHubScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   ConsumerState<ChatsHubScreen> createState() => _ChatsHubScreenState();
@@ -35,7 +37,12 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
+    _lastTabIndex = _tabs.index;
     _tabs.addListener(_onTabChanged);
   }
 

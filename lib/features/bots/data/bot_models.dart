@@ -72,6 +72,7 @@ class BotListItem {
   final String username;
   final String? description;
   final String? shortDescription;
+  final String? avatarUrl;
 
   BotListItem({
     required this.id,
@@ -79,6 +80,7 @@ class BotListItem {
     required this.username,
     this.description,
     this.shortDescription,
+    this.avatarUrl,
   });
 
   factory BotListItem.fromJson(Map<String, dynamic> json) => BotListItem(
@@ -87,5 +89,6 @@ class BotListItem {
         username: json['username'] as String,
         description: json['description'] as String?,
         shortDescription: json['short_description'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
       );
 }

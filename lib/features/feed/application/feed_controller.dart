@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../core/app/app_variant.dart';
 import '../../../models/post.dart';
 import '../../../models/post_types.dart';
 import '../../../services/api_service.dart';
@@ -68,8 +69,10 @@ class FeedController extends StateNotifier<FeedState> {
   }
 
   List<Post> _withoutBlockedAuthors(List<Post> posts, Set<int> blocked) {
-    if (blocked.isEmpty) return posts;
-    return posts.where((p) => !blocked.contains(p.userId)).toList();
+    return posts.where((p) {
+      if (AppVariant.current.isSocial && p.type == 'recipe') return false;
+      return !blocked.contains(p.userId);
+    }).toList();
   }
 
   /// Больше не показывать посты этого автора в ленте (локально).
@@ -165,9 +168,8 @@ class FeedController extends StateNotifier<FeedState> {
       // Объединяем с существующими (убираем дубликаты)
       final existingIds = state.posts.map((p) => p.id).toSet();
       final blocked = await _blockedAuthors();
-      final uniqueNewPosts = newPosts
-          .where((p) => !existingIds.contains(p.id))
-          .toList();
+      final uniqueNewPosts =
+          newPosts.where((p) => !existingIds.contains(p.id)).toList();
       final visibleNew = _withoutBlockedAuthors(uniqueNewPosts, blocked);
 
       state = state.copyWith(
@@ -224,4 +226,3 @@ class FeedController extends StateNotifier<FeedState> {
     }
   }
 }
-

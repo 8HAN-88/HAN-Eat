@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/app/app_variant.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../core/recipe/recipe_nutrition_input.dart';
 import '../../../widgets/recipe_nutrition_form_section.dart';
@@ -50,7 +51,9 @@ class _CreateChannelPostScreenState
   final _descriptionController = TextEditingController();
 
   // Выбор типа поста
-  String _selectedPostType = 'text'; // text, photo, recipe, reel
+  String _selectedPostType = AppVariant.current.isKitchen
+      ? 'recipe'
+      : 'text'; // text, photo, recipe, reel
 
   // Медиа
   final ImagePicker _imagePicker = ImagePicker();
@@ -99,6 +102,8 @@ class _CreateChannelPostScreenState
   String? _originCountryCode;
 
   bool get _isRecipeMode => _selectedPostType == 'recipe';
+  bool get _recipeAllowedInVariant => AppVariant.current.isKitchen;
+  bool get _nonRecipeAllowedInVariant => AppVariant.current.isSocial;
   bool get _isPollMode => _selectedPostType == 'poll';
   bool get _isLinkMode => _selectedPostType == 'link';
   bool get _isPlainComposerMode =>
@@ -1692,6 +1697,8 @@ class _CreateChannelPostScreenState
   }
 
   Widget _buildComposerToolbar() {
+    // В kitchen показываем только рецепт — toolbar не нужен
+    if (AppVariant.current.isKitchen) return const SizedBox.shrink();
     final disabled = _isSubmitting || _isUploadingMedia;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1738,14 +1745,15 @@ class _CreateChannelPostScreenState
                   ? null
                   : () => _setContentType(_isLinkMode ? 'text' : 'link'),
             ),
-            _ComposerToolButton(
-              icon: Icons.restaurant_menu_rounded,
-              tooltip: 'Рецепт',
-              selected: _isRecipeMode,
-              onPressed: disabled
-                  ? null
-                  : () => _setContentType(_isRecipeMode ? 'text' : 'recipe'),
-            ),
+            if (AppVariant.current.isKitchen)
+              _ComposerToolButton(
+                icon: Icons.restaurant_menu_rounded,
+                tooltip: 'Рецепт',
+                selected: _isRecipeMode,
+                onPressed: disabled
+                    ? null
+                    : () => _setContentType(_isRecipeMode ? 'text' : 'recipe'),
+              ),
           ],
         ),
       ),
@@ -1753,6 +1761,10 @@ class _CreateChannelPostScreenState
   }
 
   void _setContentType(String type) {
+    // Guard: в social нельзя выбрать recipe, в kitchen только recipe
+    if (AppVariant.current.isSocial && type == 'recipe') return;
+    if (AppVariant.current.isKitchen && type != 'recipe') return;
+
     if (type == 'poll' || type == 'link') {
       _videoPreviewController?.pause();
       _videoPreviewController?.dispose();

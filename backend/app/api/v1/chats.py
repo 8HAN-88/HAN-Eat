@@ -686,6 +686,17 @@ async def send_message(
         )
         db.commit()
         db.refresh(msg)
+
+        # === Встроенный обработчик ботов ===
+        from app.services.bot_handler import process_message_for_bot
+        bot_reply = process_message_for_bot(db, conversation_id, current_user.id, content)
+        if bot_reply:
+            db.commit()
+            db.refresh(bot_reply)
+            _emit(
+                conversation_id,
+                {"type": "message.new", "message": _message_payload(bot_reply)},
+            )
     except ValueError as e:
         db.rollback()
         code = str(e)

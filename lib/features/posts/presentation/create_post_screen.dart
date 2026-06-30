@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/app/app_variant.dart';
 import '../../../../core/recipe/recipe_nutrition_input.dart';
 import '../../../../widgets/app_gradient_background.dart';
 import '../../../../features/settings/application/subscription_status_provider.dart';
@@ -24,9 +25,16 @@ import '../../../../utils/url_validator.dart';
 import '../../reels/application/reels_feed_refresh_provider.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
-  const CreatePostScreen({super.key});
+  const CreatePostScreen({
+    super.key,
+    this.initialType = 'text',
+    this.recipeOnly = false,
+  });
 
   static const routeName = '/create-post';
+
+  final String initialType;
+  final bool recipeOnly;
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -36,8 +44,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  String _selectedType =
-      'text'; // По умолчанию обычный пост, рецепт нужно выбрать явно
+  late String _selectedType;
   bool _isLoading = false;
   String? _loadingStatus;
   int? _selectedChannelId;
@@ -80,6 +87,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   bool get _isPollMode => _selectedType == 'poll';
   bool get _isLinkMode => _selectedType == 'link';
+  bool get _recipeComposerEnabled =>
+      widget.recipeOnly || AppVariant.current.isKitchen;
   int get _paidPriceStars => _isPaidContent
       ? (int.tryParse(_priceStarsController.text.trim()) ?? 0)
       : 0;
@@ -91,6 +100,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
+    final wantsRecipe = widget.recipeOnly || widget.initialType == 'recipe';
+    // В social recipe запрещён
+    _selectedType =
+        wantsRecipe && AppVariant.current.isKitchen ? 'recipe' : 'text';
     _linkUrlController.addListener(_scheduleLinkPreviewLoad);
     _linkPreviewController.addListener(() {
       if (!mounted) return;
@@ -819,8 +832,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         Navigator.of(context).pop(true); // Возвращаемся с успехом
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                wasVideoSelected ? 'Рилс опубликован' : 'Пост опубликован'),
+            content: Text(widget.recipeOnly
+                ? 'Рецепт опубликован'
+                : wasVideoSelected
+                    ? 'Рилс опубликован'
+                    : 'Пост опубликован'),
           ),
         );
       }
@@ -892,7 +908,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_selectedVideo != null ? 'В рилсы' : 'Опубликовать'),
+                    : Text(widget.recipeOnly
+                        ? 'Опубликовать рецепт'
+                        : _selectedVideo != null
+                            ? 'В рилсы'
+                            : 'Опубликовать'),
               ),
             ),
           ],
@@ -1250,6 +1270,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Widget _buildComposerToolbar() {
+    if (widget.recipeOnly || AppVariant.current.isKitchen) {
+      return const SizedBox.shrink();
+    }
     final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -1305,16 +1328,17 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   ? null
                   : () => _setContentType(_isLinkMode ? 'text' : 'link'),
             ),
-            _ComposerToolButton(
-              icon: Icons.restaurant_menu_rounded,
-              tooltip: 'Рецепт',
-              selected: _selectedType == 'recipe',
-              onTap: _isLoading
-                  ? null
-                  : () => _setContentType(
-                        _selectedType == 'recipe' ? 'text' : 'recipe',
-                      ),
-            ),
+            if (_recipeComposerEnabled && !widget.recipeOnly)
+              _ComposerToolButton(
+                icon: Icons.restaurant_menu_rounded,
+                tooltip: 'Рецепт',
+                selected: _selectedType == 'recipe',
+                onTap: _isLoading
+                    ? null
+                    : () => _setContentType(
+                          _selectedType == 'recipe' ? 'text' : 'recipe',
+                        ),
+              ),
           ],
         ),
       ),
@@ -1322,6 +1346,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   void _setContentType(String type) {
+    if (type == 'recipe' && !_recipeComposerEnabled) return;
+    if (widget.recipeOnly && type != 'recipe') return;
     setState(() {
       if (_selectedType == 'recipe' && type != 'recipe') {
         _disposeRecipeDraftFields();

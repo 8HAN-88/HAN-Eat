@@ -26,6 +26,7 @@ async def get_feed(
     cursor: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=50),
     feed_type: str = Query("all", regex="^(all|reels|recipes|photos)$"),
+    include_recipes: bool = Query(True, description="Include recipe posts in all-feed results"),
     following_only: bool = Query(False, description="Показывать только посты от подписок"),
     sort_by: str = Query(
         "personalized",
@@ -43,6 +44,7 @@ async def get_feed(
         cursor=cursor,
         limit=limit,
         feed_type=feed_type,
+        include_recipes=include_recipes,
         following_only=following_only,
         sort_by=sort_by,
     )

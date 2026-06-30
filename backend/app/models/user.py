@@ -42,6 +42,15 @@ class User(Base):
     account_warnings = Column(Integer, default=0, nullable=False)
     shadow_moderation = Column(Boolean, default=False, nullable=False)
     banned_at = Column(DateTime, nullable=True)
+
+    # === Боты (BotFather) ===
+    is_bot = Column(Boolean, default=False, nullable=False)
+    bot_token = Column(String(64), unique=True, nullable=True, index=True)
+    bot_username = Column(String(32), unique=True, nullable=True, index=True)
+    bot_description = Column(Text, nullable=True)
+    bot_short_description = Column(String(120), nullable=True)
+    bot_avatar_url = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, nullable=True)  # кто создал бота (для is_bot=True)
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token (для Android и iOS)
     device_platform = Column(String(20), nullable=True)  # android | ios | web
     country_code = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2 код страны (RU, US, etc.)

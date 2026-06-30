@@ -21,6 +21,8 @@ import 'channel_search_screen.dart';
 
 import 'channel_post_card.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../monetization/presentation/support_button.dart';
+import '../../monetization/presentation/channel_subscription_button.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../core/format/russian_count_labels.dart';
@@ -321,6 +323,24 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
           ),
         ),
         actions: [
+          if (_channel != null && !_channel!.isOwner)
+            SupportButton(
+              recipientId: _channel!.adminUserId,
+              recipientName: _channel!.name,
+              channelId: _channel!.id,
+              channelName: _channel!.name,
+              compact: true,
+            ),
+          if (_channel != null && _channel!.isPaid == true && !_channel!.isOwner)
+            ChannelSubscriptionButton(
+              channelId: _channel!.id,
+              channelName: _channel!.name,
+              monthlyPriceStars: _channel!.monthlyPriceStars,
+              isSubscribed: false, // TODO: Проверить реальный статус подписки
+              onSubscribe: () {
+                // TODO: Открыть экран подписки
+              },
+            ),
           IconButton(
             tooltip: 'Поиск',
             icon: const Icon(Icons.search),

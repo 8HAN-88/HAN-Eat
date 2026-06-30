@@ -44,9 +44,19 @@ jobs:
 
       - name: Build web release
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.prebuilt_tag == '' }}
-        run: ./scripts/build_web_release.sh
+        run: |
+          ./scripts/build_web_release.sh https://api.haneat.app social
+          rm -rf build/web-social
+          mv build/web build/web-social
+
+          ./scripts/build_web_release.sh https://api.haneat.app kitchen
+          rm -rf build/web-kitchen
+          mv build/web build/web-kitchen
+
+          mkdir -p build/web
+          cp -R build/web-social/. build/web/
         env:
-          HANEAT_API_BASE: https://haneat.app
+          HANEAT_API_BASE: https://api.haneat.app
 
       - name: Download prebuilt web tarball
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.prebuilt_tag != '' }}
@@ -59,9 +69,18 @@ jobs:
           test -f build/web/index.html
 
       - name: Verify web build artifacts
-        run: python3 scripts/check_web_build_artifacts.py
+        run: |
+          python3 scripts/check_web_build_artifacts.py
+          if [ -d build/web-kitchen ]; then
+            rm -rf /tmp/haneat-social-build
+            mv build/web /tmp/haneat-social-build
+            cp -R build/web-kitchen build/web
+            python3 scripts/check_web_build_artifacts.py
+            rm -rf build/web
+            mv /tmp/haneat-social-build build/web
+          fi
         env:
-          HANEAT_API_BASE: https://haneat.app
+          HANEAT_API_BASE: https://api.haneat.app
 
       - name: Setup SSH key
         run: |
@@ -76,9 +95,15 @@ jobs:
             -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
             build/web/ \
             root@89.19.216.60:/var/www/haneat-web/
+          if [ -d build/web-kitchen ]; then
+            rsync -avz --delete \
+              -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
+              build/web-kitchen/ \
+              root@89.19.216.60:/var/www/haneat-kitchen-web/
+          fi
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
             root@89.19.216.60 \
-            "chown -R www-data:www-data /var/www/haneat-web 2>/dev/null || true"
+            "chown -R www-data:www-data /var/www/haneat-web /var/www/haneat-kitchen-web 2>/dev/null || true"
 
       - name: Patch nginx (same-origin API for Safari Web)
         continue-on-error: true

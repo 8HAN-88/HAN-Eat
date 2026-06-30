@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/menu/presentation/menu_screen.dart';
+import '../features/menu/presentation/create_recipe_screen.dart';
 import '../features/menu/presentation/scan_result_screen.dart';
 import '../screens/cooking_mode_screen.dart';
 import '../screens/recipe_by_id_screen.dart';
@@ -43,6 +44,8 @@ import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
 import '../models/post_model.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/miniapps/presentation/miniapps_catalog_screen.dart';
+import '../features/stories/presentation/stories_hub_screen.dart';
 import '../features/profile/presentation/follow_list_screen.dart';
 import '../features/feed/presentation/main_feed_screen.dart';
 import '../features/comments/presentation/comments_screen.dart';
@@ -75,6 +78,7 @@ import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
+import '../core/app/app_variant.dart';
 import 'app_bootstrap_state.dart';
 import 'boot_screen.dart';
 import 'bootstrap.dart';
@@ -186,6 +190,8 @@ Widget _safeShellIndexedStack(
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final homePath =
+      AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
   final initialLoc = () {
     if (initialDeepLink != null) {
       final path = parseDeepLinkToGoPath(initialDeepLink!);
@@ -198,7 +204,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Сессия уже восстановлена в StartupShell — не мигаем /boot.
       return AuthService.instance.currentUser == null
           ? LoginRoute.path
-          : FeedRoute.path;
+          : homePath;
     }
     return BootScreen.path;
   }();
@@ -220,13 +226,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (AuthService.instance.currentUser == null) {
           return LoginRoute.path;
         }
-        return FeedRoute.path;
+        return homePath;
       }
       if (loc == ChannelsListRoute.path) {
         return ChatsRoute.path;
       }
       if (loc == '/shopping') {
         return ShoppingListRoute.path;
+      }
+      // Variant guards: prevent cross-app navigation
+      if (AppVariant.current.isKitchen) {
+        if (loc == FeedRoute.path ||
+            loc == ChatsRoute.path ||
+            loc == CreatePostRoute.path ||
+            loc == CreateReelRoute.path ||
+            (loc.startsWith('/channel/') && loc.contains('/create-post'))) {
+          return MenuRoute.path;
+        }
+      } else {
+        if (loc == MenuRoute.path ||
+            loc == MealPlanRoute.path ||
+            loc == ShoppingListRoute.path ||
+            loc == CreateRecipeRoute.path ||
+            (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
+          return FeedRoute.path;
+        }
       }
       final user = AuthService.instance.currentUser;
       final isAuth = user != null;
@@ -247,7 +271,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (isAuth &&
           user.emailVerified &&
           (loc == LoginRoute.path || loc == RegisterRoute.path)) {
-        return FeedRoute.path;
+        return homePath;
       }
       if (isAuth) return null;
       final locBase = loc.split('?').first;
@@ -278,56 +302,113 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         navigatorContainerBuilder: _safeShellIndexedStack,
         builder: (context, state, navigationShell) =>
             RootShell(navigationShell: navigationShell),
-        branches: [
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: FeedRoute.path,
-                name: FeedRoute.name,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: const ValueKey('feed_branch'),
-                  child: const MainFeedScreen(),
+        branches: AppVariant.current.isKitchen
+            ? [
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: MenuRoute.path,
+                      name: MenuRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('kitchen_menu_branch'),
+                        child: const MenuScreen(),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: ChatsRoute.path,
-                name: ChatsRoute.name,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: const ValueKey('chats_branch'),
-                  child: const ChatsHubScreen(),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: MealPlanRoute.path,
+                      name: MealPlanRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('kitchen_meal_plan_branch'),
+                        child: const MealPlanScreen(),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: MenuRoute.path,
-                name: MenuRoute.name,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: const ValueKey('menu_branch'),
-                  child: const MenuScreen(),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: ShoppingListRoute.path,
+                      name: ShoppingListRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('kitchen_shopping_branch'),
+                        child: const ShoppingPage(),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: ProfileTabRoute.path,
-                name: ProfileTabRoute.name,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: const ValueKey('profile_branch'),
-                  child: const ProfileScreen(),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: ProfileTabRoute.path,
+                      name: ProfileTabRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('kitchen_profile_branch'),
+                        child: const ProfileScreen(),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-        ],
+              ]
+            : [
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: FeedRoute.path,
+                      name: FeedRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('feed_branch'),
+                        child: const MainFeedScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: ChatsRoute.path,
+                      name: ChatsRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('chats_branch'),
+                        child: const ChatsHubScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: MiniAppsRoute.path,
+                      name: MiniAppsRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('mini_apps_branch'),
+                        child: const MiniAppsCatalogScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: ProfileTabRoute.path,
+                      name: ProfileTabRoute.name,
+                      pageBuilder: (context, state) => NoTransitionPage(
+                        key: const ValueKey('profile_branch'),
+                        child: const ProfileScreen(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+      ),
+      GoRoute(
+        path: StoriesRoute.path,
+        name: StoriesRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StoriesHubScreen()),
       ),
       GoRoute(
         path: ChannelsListRoute.path,
@@ -340,13 +421,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: SettingsScreen()),
       ),
-      // Отдельный маршрут для плана питания
-      GoRoute(
-        path: MealPlanRoute.path,
-        name: MealPlanRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: MealPlanScreen()),
-      ),
+      if (AppVariant.current.isSocial)
+        GoRoute(
+          path: MealPlanRoute.path,
+          name: MealPlanRoute.name,
+          pageBuilder: (context, state) =>
+              const MaterialPage(child: MealPlanScreen()),
+        ),
       GoRoute(
         path: AiMealPlanRoute.path,
         name: AiMealPlanRoute.name,
@@ -476,12 +557,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: AllergiesScreen()),
       ),
-      GoRoute(
-        path: ShoppingListRoute.path,
-        name: ShoppingListRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: ShoppingPage()),
-      ),
+      if (AppVariant.current.isSocial)
+        GoRoute(
+          path: ShoppingListRoute.path,
+          name: ShoppingListRoute.name,
+          pageBuilder: (context, state) =>
+              const MaterialPage(child: ShoppingPage()),
+        ),
       GoRoute(
         path: NotificationsRoute.path,
         name: NotificationsRoute.name,
@@ -682,12 +764,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: CreatePostRoute.path,
         name: CreatePostRoute.name,
+        redirect: (context, state) =>
+            AppVariant.current.isKitchen ? CreateRecipeRoute.path : null,
         pageBuilder: (context, state) =>
             const MaterialPage(child: CreatePostScreen()),
       ),
       GoRoute(
+        path: CreateRecipeRoute.path,
+        name: CreateRecipeRoute.name,
+        redirect: (context, state) =>
+            AppVariant.current.isSocial ? FeedRoute.path : null,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: CreateRecipeScreen()),
+      ),
+      GoRoute(
         path: CreateReelRoute.path,
         name: CreateReelRoute.name,
+        redirect: (context, state) =>
+            AppVariant.current.isKitchen ? MenuRoute.path : null,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.uri.queryParameters['channelId']);
@@ -827,6 +921,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/channel/:channelId/create-recipe',
         name: 'create_channel_recipe',
+        redirect: (context, state) =>
+            AppVariant.current.isSocial ? FeedRoute.path : null,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.pathParameters['channelId']);
@@ -848,6 +944,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/channel/:channelId/create-post',
         name: 'create_channel_post',
+        redirect: (context, state) =>
+            AppVariant.current.isKitchen ? MenuRoute.path : null,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.pathParameters['channelId']);
@@ -1134,6 +1232,21 @@ class FeedRoute {
 class ChatsRoute {
   static const path = '/chats';
   static const name = 'chats';
+}
+
+class ChannelsHubRoute {
+  static const path = '/channels-hub';
+  static const name = 'channels_hub';
+}
+
+class MiniAppsRoute {
+  static const path = '/mini-apps';
+  static const name = 'mini_apps';
+}
+
+class StoriesRoute {
+  static const path = '/stories';
+  static const name = 'stories';
 }
 
 class ChatThreadRoute {
@@ -1469,6 +1582,11 @@ class SupportContactRoute {
 class CreatePostRoute {
   static const path = '/create-post';
   static const name = 'create_post';
+}
+
+class CreateRecipeRoute {
+  static const path = '/create-recipe';
+  static const name = 'create_recipe';
 }
 
 class CreateReelRoute {

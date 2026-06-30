@@ -1,33 +1,68 @@
 import 'package:flutter/material.dart';
 import 'miniapp_webview_screen.dart';
+import '../../integrations/presentation/integrations_screen.dart';
 
 class MiniAppsCatalogScreen extends StatelessWidget {
   const MiniAppsCatalogScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: _MiniAppsCatalogBody(),
+    );
+  }
+}
+
+class _MiniAppsCatalogBody extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     final apps = [
       _MiniApp(
         'Калькулятор калорий',
         'Считает БЖУ и калории',
+        'HanWe',
+        true,
         Icons.calculate_outlined,
         _calorieCalculatorHtml,
       ),
-      _MiniApp('Погода', 'Погода по городу', Icons.wb_sunny_outlined, null),
-      _MiniApp('Рецепты по фото', 'Распознаёт ингредиенты', Icons.camera_alt_outlined, null),
-      _MiniApp('Переводчик', 'Перевод текста', Icons.translate_outlined, null),
-      _MiniApp('Напоминания', 'Todo и reminders', Icons.alarm_outlined, null),
+      _MiniApp('Погода', 'Погода по городу', 'HanWe', true, Icons.wb_sunny_outlined, null),
+      _MiniApp('Рецепты по фото', 'Распознаёт ингредиенты', 'HanWe', true, Icons.camera_alt_outlined, null),
+      _MiniApp('Переводчик', 'Перевод текста', 'Community', false, Icons.translate_outlined, null),
+      _MiniApp('Напоминания', 'Todo и reminders', 'Community', false, Icons.alarm_outlined, null),
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Мини-приложения')),
-      body: GridView.builder(
+      appBar: AppBar(
+        title: const Text('Мини-приложения'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: 'Опубликовать своё приложение',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Публикация приложений будет доступна позже')),
+              );
+            },
+          ),
+        ],
+        bottom: const TabBar(
+          tabs: [
+            Tab(text: 'Все'),
+            Tab(text: 'Интеграции'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        children: [
+          // Вкладка "Все"
+          GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 1.1,
+          childAspectRatio: 1.05,
         ),
         itemCount: apps.length,
         itemBuilder: (context, index) {
@@ -52,21 +87,80 @@ class MiniAppsCatalogScreen extends StatelessWidget {
                 }
               },
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(app.icon, size: 48, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(app.icon, size: 36, color: Theme.of(context).colorScheme.primary),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: app.isOfficial
+                                ? Colors.blue.withOpacity(0.1)
+                                : Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            app.isOfficial ? 'Официальное' : 'От разработчиков',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: app.isOfficial ? Colors.blue : Colors.green,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     Text(app.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(app.subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Text(app.subtitle, style: const TextStyle(fontSize: 12)),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Text(
+                          'от ${app.developer}',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline),
+                        ),
+                        const Spacer(),
+                        if (app.htmlContent != null)
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => MiniAppWebViewScreen(
+                                    title: app.title,
+                                    subtitle: app.subtitle,
+                                    htmlContent: app.htmlContent,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('Открыть'),
+                          )
+                        else
+                          OutlinedButton(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Установка будет доступна позже')),
+                              );
+                            },
+                            child: const Text('Установить'),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ),
           );
         },
+      ),
+          // Вкладка "Интеграции"
+          const IntegrationsScreen(),
+        ],
       ),
     );
   }
@@ -75,9 +169,12 @@ class MiniAppsCatalogScreen extends StatelessWidget {
 class _MiniApp {
   final String title;
   final String subtitle;
+  final String developer;
+  final bool isOfficial;
   final IconData icon;
   final String? htmlContent;
-  _MiniApp(this.title, this.subtitle, this.icon, this.htmlContent);
+
+  _MiniApp(this.title, this.subtitle, this.developer, this.isOfficial, this.icon, this.htmlContent);
 }
 
 /// Self-contained HTML + JS для демо мини-приложения "Калькулятор калорий"

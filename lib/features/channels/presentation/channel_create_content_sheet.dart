@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/app/app_variant.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 
@@ -24,12 +25,13 @@ Future<bool> showChannelCreateContentSheet(
         subtitle: 'Короткое видео в ленту рилсов',
         onTap: () => choice = 'reel',
       ),
-      TelegramActionSheetAction(
-        icon: Icons.restaurant_menu,
-        title: 'Создать рецепт',
-        subtitle: 'Публичный в Menu или приватный в канале',
-        onTap: () => choice = 'recipe',
-      ),
+      if (AppVariant.current.isKitchen)
+        TelegramActionSheetAction(
+          icon: Icons.restaurant_menu,
+          title: 'Создать рецепт',
+          subtitle: 'Публичный в Menu или приватный в канале',
+          onTap: () => choice = 'recipe',
+        ),
       TelegramActionSheetAction(
         icon: Icons.photo_library_outlined,
         title: 'Пост с фото',
