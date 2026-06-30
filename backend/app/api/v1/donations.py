@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.api.dependencies import get_current_user_required as get_current_user
 from app.models.user import User
 from app.models.donation import Donation
-from app.models.channel import Channel
+from app.models.community import Channel
 from app.models.post import Post
 
 router = APIRouter(prefix="/donations", tags=["Donations"])
@@ -69,7 +69,7 @@ async def create_donation(
     # Проверка поста (если указан)
     if payload.post_id:
         post = db.query(Post).filter(Post.id == payload.post_id).first()
-        if not post or post.author_id != payload.recipient_id:
+        if not post or post.user_id != payload.recipient_id:
             raise HTTPException(status_code=400, detail="Invalid post")
 
     # Создаём донат
