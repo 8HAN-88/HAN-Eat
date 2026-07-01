@@ -104,6 +104,27 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 fi
+python - <<'PY'
+import os
+from sqlalchemy import create_engine, text
+
+env_path = "/root/HAN-Eat/backend/.env"
+db_url = None
+if os.path.exists(env_path):
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("DATABASE_URL="):
+                db_url = line.split("=", 1)[1].strip()
+                break
+if not db_url:
+    raise SystemExit("DATABASE_URL not found in .env")
+
+engine = create_engine(db_url)
+with engine.begin() as conn:
+    conn.execute(
+        text("ALTER TABLE IF EXISTS alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)")
+    )
+PY
 alembic upgrade head
 python3 scripts/create_all_test_accounts.py || true
 systemctl daemon-reload
