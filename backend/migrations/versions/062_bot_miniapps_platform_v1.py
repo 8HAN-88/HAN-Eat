@@ -1,7 +1,7 @@
 """bot miniapps platform v1
 
 Revision ID: 062_bot_miniapps_platform_v1
-Revises: 061_subscription_payment_id_unique_v1
+Revises: 061_sub_payment_unique_v1
 """
 
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "062_bot_miniapps_platform_v1"
-down_revision = "061_subscription_payment_id_unique_v1"
+down_revision = "061_sub_payment_unique_v1"
 branch_labels = None
 depends_on = None
 
