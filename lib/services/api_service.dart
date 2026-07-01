@@ -1053,6 +1053,18 @@ class ApiService {
     return list.map((e) => BotListItem.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  static Future<BotResponse> getBot(int botId) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/bots/$botId'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    return BotResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<List<BotCommandCreate>> getBotCommands(int botId) async {
     final headers = await authHeaders();
     final response = await http.get(
@@ -1061,10 +1073,34 @@ class ApiService {
     );
     _ensureSuccess(response);
     final list = jsonDecode(response.body) as List;
-    return list.map((e) => BotCommandCreate(
-          command: (e as Map<String, dynamic>)['command'] as String,
-          description: (e)['description'] as String,
-        )).toList();
+    return list.map((e) {
+      final item = e as Map<String, dynamic>;
+      final rowsRaw = item['inline_button_rows'] as List? ?? const [];
+      final rows = <List<BotInlineButton>>[];
+      for (final row in rowsRaw) {
+        if (row is! List) continue;
+        final parsed = row
+            .whereType<Map<String, dynamic>>()
+            .map(BotInlineButton.fromJson)
+            .where((b) => b.text.trim().isNotEmpty)
+            .toList();
+        if (parsed.isNotEmpty) rows.add(parsed);
+      }
+      if (rows.isEmpty) {
+        final flat = ((item['inline_buttons'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(BotInlineButton.fromJson)
+            .where((b) => b.text.trim().isNotEmpty)
+            .toList();
+        if (flat.isNotEmpty) rows.add(flat);
+      }
+      return BotCommandCreate(
+        command: item['command'] as String,
+        description: item['description'] as String,
+        responseText: item['response_text'] as String?,
+        inlineButtonRows: rows,
+      );
+    }).toList();
   }
 
   static Future<void> addBotCommand(int botId, BotCommandCreate cmd) async {
@@ -1077,6 +1113,27 @@ class ApiService {
     _ensureSuccess(response);
   }
 
+  static Future<void> updateBotCommand({
+    required int botId,
+    required String command,
+    required BotCommandCreate cmd,
+  }) async {
+    final headers = await authHeaders();
+    final response = await http.patch(
+      _uri('/bots/$botId/commands/$command'),
+      headers: headers,
+      body: jsonEncode({
+        'description': cmd.description,
+        'response_text': cmd.responseText,
+        'inline_button_rows': cmd.inlineButtonRows
+            .map((row) => row.map((b) => b.toJson()).toList())
+            .toList(),
+        'clear_inline_buttons': cmd.inlineButtonRows.isEmpty,
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
   static Future<void> deleteBotCommand(int botId, String command) async {
     final headers = await authHeaders();
     final response = await http.delete(
@@ -1084,6 +1141,89 @@ class ApiService {
       headers: headers,
     );
     _ensureSuccess(response);
+  }
+
+  static Future<void> addBotToChat({
+    required int botId,
+    required int conversationId,
+  }) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/bots/$botId/add-to-chat'),
+      headers: headers,
+      body: jsonEncode({'conversation_id': conversationId}),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> setBotWebhook({
+    required int botId,
+    required String url,
+    String? secretToken,
+  }) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/bots/$botId/webhook'),
+      headers: headers,
+      body: jsonEncode({
+        'url': url,
+        if (secretToken != null && secretToken.trim().isNotEmpty)
+          'secret_token': secretToken.trim(),
+      }),
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<void> deleteBotWebhook(int botId) async {
+    final headers = await authHeaders();
+    final response = await http.delete(
+      _uri('/bots/$botId/webhook'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+  }
+
+  static Future<bool> testBotWebhook(int botId) async {
+    final headers = await authHeaders();
+    final response = await http.post(
+      _uri('/bots/$botId/webhook/test'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['delivered'] == true;
+  }
+
+  static Future<BotAnalyticsResponse> getBotAnalytics({
+    required int botId,
+    int days = 30,
+  }) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/bots/$botId/analytics', {'days': '$days'}),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    return BotAnalyticsResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<List<BotWebhookAttempt>> getBotWebhookAttempts({
+    required int botId,
+    int limit = 30,
+  }) async {
+    final headers = await authHeaders();
+    final response = await http.get(
+      _uri('/bots/$botId/webhook/attempts', {'limit': '$limit'}),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return ((data['items'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(BotWebhookAttempt.fromJson)
+        .toList();
   }
 
   // === Donations ===

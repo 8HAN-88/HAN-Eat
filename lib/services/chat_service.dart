@@ -574,6 +574,21 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendInlineCallback({
+    required int conversationId,
+    required int messageId,
+    required String data,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/callback',
+    );
+    final response = await _post(uri, body: jsonEncode({'data': data}));
+    _ensureOk(response, 'Не удалось выполнить действие кнопки');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<void> _waitForRateLimit() async {
     while (ApiRateLimitBackoff.isActive) {
       final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
@@ -762,6 +777,7 @@ class ChatService {
       isMine: msg.senderId == uid,
       isRead: msg.senderId == uid,
       reactions: msg.reactions,
+      inlineKeyboard: msg.inlineKeyboard,
     );
   }
 

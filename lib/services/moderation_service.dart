@@ -260,6 +260,274 @@ class ModerationService {
     throw Exception('Failed to load moderation dashboard');
   }
 
+  static Future<BotWebhookOpsPage> fetchWebhookOperations({
+    int limit = 20,
+    int offset = 0,
+    String? query,
+    String? eventType,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final params = <String, String>{
+      'limit': '$limit',
+      'offset': '$offset',
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+      if (eventType != null && eventType.trim().isNotEmpty)
+        'event_type': eventType.trim(),
+    };
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/ops')
+        .replace(queryParameters: params);
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return BotWebhookOpsPage.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception('Failed to load webhook operations');
+  }
+
+  static Future<BotWebhookOpsExport> exportWebhookOperations({
+    int limit = 500,
+    String? query,
+    String? eventType,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final params = <String, String>{
+      'limit': '$limit',
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+      if (eventType != null && eventType.trim().isNotEmpty)
+        'event_type': eventType.trim(),
+    };
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/ops/export')
+        .replace(queryParameters: params);
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return BotWebhookOpsExport.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception('Failed to export webhook operations');
+  }
+
+  static Future<BotWebhookOpsExport> exportWebhookIncidentReport({
+    int limit = 200,
+    String? query,
+    String? eventType,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final params = <String, String>{
+      'limit': '$limit',
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+      if (eventType != null && eventType.trim().isNotEmpty)
+        'event_type': eventType.trim(),
+    };
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/ops/incident-report')
+        .replace(queryParameters: params);
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return BotWebhookOpsExport.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception('Failed to export webhook incident report');
+  }
+
+  static Future<BotWebhookQueueStats> promoteWebhookDelayed({
+    int limit = 500,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/promote-delayed');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'limit': limit}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to promote delayed webhooks');
+  }
+
+  static Future<BotWebhookQueueStats> clearWebhookQueue({
+    bool includeDelayed = true,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/clear');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'include_delayed': includeDelayed}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to clear webhook queue');
+  }
+
+  static Future<BotWebhookQueueStats> resetWebhookMetrics() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/reset-metrics');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to reset webhook metrics');
+  }
+
+  static Future<BotWebhookQueueStats> requeueWebhookDeadLetters({
+    int limit = 100,
+    List<String>? taskIds,
+    String? query,
+    String? dropReason,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse(
+      '$baseUrl/moderation/system/webhooks/dead-letter/requeue',
+    );
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'limit': limit,
+        if (taskIds != null && taskIds.isNotEmpty) 'task_ids': taskIds,
+        if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+        if (dropReason != null && dropReason.trim().isNotEmpty)
+          'drop_reason': dropReason.trim(),
+      }),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to requeue dead-letter webhooks');
+  }
+
+  static Future<BotWebhookDeadLetterPage> fetchWebhookDeadLetters({
+    int limit = 50,
+    int offset = 0,
+    String? query,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final params = <String, String>{
+      'limit': '$limit',
+      'offset': '$offset',
+      if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+    };
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/dead-letter')
+        .replace(queryParameters: params);
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return BotWebhookDeadLetterPage.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception('Failed to fetch dead-letter webhooks');
+  }
+
+  static Future<BotWebhookQueueStats> clearWebhookDeadLetters() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/dead-letter/clear');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to clear dead-letter webhooks');
+  }
+
+  static Future<BotWebhookQueueStats> runWebhookRecoveryPlaybook({
+    int requeueDeadLimit = 300,
+    int promoteDelayedLimit = 500,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) throw Exception('Not authenticated');
+    final uri = Uri.parse('$baseUrl/moderation/system/webhooks/recovery-playbook');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'requeue_dead_limit': requeueDeadLimit,
+        'promote_delayed_limit': promoteDelayedLimit,
+      }),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return BotWebhookQueueStats.fromJson(
+        data['stats'] as Map<String, dynamic>? ?? const {},
+      );
+    }
+    throw Exception('Failed to run webhook recovery playbook');
+  }
+
   static bool isModerator(String? userId) {
     if (userId == null) return false;
     final user = AuthService.instance.currentUser;
@@ -455,6 +723,9 @@ class ModerationDashboard {
   final int bannedUsers;
   final int shadowUsers;
   final List<ModerationAuditEntry> recentActions;
+  final BotWebhookQueueStats? botWebhookQueue;
+  final BotWebhookAlerts? botWebhookAlerts;
+  final List<BotWebhookOperation> botWebhookRecentOps;
 
   ModerationDashboard({
     required this.pendingTotal,
@@ -464,6 +735,9 @@ class ModerationDashboard {
     required this.bannedUsers,
     required this.shadowUsers,
     required this.recentActions,
+    this.botWebhookQueue,
+    this.botWebhookAlerts,
+    this.botWebhookRecentOps = const [],
   });
 
   factory ModerationDashboard.fromJson(Map<String, dynamic> json) {
@@ -480,6 +754,281 @@ class ModerationDashboard {
               )
               .toList() ??
           [],
+      botWebhookQueue: json['bot_webhook_queue'] is Map<String, dynamic>
+          ? BotWebhookQueueStats.fromJson(
+              json['bot_webhook_queue'] as Map<String, dynamic>,
+            )
+          : null,
+      botWebhookAlerts: json['bot_webhook_alerts'] is Map<String, dynamic>
+          ? BotWebhookAlerts.fromJson(
+              json['bot_webhook_alerts'] as Map<String, dynamic>,
+            )
+          : null,
+      botWebhookRecentOps: ((json['bot_webhook_recent_ops'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BotWebhookOperation.fromJson)
+          .toList(),
+    );
+  }
+
+  ModerationDashboard copyWith({
+    int? pendingTotal,
+    int? pendingAutoFlagged,
+    int? pendingReported,
+    int? reportsLast7d,
+    int? bannedUsers,
+    int? shadowUsers,
+    List<ModerationAuditEntry>? recentActions,
+    BotWebhookQueueStats? botWebhookQueue,
+    BotWebhookAlerts? botWebhookAlerts,
+    List<BotWebhookOperation>? botWebhookRecentOps,
+  }) {
+    return ModerationDashboard(
+      pendingTotal: pendingTotal ?? this.pendingTotal,
+      pendingAutoFlagged: pendingAutoFlagged ?? this.pendingAutoFlagged,
+      pendingReported: pendingReported ?? this.pendingReported,
+      reportsLast7d: reportsLast7d ?? this.reportsLast7d,
+      bannedUsers: bannedUsers ?? this.bannedUsers,
+      shadowUsers: shadowUsers ?? this.shadowUsers,
+      recentActions: recentActions ?? this.recentActions,
+      botWebhookQueue: botWebhookQueue ?? this.botWebhookQueue,
+      botWebhookAlerts: botWebhookAlerts ?? this.botWebhookAlerts,
+      botWebhookRecentOps: botWebhookRecentOps ?? this.botWebhookRecentOps,
+    );
+  }
+}
+
+class BotWebhookOperation {
+  final int id;
+  final String eventType;
+  final String? createdAt;
+  final int? userId;
+  final String? actorName;
+  final String? actorUsername;
+  final Map<String, dynamic> metadata;
+
+  BotWebhookOperation({
+    required this.id,
+    required this.eventType,
+    this.createdAt,
+    this.userId,
+    this.actorName,
+    this.actorUsername,
+    this.metadata = const {},
+  });
+
+  factory BotWebhookOperation.fromJson(Map<String, dynamic> json) {
+    return BotWebhookOperation(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      eventType: json['event_type'] as String? ?? 'bot_webhook_unknown',
+      createdAt: json['created_at'] as String?,
+      userId: (json['user_id'] as num?)?.toInt(),
+      actorName: json['actor_name'] as String?,
+      actorUsername: json['actor_username'] as String?,
+      metadata: json['metadata'] is Map<String, dynamic>
+          ? json['metadata'] as Map<String, dynamic>
+          : const {},
+    );
+  }
+}
+
+class BotWebhookOpsPage {
+  final List<BotWebhookOperation> items;
+  final int total;
+  final int offset;
+  final int limit;
+  final bool hasMore;
+  final int? nextOffset;
+
+  BotWebhookOpsPage({
+    required this.items,
+    required this.total,
+    required this.offset,
+    required this.limit,
+    required this.hasMore,
+    this.nextOffset,
+  });
+
+  factory BotWebhookOpsPage.fromJson(Map<String, dynamic> json) {
+    return BotWebhookOpsPage(
+      items: ((json['items'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BotWebhookOperation.fromJson)
+          .toList(),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      limit: (json['limit'] as num?)?.toInt() ?? 20,
+      hasMore: json['has_more'] == true,
+      nextOffset: (json['next_offset'] as num?)?.toInt(),
+    );
+  }
+}
+
+class BotWebhookOpsExport {
+  final int count;
+  final bool truncated;
+  final String content;
+
+  BotWebhookOpsExport({
+    required this.count,
+    required this.truncated,
+    required this.content,
+  });
+
+  factory BotWebhookOpsExport.fromJson(Map<String, dynamic> json) {
+    return BotWebhookOpsExport(
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      truncated: json['truncated'] == true,
+      content: json['content'] as String? ?? '',
+    );
+  }
+}
+
+class BotWebhookDeadLetterItem {
+  final String taskId;
+  final int? botId;
+  final String updateType;
+  final String dropReason;
+  final int attempt;
+  final int? queuedAt;
+  final int? droppedAt;
+
+  BotWebhookDeadLetterItem({
+    required this.taskId,
+    required this.botId,
+    required this.updateType,
+    required this.dropReason,
+    required this.attempt,
+    required this.queuedAt,
+    required this.droppedAt,
+  });
+
+  factory BotWebhookDeadLetterItem.fromJson(Map<String, dynamic> json) {
+    return BotWebhookDeadLetterItem(
+      taskId: json['task_id'] as String? ?? '',
+      botId: (json['bot_id'] as num?)?.toInt(),
+      updateType: json['update_type'] as String? ?? '',
+      dropReason: json['drop_reason'] as String? ?? '',
+      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
+      queuedAt: (json['queued_at'] as num?)?.toInt(),
+      droppedAt: (json['dropped_at'] as num?)?.toInt(),
+    );
+  }
+}
+
+class BotWebhookDeadLetterPage {
+  final List<BotWebhookDeadLetterItem> items;
+  final int total;
+  final int offset;
+  final int limit;
+  final bool hasMore;
+  final int? nextOffset;
+  final BotWebhookQueueStats? stats;
+
+  BotWebhookDeadLetterPage({
+    required this.items,
+    required this.total,
+    required this.offset,
+    required this.limit,
+    required this.hasMore,
+    this.nextOffset,
+    this.stats,
+  });
+
+  factory BotWebhookDeadLetterPage.fromJson(Map<String, dynamic> json) {
+    return BotWebhookDeadLetterPage(
+      items: ((json['items'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BotWebhookDeadLetterItem.fromJson)
+          .toList(),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      offset: (json['offset'] as num?)?.toInt() ?? 0,
+      limit: (json['limit'] as num?)?.toInt() ?? 50,
+      hasMore: json['has_more'] == true,
+      nextOffset: (json['next_offset'] as num?)?.toInt(),
+      stats: json['stats'] is Map<String, dynamic>
+          ? BotWebhookQueueStats.fromJson(json['stats'] as Map<String, dynamic>)
+          : null,
+    );
+  }
+}
+
+class BotWebhookAlertItem {
+  final String code;
+  final String severity;
+  final String message;
+  final num value;
+  final num threshold;
+
+  BotWebhookAlertItem({
+    required this.code,
+    required this.severity,
+    required this.message,
+    required this.value,
+    required this.threshold,
+  });
+
+  factory BotWebhookAlertItem.fromJson(Map<String, dynamic> json) {
+    return BotWebhookAlertItem(
+      code: json['code'] as String? ?? '',
+      severity: json['severity'] as String? ?? 'warning',
+      message: json['message'] as String? ?? 'Webhook alert',
+      value: (json['value'] as num?) ?? 0,
+      threshold: (json['threshold'] as num?) ?? 0,
+    );
+  }
+}
+
+class BotWebhookAlerts {
+  final List<BotWebhookAlertItem> items;
+
+  BotWebhookAlerts({required this.items});
+
+  factory BotWebhookAlerts.fromJson(Map<String, dynamic> json) {
+    return BotWebhookAlerts(
+      items: ((json['items'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(BotWebhookAlertItem.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class BotWebhookQueueStats {
+  final int queueDepth;
+  final int delayedDepth;
+  final int deadDepth;
+  final int sentTotal;
+  final int failedTotal;
+  final int retriedTotal;
+  final int droppedTotal;
+  final int throttledTotal;
+  final bool redisStub;
+
+  BotWebhookQueueStats({
+    required this.queueDepth,
+    required this.delayedDepth,
+    required this.deadDepth,
+    required this.sentTotal,
+    required this.failedTotal,
+    required this.retriedTotal,
+    required this.droppedTotal,
+    required this.throttledTotal,
+    required this.redisStub,
+  });
+
+  factory BotWebhookQueueStats.fromJson(Map<String, dynamic> json) {
+    int asInt(String key) => (json[key] as num?)?.toInt() ?? 0;
+    return BotWebhookQueueStats(
+      queueDepth: asInt('queue_depth'),
+      delayedDepth: asInt('delayed_depth'),
+      deadDepth: asInt('dead_depth'),
+      sentTotal: asInt('sent_total'),
+      failedTotal: asInt('failed_total'),
+      retriedTotal: asInt('retried_total'),
+      droppedTotal: asInt('dropped_total'),
+      throttledTotal: asInt('throttled_total'),
+      redisStub: asInt('redis_stub') == 1,
     );
   }
 }

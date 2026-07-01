@@ -44,12 +44,15 @@ from app.schemas.chat import (
     PhoneSyncResponse,
     SendMessageRequest,
     ChatPollVoteRequest,
+    CallbackQueryRequest,
 )
-from app.models.conversation import Conversation, ConversationMember
+from app.models.conversation import Conversation, ConversationMember, Message
 from app.services.chat_event_bus import publish as publish_chat_event
 from app.services.chat_event_bus import subscribe as subscribe_chat_events
 from app.services.chat_service import ChatService
 from app.services.user_event_bus import publish_user_event
+from app.services.analytics_service import AnalyticsService
+from app.services.bot_webhook_queue_service import enqueue_webhook_task
 
 router = APIRouter()
 
@@ -82,6 +85,15 @@ def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> No
 
 
 def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, Any]:
+    inline_keyboard = None
+    raw_keyboard = getattr(msg, "inline_keyboard_json", None)
+    if raw_keyboard:
+        try:
+            parsed = json.loads(raw_keyboard)
+            if isinstance(parsed, list):
+                inline_keyboard = parsed
+        except Exception:
+            inline_keyboard = None
     return {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
@@ -90,6 +102,7 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "content": msg.content,
         "media_url": msg.media_url,
         "reply_to_message_id": msg.reply_to_message_id,
+        "inline_keyboard": inline_keyboard,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
         "reactions": reactions or [],
@@ -142,6 +155,42 @@ def _notify_chat_inbox(
         )
 
 
+def _find_chat_bot(db: Session, conversation_id: int) -> Optional[User]:
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == conversation_id)
+        .all()
+    )
+    if not member_ids:
+        return None
+    user_ids = [uid for (uid,) in member_ids]
+    if not user_ids:
+        return None
+    return (
+        db.query(User)
+        .filter(User.id.in_(user_ids), User.is_bot.is_(True))
+        .first()
+    )
+
+
+def _enqueue_bot_webhook(
+    db: Session,
+    *,
+    conversation_id: int,
+    update_type: str,
+    payload: Dict[str, Any],
+) -> bool:
+    bot = _find_chat_bot(db, conversation_id)
+    if not bot:
+        return False
+    enqueue_webhook_task(
+        bot_id=bot.id,
+        update_type=update_type,
+        payload=payload,
+    )
+    return True
+
+
 def _brief(user: User) -> ChatUserBrief:
     return ChatUserBrief(
         id=user.id,
@@ -175,6 +224,48 @@ def _sender_name(user: Optional[User]) -> Optional[str]:
     return user.name or user.username
 
 
+def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
+    if raw in (None, ""):
+        return None
+    source = raw
+    if isinstance(raw, str):
+        try:
+            source = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(source, list):
+        return None
+    rows: List[List[Dict[str, Any]]] = []
+    for row in source:
+        if not isinstance(row, list):
+            continue
+        out_row: List[Dict[str, Any]] = []
+        for btn in row:
+            if hasattr(btn, "model_dump"):
+                btn = btn.model_dump(exclude_none=True)
+            if not isinstance(btn, dict):
+                continue
+            text = str(btn.get("text") or "").strip()[:64]
+            if not text:
+                continue
+            callback_data = btn.get("callback_data")
+            url = btn.get("url")
+            callback_text = btn.get("callback_text")
+            out_btn: Dict[str, Any] = {"text": text}
+            if isinstance(callback_data, str) and callback_data.strip():
+                out_btn["callback_data"] = callback_data.strip()[:128]
+            if isinstance(url, str) and url.strip():
+                out_btn["url"] = url.strip()[:512]
+            if isinstance(callback_text, str) and callback_text.strip():
+                out_btn["callback_text"] = callback_text.strip()[:300]
+            if "callback_data" not in out_btn and "url" not in out_btn:
+                continue
+            out_row.append(out_btn)
+        if out_row:
+            rows.append(out_row)
+    return rows or None
+
+
 def _message_response(
     msg,
     current_user_id: int,
@@ -203,6 +294,7 @@ def _message_response(
     content = msg.content
     if db is not None and getattr(msg, "type", None) == "poll":
         content = _enriched_content(db, msg, current_user_id, poll_content_cache)
+    inline_keyboard = _normalize_inline_keyboard(getattr(msg, "inline_keyboard_json", None))
     return MessageResponse(
         id=msg.id,
         conversation_id=msg.conversation_id,
@@ -212,6 +304,7 @@ def _message_response(
         content=content,
         media_url=msg.media_url,
         reply_to_message_id=msg.reply_to_message_id,
+        inline_keyboard=inline_keyboard,
         created_at=msg.created_at,
         edited_at=getattr(msg, "edited_at", None),
         is_mine=is_mine,
@@ -658,6 +751,8 @@ async def send_message(
 ):
     svc = ChatService(db)
     content = body.content
+    inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
+    webhook_touched = False
     if body.type == "poll":
         from app.services.chat_poll_service import build_poll_content
 
@@ -683,6 +778,9 @@ async def send_message(
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
             client_message_id=body.client_message_id,
+            inline_keyboard_json=json.dumps(inline_keyboard_payload, ensure_ascii=False)
+            if inline_keyboard_payload
+            else None,
         )
         db.commit()
         db.refresh(msg)
@@ -697,6 +795,16 @@ async def send_message(
                 conversation_id,
                 {"type": "message.new", "message": _message_payload(bot_reply)},
             )
+            webhook_touched = _enqueue_bot_webhook(
+                db,
+                conversation_id=conversation_id,
+                update_type="message.bot_reply",
+                payload={
+                    "conversation_id": conversation_id,
+                    "from_user_id": current_user.id,
+                    "message": _message_payload(bot_reply),
+                },
+            ) or webhook_touched
     except ValueError as e:
         db.rollback()
         code = str(e)
@@ -714,6 +822,18 @@ async def send_message(
             {"type": "message.new", "message": _message_payload(msg)},
         )
         _notify_chat_inbox(db, conversation_id, current_user.id)
+        webhook_touched = _enqueue_bot_webhook(
+            db,
+            conversation_id=conversation_id,
+            update_type="message.new",
+            payload={
+                "conversation_id": conversation_id,
+                "from_user_id": current_user.id,
+                "message": _message_payload(msg),
+            },
+        ) or webhook_touched
+    if webhook_touched:
+        db.commit()
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)
@@ -731,6 +851,116 @@ async def send_message(
     sender = db.query(User).filter(User.id == msg.sender_id).first()
     return _message_response(
         msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/callback",
+    response_model=MessageResponse,
+)
+async def callback_query(
+    conversation_id: int,
+    message_id: int,
+    body: CallbackQueryRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    msg = (
+        db.query(Message)
+        .filter(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    if not msg.inline_keyboard_json:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "inline_keyboard_not_found",
+        )
+    from app.services.bot_handler import process_callback_for_bot
+
+    result = process_callback_for_bot(
+        db,
+        conversation_id=conversation_id,
+        source_message=msg,
+        callback_data=body.data,
+    )
+    if not result:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "callback_not_found")
+    bot_reply, _ = result
+    bot_user = _find_chat_bot(db, conversation_id)
+    if bot_user:
+        AnalyticsService(db).log_event(
+            event_type="bot_callback_click",
+            entity_type="bot",
+            entity_id=bot_user.id,
+            user_id=current_user.id,
+            author_id=bot_user.created_by_user_id,
+            metadata={
+                "data": body.data,
+                "message_id": message_id,
+                "conversation_id": conversation_id,
+            },
+        )
+    _enqueue_bot_webhook(
+        db,
+        conversation_id=conversation_id,
+        update_type="callback.query",
+        payload={
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "data": body.data,
+            "from_user_id": current_user.id,
+            "bot_reply": _message_payload(bot_reply),
+        },
+    )
+    db.commit()
+    db.refresh(bot_reply)
+    _emit(
+        conversation_id,
+        {
+            "type": "message.callback",
+            "message_id": message_id,
+            "data": body.data,
+            "from_user_id": current_user.id,
+        },
+    )
+    _emit(
+        conversation_id,
+        {"type": "message.new", "message": _message_payload(bot_reply)},
+    )
+    _notify_chat_inbox(db, conversation_id, bot_reply.sender_id)
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    sender = db.query(User).filter(User.id == bot_reply.sender_id).first()
+    return _message_response(
+        bot_reply,
         current_user.id,
         member.last_read_message_id if member else None,
         peer_read,

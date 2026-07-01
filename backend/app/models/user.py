@@ -50,6 +50,11 @@ class User(Base):
     bot_description = Column(Text, nullable=True)
     bot_short_description = Column(String(120), nullable=True)
     bot_avatar_url = Column(Text, nullable=True)
+    bot_webhook_url = Column(String(500), nullable=True)
+    bot_webhook_secret = Column(String(128), nullable=True)
+    bot_webhook_enabled = Column(Boolean, default=False, nullable=False)
+    bot_webhook_last_error = Column(Text, nullable=True)
+    bot_webhook_last_ok_at = Column(DateTime, nullable=True)
     created_by_user_id = Column(Integer, nullable=True)  # кто создал бота (для is_bot=True)
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token (для Android и iOS)
     device_platform = Column(String(20), nullable=True)  # android | ios | web

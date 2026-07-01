@@ -6,7 +6,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -59,6 +59,7 @@ app.include_router(feed.router, prefix="/api/v1/feed", tags=["Feed"])
 app.include_router(channels.router, prefix="/api/v1/channels", tags=["Channels"])
 app.include_router(bots.router, prefix="/api/v1", tags=["Bots (BotFather)"])
 app.include_router(bot_chats.router, prefix="/api/v1", tags=["Bots in chats"])
+app.include_router(miniapps.router, prefix="/api/v1", tags=["Mini Apps"])
 app.include_router(donations.router, prefix="/api/v1", tags=["Donations"])
 app.include_router(stories.router, prefix="/api/v1", tags=["Stories"])
 app.include_router(
@@ -154,11 +155,13 @@ async def startup_event():
     from app.core.media_startup import log_media_readiness
     from app.core.payments_startup import log_payments_readiness
     from app.core.production_startup import log_production_readiness
+    from app.services.bot_webhook_queue_service import run_webhook_queue_worker
 
     log_payments_readiness()
     log_media_readiness()
     log_production_readiness()
     asyncio.create_task(_background_maintenance_loop())
+    asyncio.create_task(run_webhook_queue_worker())
 
 
 async def _background_maintenance_loop() -> None:

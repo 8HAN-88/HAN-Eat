@@ -19,6 +19,8 @@ import 'package:uuid/uuid.dart';
 
 import '../../bots/data/bot_inline_service.dart';
 import '../../bots/presentation/inline_suggestions.dart';
+import '../../miniapps/data/miniapps_service.dart';
+import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../../bots/data/bot_models.dart';
 import '../../../services/api_service.dart';
 import '../../calls/presentation/video_call_screen.dart';
@@ -250,6 +252,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _selectedMessageIds = <int>{};
   final _votingPollIds = <int>{};
   final _closingPollIds = <int>{};
+  final _callbackInFlightKeys = <String>{};
   final _composerPanelKey = GlobalKey();
   final Map<int, GlobalKey> _messageItemKeys = {};
   int _pollFailureCount = 0;
@@ -801,11 +804,49 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _insertInlineResult(InlineResult result) {
     _hideInlineOverlay();
+    if (result.type == 'miniapp') {
+      unawaited(_openMiniAppFromInline(result));
+      return;
+    }
     _controller.text = result.payload;
     _controller.selection = TextSelection.fromPosition(
       TextPosition(offset: _controller.text.length),
     );
     // Можно сразу отправить или оставить для редактирования
+  }
+
+  Future<void> _openMiniAppFromInline(InlineResult result) async {
+    final miniAppId = result.miniAppId;
+    if (miniAppId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mini app недоступен для запуска')),
+      );
+      return;
+    }
+    try {
+      final launch = await MiniAppsService.getLaunchContext(
+        miniAppId,
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MiniAppWebViewScreen(
+            title: result.title,
+            subtitle: result.description,
+            url: launch.url,
+            initData: launch.initData,
+            initDataUnsafe: launch.initDataUnsafe,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось открыть mini app: $e')),
+      );
+    }
   }
 
   void _onStreamEvent(Map<String, dynamic> event) {
@@ -2632,6 +2673,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     bool pollVoting = false,
     VoidCallback? onPollClose,
     bool pollClosing = false,
+    ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
+    Set<String> callbackLoadingData = const <String>{},
   }) {
     return _Bubble(
       message: msg,
@@ -2650,6 +2693,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       pollVoting: pollVoting,
       onPollClose: onPollClose,
       pollClosing: pollClosing,
+      onInlineButtonTap: onInlineButtonTap,
+      callbackLoadingData: callbackLoadingData,
       onImageTap: interactive && msg.type == 'image' && msg.mediaUrl != null
           ? () => _openImage(msg.mediaUrl!)
           : null,
@@ -3071,6 +3116,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         );
         if (selected != null) {
+          if (selected.type == 'miniapp') {
+            await _openMiniAppFromInline(selected);
+            return;
+          }
           // Отправляем payload как обычное сообщение
           _controller.text = selected.payload;
           // Рекурсивно вызовем _sendText для отправки
@@ -3414,6 +3463,57 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } finally {
       if (mounted) setState(() => _closingPollIds.remove(msg.id));
+    }
+  }
+
+  Future<void> _tapInlineButton(
+    ChatMessage msg,
+    ChatInlineKeyboardButton button,
+  ) async {
+    final url = button.url?.trim();
+    if (url != null && url.isNotEmpty) {
+      final uri = Uri.tryParse(url);
+      if (uri == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Некорректная ссылка кнопки')),
+          );
+        }
+        return;
+      }
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть ссылку')),
+        );
+      }
+      return;
+    }
+    final data = button.callbackData?.trim();
+    if (data == null || data.isEmpty) return;
+    final key = '${msg.id}:$data';
+    if (_callbackInFlightKeys.contains(key)) return;
+    setState(() => _callbackInFlightKeys.add(key));
+    try {
+      final botReply = await ChatService.sendInlineCallback(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        data: data,
+      );
+      if (!mounted) return;
+      setState(() {
+        _integrateMessage(botReply);
+      });
+      _scrollToBottom();
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, e, fallback: 'Не удалось выполнить действие');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _callbackInFlightKeys.remove(key));
+      }
     }
   }
 
@@ -4065,6 +4165,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                       _closingPollIds
                                                                           .contains(
                                                                               msg.id),
+                                                                  onInlineButtonTap:
+                                                                      !_selectionMode
+                                                                          ? (button) =>
+                                                                              _tapInlineButton(
+                                                                                msg,
+                                                                                button,
+                                                                              )
+                                                                          : null,
+                                                                  callbackLoadingData:
+                                                                      _callbackInFlightKeys,
                                                                   onReplyTap: msg
                                                                               .replyToMessageId !=
                                                                           null
@@ -4505,6 +4615,8 @@ class _Bubble extends StatelessWidget {
     this.pollVoting = false,
     this.onPollClose,
     this.pollClosing = false,
+    this.onInlineButtonTap,
+    this.callbackLoadingData = const <String>{},
   });
 
   final ChatMessage message;
@@ -4526,6 +4638,8 @@ class _Bubble extends StatelessWidget {
   final bool pollVoting;
   final VoidCallback? onPollClose;
   final bool pollClosing;
+  final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
+  final Set<String> callbackLoadingData;
 
   static const _metaReserveWidth = 54.0;
 
@@ -4704,6 +4818,69 @@ class _Bubble extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildInlineKeyboard(Color fg, Color quoteBg) {
+    if (message.inlineKeyboard.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final row in message.inlineKeyboard)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final btn in row)
+                    OutlinedButton(
+                      onPressed: onInlineButtonTap == null ||
+                              ((btn.callbackData == null ||
+                                      btn.callbackData!.trim().isEmpty) &&
+                                  (btn.url == null || btn.url!.trim().isEmpty))
+                          ? null
+                          : () => onInlineButtonTap!(btn),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: fg.withValues(alpha: 0.25),
+                        ),
+                        backgroundColor: quoteBg,
+                        foregroundColor: fg,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(btn.text),
+                          if (btn.callbackData != null &&
+                              callbackLoadingData
+                                  .contains('${message.id}:${btn.callbackData}'))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: fg.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -4982,6 +5159,7 @@ class _Bubble extends StatelessWidget {
               child: _buildReplyQuote(fg, quoteBg),
             ),
           mainContent,
+          _buildInlineKeyboard(fg, quoteBg),
           Padding(
             padding: isMedia
                 ? const EdgeInsets.fromLTRB(8, 0, 8, 4)

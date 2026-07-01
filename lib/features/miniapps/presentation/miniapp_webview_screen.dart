@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -9,12 +11,16 @@ class MiniAppWebViewScreen extends StatefulWidget {
     required this.subtitle,
     this.htmlContent, // для self-contained demo мини-приложений
     this.url, // для внешних мини-приложений
+    this.initData,
+    this.initDataUnsafe,
   });
 
   final String title;
   final String subtitle;
   final String? htmlContent;
   final String? url;
+  final String? initData;
+  final Map<String, dynamic>? initDataUnsafe;
 
   @override
   State<MiniAppWebViewScreen> createState() => _MiniAppWebViewScreenState();
@@ -25,8 +31,21 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
   bool _isLoading = true;
   String? _error;
 
-  // TODO: В будущем генерировать настоящий initData с HMAC-подписью на бэкенде
-  final String _initData = '{"user":{"id":1,"first_name":"Demo","username":"demo"},"auth_date":1710000000,"hash":"demo_hash"}';
+  String get _effectiveInitData {
+    final raw = widget.initData?.trim();
+    if (raw != null && raw.isNotEmpty) return raw;
+    return '{"user":{"id":1,"first_name":"Demo","username":"demo"},"auth_date":1710000000,"hash":"demo_hash"}';
+  }
+
+  Map<String, dynamic> get _effectiveInitDataUnsafe {
+    final fromWidget = widget.initDataUnsafe;
+    if (fromWidget != null && fromWidget.isNotEmpty) return fromWidget;
+    return const {
+      'user': {'id': 1, 'first_name': 'Demo', 'username': 'demo'},
+      'auth_date': 1710000000,
+      'hash': 'demo_hash',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +160,8 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
 
   /// Инжектирует window.HanWe.WebApp bridge (аналог Telegram WebApp API)
   Future<void> _injectWebAppBridge(InAppWebViewController controller) async {
+    final initDataSafe = jsonEncode(_effectiveInitData);
+    final initDataUnsafeSafe = jsonEncode(_effectiveInitDataUnsafe);
     await controller.evaluateJavascript(source: '''
       (function() {
         if (window.HanWe && window.HanWe.WebApp) return;
@@ -150,8 +171,8 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
 
         window.HanWe = {
           WebApp: {
-            initData: '$_initData',
-            initDataUnsafe: JSON.parse('$_initData'),
+            initData: JSON.parse($initDataSafe),
+            initDataUnsafe: JSON.parse($initDataUnsafeSafe),
             colorScheme: '${Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light'}',
             themeParams: {
               bg_color: '${Theme.of(context).colorScheme.surface.value.toRadixString(16)}',

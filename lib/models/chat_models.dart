@@ -81,6 +81,29 @@ class ChatReactionSummary {
   }
 }
 
+class ChatInlineKeyboardButton {
+  const ChatInlineKeyboardButton({
+    required this.text,
+    this.callbackData,
+    this.url,
+    this.callbackText,
+  });
+
+  final String text;
+  final String? callbackData;
+  final String? url;
+  final String? callbackText;
+
+  factory ChatInlineKeyboardButton.fromJson(Map<String, dynamic> json) {
+    return ChatInlineKeyboardButton(
+      text: json['text'] as String? ?? '',
+      callbackData: json['callback_data'] as String?,
+      url: json['url'] as String?,
+      callbackText: json['callback_text'] as String?,
+    );
+  }
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -96,6 +119,7 @@ class ChatMessage {
     this.isMine = false,
     this.isRead = false,
     this.reactions = const [],
+    this.inlineKeyboard = const [],
   });
 
   final int id;
@@ -111,6 +135,7 @@ class ChatMessage {
   final bool isMine;
   final bool isRead;
   final List<ChatReactionSummary> reactions;
+  final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
 
   bool get isEdited => editedAt != null;
 
@@ -137,6 +162,18 @@ class ChatMessage {
         } catch (_) {}
       }
     }
+    final keyboardRaw = json['inline_keyboard'] as List<dynamic>? ?? const [];
+    final keyboard = <List<ChatInlineKeyboardButton>>[];
+    for (final rowRaw in keyboardRaw) {
+      if (rowRaw is! List) continue;
+      final row = <ChatInlineKeyboardButton>[];
+      for (final item in rowRaw) {
+        if (item is Map<String, dynamic>) {
+          row.add(ChatInlineKeyboardButton.fromJson(item));
+        }
+      }
+      if (row.isNotEmpty) keyboard.add(row);
+    }
     return ChatMessage(
       id: _parseInt(json['id']),
       conversationId: _parseInt(json['conversation_id']),
@@ -153,6 +190,7 @@ class ChatMessage {
       isMine: json['is_mine'] as bool? ?? false,
       isRead: json['is_read'] as bool? ?? false,
       reactions: reactions,
+      inlineKeyboard: keyboard,
     );
   }
 
@@ -161,6 +199,7 @@ class ChatMessage {
     String? content,
     DateTime? editedAt,
     List<ChatReactionSummary>? reactions,
+    List<List<ChatInlineKeyboardButton>>? inlineKeyboard,
   }) {
     return ChatMessage(
       id: id,
@@ -176,6 +215,7 @@ class ChatMessage {
       isMine: isMine,
       isRead: isRead ?? this.isRead,
       reactions: reactions ?? this.reactions,
+      inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );
   }
 }

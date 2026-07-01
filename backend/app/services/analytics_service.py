@@ -449,3 +449,210 @@ class AnalyticsService:
             "retention_hint": generations > 0 and regenerations > 0,
         }
 
+    def get_bot_analytics(
+        self,
+        *,
+        bot_id: int,
+        owner_user_id: int,
+        days: int = 30,
+    ) -> Dict[str, Any]:
+        bot = (
+            self.db.query(User)
+            .filter(
+                User.id == bot_id,
+                User.is_bot.is_(True),
+                User.created_by_user_id == owner_user_id,
+            )
+            .first()
+        )
+        if not bot:
+            return {"error": "Bot not found or access denied"}
+        start_date = datetime.utcnow() - timedelta(days=days)
+        base = self.db.query(AnalyticsEvent).filter(
+            AnalyticsEvent.entity_type == "bot",
+            AnalyticsEvent.entity_id == bot_id,
+            AnalyticsEvent.created_at >= start_date,
+        )
+
+        def _count(event_type: str) -> int:
+            return int(
+                base.filter(AnalyticsEvent.event_type == event_type)
+                .count()
+            )
+
+        command_uses = _count("bot_command_invoked")
+        callback_clicks = _count("bot_callback_click")
+        unique_users = int(
+            base.with_entities(func.count(func.distinct(AnalyticsEvent.user_id)))
+            .scalar()
+            or 0
+        )
+        ctr = (callback_clicks / command_uses * 100) if command_uses > 0 else 0.0
+
+        by_day_rows = (
+            self.db.query(
+                func.date(AnalyticsEvent.created_at).label("date"),
+                func.count(AnalyticsEvent.id).label("count"),
+            )
+            .filter(
+                AnalyticsEvent.entity_type == "bot",
+                AnalyticsEvent.entity_id == bot_id,
+                AnalyticsEvent.event_type.in_(
+                    ["bot_command_invoked", "bot_callback_click"]
+                ),
+                AnalyticsEvent.created_at >= start_date,
+            )
+            .group_by(func.date(AnalyticsEvent.created_at))
+            .order_by(func.date(AnalyticsEvent.created_at))
+            .all()
+        )
+
+        command_counts: Dict[str, int] = {}
+        callback_counts: Dict[str, int] = {}
+        for row in base.filter(
+            AnalyticsEvent.event_type.in_(["bot_command_invoked", "bot_callback_click"])
+        ).all():
+            meta = row.event_metadata or {}
+            if row.event_type == "bot_command_invoked":
+                command = str(meta.get("command") or "").strip()
+                if command:
+                    command_counts[command] = command_counts.get(command, 0) + 1
+            elif row.event_type == "bot_callback_click":
+                data = str(meta.get("data") or "").strip()
+                if data:
+                    callback_counts[data] = callback_counts.get(data, 0) + 1
+        top_commands = sorted(
+            command_counts.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:10]
+        top_callbacks = sorted(
+            callback_counts.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:10]
+
+        webhook_ok = _count("bot_webhook_delivery_ok")
+        webhook_fail = _count("bot_webhook_delivery_fail")
+        webhook_attempts = webhook_ok + webhook_fail
+        webhook_success_rate = (
+            (webhook_ok / webhook_attempts * 100) if webhook_attempts > 0 else 0.0
+        )
+
+        webhook_error_counts: Dict[str, int] = {}
+        for row in base.filter(
+            AnalyticsEvent.event_type == "bot_webhook_delivery_fail"
+        ).all():
+            meta = row.event_metadata or {}
+            err = str(meta.get("error") or "").strip() or "unknown_error"
+            webhook_error_counts[err] = webhook_error_counts.get(err, 0) + 1
+        top_webhook_errors = sorted(
+            webhook_error_counts.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:5]
+
+        return {
+            "bot_id": bot_id,
+            "period_days": days,
+            "command_uses": command_uses,
+            "callback_clicks": callback_clicks,
+            "unique_users": unique_users,
+            "callback_ctr_percent": round(ctr, 2),
+            "by_day": [
+                {
+                    "date": row.date.isoformat() if row.date else None,
+                    "count": int(row.count),
+                }
+                for row in by_day_rows
+            ],
+            "top_commands": [
+                {"command": command, "count": int(count)}
+                for command, count in top_commands
+            ],
+            "top_callbacks": [
+                {"data": data, "count": int(count)}
+                for data, count in top_callbacks
+            ],
+            "webhook_delivery": {
+                "sent": int(webhook_ok),
+                "failed": int(webhook_fail),
+                "attempted": int(webhook_attempts),
+                "success_rate_percent": round(webhook_success_rate, 2),
+                "last_ok_at": bot.bot_webhook_last_ok_at.isoformat()
+                if bot.bot_webhook_last_ok_at
+                else None,
+                "last_error": bot.bot_webhook_last_error,
+                "top_errors": [
+                    {"error": error_text, "count": int(count)}
+                    for error_text, count in top_webhook_errors
+                ],
+            },
+        }
+
+    def get_bot_webhook_attempts(
+        self,
+        *,
+        bot_id: int,
+        owner_user_id: int,
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        bot = (
+            self.db.query(User)
+            .filter(
+                User.id == bot_id,
+                User.is_bot.is_(True),
+                User.created_by_user_id == owner_user_id,
+            )
+            .first()
+        )
+        if not bot:
+            return {"error": "Bot not found or access denied"}
+
+        max_limit = max(1, min(int(limit), 100))
+        rows = (
+            self.db.query(AnalyticsEvent)
+            .filter(
+                AnalyticsEvent.entity_type == "bot",
+                AnalyticsEvent.entity_id == bot_id,
+                AnalyticsEvent.event_type.in_(
+                    [
+                        "bot_webhook_delivery_ok",
+                        "bot_webhook_delivery_fail",
+                        "bot_webhook_auto_disabled",
+                    ]
+                ),
+            )
+            .order_by(AnalyticsEvent.created_at.desc(), AnalyticsEvent.id.desc())
+            .limit(max_limit)
+            .all()
+        )
+
+        attempts: List[Dict[str, Any]] = []
+        for row in rows:
+            meta = row.event_metadata or {}
+            attempts.append(
+                {
+                    "id": int(row.id),
+                    "event_type": row.event_type,
+                    "status": (
+                        "ok"
+                        if row.event_type == "bot_webhook_delivery_ok"
+                        else "auto_disabled"
+                        if row.event_type == "bot_webhook_auto_disabled"
+                        else "fail"
+                    ),
+                    "update_type": str(meta.get("update_type") or "").strip() or None,
+                    "delivery_id": str(meta.get("delivery_id") or "").strip() or None,
+                    "attempts_used": int(meta.get("attempts_used") or 0),
+                    "error": str(meta.get("error") or meta.get("last_error") or "").strip()
+                    or None,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+            )
+
+        return {
+            "bot_id": bot_id,
+            "items": attempts,
+        }
+

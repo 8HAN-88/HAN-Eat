@@ -15,6 +15,7 @@ from app.core.media_startup import (
 )
 from app.core.payments_startup import collect_payments_issues
 from app.core.production_startup import collect_production_issues
+from app.services.bot_webhook_queue_service import webhook_queue_stats
 
 router = APIRouter()
 
@@ -60,4 +61,5 @@ async def system_readiness():
         },
         "infrastructure": infrastructure_status(),
         "production_issues": production,
+        "bot_webhooks": webhook_queue_stats(),
     }

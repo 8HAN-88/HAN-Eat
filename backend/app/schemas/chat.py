@@ -27,6 +27,7 @@ class MessageResponse(BaseModel):
     reply_to_message_id: Optional[int] = None
     created_at: datetime
     edited_at: Optional[datetime] = None
+    inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     is_mine: bool = False
     is_read: bool = False
     reactions: List["MessageReactionSummary"] = []
@@ -94,6 +95,18 @@ class SendMessageRequest(BaseModel):
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
+    inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
+
+
+class InlineKeyboardButton(BaseModel):
+    text: str = Field(..., min_length=1, max_length=64)
+    callback_data: Optional[str] = Field(default=None, max_length=128)
+    url: Optional[str] = Field(default=None, max_length=512)
+    callback_text: Optional[str] = Field(default=None, max_length=300)
+
+
+class CallbackQueryRequest(BaseModel):
+    data: str = Field(..., min_length=1, max_length=128)
 
 
 class ChatPollVoteRequest(BaseModel):
@@ -226,3 +239,7 @@ class ReorderChatFoldersRequest(BaseModel):
 class ChatFolderItemRequest(BaseModel):
     conversation_id: Optional[int] = None
     channel_id: Optional[int] = None
+
+
+MessageResponse.model_rebuild()
+SendMessageRequest.model_rebuild()

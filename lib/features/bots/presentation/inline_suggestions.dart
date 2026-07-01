@@ -48,9 +48,10 @@ class InlineSuggestions extends StatelessWidget {
           ),
           itemBuilder: (context, index) {
             final r = results[index];
+            final icon = r.type == 'miniapp' ? Icons.apps_rounded : Icons.code;
             return ListTile(
               dense: true,
-              leading: const Icon(Icons.code, size: 20),
+              leading: Icon(icon, size: 20),
               title: Text(
                 r.title,
                 style: const TextStyle(fontWeight: FontWeight.w600),

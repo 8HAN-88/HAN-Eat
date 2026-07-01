@@ -9,6 +9,8 @@ class InlineResult {
   final String title;
   final String description;
   final String payload; // что отправить в чат
+  final int? miniAppId;
+  final String? miniAppShortName;
 
   InlineResult({
     required this.id,
@@ -16,6 +18,8 @@ class InlineResult {
     required this.title,
     required this.description,
     required this.payload,
+    this.miniAppId,
+    this.miniAppShortName,
   });
 
   factory InlineResult.fromJson(Map<String, dynamic> json) => InlineResult(
@@ -24,6 +28,8 @@ class InlineResult {
         title: json['title'] as String,
         description: json['description'] as String,
         payload: json['payload'] as String,
+        miniAppId: (json['miniapp_id'] as num?)?.toInt(),
+        miniAppShortName: json['miniapp_short_name'] as String?,
       );
 }
 

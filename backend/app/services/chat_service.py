@@ -714,6 +714,7 @@ class ChatService:
         media_url: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
+        inline_keyboard_json: Optional[str] = None,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -774,6 +775,7 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
             client_message_id=client_message_id,
+            inline_keyboard_json=inline_keyboard_json,
         )
         self.db.add(msg)
 

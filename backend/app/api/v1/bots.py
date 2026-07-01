@@ -1,8 +1,11 @@
 """
 API для управления ботами (BotFather)
 """
+import json
 import secrets
+from datetime import datetime
 from typing import List, Optional
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -10,6 +13,8 @@ from app.core.database import get_db
 from app.api.dependencies import get_current_user_required as get_current_user
 from app.models.user import User
 from app.models.bot_command import BotCommand
+from app.services.analytics_service import AnalyticsService
+from app.services.bot_webhook_service import deliver_webhook_update
 
 router = APIRouter(prefix="/bots", tags=["bots"])
 
@@ -19,6 +24,61 @@ router = APIRouter(prefix="/bots", tags=["bots"])
 class BotCommandCreate(BaseModel):
     command: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=1, max_length=256)
+    response_text: Optional[str] = Field(None, max_length=2000)
+    inline_buttons: Optional[List["BotInlineButton"]] = None
+    inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
+
+
+class BotInlineButton(BaseModel):
+    text: str = Field(..., min_length=1, max_length=64)
+    callback_data: Optional[str] = Field(None, max_length=128)
+    url: Optional[str] = Field(None, max_length=512)
+    callback_text: Optional[str] = Field(None, max_length=300)
+
+
+def _normalize_inline_buttons(
+    buttons: Optional[List[BotInlineButton]],
+    rows: Optional[List[List[BotInlineButton]]] = None,
+) -> Optional[List[List[dict]]]:
+    if rows:
+        normalized_rows: List[List[dict]] = []
+        for row_buttons in rows:
+            row: List[dict] = []
+            for btn in row_buttons:
+                item = {"text": btn.text.strip()[:64]}
+                if btn.callback_data and btn.callback_data.strip():
+                    item["callback_data"] = btn.callback_data.strip()[:128]
+                if btn.url and btn.url.strip():
+                    item["url"] = btn.url.strip()[:512]
+                if btn.callback_text and btn.callback_text.strip():
+                    item["callback_text"] = btn.callback_text.strip()[:300]
+                if "callback_data" not in item and "url" not in item:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Each inline button requires callback_data or url",
+                    )
+                row.append(item)
+            if row:
+                normalized_rows.append(row)
+        return normalized_rows or None
+    if not buttons:
+        return None
+    row = []
+    for btn in buttons:
+        item = {"text": btn.text.strip()[:64]}
+        if btn.callback_data and btn.callback_data.strip():
+            item["callback_data"] = btn.callback_data.strip()[:128]
+        if btn.url and btn.url.strip():
+            item["url"] = btn.url.strip()[:512]
+        if btn.callback_text and btn.callback_text.strip():
+            item["callback_text"] = btn.callback_text.strip()[:300]
+        if "callback_data" not in item and "url" not in item:
+            raise HTTPException(
+                status_code=400,
+                detail="Each inline button requires callback_data or url",
+            )
+        row.append(item)
+    return [row] if row else None
 
 
 class BotCreateRequest(BaseModel):
@@ -29,6 +89,9 @@ class BotCreateRequest(BaseModel):
     commands: List[BotCommandCreate] = Field(default_factory=list)
 
 
+BotCommandCreate.model_rebuild()
+
+
 class BotResponse(BaseModel):
     id: int
     name: str
@@ -37,6 +100,10 @@ class BotResponse(BaseModel):
     description: Optional[str] = None
     short_description: Optional[str] = None
     avatar_url: Optional[str] = None
+    webhook_url: Optional[str] = None
+    webhook_enabled: bool = False
+    webhook_last_error: Optional[str] = None
+    webhook_last_ok_at: Optional[datetime] = None
 
 
 class BotListItem(BaseModel):
@@ -45,6 +112,23 @@ class BotListItem(BaseModel):
     username: str
     description: Optional[str] = None
     short_description: Optional[str] = None
+
+
+def _bot_or_404(db: Session, bot_id: int, owner_id: int) -> User:
+    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
+    if not bot or bot.created_by_user_id != owner_id:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    return bot
+
+
+def _validate_webhook_url(url: str) -> str:
+    clean = (url or "").strip()
+    parsed = urlparse(clean)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Webhook URL must start with http/https")
+    if not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Webhook URL host is required")
+    return clean
 
 
 # === Endpoints ===
@@ -85,10 +169,16 @@ async def create_bot(
 
     # Сохраняем команды
     for cmd in payload.commands:
+        inline_buttons = _normalize_inline_buttons(
+            cmd.inline_buttons,
+            cmd.inline_button_rows,
+        )
         db.add(BotCommand(
             bot_id=bot_user.id,
             command=cmd.command,
             description=cmd.description,
+            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
         ))
 
     db.commit()
@@ -102,6 +192,10 @@ async def create_bot(
         description=bot_user.bot_description,
         short_description=bot_user.bot_short_description,
         avatar_url=bot_user.avatar_url,
+        webhook_url=bot_user.bot_webhook_url,
+        webhook_enabled=bool(bot_user.bot_webhook_enabled),
+        webhook_last_error=bot_user.bot_webhook_last_error,
+        webhook_last_ok_at=bot_user.bot_webhook_last_ok_at,
     )
 
 
@@ -140,9 +234,7 @@ async def get_bot(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
-    if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+    bot = _bot_or_404(db, bot_id, current_user.id)
     return BotResponse(
         id=bot.id,
         name=bot.name,
@@ -151,6 +243,10 @@ async def get_bot(
         description=bot.bot_description,
         short_description=bot.bot_short_description,
         avatar_url=bot.avatar_url,
+        webhook_url=bot.bot_webhook_url,
+        webhook_enabled=bool(bot.bot_webhook_enabled),
+        webhook_last_error=bot.bot_webhook_last_error,
+        webhook_last_ok_at=bot.bot_webhook_last_ok_at,
     )
 
 
@@ -161,9 +257,7 @@ async def update_bot(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
-    if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+    bot = _bot_or_404(db, bot_id, current_user.id)
 
     if payload.name is not None:
         bot.name = payload.name
@@ -182,12 +276,17 @@ async def update_bot(
         description=bot.bot_description,
         short_description=bot.bot_short_description,
         avatar_url=bot.avatar_url,
+        webhook_url=bot.bot_webhook_url,
+        webhook_enabled=bool(bot.bot_webhook_enabled),
+        webhook_last_error=bot.bot_webhook_last_error,
+        webhook_last_ok_at=bot.bot_webhook_last_ok_at,
     )
 
 
 class WebhookSetRequest(BaseModel):
     url: Optional[str] = Field(None, max_length=500)
     secret_token: Optional[str] = Field(None, max_length=64)
+    verify_delivery: bool = True
 
 
 @router.post("/{bot_id}/webhook")
@@ -197,15 +296,33 @@ async def set_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
-    if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
-
-    # Для MVP храним webhook в отдельных полях (добавьте колонки при необходимости)
-    # bot.bot_webhook_url = payload.url
-    # bot.bot_webhook_secret = payload.secret_token
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    if not payload.url:
+        raise HTTPException(status_code=400, detail="Webhook URL is required")
+    bot.bot_webhook_url = _validate_webhook_url(payload.url)
+    bot.bot_webhook_secret = (payload.secret_token or "").strip()[:128] or None
+    bot.bot_webhook_enabled = True
+    bot.bot_webhook_last_error = None
+    if payload.verify_delivery:
+        deliver_webhook_update(
+            db,
+            bot_user=bot,
+            update_type="webhook.verify",
+            delivery_id=secrets.token_hex(12),
+            payload={
+                "bot_id": bot.id,
+                "bot_username": bot.bot_username,
+                "verified_at": datetime.utcnow().isoformat(),
+            },
+        )
     db.commit()
-    return {"status": "ok", "webhook_url": payload.url}
+    return {
+        "status": "ok",
+        "webhook_url": bot.bot_webhook_url,
+        "webhook_enabled": True,
+        "webhook_last_error": bot.bot_webhook_last_error,
+        "webhook_last_ok_at": bot.bot_webhook_last_ok_at,
+    }
 
 
 @router.delete("/{bot_id}/webhook")
@@ -214,12 +331,64 @@ async def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
-    if not bot or bot.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Bot not found")
-    # bot.bot_webhook_url = None
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    bot.bot_webhook_url = None
+    bot.bot_webhook_secret = None
+    bot.bot_webhook_enabled = False
+    bot.bot_webhook_last_error = None
+    bot.bot_webhook_last_ok_at = None
     db.commit()
     return {"status": "ok"}
+
+
+@router.get("/{bot_id}/webhook")
+async def get_webhook(
+    bot_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    return {
+        "webhook_url": bot.bot_webhook_url,
+        "webhook_enabled": bool(bot.bot_webhook_enabled),
+        "webhook_last_error": bot.bot_webhook_last_error,
+        "webhook_last_ok_at": bot.bot_webhook_last_ok_at,
+    }
+
+
+@router.post("/{bot_id}/webhook/test")
+async def test_webhook_delivery(
+    bot_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    if not bot.bot_webhook_enabled or not bot.bot_webhook_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook is not configured or disabled",
+        )
+
+    delivered = deliver_webhook_update(
+        db,
+        bot_user=bot,
+        update_type="webhook.test",
+        delivery_id=secrets.token_hex(12),
+        payload={
+            "bot_id": bot.id,
+            "bot_username": bot.bot_username,
+            "triggered_by_user_id": current_user.id,
+            "triggered_at": datetime.utcnow().isoformat(),
+            "source": "manual_test",
+        },
+    )
+    db.commit()
+    return {
+        "status": "ok" if delivered else "failed",
+        "delivered": delivered,
+        "webhook_last_error": bot.bot_webhook_last_error,
+        "webhook_last_ok_at": bot.bot_webhook_last_ok_at,
+    }
 
 
 # === Управление командами бота ===
@@ -235,7 +404,45 @@ async def list_bot_commands(
         raise HTTPException(status_code=404, detail="Bot not found")
 
     cmds = db.query(BotCommand).filter(BotCommand.bot_id == bot_id).all()
-    return [BotCommandCreate(command=c.command, description=c.description) for c in cmds]
+    result: List[BotCommandCreate] = []
+    for c in cmds:
+        inline_button_rows: List[List[BotInlineButton]] = []
+        if c.inline_buttons_json:
+            try:
+                parsed = json.loads(c.inline_buttons_json)
+                if isinstance(parsed, list):
+                    for row in parsed:
+                        if not isinstance(row, list):
+                            continue
+                        out_row: List[BotInlineButton] = []
+                        for btn in row:
+                            if not isinstance(btn, dict):
+                                continue
+                            text = str(btn.get("text") or "").strip()
+                            if not text:
+                                continue
+                            out_row.append(
+                                BotInlineButton(
+                                    text=text,
+                                    callback_data=btn.get("callback_data"),
+                                    url=btn.get("url"),
+                                    callback_text=btn.get("callback_text"),
+                                )
+                            )
+                        if out_row:
+                            inline_button_rows.append(out_row)
+            except Exception:
+                inline_button_rows = []
+        result.append(
+            BotCommandCreate(
+                command=c.command,
+                description=c.description,
+                response_text=c.response_text,
+                inline_button_rows=inline_button_rows or None,
+                inline_buttons=(inline_button_rows[0] if len(inline_button_rows) == 1 else None),
+            )
+        )
+    return result
 
 
 @router.post("/{bot_id}/commands", status_code=status.HTTP_201_CREATED)
@@ -257,7 +464,65 @@ async def add_bot_command(
     if existing:
         raise HTTPException(status_code=400, detail="Command already exists")
 
-    db.add(BotCommand(bot_id=bot_id, command=cmd.command, description=cmd.description))
+    inline_buttons = _normalize_inline_buttons(
+        cmd.inline_buttons,
+        cmd.inline_button_rows,
+    )
+    db.add(
+        BotCommand(
+            bot_id=bot_id,
+            command=cmd.command,
+            description=cmd.description,
+            response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
+            inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
+        )
+    )
+    db.commit()
+    return {"status": "ok"}
+
+
+class BotCommandUpdateRequest(BaseModel):
+    description: Optional[str] = Field(None, min_length=1, max_length=256)
+    response_text: Optional[str] = Field(None, max_length=2000)
+    inline_buttons: Optional[List["BotInlineButton"]] = None
+    inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
+    clear_inline_buttons: bool = False
+
+
+BotCommandUpdateRequest.model_rebuild()
+
+
+@router.patch("/{bot_id}/commands/{command}")
+async def update_bot_command(
+    bot_id: int,
+    command: str,
+    payload: BotCommandUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    bot = db.query(User).filter(User.id == bot_id, User.is_bot == True).first()
+    if not bot or bot.created_by_user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Bot not found")
+    cmd = db.query(BotCommand).filter(
+        BotCommand.bot_id == bot_id,
+        BotCommand.command == command,
+    ).first()
+    if not cmd:
+        raise HTTPException(status_code=404, detail="Command not found")
+    if payload.description is not None:
+        cmd.description = payload.description.strip()
+    if payload.response_text is not None:
+        cmd.response_text = payload.response_text.strip()[:2000] or None
+    if payload.clear_inline_buttons:
+        cmd.inline_buttons_json = None
+    elif payload.inline_button_rows is not None or payload.inline_buttons is not None:
+        inline_buttons = _normalize_inline_buttons(
+            payload.inline_buttons,
+            payload.inline_button_rows,
+        )
+        cmd.inline_buttons_json = (
+            json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None
+        )
     db.commit()
     return {"status": "ok"}
 
@@ -281,6 +546,42 @@ async def delete_bot_command(
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Command not found")
     return {"status": "ok"}
+
+
+@router.get("/{bot_id}/analytics")
+async def get_bot_analytics(
+    bot_id: int,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _bot_or_404(db, bot_id, current_user.id)
+    data = AnalyticsService(db).get_bot_analytics(
+        bot_id=bot_id,
+        owner_user_id=current_user.id,
+        days=max(1, min(int(days), 365)),
+    )
+    if data.get("error"):
+        raise HTTPException(status_code=404, detail=data["error"])
+    return data
+
+
+@router.get("/{bot_id}/webhook/attempts")
+async def get_bot_webhook_attempts(
+    bot_id: int,
+    limit: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _bot_or_404(db, bot_id, current_user.id)
+    data = AnalyticsService(db).get_bot_webhook_attempts(
+        bot_id=bot_id,
+        owner_user_id=current_user.id,
+        limit=max(1, min(int(limit), 100)),
+    )
+    if data.get("error"):
+        raise HTTPException(status_code=404, detail=data["error"])
+    return data
 
 
 # === Inline Mode ===

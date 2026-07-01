@@ -1,13 +1,89 @@
 """
 Встроенный обработчик ботов (BotFather).
 Обрабатывает входящие сообщения в чатах с ботами и генерирует автоматические ответы.
-Также поддерживает inline-режим (@bot query).
+Также поддерживает inline-режим (@bot query) и callback-кнопки.
 """
-from typing import Optional, List, Dict, Any
+import json
+from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.conversation import Message, ConversationMember
 from app.models.bot_command import BotCommand
+from app.models.miniapp import BotMiniApp
+from app.services.analytics_service import AnalyticsService
+
+
+def _find_bot_in_conversation(db: Session, conversation_id: int) -> Optional[User]:
+    members = db.query(ConversationMember).filter(
+        ConversationMember.conversation_id == conversation_id
+    ).all()
+    for member in members:
+        bot = db.query(User).filter(
+            User.id == member.user_id,
+            User.is_bot == True,
+        ).first()
+        if bot:
+            return bot
+    return None
+
+
+def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
+    if not raw:
+        return None
+    source = raw
+    if isinstance(raw, str):
+        try:
+            source = json.loads(raw)
+        except Exception:
+            return None
+    if not isinstance(source, list):
+        return None
+    rows: List[List[Dict[str, Any]]] = []
+    for row in source:
+        if not isinstance(row, list):
+            continue
+        out_row: List[Dict[str, Any]] = []
+        for btn in row:
+            if not isinstance(btn, dict):
+                continue
+            text = str(btn.get("text") or "").strip()[:64]
+            if not text:
+                continue
+            callback_data = btn.get("callback_data")
+            url = btn.get("url")
+            callback_text = btn.get("callback_text")
+            clean: Dict[str, Any] = {"text": text}
+            if isinstance(callback_data, str) and callback_data.strip():
+                clean["callback_data"] = callback_data.strip()[:128]
+            if isinstance(url, str) and url.strip():
+                clean["url"] = url.strip()[:512]
+            if isinstance(callback_text, str) and callback_text.strip():
+                clean["callback_text"] = callback_text.strip()[:300]
+            if "callback_data" not in clean and "url" not in clean:
+                continue
+            out_row.append(clean)
+        if out_row:
+            rows.append(out_row)
+    return rows or None
+
+
+def _button_callback_reply(
+    keyboard: Optional[List[List[Dict[str, Any]]]],
+    callback_data: str,
+) -> Optional[str]:
+    if not keyboard:
+        return None
+    for row in keyboard:
+        for btn in row:
+            if btn.get("callback_data") == callback_data:
+                text = (btn.get("callback_text") or "").strip()
+                if text:
+                    return text[:300]
+                label = (btn.get("text") or "").strip()
+                if label:
+                    return f"Нажата кнопка: {label}"
+                return "Действие выполнено"
+    return None
 
 
 def get_inline_results(db: Session, bot_username: str, query: str, limit: int = 8) -> List[Dict[str, Any]]:
@@ -21,6 +97,11 @@ def get_inline_results(db: Session, bot_username: str, query: str, limit: int = 
 
     q = query.lower().strip()
     cmds = db.query(BotCommand).filter(BotCommand.bot_id == bot.id).all()
+    miniapps = (
+        db.query(BotMiniApp)
+        .filter(BotMiniApp.bot_id == bot.id, BotMiniApp.is_active == True)
+        .all()
+    )
 
     results: List[Dict[str, Any]] = []
     for cmd in cmds:
@@ -35,6 +116,29 @@ def get_inline_results(db: Session, bot_username: str, query: str, limit: int = 
             if len(results) >= limit:
                 break
 
+    if len(results) < limit:
+        for app in miniapps:
+            haystack = " ".join(
+                [
+                    (app.name or ""),
+                    (app.short_name or ""),
+                    (app.description or ""),
+                ]
+            ).lower()
+            if q and q not in haystack:
+                continue
+            results.append({
+                "type": "miniapp",
+                "id": f"miniapp_{app.id}",
+                "title": app.name,
+                "description": app.description or f"Открыть {app.short_name}",
+                "payload": f"/miniapp {app.id}",
+                "miniapp_id": app.id,
+                "miniapp_short_name": app.short_name,
+            })
+            if len(results) >= limit:
+                break
+
     # Если ничего не найдено — показываем все команды
     if not results:
         for cmd in cmds[:limit]:
@@ -45,6 +149,17 @@ def get_inline_results(db: Session, bot_username: str, query: str, limit: int = 
                 "description": cmd.description,
                 "payload": f"/{cmd.command}",
             })
+        if not results:
+            for app in miniapps[:limit]:
+                results.append({
+                    "type": "miniapp",
+                    "id": f"miniapp_{app.id}",
+                    "title": app.name,
+                    "description": app.description or f"Открыть {app.short_name}",
+                    "payload": f"/miniapp {app.id}",
+                    "miniapp_id": app.id,
+                    "miniapp_short_name": app.short_name,
+                })
 
     return results
 
@@ -55,20 +170,7 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     Если да — генерирует автоматический ответ бота (если сообщение — команда).
     Возвращает созданное сообщение бота или None.
     """
-    # Находим участников разговора
-    members = db.query(ConversationMember).filter(
-        ConversationMember.conversation_id == conversation_id
-    ).all()
-
-    # Ищем бота среди участников (бот может быть в группе/канале)
-    bot_member = next(
-        (m for m in members if db.query(User).filter(User.id == m.user_id, User.is_bot == True).first()),
-        None,
-    )
-    if not bot_member:
-        return None
-
-    bot = db.query(User).filter(User.id == bot_member.user_id, User.is_bot == True).first()
+    bot = _find_bot_in_conversation(db, conversation_id)
     if not bot:
         return None
 
@@ -87,8 +189,23 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     ).first()
 
     reply_text: str
+    inline_keyboard_json: Optional[str] = None
     if cmd_row:
-        reply_text = cmd_row.description
+        reply_text = (cmd_row.response_text or "").strip() or cmd_row.description
+        keyboard = _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None))
+        if keyboard:
+            inline_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
+        AnalyticsService(db).log_event(
+            event_type="bot_command_invoked",
+            entity_type="bot",
+            entity_id=bot.id,
+            user_id=sender_id,
+            author_id=bot.created_by_user_id,
+            metadata={
+                "command": command,
+                "conversation_id": conversation_id,
+            },
+        )
     elif command == 'start':
         reply_text = bot.bot_short_description or f"Привет! Я {bot.name}. Чем могу помочь?"
     elif command == 'help':
@@ -108,7 +225,32 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
         sender_id=bot.id,
         type="text",
         content=reply_text,
+        inline_keyboard_json=inline_keyboard_json,
     )
     db.add(bot_msg)
     db.flush()
     return bot_msg
+
+
+def process_callback_for_bot(
+    db: Session,
+    conversation_id: int,
+    source_message: Message,
+    callback_data: str,
+) -> Optional[Tuple[Message, str]]:
+    bot = _find_bot_in_conversation(db, conversation_id)
+    if not bot:
+        return None
+    keyboard = _normalize_inline_buttons(source_message.inline_keyboard_json)
+    reply_text = _button_callback_reply(keyboard, callback_data.strip())
+    if not reply_text:
+        return None
+    bot_msg = Message(
+        conversation_id=conversation_id,
+        sender_id=bot.id,
+        type="text",
+        content=reply_text,
+    )
+    db.add(bot_msg)
+    db.flush()
+    return bot_msg, "ok"

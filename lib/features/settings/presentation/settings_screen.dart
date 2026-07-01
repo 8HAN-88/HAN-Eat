@@ -118,6 +118,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(StarsWalletRoute.path),
       ),
       _SettingsItem(
+        title: 'Мои боты',
+        icon: Icons.smart_toy_outlined,
+        subtitle: 'Создание ботов, команды и подключение к чатам',
+        onTap: () => context.push(MyBotsRoute.path),
+      ),
+      _SettingsItem(
         title: 'Настройки питания',
         icon: Icons.monitor_heart_outlined,
         subtitle: 'Цель, калории, повторы — для AI-плана',

@@ -14,6 +14,8 @@ class BotCommand(Base):
     bot_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     command = Column(String(32), nullable=False)
     description = Column(String(256), nullable=False)
+    response_text = Column(String(2000), nullable=True)
+    inline_buttons_json = Column(String(4000), nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
 

@@ -28,6 +28,7 @@ from app.models.paid_features import (
     StarTransaction,
 )
 from app.models.story import Story
+from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 
 # Для обратной совместимости
 Community = Channel
@@ -41,5 +42,6 @@ __all__ = [
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
     "PaidChannelSubscription", "PostBoost", "Story",
+    "BotMiniApp", "MiniAppInstall", "MiniAppLaunch",
 ]
 

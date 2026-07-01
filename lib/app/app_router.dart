@@ -69,6 +69,7 @@ import '../features/analytics/presentation/analytics_screen.dart';
 import '../features/moderation/presentation/moderation_dashboard_screen.dart';
 import '../features/admin/presentation/admin_refund_queue_screen.dart';
 import '../features/moderation/presentation/moderation_queue_screen.dart';
+import '../features/moderation/presentation/miniapps_moderation_screen.dart';
 import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
 import '../features/favorites/favorites_page.dart';
@@ -76,6 +77,7 @@ import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
+import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
 import '../core/app/app_variant.dart';
@@ -611,6 +613,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: StarsWalletScreen()),
       ),
       GoRoute(
+        path: MyBotsRoute.path,
+        name: MyBotsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: MyBotsScreen()),
+      ),
+      GoRoute(
         path: SubscriptionSuccessRoute.path,
         name: SubscriptionSuccessRoute.name,
         pageBuilder: (context, state) {
@@ -1073,6 +1081,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: ModerationQueueScreen()),
       ),
       GoRoute(
+        path: MiniAppsModerationRoute.path,
+        name: MiniAppsModerationRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: MiniAppsModerationScreen()),
+      ),
+      GoRoute(
         path: AdminRefundQueueRoute.path,
         name: AdminRefundQueueRoute.name,
         pageBuilder: (context, state) =>
@@ -1202,6 +1216,11 @@ class ModerationDashboardRoute {
 class ModerationQueueRoute {
   static const path = '/moderation';
   static const name = 'moderation';
+}
+
+class MiniAppsModerationRoute {
+  static const path = '/moderation/miniapps';
+  static const name = 'moderation_miniapps';
 }
 
 class AdminRefundQueueRoute {
@@ -1370,6 +1389,11 @@ class SubscriptionRoute {
 class StarsWalletRoute {
   static const path = '/paid/wallet';
   static const name = 'stars_wallet';
+}
+
+class MyBotsRoute {
+  static const path = '/bots/my';
+  static const name = 'my_bots';
 }
 
 class SubscriptionSuccessRoute {

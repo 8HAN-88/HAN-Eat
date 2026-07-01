@@ -175,6 +175,38 @@ class Settings(BaseSettings):
         "http://localhost:5000,"
         "http://127.0.0.1:5000"
     )
+    # Mini Apps: разрешённые домены для публикации внешних приложений.
+    # Пусто = разрешать все https/http в development и только https в production.
+    MINIAPP_ALLOWED_HOSTS: Union[str, List[str]] = ""
+    MINIAPP_BLOCK_PRIVATE_HOSTS: bool = True
+    MINIAPP_REQUIRE_APPROVED_FOR_USE: bool = True
+    # Максимальный возраст initData (защита от replay) для verify endpoint.
+    MINIAPP_INITDATA_TTL_SECONDS: int = 900
+    # Лимиты mini apps endpoint-ов на пользователя (anti-abuse).
+    MINIAPP_LAUNCH_PER_MINUTE: int = 45
+    MINIAPP_VERIFY_PER_MINUTE: int = 120
+    # Bot webhooks
+    BOT_WEBHOOK_TIMEOUT_SECONDS: float = 4.0
+    BOT_WEBHOOK_MAX_RETRIES: int = 2
+    BOT_WEBHOOK_SIGN_WITH_SECRET: bool = True
+    BOT_WEBHOOK_SIGNATURE_TTL_SECONDS: int = 300
+    BOT_WEBHOOK_QUEUE_ENABLED: bool = True
+    BOT_WEBHOOK_QUEUE_POLL_SECONDS: float = 1.0
+    BOT_WEBHOOK_MAX_PER_BOT_PER_MINUTE: int = 120
+    BOT_WEBHOOK_DELIVERY_MAX_ATTEMPTS: int = 5
+    BOT_WEBHOOK_AUTO_DISABLE_AFTER_FAIL_STREAK: int = 10
+    BOT_WEBHOOK_FAIL_STREAK_TTL_SECONDS: int = 3600
+    BOT_WEBHOOK_ALERT_DEAD_DEPTH: int = 20
+    BOT_WEBHOOK_ALERT_AUTO_DISABLED_24H: int = 1
+    BOT_WEBHOOK_ALERT_FAILS_1H: int = 30
+    BOT_WEBHOOK_ALERT_FAIL_RATE_PERCENT_1H: float = 20.0
+    BOT_WEBHOOK_ALERT_MIN_ATTEMPTS_1H: int = 20
+    BOT_WEBHOOK_ALERT_DROPPED_TOTAL: int = 10
+    BOT_WEBHOOK_ALERT_THROTTLED_TOTAL: int = 50
+    BOT_WEBHOOK_OP_MAX_REQUEUE_LIMIT: int = 500
+    BOT_WEBHOOK_OP_MAX_PROMOTE_LIMIT: int = 500
+    BOT_WEBHOOK_OP_MAX_RUNBOOK_REQUEUE_LIMIT: int = 500
+    BOT_WEBHOOK_OP_MAX_RUNBOOK_PROMOTE_LIMIT: int = 500
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -195,6 +227,27 @@ class Settings(BaseSettings):
                     raise ValueError("ALLOWED_ORIGINS JSON must be a list")
                 return [str(item).strip() for item in parsed if str(item).strip()]
             return [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+        return list(value)
+
+    @field_validator("MINIAPP_ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def parse_miniapp_allowed_hosts(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip().lower() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            hosts = value.strip()
+            if not hosts:
+                return []
+            if hosts.startswith("["):
+                import json
+
+                parsed = json.loads(hosts)
+                if not isinstance(parsed, list):
+                    raise ValueError("MINIAPP_ALLOWED_HOSTS JSON must be a list")
+                return [str(item).strip().lower() for item in parsed if str(item).strip()]
+            return [item.strip().lower() for item in hosts.split(",") if item.strip()]
         return list(value)
 
     @model_validator(mode='before')
