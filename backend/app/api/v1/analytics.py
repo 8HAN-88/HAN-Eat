@@ -117,3 +117,16 @@ async def get_profile_analytics(
     
     return analytics
 
+
+@router.get("/chat-channel")
+async def get_chat_channel_analytics(
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(require_han_creator_subscriber),
+    db: Session = Depends(get_db),
+):
+    analytics_service = AnalyticsService(db)
+    return analytics_service.get_chat_channel_insights(
+        user_id=current_user.id,
+        days=days,
+    )
+

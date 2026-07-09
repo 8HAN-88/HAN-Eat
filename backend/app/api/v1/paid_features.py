@@ -11,6 +11,9 @@ from app.schemas.paid_features import (
     BoostPostResponse,
     DonateStarsRequest,
     DonateStarsResponse,
+    CreatorPayoutRequestCreate,
+    CreatorPayoutResponse,
+    CreatorPayoutReviewRequest,
     PurchasePostRequest,
     PurchasePostResponse,
     StarPackage,
@@ -115,12 +118,18 @@ async def subscribe_paid_channel(
     db: Session = Depends(get_db),
 ):
     service = PaidFeaturesService(db)
-    subscription = service.subscribe_channel(current_user.id, channel_id, months=request.months)
+    subscription = service.subscribe_channel(
+        current_user.id,
+        channel_id,
+        months=request.months,
+        auto_renew=request.auto_renew,
+    )
     db.commit()
     return SubscribeChannelResponse(
         channel_id=channel_id,
         expires_at=subscription.expires_at,
         amount_stars=subscription.amount_stars,
+        auto_renew=subscription.auto_renew,
         balance=service.star_balance(current_user.id),
     )
 
@@ -146,4 +155,52 @@ async def boost_post(
         expires_at=boost.expires_at,
         balance=service.star_balance(current_user.id),
     )
+
+
+@router.post("/payouts/request", response_model=CreatorPayoutResponse)
+async def request_creator_payout(
+    request: CreatorPayoutRequestCreate,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    payout = service.request_creator_payout(
+        current_user.id,
+        request.amount_stars,
+        note=request.note,
+    )
+    db.commit()
+    db.refresh(payout)
+    return payout
+
+
+@router.get("/payouts/me", response_model=list[CreatorPayoutResponse])
+async def list_my_payouts(
+    limit: int = 30,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    return service.list_creator_payouts(current_user.id, limit=limit)
+
+
+@router.post("/payouts/{payout_id}/review", response_model=CreatorPayoutResponse)
+async def review_payout(
+    payout_id: int,
+    request: CreatorPayoutReviewRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    service = PaidFeaturesService(db)
+    payout = service.review_payout(
+        payout_id,
+        reviewer_user_id=current_user.id,
+        approve=request.approve,
+        note=request.note,
+    )
+    db.commit()
+    db.refresh(payout)
+    return payout
 

@@ -86,11 +86,15 @@ class PaidFeaturesService {
     throw Exception(_errorMessage(response, 'Не удалось отправить донат'));
   }
 
-  static Future<void> subscribeChannel(int channelId, {int months = 1}) async {
+  static Future<void> subscribeChannel(
+    int channelId, {
+    int months = 1,
+    bool autoRenew = false,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/channels/$channelId/subscribe'),
       headers: await _headers(),
-      body: jsonEncode({'months': months}),
+      body: jsonEncode({'months': months, 'auto_renew': autoRenew}),
     );
     if (response.statusCode == 200) return;
     throw Exception(_errorMessage(response, 'Не удалось оформить подписку'));
@@ -125,6 +129,42 @@ class PaidFeaturesService {
           .toList();
     }
     throw Exception(_errorMessage(response, 'Не удалось загрузить историю'));
+  }
+
+  static Future<CreatorPayoutRequest> requestCreatorPayout({
+    required int amountStars,
+    String? note,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/payouts/request'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'amount_stars': amountStars,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (response.statusCode == 200) {
+      return CreatorPayoutRequest.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception(_errorMessage(response, 'Не удалось запросить выплату'));
+  }
+
+  static Future<List<CreatorPayoutRequest>> getMyPayoutRequests({
+    int limit = 30,
+  }) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/payouts/me?limit=$limit'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data
+          .map((e) => CreatorPayoutRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception(_errorMessage(response, 'Не удалось загрузить выплаты'));
   }
 
   static String _errorMessage(http.Response response, String fallback) {
@@ -208,6 +248,9 @@ class StarTransaction {
     required this.type,
     required this.status,
     required this.createdAt,
+    this.counterpartyUserId,
+    this.referenceType,
+    this.referenceId,
   });
 
   final int id;
@@ -215,6 +258,9 @@ class StarTransaction {
   final String type;
   final String status;
   final DateTime createdAt;
+  final int? counterpartyUserId;
+  final String? referenceType;
+  final int? referenceId;
 
   factory StarTransaction.fromJson(Map<String, dynamic> json) => StarTransaction(
         id: json['id'] as int? ?? 0,
@@ -223,5 +269,39 @@ class StarTransaction {
         status: json['status'] as String? ?? '',
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
+        counterpartyUserId: json['counterparty_user_id'] as int?,
+        referenceType: json['reference_type'] as String?,
+        referenceId: json['reference_id'] as int?,
+      );
+}
+
+class CreatorPayoutRequest {
+  const CreatorPayoutRequest({
+    required this.id,
+    required this.creatorUserId,
+    required this.amountStars,
+    required this.amountRub,
+    required this.status,
+    this.note,
+    this.createdAt,
+  });
+
+  final int id;
+  final int creatorUserId;
+  final int amountStars;
+  final double amountRub;
+  final String status;
+  final String? note;
+  final DateTime? createdAt;
+
+  factory CreatorPayoutRequest.fromJson(Map<String, dynamic> json) =>
+      CreatorPayoutRequest(
+        id: json['id'] as int? ?? 0,
+        creatorUserId: json['creator_user_id'] as int? ?? 0,
+        amountStars: json['amount_stars'] as int? ?? 0,
+        amountRub: (json['amount_rub'] as num?)?.toDouble() ?? 0,
+        status: json['status'] as String? ?? 'pending',
+        note: json['note'] as String?,
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       );
 }

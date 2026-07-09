@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
@@ -29,12 +30,35 @@ from app.schemas.chat import (
     ReorderChatFoldersRequest,
     DirectChatRequest,
     EditMessageRequest,
+    RescheduleMessageRequest,
+    ScheduledMessageListResponse,
+    ScheduledMessageResponse,
+    ScheduleMessageRequest,
     MarkReadRequest,
     MessageReactionRequest,
     MessageReactionSummary,
+    MessageSearchItem,
+    MessageSearchResponse,
     MuteChatRequest,
     PinChatRequest,
     UpdateGroupChatRequest,
+    GroupMemberAdminRequest,
+    GroupMemberPermissionsRequest,
+    GroupMemberSendRestrictionRequest,
+    GroupMemberBanRequest,
+    GroupMemberBanResponse,
+    GroupMemberBanListResponse,
+    GroupInviteLinkCreateRequest,
+    GroupInviteLinkResponse,
+    GroupInviteLinkListResponse,
+    GroupJoinRequestListResponse,
+    GroupJoinRequestResponse,
+    GroupJoinRequestReviewRequest,
+    JoinByInviteResponse,
+    JoinRequestsInboxItemResponse,
+    JoinRequestsInboxResponse,
+    GroupModerationLogItemResponse,
+    GroupModerationLogResponse,
     UpdateChatFolderRequest,
     MessageListResponse,
     MessageResponse,
@@ -46,7 +70,14 @@ from app.schemas.chat import (
     ChatPollVoteRequest,
     CallbackQueryRequest,
 )
-from app.models.conversation import Conversation, ConversationMember, Message
+from app.models.conversation import (
+    Conversation,
+    ConversationMember,
+    GroupInviteLink,
+    GroupJoinRequest,
+    Message,
+    ScheduledMessage,
+)
 from app.services.chat_event_bus import publish as publish_chat_event
 from app.services.chat_event_bus import subscribe as subscribe_chat_events
 from app.services.chat_service import ChatService
@@ -107,6 +138,22 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
         "reactions": reactions or [],
     }
+
+
+def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageResponse:
+    return ScheduledMessageResponse(
+        id=item.id,
+        conversation_id=item.conversation_id,
+        sender_id=item.sender_id,
+        type=item.type,
+        content=item.content,
+        media_url=item.media_url,
+        reply_to_message_id=item.reply_to_message_id,
+        send_at=item.send_at,
+        send_when_online=getattr(item, "deliver_when_online", False),
+        status=item.status,
+        created_at=item.created_at,
+    )
 
 
 def _enriched_content(
@@ -191,14 +238,86 @@ def _enqueue_bot_webhook(
     return True
 
 
-def _brief(user: User) -> ChatUserBrief:
+def _brief(
+    user: User,
+    *,
+    is_group_admin: bool = False,
+    is_group_creator: bool = False,
+    can_manage_members: bool = False,
+    can_manage_posting_permissions: bool = False,
+    send_restricted: bool = False,
+    send_restricted_until: Optional[datetime] = None,
+    send_restriction_reason: Optional[str] = None,
+) -> ChatUserBrief:
     return ChatUserBrief(
         id=user.id,
         name=user.name,
         username=user.username,
         avatar_url=user.avatar_url,
         last_seen_at=user.last_seen_at,
+        is_group_admin=is_group_admin,
+        is_group_creator=is_group_creator,
+        can_manage_members=can_manage_members,
+        can_manage_posting_permissions=can_manage_posting_permissions,
+        send_restricted=send_restricted,
+        send_restricted_until=send_restricted_until,
+        send_restriction_reason=send_restriction_reason,
     )
+
+
+def _group_ban_response(item: dict) -> GroupMemberBanResponse:
+    return GroupMemberBanResponse(
+        user=_brief(item["user"]),
+        reason=item.get("reason"),
+        banned_until=item.get("banned_until"),
+        banned_at=item.get("banned_at"),
+    )
+
+
+def _group_join_request_response(item: dict) -> GroupJoinRequestResponse:
+    return GroupJoinRequestResponse(
+        id=item["id"],
+        user=_brief(item["user"]),
+        status=item["status"],
+        requested_at=item["requested_at"],
+    )
+
+
+def _invite_link_from_token(token: str) -> str:
+    # Public web link also works for deep-link parsing in app.
+    return f"https://haneat.app/chat-invite/{token}"
+
+
+def _invite_link_response(row: GroupInviteLink) -> GroupInviteLinkResponse:
+    return GroupInviteLinkResponse(
+        id=row.id,
+        token=row.token,
+        invite_link=_invite_link_from_token(row.token),
+        expires_at=row.expires_at,
+        max_uses=row.max_uses,
+        uses_count=row.uses_count,
+        revoked_at=row.revoked_at,
+        created_at=row.created_at,
+    )
+
+
+def _moderation_action_from_text(text: str) -> str:
+    t = (text or "").lower()
+    if "join request" in t:
+        return "joins"
+    if "banned" in t or "unbanned" in t:
+        return "bans"
+    if "restricted messaging" in t or "messaging restriction" in t:
+        return "restrictions"
+    if "moderator role" in t or "moderator permissions" in t:
+        return "roles"
+    if (
+        "changed group title" in t
+        or "sending mode changed" in t
+        or "join mode changed" in t
+    ):
+        return "settings"
+    return "other"
 
 
 def _peer_last_read_id(
@@ -222,6 +341,18 @@ def _sender_name(user: Optional[User]) -> Optional[str]:
     if not user:
         return None
     return user.name or user.username
+
+
+def _user_label(user: Optional[User], fallback_id: Optional[int] = None) -> str:
+    if user is not None:
+        if user.name and user.name.strip():
+            return user.name.strip()
+        if user.username and user.username.strip():
+            return f"@{user.username.strip()}"
+        return f"User {user.id}"
+    if fallback_id is not None:
+        return f"User {fallback_id}"
+    return "User"
 
 
 def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
@@ -331,6 +462,56 @@ def _conversation_response(
         )
         .first()
     )
+    am_i_group_admin = bool(
+        conv.type == "group"
+        and (
+            conv.created_by_user_id == current_user.id
+            or (member is not None and member.is_admin)
+        )
+    )
+    am_i_can_manage_members = bool(
+        conv.type == "group"
+        and (
+            conv.created_by_user_id == current_user.id
+            or (
+                member is not None
+                and member.is_admin
+                and member.can_manage_members
+            )
+        )
+    )
+    am_i_can_manage_posting_permissions = bool(
+        conv.type == "group"
+        and (
+            conv.created_by_user_id == current_user.id
+            or (
+                member is not None
+                and member.is_admin
+                and member.can_manage_posting_permissions
+            )
+        )
+    )
+    am_i_send_restricted = False
+    am_i_send_restricted_until = None
+    am_i_send_restriction_reason = None
+    if conv.type == "group" and member is not None:
+        restricted, restricted_until, restricted_reason = (
+            svc.member_send_restriction_state(conv.id, current_user.id)
+        )
+        am_i_send_restricted = restricted
+        am_i_send_restricted_until = restricted_until
+        am_i_send_restriction_reason = restricted_reason
+    pending_join_requests_count = 0
+    if conv.type == "group" and am_i_can_manage_members:
+        pending_join_requests_count = (
+            db.query(func.count(GroupJoinRequest.id))
+            .filter(
+                GroupJoinRequest.conversation_id == conv.id,
+                GroupJoinRequest.status == "pending",
+            )
+            .scalar()
+            or 0
+        )
     peer_read = _peer_last_read_id(db, svc, conv, current_user.id)
     last = row.get("last_message")
     last_resp = None
@@ -355,6 +536,7 @@ def _conversation_response(
         peer=_brief(peer) if peer else None,
         title=conv.title if conv.type in ("group", "saved") else None,
         member_count=row.get("member_count", 0),
+        pending_join_requests_count=pending_join_requests_count,
         members_preview=[
             _brief(u) for u in row.get("members_preview", []) if u
         ],
@@ -367,7 +549,64 @@ def _conversation_response(
         created_by_user_id=conv.created_by_user_id
         if conv.type in ("group", "saved")
         else None,
+        only_admins_can_post=bool(getattr(conv, "only_admins_can_post", False)),
+        join_by_request_enabled=bool(getattr(conv, "join_by_request_enabled", False)),
+        slow_mode_seconds=int(getattr(conv, "slow_mode_seconds", 0) or 0),
+        anti_flood_max_messages_per_minute=int(
+            getattr(conv, "anti_flood_max_messages_per_minute", 0) or 0
+        ),
+        am_i_group_admin=am_i_group_admin,
+        am_i_can_manage_members=am_i_can_manage_members,
+        am_i_can_manage_posting_permissions=am_i_can_manage_posting_permissions,
+        am_i_send_restricted=am_i_send_restricted,
+        am_i_send_restricted_until=am_i_send_restricted_until,
+        am_i_send_restriction_reason=am_i_send_restriction_reason,
     )
+
+
+def _search_response_items(
+    db: Session,
+    svc: ChatService,
+    current_user: User,
+    hits: List[dict],
+) -> MessageSearchResponse:
+    items: List[MessageSearchItem] = []
+    for hit in hits:
+        msg = hit["message"]
+        row = hit.get("conversation_row")
+        if not row:
+            continue
+        conv_item = _conversation_response(row, svc, db, current_user)
+        if not conv_item:
+            continue
+        conv = row["conversation"]
+        member = (
+            db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conv.id,
+                ConversationMember.user_id == current_user.id,
+            )
+            .first()
+        )
+        peer_read = _peer_last_read_id(db, svc, conv, current_user.id)
+        msg_resp = _message_response(
+            msg,
+            current_user.id,
+            member.last_read_message_id if member else None,
+            peer_read,
+            conv,
+            svc,
+            hit.get("sender"),
+            db=db,
+        )
+        items.append(
+            MessageSearchItem(
+                message=msg_resp,
+                conversation=conv_item,
+                snippet=hit.get("snippet") or "",
+            )
+        )
+    return MessageSearchResponse(items=items)
 
 
 @router.get("/chats", response_model=ConversationListResponse)
@@ -630,6 +869,192 @@ async def create_group_chat(
 
 
 @router.get(
+    "/chats/{conversation_id}/invite-link",
+    response_model=GroupInviteLinkResponse,
+)
+async def get_group_invite_link(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        token = svc.get_or_create_group_invite_token(
+            conversation_id,
+            current_user.id,
+            rotate=False,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    row = db.query(GroupInviteLink).filter(GroupInviteLink.token == token).first()
+    if not row:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Invite link error")
+    return _invite_link_response(row)
+
+
+@router.post(
+    "/chats/{conversation_id}/invite-link/rotate",
+    response_model=GroupInviteLinkResponse,
+)
+async def rotate_group_invite_link(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        token = svc.get_or_create_group_invite_token(
+            conversation_id,
+            current_user.id,
+            rotate=True,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    row = db.query(GroupInviteLink).filter(GroupInviteLink.token == token).first()
+    if not row:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Invite link error")
+    return _invite_link_response(row)
+
+
+@router.get(
+    "/chats/{conversation_id}/invite-links",
+    response_model=GroupInviteLinkListResponse,
+)
+async def list_group_invite_links(
+    conversation_id: int,
+    include_revoked: bool = Query(True),
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        rows = svc.list_group_invite_links(
+            conversation_id,
+            current_user.id,
+            include_revoked=include_revoked,
+            limit=limit,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    return GroupInviteLinkListResponse(items=[_invite_link_response(r) for r in rows])
+
+
+@router.post(
+    "/chats/{conversation_id}/invite-links",
+    response_model=GroupInviteLinkResponse,
+)
+async def create_group_invite_link(
+    conversation_id: int,
+    body: GroupInviteLinkCreateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        row = svc.create_group_invite_link(
+            conversation_id,
+            current_user.id,
+            expires_at=body.expires_at,
+            max_uses=body.max_uses,
+        )
+        db.commit()
+        db.refresh(row)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code in ("invalid_invite_expiry", "invalid_invite_max_uses"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    return _invite_link_response(row)
+
+
+@router.delete("/chats/{conversation_id}/invite-links/{invite_link_id}")
+async def revoke_group_invite_link(
+    conversation_id: int,
+    invite_link_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.revoke_group_invite_link(
+            conversation_id,
+            current_user.id,
+            invite_link_id,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Invite link not found")
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    return {"ok": True}
+
+
+@router.post("/chats/join/{invite_token}", response_model=JoinByInviteResponse)
+async def join_group_by_invite(
+    invite_token: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        result = svc.join_group_by_invite_token(invite_token, current_user.id)
+        db.commit()
+        conv = result["conversation"]
+        db.refresh(conv)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code in ("invalid_invite",):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "group_member_banned":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "user_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise
+    if result["status"] == "requested":
+        for manager_id in svc.group_member_manager_user_ids(conv.id):
+            if manager_id == current_user.id:
+                continue
+            publish_user_event(
+                manager_id,
+                {
+                    "event": "chat.join_request.new",
+                    "notification_type": "chat_join_request",
+                    "conversation_id": conv.id,
+                },
+            )
+        return JoinByInviteResponse(status="requested", conversation=None)
+    row = svc.get_conversation_row(conv.id, current_user.id)
+    item = _conversation_response(row, svc, db, current_user) if row else None
+    if not item:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Join failed")
+    return JoinByInviteResponse(status="joined", conversation=item)
+
+
+@router.get(
     "/chats/{conversation_id}/members",
     response_model=ConversationMembersResponse,
 )
@@ -640,10 +1065,26 @@ async def list_chat_members(
 ):
     svc = ChatService(db)
     try:
-        users = svc.list_members(conversation_id, current_user.id)
+        members = svc.list_members(conversation_id, current_user.id)
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-    return ConversationMembersResponse(items=[_brief(u) for u in users])
+    return ConversationMembersResponse(
+        items=[
+            _brief(
+                m["user"],
+                is_group_admin=m.get("is_group_admin", False),
+                is_group_creator=m.get("is_group_creator", False),
+                can_manage_members=m.get("can_manage_members", False),
+                can_manage_posting_permissions=m.get(
+                    "can_manage_posting_permissions", False
+                ),
+                send_restricted=m.get("send_restricted", False),
+                send_restricted_until=m.get("send_restricted_until"),
+                send_restriction_reason=m.get("send_restriction_reason"),
+            )
+            for m in members
+        ]
+    )
 
 
 @router.get("/chats/{conversation_id}/messages", response_model=MessageListResponse)
@@ -666,6 +1107,24 @@ async def list_messages(
         )
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    dispatched = svc.dispatch_scheduled_messages(conversation_id)
+    if dispatched:
+        db.commit()
+        for msg in dispatched:
+            _emit(
+                conversation_id,
+                {"type": "message.new", "message": _message_payload(msg)},
+            )
+            _notify_chat_inbox(db, conversation_id, msg.sender_id)
+        db.commit()
+        messages, has_more = svc.get_messages(
+            conversation_id,
+            current_user.id,
+            cursor,
+            after_id,
+            limit,
+        )
 
     member = (
         db.query(ConversationMember)
@@ -742,6 +1201,59 @@ async def list_messages(
     )
 
 
+@router.get("/chats/messages/search", response_model=MessageSearchResponse)
+async def search_messages_global(
+    q: str = Query(..., min_length=2),
+    type: Optional[str] = Query(
+        None,
+        pattern="^(text|image|voice|file|video|poll)$",
+    ),
+    limit: int = Query(40, ge=1, le=100),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        hits = svc.search_messages(
+            current_user.id,
+            q,
+            msg_type=type,
+            limit=limit,
+        )
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return _search_response_items(db, svc, current_user, hits)
+
+
+@router.get(
+    "/chats/{conversation_id}/messages/search",
+    response_model=MessageSearchResponse,
+)
+async def search_messages_in_chat(
+    conversation_id: int,
+    q: str = Query(..., min_length=2),
+    type: Optional[str] = Query(
+        None,
+        pattern="^(text|image|voice|file|video|poll)$",
+    ),
+    limit: int = Query(40, ge=1, le=100),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        hits = svc.search_messages(
+            current_user.id,
+            q,
+            conversation_id=conversation_id,
+            msg_type=type,
+            limit=limit,
+        )
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return _search_response_items(db, svc, current_user, hits)
+
+
 @router.post("/chats/{conversation_id}/messages", response_model=MessageResponse)
 async def send_message(
     conversation_id: int,
@@ -814,6 +1326,32 @@ async def send_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "group_write_restricted":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_user_restricted":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_slow_mode":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_slow_mode_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
+        if code == "group_flood_limited":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_flood_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
         raise
 
     if is_new:
@@ -859,6 +1397,182 @@ async def send_message(
         sender,
         db=db,
     )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/scheduled",
+    response_model=ScheduledMessageResponse,
+)
+async def schedule_message(
+    conversation_id: int,
+    body: ScheduleMessageRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    content = body.content
+    inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
+    if body.type == "poll":
+        from app.services.chat_poll_service import build_poll_content
+
+        if not body.poll_question or not body.poll_options:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "poll_fields_required"
+            )
+        try:
+            content = build_poll_content(
+                body.poll_question,
+                body.poll_options,
+                description=body.poll_description or "",
+                settings=body.poll_settings,
+            )
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    try:
+        item = svc.schedule_message(
+            conversation_id=conversation_id,
+            sender_id=current_user.id,
+            msg_type=body.type,
+            content=content,
+            send_when_online=body.send_when_online,
+            media_url=body.media_url,
+            reply_to_message_id=body.reply_to_message_id,
+            client_message_id=body.client_message_id,
+            inline_keyboard_json=json.dumps(inline_keyboard_payload, ensure_ascii=False)
+            if inline_keyboard_payload
+            else None,
+            send_at=body.send_at,
+        )
+        db.commit()
+        db.refresh(item)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code in (
+            "empty_message",
+            "missing_media",
+            "empty_poll",
+            "invalid_reply",
+            "invalid_send_at",
+            "when_online_direct_only",
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "user_blocked":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "group_write_restricted":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_user_restricted":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_slow_mode":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_slow_mode_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
+        if code == "group_flood_limited":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_flood_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
+        raise
+    return _scheduled_message_response(item)
+
+
+@router.get(
+    "/chats/{conversation_id}/messages/scheduled",
+    response_model=ScheduledMessageListResponse,
+)
+async def list_scheduled_messages(
+    conversation_id: int,
+    limit: int = Query(100, ge=1, le=200),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        items = svc.list_scheduled_messages(conversation_id, current_user.id, limit=limit)
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return ScheduledMessageListResponse(
+        items=[_scheduled_message_response(i) for i in items]
+    )
+
+
+@router.delete(
+    "/chats/{conversation_id}/messages/scheduled/{scheduled_message_id}",
+    response_model=ScheduledMessageResponse,
+)
+async def cancel_scheduled_message(
+    conversation_id: int,
+    scheduled_message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        item = svc.cancel_scheduled_message(
+            conversation_id=conversation_id,
+            scheduled_message_id=scheduled_message_id,
+            user_id=current_user.id,
+        )
+        db.commit()
+        db.refresh(item)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Scheduled message not found")
+        if code == "already_processed":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return _scheduled_message_response(item)
+
+
+@router.patch(
+    "/chats/{conversation_id}/messages/scheduled/{scheduled_message_id}",
+    response_model=ScheduledMessageResponse,
+)
+async def reschedule_scheduled_message(
+    conversation_id: int,
+    scheduled_message_id: int,
+    body: RescheduleMessageRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        item = svc.reschedule_message(
+            conversation_id=conversation_id,
+            scheduled_message_id=scheduled_message_id,
+            user_id=current_user.id,
+            send_at=body.send_at,
+        )
+        db.commit()
+        db.refresh(item)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Scheduled message not found")
+        if code in ("already_processed", "invalid_send_at"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "online_delivery_locked":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return _scheduled_message_response(item)
 
 
 @router.post(
@@ -1560,8 +2274,97 @@ async def update_group_chat(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    notes = []
     try:
-        svc.update_group_title(conversation_id, current_user.id, body.title)
+        if (
+            body.title is None
+            and body.only_admins_can_post is None
+            and body.join_by_request_enabled is None
+            and body.slow_mode_seconds is None
+            and body.anti_flood_max_messages_per_minute is None
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
+        if body.title is not None:
+            svc.update_group_title(conversation_id, current_user.id, body.title)
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    f"🛡 { _user_label(current_user) } changed group title.",
+                )
+            )
+        if body.only_admins_can_post is not None:
+            svc.set_group_only_admins_can_post(
+                conversation_id,
+                current_user.id,
+                body.only_admins_can_post,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 Sending mode changed: "
+                    + (
+                        "only admins can post."
+                        if body.only_admins_can_post
+                        else "all members can post."
+                    ),
+                )
+            )
+        if body.join_by_request_enabled is not None:
+            svc.set_group_join_by_request_enabled(
+                conversation_id,
+                current_user.id,
+                body.join_by_request_enabled,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 Join mode changed: "
+                    + (
+                        "join requests are required."
+                        if body.join_by_request_enabled
+                        else "direct join by invite enabled."
+                    ),
+                )
+            )
+        if body.slow_mode_seconds is not None:
+            svc.set_group_slow_mode_seconds(
+                conversation_id,
+                current_user.id,
+                body.slow_mode_seconds,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 Slow mode changed: "
+                    + (
+                        "disabled."
+                        if int(body.slow_mode_seconds) <= 0
+                        else f"{int(body.slow_mode_seconds)} sec between messages."
+                    ),
+                )
+            )
+        if body.anti_flood_max_messages_per_minute is not None:
+            svc.set_group_anti_flood_limit(
+                conversation_id,
+                current_user.id,
+                body.anti_flood_max_messages_per_minute,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 Anti-flood changed: "
+                    + (
+                        "disabled."
+                        if int(body.anti_flood_max_messages_per_minute) <= 0
+                        else f"max {int(body.anti_flood_max_messages_per_minute)} messages/min."
+                    ),
+                )
+            )
         db.commit()
     except ValueError as e:
         db.rollback()
@@ -1579,6 +2382,13 @@ async def update_group_chat(
     item = _conversation_response(row, svc, db, current_user)
     if not item:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+    for note in notes:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+    if notes:
+        _notify_chat_inbox(db, conversation_id, current_user.id)
     return item
 
 
@@ -1602,6 +2412,8 @@ async def add_group_members(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "group_member_banned":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in ("forbidden", "not_group"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         raise
@@ -1630,6 +2442,429 @@ async def remove_group_member(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         raise
     return {"ok": True}
+
+
+@router.patch("/chats/{conversation_id}/members/{member_user_id}/admin")
+async def set_group_member_admin(
+    conversation_id: int,
+    member_user_id: int,
+    body: GroupMemberAdminRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    try:
+        svc.set_group_member_admin(
+            conversation_id=conversation_id,
+            actor_id=current_user.id,
+            target_user_id=member_user_id,
+            is_admin=body.is_admin,
+        )
+        target_user = db.query(User).filter(User.id == member_user_id).first()
+        note = svc.create_group_system_note(
+            conversation_id,
+            current_user.id,
+            "🛡 "
+            + _user_label(current_user)
+            + (" granted moderator role to " if body.is_admin else " revoked moderator role from ")
+            + _user_label(target_user, member_user_id)
+            + ".",
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+        if code == "cannot_change_self_role":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    return {"ok": True}
+
+
+@router.patch("/chats/{conversation_id}/members/{member_user_id}/permissions")
+async def set_group_member_permissions(
+    conversation_id: int,
+    member_user_id: int,
+    body: GroupMemberPermissionsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    try:
+        svc.set_group_member_permissions(
+            conversation_id=conversation_id,
+            actor_id=current_user.id,
+            target_user_id=member_user_id,
+            can_manage_members=body.can_manage_members,
+            can_manage_posting_permissions=body.can_manage_posting_permissions,
+        )
+        target_user = db.query(User).filter(User.id == member_user_id).first()
+        scopes = []
+        if body.can_manage_members:
+            scopes.append("members")
+        if body.can_manage_posting_permissions:
+            scopes.append("chat settings")
+        scope_text = ", ".join(scopes) if scopes else "no extra scopes"
+        note = svc.create_group_system_note(
+            conversation_id,
+            current_user.id,
+            f"🛡 {_user_label(current_user)} updated moderator permissions for "
+            f"{_user_label(target_user, member_user_id)} ({scope_text}).",
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+        if code in ("cannot_change_self_role", "target_not_admin"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    return {"ok": True}
+
+
+@router.patch("/chats/{conversation_id}/members/{member_user_id}/send-restriction")
+async def set_group_member_send_restriction(
+    conversation_id: int,
+    member_user_id: int,
+    body: GroupMemberSendRestrictionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    try:
+        svc.set_group_member_send_restriction(
+            conversation_id=conversation_id,
+            actor_id=current_user.id,
+            target_user_id=member_user_id,
+            send_restricted=body.send_restricted,
+            send_restricted_until=body.send_restricted_until,
+            reason=body.reason,
+        )
+        target_user = db.query(User).filter(User.id == member_user_id).first()
+        if body.send_restricted:
+            suffix = ""
+            if body.send_restricted_until is not None:
+                suffix = f" until {body.send_restricted_until.isoformat()}"
+            note = svc.create_group_system_note(
+                conversation_id,
+                current_user.id,
+                f"🛡 {_user_label(current_user)} restricted messaging for "
+                f"{_user_label(target_user, member_user_id)}{suffix}.",
+            )
+        else:
+            note = svc.create_group_system_note(
+                conversation_id,
+                current_user.id,
+                f"🛡 {_user_label(current_user)} removed messaging restriction for "
+                f"{_user_label(target_user, member_user_id)}.",
+            )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+        if code in (
+            "cannot_restrict_self",
+            "cannot_restrict_creator",
+            "cannot_restrict_admin",
+            "invalid_restriction_until",
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    return {"ok": True}
+
+
+@router.get("/chats/{conversation_id}/bans", response_model=GroupMemberBanListResponse)
+async def list_group_bans(
+    conversation_id: int,
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        rows = svc.list_group_bans(conversation_id, current_user.id, limit=limit)
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return GroupMemberBanListResponse(
+        items=[_group_ban_response(r) for r in rows],
+    )
+
+
+@router.post("/chats/{conversation_id}/bans/{target_user_id}")
+async def ban_group_member(
+    conversation_id: int,
+    target_user_id: int,
+    body: GroupMemberBanRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    try:
+        svc.ban_group_member(
+            conversation_id=conversation_id,
+            actor_id=current_user.id,
+            target_user_id=target_user_id,
+            reason=body.reason,
+            banned_until=body.banned_until,
+        )
+        target_user = db.query(User).filter(User.id == target_user_id).first()
+        note = svc.create_group_system_note(
+            conversation_id,
+            current_user.id,
+            f"🛡 {_user_label(current_user)} banned "
+            f"{_user_label(target_user, target_user_id)} from the group.",
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "user_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        if code in (
+            "cannot_ban_self",
+            "cannot_ban_creator",
+            "cannot_ban_admin",
+            "invalid_ban_until",
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    return {"ok": True}
+
+
+@router.delete("/chats/{conversation_id}/bans/{target_user_id}")
+async def unban_group_member(
+    conversation_id: int,
+    target_user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    try:
+        svc.unban_group_member(
+            conversation_id=conversation_id,
+            actor_id=current_user.id,
+            target_user_id=target_user_id,
+        )
+        target_user = db.query(User).filter(User.id == target_user_id).first()
+        note = svc.create_group_system_note(
+            conversation_id,
+            current_user.id,
+            f"🛡 {_user_label(current_user)} unbanned "
+            f"{_user_label(target_user, target_user_id)}.",
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ban not found")
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    return {"ok": True}
+
+
+@router.get(
+    "/chats/{conversation_id}/join-requests",
+    response_model=GroupJoinRequestListResponse,
+)
+async def list_group_join_requests(
+    conversation_id: int,
+    status_filter: str = Query("pending", alias="status"),
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        rows = svc.list_group_join_requests(
+            conversation_id,
+            current_user.id,
+            status_filter=status_filter,
+            limit=limit,
+        )
+        db.commit()
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return GroupJoinRequestListResponse(
+        items=[_group_join_request_response(r) for r in rows]
+    )
+
+
+@router.patch("/chats/{conversation_id}/join-requests/{request_id}")
+async def review_group_join_request(
+    conversation_id: int,
+    request_id: int,
+    body: GroupJoinRequestReviewRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    note = None
+    requester_user_id: Optional[int] = None
+    try:
+        row = svc.review_group_join_request(
+            conversation_id,
+            current_user.id,
+            request_id,
+            approve=body.approve,
+        )
+        requester_user_id = row.user_id
+        requester_user = db.query(User).filter(User.id == requester_user_id).first()
+        note = svc.create_group_system_note(
+            conversation_id,
+            current_user.id,
+            f"🛡 {_user_label(current_user)} "
+            + ("approved join request from " if body.approve else "rejected join request from ")
+            + _user_label(requester_user, requester_user_id)
+            + ".",
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Request not found")
+        if code in ("already_reviewed", "group_member_banned"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in ("forbidden", "not_group"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    if note is not None:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(note)},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+    if requester_user_id is not None:
+        publish_user_event(
+            requester_user_id,
+            {
+                "event": "chat.join_request.reviewed",
+                "conversation_id": conversation_id,
+                "approved": bool(body.approve),
+            },
+        )
+    return {"ok": True}
+
+
+@router.get("/chats/join-requests/inbox", response_model=JoinRequestsInboxResponse)
+async def list_join_requests_inbox(
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    rows = svc.list_join_requests_inbox(current_user.id, limit=limit)
+    items: List[JoinRequestsInboxItemResponse] = []
+    for row in rows:
+        conv_row = svc.get_conversation_row(row["conversation_id"], current_user.id)
+        if not conv_row:
+            continue
+        conv_item = _conversation_response(conv_row, svc, db, current_user)
+        if not conv_item:
+            continue
+        items.append(
+            JoinRequestsInboxItemResponse(
+                id=row["id"],
+                conversation=conv_item,
+                user=_brief(row["user"]),
+                status=row["status"],
+                requested_at=row["requested_at"],
+            )
+        )
+    return JoinRequestsInboxResponse(items=items)
+
+
+@router.get(
+    "/chats/{conversation_id}/moderation-log",
+    response_model=GroupModerationLogResponse,
+)
+async def list_group_moderation_log(
+    conversation_id: int,
+    action: str = Query("all"),
+    limit: int = Query(200, ge=1, le=500),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        rows = svc.list_group_moderation_log(
+            conversation_id,
+            current_user.id,
+            action_filter=action,
+            limit=limit,
+        )
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    if not rows:
+        return GroupModerationLogResponse(items=[])
+    actor_ids = {m.sender_id for m in rows}
+    actors = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(actor_ids)).all()}
+        if actor_ids
+        else {}
+    )
+    return GroupModerationLogResponse(
+        items=[
+            GroupModerationLogItemResponse(
+                id=m.id,
+                action=_moderation_action_from_text(m.content),
+                text=m.content,
+                created_at=m.created_at,
+                actor=_brief(actors[m.sender_id]) if m.sender_id in actors else None,
+            )
+            for m in rows
+        ]
+    )
 
 
 @router.post("/chats/{conversation_id}/leave")

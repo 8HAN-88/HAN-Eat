@@ -37,6 +37,8 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
+import '../../../services/paid_features_service.dart';
+import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
 import '../../../utils/chat_time_format.dart';
@@ -54,6 +56,7 @@ import '../application/chats_hub_refresh_provider.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/chat_hub_ui_prefs.dart';
+import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
@@ -67,6 +70,7 @@ import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
 import 'chat_media_gallery_screen.dart';
+import 'manual_retry_utils.dart';
 import 'chat_voice_bubble.dart';
 
 /// Загружает чат с API, если не передан в [extra] (push / deep link).
@@ -76,11 +80,13 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
     required this.conversationId,
     this.initialConversation,
     this.initialPeer,
+    this.initialJumpMessageId,
   });
 
   final int conversationId;
   final ChatConversation? initialConversation;
   final ChatUserBrief? initialPeer;
+  final int? initialJumpMessageId;
 
   @override
   ConsumerState<ChatThreadLoaderScreen> createState() =>
@@ -163,6 +169,7 @@ class _ChatThreadLoaderScreenState
       },
       child: ChatThreadScreen(
         conversation: _conversation!,
+        initialJumpMessageId: widget.initialJumpMessageId,
       ),
     );
   }
@@ -172,9 +179,11 @@ class ChatThreadScreen extends StatefulWidget {
   const ChatThreadScreen({
     super.key,
     required this.conversation,
+    this.initialJumpMessageId,
   });
 
   final ChatConversation conversation;
+  final int? initialJumpMessageId;
 
   int get conversationId => conversation.id;
 
@@ -182,11 +191,33 @@ class ChatThreadScreen extends StatefulWidget {
   State<ChatThreadScreen> createState() => _ChatThreadScreenState();
 }
 
+enum _ThreadSearchFilter {
+  all,
+  text,
+  media,
+  files,
+  links,
+  mine,
+}
+
+class _SearchSenderOption {
+  const _SearchSenderOption({
+    required this.value,
+    required this.label,
+    this.senderId,
+  });
+
+  final int value;
+  final String label;
+  final int? senderId;
+}
+
 class _ChatThreadScreenState extends State<ChatThreadScreen>
     with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _inputFocusNode = FocusNode();
   final _threadSearchController = TextEditingController();
+  final _threadSearchFocusNode = FocusNode();
   final _scroll = ScrollController();
   final _messages = <ChatMessage>[];
   bool _loading = true;
@@ -196,6 +227,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   double? _uploadProgress;
   String _sendingStatus = 'Отправка…';
   final Map<int, _PendingTextSend> _failedTextSends = {};
+  final Map<int, DateTime> _failedTextAutoRetryUntil = {};
+  final Map<int, Timer> _failedTextAutoRetryTimers = {};
+  final Map<int, String> _failedTextAutoRetryReason = {};
   final List<_PendingTextSend> _textOutboundQueue = [];
   bool _textDrainActive = false;
   final List<_PendingMediaSend> _mediaOutboundQueue = [];
@@ -224,6 +258,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _peerTyping = false;
   bool _pinned = false;
   bool _muted = false;
+  bool _retryAllBulkBusy = false;
+  bool _retryAllBulkCancelRequested = false;
+  bool _clearAllAfterBulkStopRequested = false;
+  int _retryAllBulkDone = 0;
+  int _retryAllBulkTotal = 0;
   bool _recording = false;
   bool _holdActive = false;
   bool _recordCancelled = false;
@@ -240,8 +279,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Map<int, String> _senderNames = {};
   List<ChatUserBrief> _groupMembers = [];
   bool _threadSearchOpen = false;
+  bool _showOnlyFailedMessages = false;
   String _threadSearchQuery = '';
+  _ThreadSearchFilter _threadSearchFilter = _ThreadSearchFilter.all;
+  int? _threadSearchSenderId;
   int _searchMatchIndex = 0;
+  bool _searchAutoloading = false;
+  int _searchBackfillLoads = 0;
+  int _searchBackfillSeq = 0;
+  bool _jumpingToDate = false;
   ChatMessage? _pinnedMessage;
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
@@ -256,14 +302,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _composerPanelKey = GlobalKey();
   final Map<int, GlobalKey> _messageItemKeys = {};
   int _pollFailureCount = 0;
+  int _scheduledPendingCount = 0;
+  int? _pendingInitialJumpMessageId;
+  int? _focusedMessageId;
+  Timer? _focusedMessageTimer;
+  Timer? _slowModeCountdownTimer;
+  Timer? _pendingMediaAutoRetryTimer;
+  Timer? _manualReadyRetryTimer;
+  DateTime? _slowModeLockUntil;
+  DateTime? _floodLockUntil;
+  DateTime? _pendingMediaAutoRetryUntil;
+  DateTime? _manualReadyRetryUntil;
+  int _manualReadyRetryDeferrals = 0;
+  int _floodCooldownTotalSeconds = 0;
+  int? _lastSlowModeTick;
+  bool _slowModeCountdownHapticsEnabled = true;
+  bool _autoRetryOnLimitsEnabled = true;
+  String? _pendingMediaAutoRetryClientMessageId;
+  String? _pendingMediaAutoRetryReason;
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
+  static const _uiAnimDuration = Duration(milliseconds: 180);
+  static const _composerIconSize = 20.0;
+  static const _composerButtonSide = 40.0;
 
   @override
   void initState() {
     super.initState();
     _conversation = widget.conversation;
+    _pendingInitialJumpMessageId = widget.initialJumpMessageId;
     _pinned = widget.conversation.pinned;
     _muted = widget.conversation.muted;
     ActiveChatSession.instance.setOpen(widget.conversationId);
@@ -272,10 +340,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scroll.addListener(_onScrollChanged);
     _controller.addListener(_onInputChanged);
     unawaited(_loadCachedMessages().then((_) => _restoreFailedTextSends()));
+    unawaited(_loadSlowModeUiPrefs());
     unawaited(_restoreDraft());
     unawaited(_restoreVoiceHint());
     unawaited(AuthService.getAccessTokenForApi());
     unawaited(_loadMyBots());
+    unawaited(_refreshScheduledPendingCount());
     _load(refresh: true);
     _startPolling();
     _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -315,6 +385,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       },
     )..connect();
     _refreshConversation();
+    _reconcileSlowModeCooldownWithConversation();
     if (kIsWeb) {
       registerWebPageVisibilityListener(
         _onWebTabVisible,
@@ -346,9 +417,342 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (_mediaOutboundQueue.isNotEmpty) {
       unawaited(_drainMediaOutboundQueue());
-    } else if (_pendingMediaRetry != null) {
+    } else if (_pendingMediaRetry != null && _autoRetryOnLimitsEnabled) {
       unawaited(_retryPendingMedia());
     }
+  }
+
+  Future<void> _loadSlowModeUiPrefs() async {
+    try {
+      final hapticsEnabled =
+          await ChatThreadUiPrefs.isSlowModeCountdownHapticsEnabled();
+      final autoRetryEnabled =
+          await ChatThreadUiPrefs.isAutoRetryOnLimitsEnabled();
+      if (!mounted) return;
+      setState(() {
+        _slowModeCountdownHapticsEnabled = hapticsEnabled;
+        _autoRetryOnLimitsEnabled = autoRetryEnabled;
+      });
+      if (!autoRetryEnabled) {
+        _clearAllAutoRetrySchedules();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleAutoRetryOnLimitsInThread(bool enabled) async {
+    final previous = _autoRetryOnLimitsEnabled;
+    if (previous == enabled) return;
+    setState(() => _autoRetryOnLimitsEnabled = enabled);
+    if (!enabled) {
+      _clearAllAutoRetrySchedules();
+    } else {
+      _clearManualReadyRetrySchedule();
+      _onConnectionRestored();
+    }
+    try {
+      await ChatThreadUiPrefs.setAutoRetryOnLimitsEnabled(enabled);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _autoRetryOnLimitsEnabled = previous);
+      if (!previous) {
+        _clearAllAutoRetrySchedules();
+      }
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabled
+              ? 'Автоповтор при лимитах включен'
+              : 'Автоповтор при лимитах выключен',
+        ),
+      ),
+    );
+  }
+
+  void _clearAllAutoRetrySchedules() {
+    _clearPendingMediaAutoRetry();
+    final keys = _failedTextAutoRetryTimers.keys.toList(growable: false);
+    for (final tempId in keys) {
+      _clearFailedTextAutoRetry(tempId);
+    }
+  }
+
+  bool get _slowModeEnabledForCurrentUser =>
+      _conversation.isGroup &&
+      !_conversation.amIGroupAdmin &&
+      _conversation.slowModeSeconds > 0;
+
+  int get _slowModeRemainingSeconds {
+    if (!_slowModeEnabledForCurrentUser) return 0;
+    final until = _slowModeLockUntil;
+    if (until == null) return 0;
+    final ms = until.difference(DateTime.now()).inMilliseconds;
+    if (ms <= 0) return 0;
+    return (ms / 1000).ceil();
+  }
+
+  int get _floodRemainingSeconds {
+    final until = _floodLockUntil;
+    if (until == null) return 0;
+    final ms = until.difference(DateTime.now()).inMilliseconds;
+    if (ms <= 0) return 0;
+    return (ms / 1000).ceil();
+  }
+
+  int get _activeCooldownRemainingSeconds =>
+      math.max(_slowModeRemainingSeconds, _floodRemainingSeconds);
+
+  int get _pendingMediaAutoRetryRemainingSeconds {
+    final until = _pendingMediaAutoRetryUntil;
+    if (until == null) return 0;
+    final ms = until.difference(DateTime.now()).inMilliseconds;
+    if (ms <= 0) return 0;
+    return (ms / 1000).ceil();
+  }
+
+  int get _manualReadyRetryRemainingSeconds {
+    final until = _manualReadyRetryUntil;
+    if (until == null) return 0;
+    final ms = until.difference(DateTime.now()).inMilliseconds;
+    if (ms <= 0) return 0;
+    return (ms / 1000).ceil();
+  }
+
+  int _failedTextAutoRetryRemainingSeconds(int tempId) {
+    final until = _failedTextAutoRetryUntil[tempId];
+    if (until == null) return 0;
+    final ms = until.difference(DateTime.now()).inMilliseconds;
+    if (ms <= 0) return 0;
+    return (ms / 1000).ceil();
+  }
+
+  int get _maxFailedTextAutoRetryRemainingSeconds {
+    var maxSec = 0;
+    for (final id in _failedTextAutoRetryUntil.keys) {
+      maxSec = math.max(maxSec, _failedTextAutoRetryRemainingSeconds(id));
+    }
+    return maxSec;
+  }
+
+  int get _activeFailedTextAutoRetryCount {
+    var count = 0;
+    for (final id in _failedTextAutoRetryUntil.keys) {
+      if (_failedTextAutoRetryRemainingSeconds(id) > 0) count++;
+    }
+    return count;
+  }
+
+  int get _activeFailedTextAutoRetrySlowCount {
+    var count = 0;
+    for (final entry in _failedTextAutoRetryReason.entries) {
+      if (_failedTextAutoRetryRemainingSeconds(entry.key) > 0 &&
+          entry.value == 'slow') {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  int get _activeFailedTextAutoRetryFloodCount {
+    var count = 0;
+    for (final entry in _failedTextAutoRetryReason.entries) {
+      if (_failedTextAutoRetryRemainingSeconds(entry.key) > 0 &&
+          entry.value == 'flood') {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  bool get _isAutoRetryActive =>
+      _autoRetryOnLimitsEnabled &&
+      (_pendingMediaAutoRetryRemainingSeconds > 0 ||
+          _maxFailedTextAutoRetryRemainingSeconds > 0);
+
+  int get _autoRetryRemainingSeconds => math.max(
+        _pendingMediaAutoRetryRemainingSeconds,
+        _maxFailedTextAutoRetryRemainingSeconds,
+      );
+
+  int get _autoRetryPendingCount =>
+      (_pendingMediaAutoRetryRemainingSeconds > 0 ? 1 : 0) +
+      _activeFailedTextAutoRetryCount;
+
+  bool get _hasFailedPendingItems =>
+      _pendingMediaRetry != null || _failedTextSends.isNotEmpty;
+
+  int get _autoRetrySlowCount =>
+      (_pendingMediaAutoRetryRemainingSeconds > 0 &&
+              _pendingMediaAutoRetryReason == 'slow'
+          ? 1
+          : 0) +
+      _activeFailedTextAutoRetrySlowCount;
+
+  int get _autoRetryFloodCount =>
+      (_pendingMediaAutoRetryRemainingSeconds > 0 &&
+              _pendingMediaAutoRetryReason == 'flood'
+          ? 1
+          : 0) +
+      _activeFailedTextAutoRetryFloodCount;
+
+  IconData get _autoRetryReasonIcon =>
+      _autoRetryFloodCount > _autoRetrySlowCount
+          ? Icons.speed_outlined
+          : Icons.timer_outlined;
+
+  String get _autoRetryReasonLabel {
+    if (_autoRetrySlowCount > 0 && _autoRetryFloodCount > 0) {
+      return 'Slow mode и антифлуд';
+    }
+    if (_autoRetryFloodCount > 0) return 'Антифлуд';
+    return 'Slow mode';
+  }
+
+  bool get _isAnyCooldownActive => _activeCooldownRemainingSeconds > 0;
+
+  String _formatSlowModeCountdown(int seconds) {
+    if (seconds <= 0) return '0с';
+    if (seconds < 60) return '$secondsс';
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    if (rest == 0) return '$minutesм';
+    return '$minutesм $restс';
+  }
+
+  String _formatSlowModeCompact(int seconds) {
+    if (seconds <= 0) return '0s';
+    if (seconds < 60) return '${seconds}s';
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return '$minutes:${rest.toString().padLeft(2, '0')}';
+  }
+
+  void _syncSlowModeCountdownTimer() {
+    final shouldRun = _isAnyCooldownActive ||
+        _pendingMediaAutoRetryRemainingSeconds > 0 ||
+        _maxFailedTextAutoRetryRemainingSeconds > 0 ||
+        _manualReadyRetryRemainingSeconds > 0 ||
+        (_nextManualRetryRemainingSeconds ?? 0) > 0;
+    if (!shouldRun) {
+      _slowModeCountdownTimer?.cancel();
+      _slowModeCountdownTimer = null;
+      _lastSlowModeTick = null;
+      return;
+    }
+    if (_slowModeCountdownTimer != null) return;
+    _lastSlowModeTick = _activeCooldownRemainingSeconds;
+    _slowModeCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final manualRemaining = _nextManualRetryRemainingSeconds;
+      if (shouldTriggerScheduledReadyRetryNow(
+        hasSchedule: _manualReadyRetryUntil != null,
+        nextRemainingSeconds: manualRemaining,
+        sending: _sending,
+        bulkRetryBusy: _retryAllBulkBusy,
+      )) {
+        _clearManualReadyRetrySchedule();
+        unawaited(_retryReadyFailedPending());
+        return;
+      }
+      final remaining = _activeCooldownRemainingSeconds;
+      final previous = _lastSlowModeTick;
+      if (previous != remaining) {
+        if (_slowModeCountdownHapticsEnabled) {
+          if (remaining > 0 && remaining <= 3) {
+            unawaited(HapticFeedback.selectionClick());
+          } else if (remaining == 0 && (previous ?? 1) > 0) {
+            unawaited(HapticFeedback.lightImpact());
+          }
+        }
+        _lastSlowModeTick = remaining;
+      }
+      if (!_isAnyCooldownActive &&
+          _pendingMediaAutoRetryRemainingSeconds <= 0 &&
+          _maxFailedTextAutoRetryRemainingSeconds <= 0 &&
+          _manualReadyRetryRemainingSeconds <= 0 &&
+          (_nextManualRetryRemainingSeconds ?? 0) <= 0) {
+        _slowModeCountdownTimer?.cancel();
+        _slowModeCountdownTimer = null;
+        _lastSlowModeTick = null;
+      }
+      setState(() {});
+    });
+  }
+
+  void _activateSlowModeCooldownFromNow() {
+    if (!_slowModeEnabledForCurrentUser) return;
+    _slowModeLockUntil =
+        DateTime.now().add(Duration(seconds: _conversation.slowModeSeconds));
+    _lastSlowModeTick = _activeCooldownRemainingSeconds;
+    _syncSlowModeCountdownTimer();
+  }
+
+  void _activateSlowModeCooldownForSeconds(int seconds) {
+    if (!_slowModeEnabledForCurrentUser) return;
+    final safe = seconds <= 0 ? _conversation.slowModeSeconds : seconds;
+    _slowModeLockUntil = DateTime.now().add(Duration(seconds: safe));
+    _lastSlowModeTick = _activeCooldownRemainingSeconds;
+    _syncSlowModeCountdownTimer();
+  }
+
+  void _activateFloodCooldownForSeconds(int seconds) {
+    final safe = seconds <= 0 ? 60 : seconds;
+    _floodCooldownTotalSeconds = safe;
+    _floodLockUntil = DateTime.now().add(Duration(seconds: safe));
+    _lastSlowModeTick = _activeCooldownRemainingSeconds;
+    _syncSlowModeCountdownTimer();
+  }
+
+  void _reconcileSlowModeCooldownWithConversation() {
+    if (!_slowModeEnabledForCurrentUser) {
+      _slowModeLockUntil = null;
+    }
+    _syncSlowModeCountdownTimer();
+  }
+
+  Future<void> _showPostingLimitsInfo({
+    required bool floodCooldownActive,
+    required int activeCooldownSeconds,
+  }) async {
+    if (!mounted) return;
+    final slowModeOn = _conversation.slowModeSeconds > 0;
+    final antiFloodOn = _conversation.antiFloodMaxMessagesPerMinute > 0;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ограничения отправки'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (slowModeOn)
+              Text(
+                '• Slow mode: ${_formatSlowModeCountdown(_conversation.slowModeSeconds)} между сообщениями для обычных участников.',
+              ),
+            if (antiFloodOn) ...[
+              if (slowModeOn) const SizedBox(height: 8),
+              Text(
+                '• Антифлуд: максимум ${_conversation.antiFloodMaxMessagesPerMinute} сообщений в минуту.',
+              ),
+            ],
+            if (activeCooldownSeconds > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Сейчас активно: ${floodCooldownActive ? 'антифлуд' : 'slow mode'}. '
+                'Отправка будет доступна через ${_formatSlowModeCountdown(activeCooldownSeconds)}.',
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
   }
 
   bool _isRetryableSendError(Object e) {
@@ -388,6 +792,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _mediaDrainActive = true;
     try {
       while (_mediaOutboundQueue.isNotEmpty && mounted) {
+        if (_isAnyCooldownActive) {
+          final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
+          if (_sending) {
+            _beginSending(
+              status: 'Пауза ${_formatSlowModeCountdown(wait)}…',
+            );
+          }
+          await Future<void>.delayed(Duration(seconds: wait));
+          if (!mounted) return;
+          continue;
+        }
         while (ApiRateLimitBackoff.isActive) {
           final wait =
               ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
@@ -411,6 +826,68 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           }
           _scrollToBottom();
         } catch (e) {
+          final err = e.toString().toLowerCase();
+          if (err.contains('group_slow_mode')) {
+            final retryAfter =
+                e is ApiClientException ? e.retryAfterSeconds : null;
+            pending.lastRetryAfterSeconds =
+                (retryAfter ?? _conversation.slowModeSeconds).clamp(1, 3600);
+            pending.lastLimitedAt = DateTime.now().toUtc();
+            _mediaOutboundQueue.removeAt(0);
+            _endSending();
+            _rememberFailedMedia(pending);
+            if (mounted) {
+              setState(() {
+                _activateSlowModeCooldownForSeconds(retryAfter ?? 0);
+              });
+              _schedulePendingMediaAutoRetry(
+                pending,
+                retryAfterSeconds: retryAfter ?? _conversation.slowModeSeconds,
+                reason: 'slow',
+              );
+              if (!_autoRetryOnLimitsEnabled) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Автоповтор отключен — нажмите «Повторить» вручную',
+                    ),
+                  ),
+                );
+              }
+              showErrorSnackBar(context, e);
+            }
+            continue;
+          }
+          if (err.contains('group_flood_limited')) {
+            final retryAfter =
+                e is ApiClientException ? e.retryAfterSeconds : null;
+            pending.lastRetryAfterSeconds = (retryAfter ?? 60).clamp(1, 3600);
+            pending.lastLimitedAt = DateTime.now().toUtc();
+            _mediaOutboundQueue.removeAt(0);
+            _endSending();
+            _rememberFailedMedia(pending);
+            if (mounted) {
+              setState(() {
+                _activateFloodCooldownForSeconds(retryAfter ?? 0);
+              });
+              _schedulePendingMediaAutoRetry(
+                pending,
+                retryAfterSeconds: retryAfter ?? 60,
+                reason: 'flood',
+              );
+              if (!_autoRetryOnLimitsEnabled) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Автоповтор отключен — нажмите «Повторить» вручную',
+                    ),
+                  ),
+                );
+              }
+              showErrorSnackBar(context, e);
+            }
+            continue;
+          }
           pending.attempts++;
           if (_isRetryableSendError(e) && pending.attempts < 8) {
             final waitSec = (2 * pending.attempts).clamp(2, 45);
@@ -424,6 +901,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           }
           _mediaOutboundQueue.removeAt(0);
           _endSending();
+          pending.lastRetryAfterSeconds = null;
+          pending.lastLimitedAt = null;
           _rememberFailedMedia(pending);
           if (mounted) {
             final fallback = switch (pending.kind) {
@@ -576,6 +1055,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         replyToMessageId: replyRaw is int ? replyRaw : null,
       );
       pending.attempts = row['attempts'] as int? ?? 0;
+      pending.lastRetryAfterSeconds =
+          (row['last_retry_after_seconds'] as int?)?.clamp(1, 3600);
+      pending.lastLimitedAt = DateTime.tryParse(
+        row['last_limited_at'] as String? ?? '',
+      );
       restored[tempId] = pending;
       if (!_messages.any((m) => m.id == tempId)) {
         restoredMessages.add(
@@ -600,6 +1084,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages.addAll(restoredMessages);
       _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     });
+    _syncSlowModeCountdownTimer();
   }
 
   Future<void> _persistFailedTextSends() {
@@ -613,6 +1098,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               'temp_id': p.tempId,
               'reply_to_message_id': p.replyToMessageId,
               'attempts': p.attempts,
+              'last_retry_after_seconds': p.lastRetryAfterSeconds,
+              'last_limited_at': p.lastLimitedAt?.toUtc().toIso8601String(),
               'created_at': DateTime.now().toUtc().toIso8601String(),
             },
           )
@@ -753,7 +1240,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
 
-    Overlay.of(context, rootOverlay: true).insert(_botAutocompleteOverlayEntry!);
+    Overlay.of(context, rootOverlay: true)
+        .insert(_botAutocompleteOverlayEntry!);
   }
 
   void _hideBotAutocompleteOverlay() {
@@ -857,7 +1345,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (raw is! Map<String, dynamic>) return;
       try {
         final msg = ChatService.messageFromStreamPayload(raw);
-        setState(() => _integrateMessage(msg));
+        setState(() {
+          _integrateMessage(msg);
+          if (!msg.isMine) _peerTyping = false;
+        });
+        if (!msg.isMine) _peerTypingClear?.cancel();
         _scrollToBottom();
         _scheduleMarkRead();
       } catch (e) {
@@ -1108,35 +1600,577 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _retryFailedText(int tempId) async {
+    _clearFailedTextAutoRetry(tempId);
     final pending = _failedTextSends[tempId];
     if (pending == null) return;
     _failedTextSends.remove(tempId);
     unawaited(_persistFailedTextSends());
     pending.attempts = 0;
+    pending.lastRetryAfterSeconds = null;
+    pending.lastLimitedAt = null;
     setState(() => _textOutboundQueue.add(pending));
     unawaited(_drainTextOutboundQueue());
   }
 
   void _discardFailedText(int tempId) {
+    _clearFailedTextAutoRetry(tempId);
     setState(() {
       _failedTextSends.remove(tempId);
       _messages.removeWhere((m) => m.id == tempId);
     });
+    if (!_hasFailedPendingItems) {
+      _clearManualReadyRetrySchedule();
+    }
     unawaited(_persistFailedTextSends());
     unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
   }
 
+  void _clearFailedTextAutoRetry(int tempId) {
+    _failedTextAutoRetryTimers[tempId]?.cancel();
+    _failedTextAutoRetryTimers.remove(tempId);
+    _failedTextAutoRetryUntil.remove(tempId);
+    _failedTextAutoRetryReason.remove(tempId);
+    _syncSlowModeCountdownTimer();
+  }
+
+  void _cancelFailedTextAutoRetry(int tempId) {
+    _clearFailedTextAutoRetry(tempId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Автоповтор для сообщения отменен')),
+    );
+  }
+
+  void _scheduleFailedTextAutoRetry(
+    _PendingTextSend pending, {
+    required int retryAfterSeconds,
+    required String reason,
+  }) {
+    if (!_autoRetryOnLimitsEnabled) return;
+    final waitSec = retryAfterSeconds.clamp(1, 120).toInt();
+    _clearFailedTextAutoRetry(pending.tempId);
+    _failedTextAutoRetryUntil[pending.tempId] =
+        DateTime.now().add(Duration(seconds: waitSec));
+    _failedTextAutoRetryReason[pending.tempId] = reason;
+    _syncSlowModeCountdownTimer();
+    _failedTextAutoRetryTimers[pending.tempId] =
+        Timer(Duration(seconds: waitSec), () {
+      if (!mounted) return;
+      if (!_failedTextSends.containsKey(pending.tempId)) return;
+      unawaited(_retryFailedText(pending.tempId));
+    });
+  }
+
+  int? _remainingRetryDelay({
+    required int? retryAfterSeconds,
+    required DateTime? limitedAt,
+  }) {
+    return remainingRetryDelay(
+      retryAfterSeconds: retryAfterSeconds,
+      limitedAt: limitedAt,
+    );
+  }
+
+  int? _remainingRetryDelayForText(_PendingTextSend pending) {
+    return _remainingRetryDelay(
+      retryAfterSeconds: pending.lastRetryAfterSeconds,
+      limitedAt: pending.lastLimitedAt,
+    );
+  }
+
+  int? _remainingRetryDelayForMedia(_PendingMediaSend pending) {
+    return _remainingRetryDelay(
+      retryAfterSeconds: pending.lastRetryAfterSeconds,
+      limitedAt: pending.lastLimitedAt,
+    );
+  }
+
+  int? get _nextManualRetryRemainingSeconds {
+    return nextManualRetryRemainingSeconds([
+      for (final pending in _failedTextSends.values)
+        _remainingRetryDelayForText(pending),
+      if (_pendingMediaRetry != null)
+        _remainingRetryDelayForMedia(_pendingMediaRetry!),
+    ]);
+  }
+
   void _discardPendingMedia() {
+    _clearPendingMediaAutoRetry();
     setState(() => _pendingMediaRetry = null);
+    if (!_hasFailedPendingItems) {
+      _clearManualReadyRetrySchedule();
+    }
+  }
+
+  List<_ManualRetryTask> _buildManualRetryTasks() {
+    final pendingMedia = _pendingMediaRetry;
+    final failedTextItems = _failedTextSends.values.toList(growable: false);
+    return sortManualRetryItems<_ManualRetryTask>(
+      <_ManualRetryTask>[
+        if (pendingMedia != null)
+          _ManualRetryTask(
+            remainingSeconds: _remainingRetryDelayForMedia(pendingMedia),
+            isMedia: true,
+            action: _retryPendingMedia,
+          ),
+        for (final pending in failedTextItems)
+          _ManualRetryTask(
+            remainingSeconds: _remainingRetryDelayForText(pending),
+            isMedia: false,
+            action: () => _retryFailedText(pending.tempId),
+          ),
+      ],
+      (item) => item.remainingSeconds,
+      (item) => item.isMedia,
+    );
+  }
+
+  Future<void> _runManualRetryTasks(
+    List<_ManualRetryTask> retryTasks, {
+    String? completionSuffix,
+  }) async {
+    if (retryTasks.isEmpty || _sending || _retryAllBulkBusy) return;
+    _clearManualReadyRetrySchedule();
+    final cooldownBeforeRetry = _activeCooldownRemainingSeconds;
+    if (mounted) {
+      setState(() {
+        _retryAllBulkBusy = true;
+        _retryAllBulkCancelRequested = false;
+        _clearAllAfterBulkStopRequested = false;
+        _retryAllBulkDone = 0;
+        _retryAllBulkTotal = retryTasks.length;
+      });
+    }
+    const interItemDelay = Duration(milliseconds: 160);
+    var retriedMedia = 0;
+    var retriedText = 0;
+    var cancelled = false;
+    try {
+      for (var i = 0; i < retryTasks.length; i++) {
+        if (_retryAllBulkCancelRequested) {
+          cancelled = true;
+          break;
+        }
+        final task = retryTasks[i];
+        await task.action();
+        if (task.isMedia) {
+          retriedMedia++;
+        } else {
+          retriedText++;
+        }
+        if (mounted) {
+          setState(() {
+            _retryAllBulkDone = i + 1;
+          });
+        }
+        if (_retryAllBulkCancelRequested) {
+          cancelled = true;
+          break;
+        }
+        if (i < retryTasks.length - 1) {
+          await Future<void>.delayed(interItemDelay);
+        }
+      }
+      if (!mounted) return;
+      final total = retriedMedia + retriedText;
+      if (total <= 0) return;
+      final details = <String>[
+        if (retriedText > 0) 'текст: $retriedText',
+        if (retriedMedia > 0) 'медиа: $retriedMedia',
+      ].join(', ');
+      final waitSuffix = cooldownBeforeRetry > 0
+          ? '. Отправка начнётся через ${_formatSlowModeCountdown(cooldownBeforeRetry)}'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (total == 1
+                    ? 'Повтор запущен ($details)$waitSuffix'
+                    : 'Повтор запущен для $total элементов ($details)$waitSuffix') +
+                (completionSuffix ?? '') +
+                (cancelled ? '. Остановлено пользователем' : ''),
+          ),
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      final runClearAfterStop = _clearAllAfterBulkStopRequested;
+      if (mounted) {
+        setState(() {
+          _retryAllBulkBusy = false;
+          _retryAllBulkCancelRequested = false;
+          _clearAllAfterBulkStopRequested = false;
+          _retryAllBulkDone = 0;
+          _retryAllBulkTotal = 0;
+        });
+        if (runClearAfterStop) {
+          unawaited(_clearAllFailedPending());
+        }
+      }
+    }
+  }
+
+  void _cancelRetryAllBulk() {
+    if (!_retryAllBulkBusy || _retryAllBulkCancelRequested) return;
+    setState(() {
+      _retryAllBulkCancelRequested = true;
+    });
+    _logRetryAction('bulk_cancel_requested');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Останавливаем пакетный повтор...')),
+    );
+  }
+
+  void _logRetryAction(
+    String action, {
+    Map<String, dynamic>? metadata,
+  }) {
+    unawaited(
+      ProductAnalytics.logEvent(
+        eventType: 'chat_retry_action',
+        entityType: 'conversation',
+        entityId: widget.conversationId,
+        metadata: {
+          'action': action,
+          'auto_retry_enabled': _autoRetryOnLimitsEnabled,
+          if (metadata != null) ...metadata,
+        },
+      ),
+    );
+  }
+
+  void _requestClearAfterBulkStop() {
+    if (!_retryAllBulkBusy) {
+      unawaited(_clearAllFailedPending());
+      return;
+    }
+    setState(() {
+      _clearAllAfterBulkStopRequested = true;
+    });
+    _logRetryAction('clear_after_bulk_stop_requested');
+    _cancelRetryAllBulk();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Останавливаем повтор. Очистка откроется сразу после остановки.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _retryAllFailedPending() async {
+    _logRetryAction('retry_all_manual');
+    await _runManualRetryTasks(_buildManualRetryTasks());
+  }
+
+  void _clearManualReadyRetrySchedule({bool resetDeferrals = true}) {
+    final hadSchedule =
+        _manualReadyRetryTimer != null || _manualReadyRetryUntil != null;
+    _manualReadyRetryTimer?.cancel();
+    _manualReadyRetryTimer = null;
+    _manualReadyRetryUntil = null;
+    if (resetDeferrals) _manualReadyRetryDeferrals = 0;
+    _syncSlowModeCountdownTimer();
+    if (hadSchedule && mounted) setState(() {});
+  }
+
+  void _cancelManualReadyRetrySchedule() {
+    _clearManualReadyRetrySchedule();
+    if (!mounted) return;
+    _logRetryAction('manual_ready_autostart_cancel');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Автозапуск готовых отменен')),
+    );
+  }
+
+  void _scheduleManualReadyRetry(
+    int waitSec, {
+    bool announce = true,
+  }) {
+    if (_autoRetryOnLimitsEnabled || !_hasFailedPendingItems) return;
+    final safeWait = waitSec.clamp(1, 1200);
+    final isReschedule =
+        _manualReadyRetryUntil != null || _manualReadyRetryTimer != null;
+    final nextDeferrals = nextManualReadyRetryDeferrals(
+      isReschedule: isReschedule,
+      currentDeferrals: _manualReadyRetryDeferrals,
+    );
+    _clearManualReadyRetrySchedule(resetDeferrals: false);
+    _manualReadyRetryDeferrals = nextDeferrals;
+    _manualReadyRetryUntil = DateTime.now().add(Duration(seconds: safeWait));
+    _logRetryAction(
+      'manual_ready_autostart_schedule',
+      metadata: {
+        'wait_seconds': safeWait,
+        'is_reschedule': isReschedule,
+        'deferrals': nextDeferrals,
+      },
+    );
+    _syncSlowModeCountdownTimer();
+    if (mounted) setState(() {});
+    _armManualReadyRetryTimer(safeWait);
+    if (!announce || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Автозапуск готовых через ${_formatSlowModeCountdown(safeWait)}',
+        ),
+        action: SnackBarAction(
+          label: 'Отменить',
+          onPressed: _cancelManualReadyRetrySchedule,
+        ),
+      ),
+    );
+  }
+
+  void _armManualReadyRetryTimer(int waitSec) {
+    _manualReadyRetryTimer?.cancel();
+    _manualReadyRetryTimer = Timer(Duration(seconds: waitSec), () {
+      if (!mounted) return;
+      if (_sending || _retryAllBulkBusy) {
+        if (shouldStopManualReadyRetry(deferrals: _manualReadyRetryDeferrals)) {
+          _clearManualReadyRetrySchedule();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Автозапуск готовых остановлен: чат долго занят отправкой',
+              ),
+            ),
+          );
+          return;
+        }
+        _scheduleManualReadyRetry(2, announce: false);
+        return;
+      }
+      _clearManualReadyRetrySchedule();
+      unawaited(_retryReadyFailedPending());
+    });
+  }
+
+  void _reconcileManualReadyRetrySchedule() {
+    final until = _manualReadyRetryUntil;
+    if (until == null) return;
+    final remainingMs = until.difference(DateTime.now()).inMilliseconds;
+    if (remainingMs <= 0) {
+      _clearManualReadyRetrySchedule();
+      unawaited(_retryReadyFailedPending());
+      return;
+    }
+    final remainingSec = (remainingMs / 1000).ceil().clamp(1, 1200);
+    _armManualReadyRetryTimer(remainingSec);
+    _syncSlowModeCountdownTimer();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _retryReadyFailedPending() async {
+    if (_sending || _retryAllBulkBusy) return;
+    final tasks = _buildManualRetryTasks();
+    if (tasks.isEmpty) return;
+    final readyTasks = readyManualRetryItems<_ManualRetryTask>(
+        tasks, (t) => t.remainingSeconds);
+    final skipped = tasks.length - readyTasks.length;
+    if (readyTasks.isEmpty) {
+      if (!mounted) return;
+      final remaining = _nextManualRetryRemainingSeconds;
+      final suffix = remaining != null
+          ? 'Ближайшая готовность через ${_formatSlowModeCountdown(remaining)}.'
+          : 'Пока нет элементов для повтора.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(suffix),
+          action: (remaining != null && remaining > 0)
+              ? SnackBarAction(
+                  label: 'Автозапуск',
+                  onPressed: () => _scheduleManualReadyRetry(remaining),
+                )
+              : null,
+        ),
+      );
+      return;
+    }
+    _logRetryAction(
+      'retry_ready_manual',
+      metadata: {
+        'ready_count': readyTasks.length,
+        'skipped_count': skipped,
+      },
+    );
+    _clearManualReadyRetrySchedule();
+    final completionSuffix =
+        skipped > 0 ? '. Отложено: $skipped, пока действует лимит' : null;
+    await _runManualRetryTasks(
+      readyTasks,
+      completionSuffix: completionSuffix,
+    );
+  }
+
+  Future<void> _retryAllFailedPendingWithGuard() async {
+    if (_sending || _retryAllBulkBusy) return;
+    final remaining = _nextManualRetryRemainingSeconds;
+    if (remaining != null && remaining > 8) {
+      _logRetryAction(
+        'retry_all_guard_shown',
+        metadata: {'remaining_seconds': remaining},
+      );
+      final proceedNow = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Повторить сейчас?'),
+          content: Text(
+            'До ближайшей готовности примерно ${_formatSlowModeCountdown(remaining)}.'
+            '\nМожно подождать, чтобы снизить шанс повторного лимита.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Подождать'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Все равно повторить'),
+            ),
+          ],
+        ),
+      );
+      if (proceedNow != true || !mounted) {
+        _logRetryAction('retry_all_guard_cancelled');
+        return;
+      }
+      _logRetryAction('retry_all_guard_confirmed');
+    }
+    await _retryAllFailedPending();
+  }
+
+  String _failedItemsClearSummary(int textCount, int mediaCount) {
+    final parts = <String>[
+      if (textCount > 0) 'текст: $textCount',
+      if (mediaCount > 0) 'медиа: $mediaCount',
+    ];
+    return parts.join(', ');
+  }
+
+  Future<void> _showClearedFailedItemsSnackbar({
+    required int textCount,
+    required int mediaCount,
+  }) async {
+    if (!mounted) return;
+    final total = textCount + mediaCount;
+    if (total <= 0) return;
+    final details = _failedItemsClearSummary(textCount, mediaCount);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          total == 1
+              ? 'Неотправленный элемент удален ($details)'
+              : 'Неотправленные элементы очищены: $total ($details)',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _clearAllFailedPending() async {
+    if (_sending) return;
+    if (_retryAllBulkBusy) {
+      _requestClearAfterBulkStop();
+      return;
+    }
+    final mediaCount = _pendingMediaRetry != null ? 1 : 0;
+    final failedTextIds = _failedTextSends.keys.toList(growable: false);
+    if (mediaCount == 0 && failedTextIds.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Очистить неотправленные?'),
+        content: const Text(
+          'Все неотправленные сообщения и медиа будут удалены из очереди.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Очистить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _logRetryAction(
+      'clear_all_pending_confirmed',
+      metadata: {
+        'text_count': failedTextIds.length,
+        'media_count': mediaCount,
+      },
+    );
+    _clearManualReadyRetrySchedule();
+    _clearPendingMediaAutoRetry();
+    for (final tempId in failedTextIds) {
+      _clearFailedTextAutoRetry(tempId);
+    }
+    setState(() {
+      _pendingMediaRetry = null;
+      _failedTextSends.removeWhere((_, __) => true);
+      _messages.removeWhere((m) => m.id < 0);
+    });
+    unawaited(_persistFailedTextSends());
+    unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    await _showClearedFailedItemsSnackbar(
+      textCount: failedTextIds.length,
+      mediaCount: mediaCount,
+    );
   }
 
   void _rememberFailedMedia(_PendingMediaSend pending) {
+    _clearPendingMediaAutoRetry();
     setState(() => _pendingMediaRetry = pending);
+  }
+
+  void _clearPendingMediaAutoRetry() {
+    _pendingMediaAutoRetryTimer?.cancel();
+    _pendingMediaAutoRetryTimer = null;
+    _pendingMediaAutoRetryClientMessageId = null;
+    _pendingMediaAutoRetryUntil = null;
+    _pendingMediaAutoRetryReason = null;
+    _syncSlowModeCountdownTimer();
+  }
+
+  void _cancelPendingMediaAutoRetry() {
+    _clearPendingMediaAutoRetry();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Автоповтор для медиа отменен')),
+    );
+  }
+
+  void _schedulePendingMediaAutoRetry(
+    _PendingMediaSend pending, {
+    required int retryAfterSeconds,
+    required String reason,
+  }) {
+    if (!_autoRetryOnLimitsEnabled) return;
+    final waitSec = retryAfterSeconds.clamp(1, 120).toInt();
+    _clearPendingMediaAutoRetry();
+    _pendingMediaAutoRetryUntil =
+        DateTime.now().add(Duration(seconds: waitSec));
+    _pendingMediaAutoRetryReason = reason;
+    if (mounted) setState(() {});
+    _syncSlowModeCountdownTimer();
+    _pendingMediaAutoRetryClientMessageId = pending.clientMessageId;
+    _pendingMediaAutoRetryTimer = Timer(Duration(seconds: waitSec), () {
+      if (!mounted) return;
+      final expectedId = _pendingMediaAutoRetryClientMessageId;
+      if (expectedId == null) return;
+      if (_pendingMediaRetry?.clientMessageId != expectedId) return;
+      unawaited(_retryPendingMedia());
+    });
   }
 
   Future<void> _retryPendingMedia() async {
     final pending = _pendingMediaRetry;
     if (pending == null) return;
+    _clearPendingMediaAutoRetry();
     while (ApiRateLimitBackoff.isActive) {
       final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
       await Future<void>.delayed(wait);
@@ -1144,18 +2178,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     setState(() => _pendingMediaRetry = null);
     pending.attempts = 0;
+    pending.lastRetryAfterSeconds = null;
+    pending.lastLimitedAt = null;
     _enqueueMediaSend(pending);
   }
 
   Widget _pendingMediaRetryBanner(ColorScheme scheme) {
     final pending = _pendingMediaRetry;
     if (pending == null) return const SizedBox.shrink();
+    final autoRetrying =
+        _pendingMediaAutoRetryClientMessageId == pending.clientMessageId &&
+            _pendingMediaAutoRetryRemainingSeconds > 0;
     final label = switch (pending.kind) {
       _PendingMediaKind.image => 'фото',
       _PendingMediaKind.video => 'видео',
       _PendingMediaKind.file => 'файл',
       _PendingMediaKind.voice => 'голосовое',
     };
+    final autoRetryDisabledHint = !_autoRetryOnLimitsEnabled && !autoRetrying
+        ? ' • автоповтор отключен'
+        : '';
     return Material(
       color: scheme.errorContainer.withValues(alpha: 0.55),
       child: Padding(
@@ -1166,16 +2208,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Не удалось отправить $label',
+                autoRetrying
+                    ? 'Не удалось отправить $label • автоповтор через '
+                        '${_formatSlowModeCountdown(_pendingMediaAutoRetryRemainingSeconds)}'
+                    : 'Не удалось отправить $label$autoRetryDisabledHint',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: scheme.onErrorContainer,
                     ),
               ),
             ),
             TextButton(
-              onPressed: _sending ? null : _retryPendingMedia,
-              child: const Text('Повторить'),
+              onPressed: (_sending || autoRetrying) ? null : _retryPendingMedia,
+              child:
+                  Text(autoRetrying ? 'Отправим автоматически' : 'Повторить'),
             ),
+            if (autoRetrying)
+              TextButton(
+                onPressed: _sending ? null : _cancelPendingMediaAutoRetry,
+                child: const Text('Отменить автоповтор'),
+              ),
             TextButton(
               onPressed: _sending ? null : _discardPendingMedia,
               child: const Text('Отмена'),
@@ -1261,6 +2312,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _scrollAfterInitialLoad() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
+      if (_pendingInitialJumpMessageId != null) {
+        unawaited(_jumpToInitialMessageIfNeeded());
+        return;
+      }
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
         _scrollToMessage(firstUnread);
@@ -1276,6 +2331,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _scrollToBottom();
       }
     });
+  }
+
+  void _focusMessageTemporarily(int messageId) {
+    _focusedMessageTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _focusedMessageId = messageId);
+    _focusedMessageTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted || _focusedMessageId != messageId) return;
+      setState(() => _focusedMessageId = null);
+    });
+  }
+
+  Future<void> _jumpToInitialMessageIfNeeded() async {
+    final targetId = _pendingInitialJumpMessageId;
+    if (targetId == null || !mounted) return;
+
+    if (_messages.any((m) => m.id == targetId)) {
+      _pendingInitialJumpMessageId = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _scrollToMessage(targetId);
+        _focusMessageTemporarily(targetId);
+      });
+      return;
+    }
+
+    var attempts = 0;
+    while (mounted && _hasMore && attempts < 8) {
+      attempts++;
+      await _load(refresh: false);
+      if (_messages.any((m) => m.id == targetId)) {
+        _pendingInitialJumpMessageId = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _scrollToMessage(targetId);
+          _focusMessageTemporarily(targetId);
+        });
+        return;
+      }
+    }
+
+    _pendingInitialJumpMessageId = null;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Сообщение не найдено в истории чата')),
+    );
   }
 
   void _jumpToBottomAndMarkRead() {
@@ -1308,6 +2409,80 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return la.year == lb.year && la.month == lb.month && la.day == lb.day;
   }
 
+  DateTime _dateOnly(DateTime date) {
+    final local = date.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
+
+  int? _messageIdForJumpDate(DateTime targetDay) {
+    if (_messages.isEmpty) return null;
+    for (final msg in _messages) {
+      if (_isSameChatDay(msg.createdAt, targetDay)) return msg.id;
+    }
+    for (final msg in _messages) {
+      final day = _dateOnly(msg.createdAt);
+      if (day.isAfter(targetDay)) return msg.id;
+    }
+    return _messages.last.id;
+  }
+
+  Future<void> _pickAndJumpToDate() async {
+    if (_jumpingToDate) return;
+    if (_messages.isEmpty && !_loading) {
+      await _load(refresh: true);
+      if (!mounted || _messages.isEmpty) return;
+    }
+    if (!mounted || _messages.isEmpty) return;
+    final now = DateTime.now();
+    final oldest = _dateOnly(_messages.first.createdAt);
+    final firstDate = oldest.isBefore(now)
+        ? oldest
+        : now.subtract(const Duration(days: 3650));
+    final lastDate = _dateOnly(now);
+    final initialCandidate = _dateOnly(_messages.last.createdAt);
+    final initialDate = initialCandidate.isAfter(lastDate)
+        ? lastDate
+        : initialCandidate.isBefore(firstDate)
+            ? firstDate
+            : initialCandidate;
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDate: initialDate,
+      helpText: 'Перейти к дате',
+    );
+    if (picked == null || !mounted) return;
+    await _jumpToDate(picked);
+  }
+
+  Future<void> _jumpToDate(DateTime picked) async {
+    if (_jumpingToDate) return;
+    final targetDay = _dateOnly(picked);
+    setState(() => _jumpingToDate = true);
+    try {
+      var attempts = 0;
+      while (mounted &&
+          _messages.isNotEmpty &&
+          _hasMore &&
+          attempts < 12 &&
+          _dateOnly(_messages.first.createdAt).isAfter(targetDay)) {
+        if (_loading || _loadingMore) {
+          await Future<void>.delayed(const Duration(milliseconds: 120));
+          continue;
+        }
+        attempts++;
+        await _load(refresh: false);
+      }
+      if (!mounted || _messages.isEmpty) return;
+      final messageId = _messageIdForJumpDate(targetDay);
+      if (messageId == null) return;
+      _scrollToMessage(messageId);
+    } finally {
+      if (mounted) setState(() => _jumpingToDate = false);
+    }
+  }
+
   String _chatDateSeparatorLabel(DateTime date) {
     final local = date.toLocal();
     final now = DateTime.now();
@@ -1327,19 +2502,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.black.withValues(alpha: 0.42)
-              : scheme.onSurface.withValues(alpha: 0.12),
+              ? Colors.black.withValues(alpha: 0.35)
+              : scheme.surfaceContainerHighest.withValues(alpha: 0.92),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.35),
+          ),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           _chatDateSeparatorLabel(date),
           style: TextStyle(
-            color: isDark ? Colors.white : scheme.onSurface,
-            fontSize: 12,
+            color: isDark ? Colors.white : scheme.onSurfaceVariant,
+            fontSize: 11.5,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1452,6 +2630,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isSaved = _conversation.isSaved;
     final peer = _conversation.peer;
     final mediaCount = _messages.where((m) => m.mediaUrl != null).length;
+    final manualReadyRetryRemaining = _manualReadyRetryRemainingSeconds;
+    final nextReadyRemaining = _nextManualRetryRemainingSeconds;
+    final hasManualRetryControls =
+        !_autoRetryOnLimitsEnabled && _hasFailedPendingItems;
+    final readyManualRetryCount = hasManualRetryControls
+        ? readyManualRetryItems<_ManualRetryTask>(
+            _buildManualRetryTasks(),
+            (t) => t.remainingSeconds,
+          ).length
+        : 0;
 
     showTelegramActionSheet<void>(
       context: context,
@@ -1462,6 +2650,108 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           title: _threadSearchOpen ? 'Закрыть поиск' : 'Поиск в чате',
           onTap: _toggleThreadSearch,
         ),
+        TelegramActionSheetAction(
+          icon: _showOnlyFailedMessages
+              ? Icons.filter_alt_off_outlined
+              : Icons.filter_alt_outlined,
+          title: _showOnlyFailedMessages
+              ? 'Показывать все сообщения'
+              : 'Только неотправленные',
+          onTap: () => _setShowOnlyFailedMessages(!_showOnlyFailedMessages),
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.calendar_today_outlined,
+          title: _jumpingToDate ? 'Переход к дате…' : 'Перейти к дате',
+          onTap: () => unawaited(_pickAndJumpToDate()),
+        ),
+        TelegramActionSheetAction(
+          icon: _autoRetryOnLimitsEnabled
+              ? Icons.autorenew_rounded
+              : Icons.autorenew_outlined,
+          title: _autoRetryOnLimitsEnabled
+              ? 'Автоповтор при лимитах: вкл'
+              : 'Автоповтор при лимитах: выкл',
+          onTap: () => unawaited(
+              _toggleAutoRetryOnLimitsInThread(!_autoRetryOnLimitsEnabled)),
+        ),
+        if (hasManualRetryControls)
+          TelegramActionSheetAction(
+            icon: Icons.playlist_add_check_circle_outlined,
+            title: readyManualRetryCount > 0
+                ? 'Повторить готовые ($readyManualRetryCount)'
+                : 'Повторить готовые',
+            onTap: () {
+              if (_sending || _retryAllBulkBusy) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Сейчас идет отправка. Повторите действие чуть позже.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              unawaited(_retryReadyFailedPending());
+            },
+          ),
+        if (hasManualRetryControls)
+          TelegramActionSheetAction(
+            icon: Icons.refresh_rounded,
+            title: 'Повторить все',
+            onTap: () {
+              if (_sending || _retryAllBulkBusy) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Сейчас идет отправка. Повторите действие чуть позже.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              unawaited(_retryAllFailedPendingWithGuard());
+            },
+          ),
+        if (_retryAllBulkBusy)
+          TelegramActionSheetAction(
+            icon: Icons.stop_circle_outlined,
+            title: _clearAllAfterBulkStopRequested
+                ? 'Остановить и очистить...'
+                : _retryAllBulkCancelRequested
+                    ? 'Останавливаем пакетный повтор...'
+                    : 'Остановить пакетный повтор',
+            onTap: _cancelRetryAllBulk,
+          ),
+        if (hasManualRetryControls)
+          TelegramActionSheetAction(
+            icon: Icons.delete_sweep_outlined,
+            title: 'Очистить неотправленные',
+            destructive: true,
+            onTap: () {
+              if (_retryAllBulkBusy) {
+                _requestClearAfterBulkStop();
+                return;
+              }
+              unawaited(_clearAllFailedPending());
+            },
+          ),
+        if (!_autoRetryOnLimitsEnabled && _hasFailedPendingItems)
+          if (manualReadyRetryRemaining > 0)
+            TelegramActionSheetAction(
+              icon: Icons.alarm_off_outlined,
+              title:
+                  'Отменить автозапуск (${_formatSlowModeCountdown(manualReadyRetryRemaining)})',
+              onTap: _cancelManualReadyRetrySchedule,
+            )
+          else if (nextReadyRemaining != null && nextReadyRemaining > 0)
+            TelegramActionSheetAction(
+              icon: Icons.alarm_add_outlined,
+              title:
+                  'Автозапуск готовых через ${_formatSlowModeCountdown(nextReadyRemaining)}',
+              onTap: () => _scheduleManualReadyRetry(nextReadyRemaining),
+            ),
         if (mediaCount > 0)
           TelegramActionSheetAction(
             icon: Icons.photo_library_outlined,
@@ -1558,6 +2848,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_stopRecorderSilently());
     _audioRecorder.dispose();
     _stream?.disconnect();
+    _focusedMessageTimer?.cancel();
+    _slowModeCountdownTimer?.cancel();
+    _pendingMediaAutoRetryTimer?.cancel();
+    _manualReadyRetryTimer?.cancel();
+    for (final t in _failedTextAutoRetryTimers.values) {
+      t.cancel();
+    }
+    _failedTextAutoRetryTimers.clear();
     unawaited(
       ChatCacheService.saveDraft(widget.conversationId, _controller.text),
     );
@@ -1566,6 +2864,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _inputFocusNode.dispose();
     _controller.dispose();
     _threadSearchController.dispose();
+    _threadSearchFocusNode.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -1623,6 +2922,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _senderNames = names;
         _groupMembers = members;
       });
+      _reconcileSlowModeCooldownWithConversation();
     } catch (_) {}
   }
 
@@ -1888,14 +3188,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() {
       _threadSearchOpen = !_threadSearchOpen;
       if (!_threadSearchOpen) {
+        _searchBackfillSeq++;
+        _searchAutoloading = false;
+        _searchBackfillLoads = 0;
         _threadSearchQuery = '';
+        _threadSearchFilter = _ThreadSearchFilter.all;
+        _threadSearchSenderId = null;
         _searchMatchIndex = 0;
         _threadSearchController.clear();
       }
     });
   }
 
+  void _setShowOnlyFailedMessages(bool enabled) {
+    if (_showOnlyFailedMessages == enabled) return;
+    setState(() {
+      _showOnlyFailedMessages = enabled;
+    });
+    if (enabled && _failedTextSends.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Неотправленные медиа видны в нижней панели, текстовых неотправленных нет',
+          ),
+        ),
+      );
+    }
+  }
+
+  bool _messageMatchesFilter(ChatMessage msg) {
+    if (_threadSearchSenderId != null &&
+        msg.senderId != _threadSearchSenderId) {
+      return false;
+    }
+    switch (_threadSearchFilter) {
+      case _ThreadSearchFilter.all:
+        return true;
+      case _ThreadSearchFilter.text:
+        return msg.content.trim().isNotEmpty &&
+            msg.type != 'image' &&
+            msg.type != 'video' &&
+            msg.type != 'file' &&
+            msg.type != 'voice';
+      case _ThreadSearchFilter.media:
+        return msg.type == 'image' ||
+            msg.type == 'video' ||
+            msg.type == 'voice';
+      case _ThreadSearchFilter.files:
+        return msg.type == 'file';
+      case _ThreadSearchFilter.links:
+        return extractFirstHttpUrl(msg.content) != null;
+      case _ThreadSearchFilter.mine:
+        return msg.isMine;
+    }
+  }
+
   bool _messageMatchesSearch(ChatMessage msg, String q) {
+    if (!_messageMatchesFilter(msg)) return false;
+    if (q.isEmpty) return true;
     if (msg.content.toLowerCase().contains(q)) return true;
     final sender = msg.senderName ?? _senderNames[msg.senderId] ?? '';
     if (sender.toLowerCase().contains(q)) return true;
@@ -1909,21 +3259,169 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return false;
   }
 
+  bool get _threadSearchHasCriteria {
+    return _threadSearchQuery.trim().isNotEmpty ||
+        _threadSearchFilter != _ThreadSearchFilter.all ||
+        _threadSearchSenderId != null;
+  }
+
   List<int> get _searchMatchIds {
+    final sourceMessages = _visibleMessages;
     final q = _threadSearchQuery.trim().toLowerCase();
-    if (q.isEmpty) return const [];
+    if (!_threadSearchHasCriteria) return const [];
     return [
-      for (final msg in _messages)
+      for (final msg in sourceMessages)
         if (_messageMatchesSearch(msg, q)) msg.id,
     ];
   }
 
   void _onThreadSearchChanged(String value) {
+    final normalized = value.trim().toLowerCase();
+    final hasCriteria = normalized.isNotEmpty ||
+        _threadSearchFilter != _ThreadSearchFilter.all ||
+        _threadSearchSenderId != null;
     setState(() {
+      _searchBackfillSeq++;
       _threadSearchQuery = value;
       _searchMatchIndex = 0;
+      _searchBackfillLoads = 0;
+      if (!hasCriteria) _searchAutoloading = false;
     });
     _scrollToCurrentSearchMatch();
+    if (hasCriteria) {
+      unawaited(
+        _backfillSearchFromHistory(
+          normalized,
+          _threadSearchFilter,
+          _threadSearchSenderId,
+        ),
+      );
+    }
+  }
+
+  void _onThreadSearchFilterChanged(_ThreadSearchFilter value) {
+    if (_threadSearchFilter == value) return;
+    final normalized = _threadSearchQuery.trim().toLowerCase();
+    final hasCriteria = normalized.isNotEmpty ||
+        value != _ThreadSearchFilter.all ||
+        _threadSearchSenderId != null;
+    setState(() {
+      _searchBackfillSeq++;
+      _threadSearchFilter = value;
+      _searchMatchIndex = 0;
+      _searchBackfillLoads = 0;
+      if (!hasCriteria) _searchAutoloading = false;
+    });
+    _scrollToCurrentSearchMatch();
+    if (hasCriteria) {
+      unawaited(
+        _backfillSearchFromHistory(
+          normalized,
+          value,
+          _threadSearchSenderId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickThreadSearchSender() async {
+    if (!_conversation.isGroup) return;
+    if (_groupMembers.isEmpty) {
+      try {
+        final members = await ChatService.listMembers(widget.conversationId);
+        if (!mounted) return;
+        setState(() {
+          _groupMembers = members;
+          _senderNames = {for (final m in members) m.id: m.displayName};
+        });
+      } catch (_) {
+        // Ignore; user can still select "all" if load fails.
+      }
+    }
+    if (!mounted) return;
+    final myId = AuthService.instance.currentUser?.id;
+    const allValue = -1;
+    const myValue = -2;
+    final options = <_SearchSenderOption>[
+      const _SearchSenderOption(
+        value: allValue,
+        senderId: null,
+        label: 'Все участники',
+      ),
+      if (myId != null) const _SearchSenderOption(value: myValue, label: 'Я'),
+      ..._groupMembers.map(
+        (m) => _SearchSenderOption(
+          value: m.id,
+          senderId: m.id,
+          label: m.displayName,
+        ),
+      ),
+    ];
+    final selectedValue = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final selectedValue = myId != null && _threadSearchSenderId == myId
+            ? myValue
+            : (_threadSearchSenderId ?? allValue);
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final option in options)
+                ListTile(
+                  title: Text(option.label),
+                  trailing: selectedValue == option.value
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(option.value),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (selectedValue == null) return;
+    if (selectedValue == allValue) {
+      _onThreadSearchSenderChanged(null);
+      return;
+    }
+    if (selectedValue == myValue && myId != null) {
+      _onThreadSearchSenderChanged(myId);
+      return;
+    }
+    for (final option in options) {
+      if (option.value == selectedValue) {
+        _onThreadSearchSenderChanged(option.senderId);
+        return;
+      }
+    }
+  }
+
+  void _onThreadSearchSenderChanged(int? senderId) {
+    if (_threadSearchSenderId == senderId) return;
+    final normalized = _threadSearchQuery.trim().toLowerCase();
+    final hasCriteria = normalized.isNotEmpty ||
+        _threadSearchFilter != _ThreadSearchFilter.all ||
+        senderId != null;
+    setState(() {
+      _searchBackfillSeq++;
+      _threadSearchSenderId = senderId;
+      _searchMatchIndex = 0;
+      _searchBackfillLoads = 0;
+      if (!hasCriteria) _searchAutoloading = false;
+    });
+    _scrollToCurrentSearchMatch();
+    if (hasCriteria) {
+      unawaited(
+        _backfillSearchFromHistory(
+          normalized,
+          _threadSearchFilter,
+          senderId,
+        ),
+      );
+    }
   }
 
   void _scrollToCurrentSearchMatch() {
@@ -1946,11 +3444,91 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scrollToMessage(ids[_searchMatchIndex]);
   }
 
-  List<ChatMessage> get _visibleMessages {
-    final q = _threadSearchQuery.trim().toLowerCase();
-    if (q.isEmpty) return _messages;
-    return _messages.where((msg) => _messageMatchesSearch(msg, q)).toList();
+  void _jumpToFirstSearchMatch() {
+    final ids = _searchMatchIds;
+    if (ids.isEmpty) return;
+    setState(() => _searchMatchIndex = 0);
+    _scrollToMessage(ids.first);
   }
+
+  Future<void> _backfillSearchFromHistory(
+    String normalizedQuery,
+    _ThreadSearchFilter filter,
+    int? senderId,
+  ) async {
+    if (_searchMatchIds.isNotEmpty || !_hasMore) return;
+    final seq = _searchBackfillSeq;
+    if (!_searchAutoloading && mounted) {
+      setState(() {
+        _searchAutoloading = true;
+        _searchBackfillLoads = 0;
+      });
+    }
+    var attempts = 0;
+    while (mounted &&
+        seq == _searchBackfillSeq &&
+        attempts < 6 &&
+        _threadSearchQuery.trim().toLowerCase() == normalizedQuery &&
+        _threadSearchFilter == filter &&
+        _threadSearchSenderId == senderId &&
+        _searchMatchIds.isEmpty &&
+        _hasMore) {
+      if (_loading || _loadingMore) {
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        continue;
+      }
+      attempts++;
+      await _load(refresh: false);
+      if (mounted && seq == _searchBackfillSeq) {
+        setState(() => _searchBackfillLoads = attempts);
+      }
+    }
+    if (!mounted || seq != _searchBackfillSeq) return;
+    setState(() => _searchAutoloading = false);
+    if (_threadSearchQuery.trim().toLowerCase() == normalizedQuery &&
+        _threadSearchFilter == filter &&
+        _threadSearchSenderId == senderId &&
+        _searchMatchIds.isNotEmpty) {
+      _scrollToCurrentSearchMatch();
+    }
+  }
+
+  String _searchFilterLabel(_ThreadSearchFilter filter) {
+    switch (filter) {
+      case _ThreadSearchFilter.all:
+        return 'Все';
+      case _ThreadSearchFilter.text:
+        return 'Текст';
+      case _ThreadSearchFilter.media:
+        return 'Медиа';
+      case _ThreadSearchFilter.files:
+        return 'Файлы';
+      case _ThreadSearchFilter.links:
+        return 'Ссылки';
+      case _ThreadSearchFilter.mine:
+        return 'Мои';
+    }
+  }
+
+  String _searchSenderLabel() {
+    final senderId = _threadSearchSenderId;
+    if (senderId == null) return 'Автор';
+    final myId = AuthService.instance.currentUser?.id;
+    if (myId != null && senderId == myId) return 'Я';
+    return _senderNames[senderId] ?? 'Пользователь';
+  }
+
+  List<ChatMessage> get _visibleMessages {
+    if (_showOnlyFailedMessages) {
+      return _messages
+          .where((m) => _failedTextSends.containsKey(m.id))
+          .toList(growable: false);
+    }
+    return _messages;
+  }
+
+  int get _failedPendingItemsCount =>
+      _failedTextSends.length + (_pendingMediaRetry != null ? 1 : 0);
 
   bool _canClusterMessages(ChatMessage a, ChatMessage b) {
     if (a.senderId != b.senderId || a.isMine != b.isMine) return false;
@@ -1960,13 +3538,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return gap <= const Duration(minutes: 5);
   }
 
-  _MessageCluster _clusterForMessage(List<ChatMessage> messages, int index) {
-    final current = messages[index];
-    final prevSame =
-        index > 0 && _canClusterMessages(messages[index - 1], current);
-    final nextSame = index < messages.length - 1 &&
-        _canClusterMessages(current, messages[index + 1]);
-    return _MessageCluster(starts: !prevSame, ends: !nextSame);
+  List<_MessageCluster> _computeMessageClusters(List<ChatMessage> messages) {
+    if (messages.isEmpty) return const [];
+    final clusters = List<_MessageCluster>.filled(
+      messages.length,
+      const _MessageCluster.single(),
+      growable: false,
+    );
+    for (var index = 0; index < messages.length; index++) {
+      final current = messages[index];
+      final prevSame =
+          index > 0 && _canClusterMessages(messages[index - 1], current);
+      final nextSame = index < messages.length - 1 &&
+          _canClusterMessages(current, messages[index + 1]);
+      clusters[index] = _MessageCluster(starts: !prevSame, ends: !nextSame);
+    }
+    return clusters;
+  }
+
+  List<bool> _computeDateSeparators(List<ChatMessage> messages) {
+    if (messages.isEmpty) return const [];
+    final separators =
+        List<bool>.filled(messages.length, false, growable: false);
+    separators[0] = true;
+    for (var index = 1; index < messages.length; index++) {
+      separators[index] = !_isSameChatDay(
+        messages[index - 1].createdAt,
+        messages[index].createdAt,
+      );
+    }
+    return separators;
   }
 
   GlobalKey _messageItemKey(int messageId) {
@@ -1991,7 +3592,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() => _suppressMarkRead = true);
       try {
         final conv = await ChatService.getConversation(widget.conversationId);
-        if (mounted) setState(() => _conversation = conv);
+        if (mounted) {
+          setState(() => _conversation = conv);
+          _reconcileSlowModeCooldownWithConversation();
+        }
       } catch (_) {}
       try {
         ProviderScope.containerOf(context)
@@ -2052,6 +3656,85 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _tipPeerWithStars() async {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    final amountController = TextEditingController(text: '50');
+    final messageController = TextEditingController();
+    final payload = await showDialog<({int amount, String? message})>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Отправить звёзды ${peer.displayName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Количество звёзд',
+                hintText: 'например, 50',
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: messageController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Сообщение (опционально)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(amountController.text.trim()) ?? 0;
+              if (amount <= 0) return;
+              Navigator.pop(
+                ctx,
+                (
+                  amount: amount,
+                  message: messageController.text.trim().isEmpty
+                      ? null
+                      : messageController.text.trim(),
+                ),
+              );
+            },
+            child: const Text('Отправить'),
+          ),
+        ],
+      ),
+    );
+    amountController.dispose();
+    messageController.dispose();
+    if (payload == null) return;
+    try {
+      final balance = await PaidFeaturesService.donate(
+        recipientId: peer.id,
+        amountStars: payload.amount,
+        message: payload.message,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Отправлено ${payload.amount} звёзд. Баланс: $balance',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _blockPeer() async {
     final peer = _conversation.peer;
     if (peer == null) return;
@@ -2098,6 +3781,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _conversation = conv;
               _muted = conv.muted;
             });
+            _reconcileSlowModeCooldownWithConversation();
           },
           onLeftGroup: () {
             if (mounted) Navigator.of(context).pop();
@@ -2148,6 +3832,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (kIsWeb) return;
     _appPaused = state != AppLifecycleState.resumed;
     if (_appPaused) {
+      _manualReadyRetryTimer?.cancel();
+      _manualReadyRetryTimer = null;
       _stream?.pauseForBackground();
       if (_recording || _holdActive) {
         _holdActive = false;
@@ -2159,6 +3845,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _stream?.resumeFromBackground();
       unawaited(_pollNew());
       _onConnectionRestored();
+      _reconcileManualReadyRetrySchedule();
     }
   }
 
@@ -2623,6 +4310,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _failedSendActions(int tempId, ColorScheme scheme) {
+    final retryIn = _failedTextAutoRetryRemainingSeconds(tempId);
+    final autoRetrying = retryIn > 0;
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 4),
       child: Wrap(
@@ -2631,20 +4320,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         children: [
           Icon(Icons.error_outline, size: 14, color: scheme.error),
           Text(
-            'Не отправлено',
+            retryIn > 0
+                ? 'Не отправлено • автоповтор через ${_formatSlowModeCountdown(retryIn)}'
+                : (!_autoRetryOnLimitsEnabled
+                    ? 'Не отправлено • автоповтор отключен'
+                    : 'Не отправлено'),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.error,
                 ),
           ),
           TextButton(
-            onPressed: _sending ? null : () => _retryFailedText(tempId),
+            onPressed: (_sending || autoRetrying)
+                ? null
+                : () => _retryFailedText(tempId),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Повторить'),
+            child: Text(autoRetrying ? 'Отправим автоматически' : 'Повторить'),
           ),
+          if (autoRetrying)
+            TextButton(
+              onPressed:
+                  _sending ? null : () => _cancelFailedTextAutoRetry(tempId),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Отменить автоповтор'),
+            ),
           TextButton(
             onPressed: _sending ? null : () => _discardFailedText(tempId),
             style: TextButton.styleFrom(
@@ -2663,6 +4369,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required ChatMessage msg,
     required ColorScheme scheme,
     required bool searching,
+    bool isActiveSearchMatch = false,
     required bool isGroup,
     _MessageCluster cluster = const _MessageCluster.single(),
     String? replyQuote,
@@ -2680,6 +4387,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       message: msg,
       scheme: scheme,
       highlightQuery: searching ? _threadSearchQuery : null,
+      isActiveSearchMatch: isActiveSearchMatch,
       replyQuote: replyQuote,
       onReplyTap: onReplyTap,
       showSenderName: isGroup && !msg.isMine && cluster.starts,
@@ -2843,6 +4551,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Widget _animatedVisibility({
+    required bool visible,
+    required Widget child,
+    required String keyName,
+  }) {
+    return AnimatedSwitcher(
+      duration: _uiAnimDuration,
+      reverseDuration: const Duration(milliseconds: 130),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        );
+      },
+      child: visible
+          ? KeyedSubtree(key: ValueKey(keyName), child: child)
+          : const SizedBox.shrink(key: ValueKey('hidden')),
+    );
+  }
+
   Future<void> _deleteMessage(ChatMessage msg) async {
     try {
       await ChatService.deleteMessage(
@@ -2874,6 +4608,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _load({required bool refresh}) async {
+    if (!refresh && (_loading || _loadingMore || !_hasMore)) return;
     final seq = ++_messageLoadSeq;
     if (refresh) {
       setState(() {
@@ -2919,6 +4654,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       if (refresh) {
+        unawaited(_refreshScheduledPendingCount());
+      }
+      if (refresh) {
         _scrollAfterInitialLoad();
       }
       _scheduleMarkRead();
@@ -2961,6 +4699,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       });
       if (added == 0) return;
+      final hasIncoming = fresh.any((m) => !m.isMine);
+      if (hasIncoming) {
+        _peerTypingClear?.cancel();
+        if (_peerTyping) {
+          setState(() => _peerTyping = false);
+        }
+      }
       if (_isNearBottom()) {
         _scrollToBottom();
         _scheduleMarkRead();
@@ -3035,6 +4780,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _textDrainActive = true;
     try {
       while (_textOutboundQueue.isNotEmpty && mounted) {
+        if (_isAnyCooldownActive) {
+          final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
+          await Future<void>.delayed(Duration(seconds: wait));
+          if (!mounted) return;
+          continue;
+        }
         if (ApiRateLimitBackoff.isActive) {
           final wait =
               ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
@@ -3052,7 +4803,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
           setState(() {
+            _clearFailedTextAutoRetry(pending.tempId);
             _integrateMessage(msg, removeTempId: pending.tempId);
+            _activateSlowModeCooldownFromNow();
           });
           _scrollToBottom();
           unawaited(
@@ -3061,6 +4814,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(ChatCacheService.clearDraft(widget.conversationId));
         } catch (e) {
           if (!mounted) return;
+          final err = e.toString().toLowerCase();
+          if (err.contains('group_slow_mode')) {
+            _textOutboundQueue.removeAt(0);
+            final retryAfter =
+                e is ApiClientException ? e.retryAfterSeconds : null;
+            pending.lastRetryAfterSeconds =
+                (retryAfter ?? _conversation.slowModeSeconds).clamp(1, 3600);
+            pending.lastLimitedAt = DateTime.now().toUtc();
+            setState(() {
+              _failedTextSends[pending.tempId] = pending;
+              _activateSlowModeCooldownForSeconds(retryAfter ?? 0);
+            });
+            _scheduleFailedTextAutoRetry(
+              pending,
+              retryAfterSeconds: retryAfter ?? _conversation.slowModeSeconds,
+              reason: 'slow',
+            );
+            unawaited(_persistFailedTextSends());
+            if (!_autoRetryOnLimitsEnabled && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Автоповтор отключен — нажмите «Повторить» вручную',
+                  ),
+                ),
+              );
+            }
+            showErrorSnackBar(context, e);
+            continue;
+          }
+          if (err.contains('group_flood_limited')) {
+            _textOutboundQueue.removeAt(0);
+            final retryAfter =
+                e is ApiClientException ? e.retryAfterSeconds : null;
+            pending.lastRetryAfterSeconds = (retryAfter ?? 60).clamp(1, 3600);
+            pending.lastLimitedAt = DateTime.now().toUtc();
+            final wait = (retryAfter != null && retryAfter > 0)
+                ? ' Подождите ${_formatSlowModeCountdown(retryAfter)}.'
+                : '';
+            setState(() {
+              _failedTextSends[pending.tempId] = pending;
+              _activateFloodCooldownForSeconds(retryAfter ?? 0);
+            });
+            _scheduleFailedTextAutoRetry(
+              pending,
+              retryAfterSeconds: retryAfter ?? 60,
+              reason: 'flood',
+            );
+            unawaited(_persistFailedTextSends());
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Лимит сообщений в минуту достигнут.$wait'),
+              ),
+            );
+            if (!_autoRetryOnLimitsEnabled && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Автоповтор отключен — нажмите «Повторить» вручную',
+                  ),
+                ),
+              );
+            }
+            continue;
+          }
           pending.attempts++;
           if (_isRetryableSendError(e) && pending.attempts < 6) {
             final waitSec = (2 * pending.attempts).clamp(2, 30);
@@ -3068,6 +4886,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             continue;
           }
           _textOutboundQueue.removeAt(0);
+          pending.lastRetryAfterSeconds = null;
+          pending.lastLimitedAt = null;
           setState(() {
             _failedTextSends[pending.tempId] = pending;
           });
@@ -3086,6 +4906,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendText() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _recording) return;
+    if (_conversation.isGroup &&
+        _conversation.amISendRestricted &&
+        !_conversation.amIGroupAdmin) {
+      final until = _conversation.amISendRestrictedUntil;
+      final reason = (_conversation.amISendRestrictionReason ?? '').trim();
+      final untilText = until == null
+          ? 'без срока'
+          : DateFormat('dd.MM.yyyy HH:mm').format(until.toLocal());
+      final details = reason.isEmpty ? untilText : '$untilText • $reason';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Вам ограничили отправку сообщений ($details)')),
+        );
+      }
+      return;
+    }
+    if (_conversation.isGroup &&
+        _conversation.onlyAdminsCanPost &&
+        !_conversation.amIGroupAdmin) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Писать в этой группе могут только админы')),
+        );
+      }
+      return;
+    }
 
     _hideBotAutocompleteOverlay();
 
@@ -3103,7 +4951,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (!mounted) return;
         if (results.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Бот @$botUsername не найден или не имеет команд')),
+            SnackBar(
+                content:
+                    Text('Бот @$botUsername не найден или не имеет команд')),
           );
           return;
         }
@@ -3131,6 +4981,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_messages.any(
       (m) => m.isMine && m.id < 0 && m.content == text,
     )) {
+      return;
+    }
+    if (_editingMessage == null && _isAnyCooldownActive) {
+      final remain = _formatSlowModeCountdown(_activeCooldownRemainingSeconds);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Подождите $remain перед отправкой')),
+        );
+      }
       return;
     }
     if (_failedTextSends.values.any((p) => p.text == text)) {
@@ -3199,6 +5058,368 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
     _scrollToBottom();
     unawaited(_drainTextOutboundQueue());
+  }
+
+  Future<DateTime?> _pickScheduleDateTime({DateTime? initialDateTime}) async {
+    final now = DateTime.now();
+    final initial = initialDateTime != null && initialDateTime.isAfter(now)
+        ? initialDateTime
+        : now.add(const Duration(minutes: 10));
+    DateTime atOrNextDay(int hour, int minute) {
+      var dt = DateTime(now.year, now.month, now.day, hour, minute);
+      if (!dt.isAfter(now.add(const Duration(seconds: 30)))) {
+        dt = dt.add(const Duration(days: 1));
+      }
+      return dt;
+    }
+
+    final inOneHour = now.add(const Duration(hours: 1));
+    final tonight = atOrNextDay(21, 0);
+    final tomorrowMorning = DateTime(
+      now.year,
+      now.month,
+      now.day + 1,
+      9,
+      0,
+    );
+    final presetFmt = DateFormat('dd.MM HH:mm');
+    final preset = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Через 1 час'),
+                subtitle: Text(presetFmt.format(inOneHour)),
+                onTap: () => Navigator.pop(ctx, 'in_1h'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.nights_stay_outlined),
+                title: const Text('Сегодня вечером'),
+                subtitle: Text(presetFmt.format(tonight)),
+                onTap: () => Navigator.pop(ctx, 'tonight'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.wb_sunny_outlined),
+                title: const Text('Завтра утром'),
+                subtitle: Text(presetFmt.format(tomorrowMorning)),
+                onTap: () => Navigator.pop(ctx, 'tomorrow_morning'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_calendar_outlined),
+                title: const Text('Выбрать дату и время...'),
+                onTap: () => Navigator.pop(ctx, 'custom'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (preset == null) return null;
+    switch (preset) {
+      case 'in_1h':
+        return inOneHour;
+      case 'tonight':
+        return tonight;
+      case 'tomorrow_morning':
+        return tomorrowMorning;
+      default:
+        break;
+    }
+
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Дата отправки',
+    );
+    if (pickedDate == null || !mounted) return null;
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      helpText: 'Время отправки',
+    );
+    if (pickedTime == null) return null;
+    return DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+  }
+
+  Future<void> _scheduleCurrentTextMessage() async {
+    if (_recording || _editingMessage != null) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    var sendWhenOnline = false;
+    DateTime? sendAt;
+    final canUseWhenOnline =
+        !_conversation.isGroup && _conversation.peer != null;
+    if (canUseWhenOnline) {
+      final mode = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.circle_outlined),
+                title: const Text('Когда пользователь онлайн'),
+                subtitle: const Text(
+                    'Отправится, как только собеседник появится в сети'),
+                onTap: () => Navigator.pop(ctx, 'online'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Отправить по времени'),
+                onTap: () => Navigator.pop(ctx, 'time'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (mode == null || !mounted) return;
+      if (mode == 'online') {
+        sendWhenOnline = true;
+        sendAt = DateTime.now().add(const Duration(minutes: 1));
+      }
+    }
+    if (!sendWhenOnline) {
+      sendAt = await _pickScheduleDateTime();
+      if (sendAt == null || !mounted) return;
+      if (!sendAt.isAfter(DateTime.now().add(const Duration(seconds: 30)))) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Выберите время минимум на 30 секунд позже'),
+          ),
+        );
+        return;
+      }
+    }
+
+    try {
+      final item = await ChatService.scheduleText(
+        conversationId: widget.conversationId,
+        content: text,
+        sendAt: sendAt!,
+        sendWhenOnline: sendWhenOnline,
+        replyToMessageId: _replyTo?.id,
+        clientMessageId: const Uuid().v4(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _controller.clear();
+        _replyTo = null;
+      });
+      final when = DateFormat('dd.MM HH:mm').format(item.sendAt);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            item.sendWhenOnline
+                ? 'Сообщение будет отправлено, когда собеседник онлайн'
+                : 'Сообщение запланировано на $when',
+          ),
+        ),
+      );
+      unawaited(_refreshScheduledPendingCount());
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e,
+          fallback: 'Не удалось запланировать сообщение');
+    }
+  }
+
+  Future<void> _openScheduledMessagesManager() async {
+    try {
+      final initialItems = await ChatService.listScheduledMessages(
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) {
+          final items = List<ScheduledChatMessage>.from(initialItems);
+          return StatefulBuilder(
+            builder: (ctx, setModalState) {
+              final pending = items.where((e) => e.status == 'pending').toList()
+                ..sort((a, b) => a.sendAt.compareTo(b.sendAt));
+              if (pending.isEmpty) {
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.schedule_outlined, size: 30),
+                        SizedBox(height: 12),
+                        Text('Нет отложенных сообщений'),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Отложенные сообщения',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: math.min(
+                          MediaQuery.sizeOf(context).height * 0.55,
+                          360,
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: pending.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, index) {
+                            final item = pending[index];
+                            final preview = item.content.trim().isEmpty
+                                ? item.type.toUpperCase()
+                                : item.content.trim();
+                            return ListTile(
+                              title: Text(
+                                preview,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                item.sendWhenOnline
+                                    ? 'Отправка: когда пользователь онлайн'
+                                    : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!item.sendWhenOnline)
+                                    IconButton(
+                                      icon: const Icon(
+                                          Icons.edit_calendar_outlined),
+                                      tooltip: 'Перенести',
+                                      onPressed: () async {
+                                        final nextSendAt =
+                                            await _pickScheduleDateTime(
+                                          initialDateTime: item.sendAt,
+                                        );
+                                        if (nextSendAt == null) return;
+                                        if (!nextSendAt.isAfter(
+                                          DateTime.now()
+                                              .add(const Duration(seconds: 30)),
+                                        )) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Выберите время минимум на 30 секунд позже',
+                                              ),
+                                            ),
+                                          );
+                                          return;
+                                        }
+                                        try {
+                                          final updated = await ChatService
+                                              .rescheduleMessage(
+                                            conversationId:
+                                                widget.conversationId,
+                                            scheduledMessageId: item.id,
+                                            sendAt: nextSendAt,
+                                          );
+                                          setModalState(() {
+                                            final idx = items.indexWhere(
+                                              (e) => e.id == item.id,
+                                            );
+                                            if (idx >= 0) items[idx] = updated;
+                                          });
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          showErrorSnackBar(
+                                            context,
+                                            e,
+                                            fallback:
+                                                'Не удалось перенести сообщение',
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline),
+                                    tooltip: 'Отменить',
+                                    onPressed: () async {
+                                      try {
+                                        await ChatService
+                                            .cancelScheduledMessage(
+                                          conversationId: widget.conversationId,
+                                          scheduledMessageId: item.id,
+                                        );
+                                        setModalState(
+                                          () => items.removeWhere(
+                                              (e) => e.id == item.id),
+                                        );
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        showErrorSnackBar(
+                                          context,
+                                          e,
+                                          fallback:
+                                              'Не удалось отменить сообщение',
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+      unawaited(_refreshScheduledPendingCount());
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось загрузить отложенные сообщения',
+      );
+    }
+  }
+
+  Future<void> _refreshScheduledPendingCount() async {
+    try {
+      final items = await ChatService.listScheduledMessages(
+        conversationId: widget.conversationId,
+        limit: 200,
+      );
+      if (!mounted) return;
+      setState(() => _scheduledPendingCount = items.length);
+    } catch (_) {
+      // Silent: this is a decorative badge.
+    }
   }
 
   void _openImage(String url) {
@@ -3508,7 +5729,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (mounted) {
-        showErrorSnackBar(context, e, fallback: 'Не удалось выполнить действие');
+        showErrorSnackBar(context, e,
+            fallback: 'Не удалось выполнить действие');
       }
     } finally {
       if (mounted) {
@@ -3698,10 +5920,78 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   : scheme.onSurfaceVariant,
         );
     final visibleMessages = _visibleMessages;
+    final messageClusters = _computeMessageClusters(visibleMessages);
+    final messageDateSeparators = _computeDateSeparators(visibleMessages);
     _trimMessageItemKeys(visibleMessages);
+    final searchHasCriteria = _threadSearchHasCriteria;
+    final searchMatchIds = searchHasCriteria ? _searchMatchIds : const <int>[];
     final searching = _threadSearchQuery.trim().isNotEmpty;
+    final activeSearchMatchId = searchMatchIds.isNotEmpty
+        ? searchMatchIds[_searchMatchIndex.clamp(0, searchMatchIds.length - 1)]
+        : _focusedMessageId;
     final mediaCount = _mediaMessageCount();
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isRestrictedByModeration = _conversation.isGroup &&
+        _conversation.amISendRestricted &&
+        !_conversation.amIGroupAdmin;
+    final canSendInGroup = !(_conversation.isGroup &&
+            _conversation.onlyAdminsCanPost &&
+            !_conversation.amIGroupAdmin) &&
+        !isRestrictedByModeration;
+    String formatSlowMode(int seconds) {
+      if (seconds <= 0) return 'выкл';
+      if (seconds < 60) return '$seconds сек';
+      if (seconds % 60 == 0) return '${seconds ~/ 60} мин';
+      return '${seconds ~/ 60}м ${seconds % 60}с';
+    }
+
+    final showPostingLimitsHint = _conversation.isGroup &&
+        canSendInGroup &&
+        !_conversation.amIGroupAdmin &&
+        (_conversation.slowModeSeconds > 0 ||
+            _conversation.antiFloodMaxMessagesPerMinute > 0);
+    final slowModeRemainingSeconds = _slowModeRemainingSeconds;
+    final floodRemainingSeconds = _floodRemainingSeconds;
+    final activeCooldownSeconds = _activeCooldownRemainingSeconds;
+    final floodCooldownActive = floodRemainingSeconds > 0 &&
+        floodRemainingSeconds >= slowModeRemainingSeconds;
+    final activeCooldownLabel = floodCooldownActive ? 'Антифлуд' : 'Slow mode';
+    final activeCooldownIcon =
+        floodCooldownActive ? Icons.speed_outlined : Icons.timer_outlined;
+    final activeCooldownProgress = floodCooldownActive &&
+            _floodCooldownTotalSeconds > 0
+        ? ((1 - (floodRemainingSeconds / _floodCooldownTotalSeconds))
+                .clamp(0.0, 1.0))
+            .toDouble()
+        : (_conversation.slowModeSeconds > 0 && slowModeRemainingSeconds > 0)
+            ? ((1 - (slowModeRemainingSeconds / _conversation.slowModeSeconds))
+                    .clamp(0.0, 1.0))
+                .toDouble()
+            : null;
+    final isSlowModeUnlockSoon =
+        activeCooldownSeconds > 0 && activeCooldownSeconds <= 3;
+    final slowModePulseScale =
+        isSlowModeUnlockSoon && activeCooldownSeconds.isOdd ? 1.08 : 1.0;
+    final canSendNow = canSendInGroup && activeCooldownSeconds <= 0;
+    final nextManualRetryRemainingSeconds = _nextManualRetryRemainingSeconds;
+    final manualReadyRetryRemainingSeconds = _manualReadyRetryRemainingSeconds;
+    final showRetryAllReadyHint = !_retryAllBulkBusy &&
+        nextManualRetryRemainingSeconds != null &&
+        nextManualRetryRemainingSeconds > 8;
+    final hasReadyManualRetryItems = !_retryAllBulkBusy &&
+        (nextManualRetryRemainingSeconds == null ||
+            nextManualRetryRemainingSeconds <= 0);
+    final retryBulkProgressLabel = _retryAllBulkBusy && _retryAllBulkTotal > 0
+        ? '${_retryAllBulkDone.clamp(0, _retryAllBulkTotal)}/$_retryAllBulkTotal'
+        : null;
+    final postingLimitsHint = [
+      if (_conversation.slowModeSeconds > 0)
+        'Slow mode: ${formatSlowMode(_conversation.slowModeSeconds)}',
+      if (_conversation.antiFloodMaxMessagesPerMinute > 0)
+        'Антифлуд: ${_conversation.antiFloodMaxMessagesPerMinute}/мин',
+      if (activeCooldownSeconds > 0)
+        '$activeCooldownLabel: отправка через ${_formatSlowModeCountdown(activeCooldownSeconds)}',
+    ].join(' • ');
 
     return PopScope(
       canPop: !_selectionMode,
@@ -3769,65 +6059,322 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
                 bottom: _threadSearchOpen
                     ? PreferredSize(
-                        preferredSize: const Size.fromHeight(56),
+                        preferredSize: const Size.fromHeight(102),
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                          child: TextField(
-                            controller: _threadSearchController,
-                            autofocus: true,
-                            onChanged: _onThreadSearchChanged,
-                            decoration: InputDecoration(
-                              hintText: 'Поиск в чате',
-                              prefixIcon: const Icon(Icons.search),
-                              suffixIcon: Row(
-                                mainAxisSize: MainAxisSize.min,
+                          child: Builder(
+                            builder: (context) {
+                              final matches = searchMatchIds;
+                              final hasCriteria = searchHasCriteria;
+                              final hasMatches = matches.isNotEmpty;
+                              final currentIndex = hasMatches
+                                  ? _searchMatchIndex.clamp(
+                                          0, matches.length - 1) +
+                                      1
+                                  : 0;
+                              final chipBorderColor =
+                                  Theme.of(context).colorScheme.outlineVariant;
+                              final chipSelectedColor = Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer;
+                              final chipLabelColor = Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant;
+                              final chipSelectedLabelColor = Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer;
+                              return Column(
                                 children: [
-                                  if (_searchMatchIds.isNotEmpty) ...[
-                                    Text(
-                                      '${_searchMatchIndex + 1}/${_searchMatchIds.length}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall,
+                                  Focus(
+                                    onKeyEvent: (_, event) {
+                                      if (event is! KeyDownEvent ||
+                                          !hasMatches ||
+                                          event.logicalKey !=
+                                              LogicalKeyboardKey.enter) {
+                                        return KeyEventResult.ignored;
+                                      }
+                                      final pressed = HardwareKeyboard
+                                          .instance.logicalKeysPressed;
+                                      if (pressed.contains(
+                                            LogicalKeyboardKey.shiftLeft,
+                                          ) ||
+                                          pressed.contains(
+                                            LogicalKeyboardKey.shiftRight,
+                                          )) {
+                                        _goToSearchMatch(false);
+                                        return KeyEventResult.handled;
+                                      }
+                                      return KeyEventResult.ignored;
+                                    },
+                                    child: TextField(
+                                      focusNode: _threadSearchFocusNode,
+                                      controller: _threadSearchController,
+                                      autofocus: true,
+                                      onChanged: _onThreadSearchChanged,
+                                      onSubmitted: (_) {
+                                        if (hasMatches) _goToSearchMatch(true);
+                                      },
+                                      decoration: InputDecoration(
+                                        hintText: 'Поиск в чате',
+                                        prefixIcon: const Icon(Icons.search),
+                                        helperText: hasCriteria && !hasMatches
+                                            ? (_searchAutoloading
+                                                ? 'Ищем в истории…'
+                                                : 'Ничего не найдено')
+                                            : null,
+                                        suffixIcon: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_searchAutoloading)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                  right: 4,
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const SizedBox(
+                                                      width: 12,
+                                                      height: 12,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '$_searchBackfillLoads',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            IconButton(
+                                              tooltip: 'К первому совпадению',
+                                              icon: const Icon(
+                                                Icons.vertical_align_top,
+                                              ),
+                                              onPressed: hasMatches
+                                                  ? _jumpToFirstSearchMatch
+                                                  : null,
+                                            ),
+                                            Text(
+                                              '$currentIndex/${matches.length}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall,
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Предыдущее',
+                                              icon: const Icon(
+                                                Icons.keyboard_arrow_up,
+                                              ),
+                                              onPressed: hasMatches
+                                                  ? () =>
+                                                      _goToSearchMatch(false)
+                                                  : null,
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Следующее',
+                                              icon: const Icon(
+                                                Icons.keyboard_arrow_down,
+                                              ),
+                                              onPressed: hasMatches
+                                                  ? () => _goToSearchMatch(true)
+                                                  : null,
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Закрыть',
+                                              icon: const Icon(Icons.close),
+                                              onPressed: _toggleThreadSearch,
+                                            ),
+                                          ],
+                                        ),
+                                        isDense: true,
+                                        filled: true,
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                      ),
                                     ),
-                                    IconButton(
-                                      tooltip: 'Предыдущее',
-                                      icon: const Icon(Icons.keyboard_arrow_up),
-                                      onPressed: () => _goToSearchMatch(false),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  SizedBox(
+                                    height: 28,
+                                    child: ListView(
+                                      scrollDirection: Axis.horizontal,
+                                      children: [
+                                        for (final filter
+                                            in _ThreadSearchFilter.values)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
+                                            child: ChoiceChip(
+                                              label: Text(
+                                                _searchFilterLabel(filter),
+                                              ),
+                                              selected:
+                                                  _threadSearchFilter == filter,
+                                              onSelected: (_) =>
+                                                  _onThreadSearchFilterChanged(
+                                                filter,
+                                              ),
+                                              shape: StadiumBorder(
+                                                side: BorderSide(
+                                                  color: _threadSearchFilter ==
+                                                          filter
+                                                      ? chipSelectedColor
+                                                      : chipBorderColor,
+                                                ),
+                                              ),
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              selectedColor: chipSelectedColor,
+                                              labelStyle: TextStyle(
+                                                color: _threadSearchFilter ==
+                                                        filter
+                                                    ? chipSelectedLabelColor
+                                                    : chipLabelColor,
+                                                fontWeight:
+                                                    _threadSearchFilter ==
+                                                            filter
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w500,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                          ),
+                                        if (isGroup)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 6,
+                                            ),
+                                            child: FilterChip(
+                                              avatar: Icon(
+                                                _threadSearchSenderId == null
+                                                    ? Icons.person_outline
+                                                    : Icons.person,
+                                                size: 16,
+                                                color: _threadSearchSenderId ==
+                                                        null
+                                                    ? chipLabelColor
+                                                    : chipSelectedLabelColor,
+                                              ),
+                                              label: Text(_searchSenderLabel()),
+                                              selected:
+                                                  _threadSearchSenderId != null,
+                                              onSelected: (_) =>
+                                                  _pickThreadSearchSender(),
+                                              onDeleted: _threadSearchSenderId ==
+                                                      null
+                                                  ? null
+                                                  : () =>
+                                                      _onThreadSearchSenderChanged(
+                                                        null,
+                                                      ),
+                                              deleteIcon: const Icon(
+                                                Icons.close,
+                                                size: 16,
+                                              ),
+                                              shape: StadiumBorder(
+                                                side: BorderSide(
+                                                  color:
+                                                      _threadSearchSenderId !=
+                                                              null
+                                                          ? chipSelectedColor
+                                                          : chipBorderColor,
+                                                ),
+                                              ),
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              selectedColor: chipSelectedColor,
+                                              labelStyle: TextStyle(
+                                                color: _threadSearchSenderId !=
+                                                        null
+                                                    ? chipSelectedLabelColor
+                                                    : chipLabelColor,
+                                                fontWeight:
+                                                    _threadSearchSenderId !=
+                                                            null
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w500,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      tooltip: 'Следующее',
-                                      icon:
-                                          const Icon(Icons.keyboard_arrow_down),
-                                      onPressed: () => _goToSearchMatch(true),
-                                    ),
-                                  ],
-                                  IconButton(
-                                    tooltip: 'Закрыть',
-                                    icon: const Icon(Icons.close),
-                                    onPressed: _toggleThreadSearch,
                                   ),
                                 ],
-                              ),
-                              isDense: true,
-                              filled: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
                       )
                     : null,
                 actions: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      IconButton(
+                        tooltip: 'Отложенные',
+                        icon: const Icon(Icons.schedule_outlined),
+                        onPressed: _openScheduledMessagesManager,
+                      ),
+                      if (_scheduledPendingCount > 0)
+                        Positioned(
+                          right: 6,
+                          top: 7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: scheme.error,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16),
+                            child: Text(
+                              _scheduledPendingCount > 99
+                                  ? '99+'
+                                  : '$_scheduledPendingCount',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
+                                    color: scheme.onError,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                  ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   if (!isGroup && peer != null) ...[
+                    IconButton(
+                      tooltip: 'Отправить звёзды',
+                      icon: const Icon(Icons.stars_rounded),
+                      onPressed: _tipPeerWithStars,
+                    ),
                     IconButton(
                       tooltip: 'Видео-звонок',
                       icon: const Icon(Icons.videocam_outlined),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => VideoCallScreen(contactName: peer.displayName),
+                            builder: (_) =>
+                                VideoCallScreen(contactName: peer.displayName),
                           ),
                         );
                       },
@@ -3861,54 +6408,112 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: Column(
             children: [
-              if (_loading) const LinearProgressIndicator(minHeight: 2),
-              if (_pinnedMessage != null)
-                Material(
-                  color: scheme.surfaceContainerHighest,
-                  child: InkWell(
-                    onTap: () => _scrollToMessage(_pinnedMessage!.id),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(Icons.push_pin, size: 18, color: scheme.primary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              _animatedVisibility(
+                visible: _loading,
+                keyName: 'thread-loading',
+                child: const SizedBox(
+                  height: 2,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+              ),
+              _animatedVisibility(
+                visible: _showOnlyFailedMessages,
+                keyName: 'thread-failed-filter',
+                child: Material(
+                  color: scheme.primaryContainer.withValues(alpha: 0.75),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.filter_alt_outlined,
+                          size: 16,
+                          color: scheme.onPrimaryContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _failedPendingItemsCount == 0
+                                ? 'Фильтр: только неотправленные (пусто)'
+                                : 'Фильтр: только неотправленные ($_failedPendingItemsCount)',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: scheme.onPrimaryContainer,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            _setShowOnlyFailedMessages(false);
+                          },
+                          child: const Text('Сбросить'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              _animatedVisibility(
+                visible: _pinnedMessage != null,
+                keyName: 'thread-pinned',
+                child: _pinnedMessage == null
+                    ? const SizedBox.shrink()
+                    : Material(
+                        color: scheme.surfaceContainerHighest,
+                        child: InkWell(
+                          onTap: () => _scrollToMessage(_pinnedMessage!.id),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            child: Row(
                               children: [
-                                Text(
-                                  'Закреплённое сообщение',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(
-                                        color: scheme.primary,
-                                        fontWeight: FontWeight.w600,
+                                Icon(Icons.push_pin,
+                                    size: 18, color: scheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Закреплённое сообщение',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                              color: scheme.primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                       ),
+                                      Text(
+                                        _pinnedPreview(_pinnedMessage!),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                Text(
-                                  _pinnedPreview(_pinnedMessage!),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                IconButton(
+                                  tooltip: 'Открепить',
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () =>
+                                      _togglePinMessage(_pinnedMessage!),
                                 ),
                               ],
                             ),
                           ),
-                          IconButton(
-                            tooltip: 'Открепить',
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => _togglePinMessage(_pinnedMessage!),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              if (!_sseConnected)
-                Material(
+              ),
+              _animatedVisibility(
+                visible: !_sseConnected,
+                keyName: 'thread-sse',
+                child: Material(
                   color: scheme.tertiaryContainer.withValues(alpha: 0.72),
                   child: Padding(
                     padding:
@@ -3935,6 +6540,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     ),
                   ),
                 ),
+              ),
               Expanded(
                 child: Stack(
                   alignment: Alignment.bottomCenter,
@@ -3949,259 +6555,258 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               child: const Text('Повторить'),
                             ),
                           )
-                        : _messages.isEmpty && !_loading
-                            ? const Center(
-                                child: Text('Напишите первое сообщение'))
-                            : searching && visibleMessages.isEmpty
-                                ? const Center(child: Text('Ничего не найдено'))
-                                : ListView.builder(
-                                    controller: _scroll,
-                                    cacheExtent: 900,
-                                    addAutomaticKeepAlives: false,
-                                    addRepaintBoundaries: true,
-                                    keyboardDismissBehavior:
-                                        ScrollViewKeyboardDismissBehavior
-                                            .onDrag,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    itemCount: visibleMessages.length +
-                                        (_hasMore && !searching ? 1 : 0),
-                                    itemBuilder: (context, index) {
-                                      if (_hasMore &&
-                                          !searching &&
-                                          index == 0) {
-                                        return TextButton(
-                                          onPressed: _loadingMore
-                                              ? null
-                                              : () => _load(refresh: false),
-                                          child: _loadingMore
-                                              ? const SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                  ),
-                                                )
-                                              : const Text('Загрузить раньше'),
-                                        );
-                                      }
-                                      final msgIndex = index -
-                                          (_hasMore && !searching ? 1 : 0);
-                                      final msg = visibleMessages[msgIndex];
-                                      final replyTarget = _replyTargetFor(msg);
-                                      final replyQuote = replyTarget != null
-                                          ? _messagePreview(replyTarget)
-                                          : (msg.replyToMessageId != null
-                                              ? 'Сообщение'
-                                              : null);
-                                      final selected =
-                                          _selectedMessageIds.contains(msg.id);
-                                      final failed =
-                                          _failedTextSends.containsKey(msg.id);
-                                      final cluster = _clusterForMessage(
-                                        visibleMessages,
-                                        msgIndex,
-                                      );
-                                      final showDateSeparator = msgIndex == 0 ||
-                                          !_isSameChatDay(
-                                            visibleMessages[msgIndex - 1]
-                                                .createdAt,
-                                            msg.createdAt,
-                                          );
-                                      return KeyedSubtree(
-                                        key: _messageItemKey(msg.id),
-                                        child: RepaintBoundary(
-                                          child: Column(
+                        : visibleMessages.isEmpty && !_loading
+                            ? Center(
+                                child: Text(
+                                  _showOnlyFailedMessages
+                                      ? _pendingMediaRetry != null
+                                          ? 'Есть неотправленное медиа.\nУправление отправкой доступно в панели ниже.'
+                                          : 'Нет неотправленных сообщений'
+                                      : 'Напишите первое сообщение',
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : ListView.builder(
+                                controller: _scroll,
+                                cacheExtent: 900,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                itemCount:
+                                    visibleMessages.length + (_hasMore ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (_hasMore && index == 0) {
+                                    return TextButton(
+                                      onPressed: _loadingMore
+                                          ? null
+                                          : () => _load(refresh: false),
+                                      child: _loadingMore
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text('Загрузить раньше'),
+                                    );
+                                  }
+                                  final msgIndex = index - (_hasMore ? 1 : 0);
+                                  final msg = visibleMessages[msgIndex];
+                                  final replyTarget = _replyTargetFor(msg);
+                                  final replyQuote = replyTarget != null
+                                      ? _messagePreview(replyTarget)
+                                      : (msg.replyToMessageId != null
+                                          ? 'Сообщение'
+                                          : null);
+                                  final selected =
+                                      _selectedMessageIds.contains(msg.id);
+                                  final failed =
+                                      _failedTextSends.containsKey(msg.id);
+                                  final cluster = messageClusters[msgIndex];
+                                  final showDateSeparator =
+                                      messageDateSeparators[msgIndex];
+                                  return KeyedSubtree(
+                                    key: _messageItemKey(msg.id),
+                                    child: RepaintBoundary(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (showDateSeparator)
+                                            _chatDateSeparator(msg.createdAt),
+                                          Row(
                                             crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
+                                                CrossAxisAlignment.end,
                                             children: [
-                                              if (showDateSeparator)
-                                                _chatDateSeparator(
-                                                    msg.createdAt),
-                                              Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
-                                                children: [
-                                                  if (_selectionMode)
-                                                    _selectionIndicator(
-                                                        selected, scheme),
-                                                  if (!isSaved && !msg.isMine)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                        right: 6,
-                                                        bottom: 2,
-                                                      ),
-                                                      child: cluster.ends
-                                                          ? _incomingMessageAvatar(
-                                                              msg,
-                                                            )
-                                                          : const SizedBox(
-                                                              width: 32,
-                                                            ),
-                                                    ),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment: msg
-                                                              .isMine
-                                                          ? CrossAxisAlignment
-                                                              .end
-                                                          : CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Align(
-                                                          alignment: msg.isMine
-                                                              ? Alignment
-                                                                  .centerRight
-                                                              : Alignment
-                                                                  .centerLeft,
-                                                          child: Builder(
-                                                            builder:
-                                                                (bubbleContext) =>
-                                                                    GestureDetector(
-                                                              behavior:
-                                                                  HitTestBehavior
-                                                                      .opaque,
-                                                              onTap:
-                                                                  _selectionMode
-                                                                      ? () =>
-                                                                          _toggleMessageSelection(
-                                                                            msg.id,
+                                              if (_selectionMode)
+                                                _selectionIndicator(
+                                                    selected, scheme),
+                                              if (!isSaved && !msg.isMine)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                    right: 6,
+                                                    bottom: 2,
+                                                  ),
+                                                  child: cluster.ends
+                                                      ? _incomingMessageAvatar(
+                                                          msg,
+                                                        )
+                                                      : const SizedBox(
+                                                          width: 32,
+                                                        ),
+                                                ),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: msg.isMine
+                                                      ? CrossAxisAlignment.end
+                                                      : CrossAxisAlignment
+                                                          .start,
+                                                  children: [
+                                                    Align(
+                                                      alignment: msg.isMine
+                                                          ? Alignment
+                                                              .centerRight
+                                                          : Alignment
+                                                              .centerLeft,
+                                                      child: Builder(
+                                                        builder:
+                                                            (bubbleContext) =>
+                                                                GestureDetector(
+                                                          behavior:
+                                                              HitTestBehavior
+                                                                  .opaque,
+                                                          onTap: _selectionMode
+                                                              ? () =>
+                                                                  _toggleMessageSelection(
+                                                                    msg.id,
+                                                                  )
+                                                              : null,
+                                                          onDoubleTap:
+                                                              _selectionMode
+                                                                  ? null
+                                                                  : () =>
+                                                                      _toggleReaction(
+                                                                        msg,
+                                                                        '👍',
+                                                                      ),
+                                                          onHorizontalDragEnd:
+                                                              _selectionMode
+                                                                  ? null
+                                                                  : (details) {
+                                                                      final v =
+                                                                          details
+                                                                              .primaryVelocity;
+                                                                      if (v ==
+                                                                              null ||
+                                                                          v.abs() <
+                                                                              320) {
+                                                                        return;
+                                                                      }
+                                                                      setState(
+                                                                        () {
+                                                                          _replyTo =
+                                                                              msg;
+                                                                          _editingMessage =
+                                                                              null;
+                                                                          _controller
+                                                                              .clear();
+                                                                        },
+                                                                      );
+                                                                      _inputFocusNode
+                                                                          .requestFocus();
+                                                                    },
+                                                          onLongPress:
+                                                              _selectionMode
+                                                                  ? null
+                                                                  : () {
+                                                                      final box =
+                                                                          bubbleContext.findRenderObject()
+                                                                              as RenderBox?;
+                                                                      if (box !=
+                                                                              null &&
+                                                                          box.hasSize) {
+                                                                        unawaited(
+                                                                          _showMessageActionOverlay(
+                                                                            msg,
+                                                                            box,
+                                                                          ),
+                                                                        );
+                                                                      }
+                                                                    },
+                                                          child: Opacity(
+                                                            opacity: failed
+                                                                ? 0.55
+                                                                : 1,
+                                                            child:
+                                                                _messageBubbleWidget(
+                                                              msg: msg,
+                                                              scheme: scheme,
+                                                              searching:
+                                                                  searching,
+                                                              isActiveSearchMatch:
+                                                                  activeSearchMatchId ==
+                                                                      msg.id,
+                                                              isGroup: isGroup,
+                                                              cluster: cluster,
+                                                              replyQuote:
+                                                                  replyQuote,
+                                                              interactive:
+                                                                  !_selectionMode,
+                                                              wrapWithAlign:
+                                                                  false,
+                                                              onPollVote:
+                                                                  !_selectionMode
+                                                                      ? (idx) =>
+                                                                          _votePoll(
+                                                                            msg,
+                                                                            idx,
                                                                           )
                                                                       : null,
-                                                              onDoubleTap:
-                                                                  _selectionMode
-                                                                      ? null
-                                                                      : () =>
-                                                                          _toggleReaction(
-                                                                            msg,
-                                                                            '👍',
-                                                                          ),
-                                                              onHorizontalDragEnd:
-                                                                  _selectionMode
-                                                                      ? null
-                                                                      : (details) {
-                                                                          final v =
-                                                                              details.primaryVelocity;
-                                                                          if (v == null ||
-                                                                              v.abs() < 320) {
-                                                                            return;
-                                                                          }
-                                                                          setState(
-                                                                            () {
-                                                                              _replyTo = msg;
-                                                                              _editingMessage = null;
-                                                                              _controller.clear();
-                                                                            },
-                                                                          );
-                                                                          _inputFocusNode
-                                                                              .requestFocus();
-                                                                        },
-                                                              onLongPress:
-                                                                  _selectionMode
-                                                                      ? null
-                                                                      : () {
-                                                                          final box =
-                                                                              bubbleContext.findRenderObject() as RenderBox?;
-                                                                          if (box != null &&
-                                                                              box.hasSize) {
-                                                                            unawaited(
-                                                                              _showMessageActionOverlay(
-                                                                                msg,
-                                                                                box,
-                                                                              ),
-                                                                            );
-                                                                          }
-                                                                        },
-                                                              child: Opacity(
-                                                                opacity: failed
-                                                                    ? 0.55
-                                                                    : 1,
-                                                                child:
-                                                                    _messageBubbleWidget(
-                                                                  msg: msg,
-                                                                  scheme:
-                                                                      scheme,
-                                                                  searching:
-                                                                      searching,
-                                                                  isGroup:
-                                                                      isGroup,
-                                                                  cluster:
-                                                                      cluster,
-                                                                  replyQuote:
-                                                                      replyQuote,
-                                                                  interactive:
-                                                                      !_selectionMode,
-                                                                  wrapWithAlign:
-                                                                      false,
-                                                                  onPollVote:
-                                                                      !_selectionMode
-                                                                          ? (idx) =>
-                                                                              _votePoll(
-                                                                                msg,
-                                                                                idx,
-                                                                              )
-                                                                          : null,
-                                                                  pollVoting: _votingPollIds
+                                                              pollVoting:
+                                                                  _votingPollIds
                                                                       .contains(
                                                                           msg.id),
-                                                                  onPollClose: (!_selectionMode &&
-                                                                          msg
-                                                                              .isMine &&
-                                                                          msg.type ==
-                                                                              'poll' &&
-                                                                          msg.poll !=
-                                                                              null &&
-                                                                          !msg.poll!
-                                                                              .isClosed)
-                                                                      ? () =>
-                                                                          _closePoll(
-                                                                              msg)
+                                                              onPollClose: (!_selectionMode &&
+                                                                      msg
+                                                                          .isMine &&
+                                                                      msg.type ==
+                                                                          'poll' &&
+                                                                      msg.poll !=
+                                                                          null &&
+                                                                      !msg.poll!
+                                                                          .isClosed)
+                                                                  ? () =>
+                                                                      _closePoll(
+                                                                          msg)
+                                                                  : null,
+                                                              pollClosing:
+                                                                  _closingPollIds
+                                                                      .contains(
+                                                                          msg.id),
+                                                              onInlineButtonTap:
+                                                                  !_selectionMode
+                                                                      ? (button) =>
+                                                                          _tapInlineButton(
+                                                                            msg,
+                                                                            button,
+                                                                          )
                                                                       : null,
-                                                                  pollClosing:
-                                                                      _closingPollIds
-                                                                          .contains(
-                                                                              msg.id),
-                                                                  onInlineButtonTap:
-                                                                      !_selectionMode
-                                                                          ? (button) =>
-                                                                              _tapInlineButton(
-                                                                                msg,
-                                                                                button,
-                                                                              )
-                                                                          : null,
-                                                                  callbackLoadingData:
-                                                                      _callbackInFlightKeys,
-                                                                  onReplyTap: msg
-                                                                              .replyToMessageId !=
+                                                              callbackLoadingData:
+                                                                  _callbackInFlightKeys,
+                                                              onReplyTap:
+                                                                  msg.replyToMessageId !=
                                                                           null
                                                                       ? () =>
                                                                           _scrollToReplyMessage(
                                                                             msg.replyToMessageId!,
                                                                           )
                                                                       : null,
-                                                                ),
-                                                              ),
                                                             ),
                                                           ),
                                                         ),
-                                                        if (failed)
-                                                          _failedSendActions(
-                                                              msg.id, scheme),
-                                                      ],
+                                                      ),
                                                     ),
-                                                  ),
-                                                ],
+                                                    if (failed)
+                                                      _failedSendActions(
+                                                          msg.id, scheme),
+                                                  ],
+                                                ),
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      );
-                                    },
-                                  ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                     if (_showJumpToBottom && !_selectionMode)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
@@ -4247,6 +6852,155 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (_isAutoRetryActive && !_sending)
+                        Material(
+                          color:
+                              scheme.secondaryContainer.withValues(alpha: 0.42),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(_autoRetryReasonIcon, size: 18),
+                            title: Text(
+                              _autoRetryPendingCount > 1
+                                  ? 'Автоповтор активен для $_autoRetryPendingCount сообщений'
+                                  : 'Автоповтор активен',
+                            ),
+                            subtitle: Text(
+                              'Причина: $_autoRetryReasonLabel • следующая попытка через '
+                              '${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}',
+                            ),
+                            trailing: Wrap(
+                              spacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: scheme.primaryContainer
+                                        .withValues(alpha: 0.7),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'Режим: авто',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: scheme.onPrimaryContainer,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => unawaited(
+                                    _toggleAutoRetryOnLimitsInThread(false),
+                                  ),
+                                  child: const Text('Отключить'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (!_autoRetryOnLimitsEnabled &&
+                          _hasFailedPendingItems &&
+                          !_sending)
+                        Material(
+                          color:
+                              scheme.tertiaryContainer.withValues(alpha: 0.4),
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.pause_circle_outline,
+                                size: 18),
+                            title: const Text('Автоповтор выключен'),
+                            subtitle: Text(
+                              'Неотправленные элементы ожидают ручного повтора'
+                              '\nТекст: ${_failedTextSends.length} • Медиа: ${_pendingMediaRetry != null ? 1 : 0}'
+                              '${retryBulkProgressLabel != null ? '\nПакетный повтор: $retryBulkProgressLabel' : ''}'
+                              '${_retryAllBulkCancelRequested ? '\nОстановка после текущего элемента…' : ''}'
+                              '${_clearAllAfterBulkStopRequested ? '\nПосле остановки откроется очистка…' : ''}'
+                              '${manualReadyRetryRemainingSeconds > 0 ? '\nАвтозапуск готовых через ${_formatSlowModeCountdown(manualReadyRetryRemainingSeconds)}' : ''}'
+                              '${nextManualRetryRemainingSeconds != null ? '\nБлижайшая готовность: через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}' : ''}',
+                            ),
+                            trailing: Wrap(
+                              spacing: 6,
+                              children: [
+                                TextButton(
+                                  onPressed: (_sending || _retryAllBulkBusy)
+                                      ? null
+                                      : _retryAllFailedPendingWithGuard,
+                                  style: showRetryAllReadyHint
+                                      ? TextButton.styleFrom(
+                                          foregroundColor: scheme.primary,
+                                        )
+                                      : null,
+                                  child: Text(
+                                    _retryAllBulkBusy
+                                        ? 'Повтор: ${retryBulkProgressLabel ?? '…'}'
+                                        : showRetryAllReadyHint
+                                            ? 'Повторить через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}'
+                                            : 'Повторить все',
+                                  ),
+                                ),
+                                if (_retryAllBulkBusy)
+                                  TextButton(
+                                    onPressed: _cancelRetryAllBulk,
+                                    child: Text(
+                                      _retryAllBulkCancelRequested
+                                          ? 'Останавливаем...'
+                                          : 'Остановить',
+                                    ),
+                                  ),
+                                TextButton(
+                                  onPressed: (_sending || _retryAllBulkBusy)
+                                      ? null
+                                      : _retryReadyFailedPending,
+                                  style: hasReadyManualRetryItems
+                                      ? TextButton.styleFrom(
+                                          foregroundColor: scheme.primary,
+                                        )
+                                      : null,
+                                  child: const Text('Повторить готовые'),
+                                ),
+                                if (manualReadyRetryRemainingSeconds > 0)
+                                  TextButton(
+                                    onPressed: (_sending || _retryAllBulkBusy)
+                                        ? null
+                                        : _cancelManualReadyRetrySchedule,
+                                    child: const Text('Отменить автозапуск'),
+                                  ),
+                                TextButton(
+                                  onPressed: (_sending || _retryAllBulkBusy)
+                                      ? null
+                                      : _clearAllFailedPending,
+                                  child: const Text('Очистить'),
+                                ),
+                                TextButton(
+                                  onPressed: (_sending || _retryAllBulkBusy)
+                                      ? null
+                                      : () => _setShowOnlyFailedMessages(
+                                            !_showOnlyFailedMessages,
+                                          ),
+                                  child: Text(
+                                    _showOnlyFailedMessages
+                                        ? 'Показать все'
+                                        : 'Показать в чате',
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: (_sending || _retryAllBulkBusy)
+                                      ? null
+                                      : () => unawaited(
+                                            _toggleAutoRetryOnLimitsInThread(
+                                                true),
+                                          ),
+                                  child: const Text('Включить'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       if (_sending)
                         Material(
                           color:
@@ -4311,8 +7065,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                       if (_pendingMediaRetry != null)
                         _pendingMediaRetryBanner(scheme),
-                      if (_showVoiceHint && !_recording && !_sending)
-                        Material(
+                      _animatedVisibility(
+                        visible: _showVoiceHint && !_recording && !_sending,
+                        keyName: 'voice-hint',
+                        child: Material(
                           color:
                               scheme.tertiaryContainer.withValues(alpha: 0.45),
                           child: ListTile(
@@ -4338,52 +7094,69 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                         ),
-                      if (_editingMessage != null)
-                        Material(
-                          color:
-                              scheme.primaryContainer.withValues(alpha: 0.35),
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.edit_outlined, size: 20),
-                            title: const Text('Редактирование'),
-                            subtitle: Text(
-                              _editingMessage!.content,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close, size: 20),
-                              onPressed: _cancelEdit,
-                            ),
-                          ),
-                        ),
-                      if (_replyTo != null)
-                        Material(
-                          color: scheme.surfaceContainerHighest,
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.reply_rounded, size: 20),
-                            title: Text(
-                              _replyTo!.isMine
-                                  ? 'Вы'
-                                  : (_replyTo!.senderName ??
-                                      _senderNames[_replyTo!.senderId] ??
-                                      _conversation.displayTitle),
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                            subtitle: Text(
-                              _messagePreview(_replyTo!),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close, size: 20),
-                              onPressed: () => setState(() => _replyTo = null),
-                            ),
-                          ),
-                        ),
-                      if (_recording)
-                        Material(
+                      ),
+                      _animatedVisibility(
+                        visible: _editingMessage != null,
+                        keyName: 'edit-banner',
+                        child: _editingMessage == null
+                            ? const SizedBox.shrink()
+                            : Material(
+                                color: scheme.primaryContainer
+                                    .withValues(alpha: 0.35),
+                                child: ListTile(
+                                  dense: true,
+                                  leading:
+                                      const Icon(Icons.edit_outlined, size: 20),
+                                  title: const Text('Редактирование'),
+                                  subtitle: Text(
+                                    _editingMessage!.content,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.close, size: 20),
+                                    onPressed: _cancelEdit,
+                                  ),
+                                ),
+                              ),
+                      ),
+                      _animatedVisibility(
+                        visible: _replyTo != null,
+                        keyName: 'reply-banner',
+                        child: _replyTo == null
+                            ? const SizedBox.shrink()
+                            : Material(
+                                color: scheme.surfaceContainerHighest,
+                                child: ListTile(
+                                  dense: true,
+                                  leading:
+                                      const Icon(Icons.reply_rounded, size: 20),
+                                  title: Text(
+                                    _replyTo!.isMine
+                                        ? 'Вы'
+                                        : (_replyTo!.senderName ??
+                                            _senderNames[_replyTo!.senderId] ??
+                                            _conversation.displayTitle),
+                                    style:
+                                        Theme.of(context).textTheme.labelMedium,
+                                  ),
+                                  subtitle: Text(
+                                    _messagePreview(_replyTo!),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.close, size: 20),
+                                    onPressed: () =>
+                                        setState(() => _replyTo = null),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      _animatedVisibility(
+                        visible: _recording,
+                        keyName: 'record-banner',
+                        child: Material(
                           color: _recordCancelled
                               ? scheme.errorContainer.withValues(alpha: 0.5)
                               : scheme.primaryContainer.withValues(alpha: 0.35),
@@ -4425,33 +7198,110 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                         ),
+                      ),
+                      _animatedVisibility(
+                        visible: !canSendInGroup,
+                        keyName: 'group-readonly-banner',
+                        child: Material(
+                          color:
+                              scheme.secondaryContainer.withValues(alpha: 0.45),
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.lock_outline, size: 20),
+                            title: Text(
+                              isRestrictedByModeration
+                                  ? 'Отправка сообщений ограничена модератором'
+                                  : 'Только админы могут отправлять сообщения',
+                            ),
+                          ),
+                        ),
+                      ),
+                      _animatedVisibility(
+                        visible: showPostingLimitsHint,
+                        keyName: 'group-posting-limits-banner',
+                        child: Material(
+                          color:
+                              scheme.tertiaryContainer.withValues(alpha: 0.4),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(activeCooldownIcon, size: 20),
+                            title: Text(
+                              postingLimitsHint,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => _showPostingLimitsInfo(
+                              floodCooldownActive: floodCooldownActive,
+                              activeCooldownSeconds: activeCooldownSeconds,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _animatedVisibility(
+                        visible: !canSendNow && canSendInGroup,
+                        keyName: 'group-active-cooldown-banner',
+                        child: Material(
+                          color:
+                              scheme.tertiaryContainer.withValues(alpha: 0.6),
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(activeCooldownIcon, size: 20),
+                            title: Text(
+                              '$activeCooldownLabel: временная пауза перед отправкой',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              'Можно отправить через ${_formatSlowModeCountdown(activeCooldownSeconds)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => _showPostingLimitsInfo(
+                              floodCooldownActive: floodCooldownActive,
+                              activeCooldownSeconds: activeCooldownSeconds,
+                            ),
+                          ),
+                        ),
+                      ),
                       SafeArea(
                         top: false,
                         child: Container(
-                          margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                          margin: const EdgeInsets.fromLTRB(10, 6, 10, 10),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 6),
+                              horizontal: 6, vertical: 5),
                           decoration: BoxDecoration(
                             color: scheme.surface,
                             borderRadius: BorderRadius.circular(28),
+                            border: Border.all(
+                              color:
+                                  scheme.outlineVariant.withValues(alpha: 0.35),
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: scheme.shadow.withValues(alpha: 0.08),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                                color: scheme.shadow.withValues(alpha: 0.07),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
                               ),
                             ],
                           ),
                           child: Row(
                             children: [
                               IconButton(
-                                onPressed: _recording ? null : _showAttachMenu,
+                                onPressed: (_recording || !canSendNow)
+                                    ? null
+                                    : _showAttachMenu,
                                 icon: const Icon(Icons.attach_file_outlined),
                                 tooltip: 'Вложение',
                                 color: scheme.onSurfaceVariant,
+                                iconSize: _composerIconSize,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: _composerButtonSide,
+                                  height: _composerButtonSide,
+                                ),
                               ),
                               IconButton(
-                                onPressed: _recording
+                                onPressed: (_recording || !canSendNow)
                                     ? null
                                     : () => _pickImage(
                                           source: ImageSource.camera,
@@ -4459,12 +7309,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 icon: const Icon(Icons.photo_camera_outlined),
                                 tooltip: 'Камера',
                                 color: scheme.primary,
+                                iconSize: _composerIconSize,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: _composerButtonSide,
+                                  height: _composerButtonSide,
+                                ),
                               ),
                               Expanded(
                                 child: TextField(
                                   controller: _controller,
                                   focusNode: _inputFocusNode,
-                                  enabled: !_recording,
+                                  enabled: !_recording && canSendInGroup,
                                   minLines: 1,
                                   maxLines: 5,
                                   textInputAction: TextInputAction.send,
@@ -4475,16 +7331,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   decoration: InputDecoration(
                                     hintText: _recording
                                         ? 'Удерживайте микрофон…'
-                                        : (_editingMessage != null
-                                            ? 'Изменить сообщение'
-                                            : (_hasText
-                                                ? 'Сообщение'
-                                                : 'Сообщение или удержите 🎤')),
+                                        : (!canSendInGroup
+                                            ? (isRestrictedByModeration
+                                                ? 'Ваши сообщения временно ограничены'
+                                                : 'В этой группе писать могут только админы')
+                                            : (activeCooldownSeconds > 0
+                                                ? '$activeCooldownLabel: подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
+                                                : (_editingMessage != null
+                                                    ? 'Изменить сообщение'
+                                                    : (_hasText
+                                                        ? 'Сообщение'
+                                                        : 'Сообщение или удержите 🎤')))),
                                     filled: true,
-                                    fillColor: Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? const Color(0xFF242F3D)
-                                        : const Color(0xFFF1F3F5),
+                                    fillColor: scheme.surfaceContainerHighest
+                                        .withValues(alpha: 0.9),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(22),
                                       borderSide: BorderSide.none,
@@ -4497,37 +7357,158 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 ),
                               ),
                               const SizedBox(width: 2),
-                              if (_hasText && !_recording)
-                                IconButton.filled(
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: scheme.primary,
-                                    foregroundColor: scheme.onPrimary,
-                                    shape: const CircleBorder(),
+                              AnimatedSwitcher(
+                                duration: _uiAnimDuration,
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, animation) =>
+                                    FadeTransition(
+                                  opacity: animation,
+                                  child: ScaleTransition(
+                                    scale: Tween<double>(
+                                      begin: 0.94,
+                                      end: 1,
+                                    ).animate(animation),
+                                    child: child,
                                   ),
-                                  onPressed: _recording ? null : _sendText,
-                                  icon: _sending
-                                      ? SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: scheme.onPrimary,
-                                          ),
-                                        )
-                                      : Icon(
-                                          _editingMessage != null
-                                              ? Icons.check_rounded
-                                              : Icons.send_rounded,
-                                        ),
-                                )
-                              else
-                                ChatVoiceMicButton(
-                                  enabled: !_sending,
-                                  recording: _recording,
-                                  onHoldStart: _onHoldStart,
-                                  onHoldEnd: _onHoldEnd,
-                                  onHoldDragDx: _onHoldDrag,
                                 ),
+                                child: (_hasText && !_recording)
+                                    ? GestureDetector(
+                                        key: const ValueKey('send-btn'),
+                                        onLongPress: _editingMessage == null &&
+                                                canSendNow
+                                            ? _scheduleCurrentTextMessage
+                                            : null,
+                                        child: IconButton.filled(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: scheme.primary,
+                                            foregroundColor: scheme.onPrimary,
+                                            shape: const CircleBorder(),
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(
+                                              _composerButtonSide,
+                                              _composerButtonSide,
+                                            ),
+                                          ),
+                                          onPressed: (_recording || !canSendNow)
+                                              ? null
+                                              : _sendText,
+                                          icon: _sending
+                                              ? SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: scheme.onPrimary,
+                                                  ),
+                                                )
+                                              : (activeCooldownSeconds > 0
+                                                  ? AnimatedScale(
+                                                      duration: const Duration(
+                                                        milliseconds: 180,
+                                                      ),
+                                                      scale: slowModePulseScale,
+                                                      child: SizedBox(
+                                                        width: 26,
+                                                        height: 26,
+                                                        child: Stack(
+                                                          alignment:
+                                                              Alignment.center,
+                                                          children: [
+                                                            SizedBox(
+                                                              width: 24,
+                                                              height: 24,
+                                                              child:
+                                                                  CircularProgressIndicator(
+                                                                strokeWidth:
+                                                                    isSlowModeUnlockSoon
+                                                                        ? 2.4
+                                                                        : 2,
+                                                                value:
+                                                                    activeCooldownProgress,
+                                                                backgroundColor:
+                                                                    scheme
+                                                                        .onPrimary
+                                                                        .withValues(
+                                                                  alpha: 0.28,
+                                                                ),
+                                                                color:
+                                                                    isSlowModeUnlockSoon
+                                                                        ? scheme
+                                                                            .onPrimary
+                                                                            .withValues(
+                                                                            alpha:
+                                                                                0.98,
+                                                                          )
+                                                                        : scheme
+                                                                            .onPrimary,
+                                                              ),
+                                                            ),
+                                                            AnimatedSwitcher(
+                                                              duration:
+                                                                  const Duration(
+                                                                milliseconds:
+                                                                    180,
+                                                              ),
+                                                              transitionBuilder: (
+                                                                child,
+                                                                animation,
+                                                              ) =>
+                                                                  FadeTransition(
+                                                                opacity:
+                                                                    animation,
+                                                                child:
+                                                                    ScaleTransition(
+                                                                  scale: Tween<
+                                                                      double>(
+                                                                    begin: 0.92,
+                                                                    end: 1,
+                                                                  ).animate(
+                                                                    animation,
+                                                                  ),
+                                                                  child: child,
+                                                                ),
+                                                              ),
+                                                              child: Text(
+                                                                _formatSlowModeCompact(
+                                                                  activeCooldownSeconds,
+                                                                ),
+                                                                key: ValueKey(
+                                                                  activeCooldownSeconds,
+                                                                ),
+                                                                style:
+                                                                    TextStyle(
+                                                                  color: scheme
+                                                                      .onPrimary,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                  fontSize: 9,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : Icon(
+                                                      _editingMessage != null
+                                                          ? Icons.check_rounded
+                                                          : Icons.send_rounded,
+                                                      size: _composerIconSize,
+                                                    )),
+                                        ),
+                                      )
+                                    : ChatVoiceMicButton(
+                                        key: const ValueKey('mic-btn'),
+                                        enabled: !_sending && canSendNow,
+                                        recording: _recording,
+                                        onHoldStart: _onHoldStart,
+                                        onHoldEnd: _onHoldEnd,
+                                        onHoldDragDx: _onHoldDrag,
+                                      ),
+                              ),
                             ],
                           ),
                         ),
@@ -4563,6 +7544,8 @@ class _PendingMediaSend {
   final int? voiceDurationSec;
   String? uploadedMediaUrl;
   int attempts = 0;
+  int? lastRetryAfterSeconds;
+  DateTime? lastLimitedAt;
 }
 
 class _PendingTextSend {
@@ -4578,6 +7561,20 @@ class _PendingTextSend {
   final int tempId;
   final int? replyToMessageId;
   int attempts = 0;
+  int? lastRetryAfterSeconds;
+  DateTime? lastLimitedAt;
+}
+
+class _ManualRetryTask {
+  _ManualRetryTask({
+    required this.remainingSeconds,
+    required this.isMedia,
+    required this.action,
+  });
+
+  final int? remainingSeconds;
+  final bool isMedia;
+  final Future<void> Function() action;
 }
 
 class _MessageCluster {
@@ -4599,6 +7596,7 @@ class _Bubble extends StatelessWidget {
     required this.message,
     required this.scheme,
     this.highlightQuery,
+    this.isActiveSearchMatch = false,
     this.replyQuote,
     this.onReplyTap,
     this.showSenderName = false,
@@ -4622,6 +7620,7 @@ class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final ColorScheme scheme;
   final String? highlightQuery;
+  final bool isActiveSearchMatch;
   final String? replyQuote;
   final VoidCallback? onReplyTap;
   final bool showSenderName;
@@ -4641,7 +7640,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
 
-  static const _metaReserveWidth = 54.0;
+  static const _metaReserveWidth = 52.0;
 
   BorderRadius _bubbleRadius(bool mine) {
     const large = Radius.circular(18);
@@ -4675,7 +7674,7 @@ class _Bubble extends StatelessWidget {
         if (isConversationPinned) ...[
           Icon(
             Icons.push_pin,
-            size: 11,
+            size: 10.5,
             color:
                 onMedia ? Colors.white.withValues(alpha: 0.9) : scheme.primary,
           ),
@@ -4683,7 +7682,7 @@ class _Bubble extends StatelessWidget {
         ],
         Text(
           formatChatMessageTime(message.createdAt),
-          style: TextStyle(color: timeColor, fontSize: 11, height: 1.1),
+          style: TextStyle(color: timeColor, fontSize: 10.5, height: 1.08),
         ),
         if (message.isEdited) ...[
           const SizedBox(width: 3),
@@ -4691,9 +7690,9 @@ class _Bubble extends StatelessWidget {
             'изм.',
             style: TextStyle(
               color: editedColor,
-              fontSize: 11,
+              fontSize: 10.5,
               fontStyle: FontStyle.italic,
-              height: 1.1,
+              height: 1.08,
             ),
           ),
         ],
@@ -4701,7 +7700,7 @@ class _Bubble extends StatelessWidget {
           const SizedBox(width: 3),
           Icon(
             message.isRead ? Icons.done_all : Icons.done,
-            size: 13,
+            size: 12.5,
             color: statusColor,
           ),
         ],
@@ -4861,8 +7860,8 @@ class _Bubble extends StatelessWidget {
                         children: [
                           Text(btn.text),
                           if (btn.callbackData != null &&
-                              callbackLoadingData
-                                  .contains('${message.id}:${btn.callbackData}'))
+                              callbackLoadingData.contains(
+                                  '${message.id}:${btn.callbackData}'))
                             Padding(
                               padding: const EdgeInsets.only(left: 8),
                               child: SizedBox(
@@ -4893,7 +7892,7 @@ class _Bubble extends StatelessWidget {
         ? (isDark
             ? AppColors.telegramOutgoingDark
             : AppColors.telegramOutgoingLight)
-        : scheme.surface;
+        : (isDark ? scheme.surfaceContainerLow : scheme.surfaceContainerLowest);
     final fg = mine && isDark ? Colors.white : scheme.onSurface;
     final quoteBg = mine
         ? scheme.primary.withValues(alpha: 0.12)
@@ -4911,6 +7910,8 @@ class _Bubble extends StatelessWidget {
         replyQuote != null ||
         (showSenderName && (senderLabel?.isNotEmpty ?? false)) ||
         message.reactions.isNotEmpty;
+    final activeBorderColor = scheme.primary.withValues(alpha: 0.75);
+    final activeShadowColor = scheme.primary.withValues(alpha: 0.28);
 
     Widget mainContent;
     if (message.type == 'voice' && message.mediaUrl != null) {
@@ -5108,15 +8109,39 @@ class _Bubble extends StatelessWidget {
     final bubble = Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding:
-          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 7, 10, 5),
+          isMedia ? contentPadding : const EdgeInsets.fromLTRB(11, 8, 11, 6),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+        maxWidth: MediaQuery.sizeOf(context).width * 0.76,
       ),
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,
         borderRadius: bubbleRadius,
-        border: null,
+        border: isActiveSearchMatch
+            ? Border.all(color: activeBorderColor, width: 1.6)
+            : (!mine && bubbleNeedsBackground
+                ? Border.all(
+                    color: scheme.outlineVariant.withValues(alpha: 0.35),
+                  )
+                : null),
+        boxShadow: isActiveSearchMatch
+            ? [
+                BoxShadow(
+                  color: activeShadowColor,
+                  blurRadius: 12,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : (!mine && bubbleNeedsBackground
+                ? [
+                    BoxShadow(
+                      color: scheme.shadow.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

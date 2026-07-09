@@ -19,6 +19,7 @@ import '../features/settings/presentation/allergies_screen.dart';
 import '../features/settings/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
+import '../features/settings/presentation/creator_revenue_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
 import '../features/settings/presentation/support_security_screen.dart';
@@ -76,6 +77,7 @@ import '../features/favorites/favorites_page.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
+import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
@@ -134,6 +136,9 @@ String? parseDeepLinkToGoPath(String raw) {
     }
     if (uri.host == 'chat' && uri.pathSegments.isNotEmpty) {
       return '/chats/thread/${uri.pathSegments.first}';
+    }
+    if (uri.host == 'chat-invite' && uri.pathSegments.isNotEmpty) {
+      return '/chat-invite/${uri.pathSegments.first}';
     }
     if (uri.host == 'subscription') {
       if (uri.pathSegments.contains('success')) {
@@ -284,6 +289,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isAuthRoute = loc == LoginRoute.path ||
           loc == RegisterRoute.path ||
           loc == '/invite' ||
+          loc.startsWith(ChatInviteJoinRoute.basePath) ||
           loc == ForgotPasswordRoute.path ||
           loc == ResetPasswordRoute.path ||
           loc.startsWith(VerifyEmailRoute.path) ||
@@ -613,6 +619,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             const MaterialPage(child: StarsWalletScreen()),
       ),
       GoRoute(
+        path: CreatorRevenueRoute.path,
+        name: CreatorRevenueRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: CreatorRevenueScreen()),
+      ),
+      GoRoute(
         path: MyBotsRoute.path,
         name: MyBotsRoute.name,
         pageBuilder: (context, state) =>
@@ -656,6 +668,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             return '${RegisterRoute.path}?ref=${Uri.encodeComponent(ref)}';
           }
           return RegisterRoute.path;
+        },
+      ),
+      GoRoute(
+        path: ChatInviteJoinRoute.path,
+        name: ChatInviteJoinRoute.name,
+        pageBuilder: (context, state) {
+          final token = state.pathParameters['token'] ?? '';
+          return MaterialPage(
+            child: ChatInviteJoinScreen(token: token),
+          );
         },
       ),
       GoRoute(
@@ -1117,6 +1139,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final id = int.tryParse(state.pathParameters['conversationId'] ?? '');
           final extra = state.extra;
+          final openArgs = extra is ChatThreadOpenArgs ? extra : null;
+          final initialConversation = openArgs?.conversation ??
+              (extra is ChatConversation ? extra : null);
+          final initialPeer =
+              openArgs?.peer ?? (extra is ChatUserBrief ? extra : null);
           if (id == null) {
             return const MaterialPage(
               child: AppEmptyState(
@@ -1128,8 +1155,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return MaterialPage(
             child: ChatThreadLoaderScreen(
               conversationId: id,
-              initialConversation: extra is ChatConversation ? extra : null,
-              initialPeer: extra is ChatUserBrief ? extra : null,
+              initialConversation: initialConversation,
+              initialPeer: initialPeer,
+              initialJumpMessageId: openArgs?.jumpToMessageId,
             ),
           );
         },
@@ -1277,6 +1305,24 @@ class ChatThreadRoute {
   static String pathForId(int conversationId) => '$path/$conversationId';
 }
 
+class ChatInviteJoinRoute {
+  static const path = '/chat-invite/:token';
+  static const basePath = '/chat-invite';
+  static const name = 'chat_invite_join';
+}
+
+class ChatThreadOpenArgs {
+  const ChatThreadOpenArgs({
+    this.conversation,
+    this.peer,
+    this.jumpToMessageId,
+  });
+
+  final ChatConversation? conversation;
+  final ChatUserBrief? peer;
+  final int? jumpToMessageId;
+}
+
 /// Вкладка «Профиль» в нижней навигации (хаб, не путать с [ProfileRoute] ленты профиля).
 class ProfileTabRoute {
   static const path = '/me';
@@ -1389,6 +1435,11 @@ class SubscriptionRoute {
 class StarsWalletRoute {
   static const path = '/paid/wallet';
   static const name = 'stars_wallet';
+}
+
+class CreatorRevenueRoute {
+  static const path = '/paid/revenue';
+  static const name = 'creator_revenue';
 }
 
 class MyBotsRoute {

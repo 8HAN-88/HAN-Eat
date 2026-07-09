@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models.post import Post
 from app.models.repost import Repost
 from app.models.community import Channel
+from app.models.community_member import ChannelMember
 from app.services.channel_membership_service import (
     get_membership,
     has_channel_permission,

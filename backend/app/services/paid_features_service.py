@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.community import Channel
 from app.models.paid_features import (
+    CreatorPayoutRequest,
     CreatorBalance,
     PaidChannelSubscription,
     PaidContentPurchase,
@@ -295,7 +296,14 @@ class PaidFeaturesService:
         )
         return tx
 
-    def subscribe_channel(self, user_id: int, channel_id: int, *, months: int = 1) -> PaidChannelSubscription:
+    def subscribe_channel(
+        self,
+        user_id: int,
+        channel_id: int,
+        *,
+        months: int = 1,
+        auto_renew: bool = False,
+    ) -> PaidChannelSubscription:
         if months < 1 or months > 12:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Months must be between 1 and 12")
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
@@ -326,6 +334,7 @@ class PaidFeaturesService:
             existing.amount_stars = price
             existing.status = "active"
             existing.expires_at = expires_at
+            existing.auto_renew = auto_renew
             sub = existing
         else:
             sub = PaidChannelSubscription(
@@ -333,6 +342,7 @@ class PaidFeaturesService:
                 channel_id=channel_id,
                 amount_stars=price,
                 expires_at=expires_at,
+                auto_renew=auto_renew,
             )
             self.db.add(sub)
         self._credit_creator(
@@ -394,6 +404,82 @@ class PaidFeaturesService:
         _invalidate_user_feed_cache(self.db, post.user_id)
         self.db.flush()
         return boost
+
+    def request_creator_payout(
+        self,
+        user_id: int,
+        amount_stars: int,
+        *,
+        note: Optional[str] = None,
+        stars_to_rub_rate: float = 0.8,
+    ) -> CreatorPayoutRequest:
+        if amount_stars <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amount must be positive",
+            )
+        balance = self.creator_balance(user_id)
+        available = int(balance.available_stars or 0)
+        if amount_stars > available:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Not enough creator balance",
+            )
+        amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
+        payout = CreatorPayoutRequest(
+            creator_user_id=user_id,
+            amount_stars=amount_stars,
+            amount_rub=amount_rub,
+            status="pending",
+            note=(note or "").strip() or None,
+        )
+        balance.available_stars = available - amount_stars
+        balance.pending_stars = int(balance.pending_stars or 0) + amount_stars
+        self.db.add(payout)
+        self.db.flush()
+        return payout
+
+    def list_creator_payouts(self, user_id: int, *, limit: int = 50) -> list[CreatorPayoutRequest]:
+        return (
+            self.db.query(CreatorPayoutRequest)
+            .filter(CreatorPayoutRequest.creator_user_id == user_id)
+            .order_by(CreatorPayoutRequest.created_at.desc(), CreatorPayoutRequest.id.desc())
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+
+    def review_payout(
+        self,
+        payout_id: int,
+        *,
+        reviewer_user_id: int,
+        approve: bool,
+        note: Optional[str] = None,
+    ) -> CreatorPayoutRequest:
+        payout = (
+            self.db.query(CreatorPayoutRequest)
+            .filter(CreatorPayoutRequest.id == payout_id)
+            .first()
+        )
+        if not payout:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payout not found")
+        if payout.status != "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payout already reviewed")
+        payout.status = "approved" if approve else "rejected"
+        payout.reviewed_by_user_id = reviewer_user_id
+        payout.reviewed_at = datetime.utcnow()
+        if note is not None:
+            payout.note = note.strip() or payout.note
+        creator_balance = self.creator_balance(payout.creator_user_id)
+        if not approve:
+            creator_balance.pending_stars = max(
+                0, int(creator_balance.pending_stars or 0) - int(payout.amount_stars)
+            )
+            creator_balance.available_stars = int(creator_balance.available_stars or 0) + int(
+                payout.amount_stars
+            )
+        self.db.flush()
+        return payout
 
 
 def expire_due_post_boosts(db: Session) -> int:

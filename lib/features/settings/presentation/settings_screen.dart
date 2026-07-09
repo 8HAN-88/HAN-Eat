@@ -8,6 +8,7 @@ import '../../meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/web_app_update_service.dart';
+import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -26,12 +27,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _unreadNotificationsCount = 0;
   bool _isAdminOrModerator = false;
   bool _isAdmin = false;
+  bool _slowModeCountdownHapticsEnabled = true;
+  bool _autoRetryOnLimitsEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadUnreadCount();
     _checkAdminStatus();
+    _loadChatUiPrefs();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -56,6 +60,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       // Игнорируем ошибки
+    }
+  }
+
+  Future<void> _loadChatUiPrefs() async {
+    try {
+      final hapticsEnabled =
+          await ChatThreadUiPrefs.isSlowModeCountdownHapticsEnabled();
+      final autoRetryEnabled =
+          await ChatThreadUiPrefs.isAutoRetryOnLimitsEnabled();
+      if (!mounted) return;
+      setState(() {
+        _slowModeCountdownHapticsEnabled = hapticsEnabled;
+        _autoRetryOnLimitsEnabled = autoRetryEnabled;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleSlowModeCountdownHaptics(bool enabled) async {
+    setState(() => _slowModeCountdownHapticsEnabled = enabled);
+    try {
+      await ChatThreadUiPrefs.setSlowModeCountdownHapticsEnabled(enabled);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _slowModeCountdownHapticsEnabled = !enabled);
+    }
+  }
+
+  Future<void> _toggleAutoRetryOnLimits(bool enabled) async {
+    setState(() => _autoRetryOnLimitsEnabled = enabled);
+    try {
+      await ChatThreadUiPrefs.setAutoRetryOnLimitsEnabled(enabled);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _autoRetryOnLimitsEnabled = !enabled);
     }
   }
 
@@ -195,6 +233,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: SwitchListTile(
+                secondary: const Icon(Icons.vibration_outlined),
+                title: const Text('Вибро-отсчёт slow mode'),
+                subtitle: const Text(
+                  'Лёгкий тактильный акцент на 3-2-1 и при разблокировке отправки',
+                ),
+                value: _slowModeCountdownHapticsEnabled,
+                onChanged: _toggleSlowModeCountdownHaptics,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: SwitchListTile(
+                secondary: const Icon(Icons.autorenew_rounded),
+                title: const Text('Автоповтор при лимитах'),
+                subtitle: const Text(
+                  'Автоматически повторять отправку после slow mode и антифлуда',
+                ),
+                value: _autoRetryOnLimitsEnabled,
+                onChanged: _toggleAutoRetryOnLimits,
               ),
             ),
             const SizedBox(height: 12),

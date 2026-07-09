@@ -10,6 +10,7 @@ from app.models.post import Post
 from app.models.user import User
 from app.models.follower import Follower
 from app.models.community_member import ChannelMember
+from app.models.conversation import Message
 
 
 class AnalyticsService:
@@ -654,5 +655,55 @@ class AnalyticsService:
         return {
             "bot_id": bot_id,
             "items": attempts,
+        }
+
+    def get_chat_channel_insights(self, *, user_id: int, days: int = 30) -> Dict[str, Any]:
+        start_date = datetime.utcnow() - timedelta(days=days)
+        sent_messages = int(
+            self.db.query(func.count(Message.id))
+            .filter(
+                Message.sender_id == user_id,
+                Message.deleted_at.is_(None),
+                Message.created_at >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+        active_chats = int(
+            self.db.query(func.count(func.distinct(Message.conversation_id)))
+            .filter(
+                Message.sender_id == user_id,
+                Message.deleted_at.is_(None),
+                Message.created_at >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+        channel_joins = int(
+            self.db.query(func.count(ChannelMember.id))
+            .filter(
+                ChannelMember.user_id == user_id,
+                ChannelMember.joined_at >= start_date,
+            )
+            .scalar()
+            or 0
+        )
+        chat_events = self.db.query(func.count(AnalyticsEvent.id)).filter(
+            AnalyticsEvent.user_id == user_id,
+            AnalyticsEvent.event_type.like("chat_%"),
+            AnalyticsEvent.created_at >= start_date,
+        ).scalar() or 0
+        channel_events = self.db.query(func.count(AnalyticsEvent.id)).filter(
+            AnalyticsEvent.user_id == user_id,
+            AnalyticsEvent.event_type.like("channel_%"),
+            AnalyticsEvent.created_at >= start_date,
+        ).scalar() or 0
+        return {
+            "period_days": days,
+            "messages_sent": sent_messages,
+            "active_chats": active_chats,
+            "channel_joins": channel_joins,
+            "chat_events": int(chat_events),
+            "channel_events": int(channel_events),
         }
 

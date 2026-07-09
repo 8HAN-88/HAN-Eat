@@ -88,6 +88,31 @@ class AnalyticsService {
       throw Exception(error?['detail'] ?? 'Failed to load profile analytics: ${response.statusCode}');
     }
   }
+
+  static Future<ChatChannelInsights> getChatChannelInsights({
+    int days = 30,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated. Please log in first.');
+    }
+    final uri = Uri.parse('$baseUrl/analytics/chat-channel').replace(
+      queryParameters: {'days': days.toString()},
+    );
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return ChatChannelInsights.fromJson(data);
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>?;
+    throw Exception(error?['detail'] ?? 'Failed to load chat/channel insights');
+  }
 }
 
 class PostAnalyticsResponse {
@@ -353,6 +378,36 @@ class DailyCount {
     return DailyCount(
       date: DateTime.parse(json['date'] as String),
       count: json['count'] as int,
+    );
+  }
+}
+
+class ChatChannelInsights {
+  final int periodDays;
+  final int messagesSent;
+  final int activeChats;
+  final int channelJoins;
+  final int chatEvents;
+  final int channelEvents;
+
+  ChatChannelInsights({
+    required this.periodDays,
+    required this.messagesSent,
+    required this.activeChats,
+    required this.channelJoins,
+    required this.chatEvents,
+    required this.channelEvents,
+  });
+
+  factory ChatChannelInsights.fromJson(Map<String, dynamic> json) {
+    int readInt(dynamic v) => (v as num?)?.toInt() ?? 0;
+    return ChatChannelInsights(
+      periodDays: readInt(json['period_days']),
+      messagesSent: readInt(json['messages_sent']),
+      activeChats: readInt(json['active_chats']),
+      channelJoins: readInt(json['channel_joins']),
+      chatEvents: readInt(json['chat_events']),
+      channelEvents: readInt(json['channel_events']),
     );
   }
 }

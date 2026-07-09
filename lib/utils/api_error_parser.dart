@@ -8,10 +8,12 @@ class ApiClientException implements Exception {
     required this.message,
     this.statusCode,
     this.code,
+    this.retryAfterSeconds,
   });
 
   final int? statusCode;
   final String? code;
+  final int? retryAfterSeconds;
   final String message;
 
   bool get isContentBlocked => code == 'CONTENT_BLOCKED';
@@ -32,6 +34,10 @@ String parseApiErrorMessage(
         'Нет подключения к серверу. Проверьте интернет и попробуйте снова.',
       'timeout' => 'Превышено время ожидания ответа от сервера',
       'offline' => 'Войдите в аккаунт',
+      'group_slow_mode' =>
+        'Слишком часто. В этом чате включен slow mode, подождите немного.',
+      'group_flood_limited' =>
+        'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
       _ => detail,
     };
   }
@@ -41,6 +47,20 @@ String parseApiErrorMessage(
     final code = detail['code'] as String?;
     if (code == 'CONTENT_BLOCKED') {
       return 'Публикация не прошла модерацию и не может быть опубликована';
+    }
+    if (code == 'group_slow_mode') {
+      final retry = parseApiRetryAfterSeconds(detail);
+      if (retry != null && retry > 0) {
+        return 'Слишком часто. Подождите $retryс и попробуйте снова.';
+      }
+      return 'Слишком часто. В этом чате включен slow mode, подождите немного.';
+    }
+    if (code == 'group_flood_limited') {
+      final retry = parseApiRetryAfterSeconds(detail);
+      if (retry != null && retry > 0) {
+        return 'Лимит сообщений в минуту превышен. Подождите $retryс.';
+      }
+      return 'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.';
     }
     return fallback;
   }
@@ -62,6 +82,15 @@ String? parseApiErrorCode(dynamic detail) {
   return null;
 }
 
+int? parseApiRetryAfterSeconds(dynamic detail) {
+  if (detail is! Map) return null;
+  final raw = detail['retry_after_seconds'];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw);
+  return null;
+}
+
 ApiClientException apiExceptionFromResponse(
   int statusCode,
   Map<String, dynamic> body, {
@@ -71,6 +100,7 @@ ApiClientException apiExceptionFromResponse(
   return ApiClientException(
     statusCode: statusCode,
     code: parseApiErrorCode(detail),
+    retryAfterSeconds: parseApiRetryAfterSeconds(detail),
     message: parseApiErrorMessage(detail, fallback: fallback),
   );
 }
@@ -146,14 +176,16 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (lower.contains('broken pipe') || lower.contains('socketwrite failed')) {
     return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова.';
   }
-  if (lower.contains('connection reset') || lower.contains('connection closed')) {
+  if (lower.contains('connection reset') ||
+      lower.contains('connection closed')) {
     return 'Соединение с сервером оборвалось. Попробуйте ещё раз.';
   }
   final statusMatch = RegExp(r'\((\d{3})\)\s*$').firstMatch(raw);
   if (statusMatch != null) {
     final code = int.tryParse(statusMatch.group(1)!);
     if (code != null) {
-      final withoutCode = raw.replaceFirst(RegExp(r'\s*\(\d{3}\)\s*$'), '').trim();
+      final withoutCode =
+          raw.replaceFirst(RegExp(r'\s*\(\d{3}\)\s*$'), '').trim();
       if (withoutCode.isNotEmpty &&
           !RegExp(r'^\S+\s+\(\d{3}\)$').hasMatch(raw)) {
         return withoutCode;

@@ -91,3 +91,18 @@ class PostBoost(Base):
     expires_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
+
+class CreatorPayoutRequest(Base):
+    __tablename__ = "creator_payout_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    creator_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount_stars = Column(Integer, nullable=False)
+    amount_rub = Column(Numeric(12, 2), nullable=False)
+    status = Column(String(24), nullable=False, default="pending", index=True)  # pending|approved|rejected|paid
+    note = Column(String(512), nullable=True)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+

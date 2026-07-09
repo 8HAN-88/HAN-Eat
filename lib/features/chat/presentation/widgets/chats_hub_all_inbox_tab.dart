@@ -53,10 +53,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     with WidgetsBindingObserver {
   final _entries = <InboxHubEntry>[];
   List<Channel> _recommended = [];
+  List<ChatJoinRequestsInboxItem> _joinRequestsInbox = [];
   bool _loading = false;
   bool _started = false;
   Object? _error;
   Object? _chatsPartialError;
+  Object? _joinInboxPartialError;
   int _loadSeq = 0;
   int? _hubActionChatId;
   Timer? _pollTimer;
@@ -311,6 +313,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return;
       }
       if (event.event == 'chat.inbox' ||
+          event.event == 'chat.join_request.new' ||
           event.event == 'sync' ||
           (event.event == 'notification.new' &&
               event.notificationType == 'message')) {
@@ -448,6 +451,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           _loading = true;
           _error = null;
           _chatsPartialError = null;
+          _joinInboxPartialError = null;
         });
       }
     }
@@ -456,6 +460,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     Object? chatsError;
     List<Channel> channels = [];
     Object? channelsError;
+    List<ChatJoinRequestsInboxItem> joinInbox = [];
+    Object? joinInboxError;
     var favoriteIds = <int>{};
     var archivedChannelIds = <int>{};
 
@@ -491,6 +497,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       chatsError = e;
       if (kDebugMode) debugPrint('Chats load failed: $e');
     }
+    try {
+      joinInbox = await ChatService.listJoinRequestsInbox(limit: 50);
+    } catch (e) {
+      joinInboxError = e;
+      if (kDebugMode) debugPrint('Join inbox load failed: $e');
+    }
     if (!mounted || seq != _loadSeq) return;
 
     final earlySaved = _extractSavedChat(chats) ?? _savedChat;
@@ -523,8 +535,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       setState(() {
         _entries.clear();
         _recommended = [];
+        _joinRequestsInbox = [];
         _error = err;
         _chatsPartialError = null;
+        _joinInboxPartialError = null;
         _loading = false;
         _servingFromCache = false;
       });
@@ -571,6 +585,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _error = null;
       _chatsPartialError =
           chatsError != null && channels.isNotEmpty ? chatsError : null;
+      _joinRequestsInbox = joinInbox;
+      _joinInboxPartialError = joinInboxError;
       _loading = false;
       _servingFromCache = false;
     });
@@ -641,6 +657,34 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       );
     } finally {
       if (mounted) setState(() => _openingSaved = false);
+    }
+  }
+
+  Future<void> _reviewJoinInboxItem(
+    ChatJoinRequestsInboxItem item, {
+    required bool approve,
+  }) async {
+    try {
+      await ChatService.reviewGroupJoinRequest(
+        conversationId: item.conversation.id,
+        requestId: item.id,
+        approve: approve,
+      );
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approve ? 'Заявка принята' : 'Заявка отклонена',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -1125,6 +1169,93 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     child: const Text('Повторить'),
                   ),
                 ],
+              ),
+            ),
+          if (_joinInboxPartialError != null)
+            SliverToBoxAdapter(
+              child: MaterialBanner(
+                content: Text(
+                  'Заявки на вступление не загрузились: '
+                  '${userVisibleError(_joinInboxPartialError!)}',
+                ),
+                leading: const Icon(Icons.warning_amber_outlined),
+                actions: [
+                  TextButton(
+                    onPressed: _load,
+                    child: const Text('Повторить'),
+                  ),
+                ],
+              ),
+            ),
+          if (widget.searchQuery.trim().isEmpty &&
+              _joinRequestsInbox.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: Material(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .tertiaryContainer
+                      .withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.pending_actions_outlined),
+                          title: const Text('Заявки в модерацию'),
+                          subtitle: Text(
+                            '${_joinRequestsInbox.length} ожидают решения',
+                          ),
+                        ),
+                        ..._joinRequestsInbox.take(3).map((item) {
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              '${item.user.displayName} -> ${item.conversation.displayTitle}',
+                            ),
+                            subtitle: Text(
+                              '${item.requestedAt.day.toString().padLeft(2, '0')}.${item.requestedAt.month.toString().padLeft(2, '0')}.${item.requestedAt.year}',
+                            ),
+                            trailing: Wrap(
+                              spacing: 4,
+                              children: [
+                                TextButton(
+                                  onPressed: () => _reviewJoinInboxItem(
+                                    item,
+                                    approve: false,
+                                  ),
+                                  child: const Text('Нет'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => _reviewJoinInboxItem(
+                                    item,
+                                    approve: true,
+                                  ),
+                                  child: const Text('Да'),
+                                ),
+                              ],
+                            ),
+                            onTap: () => context.push(
+                              ChatThreadRoute.pathFor(item.conversation),
+                              extra: item.conversation,
+                            ),
+                          );
+                        }),
+                        if (_joinRequestsInbox.length > 3)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              'И ещё ${_joinRequestsInbox.length - 3} заявок',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           if (_showSavedPinned)

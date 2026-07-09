@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -17,6 +19,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
   late Future<_WalletData> _future;
   bool _checkoutLoading = false;
   WalletFilter _filter = WalletFilter.all;
+  WalletStatsPeriod _statsPeriod = WalletStatsPeriod.days30;
 
   @override
   void initState() {
@@ -28,7 +31,7 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
     final results = await Future.wait([
       PaidFeaturesService.getBalance(),
       PaidFeaturesService.getStarPackages(),
-      PaidFeaturesService.getTransactions(),
+      PaidFeaturesService.getTransactions(limit: 120),
     ]);
     return _WalletData(
       balance: results[0] as StarsBalance,
@@ -108,6 +111,20 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
                   CreatorDashboardCard(
                     balance: data.balance,
                     transactions: data.transactions,
+                    period: _statsPeriod,
+                    onPeriodChanged: (next) =>
+                        setState(() => _statsPeriod = next),
+                  ),
+                  const SizedBox(height: 10),
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: TelegramActionRow(
+                      icon: Icons.insights_outlined,
+                      title: 'Доходы автора',
+                      subtitle: 'Периоды, источники и экспорт CSV',
+                      onTap: () => context.push(CreatorRevenueRoute.path),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
                   ),
                   const SizedBox(height: 18),
                   const TelegramSectionHeader(

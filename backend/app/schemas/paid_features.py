@@ -45,12 +45,14 @@ class DonateStarsResponse(BaseModel):
 
 class SubscribeChannelRequest(BaseModel):
     months: int = Field(default=1, ge=1, le=12)
+    auto_renew: bool = False
 
 
 class SubscribeChannelResponse(BaseModel):
     channel_id: int
     expires_at: datetime
     amount_stars: int
+    auto_renew: bool = False
     balance: int
 
 
@@ -71,9 +73,36 @@ class StarTransactionResponse(BaseModel):
     amount: int
     type: str
     status: str
+    counterparty_user_id: Optional[int] = None
     reference_type: Optional[str] = None
     reference_id: Optional[int] = None
     meta: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreatorPayoutRequestCreate(BaseModel):
+    amount_stars: int = Field(gt=0, le=10_000_000)
+    note: Optional[str] = Field(default=None, max_length=512)
+
+
+class CreatorPayoutReviewRequest(BaseModel):
+    approve: bool
+    note: Optional[str] = Field(default=None, max_length=512)
+
+
+class CreatorPayoutResponse(BaseModel):
+    id: int
+    creator_user_id: int
+    amount_stars: int
+    amount_rub: float
+    status: str
+    note: Optional[str] = None
+    reviewed_by_user_id: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

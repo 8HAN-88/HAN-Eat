@@ -1,6 +1,11 @@
 import 'chat_poll.dart';
 
-export 'chat_poll.dart' show ChatPollMessage, parseChatPollFromContent, chatPollPreviewText, patchChatPollClosedInContent;
+export 'chat_poll.dart'
+    show
+        ChatPollMessage,
+        parseChatPollFromContent,
+        chatPollPreviewText,
+        patchChatPollClosedInContent;
 
 int _parseInt(dynamic v) {
   if (v is int) return v;
@@ -23,6 +28,13 @@ class ChatUserBrief {
     this.username,
     this.avatarUrl,
     this.lastSeenAt,
+    this.isGroupAdmin = false,
+    this.isGroupCreator = false,
+    this.canManageMembers = false,
+    this.canManagePostingPermissions = false,
+    this.sendRestricted = false,
+    this.sendRestrictedUntil,
+    this.sendRestrictionReason,
   });
 
   final int id;
@@ -30,6 +42,13 @@ class ChatUserBrief {
   final String? username;
   final String? avatarUrl;
   final DateTime? lastSeenAt;
+  final bool isGroupAdmin;
+  final bool isGroupCreator;
+  final bool canManageMembers;
+  final bool canManagePostingPermissions;
+  final bool sendRestricted;
+  final DateTime? sendRestrictedUntil;
+  final String? sendRestrictionReason;
 
   bool get isOnline {
     final seen = lastSeenAt;
@@ -57,6 +76,16 @@ class ChatUserBrief {
       username: json['username'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       lastSeenAt: lastSeen,
+      isGroupAdmin: json['is_group_admin'] as bool? ?? false,
+      isGroupCreator: json['is_group_creator'] as bool? ?? false,
+      canManageMembers: json['can_manage_members'] as bool? ?? false,
+      canManagePostingPermissions:
+          json['can_manage_posting_permissions'] as bool? ?? false,
+      sendRestricted: json['send_restricted'] as bool? ?? false,
+      sendRestrictedUntil: json['send_restricted_until'] is String
+          ? DateTime.tryParse(json['send_restricted_until'] as String)
+          : null,
+      sendRestrictionReason: json['send_restriction_reason'] as String?,
     );
   }
 }
@@ -246,6 +275,7 @@ class ChatConversation {
     this.peer,
     this.title,
     this.memberCount = 0,
+    this.pendingJoinRequestsCount = 0,
     this.membersPreview = const [],
     this.lastMessage,
     this.unreadCount = 0,
@@ -254,6 +284,16 @@ class ChatConversation {
     this.archived = false,
     this.muted = false,
     this.createdByUserId,
+    this.onlyAdminsCanPost = false,
+    this.joinByRequestEnabled = false,
+    this.slowModeSeconds = 0,
+    this.antiFloodMaxMessagesPerMinute = 0,
+    this.amIGroupAdmin = false,
+    this.amICanManageMembers = false,
+    this.amICanManagePostingPermissions = false,
+    this.amISendRestricted = false,
+    this.amISendRestrictedUntil,
+    this.amISendRestrictionReason,
   });
 
   final int id;
@@ -261,6 +301,7 @@ class ChatConversation {
   final ChatUserBrief? peer;
   final String? title;
   final int memberCount;
+  final int pendingJoinRequestsCount;
   final List<ChatUserBrief> membersPreview;
   final ChatMessage? lastMessage;
   final int unreadCount;
@@ -269,6 +310,16 @@ class ChatConversation {
   final bool archived;
   final bool muted;
   final int? createdByUserId;
+  final bool onlyAdminsCanPost;
+  final bool joinByRequestEnabled;
+  final int slowModeSeconds;
+  final int antiFloodMaxMessagesPerMinute;
+  final bool amIGroupAdmin;
+  final bool amICanManageMembers;
+  final bool amICanManagePostingPermissions;
+  final bool amISendRestricted;
+  final DateTime? amISendRestrictedUntil;
+  final String? amISendRestrictionReason;
 
   bool get isGroup => type == 'group';
 
@@ -316,6 +367,7 @@ class ChatConversation {
       peer: peer,
       title: json['title'] as String?,
       memberCount: _parseInt(json['member_count']),
+      pendingJoinRequestsCount: _parseInt(json['pending_join_requests_count']),
       membersPreview: preview,
       lastMessage: lastMessage,
       unreadCount: _parseInt(json['unread_count']),
@@ -326,15 +378,40 @@ class ChatConversation {
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])
           : null,
+      onlyAdminsCanPost: json['only_admins_can_post'] as bool? ?? false,
+      joinByRequestEnabled: json['join_by_request_enabled'] as bool? ?? false,
+      slowModeSeconds: _parseInt(json['slow_mode_seconds']),
+      antiFloodMaxMessagesPerMinute:
+          _parseInt(json['anti_flood_max_messages_per_minute']),
+      amIGroupAdmin: json['am_i_group_admin'] as bool? ?? false,
+      amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
+      amICanManagePostingPermissions:
+          json['am_i_can_manage_posting_permissions'] as bool? ?? false,
+      amISendRestricted: json['am_i_send_restricted'] as bool? ?? false,
+      amISendRestrictedUntil: json['am_i_send_restricted_until'] is String
+          ? DateTime.tryParse(json['am_i_send_restricted_until'] as String)
+          : null,
+      amISendRestrictionReason: json['am_i_send_restriction_reason'] as String?,
     );
   }
 
   ChatConversation copyWith({
     String? title,
     int? memberCount,
+    int? pendingJoinRequestsCount,
     List<ChatUserBrief>? membersPreview,
     bool? muted,
     bool? pinned,
+    bool? onlyAdminsCanPost,
+    bool? joinByRequestEnabled,
+    int? slowModeSeconds,
+    int? antiFloodMaxMessagesPerMinute,
+    bool? amIGroupAdmin,
+    bool? amICanManageMembers,
+    bool? amICanManagePostingPermissions,
+    bool? amISendRestricted,
+    DateTime? amISendRestrictedUntil,
+    String? amISendRestrictionReason,
   }) {
     return ChatConversation(
       id: id,
@@ -342,6 +419,8 @@ class ChatConversation {
       peer: peer,
       title: title ?? this.title,
       memberCount: memberCount ?? this.memberCount,
+      pendingJoinRequestsCount:
+          pendingJoinRequestsCount ?? this.pendingJoinRequestsCount,
       membersPreview: membersPreview ?? this.membersPreview,
       lastMessage: lastMessage,
       unreadCount: unreadCount,
@@ -350,6 +429,20 @@ class ChatConversation {
       archived: archived,
       muted: muted ?? this.muted,
       createdByUserId: createdByUserId,
+      onlyAdminsCanPost: onlyAdminsCanPost ?? this.onlyAdminsCanPost,
+      joinByRequestEnabled: joinByRequestEnabled ?? this.joinByRequestEnabled,
+      slowModeSeconds: slowModeSeconds ?? this.slowModeSeconds,
+      antiFloodMaxMessagesPerMinute:
+          antiFloodMaxMessagesPerMinute ?? this.antiFloodMaxMessagesPerMinute,
+      amIGroupAdmin: amIGroupAdmin ?? this.amIGroupAdmin,
+      amICanManageMembers: amICanManageMembers ?? this.amICanManageMembers,
+      amICanManagePostingPermissions:
+          amICanManagePostingPermissions ?? this.amICanManagePostingPermissions,
+      amISendRestricted: amISendRestricted ?? this.amISendRestricted,
+      amISendRestrictedUntil:
+          amISendRestrictedUntil ?? this.amISendRestrictedUntil,
+      amISendRestrictionReason:
+          amISendRestrictionReason ?? this.amISendRestrictionReason,
     );
   }
 }
@@ -374,6 +467,190 @@ class ChatContact {
       id: _parseInt(json['id']),
       user: ChatUserBrief.fromJson(userJson),
       createdAt: _parseDate(json['created_at']),
+    );
+  }
+}
+
+class ChatGroupBanEntry {
+  const ChatGroupBanEntry({
+    required this.user,
+    required this.bannedAt,
+    this.reason,
+    this.bannedUntil,
+  });
+
+  final ChatUserBrief user;
+  final DateTime bannedAt;
+  final String? reason;
+  final DateTime? bannedUntil;
+
+  factory ChatGroupBanEntry.fromJson(Map<String, dynamic> json) {
+    final userJson = json['user'];
+    if (userJson is! Map<String, dynamic>) {
+      throw FormatException('ChatGroupBanEntry: missing user');
+    }
+    return ChatGroupBanEntry(
+      user: ChatUserBrief.fromJson(userJson),
+      bannedAt: _parseDate(json['banned_at']),
+      reason: json['reason'] as String?,
+      bannedUntil: json['banned_until'] is String
+          ? DateTime.tryParse(json['banned_until'] as String)
+          : null,
+    );
+  }
+}
+
+class ChatGroupInviteLink {
+  const ChatGroupInviteLink({
+    required this.id,
+    required this.token,
+    required this.inviteLink,
+    required this.createdAt,
+    this.expiresAt,
+    this.maxUses,
+    this.usesCount = 0,
+    this.revokedAt,
+  });
+
+  final int id;
+  final String token;
+  final String inviteLink;
+  final DateTime createdAt;
+  final DateTime? expiresAt;
+  final int? maxUses;
+  final int usesCount;
+  final DateTime? revokedAt;
+
+  bool get isRevoked => revokedAt != null;
+
+  bool get isExhausted => maxUses != null && usesCount >= (maxUses ?? 0);
+
+  factory ChatGroupInviteLink.fromJson(Map<String, dynamic> json) {
+    return ChatGroupInviteLink(
+      id: _parseInt(json['id']),
+      token: json['token'] as String? ?? '',
+      inviteLink: json['invite_link'] as String? ?? '',
+      createdAt: _parseDate(json['created_at']),
+      expiresAt: json['expires_at'] is String
+          ? DateTime.tryParse(json['expires_at'] as String)
+          : null,
+      maxUses: json['max_uses'] != null ? _parseInt(json['max_uses']) : null,
+      usesCount: _parseInt(json['uses_count']),
+      revokedAt: json['revoked_at'] is String
+          ? DateTime.tryParse(json['revoked_at'] as String)
+          : null,
+    );
+  }
+}
+
+class ChatJoinByInviteResult {
+  const ChatJoinByInviteResult({
+    required this.status,
+    this.conversation,
+  });
+
+  final String status; // joined | requested
+  final ChatConversation? conversation;
+
+  factory ChatJoinByInviteResult.fromJson(Map<String, dynamic> json) {
+    final convRaw = json['conversation'];
+    ChatConversation? conv;
+    if (convRaw is Map<String, dynamic>) {
+      conv = ChatConversation.fromJson(convRaw);
+    }
+    return ChatJoinByInviteResult(
+      status: json['status'] as String? ?? 'joined',
+      conversation: conv,
+    );
+  }
+}
+
+class ChatGroupJoinRequest {
+  const ChatGroupJoinRequest({
+    required this.id,
+    required this.user,
+    required this.status,
+    required this.requestedAt,
+  });
+
+  final int id;
+  final ChatUserBrief user;
+  final String status;
+  final DateTime requestedAt;
+
+  factory ChatGroupJoinRequest.fromJson(Map<String, dynamic> json) {
+    final userRaw = json['user'];
+    if (userRaw is! Map<String, dynamic>) {
+      throw FormatException('ChatGroupJoinRequest: missing user');
+    }
+    return ChatGroupJoinRequest(
+      id: _parseInt(json['id']),
+      user: ChatUserBrief.fromJson(userRaw),
+      status: json['status'] as String? ?? 'pending',
+      requestedAt: _parseDate(json['requested_at']),
+    );
+  }
+}
+
+class ChatJoinRequestsInboxItem {
+  const ChatJoinRequestsInboxItem({
+    required this.id,
+    required this.conversation,
+    required this.user,
+    required this.status,
+    required this.requestedAt,
+  });
+
+  final int id;
+  final ChatConversation conversation;
+  final ChatUserBrief user;
+  final String status;
+  final DateTime requestedAt;
+
+  factory ChatJoinRequestsInboxItem.fromJson(Map<String, dynamic> json) {
+    final convRaw = json['conversation'];
+    final userRaw = json['user'];
+    if (convRaw is! Map<String, dynamic>) {
+      throw FormatException('ChatJoinRequestsInboxItem: missing conversation');
+    }
+    if (userRaw is! Map<String, dynamic>) {
+      throw FormatException('ChatJoinRequestsInboxItem: missing user');
+    }
+    return ChatJoinRequestsInboxItem(
+      id: _parseInt(json['id']),
+      conversation: ChatConversation.fromJson(convRaw),
+      user: ChatUserBrief.fromJson(userRaw),
+      status: json['status'] as String? ?? 'pending',
+      requestedAt: _parseDate(json['requested_at']),
+    );
+  }
+}
+
+class ChatGroupModerationLogItem {
+  const ChatGroupModerationLogItem({
+    required this.id,
+    required this.action,
+    required this.text,
+    required this.createdAt,
+    this.actor,
+  });
+
+  final int id;
+  final String action;
+  final String text;
+  final DateTime createdAt;
+  final ChatUserBrief? actor;
+
+  factory ChatGroupModerationLogItem.fromJson(Map<String, dynamic> json) {
+    final actorRaw = json['actor'];
+    return ChatGroupModerationLogItem(
+      id: _parseInt(json['id']),
+      action: json['action'] as String? ?? 'other',
+      text: json['text'] as String? ?? '',
+      createdAt: _parseDate(json['created_at']),
+      actor: actorRaw is Map<String, dynamic>
+          ? ChatUserBrief.fromJson(actorRaw)
+          : null,
     );
   }
 }
@@ -523,9 +800,8 @@ class ChatFolder {
       conversationIds: (json['conversation_ids'] as List<dynamic>? ?? [])
           .map(_parseInt)
           .toList(),
-      channelIds: (json['channel_ids'] as List<dynamic>? ?? [])
-          .map(_parseInt)
-          .toList(),
+      channelIds:
+          (json['channel_ids'] as List<dynamic>? ?? []).map(_parseInt).toList(),
       filters: ChatFolderFilters.fromJson(
         json['filters'] as Map<String, dynamic>?,
       ),
@@ -541,4 +817,75 @@ class ChatFolder {
         'channel_ids': channelIds,
         'filters': filters.toJson(),
       };
+}
+
+class ChatMessageSearchItem {
+  const ChatMessageSearchItem({
+    required this.message,
+    required this.conversation,
+    this.snippet = '',
+  });
+
+  final ChatMessage message;
+  final ChatConversation conversation;
+  final String snippet;
+
+  factory ChatMessageSearchItem.fromJson(Map<String, dynamic> json) {
+    final messageRaw = json['message'];
+    final conversationRaw = json['conversation'];
+    if (messageRaw is! Map<String, dynamic> ||
+        conversationRaw is! Map<String, dynamic>) {
+      throw FormatException('ChatMessageSearchItem: invalid payload');
+    }
+    return ChatMessageSearchItem(
+      message: ChatMessage.fromJson(messageRaw),
+      conversation: ChatConversation.fromJson(conversationRaw),
+      snippet: json['snippet'] as String? ?? '',
+    );
+  }
+}
+
+class ScheduledChatMessage {
+  const ScheduledChatMessage({
+    required this.id,
+    required this.conversationId,
+    required this.senderId,
+    required this.type,
+    required this.content,
+    this.mediaUrl,
+    this.replyToMessageId,
+    required this.sendAt,
+    this.sendWhenOnline = false,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int conversationId;
+  final int senderId;
+  final String type;
+  final String content;
+  final String? mediaUrl;
+  final int? replyToMessageId;
+  final DateTime sendAt;
+  final bool sendWhenOnline;
+  final String status;
+  final DateTime createdAt;
+
+  factory ScheduledChatMessage.fromJson(Map<String, dynamic> json) {
+    final replyRaw = json['reply_to_message_id'];
+    return ScheduledChatMessage(
+      id: _parseInt(json['id']),
+      conversationId: _parseInt(json['conversation_id']),
+      senderId: _parseInt(json['sender_id']),
+      type: json['type'] as String? ?? 'text',
+      content: json['content'] as String? ?? '',
+      mediaUrl: json['media_url'] as String?,
+      replyToMessageId: replyRaw == null ? null : _parseInt(replyRaw),
+      sendAt: _parseDate(json['send_at']),
+      sendWhenOnline: json['send_when_online'] as bool? ?? false,
+      status: json['status'] as String? ?? 'pending',
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
 }

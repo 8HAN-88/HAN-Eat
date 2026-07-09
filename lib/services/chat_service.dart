@@ -166,8 +166,7 @@ class ChatService {
       );
 
   static Future<http.Response> _patch(Uri uri, {Object? body}) => _request(
-        (client, headers) =>
-            client.patch(uri, headers: headers, body: body),
+        (client, headers) => client.patch(uri, headers: headers, body: body),
       );
 
   static Future<List<ChatConversation>> listConversations({
@@ -285,8 +284,13 @@ class ChatService {
     );
   }
 
-  static Future<({List<ChatMessage> items, bool hasMore, int? nextCursor, ChatMessage? pinnedMessage})>
-      listMessages({
+  static Future<
+      ({
+        List<ChatMessage> items,
+        bool hasMore,
+        int? nextCursor,
+        ChatMessage? pinnedMessage
+      })> listMessages({
     required int conversationId,
     int? cursor,
     int limit = 50,
@@ -412,7 +416,8 @@ class ChatService {
       '$_base/chats/$conversationId/messages/$messageId/pin',
     );
     final response = await _post(uri, body: jsonEncode({'pinned': pinned}));
-    _ensureOk(response, pinned ? 'Не удалось закрепить' : 'Не удалось открепить');
+    _ensureOk(
+        response, pinned ? 'Не удалось закрепить' : 'Не удалось открепить');
   }
 
   static List<ChatReactionSummary> parseReactions(dynamic raw) =>
@@ -441,6 +446,25 @@ class ChatService {
       conversationId: conversationId,
       type: 'text',
       content: content,
+      replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  static Future<ScheduledChatMessage> scheduleText({
+    required int conversationId,
+    required String content,
+    required DateTime sendAt,
+    bool sendWhenOnline = false,
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) async {
+    return _scheduleMessage(
+      conversationId: conversationId,
+      type: 'text',
+      content: content,
+      sendAt: sendAt,
+      sendWhenOnline: sendWhenOnline,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
     );
@@ -624,6 +648,93 @@ class ChatService {
     );
   }
 
+  static Future<ScheduledChatMessage> _scheduleMessage({
+    required int conversationId,
+    required String type,
+    required String content,
+    required DateTime sendAt,
+    bool sendWhenOnline = false,
+    String? mediaUrl,
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/messages/scheduled');
+    final response = await _post(
+      uri,
+      retries: 2,
+      timeout: _sendTimeout,
+      body: jsonEncode({
+        'type': type,
+        'content': content,
+        if (mediaUrl != null) 'media_url': mediaUrl,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
+        'send_at': sendAt.toUtc().toIso8601String(),
+        'send_when_online': sendWhenOnline,
+      }),
+    );
+    _ensureOk(response, 'Не удалось запланировать сообщение');
+    return ScheduledChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<List<ScheduledChatMessage>> listScheduledMessages({
+    required int conversationId,
+    int limit = 100,
+  }) async {
+    final uri =
+        Uri.parse('$_base/chats/$conversationId/messages/scheduled').replace(
+      queryParameters: {'limit': '$limit'},
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить отложенные сообщения');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ScheduledChatMessage>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      try {
+        out.add(ScheduledChatMessage.fromJson(raw));
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static Future<ScheduledChatMessage> cancelScheduledMessage({
+    required int conversationId,
+    required int scheduledMessageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/scheduled/$scheduledMessageId',
+    );
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось отменить отложенное сообщение');
+    return ScheduledChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ScheduledChatMessage> rescheduleMessage({
+    required int conversationId,
+    required int scheduledMessageId,
+    required DateTime sendAt,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/scheduled/$scheduledMessageId',
+    );
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        'send_at': sendAt.toUtc().toIso8601String(),
+      }),
+    );
+    _ensureOk(response, 'Не удалось перенести отложенное сообщение');
+    return ScheduledChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<void> markRead({
     required int conversationId,
     required int messageId,
@@ -711,6 +822,68 @@ class ChatService {
     );
   }
 
+  static Future<ChatConversation> setGroupOnlyAdminsCanPost({
+    required int conversationId,
+    required bool onlyAdminsCanPost,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'only_admins_can_post': onlyAdminsCanPost}),
+    );
+    _ensureOk(response, 'Не удалось обновить права отправки');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatConversation> setGroupJoinByRequestEnabled({
+    required int conversationId,
+    required bool enabled,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'join_by_request_enabled': enabled}),
+    );
+    _ensureOk(response, 'Не удалось обновить режим вступления');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatConversation> setGroupSlowModeSeconds({
+    required int conversationId,
+    required int seconds,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'slow_mode_seconds': seconds}),
+    );
+    _ensureOk(response, 'Не удалось обновить slow mode');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatConversation> setGroupAntiFloodLimit({
+    required int conversationId,
+    required int maxMessagesPerMinute,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        'anti_flood_max_messages_per_minute': maxMessagesPerMinute,
+      }),
+    );
+    _ensureOk(response, 'Не удалось обновить антифлуд лимит');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<int> addGroupMembers({
     required int conversationId,
     required List<int> userIds,
@@ -732,6 +905,276 @@ class ChatService {
     final uri = Uri.parse('$_base/chats/$conversationId/members/$userId');
     final response = await _delete(uri);
     _ensureOk(response, 'Не удалось удалить участника');
+  }
+
+  static Future<void> setGroupMemberAdmin({
+    required int conversationId,
+    required int userId,
+    required bool isAdmin,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/members/$userId/admin',
+    );
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'is_admin': isAdmin}),
+    );
+    _ensureOk(response, 'Не удалось обновить роль модератора');
+  }
+
+  static Future<void> setGroupMemberPermissions({
+    required int conversationId,
+    required int userId,
+    required bool canManageMembers,
+    required bool canManagePostingPermissions,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/members/$userId/permissions',
+    );
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        'can_manage_members': canManageMembers,
+        'can_manage_posting_permissions': canManagePostingPermissions,
+      }),
+    );
+    _ensureOk(response, 'Не удалось обновить права модератора');
+  }
+
+  static Future<void> setGroupMemberSendRestriction({
+    required int conversationId,
+    required int userId,
+    required bool sendRestricted,
+    DateTime? sendRestrictedUntil,
+    String? reason,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/members/$userId/send-restriction',
+    );
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        'send_restricted': sendRestricted,
+        'send_restricted_until': sendRestrictedUntil?.toUtc().toIso8601String(),
+        'reason': reason?.trim().isEmpty == true ? null : reason?.trim(),
+      }),
+    );
+    _ensureOk(response, 'Не удалось обновить ограничения участника');
+  }
+
+  static Future<void> banGroupMember({
+    required int conversationId,
+    required int userId,
+    String? reason,
+    DateTime? bannedUntil,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/bans/$userId');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'reason': reason?.trim().isEmpty == true ? null : reason?.trim(),
+        'banned_until': bannedUntil?.toUtc().toIso8601String(),
+      }),
+    );
+    _ensureOk(response, 'Не удалось заблокировать участника');
+  }
+
+  static Future<void> unbanGroupMember({
+    required int conversationId,
+    required int userId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/bans/$userId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось снять блокировку');
+  }
+
+  static Future<List<ChatGroupBanEntry>> listGroupBans(
+    int conversationId, {
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/bans').replace(
+      queryParameters: {'limit': '$limit'},
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить бан-лист');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatGroupBanEntry>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        out.add(ChatGroupBanEntry.fromJson(raw));
+      }
+    }
+    return out;
+  }
+
+  static Future<ChatGroupInviteLink> getGroupInviteLink(
+    int conversationId,
+  ) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/invite-link');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить ссылку-приглашение');
+    return ChatGroupInviteLink.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatGroupInviteLink> rotateGroupInviteLink(
+    int conversationId,
+  ) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/invite-link/rotate');
+    final response = await _post(uri);
+    _ensureOk(response, 'Не удалось обновить ссылку-приглашение');
+    return ChatGroupInviteLink.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatJoinByInviteResult> joinGroupByInviteToken(
+    String token,
+  ) async {
+    final clean = token.trim();
+    final uri = Uri.parse('$_base/chats/join/$clean');
+    final response = await _post(uri);
+    _ensureOk(response, 'Не удалось вступить в группу');
+    return ChatJoinByInviteResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<List<ChatGroupInviteLink>> listGroupInviteLinks(
+    int conversationId, {
+    bool includeRevoked = true,
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/invite-links').replace(
+      queryParameters: {
+        'include_revoked': includeRevoked ? 'true' : 'false',
+        'limit': '$limit',
+      },
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить ссылки-приглашения');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatGroupInviteLink>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        out.add(ChatGroupInviteLink.fromJson(raw));
+      }
+    }
+    return out;
+  }
+
+  static Future<ChatGroupInviteLink> createGroupInviteLink(
+    int conversationId, {
+    DateTime? expiresAt,
+    int? maxUses,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/invite-links');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'expires_at': expiresAt?.toUtc().toIso8601String(),
+        'max_uses': maxUses,
+      }),
+    );
+    _ensureOk(response, 'Не удалось создать ссылку-приглашение');
+    return ChatGroupInviteLink.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<void> revokeGroupInviteLink({
+    required int conversationId,
+    required int inviteLinkId,
+  }) async {
+    final uri =
+        Uri.parse('$_base/chats/$conversationId/invite-links/$inviteLinkId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось отозвать ссылку');
+  }
+
+  static Future<List<ChatGroupJoinRequest>> listGroupJoinRequests(
+    int conversationId, {
+    String status = 'pending',
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/join-requests').replace(
+      queryParameters: {
+        'status': status,
+        'limit': '$limit',
+      },
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить заявки');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatGroupJoinRequest>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        out.add(ChatGroupJoinRequest.fromJson(raw));
+      }
+    }
+    return out;
+  }
+
+  static Future<void> reviewGroupJoinRequest({
+    required int conversationId,
+    required int requestId,
+    required bool approve,
+  }) async {
+    final uri =
+        Uri.parse('$_base/chats/$conversationId/join-requests/$requestId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'approve': approve}),
+    );
+    _ensureOk(response, 'Не удалось обработать заявку');
+  }
+
+  static Future<List<ChatJoinRequestsInboxItem>> listJoinRequestsInbox({
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_base/chats/join-requests/inbox').replace(
+      queryParameters: {'limit': '$limit'},
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить инбокс заявок');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatJoinRequestsInboxItem>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        out.add(ChatJoinRequestsInboxItem.fromJson(raw));
+      }
+    }
+    return out;
+  }
+
+  static Future<List<ChatGroupModerationLogItem>> listGroupModerationLog(
+    int conversationId, {
+    String action = 'all',
+    int limit = 200,
+  }) async {
+    final uri =
+        Uri.parse('$_base/chats/$conversationId/moderation-log').replace(
+      queryParameters: {
+        'action': action,
+        'limit': '$limit',
+      },
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить историю модерации');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatGroupModerationLogItem>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        out.add(ChatGroupModerationLogItem.fromJson(raw));
+      }
+    }
+    return out;
   }
 
   static Future<void> leaveGroup({required int conversationId}) async {
@@ -816,7 +1259,45 @@ class ChatService {
     return out;
   }
 
-  static ChatFolder _folderFromResponse(http.Response response, String fallback) {
+  static Future<List<ChatMessageSearchItem>> searchMessages({
+    required String query,
+    int? conversationId,
+    String? type,
+    int limit = 40,
+  }) async {
+    final q = query.trim();
+    if (q.length < 2) return const [];
+    final uri = conversationId == null
+        ? Uri.parse('$_base/chats/messages/search').replace(
+            queryParameters: {
+              'q': q,
+              if (type != null && type.isNotEmpty) 'type': type,
+              'limit': '$limit',
+            },
+          )
+        : Uri.parse('$_base/chats/$conversationId/messages/search').replace(
+            queryParameters: {
+              'q': q,
+              if (type != null && type.isNotEmpty) 'type': type,
+              'limit': '$limit',
+            },
+          );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось выполнить поиск по сообщениям');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? [];
+    final out = <ChatMessageSearchItem>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      try {
+        out.add(ChatMessageSearchItem.fromJson(raw));
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static ChatFolder _folderFromResponse(
+      http.Response response, String fallback) {
     _ensureOk(response, fallback);
     return ChatFolder.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,

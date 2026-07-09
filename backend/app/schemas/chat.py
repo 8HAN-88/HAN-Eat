@@ -11,6 +11,13 @@ class ChatUserBrief(BaseModel):
     username: Optional[str] = None
     avatar_url: Optional[str] = None
     last_seen_at: Optional[datetime] = None
+    is_group_admin: bool = False
+    is_group_creator: bool = False
+    can_manage_members: bool = False
+    can_manage_posting_permissions: bool = False
+    send_restricted: bool = False
+    send_restricted_until: Optional[datetime] = None
+    send_restriction_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -48,6 +55,7 @@ class ConversationResponse(BaseModel):
     peer: Optional[ChatUserBrief] = None
     title: Optional[str] = None
     member_count: int = 0
+    pending_join_requests_count: int = 0
     members_preview: List[ChatUserBrief] = []
     last_message: Optional[MessageResponse] = None
     unread_count: int = 0
@@ -56,6 +64,16 @@ class ConversationResponse(BaseModel):
     archived: bool = False
     muted: bool = False
     created_by_user_id: Optional[int] = None
+    only_admins_can_post: bool = False
+    join_by_request_enabled: bool = False
+    slow_mode_seconds: int = 0
+    anti_flood_max_messages_per_minute: int = 0
+    am_i_group_admin: bool = False
+    am_i_can_manage_members: bool = False
+    am_i_can_manage_posting_permissions: bool = False
+    am_i_send_restricted: bool = False
+    am_i_send_restricted_until: Optional[datetime] = None
+    am_i_send_restriction_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -71,6 +89,16 @@ class MessageListResponse(BaseModel):
     has_more: bool = False
     next_cursor: Optional[int] = None
     pinned_message: Optional[MessageResponse] = None
+
+
+class MessageSearchItem(BaseModel):
+    message: MessageResponse
+    conversation: ConversationResponse
+    snippet: str = ""
+
+
+class MessageSearchResponse(BaseModel):
+    items: List[MessageSearchItem]
 
 
 class EditMessageRequest(BaseModel):
@@ -96,6 +124,46 @@ class SendMessageRequest(BaseModel):
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
+
+
+class ScheduleMessageRequest(BaseModel):
+    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll)$")
+    content: str = Field(default="", max_length=4000)
+    media_url: Optional[str] = Field(default=None, max_length=512)
+    reply_to_message_id: Optional[int] = None
+    client_message_id: Optional[str] = Field(default=None, max_length=64)
+    poll_question: Optional[str] = Field(default=None, max_length=300)
+    poll_description: Optional[str] = Field(default=None, max_length=500)
+    poll_options: Optional[List[str]] = None
+    poll_settings: Optional[dict] = None
+    inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
+    send_at: Optional[datetime] = None
+    send_when_online: bool = False
+
+
+class ScheduledMessageResponse(BaseModel):
+    id: int
+    conversation_id: int
+    sender_id: int
+    type: str
+    content: str
+    media_url: Optional[str] = None
+    reply_to_message_id: Optional[int] = None
+    send_at: datetime
+    send_when_online: bool = False
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduledMessageListResponse(BaseModel):
+    items: List[ScheduledMessageResponse]
+
+
+class RescheduleMessageRequest(BaseModel):
+    send_at: datetime
 
 
 class InlineKeyboardButton(BaseModel):
@@ -143,11 +211,112 @@ class MuteChatRequest(BaseModel):
 
 
 class UpdateGroupChatRequest(BaseModel):
-    title: str = Field(..., min_length=1, max_length=120)
+    title: Optional[str] = Field(None, min_length=1, max_length=120)
+    only_admins_can_post: Optional[bool] = None
+    join_by_request_enabled: Optional[bool] = None
+    slow_mode_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    anti_flood_max_messages_per_minute: Optional[int] = Field(
+        default=None, ge=0, le=120
+    )
 
 
 class AddGroupMembersRequest(BaseModel):
     user_ids: List[int] = Field(..., min_length=1)
+
+
+class GroupMemberAdminRequest(BaseModel):
+    is_admin: bool = True
+
+
+class GroupMemberPermissionsRequest(BaseModel):
+    can_manage_members: bool = False
+    can_manage_posting_permissions: bool = False
+
+
+class GroupMemberSendRestrictionRequest(BaseModel):
+    send_restricted: bool = True
+    send_restricted_until: Optional[datetime] = None
+    reason: Optional[str] = Field(default=None, max_length=240)
+
+
+class GroupMemberBanRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=240)
+    banned_until: Optional[datetime] = None
+
+
+class GroupMemberBanResponse(BaseModel):
+    user: ChatUserBrief
+    reason: Optional[str] = None
+    banned_until: Optional[datetime] = None
+    banned_at: datetime
+
+
+class GroupMemberBanListResponse(BaseModel):
+    items: List[GroupMemberBanResponse]
+
+
+class GroupInviteLinkCreateRequest(BaseModel):
+    expires_at: Optional[datetime] = None
+    max_uses: Optional[int] = Field(default=None, ge=1, le=100000)
+
+
+class GroupInviteLinkResponse(BaseModel):
+    id: int
+    token: str
+    invite_link: str
+    expires_at: Optional[datetime] = None
+    max_uses: Optional[int] = None
+    uses_count: int = 0
+    revoked_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class GroupInviteLinkListResponse(BaseModel):
+    items: List[GroupInviteLinkResponse]
+
+
+class GroupJoinRequestResponse(BaseModel):
+    id: int
+    user: ChatUserBrief
+    status: str
+    requested_at: datetime
+
+
+class GroupJoinRequestListResponse(BaseModel):
+    items: List[GroupJoinRequestResponse]
+
+
+class GroupJoinRequestReviewRequest(BaseModel):
+    approve: bool = True
+
+
+class JoinByInviteResponse(BaseModel):
+    status: str  # joined | requested
+    conversation: Optional[ConversationResponse] = None
+
+
+class JoinRequestsInboxItemResponse(BaseModel):
+    id: int
+    conversation: ConversationResponse
+    user: ChatUserBrief
+    status: str
+    requested_at: datetime
+
+
+class JoinRequestsInboxResponse(BaseModel):
+    items: List[JoinRequestsInboxItemResponse]
+
+
+class GroupModerationLogItemResponse(BaseModel):
+    id: int
+    action: str
+    text: str
+    created_at: datetime
+    actor: Optional[ChatUserBrief] = None
+
+
+class GroupModerationLogResponse(BaseModel):
+    items: List[GroupModerationLogItemResponse]
 
 
 class ContactResponse(BaseModel):
@@ -243,3 +412,5 @@ class ChatFolderItemRequest(BaseModel):
 
 MessageResponse.model_rebuild()
 SendMessageRequest.model_rebuild()
+ScheduleMessageRequest.model_rebuild()
+RescheduleMessageRequest.model_rebuild()

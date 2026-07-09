@@ -6,6 +6,7 @@ import '../core/share/system_share.dart';
 import '../models/post_model.dart';
 import '../models/recipe.dart';
 import '../services/channel_service.dart';
+import '../services/chat_service.dart';
 import '../services/repost_service.dart';
 import '../services/share_link_service.dart';
 import '../utils/api_error_parser.dart';
@@ -129,6 +130,7 @@ class _PostShareSheet extends StatefulWidget {
 
 class _PostShareSheetState extends State<_PostShareSheet> {
   bool _loadingChannels = false;
+  bool _sendingToChat = false;
 
   Future<void> _copyLink(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: widget.link));
@@ -244,6 +246,71 @@ class _PostShareSheetState extends State<_PostShareSheet> {
     }
   }
 
+  Future<void> _sendToChat(BuildContext context) async {
+    if (_sendingToChat) return;
+    setState(() => _sendingToChat = true);
+    try {
+      final chats = await ChatService.listConversations();
+      if (!mounted) return;
+      if (chats.isEmpty) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          const SnackBar(content: Text('Нет чатов для отправки')),
+        );
+        return;
+      }
+      final picked = await showModalBottomSheet(
+        context: this.context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Отправить в чат')),
+              for (final c in chats)
+                ListTile(
+                  leading: Icon(
+                    c.isSaved
+                        ? Icons.bookmark_rounded
+                        : c.isGroup
+                            ? Icons.groups_rounded
+                            : Icons.person_rounded,
+                  ),
+                  title: Text(c.displayTitle),
+                  onTap: () => Navigator.pop(ctx, c),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+      final shareText = widget.post.type == 'reel'
+          ? ShareLinkService.reelShareText(widget.post)
+          : ShareLinkService.postShareText(widget.post);
+      await ChatService.sendText(conversationId: picked.id, content: shareText);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text('Отправлено в «${picked.displayTitle}»')),
+      );
+    } on ApiClientException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(
+            content: Text(
+          userVisibleAuthError(e, fallback: 'Не удалось отправить в чат'),
+        )),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(this.context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingToChat = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -269,6 +336,11 @@ class _PostShareSheetState extends State<_PostShareSheet> {
             leading: const Icon(Icons.campaign_outlined),
             title: const Text('Репост в канал'),
             onTap: _loadingChannels ? null : () => _repostToChannel(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.send_rounded),
+            title: const Text('Отправить в чат'),
+            onTap: _sendingToChat ? null : () => _sendToChat(context),
           ),
           ListTile(
             leading: const Icon(Icons.link),

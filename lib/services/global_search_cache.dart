@@ -20,6 +20,7 @@ class GlobalSearchCache {
     String? scope,
     required String mainTab,
     required String query,
+    String? messageType,
     bool followingOnly = false,
     String? postType,
     String? sortBy,
@@ -42,6 +43,7 @@ class GlobalSearchCache {
       dateTo ?? '',
       minLikes?.toString() ?? '',
       minComments?.toString() ?? '',
+      messageType ?? '',
       query.trim().toLowerCase(),
     ].join('|');
   }

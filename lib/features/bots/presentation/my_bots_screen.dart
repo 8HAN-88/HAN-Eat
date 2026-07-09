@@ -167,7 +167,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _CreateBotDialog extends StatefulWidget {
-  const _CreateBotDialog({super.key});
+  const _CreateBotDialog();
 
   @override
   State<_CreateBotDialog> createState() => _CreateBotDialogState();

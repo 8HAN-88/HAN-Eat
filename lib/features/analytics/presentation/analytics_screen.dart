@@ -23,6 +23,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   Object? _loadError;
   PostAnalyticsResponse? _postAnalytics;
   ProfileAnalyticsResponse? _profileAnalytics;
+  ChatChannelInsights? _chatChannelInsights;
   
   @override
   void initState() {
@@ -52,7 +53,13 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
         final analytics = await AnalyticsService.getProfileAnalytics(
           days: _selectedDays,
         );
-        setState(() => _profileAnalytics = analytics);
+        final chatChannel = await AnalyticsService.getChatChannelInsights(
+          days: _selectedDays,
+        );
+        setState(() {
+          _profileAnalytics = analytics;
+          _chatChannelInsights = chatChannel;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -311,6 +318,31 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          if (_chatChannelInsights != null)
+            _buildMetricsCard(
+              title: 'Чаты и каналы',
+              metrics: [
+                _MetricItem(
+                  label: 'Сообщений отправлено',
+                  value: '${_chatChannelInsights!.messagesSent}',
+                  icon: Icons.send_outlined,
+                  color: Colors.teal,
+                ),
+                _MetricItem(
+                  label: 'Активные чаты',
+                  value: '${_chatChannelInsights!.activeChats}',
+                  icon: Icons.forum_outlined,
+                  color: Colors.indigo,
+                ),
+                _MetricItem(
+                  label: 'Вступления в каналы',
+                  value: '${_chatChannelInsights!.channelJoins}',
+                  icon: Icons.campaign_outlined,
+                  color: Colors.orange,
+                ),
+              ],
+            ),
           const SizedBox(height: 16),
           // Метрики контента
           _buildMetricsCard(

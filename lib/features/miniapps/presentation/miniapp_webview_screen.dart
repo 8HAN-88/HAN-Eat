@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
 class MiniAppWebViewScreen extends StatefulWidget {
@@ -30,6 +31,9 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
   String? _error;
+  bool _mainButtonVisible = false;
+  bool _mainButtonLoading = false;
+  String _mainButtonText = 'Продолжить';
 
   String get _effectiveInitData {
     final raw = widget.initData?.trim();
@@ -97,6 +101,16 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                   _error = error.description;
                 });
               },
+              shouldOverrideUrlLoading: (controller, action) async {
+                final uri = action.request.url;
+                if (uri == null) return NavigationActionPolicy.ALLOW;
+                final scheme = uri.scheme.toLowerCase();
+                if (scheme == 'http' || scheme == 'https') {
+                  return NavigationActionPolicy.ALLOW;
+                }
+                await _openExternal(uri.toString());
+                return NavigationActionPolicy.CANCEL;
+              },
               onConsoleMessage: (controller, consoleMessage) {
                 debugPrint('[MiniApp WebView] ${consoleMessage.messageLevel}: ${consoleMessage.message}');
               },
@@ -154,6 +168,32 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('MiniApp sent data: $data')),
         );
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'openLink',
+      callback: (args) async {
+        final value = args.isNotEmpty ? (args.first?.toString() ?? '') : '';
+        if (value.trim().isEmpty) return;
+        await _openExternal(value);
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'mainButton',
+      callback: (args) async {
+        if (args.isEmpty || args.first is! Map) return;
+        final payload = Map<String, dynamic>.from(args.first as Map);
+        final visible = payload['visible'];
+        final text = payload['text'];
+        final loading = payload['loading'];
+        if (!mounted) return;
+        setState(() {
+          if (visible is bool) _mainButtonVisible = visible;
+          if (text is String && text.trim().isNotEmpty) {
+            _mainButtonText = text.trim();
+          }
+          if (loading is bool) _mainButtonLoading = loading;
+        });
       },
     );
   }
@@ -214,6 +254,11 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
               if (callback) callback(result);
             },
 
+            openLink: function(url) {
+              if (!url) return;
+              window.flutter_inappwebview.callHandler('openLink', url);
+            },
+
             hapticFeedback: function(type) {
               console.log('[HanWe.WebApp] hapticFeedback:', type);
               // TODO: Реализовать через platform channel
@@ -233,9 +278,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
             // Внутренние методы
             _ready: function() {
               console.log('[HanWe.WebApp] _ready()');
-              if (eventListeners['ready']) {
-                eventListeners['ready'].forEach(cb => cb());
-              }
+              window.HanWe.WebApp._emit('ready');
             },
 
             _close: function() {
@@ -245,6 +288,35 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
             _sendData: function(data) {
               window.flutter_inappwebview.callHandler('sendData', data);
             },
+
+            _emit: function(eventType, payload) {
+              if (eventListeners[eventType]) {
+                eventListeners[eventType].forEach(cb => {
+                  try { cb(payload); } catch (_) {}
+                });
+              }
+            },
+          }
+        };
+
+        window.HanWe.WebApp.MainButton = {
+          setText: function(text) {
+            window.flutter_inappwebview.callHandler('mainButton', { text: String(text || '') });
+          },
+          show: function() {
+            window.flutter_inappwebview.callHandler('mainButton', { visible: true });
+          },
+          hide: function() {
+            window.flutter_inappwebview.callHandler('mainButton', { visible: false });
+          },
+          showProgress: function() {
+            window.flutter_inappwebview.callHandler('mainButton', { loading: true });
+          },
+          hideProgress: function() {
+            window.flutter_inappwebview.callHandler('mainButton', { loading: false });
+          },
+          onClick: function(callback) {
+            window.HanWe.WebApp.onEvent('mainButtonClicked', callback);
           }
         };
 
@@ -268,6 +340,28 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           const Spacer(),
+          if (_mainButtonVisible)
+            FilledButton(
+              onPressed: _mainButtonLoading
+                  ? null
+                  : () async {
+                      await _controller?.evaluateJavascript(
+                        source: '''
+                          if (window.HanWe && window.HanWe.WebApp) {
+                            window.HanWe.WebApp._emit('mainButtonClicked');
+                          }
+                        ''',
+                      );
+                    },
+              child: _mainButtonLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_mainButtonText),
+            ),
+          if (_mainButtonVisible) const SizedBox(width: 12),
           Text(
             'HanWe Mini App',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.outline),
@@ -280,5 +374,11 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openExternal(String value) async {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

@@ -1,12 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/chat_models.dart';
+import '../../../services/server_config.dart';
 import '../../../utils/chat_time_format.dart';
+import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/inline_video_player.dart';
 
-enum _MediaFilter { all, photos, videos, files }
+enum _MediaFilter { all, photos, videos, files, links }
 
 /// Медиа из сообщений чата с фильтрами по типу.
 class ChatMediaGalleryScreen extends StatefulWidget {
@@ -23,6 +26,17 @@ class ChatMediaGalleryScreen extends StatefulWidget {
 
 class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
   _MediaFilter _filter = _MediaFilter.all;
+
+  List<({ChatMessage message, String url})> get _allLinks {
+    final items = <({ChatMessage message, String url})>[];
+    for (final msg in widget.messages) {
+      final url = extractFirstHttpUrl(msg.content);
+      if (url == null || url.isEmpty) continue;
+      items.add((message: msg, url: url));
+    }
+    items.sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
+    return items;
+  }
 
   List<ChatMessage> get _allMedia {
     return widget.messages
@@ -44,6 +58,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         return _allMedia.where((m) => m.type == 'video').toList();
       case _MediaFilter.files:
         return _allMedia.where((m) => m.type == 'file').toList();
+      case _MediaFilter.links:
+        return _allMedia;
       case _MediaFilter.all:
         return _allMedia;
     }
@@ -52,6 +68,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
   @override
   Widget build(BuildContext context) {
     final items = _filtered;
+    final links = _allLinks;
     final imageItems =
         items.where((m) => m.type == 'image').toList(growable: false);
     final imageUrls =
@@ -74,13 +91,37 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                   label: Text('Видео'),
                 ),
                 ButtonSegment(value: _MediaFilter.files, label: Text('Файлы')),
+                ButtonSegment(value: _MediaFilter.links, label: Text('Ссылки')),
               ],
               selected: {_filter},
               onSelectionChanged: (s) => setState(() => _filter = s.first),
             ),
           ),
           Expanded(
-            child: items.isEmpty
+            child: _filter == _MediaFilter.links
+                ? links.isEmpty
+                    ? const Center(child: Text('Пока нет ссылок в этом чате'))
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(8),
+                        itemCount: links.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final item = links[index];
+                          return ListTile(
+                            leading: const Icon(Icons.link_outlined),
+                            title: Text(
+                              item.url,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              formatChatMessageTime(item.message.createdAt),
+                            ),
+                            onTap: () => _openExternal(item.url),
+                          );
+                        },
+                      )
+                : items.isEmpty
                 ? Center(
                     child: Text(
                       _filter == _MediaFilter.all
@@ -107,6 +148,11 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                             subtitle: Text(
                               formatChatMessageTime(msg.createdAt),
                             ),
+                            onTap: () {
+                              final url = msg.mediaUrl?.trim();
+                              if (url == null || url.isEmpty) return;
+                              _openExternal(ServerConfig.resolveMediaUrl(url));
+                            },
                           );
                         },
                       )
@@ -126,19 +172,26 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                             return Stack(
                               fit: StackFit.expand,
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: InlineVideoPlayer(
-                                    videoUrl: url,
-                                    onTap: () {},
+                                GestureDetector(
+                                  onTap: () => _openExternal(
+                                    ServerConfig.resolveMediaUrl(url),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: InlineVideoPlayer(
+                                      videoUrl: ServerConfig.resolveMediaUrl(url),
+                                      onTap: () {},
+                                    ),
                                   ),
                                 ),
-                                const Align(
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    Icons.play_circle_outline,
-                                    color: Colors.white,
-                                    size: 36,
+                                const IgnorePointer(
+                                  child: Align(
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                      Icons.play_circle_outline,
+                                      color: Colors.white,
+                                      size: 36,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -177,5 +230,11 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openExternal(String value) async {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 }

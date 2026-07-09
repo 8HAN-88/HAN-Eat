@@ -20,7 +20,7 @@ import '../../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
 import '../application/search_scope.dart';
 
-enum _MainSearchTab { all, posts, people, channels }
+enum _MainSearchTab { all, posts, people, channels, messages }
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({
@@ -53,6 +53,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   List<PostModel> _posts = [];
   List<ChatUserSearchItem> _people = [];
   List<Channel> _channels = [];
+  List<ChatMessageSearchItem> _messageHits = [];
   List<String> _recentQueries = [];
   int _total = 0;
   int _offset = 0;
@@ -68,6 +69,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   int? _minLikes;
   int? _minComments;
   List<String> _selectedTags = [];
+  String? _selectedMessageType;
 
   // Автодополнение
   List<String> _suggestions = [];
@@ -111,6 +113,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       (_unifiedPeopleSearch &&
           (_mainTab == _MainSearchTab.all ||
               _mainTab == _MainSearchTab.channels));
+
+  bool get _searchMessages =>
+      _chatsHubMode && _mainTab == _MainSearchTab.messages;
 
   static const _historyKey = 'main_search_history_v1';
 
@@ -196,6 +201,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       scope: widget.scope?.name,
       mainTab: _mainTab.name,
       query: query,
+      messageType: _selectedMessageType,
       followingOnly: _followingOnly,
       postType: _selectedPostType,
       sortBy: _selectedSortBy,
@@ -226,6 +232,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             _error = null;
             _people = [];
             _channels = [];
+            _messageHits = [];
           });
         }
         try {
@@ -251,6 +258,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _posts = [];
         _people = [];
         _channels = [];
+        _messageHits = [];
         _total = 0;
         _error = null;
         _isLoading = false;
@@ -263,6 +271,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       _posts = [];
       if (_searchPeople) _people = [];
       if (_searchChannels) _channels = [];
+      if (_searchMessages) _messageHits = [];
     }
 
     GlobalSearchCachedResult? cachedResult;
@@ -344,11 +353,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         }
       }
 
+      List<ChatMessageSearchItem>? messageResult;
+      if (_searchMessages && reset) {
+        try {
+          messageResult = await ChatService.searchMessages(
+            query: query,
+            limit: 40,
+            type: _selectedMessageType,
+          );
+        } catch (e) {
+          rethrow;
+        }
+      }
+
       if (!_searchPosts) {
         if (mounted) {
           setState(() {
             if (peopleResult != null) _people = peopleResult;
             if (channelsResult != null) _channels = channelsResult;
+            if (messageResult != null) _messageHits = messageResult;
             _isLoading = false;
           });
           if (reset) {
@@ -505,6 +528,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                       _posts = [];
                                       _people = [];
                                       _channels = [];
+                                      _messageHits = [];
                                       _total = 0;
                                       _error = null;
                                     });
@@ -536,6 +560,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               value: _MainSearchTab.channels,
                               label: Text('Каналы'),
                               icon: Icon(Icons.explore_outlined, size: 18),
+                            ),
+                            ButtonSegment(
+                              value: _MainSearchTab.messages,
+                              label: Text('Сообщения'),
+                              icon: Icon(Icons.forum_outlined, size: 18),
                             ),
                           ],
                           selected: {_mainTab},
@@ -572,6 +601,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               _performSearch();
                             }
                           },
+                        ),
+                      ],
+                      if (_chatsHubMode &&
+                          _mainTab == _MainSearchTab.messages) ...[
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 36,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              _buildMessageTypeChip(null, 'Все'),
+                              _buildMessageTypeChip('text', 'Текст'),
+                              _buildMessageTypeChip('image', 'Фото'),
+                              _buildMessageTypeChip('video', 'Видео'),
+                              _buildMessageTypeChip('file', 'Файлы'),
+                              _buildMessageTypeChip('voice', 'Голос'),
+                              _buildMessageTypeChip('poll', 'Опросы'),
+                            ],
+                          ),
                         ),
                       ],
                       if (_searchController.text.trim().isEmpty &&
@@ -878,14 +926,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final showPeople = _searchPeople && _people.isNotEmpty;
     final showPosts = _searchPosts && _posts.isNotEmpty;
     final showChannels = _searchChannels && _channels.isNotEmpty;
+    final showMessages = _searchMessages && _messageHits.isNotEmpty;
     final peopleOnly = (_chatsHubMode && _mainTab == _MainSearchTab.people) ||
         (_unifiedPeopleSearch && _mainTab == _MainSearchTab.people);
     final channelsOnly = _channelsOnlyMode ||
         (_chatsHubMode && _mainTab == _MainSearchTab.channels) ||
         (_unifiedPeopleSearch && _mainTab == _MainSearchTab.channels);
+    final messagesOnly = _chatsHubMode && _mainTab == _MainSearchTab.messages;
 
-    if (_isLoading && _posts.isEmpty && _people.isEmpty && _channels.isEmpty) {
+    if (_isLoading &&
+        _posts.isEmpty &&
+        _people.isEmpty &&
+        _channels.isEmpty &&
+        _messageHits.isEmpty) {
       if (peopleOnly) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (messagesOnly) {
         return const Center(child: CircularProgressIndicator());
       }
       return const PostListSkeletonLoader(itemCount: 5);
@@ -894,7 +951,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (_error != null &&
         _posts.isEmpty &&
         _people.isEmpty &&
-        _channels.isEmpty) {
+        _channels.isEmpty &&
+        _messageHits.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -922,7 +980,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       );
     }
 
-    if (_posts.isEmpty && _people.isEmpty && _channels.isEmpty && !_isLoading) {
+    if (_posts.isEmpty &&
+        _people.isEmpty &&
+        _channels.isEmpty &&
+        _messageHits.isEmpty &&
+        !_isLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -976,6 +1038,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
           itemBuilder: (context, index) =>
               _buildChannelTile(_channels[index], query),
+        ),
+      );
+    }
+
+    if (messagesOnly) {
+      return RefreshIndicator(
+        onRefresh: () => _performSearch(),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: _messageHits.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, indent: 16),
+          itemBuilder: (context, index) =>
+              _buildMessageHitTile(_messageHits[index], query),
         ),
       );
     }
@@ -1061,6 +1136,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
           ),
         );
+      }
+    }
+
+    if (showMessages) {
+      if (showPeople || showChannels || showPosts) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: Text(
+              'Сообщения',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        );
+      }
+      for (final item in _messageHits) {
+        children.add(_buildMessageHitTile(item, query));
       }
     }
 
@@ -1155,6 +1249,61 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             )
           : Text('${channel.membersCount} подписчиков'),
       onTap: () => context.push(ChannelDetailRoute.pathFor(channel.id)),
+    );
+  }
+
+  Widget _buildMessageHitTile(ChatMessageSearchItem hit, String query) {
+    final convTitle = hit.conversation.displayTitle;
+    final snippet =
+        hit.snippet.trim().isEmpty ? hit.message.content : hit.snippet;
+    return ListTile(
+      leading: const CircleAvatar(
+        child: Icon(Icons.forum_outlined, size: 18),
+      ),
+      title: HighlightedText(
+        text: convTitle,
+        query: query,
+        style: Theme.of(context).textTheme.bodyLarge!,
+      ),
+      subtitle: HighlightedText(
+        text: snippet,
+        query: query,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+      trailing: Text(
+        hit.message.type.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+      onTap: () => context.push(
+        ChatThreadRoute.pathFor(hit.conversation),
+        extra: ChatThreadOpenArgs(
+          conversation: hit.conversation,
+          jumpToMessageId: hit.message.id,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageTypeChip(String? value, String label) {
+    final selected = _selectedMessageType == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) {
+          setState(() => _selectedMessageType = value);
+          if (_searchController.text.trim().isNotEmpty) {
+            _performSearch();
+          }
+        },
+      ),
     );
   }
 }

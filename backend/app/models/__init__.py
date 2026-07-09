@@ -18,9 +18,20 @@ from app.models.ai_meal_plan_record import AiMealPlanRecord
 from app.models.notification_preferences import NotificationPreferences
 from app.models.video_processing import VideoProcessing
 from app.models.image_processing import ImageProcessing
-from app.models.conversation import Conversation, ConversationMember, Message, Contact, MessageReaction
+from app.models.conversation import (
+    Conversation,
+    ConversationMember,
+    GroupMemberBan,
+    GroupJoinRequest,
+    GroupInviteLink,
+    Message,
+    Contact,
+    MessageReaction,
+    ScheduledMessage,
+)
 from app.models.user_block import UserBlock
 from app.models.paid_features import (
+    CreatorPayoutRequest,
     CreatorBalance,
     PaidChannelSubscription,
     PaidContentPurchase,
@@ -41,7 +52,8 @@ __all__ = [
     "Subscription", "SupportTicket", "NotificationPreferences",
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
-    "PaidChannelSubscription", "PostBoost", "Story",
+    "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest", "Story",
+    "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch",
 ]
 
