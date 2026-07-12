@@ -27,29 +27,77 @@ String _repostErrorMessage(dynamic detail, {required String fallback}) {
 
 class RepostService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
-  /// Создать репост
-  static Future<RepostResponse> createRepost({
-    required int postId,
-    String? comment,
-  }) async {
+
+  static Future<String> _requireToken() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       throw Exception('Not authenticated');
     }
-    
-    final uri = Uri.parse('$baseUrl/posts/$postId/repost');
-    final response = await http.post(
+    return token;
+  }
+
+  static Future<http.Response> _postWithAuth(
+    Uri uri, {
+    Object? body,
+  }) async {
+    var token = await _requireToken();
+    var response = await http.post(
       uri,
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
+      body: body,
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+    }
+    return response;
+  }
+
+  static Future<http.Response> _deleteWithAuth(Uri uri) async {
+    var token = await _requireToken();
+    var response = await http.delete(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await http.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+    }
+    return response;
+  }
+
+  /// Создать репост
+  static Future<RepostResponse> createRepost({
+    required int postId,
+    String? comment,
+  }) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/repost');
+    final response = await _postWithAuth(
+      uri,
       body: jsonEncode({
         if (comment != null && comment.isNotEmpty) 'comment': comment,
       }),
     );
-    
+
     if (response.statusCode == 201) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return RepostResponse.fromJson(data);
@@ -71,23 +119,12 @@ class RepostService {
       );
     }
   }
-  
+
   /// Удалить репост
   static Future<void> deleteRepost(int postId) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-    
     final uri = Uri.parse('$baseUrl/posts/$postId/repost');
-    final response = await http.delete(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    
+    final response = await _deleteWithAuth(uri);
+
     if (response.statusCode == 200) {
       return;
     }
@@ -108,14 +145,14 @@ class RepostService {
       );
     }
   }
-  
+
   /// Проверить, репостнул ли пользователь пост
   static Future<bool> isPostReposted(int postId) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) {
       return false;
     }
-    
+
     final uri = Uri.parse('$baseUrl/posts/$postId/is_reposted');
     final response = await http.get(
       uri,
@@ -124,7 +161,7 @@ class RepostService {
         'Content-Type': 'application/json',
       },
     );
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['is_reposted'] as bool? ?? false;
@@ -132,14 +169,14 @@ class RepostService {
       return false;
     }
   }
-  
+
   /// Создать репост (алиас с String)
   static Future<void> repost(String postId) async {
     final postIdInt = int.tryParse(postId);
     if (postIdInt == null) throw Exception('Invalid post ID');
     await createRepost(postId: postIdInt);
   }
-  
+
   /// Удалить репост (алиас с String)
   static Future<void> unrepost(String postId) async {
     final postIdInt = int.tryParse(postId);
@@ -153,21 +190,13 @@ class RepostService {
     required int channelId,
     String? comment,
   }) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final uri = Uri.parse('$baseUrl/posts/$postId/repost-to-channel');
-    final response = await http.post(
+    final response = await _postWithAuth(
       uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
       body: jsonEncode({
         'channel_id': channelId,
-        if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+        if (comment != null && comment.trim().isNotEmpty)
+          'comment': comment.trim(),
       }),
     );
 
@@ -190,7 +219,7 @@ class RepostService {
       }
     }
   }
-  
+
   /// Получить список репостов поста
   static Future<RepostsListResponse> getReposts({
     required int postId,
@@ -198,24 +227,24 @@ class RepostService {
     int offset = 0,
   }) async {
     final token = await AuthService.getAccessTokenForApi();
-    
+
     final uri = Uri.parse('$baseUrl/posts/$postId/reposts').replace(
       queryParameters: {
         'limit': limit.toString(),
         'offset': offset.toString(),
       },
     );
-    
+
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
-    
+
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
     }
-    
+
     final response = await http.get(uri, headers: headers);
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return RepostsListResponse.fromJson(data);
@@ -229,13 +258,13 @@ class RepostResponse {
   final bool reposted;
   final int? repostId;
   final String message;
-  
+
   RepostResponse({
     required this.reposted,
     this.repostId,
     required this.message,
   });
-  
+
   factory RepostResponse.fromJson(Map<String, dynamic> json) {
     return RepostResponse(
       reposted: json['reposted'] as bool,
@@ -248,12 +277,12 @@ class RepostResponse {
 class RepostsListResponse {
   final List<RepostItem> reposts;
   final int total;
-  
+
   RepostsListResponse({
     required this.reposts,
     required this.total,
   });
-  
+
   factory RepostsListResponse.fromJson(Map<String, dynamic> json) {
     return RepostsListResponse(
       reposts: (json['reposts'] as List<dynamic>)
@@ -269,14 +298,14 @@ class RepostItem {
   final RepostUser user;
   final String? comment;
   final DateTime createdAt;
-  
+
   RepostItem({
     required this.id,
     required this.user,
     this.comment,
     required this.createdAt,
   });
-  
+
   factory RepostItem.fromJson(Map<String, dynamic> json) {
     return RepostItem(
       id: json['id'] as int,
@@ -292,14 +321,14 @@ class RepostUser {
   final String name;
   final String? username;
   final String? avatarUrl;
-  
+
   RepostUser({
     required this.id,
     required this.name,
     this.username,
     this.avatarUrl,
   });
-  
+
   factory RepostUser.fromJson(Map<String, dynamic> json) {
     return RepostUser(
       id: json['id'] as int,
@@ -309,4 +338,3 @@ class RepostUser {
     );
   }
 }
-

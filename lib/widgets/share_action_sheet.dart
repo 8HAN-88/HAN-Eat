@@ -11,6 +11,7 @@ import '../services/repost_service.dart';
 import '../services/share_link_service.dart';
 import '../utils/api_error_parser.dart';
 import 'app_avatar.dart';
+import 'chat_target_picker_sheet.dart';
 
 class ShareActionSheet {
   static Future<void> _shareAfterSheetClosed(
@@ -259,29 +260,10 @@ class _PostShareSheetState extends State<_PostShareSheet> {
         );
         return;
       }
-      final picked = await showModalBottomSheet(
-        context: this.context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(title: Text('Отправить в чат')),
-              for (final c in chats)
-                ListTile(
-                  leading: Icon(
-                    c.isSaved
-                        ? Icons.bookmark_rounded
-                        : c.isGroup
-                            ? Icons.groups_rounded
-                            : Icons.person_rounded,
-                  ),
-                  title: Text(c.displayTitle),
-                  onTap: () => Navigator.pop(ctx, c),
-                ),
-            ],
-          ),
-        ),
+      final picked = await showChatTargetPicker(
+        this.context,
+        title: 'Отправить в чат',
+        chats: chats,
       );
       if (picked == null || !mounted) return;
       final shareText = widget.post.type == 'reel'

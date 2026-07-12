@@ -60,6 +60,7 @@ import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
+import '../../../widgets/chat_target_picker_sheet.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
@@ -2938,30 +2939,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      final picked = await showModalBottomSheet<ChatConversation>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(title: Text('Переслать в…')),
-              ...targets.map(
-                (c) => ListTile(
-                  leading: Icon(
-                    c.isSaved
-                        ? Icons.bookmark_rounded
-                        : c.isGroup
-                            ? Icons.groups_rounded
-                            : Icons.person_rounded,
-                  ),
-                  title: Text(c.displayTitle),
-                  onTap: () => Navigator.pop(ctx, c),
-                ),
-              ),
-            ],
-          ),
-        ),
+      final picked = await showChatTargetPicker(
+        context,
+        title: 'Переслать в...',
+        chats: targets,
       );
       if (picked == null || !mounted) return;
       await _sendForwardTo(picked, msg);
@@ -4212,41 +4193,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      final picked = await showModalBottomSheet<ChatConversation>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(title: Text('Переслать в…')),
-              ...targets.map(
-                (c) => ListTile(
-                  leading: Icon(
-                    c.isSaved
-                        ? Icons.bookmark_rounded
-                        : c.isGroup
-                            ? Icons.groups_rounded
-                            : Icons.person_rounded,
-                  ),
-                  title: Text(c.displayTitle),
-                  onTap: () => Navigator.pop(ctx, c),
-                ),
-              ),
-            ],
-          ),
-        ),
+      final picked = await showChatTargetPicker(
+        context,
+        title: 'Переслать в...',
+        chats: targets,
       );
       if (picked == null || !mounted) return;
+      var sent = 0;
       for (final msg in selected) {
-        await _sendForwardTo(picked, msg);
+        try {
+          await _sendForwardTo(picked, msg);
+          sent += 1;
+        } catch (_) {}
       }
       if (!mounted) return;
       _exitSelectionMode();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Переслано ${selected.length} в «${picked.displayTitle}»',
+            sent == selected.length
+                ? 'Переслано $sent в «${picked.displayTitle}»'
+                : 'Переслано $sent из ${selected.length} в «${picked.displayTitle}»',
           ),
         ),
       );
@@ -4266,21 +4233,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _editingMessage = null;
           _controller.clear();
         });
+        break;
       case 'copy':
         Clipboard.setData(ClipboardData(text: _copyableText(msg)));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Скопировано')),
         );
+        break;
       case 'edit':
         _startEdit(msg);
+        break;
       case 'pin':
         _togglePinMessage(msg);
+        break;
       case 'forward':
-        _forwardMessage(msg);
+        unawaited(_forwardMessage(msg));
+        break;
       case 'delete':
         unawaited(_confirmDeleteMessage(msg));
+        break;
       case 'select':
         _enterSelectionMode(msg);
+        break;
     }
   }
 
