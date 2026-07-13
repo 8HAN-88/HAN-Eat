@@ -1,12 +1,78 @@
 // Сервис для работы с комментариями
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/network/haneat_http_client.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
 class CommentService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
+
+  static Future<String> _requireToken() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null || token.isEmpty) {
+      throw const ApiClientException(message: 'Войдите в аккаунт');
+    }
+    return token;
+  }
+
+  static Future<http.Response> _postWithAuthRetry(
+    Uri uri, {
+    Object? body,
+  }) async {
+    var token = await _requireToken();
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: body,
+        ),
+      );
+    }
+    return response;
+  }
+
+  static Future<http.Response> _deleteWithAuthRetry(Uri uri) async {
+    var token = await _requireToken();
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.delete(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+    }
+    return response;
+  }
 
   /// Общее число комментариев (без загрузки всего списка).
   static Future<int> getCommentsTotal(int postId) async {
@@ -77,18 +143,9 @@ class CommentService {
     int? parentId,
     int? rating,
   }) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final uri = Uri.parse('$baseUrl/posts/$postId/comments');
-    final response = await http.post(
+    final response = await _postWithAuthRetry(
       uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
       body: jsonEncode({
         'text': text,
         if (rating != null) 'rating': rating,
@@ -110,19 +167,8 @@ class CommentService {
 
   /// Удалить комментарий
   static Future<void> deleteComment(int commentId) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-
     final uri = Uri.parse('$baseUrl/comments/$commentId');
-    final response = await http.delete(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
+    final response = await _deleteWithAuthRetry(uri);
 
     if (response.statusCode == 204) {
       return;

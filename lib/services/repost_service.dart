@@ -1,6 +1,7 @@
 // Сервис для работы с репостами
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/network/haneat_http_client.dart';
 import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
@@ -41,23 +42,27 @@ class RepostService {
     Object? body,
   }) async {
     var token = await _requireToken();
-    var response = await http.post(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: body,
-    );
-    if (response.statusCode == 401) {
-      token = await AuthService.refreshToken();
-      response = await http.post(
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.post(
         uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
         body: body,
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: body,
+        ),
       );
     }
     return response;
@@ -65,21 +70,25 @@ class RepostService {
 
   static Future<http.Response> _deleteWithAuth(Uri uri) async {
     var token = await _requireToken();
-    var response = await http.delete(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    if (response.statusCode == 401) {
-      token = await AuthService.refreshToken();
-      response = await http.delete(
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.delete(
         uri,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.delete(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
       );
     }
     return response;

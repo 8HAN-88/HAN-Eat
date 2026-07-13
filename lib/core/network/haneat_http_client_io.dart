@@ -22,8 +22,10 @@ http.Client createHanEatStreamClient() => _buildIoClient();
 
 IOClient _buildIoClient() {
   final ioClient = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 25)
-    ..idleTimeout = const Duration(seconds: 90);
+    ..connectionTimeout = const Duration(seconds: 12)
+    ..idleTimeout = const Duration(seconds: 45)
+    ..maxConnectionsPerHost = 12
+    ..userAgent = 'HanEatApp/1.0';
 
   if (!kReleaseMode || ApiEndpointResolver.usingIpFallback) {
     ioClient.badCertificateCallback = (cert, host, port) {

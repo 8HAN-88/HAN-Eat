@@ -98,6 +98,8 @@ class _NewPostCardState extends State<NewPostCard> {
   int _repostsCount = 0;
   int _displayCommentsCount = 0;
   bool _isLoading = false;
+  bool _isLiking = false;
+  bool _isOpeningComments = false;
   bool _isSaving = false;
   bool _isReposting = false;
   bool _isSendingDonation = false;
@@ -322,7 +324,7 @@ class _NewPostCardState extends State<NewPostCard> {
   }
 
   Future<void> _toggleLike() async {
-    if (_isLoading) return;
+    if (_isLiking) return;
 
     if (_isSpoonacularRecipePost) {
       if (mounted) {
@@ -337,7 +339,7 @@ class _NewPostCardState extends State<NewPostCard> {
     }
 
     setState(() {
-      _isLoading = true;
+      _isLiking = true;
       _isLiked = !_isLiked;
       _likesCount += _isLiked ? 1 : -1;
     });
@@ -366,7 +368,7 @@ class _NewPostCardState extends State<NewPostCard> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isLiking = false);
       }
     }
   }
@@ -1537,25 +1539,36 @@ class _NewPostCardState extends State<NewPostCard> {
                           : Icons.favorite_border_rounded,
                       label: _formatCount(_likesCount),
                       color: _isLiked ? const Color(0xFFFF3040) : null,
-                      onTap: _isLoading ? null : _toggleLike,
+                      busy: _isLiking,
+                      onTap: _isLiking ? null : _toggleLike,
                     ),
                     const SizedBox(width: 12),
                     _FeedActionButton(
                       icon: Icons.mode_comment_outlined,
                       label: _formatCount(_displayCommentsCount),
+                      busy: _isOpeningComments,
                       onTap: () {
+                        if (_isOpeningComments) return;
                         unawaited(() async {
-                          if (_isSpoonacularRecipePost) {
-                            await _openRecipeFromPost();
-                            return;
+                          if (!mounted) return;
+                          setState(() => _isOpeningComments = true);
+                          try {
+                            if (_isSpoonacularRecipePost) {
+                              await _openRecipeFromPost();
+                              return;
+                            }
+                            FeedAnalyticsService.openDetail(
+                              widget.post,
+                              source: 'post_card',
+                              target: 'comments',
+                            );
+                            await widget.onCommentTap?.call();
+                            await _refreshCommentsCount();
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isOpeningComments = false);
+                            }
                           }
-                          FeedAnalyticsService.openDetail(
-                            widget.post,
-                            source: 'post_card',
-                            target: 'comments',
-                          );
-                          await widget.onCommentTap?.call();
-                          await _refreshCommentsCount();
                         }());
                       },
                     ),
@@ -1943,12 +1956,14 @@ class _FeedActionButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.color,
+    this.busy = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
   final Color? color;
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -1962,7 +1977,25 @@ class _FeedActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 27, color: onTap == null ? scheme.outline : fg),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: busy
+                  ? SizedBox(
+                      key: const ValueKey('busy'),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: fg,
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      key: const ValueKey('icon'),
+                      size: 27,
+                      color: onTap == null ? scheme.outline : fg,
+                    ),
+            ),
             const SizedBox(width: 5),
             Text(
               label,

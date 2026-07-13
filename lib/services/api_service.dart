@@ -13,6 +13,7 @@ import '../models/search_history_entry.dart';
 
 import '../features/bots/data/bot_models.dart';
 import '../features/monetization/data/donation_models.dart';
+import '../core/network/haneat_http_client.dart';
 import 'server_config.dart';
 import 'auth_service.dart';
 import '../utils/api_error_parser.dart';
@@ -222,6 +223,45 @@ class ApiService {
         'Content-Type': 'application/json',
       };
 
+  static Future<http.Response> _get(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) {
+    return HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+  }
+
+  static Future<http.Response> _post(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return HanEatHttpClient.withShared(
+      (client) => client.post(uri, headers: headers, body: body),
+    );
+  }
+
+  static Future<http.Response> _delete(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return HanEatHttpClient.withShared(
+      (client) => client.delete(uri, headers: headers, body: body),
+    );
+  }
+
+  static Future<http.Response> _patch(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) {
+    return HanEatHttpClient.withShared(
+      (client) => client.patch(uri, headers: headers, body: body),
+    );
+  }
+
   static Future<Map<String, String>> authHeaders() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null || token.isEmpty) return _jsonHeaders;
@@ -272,13 +312,11 @@ class ApiService {
           'max_ready_time': maxReadyTime,
       };
 
-      final resp = await http
-          .post(
+      final resp = await _post(
         _uri('/recipes'),
         headers: await authHeaders(),
         body: jsonEncode(body),
-      )
-          .timeout(timeout, onTimeout: () {
+      ).timeout(timeout, onTimeout: () {
         throw TimeoutException('Превышено время ожидания ответа от сервера');
       });
       _ensureSuccess(resp);
@@ -339,12 +377,10 @@ class ApiService {
       if (modeVal != null && modeVal.isNotEmpty) query['mode'] = modeVal;
       if (language != null && language.isNotEmpty) query['language'] = language;
       // Таймаут запасной: при quick обычно < нескольких секунд.
-      final resp = await http
-          .get(
+      final resp = await _get(
         _uri('/recommendations', query),
         headers: await authHeaders(),
-      )
-          .timeout(timeout, onTimeout: () {
+      ).timeout(timeout, onTimeout: () {
         throw TimeoutException('Превышено время ожидания ответа от сервера');
       });
       _ensureSuccess(resp);
@@ -496,18 +532,16 @@ class ApiService {
     if (aiScanTicket != null && aiScanTicket.isNotEmpty) {
       payload['ai_scan_ticket'] = aiScanTicket;
     }
-    final resp = await http
-        .post(
-          _uri('/analyze'),
-          headers: await authHeaders(),
-          body: jsonEncode(payload),
-        )
-        .timeout(
-          timeout,
-          onTimeout: () => throw TimeoutException(
-            'Превышено время ожидания анализа фото',
-          ),
-        );
+    final resp = await _post(
+      _uri('/analyze'),
+      headers: await authHeaders(),
+      body: jsonEncode(payload),
+    ).timeout(
+      timeout,
+      onTimeout: () => throw TimeoutException(
+        'Превышено время ожидания анализа фото',
+      ),
+    );
     _ensureSuccess(resp);
     final decoded = jsonDecode(resp.body);
     if (decoded is! Map<String, dynamic>) {
@@ -532,16 +566,14 @@ class ApiService {
 
   /// Резервирует один AI scan на бэкенде (списание кредита) и возвращает JWT для POST /analyze.
   static Future<AiScanReserveResult> reserveAiScan() async {
-    final resp = await http
-        .post(
-          _uri('/ai-scan/reserve'),
-          headers: await authHeaders(),
-        )
-        .timeout(
-          const Duration(seconds: 25),
-          onTimeout: () => throw TimeoutException(
-              'Превышено время ожидания резерва AI scan'),
-        );
+    final resp = await _post(
+      _uri('/ai-scan/reserve'),
+      headers: await authHeaders(),
+    ).timeout(
+      const Duration(seconds: 25),
+      onTimeout: () =>
+          throw TimeoutException('Превышено время ожидания резерва AI scan'),
+    );
     if (resp.statusCode == 404) {
       throw const AiScanBackendMissingException();
     }
@@ -554,12 +586,10 @@ class ApiService {
   static Future<AiScanStatus?> fetchAiScanStatus() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null || token.isEmpty) return null;
-    final resp = await http
-        .get(
-          _uri('/ai-scan/status'),
-          headers: await authHeaders(),
-        )
-        .timeout(const Duration(seconds: 12));
+    final resp = await _get(
+      _uri('/ai-scan/status'),
+      headers: await authHeaders(),
+    ).timeout(const Duration(seconds: 12));
     if (resp.statusCode == 404) {
       throw const AiScanBackendMissingException();
     }
@@ -591,7 +621,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> fetchSettings() async {
-    final resp = await http.get(_uri('/settings'));
+    final resp = await _get(_uri('/settings'));
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
@@ -603,7 +633,7 @@ class ApiService {
     final payload = <String, dynamic>{};
     if (mode != null) payload['analysis_mode'] = mode.apiValue;
     if (language != null) payload['language'] = language;
-    final resp = await http.post(
+    final resp = await _post(
       _uri('/settings'),
       headers: _jsonHeaders,
       body: jsonEncode(payload),
@@ -655,18 +685,18 @@ class ApiService {
     try {
       final uri = _uri('/posts/$id');
       var headers = await authHeaders();
-      var resp = await http.get(uri, headers: headers).timeout(
-            const Duration(seconds: 15),
-          );
+      var resp = await _get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
       if (resp.statusCode == 401) {
         final token = await AuthService.refreshToken();
         headers = {
           ...headers,
           'Authorization': 'Bearer $token',
         };
-        resp = await http.get(uri, headers: headers).timeout(
-              const Duration(seconds: 15),
-            );
+        resp = await _get(uri, headers: headers).timeout(
+          const Duration(seconds: 15),
+        );
       }
       if (resp.statusCode != 200) {
         if (kDebugMode) {
@@ -683,7 +713,7 @@ class ApiService {
   }
 
   static Future<List<Recipe>> getFavorites() async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/favorites'),
       headers: await authHeaders(),
     );
@@ -694,7 +724,7 @@ class ApiService {
   }
 
   static Future<void> addFavorite(Recipe r) async {
-    final resp = await http.post(
+    final resp = await _post(
       _uri('/favorites'),
       headers: await authHeaders(),
       body: jsonEncode({'recipe': r.toJson()}),
@@ -703,7 +733,7 @@ class ApiService {
   }
 
   static Future<void> removeFavorite(int id) async {
-    final resp = await http.delete(
+    final resp = await _delete(
       _uri('/favorites/$id'),
       headers: await authHeaders(),
     );
@@ -711,12 +741,12 @@ class ApiService {
   }
 
   static Future<void> clearServerHistory() async {
-    final resp = await http.delete(_uri('/history'));
+    final resp = await _delete(_uri('/history'));
     _ensureSuccess(resp);
   }
 
   static Future<List<SearchHistoryEntry>> fetchHistory({int limit = 25}) async {
-    final resp = await http.get(_uri('/history', {'limit': '$limit'}));
+    final resp = await _get(_uri('/history', {'limit': '$limit'}));
     _ensureSuccess(resp);
     final data = jsonDecode(resp.body) as Map<String, dynamic>;
     final list = data['history'] as List<dynamic>? ?? [];
@@ -739,8 +769,7 @@ class ApiService {
       if (tag != null && tag.isNotEmpty) {
         query['tag'] = tag;
       }
-      final resp = await http
-          .get(_uri('/community', query))
+      final resp = await _get(_uri('/community', query))
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException('Превышено время ожидания ответа от сервера');
       });
@@ -773,7 +802,7 @@ class ApiService {
   static Future<int> likeCommunityVideo(int id) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) throw Exception('Not authenticated');
-    final resp = await http.post(
+    final resp = await _post(
       _uri('/community/$id/like'),
       headers: {
         'Authorization': 'Bearer $token',
@@ -808,8 +837,7 @@ class ApiService {
       ..._jsonHeaders,
       'Authorization': 'Bearer $token',
     };
-    final resp = await http
-        .post(
+    final resp = await _post(
       _uri('/community'),
       headers: headers,
       body: jsonEncode({
@@ -824,8 +852,7 @@ class ApiService {
         'status': 'pending',
         if (channelId != null) 'channel_id': channelId,
       }),
-    )
-        .timeout(const Duration(minutes: 2), onTimeout: () {
+    ).timeout(const Duration(minutes: 2), onTimeout: () {
       throw TimeoutException('Превышено время ожидания ответа от сервера');
     });
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
@@ -927,7 +954,7 @@ class ApiService {
 
   /// GET /meal-plans/limits
   static Future<Map<String, dynamic>> getMealPlanLimits() async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/meal-plans/limits'),
       headers: await authHeaders(),
     );
@@ -942,18 +969,16 @@ class ApiService {
     String? startDate,
     int? variationSeed,
   }) async {
-    final resp = await http
-        .post(
-          _uri('/meal-plans/generate'),
-          headers: await authHeaders(),
-          body: jsonEncode({
-            'duration_days': durationDays,
-            'preferences': preferences,
-            if (startDate != null) 'start_date': startDate,
-            if (variationSeed != null) 'variation_seed': variationSeed,
-          }),
-        )
-        .timeout(const Duration(seconds: 45));
+    final resp = await _post(
+      _uri('/meal-plans/generate'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'duration_days': durationDays,
+        'preferences': preferences,
+        if (startDate != null) 'start_date': startDate,
+        if (variationSeed != null) 'variation_seed': variationSeed,
+      }),
+    ).timeout(const Duration(seconds: 45));
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
@@ -968,28 +993,26 @@ class ApiService {
     Map<String, dynamic>? preferences,
     int? variationSeed,
   }) async {
-    final resp = await http
-        .post(
-          _uri('/meal-plans/regenerate'),
-          headers: await authHeaders(),
-          body: jsonEncode({
-            'plan': plan,
-            'scope': scope,
-            'day_index': dayIndex,
-            'meal_index': mealIndex,
-            if (modifier != null) 'modifier': modifier,
-            if (preferences != null) 'preferences': preferences,
-            if (variationSeed != null) 'variation_seed': variationSeed,
-          }),
-        )
-        .timeout(const Duration(seconds: 45));
+    final resp = await _post(
+      _uri('/meal-plans/regenerate'),
+      headers: await authHeaders(),
+      body: jsonEncode({
+        'plan': plan,
+        'scope': scope,
+        'day_index': dayIndex,
+        'meal_index': mealIndex,
+        if (modifier != null) 'modifier': modifier,
+        if (preferences != null) 'preferences': preferences,
+        if (variationSeed != null) 'variation_seed': variationSeed,
+      }),
+    ).timeout(const Duration(seconds: 45));
     _ensureSuccess(resp);
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
   static Future<void> logMealPlanShoppingApplied() async {
     try {
-      await http.post(
+      await _post(
         _uri('/meal-plans/shopping-list/apply'),
         headers: await authHeaders(),
       );
@@ -998,7 +1021,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getSavedMealPlanById(
       String planId) async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/meal-plans/saved/$planId'),
       headers: await authHeaders(),
     );
@@ -1009,7 +1032,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> listSavedMealPlans(
       {int limit = 10}) async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/meal-plans/saved', {'limit': '$limit'}),
       headers: await authHeaders(),
     );
@@ -1020,7 +1043,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>?> getLatestMealPlan() async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/meal-plans/saved/latest'),
       headers: await authHeaders(),
     );
@@ -1033,29 +1056,32 @@ class ApiService {
 
   static Future<BotResponse> createBot(BotCreateRequest request) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/bots/create'),
       headers: headers,
       body: jsonEncode(request.toJson()),
     );
     _ensureSuccess(response);
-    return BotResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return BotResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   static Future<List<BotListItem>> getMyBots() async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/bots/my'),
       headers: headers,
     );
     _ensureSuccess(response);
     final list = jsonDecode(response.body) as List;
-    return list.map((e) => BotListItem.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => BotListItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<BotResponse> getBot(int botId) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/bots/$botId'),
       headers: headers,
     );
@@ -1067,7 +1093,7 @@ class ApiService {
 
   static Future<List<BotCommandCreate>> getBotCommands(int botId) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/bots/$botId/commands'),
       headers: headers,
     );
@@ -1105,7 +1131,7 @@ class ApiService {
 
   static Future<void> addBotCommand(int botId, BotCommandCreate cmd) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/bots/$botId/commands'),
       headers: headers,
       body: jsonEncode(cmd.toJson()),
@@ -1119,7 +1145,7 @@ class ApiService {
     required BotCommandCreate cmd,
   }) async {
     final headers = await authHeaders();
-    final response = await http.patch(
+    final response = await _patch(
       _uri('/bots/$botId/commands/$command'),
       headers: headers,
       body: jsonEncode({
@@ -1136,7 +1162,7 @@ class ApiService {
 
   static Future<void> deleteBotCommand(int botId, String command) async {
     final headers = await authHeaders();
-    final response = await http.delete(
+    final response = await _delete(
       _uri('/bots/$botId/commands/$command'),
       headers: headers,
     );
@@ -1148,7 +1174,7 @@ class ApiService {
     required int conversationId,
   }) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/bots/$botId/add-to-chat'),
       headers: headers,
       body: jsonEncode({'conversation_id': conversationId}),
@@ -1162,7 +1188,7 @@ class ApiService {
     String? secretToken,
   }) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/bots/$botId/webhook'),
       headers: headers,
       body: jsonEncode({
@@ -1176,7 +1202,7 @@ class ApiService {
 
   static Future<void> deleteBotWebhook(int botId) async {
     final headers = await authHeaders();
-    final response = await http.delete(
+    final response = await _delete(
       _uri('/bots/$botId/webhook'),
       headers: headers,
     );
@@ -1185,7 +1211,7 @@ class ApiService {
 
   static Future<bool> testBotWebhook(int botId) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/bots/$botId/webhook/test'),
       headers: headers,
     );
@@ -1199,7 +1225,7 @@ class ApiService {
     int days = 30,
   }) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/bots/$botId/analytics', {'days': '$days'}),
       headers: headers,
     );
@@ -1214,7 +1240,7 @@ class ApiService {
     int limit = 30,
   }) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/bots/$botId/webhook/attempts', {'limit': '$limit'}),
       headers: headers,
     );
@@ -1230,7 +1256,7 @@ class ApiService {
 
   static Future<Donation> createDonation(DonationCreateRequest request) async {
     final headers = await authHeaders();
-    final response = await http.post(
+    final response = await _post(
       _uri('/donations'),
       headers: headers,
       body: jsonEncode(request.toJson()),
@@ -1239,31 +1265,37 @@ class ApiService {
     return Donation.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  static Future<List<Donation>> getReceivedDonations({int limit = 50, int offset = 0}) async {
+  static Future<List<Donation>> getReceivedDonations(
+      {int limit = 50, int offset = 0}) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/donations/received', {'limit': '$limit', 'offset': '$offset'}),
       headers: headers,
     );
     _ensureSuccess(response);
     final list = jsonDecode(response.body) as List;
-    return list.map((e) => Donation.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => Donation.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
-  static Future<List<Donation>> getSentDonations({int limit = 50, int offset = 0}) async {
+  static Future<List<Donation>> getSentDonations(
+      {int limit = 50, int offset = 0}) async {
     final headers = await authHeaders();
-    final response = await http.get(
+    final response = await _get(
       _uri('/donations/sent', {'limit': '$limit', 'offset': '$offset'}),
       headers: headers,
     );
     _ensureSuccess(response);
     final list = jsonDecode(response.body) as List;
-    return list.map((e) => Donation.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => Donation.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   static Future<Map<String, dynamic>> getMealPlanAnalytics(
       {int days = 30}) async {
-    final resp = await http.get(
+    final resp = await _get(
       _uri('/meal-plans/analytics', {'days': '$days'}),
       headers: await authHeaders(),
     );
@@ -1276,7 +1308,7 @@ class ApiService {
     required int durationDays,
   }) async {
     try {
-      await http.post(
+      await _post(
         _uri('/meal-plans/apply-calendar'),
         headers: await authHeaders(),
         body: jsonEncode({

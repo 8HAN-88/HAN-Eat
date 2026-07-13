@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -15,16 +17,38 @@ class HanEatHttpClient {
     return _instance ??= platform.createHanEatHttpClient();
   }
 
+  static bool _isRetryableNetworkError(Object error) {
+    if (error is http.ClientException || error is TimeoutException) {
+      return true;
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('connection refused') ||
+        text.contains('connection timed out') ||
+        text.contains('connection reset') ||
+        text.contains('broken pipe') ||
+        text.contains('network is unreachable') ||
+        text.contains('handshakeexception') ||
+        text.contains('tlsv1_alert');
+  }
+
   /// Выполнить запрос через shared-клиент; при close — пересоздать и повторить.
   static Future<T> withShared<T>(
     Future<T> Function(http.Client client) action,
   ) async {
-    for (var attempt = 0; attempt < 2; attempt++) {
+    for (var attempt = 0; attempt < 3; attempt++) {
       try {
         return await action(shared);
-      } on http.ClientException {
-        if (attempt == 0) {
+      } catch (error) {
+        final canRetry = attempt < 2 && _isRetryableNetworkError(error);
+        if (canRetry) {
           recreateShared();
+          if (attempt > 0) {
+            await Future<void>.delayed(
+              Duration(milliseconds: 150 * (attempt + 1)),
+            );
+          }
           continue;
         }
         rethrow;

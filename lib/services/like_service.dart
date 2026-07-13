@@ -1,142 +1,168 @@
 // Сервис для работы с лайками
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/network/haneat_http_client.dart';
+import '../utils/api_error_parser.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
 class LikeService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
-  /// Лайкнуть пост
-  static Future<LikeResponse> likePost(int postId) async {
-    var token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
+
+  static Future<String> _requireToken() async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null || token.isEmpty) {
+      throw const ApiClientException(message: 'Войдите в аккаунт');
     }
-    
-    final uri = Uri.parse('$baseUrl/posts/$postId/like');
-    var response = await http.post(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
+    return token;
+  }
+
+  static Future<http.Response> _postWithAuthRetry(Uri uri) async {
+    var token = await _requireToken();
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ),
     );
-    
-    // Если получили 401, пытаемся обновить токен и повторить запрос
     if (response.statusCode == 401) {
-      try {
-        token = await AuthService.refreshToken();
-        response = await http.post(
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.post(
           uri,
           headers: {
             'Authorization': 'Bearer $token',
             'Content-Type': 'application/json',
           },
-        );
-      } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
-      }
+        ),
+      );
     }
-    
+    return response;
+  }
+
+  static Future<http.Response> _deleteWithAuthRetry(Uri uri) async {
+    var token = await _requireToken();
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.delete(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.delete(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+    }
+    return response;
+  }
+
+  static Future<http.Response> _getWithAuthRetry(Uri uri) async {
+    var token = await _requireToken();
+    var response = await HanEatHttpClient.withShared(
+      (client) => client.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ),
+    );
+    if (response.statusCode == 401) {
+      token = await AuthService.refreshToken();
+      response = await HanEatHttpClient.withShared(
+        (client) => client.get(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+    }
+    return response;
+  }
+
+  static Never _throwLikeError(http.Response response, String fallback) {
+    throw apiExceptionFromHttpResponse(
+      response.statusCode,
+      response.body,
+      fallback: fallback,
+    );
+  }
+
+  /// Лайкнуть пост
+  static Future<LikeResponse> likePost(int postId) async {
+    final uri = Uri.parse('$baseUrl/posts/$postId/like');
+    final response = await _postWithAuthRetry(uri);
+
     if (response.statusCode == 201) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return LikeResponse.fromJson(data);
-    } else if (response.statusCode == 400) {
+    }
+    if (response.statusCode == 400) {
       final statusResponse = await getLikeStatus(postId);
       return LikeResponse(
         liked: true,
         likesCount: statusResponse.likesCount,
       );
-    } else {
-      final errorData = jsonDecode(response.body) as Map<String, dynamic>?;
-      final errorMessage = errorData?['detail'] as String? ?? 'Failed to like post';
-      throw Exception(errorMessage);
     }
+    _throwLikeError(response, 'Не удалось поставить лайк');
   }
-  
+
   /// Убрать лайк
   static Future<LikeResponse> unlikePost(int postId) async {
-    var token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-    
     final uri = Uri.parse('$baseUrl/posts/$postId/like');
-    var response = await http.delete(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    
-    // Если получили 401, пытаемся обновить токен и повторить запрос
-    if (response.statusCode == 401) {
-      try {
-        token = await AuthService.refreshToken();
-        response = await http.delete(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-      } catch (e) {
-        throw Exception('Authentication failed. Please log in again.');
-      }
-    }
-    
+    final response = await _deleteWithAuthRetry(uri);
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return LikeResponse.fromJson(data);
-    } else if (response.statusCode == 404) {
+    }
+    if (response.statusCode == 404) {
       final statusResponse = await getLikeStatus(postId);
       return LikeResponse(
         liked: false,
         likesCount: statusResponse.likesCount,
       );
-    } else {
-      final errorData = jsonDecode(response.body) as Map<String, dynamic>?;
-      final errorMessage = errorData?['detail'] as String? ?? 'Failed to unlike post';
-      throw Exception(errorMessage);
     }
+    _throwLikeError(response, 'Не удалось убрать лайк');
   }
-  
+
   /// Проверить статус лайка
   static Future<LikeResponse> getLikeStatus(int postId) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-    
     final uri = Uri.parse('$baseUrl/posts/$postId/like/status');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    
+    final response = await _getWithAuthRetry(uri);
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return LikeResponse.fromJson(data);
-    } else {
-      throw Exception('Failed to get like status');
     }
+    _throwLikeError(response, 'Не удалось получить статус лайка');
   }
 }
 
 class LikeResponse {
   final bool liked;
   final int likesCount;
-  
+
   LikeResponse({
     required this.liked,
     required this.likesCount,
   });
-  
+
   factory LikeResponse.fromJson(Map<String, dynamic> json) {
     return LikeResponse(
       liked: json['liked'] as bool,
@@ -144,4 +170,3 @@ class LikeResponse {
     );
   }
 }
-
