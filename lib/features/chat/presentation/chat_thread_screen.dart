@@ -2971,7 +2971,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice' && mediaUrl != null && mediaUrl.isNotEmpty) {
       await ChatService.sendVoice(
         conversationId: target.id,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        mediaUrl: ServerConfig.resolveVoiceMediaUrl(mediaUrl),
         durationSec: msg.voiceDurationSec ?? 1,
       );
       return;
@@ -3060,7 +3060,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final resolved = ServerConfig.resolveMediaUrl(url);
     final uri = Uri.tryParse(resolved);
     if (uri == null) return;
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) {
+      ok = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
+    if (!ok) {
+      ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    }
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось открыть файл')),
@@ -8195,11 +8201,24 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
   @override
   void initState() {
     super.initState();
-    VideoPlayerHelper.createPreparedController(
-      widget.videoUrl,
-      muted: false,
-      autoPlay: true,
-    ).then((c) {
+    unawaited(_initVideo());
+  }
+
+  Future<void> _initVideo() async {
+    setState(() {
+      _initialized = false;
+      _hasError = false;
+      _isPaused = false;
+    });
+    final old = _controller;
+    _controller = null;
+    unawaited(old?.dispose());
+    try {
+      final c = await VideoPlayerHelper.createPreparedController(
+        widget.videoUrl,
+        muted: false,
+        autoPlay: true,
+      );
       if (!mounted) {
         c.dispose();
         return;
@@ -8208,14 +8227,13 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
         _controller = c;
         _initialized = true;
       });
-    }).catchError((_) {
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _initialized = true;
-        });
-      }
-    });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _initialized = true;
+      });
+    }
   }
 
   @override
@@ -8247,6 +8265,11 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
+                    onPressed: _initVideo,
+                    child: const Text('Повторить'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Назад'),
                   ),

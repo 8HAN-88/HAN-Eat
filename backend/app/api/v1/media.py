@@ -430,6 +430,8 @@ async def mock_upload(
     Этот эндпоинт используется только для разработки без S3.
     """
     import os
+    import shutil
+    import tempfile
     from botocore.exceptions import ClientError
     
     _enforce_upload_rate_limit(current_user.id, "mock_put", 30)
@@ -446,60 +448,75 @@ async def mock_upload(
                 detail="Upload ID not found. Call /uploads/init again (server may have restarted).",
             )
         
-        # Получаем тело запроса как байты
-        file_data = await request.body()
-        if not file_data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Empty upload body",
+        # Потоково читаем upload, чтобы не держать большие файлы в RAM.
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix=f"upload_{upload_id}_")
+        os.close(tmp_fd)
+        written = 0
+        try:
+            with open(tmp_path, "wb") as tmp_file:
+                async for chunk in request.stream():
+                    if not chunk:
+                        continue
+                    written += len(chunk)
+                    tmp_file.write(chunk)
+            if written <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Empty upload body",
+                )
+
+            media_service = MediaService()
+            content_type = (
+                request.headers.get("content-type") or "application/octet-stream"
             )
 
-        media_service = MediaService()
-        content_type = (
-            request.headers.get("content-type") or "application/octet-stream"
-        )
+            if media_service.s3_client:
+                try:
+                    media_service.s3_client.upload_file(
+                        tmp_path,
+                        media_service.bucket,
+                        file_key,
+                        ExtraArgs={"ContentType": content_type},
+                    )
+                except ClientError as e:
+                    logger.exception("API upload to S3 failed for %s", file_key)
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"S3 upload failed: {e}",
+                    ) from e
+                url = f"{media_service.cdn_url}/{file_key}"
+                return {"ok": True, "url": url, "file_key": file_key}
 
-        if media_service.s3_client:
-            try:
-                media_service.s3_client.put_object(
-                    Bucket=media_service.bucket,
-                    Key=file_key,
-                    Body=file_data,
-                    ContentType=content_type,
-                )
-            except ClientError as e:
-                logger.exception("API upload to S3 failed for %s", file_key)
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"S3 upload failed: {e}",
-                ) from e
-            url = f"{media_service.cdn_url}/{file_key}"
-            return {"ok": True, "url": url, "file_key": file_key}
-        
-        # Локальная разработка без S3
-        uploads_dir = os.path.join(os.getcwd(), "uploads")
-        os.makedirs(uploads_dir, exist_ok=True)
-        
-        # Создаем полный путь к файлу на основе file_key
-        # file_key имеет формат: uploads/user_2/2025/12/10/uuid.jpg
-        # Сохраняем как: uploads/user_2/2025/12/10/uuid.jpg
-        file_path = os.path.join(os.getcwd(), file_key)
-        
-        # Создаем директории, если их нет
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        # Сохраняем файл
-        with open(file_path, "wb") as f:
-            f.write(file_data)
-        
-        # Возвращаем успешный ответ с локальным URL
-        # URL будет доступен через эндпоинт /api/v1/uploads/file/{file_key}
-        _pub = settings.API_PUBLIC_BASE_URL.rstrip("/")
-        return {
-            "status": "uploaded",
-            "file_key": file_key,
-            "url": f"{_pub}/api/v1/uploads/file/{file_key}"
-        }
+            # Локальная разработка без S3
+            uploads_dir = os.path.join(os.getcwd(), "uploads")
+            os.makedirs(uploads_dir, exist_ok=True)
+
+            # Создаем полный путь к файлу на основе file_key
+            # file_key имеет формат: uploads/user_2/2025/12/10/uuid.jpg
+            # Сохраняем как: uploads/user_2/2025/12/10/uuid.jpg
+            file_path = os.path.join(os.getcwd(), file_key)
+
+            # Создаем директории, если их нет
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            shutil.move(tmp_path, file_path)
+            tmp_path = ""
+
+            # Возвращаем успешный ответ с локальным URL
+            # URL будет доступен через эндпоинт /api/v1/uploads/file/{file_key}
+            _pub = settings.API_PUBLIC_BASE_URL.rstrip("/")
+            return {
+                "status": "uploaded",
+                "file_key": file_key,
+                "url": f"{_pub}/api/v1/uploads/file/{file_key}"
+            }
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

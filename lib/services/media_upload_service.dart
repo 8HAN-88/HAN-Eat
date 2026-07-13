@@ -18,7 +18,8 @@ class MediaUploadService {
     final base = ServerConfig.baseUrl;
     final uri = Uri.parse(fixed);
     if (uri.host == 'localhost' || uri.host == '127.0.0.1') {
-      final resolved = Uri.parse(base).replace(path: uri.path, query: uri.query, fragment: uri.fragment);
+      final resolved = Uri.parse(base)
+          .replace(path: uri.path, query: uri.query, fragment: uri.fragment);
       return resolved.toString();
     }
     return fixed;
@@ -113,7 +114,8 @@ class MediaUploadService {
       return UploadInitResponse.fromJson(data);
     } else {
       final error = jsonDecode(response.body) as Map<String, dynamic>?;
-      throw Exception(error?['detail'] ?? 'Failed to init upload: ${response.statusCode}');
+      throw Exception(
+          error?['detail'] ?? 'Failed to init upload: ${response.statusCode}');
     }
   }
 
@@ -128,11 +130,11 @@ class MediaUploadService {
     required String contentType,
   }) async {
     final effectiveUrl = _fixUploadUrl(uploadUrl);
-    final fileBytes = await file.readAsBytes();
+    final contentLength = await file.length();
 
     final headers = <String, String>{
       'Content-Type': contentType,
-      'Content-Length': '${fileBytes.length}',
+      'Content-Length': '$contentLength',
     };
 
     final viaApi = _isApiUploadUrl(effectiveUrl);
@@ -144,12 +146,14 @@ class MediaUploadService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final response = await _putUpload(
-      Uri.parse(effectiveUrl),
+    final response = await _putUploadWithRetries(
+      uri: Uri.parse(effectiveUrl),
       headers: headers,
-      body: fileBytes,
+      file: file,
+      contentLength: contentLength,
+      viaApi: viaApi,
     );
-    
+
     if (response.statusCode != 200 && response.statusCode != 204) {
       final errorBody = response.body;
       if (errorBody.contains('InvalidAccessKeyId') ||
@@ -158,25 +162,90 @@ class MediaUploadService {
           'Хранилище медиа настроено неверно (S3). Обратитесь к администратору или повторите позже.',
         );
       }
-      throw Exception('Failed to upload file: ${response.statusCode} - $errorBody');
+      throw Exception(
+          'Failed to upload file: ${response.statusCode} - $errorBody');
     }
   }
 
   static Future<http.Response> _putUpload(
     Uri uri, {
     required Map<String, String> headers,
-    required List<int> body,
+    required XFile file,
+    required int contentLength,
   }) async {
     final client = HanEatHttpClient.createUploadClient();
     try {
-      return await client
-          .put(uri, headers: headers, body: body)
-          .timeout(const Duration(seconds: 120));
+      final request = http.StreamedRequest('PUT', uri);
+      request.headers.addAll(headers);
+      request.contentLength = contentLength;
+      await for (final chunk in file.openRead()) {
+        request.sink.add(chunk);
+      }
+      await request.sink.close();
+      final streamed = await client.send(request).timeout(
+            const Duration(seconds: 120),
+          );
+      return http.Response.fromStream(streamed);
     } finally {
       client.close();
     }
   }
-  
+
+  static bool _isRetryableUploadError(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('connection reset') ||
+        text.contains('connection refused') ||
+        text.contains('timed out') ||
+        text.contains('handshakeexception') ||
+        text.contains('clientexception');
+  }
+
+  static Future<http.Response> _putUploadWithRetries({
+    required Uri uri,
+    required Map<String, String> headers,
+    required XFile file,
+    required int contentLength,
+    required bool viaApi,
+  }) async {
+    var workingUri = uri;
+    var workingHeaders = Map<String, String>.from(headers);
+    Object? lastError;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      try {
+        final response = await _putUpload(
+          workingUri,
+          headers: workingHeaders,
+          file: file,
+          contentLength: contentLength,
+        );
+        if (viaApi && response.statusCode == 401) {
+          final refreshedToken = await AuthService.refreshToken();
+          workingHeaders['Authorization'] = 'Bearer $refreshedToken';
+          continue;
+        }
+        if ((response.statusCode == 502 ||
+                response.statusCode == 503 ||
+                response.statusCode == 504) &&
+            attempt < 3) {
+          await Future<void>.delayed(
+              Duration(milliseconds: 350 * (attempt + 1)));
+          continue;
+        }
+        return response;
+      } catch (e) {
+        lastError = e;
+        if (attempt >= 3 || !_isRetryableUploadError(e)) rethrow;
+        HanEatHttpClient.recreateShared();
+        await ApiEndpointResolver.revalidateIfNeeded();
+        workingUri = Uri.parse(_fixUploadUrl(workingUri.toString()));
+        await Future<void>.delayed(Duration(milliseconds: 350 * (attempt + 1)));
+      }
+    }
+    throw Exception(lastError ?? 'Failed to upload file');
+  }
+
   /// Завершение загрузки
   static Future<UploadCompleteResponse> completeUpload({
     required String uploadId,
@@ -202,23 +271,12 @@ class MediaUploadService {
       throw Exception(error['detail'] ?? 'Failed to complete upload');
     }
   }
-  
+
   /// Получить статус обработки
   static Future<UploadStatusResponse> getUploadStatus(String uploadId) async {
-    final token = await AuthService.getAccessTokenForApi();
-    if (token == null) {
-      throw Exception('Not authenticated');
-    }
-    
     final uri = Uri.parse('$baseUrl/uploads/status/$uploadId');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    
+    final response = await _apiGet(uri);
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return UploadStatusResponse.fromJson(data);
@@ -226,7 +284,52 @@ class MediaUploadService {
       throw Exception('Failed to get upload status');
     }
   }
-  
+
+  static Future<http.Response> _apiGet(
+    Uri uri, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    await _waitForRateLimit();
+    var token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw Exception('Not authenticated. Please log in first.');
+    }
+
+    Future<http.Response> run(String authToken) async {
+      try {
+        return await HanEatHttpClient.withShared(
+          (client) => client.get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $authToken',
+              'Content-Type': 'application/json',
+            },
+          ).timeout(timeout),
+        );
+      } catch (_) {
+        HanEatHttpClient.recreateShared();
+        await ApiEndpointResolver.revalidateIfNeeded();
+        rethrow;
+      }
+    }
+
+    var response = await run(token);
+    if (response.statusCode == 401) {
+      try {
+        token = await AuthService.refreshToken();
+        response = await run(token);
+      } catch (_) {
+        throw Exception('Authentication failed. Please log in again.');
+      }
+    }
+    _registerRateLimit(response);
+    if (response.statusCode == 429) {
+      await _waitForRateLimit();
+      return _apiGet(uri, timeout: timeout);
+    }
+    return response;
+  }
+
   static Future<UploadCompleteResponse> _uploadMediaFileOnce({
     required XFile file,
     required String fileType,
@@ -360,7 +463,7 @@ class MediaUploadService {
       uploadId: uploadId,
     );
   }
-  
+
   static String _fileExtension(String filePath, {String? fileName}) {
     for (final source in [fileName, filePath]) {
       if (source == null || source.isEmpty) continue;
@@ -385,7 +488,7 @@ class MediaUploadService {
         _ => '',
       };
     }
-    
+
     if (fileType == 'image') {
       switch (extension) {
         case 'jpg':
@@ -456,7 +559,7 @@ class UploadInitResponse {
   final String fileKey;
   final int expiresIn;
   final String cdnUrl;
-  
+
   UploadInitResponse({
     required this.uploadId,
     required this.uploadUrl,
@@ -464,7 +567,7 @@ class UploadInitResponse {
     required this.expiresIn,
     required this.cdnUrl,
   });
-  
+
   factory UploadInitResponse.fromJson(Map<String, dynamic> json) {
     return UploadInitResponse(
       uploadId: json['upload_id'] as String,
@@ -482,7 +585,7 @@ class UploadCompleteResponse {
   final String? thumbnailUrl;
   final bool processing;
   final String? uploadId;
-  
+
   UploadCompleteResponse({
     required this.status,
     this.url,
@@ -490,7 +593,7 @@ class UploadCompleteResponse {
     required this.processing,
     this.uploadId,
   });
-  
+
   factory UploadCompleteResponse.fromJson(Map<String, dynamic> json) {
     return UploadCompleteResponse(
       status: json['status'] as String,
@@ -511,7 +614,7 @@ class UploadStatusResponse {
   final String? mp4_1080pUrl;
   final String? hlsUrl;
   final String? thumbnailUrl;
-  
+
   UploadStatusResponse({
     required this.status,
     required this.progress,
@@ -522,7 +625,7 @@ class UploadStatusResponse {
     this.hlsUrl,
     this.thumbnailUrl,
   });
-  
+
   factory UploadStatusResponse.fromJson(Map<String, dynamic> json) {
     final rawProgress = json['progress'];
     final progress = rawProgress is num ? rawProgress.toDouble() : 0.0;
@@ -538,4 +641,3 @@ class UploadStatusResponse {
     );
   }
 }
-

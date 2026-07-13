@@ -142,14 +142,27 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
     try {
       await _ensureAudioContext();
       _bindStreams();
-      final resolved = ServerConfig.resolveVoiceMediaUrl(url);
-      if (kDebugMode) {
-        debugPrint('ChatVoiceBubble: play $resolved');
-      }
+      final candidates = _voiceUrlCandidates(url);
       if (_position > Duration.zero && _total > Duration.zero) {
         await _player.resume();
       } else {
-        await _player.play(UrlSource(resolved));
+        var played = false;
+        Object? lastError;
+        for (final candidate in candidates) {
+          try {
+            if (kDebugMode) {
+              debugPrint('ChatVoiceBubble: play $candidate');
+            }
+            await _player.play(UrlSource(candidate));
+            played = true;
+            break;
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        if (!played && lastError != null) {
+          throw lastError;
+        }
       }
       if (!mounted) return;
       setState(() {
@@ -167,6 +180,22 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
         _playError = 'Не удалось воспроизвести';
       });
     }
+  }
+
+  List<String> _voiceUrlCandidates(String rawUrl) {
+    final cleaned = rawUrl.trim();
+    if (cleaned.isEmpty) return const [];
+    final out = <String>[];
+    void add(String value) {
+      final v = value.trim();
+      if (v.isEmpty || out.contains(v)) return;
+      out.add(v);
+    }
+
+    add(ServerConfig.resolveVoiceMediaUrl(cleaned));
+    add(ServerConfig.resolveMediaUrl(cleaned));
+    add(cleaned);
+    return out;
   }
 
   @override
