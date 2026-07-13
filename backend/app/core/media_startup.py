@@ -47,7 +47,8 @@ def media_upload_mode() -> str:
 def collect_media_issues() -> list[str]:
     issues: list[str] = []
     if not settings.S3_ACCESS_KEY or not settings.S3_SECRET_KEY:
-        issues.append("S3_ACCESS_KEY / S3_SECRET_KEY не заданы — загрузки через API (диск)")
+        if settings.REQUIRE_S3_READINESS:
+            issues.append("S3_ACCESS_KEY / S3_SECRET_KEY не заданы — загрузки через API (диск)")
     else:
         try:
             from app.services.media_service import MediaService

@@ -14,9 +14,10 @@ def collect_payments_issues() -> list[str]:
         return _collect_tbank_issues()
     if settings.YOOKASSA_ENABLED:
         return _collect_yookassa_issues()
-    issues.append(
-        "TBANK_ENABLED и YOOKASSA_ENABLED выключены — оплата подписок недоступна"
-    )
+    if settings.REQUIRE_PAYMENTS_READINESS:
+        issues.append(
+            "TBANK_ENABLED и YOOKASSA_ENABLED выключены — оплата подписок недоступна"
+        )
     return issues
 
 

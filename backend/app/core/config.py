@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     # Разрешить POST /api/v1/subscriptions/create при APP_ENV=production (иначе только webhook’и оплаты)
     ALLOW_DIRECT_SUBSCRIPTION_CREATE: bool = False
+    # Readiness: требовать включенные платежи для "ready=true" (по умолчанию optional).
+    REQUIRE_PAYMENTS_READINESS: bool = False
+    # Readiness: требовать S3-режим загрузок для "ready=true" (по умолчанию optional).
+    REQUIRE_S3_READINESS: bool = False
     
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/haneat"

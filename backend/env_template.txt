@@ -28,6 +28,8 @@ APP_ENV=development
 DEBUG=true
 # В production оставьте false: подписки создаются через Stripe/YooKassa webhook, не через этот эндпоинт
 ALLOW_DIRECT_SUBSCRIPTION_CREATE=false
+REQUIRE_PAYMENTS_READINESS=false
+REQUIRE_S3_READINESS=false
 
 # Google Sign-In: Web client ID (и при необходимости iOS/Android), через запятую — проверка aud id_token
 GOOGLE_OAUTH_CLIENT_IDS=
