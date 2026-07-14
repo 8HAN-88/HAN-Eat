@@ -538,6 +538,23 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendSticker({
+    required int conversationId,
+    required String mediaUrl,
+    String emoji = '',
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) async {
+    return _send(
+      conversationId: conversationId,
+      type: 'sticker',
+      content: emoji,
+      mediaUrl: mediaUrl,
+      replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
   static Future<ChatMessage> sendPoll({
     required int conversationId,
     required String question,

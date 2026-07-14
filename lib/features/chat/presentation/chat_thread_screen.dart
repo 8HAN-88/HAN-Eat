@@ -61,6 +61,7 @@ import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
 import '../../../widgets/chat_target_picker_sheet.dart';
+import '../../../widgets/chat_sticker_tile.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
@@ -302,6 +303,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final _callbackInFlightKeys = <String>{};
   final _composerPanelKey = GlobalKey();
   final Map<int, GlobalKey> _messageItemKeys = {};
+  final _animatedMessageIds = <int>{};
   int _pollFailureCount = 0;
   int _scheduledPendingCount = 0;
   int? _pendingInitialJumpMessageId;
@@ -1515,6 +1517,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'sticker') return '🧩 Стикер';
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
@@ -2503,8 +2506,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        margin: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
           color: isDark
               ? Colors.black.withValues(alpha: 0.35)
@@ -2759,6 +2762,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             title: 'Медиа ($mediaCount)',
             onTap: _openMediaGallery,
           ),
+        if (!isGroup && peer != null) ...[
+          TelegramActionSheetAction(
+            icon: Icons.stars_rounded,
+            title: 'Отправить звёзды',
+            onTap: _tipPeerWithStars,
+          ),
+          TelegramActionSheetAction(
+            icon: Icons.videocam_outlined,
+            title: 'Видео-звонок',
+            onTap: _startVideoCall,
+          ),
+          TelegramActionSheetAction(
+            icon: Icons.mic_outlined,
+            title: 'Голосовая комната',
+            onTap: _startVoiceRoom,
+          ),
+        ],
         if (!isSaved) ...[
           TelegramActionSheetAction(
             icon: _pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -2992,6 +3012,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
+    if (msg.type == 'sticker' && mediaUrl != null && mediaUrl.isNotEmpty) {
+      await ChatService.sendSticker(
+        conversationId: target.id,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        emoji: msg.content.trim(),
+      );
+      return;
+    }
     final label = msg.isMine
         ? 'Вы'
         : (msg.senderName ?? _senderNames[msg.senderId] ?? 'Сообщение');
@@ -2999,7 +3027,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? '🎤 Голосовое'
         : msg.type == 'image'
             ? '📷 Фото'
-            : msg.content.trim();
+            : msg.type == 'sticker'
+                ? '🧩 Стикер'
+                : msg.content.trim();
     await ChatService.sendText(
       conversationId: target.id,
       content: '↪ $label: ${body.isEmpty ? 'Сообщение' : body}',
@@ -3220,7 +3250,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case _ThreadSearchFilter.media:
         return msg.type == 'image' ||
             msg.type == 'video' ||
-            msg.type == 'voice';
+            msg.type == 'voice' ||
+            msg.type == 'sticker';
       case _ThreadSearchFilter.files:
         return msg.type == 'file';
       case _ThreadSearchFilter.links:
@@ -3239,6 +3270,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice' && 'голосовое'.contains(q)) return true;
     if (msg.type == 'image' && 'фото'.contains(q)) return true;
     if (msg.type == 'video' && 'видео'.contains(q)) return true;
+    if (msg.type == 'sticker' && 'стикер'.contains(q)) return true;
     if (msg.type == 'file') {
       final name = msg.content.trim().toLowerCase();
       if (name.contains(q) || 'файл'.contains(q)) return true;
@@ -3722,6 +3754,49 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  void _startVideoCall() {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(contactName: peer.displayName),
+      ),
+    );
+  }
+
+  void _startVoiceRoom() {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VoiceRoomScreen(
+          roomName: 'Комната ${peer.displayName}',
+          roomId: 'room_${widget.conversationId}',
+          isCreator: true,
+        ),
+      ),
+    );
+  }
+
+  void _showQuickCallMenu() {
+    showTelegramActionSheet<void>(
+      context: context,
+      title: 'Связь',
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.videocam_outlined,
+          title: 'Видео-звонок',
+          onTap: _startVideoCall,
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.mic_outlined,
+          title: 'Голосовая комната',
+          onTap: _startVoiceRoom,
+        ),
+      ],
+    );
+  }
+
   Future<void> _blockPeer() async {
     final peer = _conversation.peer;
     if (peer == null) return;
@@ -3849,6 +3924,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'sticker') return '🧩 Стикер';
     if (msg.type == 'poll') {
       final poll = msg.poll;
       if (poll != null) return chatPollPreviewText(poll);
@@ -4056,7 +4132,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           (m) =>
               m.mediaUrl != null &&
               m.mediaUrl!.trim().isNotEmpty &&
-              (m.type == 'image' || m.type == 'video' || m.type == 'file'),
+              (m.type == 'image' ||
+                  m.type == 'video' ||
+                  m.type == 'file' ||
+                  m.type == 'sticker'),
         )
         .length;
   }
@@ -4383,7 +4462,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       pollClosing: pollClosing,
       onInlineButtonTap: onInlineButtonTap,
       callbackLoadingData: callbackLoadingData,
-      onImageTap: interactive && msg.type == 'image' && msg.mediaUrl != null
+      onImageTap: interactive &&
+              (msg.type == 'image' || _canOpenStickerInImageViewer(msg)) &&
+              msg.mediaUrl != null
           ? () => _openImage(msg.mediaUrl!)
           : null,
       onVideoTap: interactive && msg.type == 'video' && msg.mediaUrl != null
@@ -4542,18 +4623,94 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0, -0.05),
+          end: Offset.zero,
+        ).animate(animation);
         return FadeTransition(
           opacity: animation,
-          child: SizeTransition(
-            sizeFactor: animation,
-            axisAlignment: -1,
-            child: child,
+          child: SlideTransition(
+            position: slide,
+            child: SizeTransition(
+              sizeFactor: animation,
+              axisAlignment: -1,
+              child: child,
+            ),
           ),
         );
       },
       child: visible
           ? KeyedSubtree(key: ValueKey(keyName), child: child)
           : const SizedBox.shrink(key: ValueKey('hidden')),
+    );
+  }
+
+  Widget _composerInfoBanner({
+    required Color backgroundColor,
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    Color? foregroundColor,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = foregroundColor ?? scheme.onSurface;
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+      child: Row(
+        crossAxisAlignment: subtitle == null
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: subtitle == null ? 0 : 1),
+            child: Icon(icon, size: 18, color: fg.withValues(alpha: 0.9)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: subtitle == null ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: fg.withValues(alpha: 0.85),
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ],
+      ),
+    );
+    return Material(
+      color: backgroundColor,
+      child: onTap == null
+          ? content
+          : InkWell(
+              onTap: onTap,
+              child: content,
+            ),
     );
   }
 
@@ -5404,7 +5561,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _openImage(String url) {
     final urls = _messages
-        .where((m) => m.type == 'image' && (m.mediaUrl?.isNotEmpty ?? false))
+        .where(
+          (m) =>
+              (m.type == 'image' || _canOpenStickerInImageViewer(m)) &&
+              (m.mediaUrl?.isNotEmpty ?? false),
+        )
         .map((m) => m.mediaUrl!)
         .toList(growable: false);
     final index = urls.indexOf(url);
@@ -5416,6 +5577,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
     );
+  }
+
+  bool _canOpenStickerInImageViewer(ChatMessage msg) {
+    if (msg.type != 'sticker') return false;
+    final media = msg.mediaUrl?.trim();
+    if (media == null || media.isEmpty) return false;
+    final lower = media.toLowerCase();
+    if (lower.endsWith('.webm') ||
+        lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.json') ||
+        lower.endsWith('.lottie') ||
+        lower.endsWith('.tgs')) {
+      return false;
+    }
+    return true;
   }
 
   Future<void> _openVideo(String url) async {
@@ -5466,6 +5643,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (url != null && name != null) {
           await _resendStoredFile(name: name, mediaUrl: url);
         }
+      case ChatAttachResult.sticker:
+        final stickerUrl = selection.stickerMediaUrl;
+        if (stickerUrl != null && stickerUrl.trim().isNotEmpty) {
+          await _sendStickerByUrl(stickerUrl, emoji: selection.stickerEmoji);
+        }
+    }
+  }
+
+  Future<void> _sendStickerByUrl(String mediaUrl, {String? emoji}) async {
+    try {
+      await ChatService.sendSticker(
+        conversationId: widget.conversationId,
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        emoji: (emoji ?? '').trim(),
+        replyToMessageId: _replyTo?.id,
+      );
+      _controller.clear();
+      setState(() => _replyTo = null);
+      AppHaptics.selection();
+      await _pollNew();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -5856,18 +6058,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       sizeBytes: size,
       mediaUrl: mediaUrl,
     );
-  }
-
-  Future<void> _pickImage({required ImageSource source}) async {
-    if (_recording) return;
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      maxWidth: 1600,
-    );
-    if (file == null) return;
-    await _sendPickedImage(file);
   }
 
   @override
@@ -6343,36 +6533,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                   if (!isGroup && peer != null) ...[
                     IconButton(
-                      tooltip: 'Отправить звёзды',
-                      icon: const Icon(Icons.stars_rounded),
-                      onPressed: _tipPeerWithStars,
-                    ),
-                    IconButton(
-                      tooltip: 'Видео-звонок',
-                      icon: const Icon(Icons.videocam_outlined),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                VideoCallScreen(contactName: peer.displayName),
-                          ),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      tooltip: 'Голосовая комната',
-                      icon: const Icon(Icons.mic_outlined),
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => VoiceRoomScreen(
-                              roomName: 'Комната ${peer.displayName}',
-                              roomId: 'room_${widget.conversationId}',
-                              isCreator: true,
-                            ),
-                          ),
-                        );
-                      },
+                      tooltip: 'Связь',
+                      icon: const Icon(Icons.call_outlined),
+                      onPressed: _showQuickCallMenu,
                     ),
                   ],
                   IconButton(
@@ -6554,8 +6717,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 keyboardDismissBehavior:
                                     ScrollViewKeyboardDismissBehavior.onDrag,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
+                                  horizontal: 10,
+                                  vertical: 6,
                                 ),
                                 itemCount:
                                     visibleMessages.length + (_hasMore ? 1 : 0),
@@ -6591,197 +6754,242 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   final cluster = messageClusters[msgIndex];
                                   final showDateSeparator =
                                       messageDateSeparators[msgIndex];
+                                  final focusedByJump =
+                                      _focusedMessageId == msg.id;
+                                  final shouldAnimateIn =
+                                      _animatedMessageIds.add(msg.id) &&
+                                          DateTime.now()
+                                                  .difference(msg.createdAt)
+                                                  .inSeconds <=
+                                              20;
                                   return KeyedSubtree(
                                     key: _messageItemKey(msg.id),
                                     child: RepaintBoundary(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          if (showDateSeparator)
-                                            _chatDateSeparator(msg.createdAt),
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              if (_selectionMode)
-                                                _selectionIndicator(
-                                                    selected, scheme),
-                                              if (!isSaved && !msg.isMine)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                    right: 6,
-                                                    bottom: 2,
+                                      child: TweenAnimationBuilder<double>(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        curve: Curves.easeOutCubic,
+                                        tween: Tween<double>(
+                                          begin: shouldAnimateIn ? 0.96 : 1,
+                                          end: 1,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            if (showDateSeparator)
+                                              _chatDateSeparator(msg.createdAt),
+                                            Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                if (_selectionMode)
+                                                  _selectionIndicator(
+                                                      selected, scheme),
+                                                if (!isSaved && !msg.isMine)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                      right: 4,
+                                                      bottom: 1,
+                                                    ),
+                                                    child: cluster.ends
+                                                        ? _incomingMessageAvatar(
+                                                            msg,
+                                                          )
+                                                        : const SizedBox(
+                                                            width: 28,
+                                                          ),
                                                   ),
-                                                  child: cluster.ends
-                                                      ? _incomingMessageAvatar(
-                                                          msg,
-                                                        )
-                                                      : const SizedBox(
-                                                          width: 32,
-                                                        ),
-                                                ),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: msg.isMine
-                                                      ? CrossAxisAlignment.end
-                                                      : CrossAxisAlignment
-                                                          .start,
-                                                  children: [
-                                                    Align(
-                                                      alignment: msg.isMine
-                                                          ? Alignment
-                                                              .centerRight
-                                                          : Alignment
-                                                              .centerLeft,
-                                                      child: Builder(
-                                                        builder:
-                                                            (bubbleContext) =>
-                                                                GestureDetector(
-                                                          behavior:
-                                                              HitTestBehavior
-                                                                  .opaque,
-                                                          onTap: _selectionMode
-                                                              ? () =>
-                                                                  _toggleMessageSelection(
-                                                                    msg.id,
-                                                                  )
-                                                              : null,
-                                                          onDoubleTap:
-                                                              _selectionMode
-                                                                  ? null
-                                                                  : () =>
-                                                                      _toggleReaction(
-                                                                        msg,
-                                                                        '👍',
-                                                                      ),
-                                                          onHorizontalDragEnd:
-                                                              _selectionMode
-                                                                  ? null
-                                                                  : (details) {
-                                                                      final v =
-                                                                          details
-                                                                              .primaryVelocity;
-                                                                      if (v ==
-                                                                              null ||
-                                                                          v.abs() <
-                                                                              320) {
-                                                                        return;
-                                                                      }
-                                                                      setState(
-                                                                        () {
-                                                                          _replyTo =
-                                                                              msg;
-                                                                          _editingMessage =
-                                                                              null;
-                                                                          _controller
-                                                                              .clear();
-                                                                        },
-                                                                      );
-                                                                      _inputFocusNode
-                                                                          .requestFocus();
-                                                                    },
-                                                          onLongPress:
-                                                              _selectionMode
-                                                                  ? null
-                                                                  : () {
-                                                                      final box =
-                                                                          bubbleContext.findRenderObject()
-                                                                              as RenderBox?;
-                                                                      if (box !=
-                                                                              null &&
-                                                                          box.hasSize) {
-                                                                        unawaited(
-                                                                          _showMessageActionOverlay(
-                                                                            msg,
-                                                                            box,
-                                                                          ),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: msg
+                                                            .isMine
+                                                        ? CrossAxisAlignment.end
+                                                        : CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Align(
+                                                        alignment: msg.isMine
+                                                            ? Alignment
+                                                                .centerRight
+                                                            : Alignment
+                                                                .centerLeft,
+                                                        child: Builder(
+                                                          builder:
+                                                              (bubbleContext) =>
+                                                                  GestureDetector(
+                                                            behavior:
+                                                                HitTestBehavior
+                                                                    .opaque,
+                                                            onTap:
+                                                                _selectionMode
+                                                                    ? () =>
+                                                                        _toggleMessageSelection(
+                                                                          msg.id,
+                                                                        )
+                                                                    : null,
+                                                            onDoubleTap:
+                                                                _selectionMode
+                                                                    ? null
+                                                                    : () =>
+                                                                        _toggleReaction(
+                                                                          msg,
+                                                                          '👍',
+                                                                        ),
+                                                            onHorizontalDragEnd:
+                                                                _selectionMode
+                                                                    ? null
+                                                                    : (details) {
+                                                                        final v =
+                                                                            details.primaryVelocity;
+                                                                        if (v ==
+                                                                                null ||
+                                                                            v.abs() <
+                                                                                320) {
+                                                                          return;
+                                                                        }
+                                                                        setState(
+                                                                          () {
+                                                                            _replyTo =
+                                                                                msg;
+                                                                            _editingMessage =
+                                                                                null;
+                                                                            _controller.clear();
+                                                                          },
                                                                         );
-                                                                      }
-                                                                    },
-                                                          child: Opacity(
-                                                            opacity: failed
-                                                                ? 0.55
-                                                                : 1,
-                                                            child:
-                                                                _messageBubbleWidget(
-                                                              msg: msg,
-                                                              scheme: scheme,
-                                                              searching:
-                                                                  searching,
-                                                              isActiveSearchMatch:
-                                                                  activeSearchMatchId ==
-                                                                      msg.id,
-                                                              isGroup: isGroup,
-                                                              cluster: cluster,
-                                                              replyQuote:
-                                                                  replyQuote,
-                                                              interactive:
-                                                                  !_selectionMode,
-                                                              wrapWithAlign:
-                                                                  false,
-                                                              onPollVote:
-                                                                  !_selectionMode
-                                                                      ? (idx) =>
-                                                                          _votePoll(
-                                                                            msg,
-                                                                            idx,
-                                                                          )
-                                                                      : null,
-                                                              pollVoting:
-                                                                  _votingPollIds
-                                                                      .contains(
-                                                                          msg.id),
-                                                              onPollClose: (!_selectionMode &&
-                                                                      msg
-                                                                          .isMine &&
-                                                                      msg.type ==
-                                                                          'poll' &&
-                                                                      msg.poll !=
-                                                                          null &&
-                                                                      !msg.poll!
-                                                                          .isClosed)
-                                                                  ? () =>
-                                                                      _closePoll(
-                                                                          msg)
-                                                                  : null,
-                                                              pollClosing:
-                                                                  _closingPollIds
-                                                                      .contains(
-                                                                          msg.id),
-                                                              onInlineButtonTap:
-                                                                  !_selectionMode
-                                                                      ? (button) =>
-                                                                          _tapInlineButton(
-                                                                            msg,
-                                                                            button,
-                                                                          )
-                                                                      : null,
-                                                              callbackLoadingData:
-                                                                  _callbackInFlightKeys,
-                                                              onReplyTap:
-                                                                  msg.replyToMessageId !=
-                                                                          null
-                                                                      ? () =>
-                                                                          _scrollToReplyMessage(
-                                                                            msg.replyToMessageId!,
-                                                                          )
-                                                                      : null,
+                                                                        _inputFocusNode
+                                                                            .requestFocus();
+                                                                      },
+                                                            onLongPress:
+                                                                _selectionMode
+                                                                    ? null
+                                                                    : () {
+                                                                        final box =
+                                                                            bubbleContext.findRenderObject()
+                                                                                as RenderBox?;
+                                                                        if (box !=
+                                                                                null &&
+                                                                            box.hasSize) {
+                                                                          unawaited(
+                                                                            _showMessageActionOverlay(
+                                                                              msg,
+                                                                              box,
+                                                                            ),
+                                                                          );
+                                                                        }
+                                                                      },
+                                                            child: Opacity(
+                                                              opacity: failed
+                                                                  ? 0.55
+                                                                  : 1,
+                                                              child:
+                                                                  _messageBubbleWidget(
+                                                                msg: msg,
+                                                                scheme: scheme,
+                                                                searching:
+                                                                    searching,
+                                                                isActiveSearchMatch:
+                                                                    activeSearchMatchId ==
+                                                                        msg.id,
+                                                                isGroup:
+                                                                    isGroup,
+                                                                cluster:
+                                                                    cluster,
+                                                                replyQuote:
+                                                                    replyQuote,
+                                                                interactive:
+                                                                    !_selectionMode,
+                                                                wrapWithAlign:
+                                                                    false,
+                                                                onPollVote:
+                                                                    !_selectionMode
+                                                                        ? (idx) =>
+                                                                            _votePoll(
+                                                                              msg,
+                                                                              idx,
+                                                                            )
+                                                                        : null,
+                                                                pollVoting:
+                                                                    _votingPollIds
+                                                                        .contains(
+                                                                            msg.id),
+                                                                onPollClose: (!_selectionMode &&
+                                                                        msg
+                                                                            .isMine &&
+                                                                        msg.type ==
+                                                                            'poll' &&
+                                                                        msg.poll !=
+                                                                            null &&
+                                                                        !msg.poll!
+                                                                            .isClosed)
+                                                                    ? () =>
+                                                                        _closePoll(
+                                                                            msg)
+                                                                    : null,
+                                                                pollClosing:
+                                                                    _closingPollIds
+                                                                        .contains(
+                                                                            msg.id),
+                                                                onInlineButtonTap:
+                                                                    !_selectionMode
+                                                                        ? (button) =>
+                                                                            _tapInlineButton(
+                                                                              msg,
+                                                                              button,
+                                                                            )
+                                                                        : null,
+                                                                callbackLoadingData:
+                                                                    _callbackInFlightKeys,
+                                                                onReplyTap:
+                                                                    msg.replyToMessageId !=
+                                                                            null
+                                                                        ? () =>
+                                                                            _scrollToReplyMessage(
+                                                                              msg.replyToMessageId!,
+                                                                            )
+                                                                        : null,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
                                                       ),
-                                                    ),
-                                                    if (failed)
-                                                      _failedSendActions(
-                                                          msg.id, scheme),
-                                                  ],
+                                                      if (failed)
+                                                        _failedSendActions(
+                                                            msg.id, scheme),
+                                                    ],
+                                                  ),
                                                 ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        builder: (context, value, child) {
+                                          return AnimatedContainer(
+                                            duration: const Duration(
+                                                milliseconds: 220),
+                                            curve: Curves.easeOutCubic,
+                                            decoration: BoxDecoration(
+                                              color: focusedByJump
+                                                  ? scheme.primaryContainer
+                                                      .withValues(alpha: 0.22)
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 2,
+                                            ),
+                                            child: Opacity(
+                                              opacity: value.clamp(0.0, 1.0),
+                                              child: Transform.scale(
+                                                scale: value,
+                                                alignment: Alignment.topCenter,
+                                                child: child,
                                               ),
-                                            ],
-                                          ),
-                                        ],
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ),
                                   );
@@ -6790,28 +6998,57 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     if (_showJumpToBottom && !_selectionMode)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
-                        child: Material(
-                          elevation: 2,
-                          borderRadius: BorderRadius.circular(20),
-                          color: scheme.primary,
-                          child: InkWell(
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(
+                            begin: 0.96,
+                            end: _newMessagesBelow > 0 ? 1.0 : 0.985,
+                          ),
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutBack,
+                          child: Material(
+                            elevation: 2,
                             borderRadius: BorderRadius.circular(20),
-                            onTap: _jumpToBottomAndMarkRead,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Text(
-                                _newMessagesBelow > 0
-                                    ? _newMessagesChipLabel()
-                                    : '↓ Вниз',
-                                style: TextStyle(
-                                  color: scheme.onPrimary,
-                                  fontWeight: FontWeight.w600,
+                            color: scheme.primary,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: _jumpToBottomAndMarkRead,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0, 0.25),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _newMessagesBelow > 0
+                                        ? _newMessagesChipLabel()
+                                        : '↓ Вниз',
+                                    key: ValueKey<int>(_newMessagesBelow),
+                                    style: TextStyle(
+                                      color: scheme.onPrimary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+                          ),
+                          builder: (context, value, child) => Transform.scale(
+                            scale: value,
+                            child: child,
                           ),
                         ),
                       ),
@@ -6829,25 +7066,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               else
                 KeyedSubtree(
                   key: _composerPanelKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_isAutoRetryActive && !_sending)
-                        Material(
-                          color:
-                              scheme.secondaryContainer.withValues(alpha: 0.42),
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(_autoRetryReasonIcon, size: 18),
-                            title: Text(
-                              _autoRetryPendingCount > 1
-                                  ? 'Автоповтор активен для $_autoRetryPendingCount сообщений'
-                                  : 'Автоповтор активен',
-                            ),
-                            subtitle: Text(
-                              'Причина: $_autoRetryReasonLabel • следующая попытка через '
-                              '${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}',
-                            ),
+                  child: AnimatedSize(
+                    duration: _uiAnimDuration,
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.topCenter,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isAutoRetryActive && !_sending)
+                          _composerInfoBanner(
+                            backgroundColor: scheme.secondaryContainer
+                                .withValues(alpha: 0.42),
+                            foregroundColor: scheme.onSecondaryContainer,
+                            icon: _autoRetryReasonIcon,
+                            title: _autoRetryPendingCount > 1
+                                ? 'Автоповтор активен для $_autoRetryPendingCount сообщений'
+                                : 'Автоповтор активен',
+                            subtitle:
+                                'Причина: $_autoRetryReasonLabel • следующая попытка через '
+                                '${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}',
                             trailing: Wrap(
                               spacing: 6,
                               crossAxisAlignment: WrapCrossAlignment.center,
@@ -6882,27 +7119,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ],
                             ),
                           ),
-                        ),
-                      if (!_autoRetryOnLimitsEnabled &&
-                          _hasFailedPendingItems &&
-                          !_sending)
-                        Material(
-                          color:
-                              scheme.tertiaryContainer.withValues(alpha: 0.4),
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.pause_circle_outline,
-                                size: 18),
-                            title: const Text('Автоповтор выключен'),
-                            subtitle: Text(
-                              'Неотправленные элементы ожидают ручного повтора'
-                              '\nТекст: ${_failedTextSends.length} • Медиа: ${_pendingMediaRetry != null ? 1 : 0}'
-                              '${retryBulkProgressLabel != null ? '\nПакетный повтор: $retryBulkProgressLabel' : ''}'
-                              '${_retryAllBulkCancelRequested ? '\nОстановка после текущего элемента…' : ''}'
-                              '${_clearAllAfterBulkStopRequested ? '\nПосле остановки откроется очистка…' : ''}'
-                              '${manualReadyRetryRemainingSeconds > 0 ? '\nАвтозапуск готовых через ${_formatSlowModeCountdown(manualReadyRetryRemainingSeconds)}' : ''}'
-                              '${nextManualRetryRemainingSeconds != null ? '\nБлижайшая готовность: через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}' : ''}',
-                            ),
+                        if (!_autoRetryOnLimitsEnabled &&
+                            _hasFailedPendingItems &&
+                            !_sending)
+                          _composerInfoBanner(
+                            backgroundColor:
+                                scheme.tertiaryContainer.withValues(alpha: 0.4),
+                            foregroundColor: scheme.onTertiaryContainer,
+                            icon: Icons.pause_circle_outline,
+                            title: 'Автоповтор выключен',
+                            subtitle:
+                                'Неотправленные элементы ожидают ручного повтора'
+                                '\nТекст: ${_failedTextSends.length} • Медиа: ${_pendingMediaRetry != null ? 1 : 0}'
+                                '${retryBulkProgressLabel != null ? '\nПакетный повтор: $retryBulkProgressLabel' : ''}'
+                                '${_retryAllBulkCancelRequested ? '\nОстановка после текущего элемента…' : ''}'
+                                '${_clearAllAfterBulkStopRequested ? '\nПосле остановки откроется очистка…' : ''}'
+                                '${manualReadyRetryRemainingSeconds > 0 ? '\nАвтозапуск готовых через ${_formatSlowModeCountdown(manualReadyRetryRemainingSeconds)}' : ''}'
+                                '${nextManualRetryRemainingSeconds != null ? '\nБлижайшая готовность: через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}' : ''}',
                             trailing: Wrap(
                               spacing: 6,
                               children: [
@@ -6980,93 +7213,81 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ],
                             ),
                           ),
-                        ),
-                      if (_sending)
-                        Material(
-                          color:
-                              scheme.secondaryContainer.withValues(alpha: 0.55),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    if (_uploadProgress == null)
-                                      SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: scheme.onSecondaryContainer,
+                        if (_sending)
+                          Material(
+                            color: scheme.secondaryContainer
+                                .withValues(alpha: 0.55),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Row(
+                                    children: [
+                                      if (_uploadProgress == null)
+                                        SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: scheme.onSecondaryContainer,
+                                          ),
+                                        )
+                                      else
+                                        Text(
+                                          '${(_uploadProgress! * 100).round()}%',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color:
+                                                    scheme.onSecondaryContainer,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
-                                      )
-                                    else
-                                      Text(
-                                        '${(_uploadProgress! * 100).round()}%',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              color:
-                                                  scheme.onSecondaryContainer,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          _sendingStatus,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                color:
+                                                    scheme.onSecondaryContainer,
+                                              ),
+                                        ),
                                       ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        _sendingStatus,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelMedium
-                                            ?.copyWith(
-                                              color:
-                                                  scheme.onSecondaryContainer,
-                                            ),
-                                      ),
+                                    ],
+                                  ),
+                                  if (_uploadProgress != null) ...[
+                                    const SizedBox(height: 6),
+                                    LinearProgressIndicator(
+                                      value: _uploadProgress,
+                                      minHeight: 3,
+                                      borderRadius: BorderRadius.circular(2),
+                                      color: scheme.primary,
+                                      backgroundColor: scheme
+                                          .onSecondaryContainer
+                                          .withValues(alpha: 0.2),
                                     ),
                                   ],
-                                ),
-                                if (_uploadProgress != null) ...[
-                                  const SizedBox(height: 6),
-                                  LinearProgressIndicator(
-                                    value: _uploadProgress,
-                                    minHeight: 3,
-                                    borderRadius: BorderRadius.circular(2),
-                                    color: scheme.primary,
-                                    backgroundColor: scheme.onSecondaryContainer
-                                        .withValues(alpha: 0.2),
-                                  ),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      if (_pendingMediaRetry != null)
-                        _pendingMediaRetryBanner(scheme),
-                      _animatedVisibility(
-                        visible: _showVoiceHint && !_recording && !_sending,
-                        keyName: 'voice-hint',
-                        child: Material(
-                          color:
-                              scheme.tertiaryContainer.withValues(alpha: 0.45),
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(
-                              Icons.mic_none_rounded,
-                              color: scheme.onTertiaryContainer,
-                              size: 22,
-                            ),
-                            title: Text(
-                              'Удерживайте кнопку микрофона для голосового',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: scheme.onTertiaryContainer,
-                                  ),
-                            ),
+                        if (_pendingMediaRetry != null)
+                          _pendingMediaRetryBanner(scheme),
+                        _animatedVisibility(
+                          visible: _showVoiceHint && !_recording && !_sending,
+                          keyName: 'voice-hint',
+                          child: _composerInfoBanner(
+                            backgroundColor: scheme.tertiaryContainer
+                                .withValues(alpha: 0.45),
+                            foregroundColor: scheme.onTertiaryContainer,
+                            icon: Icons.mic_none_rounded,
+                            title:
+                                'Удерживайте кнопку микрофона для голосового',
                             trailing: IconButton(
                               tooltip: 'Скрыть',
                               icon: const Icon(Icons.close, size: 18),
@@ -7074,426 +7295,388 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ),
                           ),
                         ),
-                      ),
-                      _animatedVisibility(
-                        visible: _editingMessage != null,
-                        keyName: 'edit-banner',
-                        child: _editingMessage == null
-                            ? const SizedBox.shrink()
-                            : Material(
-                                color: scheme.primaryContainer
-                                    .withValues(alpha: 0.35),
-                                child: ListTile(
-                                  dense: true,
-                                  leading:
-                                      const Icon(Icons.edit_outlined, size: 20),
-                                  title: const Text('Редактирование'),
-                                  subtitle: Text(
-                                    _editingMessage!.content,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                        _animatedVisibility(
+                          visible: _editingMessage != null,
+                          keyName: 'edit-banner',
+                          child: _editingMessage == null
+                              ? const SizedBox.shrink()
+                              : _composerInfoBanner(
+                                  backgroundColor: scheme.primaryContainer
+                                      .withValues(alpha: 0.35),
+                                  foregroundColor: scheme.onPrimaryContainer,
+                                  icon: Icons.edit_outlined,
+                                  title: 'Редактирование',
+                                  subtitle: _editingMessage!.content,
                                   trailing: IconButton(
                                     icon: const Icon(Icons.close, size: 20),
                                     onPressed: _cancelEdit,
                                   ),
                                 ),
-                              ),
-                      ),
-                      _animatedVisibility(
-                        visible: _replyTo != null,
-                        keyName: 'reply-banner',
-                        child: _replyTo == null
-                            ? const SizedBox.shrink()
-                            : Material(
-                                color: scheme.surfaceContainerHighest,
-                                child: ListTile(
-                                  dense: true,
-                                  leading:
-                                      const Icon(Icons.reply_rounded, size: 20),
-                                  title: Text(
-                                    _replyTo!.isMine
-                                        ? 'Вы'
-                                        : (_replyTo!.senderName ??
-                                            _senderNames[_replyTo!.senderId] ??
-                                            _conversation.displayTitle),
-                                    style:
-                                        Theme.of(context).textTheme.labelMedium,
-                                  ),
-                                  subtitle: Text(
-                                    _messagePreview(_replyTo!),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                        ),
+                        _animatedVisibility(
+                          visible: _replyTo != null,
+                          keyName: 'reply-banner',
+                          child: _replyTo == null
+                              ? const SizedBox.shrink()
+                              : _composerInfoBanner(
+                                  backgroundColor:
+                                      scheme.surfaceContainerHighest,
+                                  icon: Icons.reply_rounded,
+                                  title: _replyTo!.isMine
+                                      ? 'Вы'
+                                      : (_replyTo!.senderName ??
+                                          _senderNames[_replyTo!.senderId] ??
+                                          _conversation.displayTitle),
+                                  subtitle: _messagePreview(_replyTo!),
                                   trailing: IconButton(
                                     icon: const Icon(Icons.close, size: 20),
                                     onPressed: () =>
                                         setState(() => _replyTo = null),
                                   ),
                                 ),
+                        ),
+                        _animatedVisibility(
+                          visible: _recording,
+                          keyName: 'record-banner',
+                          child: Material(
+                            color: _recordCancelled
+                                ? scheme.errorContainer.withValues(alpha: 0.5)
+                                : scheme.primaryContainer
+                                    .withValues(alpha: 0.35),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    _recordCancelled
+                                        ? '← Отпустите для отмены'
+                                        : 'Отпустите для отправки',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(
+                                          color: _recordCancelled
+                                              ? scheme.error
+                                              : scheme.onSurface,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ChatVoiceWaveform(
+                                    levels: List<double>.from(_waveLevels),
+                                    color: scheme.onSurfaceVariant,
+                                    activeColor: scheme.primary,
+                                    barCount: 32,
+                                    height: 32,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _formatRecordDuration(_recordDuration),
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                ],
                               ),
-                      ),
-                      _animatedVisibility(
-                        visible: _recording,
-                        keyName: 'record-banner',
-                        child: Material(
-                          color: _recordCancelled
-                              ? scheme.errorContainer.withValues(alpha: 0.5)
-                              : scheme.primaryContainer.withValues(alpha: 0.35),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                            ),
+                          ),
+                        ),
+                        _animatedVisibility(
+                          visible: !canSendInGroup,
+                          keyName: 'group-readonly-banner',
+                          child: _composerInfoBanner(
+                            backgroundColor: scheme.secondaryContainer
+                                .withValues(alpha: 0.45),
+                            foregroundColor: scheme.onSecondaryContainer,
+                            icon: Icons.lock_outline,
+                            title: isRestrictedByModeration
+                                ? 'Отправка сообщений ограничена модератором'
+                                : 'Только админы могут отправлять сообщения',
+                          ),
+                        ),
+                        _animatedVisibility(
+                          visible: showPostingLimitsHint,
+                          keyName: 'group-posting-limits-banner',
+                          child: _composerInfoBanner(
+                            backgroundColor:
+                                scheme.tertiaryContainer.withValues(alpha: 0.4),
+                            foregroundColor: scheme.onTertiaryContainer,
+                            icon: activeCooldownIcon,
+                            title: postingLimitsHint,
+                            onTap: () => _showPostingLimitsInfo(
+                              floodCooldownActive: floodCooldownActive,
+                              activeCooldownSeconds: activeCooldownSeconds,
+                            ),
+                          ),
+                        ),
+                        _animatedVisibility(
+                          visible: !canSendNow && canSendInGroup,
+                          keyName: 'group-active-cooldown-banner',
+                          child: _composerInfoBanner(
+                            backgroundColor:
+                                scheme.tertiaryContainer.withValues(alpha: 0.6),
+                            foregroundColor: scheme.onTertiaryContainer,
+                            icon: activeCooldownIcon,
+                            title:
+                                '$activeCooldownLabel: временная пауза перед отправкой',
+                            subtitle:
+                                'Можно отправить через ${_formatSlowModeCountdown(activeCooldownSeconds)}',
+                            onTap: () => _showPostingLimitsInfo(
+                              floodCooldownActive: floodCooldownActive,
+                              activeCooldownSeconds: activeCooldownSeconds,
+                            ),
+                          ),
+                        ),
+                        SafeArea(
+                          top: false,
+                          child: AnimatedContainer(
+                            duration: _uiAnimDuration,
+                            curve: Curves.easeOutCubic,
+                            margin: const EdgeInsets.fromLTRB(10, 5, 10, 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: 0.3),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: scheme.shadow.withValues(
+                                    alpha:
+                                        (_recording || _sending) ? 0.09 : 0.05,
+                                  ),
+                                  blurRadius: (_recording || _sending) ? 11 : 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  _recordCancelled
-                                      ? '← Отпустите для отмены'
-                                      : 'Отпустите для отправки',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(
-                                        color: _recordCancelled
-                                            ? scheme.error
-                                            : scheme.onSurface,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                ChatVoiceWaveform(
-                                  levels: List<double>.from(_waveLevels),
+                                IconButton(
+                                  onPressed: (_recording || !canSendNow)
+                                      ? null
+                                      : _showAttachMenu,
+                                  icon: const Icon(Icons.attach_file_outlined),
+                                  tooltip: 'Вложение',
                                   color: scheme.onSurfaceVariant,
-                                  activeColor: scheme.primary,
-                                  barCount: 32,
-                                  height: 32,
+                                  iconSize: _composerIconSize,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: _composerButtonSide,
+                                    height: _composerButtonSide,
+                                  ),
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _formatRecordDuration(_recordDuration),
-                                  textAlign: TextAlign.center,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
+                                Expanded(
+                                  child: TextField(
+                                    controller: _controller,
+                                    focusNode: _inputFocusNode,
+                                    enabled: !_recording && canSendInGroup,
+                                    minLines: 1,
+                                    maxLines: 5,
+                                    textInputAction: TextInputAction.send,
+                                    scrollPadding:
+                                        const EdgeInsets.only(bottom: 96),
+                                    onSubmitted: (_) =>
+                                        _hasText ? _sendText() : null,
+                                    decoration: InputDecoration(
+                                      hintText: _recording
+                                          ? 'Удерживайте микрофон…'
+                                          : (!canSendInGroup
+                                              ? (isRestrictedByModeration
+                                                  ? 'Ваши сообщения временно ограничены'
+                                                  : 'В этой группе писать могут только админы')
+                                              : (activeCooldownSeconds > 0
+                                                  ? '$activeCooldownLabel: подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
+                                                  : (_editingMessage != null
+                                                      ? 'Изменить сообщение'
+                                                      : (_hasText
+                                                          ? 'Сообщение'
+                                                          : 'Сообщение или голосовое')))),
+                                      filled: true,
+                                      fillColor: scheme.surfaceContainerHighest
+                                          .withValues(alpha: 0.9),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(22),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 2),
+                                AnimatedSwitcher(
+                                  duration: _uiAnimDuration,
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.94,
+                                        end: 1,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: (_hasText && !_recording)
+                                      ? GestureDetector(
+                                          key: const ValueKey('send-btn'),
+                                          onLongPress:
+                                              _editingMessage == null &&
+                                                      canSendNow
+                                                  ? _scheduleCurrentTextMessage
+                                                  : null,
+                                          child: IconButton.filled(
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: scheme.primary,
+                                              foregroundColor: scheme.onPrimary,
+                                              shape: const CircleBorder(),
+                                              padding: EdgeInsets.zero,
+                                              minimumSize: const Size(
+                                                _composerButtonSide,
+                                                _composerButtonSide,
+                                              ),
+                                            ),
+                                            onPressed:
+                                                (_recording || !canSendNow)
+                                                    ? null
+                                                    : _sendText,
+                                            icon: _sending
+                                                ? SizedBox(
+                                                    width: 18,
+                                                    height: 18,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: scheme.onPrimary,
+                                                    ),
+                                                  )
+                                                : (activeCooldownSeconds > 0
+                                                    ? AnimatedScale(
+                                                        duration:
+                                                            const Duration(
+                                                          milliseconds: 180,
+                                                        ),
+                                                        scale:
+                                                            slowModePulseScale,
+                                                        child: SizedBox(
+                                                          width: 26,
+                                                          height: 26,
+                                                          child: Stack(
+                                                            alignment: Alignment
+                                                                .center,
+                                                            children: [
+                                                              SizedBox(
+                                                                width: 24,
+                                                                height: 24,
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      isSlowModeUnlockSoon
+                                                                          ? 2.4
+                                                                          : 2,
+                                                                  value:
+                                                                      activeCooldownProgress,
+                                                                  backgroundColor: scheme
+                                                                      .onPrimary
+                                                                      .withValues(
+                                                                    alpha: 0.28,
+                                                                  ),
+                                                                  color:
+                                                                      isSlowModeUnlockSoon
+                                                                          ? scheme
+                                                                              .onPrimary
+                                                                              .withValues(
+                                                                              alpha: 0.98,
+                                                                            )
+                                                                          : scheme
+                                                                              .onPrimary,
+                                                                ),
+                                                              ),
+                                                              AnimatedSwitcher(
+                                                                duration:
+                                                                    const Duration(
+                                                                  milliseconds:
+                                                                      180,
+                                                                ),
+                                                                transitionBuilder: (
+                                                                  child,
+                                                                  animation,
+                                                                ) =>
+                                                                    FadeTransition(
+                                                                  opacity:
+                                                                      animation,
+                                                                  child:
+                                                                      ScaleTransition(
+                                                                    scale: Tween<
+                                                                        double>(
+                                                                      begin:
+                                                                          0.92,
+                                                                      end: 1,
+                                                                    ).animate(
+                                                                      animation,
+                                                                    ),
+                                                                    child:
+                                                                        child,
+                                                                  ),
+                                                                ),
+                                                                child: Text(
+                                                                  _formatSlowModeCompact(
+                                                                    activeCooldownSeconds,
+                                                                  ),
+                                                                  key: ValueKey(
+                                                                    activeCooldownSeconds,
+                                                                  ),
+                                                                  style:
+                                                                      TextStyle(
+                                                                    color: scheme
+                                                                        .onPrimary,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                    fontSize: 9,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : Icon(
+                                                        _editingMessage != null
+                                                            ? Icons
+                                                                .check_rounded
+                                                            : Icons
+                                                                .send_rounded,
+                                                        size: _composerIconSize,
+                                                      )),
+                                          ),
+                                        )
+                                      : ChatVoiceMicButton(
+                                          key: const ValueKey('mic-btn'),
+                                          enabled: !_sending && canSendNow,
+                                          recording: _recording,
+                                          onHoldStart: _onHoldStart,
+                                          onHoldEnd: _onHoldEnd,
+                                          onHoldDragDx: _onHoldDrag,
+                                        ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      ),
-                      _animatedVisibility(
-                        visible: !canSendInGroup,
-                        keyName: 'group-readonly-banner',
-                        child: Material(
-                          color:
-                              scheme.secondaryContainer.withValues(alpha: 0.45),
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.lock_outline, size: 20),
-                            title: Text(
-                              isRestrictedByModeration
-                                  ? 'Отправка сообщений ограничена модератором'
-                                  : 'Только админы могут отправлять сообщения',
-                            ),
-                          ),
-                        ),
-                      ),
-                      _animatedVisibility(
-                        visible: showPostingLimitsHint,
-                        keyName: 'group-posting-limits-banner',
-                        child: Material(
-                          color:
-                              scheme.tertiaryContainer.withValues(alpha: 0.4),
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(activeCooldownIcon, size: 20),
-                            title: Text(
-                              postingLimitsHint,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () => _showPostingLimitsInfo(
-                              floodCooldownActive: floodCooldownActive,
-                              activeCooldownSeconds: activeCooldownSeconds,
-                            ),
-                          ),
-                        ),
-                      ),
-                      _animatedVisibility(
-                        visible: !canSendNow && canSendInGroup,
-                        keyName: 'group-active-cooldown-banner',
-                        child: Material(
-                          color:
-                              scheme.tertiaryContainer.withValues(alpha: 0.6),
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(activeCooldownIcon, size: 20),
-                            title: Text(
-                              '$activeCooldownLabel: временная пауза перед отправкой',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              'Можно отправить через ${_formatSlowModeCountdown(activeCooldownSeconds)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onTap: () => _showPostingLimitsInfo(
-                              floodCooldownActive: floodCooldownActive,
-                              activeCooldownSeconds: activeCooldownSeconds,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SafeArea(
-                        top: false,
-                        child: Container(
-                          margin: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: scheme.surface,
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color:
-                                  scheme.outlineVariant.withValues(alpha: 0.35),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: scheme.shadow.withValues(alpha: 0.07),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                onPressed: (_recording || !canSendNow)
-                                    ? null
-                                    : _showAttachMenu,
-                                icon: const Icon(Icons.attach_file_outlined),
-                                tooltip: 'Вложение',
-                                color: scheme.onSurfaceVariant,
-                                iconSize: _composerIconSize,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: _composerButtonSide,
-                                  height: _composerButtonSide,
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: (_recording || !canSendNow)
-                                    ? null
-                                    : () => _pickImage(
-                                          source: ImageSource.camera,
-                                        ),
-                                icon: const Icon(Icons.photo_camera_outlined),
-                                tooltip: 'Камера',
-                                color: scheme.primary,
-                                iconSize: _composerIconSize,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: _composerButtonSide,
-                                  height: _composerButtonSide,
-                                ),
-                              ),
-                              Expanded(
-                                child: TextField(
-                                  controller: _controller,
-                                  focusNode: _inputFocusNode,
-                                  enabled: !_recording && canSendInGroup,
-                                  minLines: 1,
-                                  maxLines: 5,
-                                  textInputAction: TextInputAction.send,
-                                  scrollPadding:
-                                      const EdgeInsets.only(bottom: 96),
-                                  onSubmitted: (_) =>
-                                      _hasText ? _sendText() : null,
-                                  decoration: InputDecoration(
-                                    hintText: _recording
-                                        ? 'Удерживайте микрофон…'
-                                        : (!canSendInGroup
-                                            ? (isRestrictedByModeration
-                                                ? 'Ваши сообщения временно ограничены'
-                                                : 'В этой группе писать могут только админы')
-                                            : (activeCooldownSeconds > 0
-                                                ? '$activeCooldownLabel: подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
-                                                : (_editingMessage != null
-                                                    ? 'Изменить сообщение'
-                                                    : (_hasText
-                                                        ? 'Сообщение'
-                                                        : 'Сообщение или удержите 🎤')))),
-                                    filled: true,
-                                    fillColor: scheme.surfaceContainerHighest
-                                        .withValues(alpha: 0.9),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(22),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 11,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              AnimatedSwitcher(
-                                duration: _uiAnimDuration,
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, animation) =>
-                                    FadeTransition(
-                                  opacity: animation,
-                                  child: ScaleTransition(
-                                    scale: Tween<double>(
-                                      begin: 0.94,
-                                      end: 1,
-                                    ).animate(animation),
-                                    child: child,
-                                  ),
-                                ),
-                                child: (_hasText && !_recording)
-                                    ? GestureDetector(
-                                        key: const ValueKey('send-btn'),
-                                        onLongPress: _editingMessage == null &&
-                                                canSendNow
-                                            ? _scheduleCurrentTextMessage
-                                            : null,
-                                        child: IconButton.filled(
-                                          style: IconButton.styleFrom(
-                                            backgroundColor: scheme.primary,
-                                            foregroundColor: scheme.onPrimary,
-                                            shape: const CircleBorder(),
-                                            padding: EdgeInsets.zero,
-                                            minimumSize: const Size(
-                                              _composerButtonSide,
-                                              _composerButtonSide,
-                                            ),
-                                          ),
-                                          onPressed: (_recording || !canSendNow)
-                                              ? null
-                                              : _sendText,
-                                          icon: _sending
-                                              ? SizedBox(
-                                                  width: 18,
-                                                  height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    color: scheme.onPrimary,
-                                                  ),
-                                                )
-                                              : (activeCooldownSeconds > 0
-                                                  ? AnimatedScale(
-                                                      duration: const Duration(
-                                                        milliseconds: 180,
-                                                      ),
-                                                      scale: slowModePulseScale,
-                                                      child: SizedBox(
-                                                        width: 26,
-                                                        height: 26,
-                                                        child: Stack(
-                                                          alignment:
-                                                              Alignment.center,
-                                                          children: [
-                                                            SizedBox(
-                                                              width: 24,
-                                                              height: 24,
-                                                              child:
-                                                                  CircularProgressIndicator(
-                                                                strokeWidth:
-                                                                    isSlowModeUnlockSoon
-                                                                        ? 2.4
-                                                                        : 2,
-                                                                value:
-                                                                    activeCooldownProgress,
-                                                                backgroundColor:
-                                                                    scheme
-                                                                        .onPrimary
-                                                                        .withValues(
-                                                                  alpha: 0.28,
-                                                                ),
-                                                                color:
-                                                                    isSlowModeUnlockSoon
-                                                                        ? scheme
-                                                                            .onPrimary
-                                                                            .withValues(
-                                                                            alpha:
-                                                                                0.98,
-                                                                          )
-                                                                        : scheme
-                                                                            .onPrimary,
-                                                              ),
-                                                            ),
-                                                            AnimatedSwitcher(
-                                                              duration:
-                                                                  const Duration(
-                                                                milliseconds:
-                                                                    180,
-                                                              ),
-                                                              transitionBuilder: (
-                                                                child,
-                                                                animation,
-                                                              ) =>
-                                                                  FadeTransition(
-                                                                opacity:
-                                                                    animation,
-                                                                child:
-                                                                    ScaleTransition(
-                                                                  scale: Tween<
-                                                                      double>(
-                                                                    begin: 0.92,
-                                                                    end: 1,
-                                                                  ).animate(
-                                                                    animation,
-                                                                  ),
-                                                                  child: child,
-                                                                ),
-                                                              ),
-                                                              child: Text(
-                                                                _formatSlowModeCompact(
-                                                                  activeCooldownSeconds,
-                                                                ),
-                                                                key: ValueKey(
-                                                                  activeCooldownSeconds,
-                                                                ),
-                                                                style:
-                                                                    TextStyle(
-                                                                  color: scheme
-                                                                      .onPrimary,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                  fontSize: 9,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    )
-                                                  : Icon(
-                                                      _editingMessage != null
-                                                          ? Icons.check_rounded
-                                                          : Icons.send_rounded,
-                                                      size: _composerIconSize,
-                                                    )),
-                                        ),
-                                      )
-                                    : ChatVoiceMicButton(
-                                        key: const ValueKey('mic-btn'),
-                                        enabled: !_sending && canSendNow,
-                                        recording: _recording,
-                                        onHoldStart: _onHoldStart,
-                                        onHoldEnd: _onHoldEnd,
-                                        onHoldDragDx: _onHoldDrag,
-                                      ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
             ],
@@ -7623,8 +7806,8 @@ class _Bubble extends StatelessWidget {
   static const _metaReserveWidth = 52.0;
 
   BorderRadius _bubbleRadius(bool mine) {
-    const large = Radius.circular(18);
-    const small = Radius.circular(5);
+    const large = Radius.circular(16);
+    const small = Radius.circular(4);
     return BorderRadius.only(
       topLeft: !mine && !cluster.starts ? small : large,
       topRight: mine && !cluster.starts ? small : large,
@@ -7880,9 +8063,10 @@ class _Bubble extends StatelessWidget {
 
     final isImage = message.type == 'image' && message.mediaUrl != null;
     final isVideo = message.type == 'video' && message.mediaUrl != null;
-    final isMedia = isImage || isVideo;
+    final isSticker = message.type == 'sticker' && message.mediaUrl != null;
+    final isMedia = isImage || isVideo || isSticker;
     final hasCaption = message.content.trim().isNotEmpty;
-    final isFullBleedMedia = isMedia && !hasCaption;
+    final isFullBleedMedia = (isImage || isVideo) && !hasCaption;
     final bubbleRadius = _bubbleRadius(mine);
     final contentPadding =
         isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 5, 8, 4);
@@ -8016,6 +8200,18 @@ class _Bubble extends StatelessWidget {
           child: image,
         );
       }
+    } else if (isSticker) {
+      final sticker = ChatStickerTile(
+        mediaUrl: message.mediaUrl!,
+        animated: ChatStickerTile.looksAnimated(message.mediaUrl!),
+        onTap: onImageTap,
+      );
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        onMedia: true,
+        child: sticker,
+      );
     } else if (isVideo) {
       final video = ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 280),
@@ -8087,12 +8283,12 @@ class _Bubble extends StatelessWidget {
     }
 
     final bubble = Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
+      margin: const EdgeInsets.symmetric(vertical: 1.5),
       padding:
-          isMedia ? contentPadding : const EdgeInsets.fromLTRB(11, 8, 11, 6),
+          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 7, 10, 5),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.76,
+        maxWidth: MediaQuery.sizeOf(context).width * 0.74,
       ),
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,

@@ -6,7 +6,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -78,6 +78,7 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytic
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
 app.include_router(realtime.router, prefix="/api/v1/realtime", tags=["Realtime"])
 app.include_router(chats.router, prefix="/api/v1", tags=["Chats"])
+app.include_router(stickers.router, prefix="/api/v1", tags=["Stickers"])
 app.include_router(link_preview.router, prefix="/api/v1", tags=["Link Preview"])
 app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])

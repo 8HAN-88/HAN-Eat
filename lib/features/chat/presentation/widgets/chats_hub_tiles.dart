@@ -44,12 +44,13 @@ class ChatHubTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final last = chat.lastMessage;
+    final hasUnread = chat.unreadCount > 0;
+    final hasStateIcons = chat.pinned || chat.muted;
 
     final tile = ListTile(
-      dense: true,
-      minVerticalPadding: 12,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      minVerticalPadding: 10,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       onTap: onTap,
       onLongPress: onLongPress,
       leading: chat.isSaved
@@ -68,23 +69,13 @@ class ChatHubTile extends StatelessWidget {
                 ),
       title: Row(
         children: [
-          if (chat.pinned) ...[
-            Icon(Icons.push_pin, size: 14, color: scheme.primary),
-            const SizedBox(width: 4),
-          ],
-          if (chat.muted) ...[
-            Icon(Icons.notifications_off_outlined,
-                size: 14, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 4),
-          ],
           Expanded(
             child: Text(
               chat.displayTitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontWeight:
-                    chat.unreadCount > 0 ? FontWeight.w700 : FontWeight.w600,
+                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
                 letterSpacing: -0.2,
               ),
             ),
@@ -96,21 +87,37 @@ class ChatHubTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color:
-              chat.unreadCount > 0 ? scheme.onSurface : scheme.onSurfaceVariant,
+          color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
         ),
       ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            chatHubFormatInboxTime(chat.updatedAt),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasStateIcons) ...[
+                if (chat.pinned) ...[
+                  Icon(Icons.push_pin_rounded,
+                      size: 13, color: scheme.primary.withValues(alpha: 0.85)),
+                  const SizedBox(width: 3),
+                ],
+                if (chat.muted) ...[
+                  Icon(Icons.notifications_off_outlined,
+                      size: 13, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                ],
+              ],
+              Text(
+                chatHubFormatInboxTime(chat.updatedAt),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
           ),
-          if (chat.unreadCount > 0) ...[
+          if (hasUnread) ...[
             const SizedBox(height: 5),
             TelegramUnreadBadge(count: chat.unreadCount, muted: chat.muted),
           ],
@@ -121,18 +128,20 @@ class ChatHubTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
       child: Material(
-        color: chat.unreadCount > 0
-            ? scheme.primary.withValues(alpha: 0.11)
+        color: hasUnread
+            ? scheme.primaryContainer.withValues(alpha: 0.36)
             : scheme.surfaceContainer.withValues(alpha: 0.72),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.38),
+              color: hasUnread
+                  ? scheme.primary.withValues(alpha: 0.28)
+                  : scheme.outlineVariant.withValues(alpha: 0.34),
               width: 0.7,
             ),
           ),
@@ -433,10 +442,9 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
         widget.onTap();
       },
       onLongPress: widget.onLongPress,
-      dense: true,
-      minVerticalPadding: 12,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      minVerticalPadding: 10,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       leading: ChatHubChannelAvatar(channel: _channel),
       title: Row(
         children: [
@@ -475,18 +483,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
           ),
           if (hasUnread) ...[
             const SizedBox(height: 4),
-            CircleAvatar(
-              radius: 10,
-              backgroundColor: scheme.primary,
-              child: Text(
-                _newPostsCount > 9 ? '9+' : '$_newPostsCount',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: scheme.onPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            TelegramUnreadBadge(count: _newPostsCount, muted: false),
           ],
         ],
       ),
@@ -496,17 +493,19 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
       child: Material(
         color: hasUnread
-            ? scheme.primary.withValues(alpha: 0.11)
+            ? scheme.primaryContainer.withValues(alpha: 0.36)
             : scheme.surfaceContainer.withValues(alpha: 0.72),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: scheme.outlineVariant.withValues(alpha: 0.38),
+              color: hasUnread
+                  ? scheme.primary.withValues(alpha: 0.28)
+                  : scheme.outlineVariant.withValues(alpha: 0.34),
               width: 0.7,
             ),
           ),

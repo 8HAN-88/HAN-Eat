@@ -40,6 +40,7 @@ from app.models.paid_features import (
 )
 from app.models.story import Story
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
+from app.models.sticker import StickerPack, Sticker, StickerPackInstall
 
 # Для обратной совместимости
 Community = Channel
@@ -54,6 +55,7 @@ __all__ = [
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest", "Story",
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
-    "BotMiniApp", "MiniAppInstall", "MiniAppLaunch",
+    "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
+    "StickerPackInstall",
 ]
 

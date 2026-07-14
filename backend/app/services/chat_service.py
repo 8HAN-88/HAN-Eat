@@ -1779,6 +1779,8 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "video" and not media_url:
             raise ValueError("missing_media")
+        if msg_type == "sticker" and not media_url:
+            raise ValueError("missing_media")
         if msg_type == "poll" and not content.strip():
             raise ValueError("empty_poll")
         if reply_to_message_id is not None:
@@ -1923,6 +1925,8 @@ class ChatService:
             preview = f"📎 {name[:80]}"
         elif msg_type == "video":
             preview = "🎬 Видео"
+        elif msg_type == "sticker":
+            preview = "🧩 Стикер"
         elif msg_type == "poll":
             from app.services.chat_poll_service import poll_preview_text
             preview = poll_preview_text(content)

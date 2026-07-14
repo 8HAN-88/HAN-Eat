@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -122,8 +121,6 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    final scheme = Theme.of(context).colorScheme;
-
     return AppGradientBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -157,21 +154,6 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
               ),
             ),
           ],
-        ),
-        floatingActionButton: Padding(
-          padding: EdgeInsets.only(bottom: fabExtraBottomPadding(context)),
-          child: FloatingActionButton.extended(
-            onPressed: _showNewChatMenu,
-            tooltip: 'Новый чат',
-            icon: const Icon(Icons.edit_outlined),
-            label: Text(
-              'Новый',
-              style: TextStyle(
-                color: scheme.onPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
         ),
       ),
     );

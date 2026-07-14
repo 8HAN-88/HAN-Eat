@@ -114,7 +114,7 @@ class PinMessageRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll)$")
+    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll|sticker)$")
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
@@ -127,7 +127,7 @@ class SendMessageRequest(BaseModel):
 
 
 class ScheduleMessageRequest(BaseModel):
-    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll)$")
+    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll|sticker)$")
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None

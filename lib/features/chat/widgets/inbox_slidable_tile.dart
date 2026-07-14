@@ -32,8 +32,8 @@ class ChatInboxSlidable extends StatelessWidget {
     return Slidable(
       key: ValueKey('chat_slidable_$chatId'),
       endActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.62,
+        motion: const DrawerMotion(),
+        extentRatio: 0.56,
         children: [
           SlidableAction(
             onPressed: (_) => _run(context, onArchive),
@@ -49,7 +49,7 @@ class ChatInboxSlidable extends StatelessWidget {
             icon: muted
                 ? Icons.notifications_outlined
                 : Icons.notifications_off_outlined,
-            label: muted ? 'Звук' : 'Без звука',
+            label: muted ? 'Вкл' : 'Тихо',
           ),
           SlidableAction(
             onPressed: (_) => _run(context, onDelete),
@@ -91,8 +91,8 @@ class ChannelInboxSlidable extends StatelessWidget {
     return Slidable(
       key: ValueKey('channel_slidable_$channelId'),
       endActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.42,
+        motion: const DrawerMotion(),
+        extentRatio: 0.38,
         children: [
           SlidableAction(
             onPressed: (_) => _run(context, onArchive),

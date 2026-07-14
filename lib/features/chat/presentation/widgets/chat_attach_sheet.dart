@@ -9,17 +9,27 @@ import 'package:intl/intl.dart';
 
 import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
 
+import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
+import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/media_upload_service.dart';
 import '../../../../services/phone_contacts_service.dart';
+import '../../../../services/server_config.dart';
+import '../../../../services/sticker_service.dart';
 import '../../application/chat_recent_files_store.dart';
+import '../../application/chat_sticker_pinned_packs_store.dart';
+import '../../application/chat_recent_stickers_store.dart';
+import '../../../../services/auth_service.dart';
+import '../sticker_pack_manage_screen.dart';
+import '../sticker_pack_preview_screen.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
 
-enum ChatAttachTab { gallery, file, poll, contact }
+enum ChatAttachTab { gallery, file, poll, contact, sticker }
 
 enum ChatAttachResult {
   galleryFiles,
@@ -28,7 +38,10 @@ enum ChatAttachResult {
   poll,
   contact,
   resendFile,
+  sticker,
 }
+
+enum _AttachMoreAction { poll, contact, miniApps }
 
 class ChatAttachSelection {
   const ChatAttachSelection._({
@@ -42,6 +55,8 @@ class ChatAttachSelection {
     this.resendFileUrl,
     this.pickedFile,
     this.pickedFileName,
+    this.stickerMediaUrl,
+    this.stickerEmoji,
   });
 
   final ChatAttachResult kind;
@@ -54,6 +69,8 @@ class ChatAttachSelection {
   final String? resendFileUrl;
   final XFile? pickedFile;
   final String? pickedFileName;
+  final String? stickerMediaUrl;
+  final String? stickerEmoji;
 
   factory ChatAttachSelection.gallery(List<XFile> files) =>
       ChatAttachSelection._(
@@ -104,6 +121,16 @@ class ChatAttachSelection {
         kind: ChatAttachResult.pickedFile,
         pickedFile: file,
         pickedFileName: name,
+      );
+
+  factory ChatAttachSelection.sticker({
+    required String mediaUrl,
+    String? emoji,
+  }) =>
+      ChatAttachSelection._(
+        kind: ChatAttachResult.sticker,
+        stickerMediaUrl: mediaUrl,
+        stickerEmoji: emoji,
       );
 }
 
@@ -199,9 +226,19 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   final List<XFile> _gallerySelection = [];
   List<_AttachSheetContact> _contacts = [];
   List<ChatRecentFileEntry> _recentFiles = [];
+  List<StickerPack> _stickerPacks = [];
+  List<ChatRecentStickerEntry> _recentStickers = [];
+  List<ChatRecentStickerEntry> _favoriteStickers = [];
   bool _contactsLoading = false;
   bool _recentLoading = true;
+  bool _stickerLoading = true;
+  bool _stickerBusy = false;
   String? _contactsError;
+  String? _stickerError;
+  int? _currentUserId;
+  List<int> _pinnedPackIds = [];
+  String _stickerView = 'packs';
+  int? _selectedStickerPackId;
   bool _pollCanSend = false;
   bool _searchVisible = false;
   String _searchQuery = '';
@@ -217,14 +254,22 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     super.initState();
     _loadContacts();
     _loadRecentFiles();
+    _loadStickerPacks();
+    _loadStickerHistory();
+    _loadPinnedPacks();
+    _currentUserId = AuthService.instance.currentUser?.id;
     _reconnectedListener = () {
       if (!mounted) return;
       unawaited(_loadContacts());
     };
     ApiReachabilityService.addReconnectedListener(_reconnectedListener!);
     _searchController.addListener(() {
-      setState(
-          () => _searchQuery = _searchController.text.trim().toLowerCase());
+      final next = _searchController.text.trim().toLowerCase();
+      if (_searchQuery == next) return;
+      setState(() => _searchQuery = next);
+      if (_tab == ChatAttachTab.sticker) {
+        unawaited(_loadStickerPacks());
+      }
     });
   }
 
@@ -314,9 +359,69 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     });
   }
 
+  Future<void> _loadStickerPacks() async {
+    setState(() {
+      _stickerLoading = true;
+      _stickerError = null;
+    });
+    try {
+      final myPacks = await StickerService.listMyPacks();
+      final catalog = await StickerService.listCatalog(
+        query: _tab == ChatAttachTab.sticker ? _searchQuery : '',
+      );
+      final merged = <StickerPack>[];
+      final seen = <int>{};
+      for (final p in [...myPacks, ...catalog]) {
+        if (seen.add(p.id)) merged.add(p);
+      }
+      merged.sort((a, b) {
+        final ai = _pinnedPackIds.indexOf(a.id);
+        final bi = _pinnedPackIds.indexOf(b.id);
+        final aPinned = ai >= 0;
+        final bPinned = bi >= 0;
+        if (aPinned && bPinned) return ai.compareTo(bi);
+        if (aPinned) return -1;
+        if (bPinned) return 1;
+        return 0;
+      });
+      if (!mounted) return;
+      setState(() {
+        _stickerPacks = merged;
+        if (_selectedStickerPackId != null &&
+            !_stickerPacks.any((p) => p.id == _selectedStickerPackId)) {
+          _selectedStickerPackId = null;
+        }
+        _stickerLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _stickerLoading = false;
+        _stickerError = 'Не удалось загрузить стикеры';
+      });
+    }
+  }
+
+  Future<void> _loadStickerHistory() async {
+    final recent = await ChatRecentStickersStore.loadRecent();
+    final favorites = await ChatRecentStickersStore.loadFavorites();
+    if (!mounted) return;
+    setState(() {
+      _recentStickers = recent;
+      _favoriteStickers = favorites;
+    });
+  }
+
+  Future<void> _loadPinnedPacks() async {
+    final ids = await ChatStickerPinnedPacksStore.load();
+    if (!mounted) return;
+    setState(() => _pinnedPackIds = ids);
+  }
+
   void _close([ChatAttachSelection? result]) => Navigator.pop(context, result);
 
   void _setTab(ChatAttachTab tab) {
+    AppHaptics.selection();
     setState(() {
       _tab = tab;
       _searchVisible = false;
@@ -325,12 +430,66 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     });
   }
 
+  Future<void> _openMiniAppsCatalog() async {
+    Navigator.of(context).pop();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MiniAppsCatalogScreen(),
+      ),
+    );
+  }
+
+  Future<void> _openAttachMoreMenu() async {
+    AppHaptics.selection();
+    final action = await showModalBottomSheet<_AttachMoreAction>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.poll_outlined),
+              title: const Text('Опрос'),
+              onTap: () => Navigator.pop(ctx, _AttachMoreAction.poll),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Контакт'),
+              onTap: () => Navigator.pop(ctx, _AttachMoreAction.contact),
+            ),
+            ListTile(
+              leading: const Icon(Icons.apps_outlined),
+              title: const Text('Мини-приложения'),
+              onTap: () => Navigator.pop(ctx, _AttachMoreAction.miniApps),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _AttachMoreAction.poll:
+        _setTab(ChatAttachTab.poll);
+        break;
+      case _AttachMoreAction.contact:
+        _setTab(ChatAttachTab.contact);
+        break;
+      case _AttachMoreAction.miniApps:
+        await _openMiniAppsCatalog();
+        break;
+    }
+  }
+
   void _toggleSearch() {
     setState(() {
       _searchVisible = !_searchVisible;
       if (!_searchVisible) {
         _searchController.clear();
         _searchQuery = '';
+      } else if (_tab == ChatAttachTab.sticker) {
+        unawaited(_loadStickerPacks());
       }
     });
   }
@@ -345,11 +504,15 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Новый опрос';
       case ChatAttachTab.contact:
         return 'Контакты';
+      case ChatAttachTab.sticker:
+        return 'Стикеры';
     }
   }
 
   bool get _showSearch =>
-      _tab == ChatAttachTab.file || _tab == ChatAttachTab.contact;
+      _tab == ChatAttachTab.file ||
+      _tab == ChatAttachTab.contact ||
+      _tab == ChatAttachTab.sticker;
 
   bool get _showGallerySend =>
       _tab == ChatAttachTab.gallery && _gallerySelection.isNotEmpty;
@@ -431,6 +594,341 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     _close(ChatAttachSelection.pollDraft(draft));
   }
 
+  Future<void> _createStickerPack() async {
+    final controller = TextEditingController();
+    final title = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Новый стикерпак'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(
+            hintText: 'Название пака',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || title == null || title.trim().length < 2) return;
+    setState(() => _stickerBusy = true);
+    try {
+      await StickerService.createPack(title: title.trim());
+      await _loadStickerPacks();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось создать стикерпак')),
+      );
+    } finally {
+      if (mounted) setState(() => _stickerBusy = false);
+    }
+  }
+
+  void _setPackInstalledLocal(int packId, bool installed) {
+    setState(() {
+      _stickerPacks = [
+        for (final p in _stickerPacks)
+          if (p.id == packId)
+            StickerPack(
+              id: p.id,
+              title: p.title,
+              slug: p.slug,
+              ownerUserId: p.ownerUserId,
+              isPublic: p.isPublic,
+              isInstalled: installed,
+              stickers: p.stickers,
+              stickersCount: p.stickersCount,
+              shareLink: p.shareLink,
+            )
+          else
+            p,
+      ];
+    });
+  }
+
+  Future<void> _toggleInstallStickerPack({
+    required int packId,
+    required bool isInstalled,
+  }) async {
+    setState(() => _stickerBusy = true);
+    try {
+      if (isInstalled) {
+        await StickerService.uninstallPack(packId);
+        _setPackInstalledLocal(packId, false);
+      } else {
+        await StickerService.installPack(packId);
+        _setPackInstalledLocal(packId, true);
+      }
+      AppHaptics.selection();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isInstalled
+                ? 'Не удалось удалить стикерпак'
+                : 'Не удалось установить стикерпак',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _stickerBusy = false);
+    }
+  }
+
+  Future<void> _addStickerToPack(int packId) async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 768,
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _stickerBusy = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: picked,
+        fileType: 'image',
+      );
+      final url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      await StickerService.addStickerToPack(
+        packId: packId,
+        mediaUrl: url,
+        stickerType: 'static',
+      );
+      await _loadStickerPacks();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось добавить стикер')),
+      );
+    } finally {
+      if (mounted) setState(() => _stickerBusy = false);
+    }
+  }
+
+  Future<void> _addAnimatedStickerToPack(int packId) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      allowedExtensions: const [
+        'gif',
+        'webp',
+        'webm',
+        'mp4',
+        'mov',
+        'json',
+        'lottie',
+      ],
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    final xFile = kIsWeb
+        ? (picked.bytes == null
+            ? null
+            : XFile.fromData(
+                picked.bytes!,
+                name: picked.name,
+              ))
+        : (picked.path == null ? null : XFile(picked.path!));
+    if (xFile == null) return;
+    final lower = picked.name.toLowerCase();
+    final fileType = lower.endsWith('.webm') ||
+            lower.endsWith('.mp4') ||
+            lower.endsWith('.mov')
+        ? 'video'
+        : lower.endsWith('.json') || lower.endsWith('.lottie')
+            ? 'document'
+            : 'image';
+    setState(() => _stickerBusy = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: xFile,
+        fileType: fileType,
+      );
+      final url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      await StickerService.addStickerToPack(
+        packId: packId,
+        mediaUrl: url,
+        stickerType: 'animated',
+      );
+      await _loadStickerPacks();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Не удалось добавить анимированный стикер')),
+      );
+    } finally {
+      if (mounted) setState(() => _stickerBusy = false);
+    }
+  }
+
+  Future<void> _pickSticker(StickerItem sticker) async {
+    final mediaUrl = sticker.mediaUrl.trim();
+    if (mediaUrl.isEmpty) return;
+    await ChatRecentStickersStore.remember(
+      mediaUrl: mediaUrl,
+      emoji: sticker.emoji,
+      stickerType: sticker.stickerType,
+    );
+    if (mounted) {
+      await _loadStickerHistory();
+      _close(
+        ChatAttachSelection.sticker(
+          mediaUrl: mediaUrl,
+          emoji: sticker.emoji,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleStickerFavorite(
+    String mediaUrl, {
+    String? emoji,
+    String? stickerType,
+  }) async {
+    await ChatRecentStickersStore.toggleFavorite(
+      mediaUrl: mediaUrl,
+      emoji: emoji,
+      stickerType: stickerType,
+    );
+    if (!mounted) return;
+    await _loadStickerHistory();
+  }
+
+  Future<void> _openPackManager(int packId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StickerPackManageScreen(packId: packId),
+      ),
+    );
+    if (!mounted) return;
+    await _loadStickerPacks();
+  }
+
+  Future<void> _togglePinnedPack(int packId) async {
+    await ChatStickerPinnedPacksStore.toggle(packId);
+    await _loadPinnedPacks();
+    await _loadStickerPacks();
+  }
+
+  Future<void> _importPackByLink() async {
+    final controller = TextEditingController();
+    final input = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Импорт пака'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Вставьте ссылку или slug',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Импорт'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || input == null || input.trim().isEmpty) return;
+    final slug = _extractStickerSlug(input.trim());
+    if (slug.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось распознать ссылку на пак')),
+      );
+      return;
+    }
+    final installed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => StickerPackPreviewScreen(slug: slug),
+      ),
+    );
+    if (installed == true && mounted) {
+      await _loadStickerPacks();
+    }
+  }
+
+  String _extractStickerSlug(String raw) {
+    final text = raw.trim();
+    if (!text.contains('/')) return text.toLowerCase();
+    final uri = Uri.tryParse(text);
+    if (uri == null) return '';
+    if (uri.pathSegments.isEmpty) return '';
+    final idx = uri.pathSegments.indexOf('stickers');
+    if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
+      return uri.pathSegments[idx + 1].toLowerCase();
+    }
+    return uri.pathSegments.last.toLowerCase();
+  }
+
+  void _selectStickerView(String view) {
+    if (_stickerView == view) return;
+    setState(() => _stickerView = view);
+  }
+
+  void _selectStickerPack(int? packId) {
+    if (_selectedStickerPackId == packId) return;
+    AppHaptics.selection();
+    setState(() {
+      _stickerView = 'packs';
+      _selectedStickerPackId = packId;
+    });
+  }
+
+  Future<void> _openPackQuickPreview(int packId) async {
+    StickerPack? pack;
+    for (final p in _stickerPacks) {
+      if (p.id == packId) {
+        pack = p;
+        break;
+      }
+    }
+    if (pack == null || !mounted) return;
+    AppHaptics.medium();
+    final currentPack = pack;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => _StickerPackQuickPreviewSheet(
+        pack: currentPack,
+        busy: _stickerBusy,
+        onToggleInstall: () async {
+          await _toggleInstallStickerPack(
+            packId: currentPack.id,
+            isInstalled: currentPack.isInstalled,
+          );
+          if (!ctx.mounted) return;
+          Navigator.of(ctx).pop();
+        },
+      ),
+    );
+  }
+
   List<_AttachSheetContact> get _filteredContacts {
     if (_searchQuery.isEmpty) return _contacts;
     return _contacts.where((c) {
@@ -444,6 +942,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     if (_searchQuery.isEmpty) return _recentFiles;
     return _recentFiles
         .where((f) => f.name.toLowerCase().contains(_searchQuery))
+        .toList();
+  }
+
+  List<StickerPack> get _filteredStickerPacks {
+    if (_searchQuery.isEmpty) return _stickerPacks;
+    return _stickerPacks
+        .where((p) => p.title.toLowerCase().contains(_searchQuery))
         .toList();
   }
 
@@ -521,6 +1026,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
               _TelegramAttachDock(
                 selected: _tab,
                 onSelect: _setTab,
+                onOpenMore: _openAttachMoreMenu,
               ),
             ],
           ),
@@ -579,6 +1085,34 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           error: _contactsError,
           onRetry: _loadContacts,
           onSelect: (c) => _close(c.toSelection()),
+          isDark: isDark,
+        );
+      case ChatAttachTab.sticker:
+        return _StickerPanel(
+          scrollController: scrollController,
+          packs: _filteredStickerPacks,
+          recentStickers: _recentStickers,
+          favoriteStickers: _favoriteStickers,
+          loading: _stickerLoading,
+          busy: _stickerBusy,
+          error: _stickerError,
+          onRetry: _loadStickerPacks,
+          onCreatePack: _createStickerPack,
+          onToggleInstallPack: _toggleInstallStickerPack,
+          onAddSticker: _addStickerToPack,
+          onAddAnimatedSticker: _addAnimatedStickerToPack,
+          currentUserId: _currentUserId,
+          onOpenPackManager: _openPackManager,
+          pinnedPackIds: _pinnedPackIds,
+          onTogglePinnedPack: _togglePinnedPack,
+          onImportByLink: _importPackByLink,
+          stickerView: _stickerView,
+          selectedPackId: _selectedStickerPackId,
+          onSelectView: _selectStickerView,
+          onSelectPack: _selectStickerPack,
+          onPreviewPack: _openPackQuickPreview,
+          onPickSticker: _pickSticker,
+          onToggleFavorite: _toggleStickerFavorite,
           isDark: isDark,
         );
     }
@@ -1013,6 +1547,863 @@ class _GalleryThumb extends StatelessWidget {
   }
 }
 
+class _StickerPanel extends StatelessWidget {
+  const _StickerPanel({
+    required this.scrollController,
+    required this.packs,
+    required this.recentStickers,
+    required this.favoriteStickers,
+    required this.loading,
+    required this.busy,
+    required this.error,
+    required this.onRetry,
+    required this.onCreatePack,
+    required this.onToggleInstallPack,
+    required this.onAddSticker,
+    required this.onAddAnimatedSticker,
+    required this.currentUserId,
+    required this.onOpenPackManager,
+    required this.pinnedPackIds,
+    required this.onTogglePinnedPack,
+    required this.onImportByLink,
+    required this.stickerView,
+    required this.selectedPackId,
+    required this.onSelectView,
+    required this.onSelectPack,
+    required this.onPreviewPack,
+    required this.onPickSticker,
+    required this.onToggleFavorite,
+    required this.isDark,
+  });
+
+  final ScrollController scrollController;
+  final List<StickerPack> packs;
+  final List<ChatRecentStickerEntry> recentStickers;
+  final List<ChatRecentStickerEntry> favoriteStickers;
+  final bool loading;
+  final bool busy;
+  final String? error;
+  final VoidCallback onRetry;
+  final VoidCallback onCreatePack;
+  final Future<void> Function({
+    required int packId,
+    required bool isInstalled,
+  }) onToggleInstallPack;
+  final ValueChanged<int> onAddSticker;
+  final ValueChanged<int> onAddAnimatedSticker;
+  final int? currentUserId;
+  final ValueChanged<int> onOpenPackManager;
+  final List<int> pinnedPackIds;
+  final ValueChanged<int> onTogglePinnedPack;
+  final VoidCallback onImportByLink;
+  final String stickerView;
+  final int? selectedPackId;
+  final ValueChanged<String> onSelectView;
+  final ValueChanged<int?> onSelectPack;
+  final ValueChanged<int> onPreviewPack;
+  final ValueChanged<StickerItem> onPickSticker;
+  final Future<void> Function(
+    String mediaUrl, {
+    String? emoji,
+    String? stickerType,
+  }) onToggleFavorite;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final groupBg = isDark
+        ? _ChatAttachSheetState._groupBgDark
+        : theme.colorScheme.surfaceContainerHighest;
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(error!),
+            const SizedBox(height: 12),
+            TextButton(onPressed: onRetry, child: const Text('Повторить')),
+          ],
+        ),
+      );
+    }
+    final favoriteUrls = favoriteStickers
+        .map((e) => e.mediaUrl.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    final editablePacks = currentUserId == null
+        ? const <StickerPack>[]
+        : packs.where((p) => p.ownerUserId == currentUserId).toList();
+    StickerPack? targetEditablePack;
+    if (editablePacks.isNotEmpty) {
+      for (final p in editablePacks) {
+        if (p.id == selectedPackId) {
+          targetEditablePack = p;
+          break;
+        }
+      }
+      targetEditablePack ??= editablePacks.first;
+    }
+    final visiblePacks = selectedPackId == null
+        ? packs
+        : packs.where((p) => p.id == selectedPackId).toList();
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Паки'),
+                      selected: stickerView == 'packs',
+                      onSelected: (_) => onSelectView('packs'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Избранные'),
+                      selected: stickerView == 'favorites',
+                      onSelected: (_) => onSelectView('favorites'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Недавние'),
+                      selected: stickerView == 'recent',
+                      onSelected: (_) => onSelectView('recent'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              _StickerQuickActions(
+                busy: busy,
+                editablePackId: targetEditablePack?.id,
+                editablePackTitle: targetEditablePack?.title,
+                onCreatePack: onCreatePack,
+                onImportByLink: onImportByLink,
+                onAddSticker: onAddSticker,
+                onAddAnimatedSticker: onAddAnimatedSticker,
+                onOpenPackManager: onOpenPackManager,
+              ),
+              const SizedBox(height: 12),
+              if (stickerView == 'packs' && packs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Text(
+                    'У вас пока нет установленных стикерпаков',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              if (stickerView == 'packs')
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  child: _StickerPacksContent(
+                    key: ValueKey<int?>(selectedPackId),
+                    packs: visiblePacks,
+                    busy: busy,
+                    currentUserId: currentUserId,
+                    pinnedPackIds: pinnedPackIds,
+                    groupBg: groupBg,
+                    theme: theme,
+                    favoriteUrls: favoriteUrls,
+                    onToggleInstallPack: onToggleInstallPack,
+                    onOpenPackManager: onOpenPackManager,
+                    onTogglePinnedPack: onTogglePinnedPack,
+                    onPickSticker: onPickSticker,
+                    onToggleFavorite: onToggleFavorite,
+                  ),
+                ),
+              if (stickerView == 'favorites' &&
+                  favoriteStickers.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _StickerSectionGrid(
+                  title: 'Избранные',
+                  items: favoriteStickers.take(24).toList(),
+                  groupBg: groupBg,
+                  theme: theme,
+                  favoriteUrls: favoriteUrls,
+                  onTap: (entry) => onPickSticker(
+                    StickerItem(
+                      id: 0,
+                      mediaUrl: entry.mediaUrl,
+                      emoji: entry.emoji,
+                      stickerType: entry.stickerType ?? 'static',
+                    ),
+                  ),
+                  onLongPress: (entry) => onToggleFavorite(
+                    entry.mediaUrl,
+                    emoji: entry.emoji,
+                    stickerType: entry.stickerType,
+                  ),
+                ),
+              ],
+              if (stickerView == 'recent' && recentStickers.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _StickerSectionGrid(
+                  title: 'Недавние',
+                  items: recentStickers.take(24).toList(),
+                  groupBg: groupBg,
+                  theme: theme,
+                  favoriteUrls: favoriteUrls,
+                  onTap: (entry) => onPickSticker(
+                    StickerItem(
+                      id: 0,
+                      mediaUrl: entry.mediaUrl,
+                      emoji: entry.emoji,
+                      stickerType: entry.stickerType ?? 'static',
+                    ),
+                  ),
+                  onLongPress: (entry) => onToggleFavorite(
+                    entry.mediaUrl,
+                    emoji: entry.emoji,
+                    stickerType: entry.stickerType,
+                  ),
+                ),
+              ],
+              if (stickerView == 'favorites' && favoriteStickers.isEmpty)
+                _emptyHint(theme, 'Избранных стикеров пока нет'),
+              if (stickerView == 'recent' && recentStickers.isEmpty)
+                _emptyHint(theme, 'Недавних стикеров пока нет'),
+            ],
+          ),
+        ),
+        if (stickerView == 'packs' && packs.isNotEmpty)
+          _StickerPacksBottomBar(
+            packs: packs,
+            selectedPackId: selectedPackId,
+            onSelectPack: onSelectPack,
+            onPreviewPack: onPreviewPack,
+            isDark: isDark,
+          ),
+      ],
+    );
+  }
+
+  Widget _emptyHint(ThemeData theme, String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 22),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+}
+
+class _StickerPacksContent extends StatelessWidget {
+  const _StickerPacksContent({
+    super.key,
+    required this.packs,
+    required this.busy,
+    required this.currentUserId,
+    required this.pinnedPackIds,
+    required this.groupBg,
+    required this.theme,
+    required this.favoriteUrls,
+    required this.onToggleInstallPack,
+    required this.onOpenPackManager,
+    required this.onTogglePinnedPack,
+    required this.onPickSticker,
+    required this.onToggleFavorite,
+  });
+
+  final List<StickerPack> packs;
+  final bool busy;
+  final int? currentUserId;
+  final List<int> pinnedPackIds;
+  final Color groupBg;
+  final ThemeData theme;
+  final Set<String> favoriteUrls;
+  final Future<void> Function({
+    required int packId,
+    required bool isInstalled,
+  }) onToggleInstallPack;
+  final ValueChanged<int> onOpenPackManager;
+  final ValueChanged<int> onTogglePinnedPack;
+  final ValueChanged<StickerItem> onPickSticker;
+  final Future<void> Function(
+    String mediaUrl, {
+    String? emoji,
+    String? stickerType,
+  }) onToggleFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: key,
+      children: [
+        for (final pack in packs) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    pack.title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: busy
+                      ? null
+                      : () => onToggleInstallPack(
+                            packId: pack.id,
+                            isInstalled: pack.isInstalled,
+                          ),
+                  child: Text(pack.isInstalled ? 'Удалить' : 'Установить'),
+                ),
+                if (pack.ownerUserId == currentUserId)
+                  IconButton(
+                    onPressed: busy ? null : () => onOpenPackManager(pack.id),
+                    tooltip: 'Управление паком',
+                    icon: const Icon(Icons.tune),
+                  ),
+                IconButton(
+                  onPressed: busy ? null : () => onTogglePinnedPack(pack.id),
+                  tooltip: pinnedPackIds.contains(pack.id)
+                      ? 'Открепить'
+                      : 'Закрепить',
+                  icon: Icon(
+                    pinnedPackIds.contains(pack.id)
+                        ? Icons.push_pin
+                        : Icons.push_pin_outlined,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (pack.stickers.isNotEmpty)
+            _StickerSectionGrid(
+              title: null,
+              items: [
+                for (final s in pack.stickers)
+                  ChatRecentStickerEntry(
+                    mediaUrl: s.mediaUrl,
+                    emoji: s.emoji,
+                    stickerType: s.stickerType,
+                  ),
+              ],
+              groupBg: groupBg,
+              theme: theme,
+              favoriteUrls: favoriteUrls,
+              onTap: (entry) => onPickSticker(
+                StickerItem(
+                  id: 0,
+                  mediaUrl: entry.mediaUrl,
+                  emoji: entry.emoji,
+                  stickerType: entry.stickerType ?? 'static',
+                ),
+              ),
+              onLongPress: (entry) => onToggleFavorite(
+                entry.mediaUrl,
+                emoji: entry.emoji,
+                stickerType: entry.stickerType,
+              ),
+            ),
+          if (pack.stickers.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Пока без стикеров',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StickerQuickActions extends StatelessWidget {
+  const _StickerQuickActions({
+    required this.busy,
+    required this.editablePackId,
+    required this.editablePackTitle,
+    required this.onCreatePack,
+    required this.onImportByLink,
+    required this.onAddSticker,
+    required this.onAddAnimatedSticker,
+    required this.onOpenPackManager,
+  });
+
+  final bool busy;
+  final int? editablePackId;
+  final String? editablePackTitle;
+  final VoidCallback onCreatePack;
+  final VoidCallback onImportByLink;
+  final ValueChanged<int> onAddSticker;
+  final ValueChanged<int> onAddAnimatedSticker;
+  final ValueChanged<int> onOpenPackManager;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton.tonalIcon(
+              onPressed: busy ? null : onImportByLink,
+              icon: const Icon(Icons.download_for_offline_outlined, size: 18),
+              label: const Text('Импорт'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (editablePackId != null)
+            Expanded(
+              child: FilledButton.tonalIcon(
+                onPressed: busy ? null : () => onAddSticker(editablePackId!),
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                label: const Text('Добавить'),
+              ),
+            ),
+          if (editablePackId != null) const SizedBox(width: 8),
+          PopupMenuButton<_StickerQuickAction>(
+            tooltip: 'Ещё действия',
+            enabled: !busy,
+            onSelected: (value) {
+              switch (value) {
+                case _StickerQuickAction.createPack:
+                  onCreatePack();
+                  break;
+                case _StickerQuickAction.addAnimated:
+                  if (editablePackId != null) {
+                    onAddAnimatedSticker(editablePackId!);
+                  }
+                  break;
+                case _StickerQuickAction.managePack:
+                  if (editablePackId != null) {
+                    onOpenPackManager(editablePackId!);
+                  }
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _StickerQuickAction.createPack,
+                child: Text('Создать стикерпак'),
+              ),
+              if (editablePackId != null)
+                PopupMenuItem(
+                  value: _StickerQuickAction.addAnimated,
+                  child: Text(
+                      'Добавить анимированный в "${editablePackTitle ?? ''}"'),
+                ),
+              if (editablePackId != null)
+                const PopupMenuItem(
+                  value: _StickerQuickAction.managePack,
+                  child: Text('Управление паком'),
+                ),
+            ],
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.more_horiz_rounded,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _StickerQuickAction { createPack, addAnimated, managePack }
+
+class _StickerPackQuickPreviewSheet extends StatefulWidget {
+  const _StickerPackQuickPreviewSheet({
+    required this.pack,
+    required this.busy,
+    required this.onToggleInstall,
+  });
+
+  final StickerPack pack;
+  final bool busy;
+  final Future<void> Function() onToggleInstall;
+
+  @override
+  State<_StickerPackQuickPreviewSheet> createState() =>
+      _StickerPackQuickPreviewSheetState();
+}
+
+class _StickerPackQuickPreviewSheetState
+    extends State<_StickerPackQuickPreviewSheet> {
+  bool _localBusy = false;
+
+  Future<void> _handleToggleInstall() async {
+    if (_localBusy || widget.busy) return;
+    setState(() => _localBusy = true);
+    try {
+      await widget.onToggleInstall();
+    } finally {
+      if (mounted) {
+        setState(() => _localBusy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pack = widget.pack;
+    final previewItems = pack.stickers.take(12).toList();
+    final actionBusy = widget.busy || _localBusy;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(pack.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              '${pack.stickersCount} стикеров',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            if (previewItems.isNotEmpty)
+              SizedBox(
+                height: 82,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: previewItems.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final sticker = previewItems[i];
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        ServerConfig.resolveMediaUrl(sticker.mediaUrl),
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: actionBusy ? null : _handleToggleInstall,
+                icon: actionBusy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        pack.isInstalled
+                            ? Icons.delete_outline_rounded
+                            : Icons.download_for_offline_outlined,
+                      ),
+                label: Text(
+                  actionBusy
+                      ? 'Подождите...'
+                      : (pack.isInstalled
+                          ? 'Удалить из установленных'
+                          : 'Установить'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPacksBottomBar extends StatelessWidget {
+  const _StickerPacksBottomBar({
+    required this.packs,
+    required this.selectedPackId,
+    required this.onSelectPack,
+    required this.onPreviewPack,
+    required this.isDark,
+  });
+
+  final List<StickerPack> packs;
+  final int? selectedPackId;
+  final ValueChanged<int?> onSelectPack;
+  final ValueChanged<int> onPreviewPack;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = isDark
+        ? _ChatAttachSheetState._sheetBgDark
+        : theme.colorScheme.surfaceContainerLow;
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 68,
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border(
+            top: BorderSide(
+              color: theme.dividerColor.withValues(alpha: 0.2),
+            ),
+          ),
+        ),
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          children: [
+            _StickerPackBottomTab(
+              selected: selectedPackId == null,
+              tooltip: 'Все',
+              child: const Icon(Icons.apps_rounded, size: 20),
+              onTap: () => onSelectPack(null),
+            ),
+            for (final pack in packs)
+              _StickerPackBottomTab(
+                selected: selectedPackId == pack.id,
+                tooltip: pack.title,
+                child: _StickerPackAvatar(pack: pack),
+                onTap: () => onSelectPack(pack.id),
+                onLongPress: () => onPreviewPack(pack.id),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPackBottomTab extends StatelessWidget {
+  const _StickerPackBottomTab({
+    required this.selected,
+    required this.tooltip,
+    required this.child,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  final bool selected;
+  final String tooltip;
+  final Widget child;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: selected
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPackAvatar extends StatelessWidget {
+  const _StickerPackAvatar({required this.pack});
+
+  final StickerPack pack;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final first = pack.stickers.isEmpty ? null : pack.stickers.first.mediaUrl;
+    if (first == null || first.trim().isEmpty) {
+      return const Icon(Icons.emoji_emotions_outlined, size: 20);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(9),
+      child: Image.network(
+        ServerConfig.resolveMediaUrl(first),
+        width: 28,
+        height: 28,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(
+          Icons.image_not_supported_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
+          size: 18,
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerSectionGrid extends StatelessWidget {
+  const _StickerSectionGrid({
+    required this.title,
+    required this.items,
+    required this.groupBg,
+    required this.theme,
+    required this.favoriteUrls,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  final String? title;
+  final List<ChatRecentStickerEntry> items;
+  final Color groupBg;
+  final ThemeData theme;
+  final Set<String> favoriteUrls;
+  final ValueChanged<ChatRecentStickerEntry> onTap;
+  final ValueChanged<ChatRecentStickerEntry>? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+            child: Text(
+              title!,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 4,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 1,
+          ),
+          itemCount: items.length,
+          itemBuilder: (_, i) {
+            final item = items[i];
+            final isFavorite = favoriteUrls.contains(item.mediaUrl.trim());
+            final lower = item.mediaUrl.toLowerCase();
+            final isLottieLike = lower.endsWith('.json') ||
+                lower.endsWith('.lottie') ||
+                lower.endsWith('.tgs');
+            final isAnimated =
+                (item.stickerType ?? '').toLowerCase() == 'animated' ||
+                    lower.endsWith('.gif') ||
+                    lower.endsWith('.webm') ||
+                    lower.endsWith('.mp4') ||
+                    lower.endsWith('.mov') ||
+                    isLottieLike;
+            return Material(
+              color: groupBg,
+              borderRadius: BorderRadius.circular(10),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => onTap(item),
+                onLongPress:
+                    onLongPress == null ? null : () => onLongPress!(item),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (isLottieLike)
+                      Icon(
+                        Icons.animation_outlined,
+                        color: theme.colorScheme.primary,
+                        size: 26,
+                      )
+                    else
+                      Image.network(
+                        ServerConfig.resolveMediaUrl(item.mediaUrl),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.broken_image_outlined,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    if (isAnimated)
+                      Positioned(
+                        left: 4,
+                        bottom: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 12,
+                          ),
+                        ),
+                      ),
+                    if (isFavorite)
+                      const Positioned(
+                        top: 4,
+                        right: 4,
+                        child: Icon(
+                          Icons.star_rounded,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
 class _ContactsPanel extends StatelessWidget {
   const _ContactsPanel({
     required this.scrollController,
@@ -1223,10 +2614,12 @@ class _TelegramAttachDock extends StatelessWidget {
   const _TelegramAttachDock({
     required this.selected,
     required this.onSelect,
+    required this.onOpenMore,
   });
 
   final ChatAttachTab selected;
   final ValueChanged<ChatAttachTab> onSelect;
+  final VoidCallback onOpenMore;
 
   @override
   Widget build(BuildContext context) {
@@ -1262,30 +2655,17 @@ class _TelegramAttachDock extends StatelessWidget {
                 onTap: () => onSelect(ChatAttachTab.file),
               ),
               _DockItem(
-                icon: Icons.poll_outlined,
-                label: 'Опрос',
-                selected: selected == ChatAttachTab.poll,
-                onTap: () => onSelect(ChatAttachTab.poll),
+                icon: Icons.emoji_emotions_outlined,
+                label: 'Стикеры',
+                selected: selected == ChatAttachTab.sticker,
+                onTap: () => onSelect(ChatAttachTab.sticker),
               ),
               _DockItem(
-                icon: Icons.person_outline,
-                label: 'Контакт',
-                selected: selected == ChatAttachTab.contact,
-                onTap: () => onSelect(ChatAttachTab.contact),
-              ),
-              _DockItem(
-                icon: Icons.apps_outlined,
-                label: 'Мини-приложения',
-                selected: false,
-                onTap: () {
-                  Navigator.of(context).pop();
-                  // Открываем каталог мини-приложений
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MiniAppsCatalogScreen(),
-                    ),
-                  );
-                },
+                icon: Icons.more_horiz_rounded,
+                label: 'Ещё',
+                selected: selected == ChatAttachTab.poll ||
+                    selected == ChatAttachTab.contact,
+                onTap: onOpenMore,
               ),
             ],
           ),
