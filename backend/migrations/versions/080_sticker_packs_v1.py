@@ -28,7 +28,7 @@ def upgrade() -> None:
             sa.Column("title", sa.String(length=120), nullable=False),
             sa.Column("slug", sa.String(length=140), nullable=False),
             sa.Column("owner_user_id", sa.Integer(), nullable=False),
-            sa.Column("is_public", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+            sa.Column("is_public", sa.Boolean(), nullable=False, server_default=sa.text("true")),
             sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),
             sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now()),
             sa.ForeignKeyConstraint(["owner_user_id"], ["users.id"], ondelete="CASCADE"),
