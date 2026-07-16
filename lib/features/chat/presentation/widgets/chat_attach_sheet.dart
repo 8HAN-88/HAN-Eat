@@ -1198,27 +1198,24 @@ class _TelegramHeader extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (showSend)
-            Tooltip(
-              message: 'Отправить',
-              child: Material(
-                color:
+            FilledButton(
+              onPressed: sendEnabled ? onSend : null,
+              style: FilledButton.styleFrom(
+                backgroundColor:
                     sendEnabled ? _ChatAttachSheetState._brandAccent : actionBg,
-                borderRadius: BorderRadius.circular(21),
-                child: InkWell(
-                  onTap: sendEnabled ? onSend : null,
+                foregroundColor: sendEnabled
+                    ? Colors.white
+                    : theme.colorScheme.onSurfaceVariant,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                minimumSize: const Size(0, 42),
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(21),
-                  child: SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Icon(
-                      Icons.check_rounded,
-                      size: 22,
-                      color: sendEnabled
-                          ? Colors.white
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
                 ),
+              ),
+              child: const Text(
+                'Отправить',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             )
           else if (showSearch)
@@ -2880,7 +2877,7 @@ class _DockItem extends StatelessWidget {
                   scale: selected ? 1.03 : 1.0,
                   child: Icon(
                     icon,
-                    size: compact ? 18 : 26,
+                    size: compact ? 19 : 26,
                     color: selected ? activeColor : inactiveColor,
                   ),
                 ),
@@ -2890,7 +2887,7 @@ class _DockItem extends StatelessWidget {
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: selected ? activeColor : inactiveColor,
                     fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
-                    fontSize: compact ? 9 : null,
+                    fontSize: compact ? 10 : null,
                     height: 1.05,
                   ),
                 ),
