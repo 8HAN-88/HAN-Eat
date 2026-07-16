@@ -2679,8 +2679,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2.5),
         decoration: BoxDecoration(
           color: isDark
               ? Colors.black.withValues(alpha: 0.35)
@@ -2694,7 +2694,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _chatDateSeparatorLabel(date),
           style: TextStyle(
             color: isDark ? Colors.white : scheme.onSurfaceVariant,
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -3091,7 +3091,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _incomingMessageAvatar(ChatMessage msg) {
     final user = _userBriefForSender(msg);
     return AppUserAvatar(
-      radius: 16,
+      radius: 15,
       imageUrl: user?.avatarUrl,
       displayName: user?.displayName ?? '?',
       onTap: () => _openUserProfile(msg.senderId),
@@ -7234,7 +7234,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             const Duration(milliseconds: 200),
                                         curve: Curves.easeOutCubic,
                                         tween: Tween<double>(
-                                          begin: shouldAnimateIn ? 0.96 : 1,
+                                          begin: shouldAnimateIn ? 0.985 : 1,
                                           end: 1,
                                         ),
                                         child: Column(
@@ -7262,7 +7262,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                             msg,
                                                           )
                                                         : const SizedBox(
-                                                            width: 28,
+                                                            width: 26,
                                                           ),
                                                   ),
                                                 Expanded(
@@ -8686,12 +8686,12 @@ class _Bubble extends StatelessWidget {
     }
 
     final bubble = Container(
-      margin: const EdgeInsets.symmetric(vertical: 1.5),
+      margin: const EdgeInsets.symmetric(vertical: 1),
       padding:
-          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 7, 10, 5),
+          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 6, 10, 4),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.74,
+        maxWidth: MediaQuery.sizeOf(context).width * 0.72,
       ),
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,
