@@ -246,7 +246,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   static const _sheetBgDark = Color(0xFF1C1C1E);
   static const _groupBgDark = Color(0xFF2C2C2E);
   static const _telegramBlue = Color(0xFF007AFF);
-  static const _brandAccent = AppColors.primary;
+  static const _brandAccent = _telegramBlue;
 
   @override
   void initState() {
@@ -1199,23 +1199,28 @@ class _TelegramHeader extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (showSend)
-            FilledButton(
-              onPressed: sendEnabled ? onSend : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: sendEnabled
-                    ? _ChatAttachSheetState._brandAccent.withValues(alpha: 0.9)
-                    : actionBg,
-                foregroundColor: sendEnabled
-                    ? Colors.white
-                    : theme.colorScheme.onSurfaceVariant,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                minimumSize: Size.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
+            Tooltip(
+              message: 'Отправить',
+              child: Material(
+                color:
+                    sendEnabled ? _ChatAttachSheetState._brandAccent : actionBg,
+                borderRadius: BorderRadius.circular(21),
+                child: InkWell(
+                  onTap: sendEnabled ? onSend : null,
+                  borderRadius: BorderRadius.circular(21),
+                  child: SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 22,
+                      color: sendEnabled
+                          ? Colors.white
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ),
-              child: const Text('Отправить'),
             )
           else if (showSearch)
             _HeaderRoundAction(

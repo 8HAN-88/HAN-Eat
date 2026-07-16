@@ -6,10 +6,10 @@ class AppColors {
   static const primaryDark = Color(0xFFE85A2B);
   static const primaryLight = Color(0xFFFF9D7A);
   static const foodOrange = primary;
-  static const telegramBlue = primary;
-  static const telegramBlueDark = primaryDark;
+  static const telegramBlue = Color(0xFF2AABEE);
+  static const telegramBlueDark = Color(0xFF1D8ECF);
   static const telegramOutgoingLight = Color(0xFFEFFEDD);
-  static const telegramOutgoingDark = Color(0xFF6A3423);
+  static const telegramOutgoingDark = Color(0xFF2B5278);
   static const telegramChatBgLight = Color(0xFFE7EBF0);
   static const telegramChatBgDark = Color(0xFF0E1621);
 

@@ -333,6 +333,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _uiAnimDuration = Duration(milliseconds: 180);
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;
+  static const _telegramAccent = Color(0xFF2AABEE);
 
   @override
   void initState() {
@@ -7455,7 +7456,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: Material(
                             elevation: 2,
                             borderRadius: BorderRadius.circular(20),
-                            color: scheme.primary,
+                            color: _telegramAccent,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(20),
                               onTap: _jumpToBottomAndMarkRead,
@@ -7713,7 +7714,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       value: _uploadProgress,
                                       minHeight: 3,
                                       borderRadius: BorderRadius.circular(2),
-                                      color: scheme.primary,
+                                      color: _telegramAccent,
                                       backgroundColor: scheme
                                           .onSecondaryContainer
                                           .withValues(alpha: 0.2),
@@ -7987,8 +7988,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                   : null,
                                           child: IconButton.filled(
                                             style: IconButton.styleFrom(
-                                              backgroundColor: scheme.primary,
-                                              foregroundColor: scheme.onPrimary,
+                                              backgroundColor: _telegramAccent,
+                                              foregroundColor: Colors.white,
                                               shape: const CircleBorder(),
                                               padding: EdgeInsets.zero,
                                               minimumSize: const Size(
@@ -8007,7 +8008,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                     child:
                                                         CircularProgressIndicator(
                                                       strokeWidth: 2,
-                                                      color: scheme.onPrimary,
+                                                      color: Colors.white,
                                                     ),
                                                   )
                                                 : (activeCooldownSeconds > 0
