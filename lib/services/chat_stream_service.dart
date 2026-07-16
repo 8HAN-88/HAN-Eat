@@ -37,6 +37,7 @@ class ChatStreamService {
   int _reconnectAttempt = 0;
   DateTime _lastActivity = DateTime.now();
   final _random = math.Random();
+  bool _connecting = false;
 
   void connect() {
     if (_disposed) return;
@@ -84,7 +85,8 @@ class ChatStreamService {
   }
 
   Future<void> _openStream() async {
-    if (_disposed) return;
+    if (_disposed || _connecting) return;
+    _connecting = true;
     _subscription?.cancel();
     _subscription = null;
     _closeStreamClient();
@@ -106,7 +108,7 @@ class ChatStreamService {
 
       _client = HanEatHttpClient.createStreamClient();
       final response = await _client!.send(request).timeout(
-            const Duration(seconds: 20),
+            const Duration(seconds: 12),
             onTimeout: () => throw TimeoutException('SSE connect timeout'),
           );
       if (response.statusCode == 401) {
@@ -146,6 +148,8 @@ class ChatStreamService {
     } catch (e) {
       debugPrint('ChatStreamService: $e');
       _handleDisconnect();
+    } finally {
+      _connecting = false;
     }
   }
 
@@ -154,7 +158,7 @@ class ChatStreamService {
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed || !connected) return;
       final idle = DateTime.now().difference(_lastActivity);
-      if (idle > const Duration(seconds: 75)) {
+      if (idle > const Duration(seconds: 45)) {
         debugPrint('ChatStreamService: idle ${idle.inSeconds}s, reconnecting');
         _handleDisconnect(forceReconnect: true);
       }
@@ -207,10 +211,15 @@ class ChatStreamService {
     }
     _reconnectTimer?.cancel();
     _reconnectAttempt = (_reconnectAttempt + 1).clamp(1, 20);
-    final baseSec = math.min(1 + _reconnectAttempt, 15);
+    final fastMs = switch (_reconnectAttempt) {
+      1 => 350,
+      2 => 800,
+      3 => 1600,
+      4 => 2800,
+      _ => math.min(6000, 2800 + (_reconnectAttempt - 4) * 600),
+    };
     final jitterMs = _random.nextInt(800);
-    final delay =
-        Duration(seconds: baseSec, milliseconds: jitterMs) + extraDelay;
+    final delay = Duration(milliseconds: fastMs + jitterMs) + extraDelay;
     _reconnectTimer = Timer(delay, connect);
   }
 }

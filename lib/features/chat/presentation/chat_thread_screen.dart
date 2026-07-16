@@ -247,6 +247,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _hasMore = false;
   int? _nextCursor;
   Timer? _pollTimer;
+  bool _pollInFlight = false;
   Timer? _presenceTimer;
   Timer? _typingDebounce;
   Timer? _peerTypingClear;
@@ -1141,8 +1142,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _startPolling() {
     _pollTimer?.cancel();
     final interval = _sseConnected
-        ? const Duration(seconds: 60)
-        : const Duration(seconds: 8);
+        ? const Duration(seconds: 25)
+        : const Duration(seconds: 4);
+    if (!_appPaused) {
+      unawaited(_pollNew());
+    }
     _pollTimer = Timer.periodic(interval, (_) {
       if (!_appPaused) _pollNew();
     });
@@ -5279,9 +5283,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pollNew() async {
-    if (_loading || _appPaused) return;
+    if (_loading || _appPaused || _pollInFlight) return;
     final lastId = _lastServerMessageId();
     if (lastId == null) return;
+    _pollInFlight = true;
     try {
       final fresh = await ChatService.listMessagesAfter(
         conversationId: widget.conversationId,
@@ -5323,6 +5328,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         );
       }
+    } finally {
+      _pollInFlight = false;
     }
   }
 
