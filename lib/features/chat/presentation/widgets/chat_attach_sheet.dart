@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -40,8 +41,6 @@ enum ChatAttachResult {
   resendFile,
   sticker,
 }
-
-enum _AttachMoreAction { poll, contact, miniApps }
 
 class ChatAttachSelection {
   const ChatAttachSelection._({
@@ -439,49 +438,6 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     );
   }
 
-  Future<void> _openAttachMoreMenu() async {
-    AppHaptics.selection();
-    final action = await showModalBottomSheet<_AttachMoreAction>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.poll_outlined),
-              title: const Text('Опрос'),
-              onTap: () => Navigator.pop(ctx, _AttachMoreAction.poll),
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Контакт'),
-              onTap: () => Navigator.pop(ctx, _AttachMoreAction.contact),
-            ),
-            ListTile(
-              leading: const Icon(Icons.apps_outlined),
-              title: const Text('Мини-приложения'),
-              onTap: () => Navigator.pop(ctx, _AttachMoreAction.miniApps),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || action == null) return;
-    switch (action) {
-      case _AttachMoreAction.poll:
-        _setTab(ChatAttachTab.poll);
-        break;
-      case _AttachMoreAction.contact:
-        _setTab(ChatAttachTab.contact);
-        break;
-      case _AttachMoreAction.miniApps:
-        await _openMiniAppsCatalog();
-        break;
-    }
-  }
-
   void _toggleSearch() {
     setState(() {
       _searchVisible = !_searchVisible;
@@ -506,6 +462,21 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Контакты';
       case ChatAttachTab.sticker:
         return 'Стикеры';
+    }
+  }
+
+  String get _headerSubtitle {
+    switch (_tab) {
+      case ChatAttachTab.gallery:
+        return 'Последние фото и видео';
+      case ChatAttachTab.file:
+        return 'Документы и недавние';
+      case ChatAttachTab.poll:
+        return 'Создайте новый опрос';
+      case ChatAttachTab.contact:
+        return 'Контакты и телефонная книга';
+      case ChatAttachTab.sticker:
+        return 'Паки, избранные и недавние';
     }
   }
 
@@ -956,12 +927,18 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final inactiveColor = theme.colorScheme.onSurface.withValues(
+      alpha: isDark ? 0.72 : 0.68,
+    );
+    final activeColor = _ChatAttachSheetState._brandAccent.withValues(
+      alpha: isDark ? 0.96 : 0.9,
+    );
     final sheetBg = isDark ? _sheetBgDark : theme.colorScheme.surface;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.58,
-      minChildSize: 0.45,
-      maxChildSize: 0.94,
+      initialChildSize: 0.62,
+      minChildSize: 0.5,
+      maxChildSize: 0.96,
       expand: false,
       builder: (context, scrollController) {
         return Material(
@@ -972,8 +949,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
             children: [
               const SizedBox(height: 10),
               Container(
-                width: 42,
-                height: 5,
+                width: 34,
+                height: 4,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.onSurfaceVariant
                       .withValues(alpha: 0.35),
@@ -982,6 +959,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
               ),
               _TelegramHeader(
                 title: _headerTitle,
+                subtitle: _searchVisible ? null : _headerSubtitle,
                 showSearch: _showSearch,
                 showSend: _showGallerySend || _showPollSend,
                 sendEnabled: _showPollSend ? _pollCanSend : true,
@@ -999,34 +977,55 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                   }
                 },
               ),
-              if (_searchVisible && _showSearch)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: TextField(
-                    controller: _searchController,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Поиск',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      filled: true,
-                      fillColor: isDark
-                          ? _groupBgDark
-                          : theme.colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: child,
                   ),
                 ),
+                child: _searchVisible && _showSearch
+                    ? Padding(
+                        key: const ValueKey('attach-search-visible'),
+                        padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Поиск',
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            filled: true,
+                            fillColor: isDark
+                                ? _groupBgDark.withValues(alpha: 0.92)
+                                : theme.colorScheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      )
+                    : const SizedBox(
+                        key: ValueKey('attach-search-hidden'),
+                      ),
+              ),
               Expanded(
                 child: _buildBody(scrollController, isDark),
               ),
               _TelegramAttachDock(
                 selected: _tab,
                 onSelect: _setTab,
-                onOpenMore: _openAttachMoreMenu,
+                onOpenMiniApps: () => unawaited(_openMiniAppsCatalog()),
               ),
             ],
           ),
@@ -1122,6 +1121,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 class _TelegramHeader extends StatelessWidget {
   const _TelegramHeader({
     required this.title,
+    this.subtitle,
     required this.showSearch,
     required this.showSend,
     required this.sendEnabled,
@@ -1131,6 +1131,7 @@ class _TelegramHeader extends StatelessWidget {
   });
 
   final String title;
+  final String? subtitle;
   final bool showSearch;
   final bool showSend;
   final bool sendEnabled;
@@ -1141,52 +1142,125 @@ class _TelegramHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final headerChipBg = isDark
+        ? _ChatAttachSheetState._groupBgDark.withValues(alpha: 0.86)
+        : theme.colorScheme.surfaceContainerHighest;
+    final actionBg = isDark
+        ? Colors.white.withValues(alpha: 0.07)
+        : theme.colorScheme.surfaceContainerHigh;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Row(
         children: [
-          IconButton(
-            onPressed: onClose,
-            icon: const Icon(Icons.close, size: 22),
+          _HeaderRoundAction(
+            icon: Icons.close,
+            onTap: onClose,
+            backgroundColor: actionBg,
             tooltip: 'Закрыть',
           ),
+          const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+            child: Container(
+              height: subtitle == null ? 46 : 52,
+              decoration: BoxDecoration(
+                color: headerChipBg,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Text(
+                        subtitle!,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 11,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
+          const SizedBox(width: 8),
           if (showSend)
             FilledButton(
               onPressed: sendEnabled ? onSend : null,
               style: FilledButton.styleFrom(
                 backgroundColor: sendEnabled
-                    ? _ChatAttachSheetState._brandAccent
-                    : theme.colorScheme.surfaceContainerHighest,
+                    ? _ChatAttachSheetState._brandAccent.withValues(alpha: 0.9)
+                    : actionBg,
                 foregroundColor: sendEnabled
                     ? Colors.white
                     : theme.colorScheme.onSurfaceVariant,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                 minimumSize: Size.zero,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(22),
                 ),
               ),
               child: const Text('Отправить'),
             )
           else if (showSearch)
-            IconButton(
-              onPressed: onSearch,
-              icon: const Icon(Icons.search, size: 22),
+            _HeaderRoundAction(
+              icon: Icons.search,
+              onTap: onSearch,
+              backgroundColor: actionBg,
               tooltip: 'Поиск',
             )
           else
-            const SizedBox(width: 48),
+            const SizedBox(width: 42),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderRoundAction extends StatelessWidget {
+  const _HeaderRoundAction({
+    required this.icon,
+    required this.onTap,
+    required this.backgroundColor,
+    required this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color backgroundColor;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(21),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(21),
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: Icon(icon, size: 21),
+          ),
+        ),
       ),
     );
   }
@@ -2614,60 +2688,109 @@ class _TelegramAttachDock extends StatelessWidget {
   const _TelegramAttachDock({
     required this.selected,
     required this.onSelect,
-    required this.onOpenMore,
+    required this.onOpenMiniApps,
   });
 
   final ChatAttachTab selected;
   final ValueChanged<ChatAttachTab> onSelect;
-  final VoidCallback onOpenMore;
+  final VoidCallback onOpenMiniApps;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark
-            ? _ChatAttachSheetState._sheetBgDark
-            : theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.2)),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        decoration: BoxDecoration(
+          color: isDark
+              ? _ChatAttachSheetState._sheetBgDark
+              : theme.colorScheme.surface,
+          border: Border(
+            top: BorderSide(color: theme.dividerColor.withValues(alpha: 0.2)),
+          ),
         ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          child: Row(
-            children: [
-              _DockItem(
-                icon: Icons.photo_library_outlined,
-                label: 'Галерея',
-                selected: selected == ChatAttachTab.gallery,
-                onTap: () => onSelect(ChatAttachTab.gallery),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.black.withValues(alpha: 0.64)
+                    : theme.colorScheme.surfaceContainerHigh
+                        .withValues(alpha: 0.84),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+                ),
               ),
-              _DockItem(
-                icon: Icons.insert_drive_file_outlined,
-                label: 'Файл',
-                selected: selected == ChatAttachTab.file,
-                onTap: () => onSelect(ChatAttachTab.file),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = ((constraints.maxWidth - 10) / 6)
+                      .clamp(50.0, 68.0)
+                      .toDouble();
+                  return Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                    child: Row(
+                      children: [
+                        _DockItem(
+                          icon: Icons.photo_library_outlined,
+                          label: 'Галерея',
+                          selected: selected == ChatAttachTab.gallery,
+                          onTap: () => onSelect(ChatAttachTab.gallery),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.insert_drive_file_outlined,
+                          label: 'Файл',
+                          selected: selected == ChatAttachTab.file,
+                          onTap: () => onSelect(ChatAttachTab.file),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.poll_outlined,
+                          label: 'Опрос',
+                          selected: selected == ChatAttachTab.poll,
+                          onTap: () => onSelect(ChatAttachTab.poll),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.person_outline_rounded,
+                          label: 'Контакт',
+                          selected: selected == ChatAttachTab.contact,
+                          onTap: () => onSelect(ChatAttachTab.contact),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.emoji_emotions_outlined,
+                          label: 'Стикер',
+                          selected: selected == ChatAttachTab.sticker,
+                          onTap: () => onSelect(ChatAttachTab.sticker),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.apps_outlined,
+                          label: 'Мини',
+                          selected: false,
+                          onTap: onOpenMiniApps,
+                          compact: true,
+                          width: width,
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
-              _DockItem(
-                icon: Icons.emoji_emotions_outlined,
-                label: 'Стикеры',
-                selected: selected == ChatAttachTab.sticker,
-                onTap: () => onSelect(ChatAttachTab.sticker),
-              ),
-              _DockItem(
-                icon: Icons.more_horiz_rounded,
-                label: 'Ещё',
-                selected: selected == ChatAttachTab.poll ||
-                    selected == ChatAttachTab.contact,
-                onTap: onOpenMore,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -2681,59 +2804,65 @@ class _DockItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
+    this.width,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final inactiveColor = theme.colorScheme.onSurface.withValues(
+      alpha: isDark ? 0.72 : 0.68,
+    );
+    final activeColor = _ChatAttachSheetState._brandAccent.withValues(
+      alpha: isDark ? 0.96 : 0.9,
+    );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _ChatAttachSheetState._brandAccent
-                          .withValues(alpha: isDark ? 0.22 : 0.14)
-                      : (isDark
-                          ? _ChatAttachSheetState._groupBgDark
-                          : theme.colorScheme.surfaceContainerHighest),
-                  shape: BoxShape.circle,
+    return SizedBox(
+      width: width,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: compact ? 1 : 6),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(compact ? 12 : 12),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 5 : 10,
+              vertical: compact ? 3 : 6,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 140),
+                  curve: Curves.easeOutCubic,
+                  scale: selected ? 1.03 : 1.0,
+                  child: Icon(
+                    icon,
+                    size: compact ? 19 : 26,
+                    color: selected ? activeColor : inactiveColor,
+                  ),
                 ),
-                child: Icon(
-                  icon,
-                  size: 26,
-                  color: selected
-                      ? _ChatAttachSheetState._brandAccent
-                      : theme.colorScheme.onSurfaceVariant,
+                SizedBox(height: compact ? 1.5 : 5),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: selected ? activeColor : inactiveColor,
+                    fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                    fontSize: compact ? 10 : null,
+                    height: 1.05,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: selected
-                      ? _ChatAttachSheetState._brandAccent
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

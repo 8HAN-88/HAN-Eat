@@ -128,6 +128,7 @@ class MediaUploadService {
     required String uploadUrl,
     required XFile file,
     required String contentType,
+    void Function(int sentBytes, int totalBytes)? onUploadProgress,
   }) async {
     final effectiveUrl = _fixUploadUrl(uploadUrl);
     final contentLength = await file.length();
@@ -152,6 +153,7 @@ class MediaUploadService {
       file: file,
       contentLength: contentLength,
       viaApi: viaApi,
+      onUploadProgress: onUploadProgress,
     );
 
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -172,14 +174,19 @@ class MediaUploadService {
     required Map<String, String> headers,
     required XFile file,
     required int contentLength,
+    void Function(int sentBytes, int totalBytes)? onUploadProgress,
   }) async {
     final client = HanEatHttpClient.createUploadClient();
     try {
       final request = http.StreamedRequest('PUT', uri);
       request.headers.addAll(headers);
       request.contentLength = contentLength;
+      var sentBytes = 0;
+      onUploadProgress?.call(sentBytes, contentLength);
       await for (final chunk in file.openRead()) {
         request.sink.add(chunk);
+        sentBytes += chunk.length;
+        onUploadProgress?.call(sentBytes, contentLength);
       }
       await request.sink.close();
       final streamed = await client.send(request).timeout(
@@ -208,6 +215,7 @@ class MediaUploadService {
     required XFile file,
     required int contentLength,
     required bool viaApi,
+    void Function(int sentBytes, int totalBytes)? onUploadProgress,
   }) async {
     var workingUri = uri;
     var workingHeaders = Map<String, String>.from(headers);
@@ -219,6 +227,7 @@ class MediaUploadService {
           headers: workingHeaders,
           file: file,
           contentLength: contentLength,
+          onUploadProgress: onUploadProgress,
         );
         if (viaApi && response.statusCode == 401) {
           final refreshedToken = await AuthService.refreshToken();
@@ -354,15 +363,20 @@ class MediaUploadService {
       clientUploadId: clientUploadId,
     );
 
-    if (onProgress != null) onProgress(0.1);
+    onProgress?.call(0.02);
 
     await uploadFile(
       uploadUrl: initResponse.uploadUrl,
       file: file,
       contentType: contentType,
+      onUploadProgress: (sentBytes, totalBytes) {
+        final safeTotal = totalBytes <= 0 ? 1 : totalBytes;
+        final ratio = (sentBytes / safeTotal).clamp(0.0, 1.0).toDouble();
+        onProgress?.call(0.02 + ratio * 0.86);
+      },
     );
 
-    if (onProgress != null) onProgress(0.9);
+    onProgress?.call(0.9);
 
     final completeResponse = await completeUpload(
       uploadId: initResponse.uploadId,
@@ -370,7 +384,7 @@ class MediaUploadService {
       fileType: fileType,
     );
 
-    if (onProgress != null) onProgress(1.0);
+    onProgress?.call(0.94);
 
     if (waitForProcessing &&
         fileType == 'video' &&
@@ -437,7 +451,7 @@ class MediaUploadService {
     while (DateTime.now().isBefore(deadline)) {
       final status = await getUploadStatus(uploadId);
       final progress = status.progress.clamp(0, 100) / 100.0;
-      onProgress?.call(0.9 + progress * 0.1);
+      onProgress?.call(0.94 + progress * 0.06);
 
       if (status.status == 'completed') {
         final url = status.url ?? status.mp4_720pUrl ?? fallbackUrl;

@@ -238,6 +238,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _mediaDrainActive = false;
   _PendingMediaSend? _pendingMediaRetry;
   final Set<String> _inFlightMediaClientIds = {};
+  final Map<int, _PendingMediaSend> _pendingMediaByTempId = {};
+  final Map<String, int> _pendingMediaTempIdByClientId = {};
+  final Map<String, double> _pendingMediaProgressByClientId = {};
+  final Set<String> _cancelledPendingMediaClientIds = {};
   bool _voiceSending = false;
   bool _showVoiceHint = false;
   bool _hasMore = false;
@@ -772,6 +776,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         s.contains('offline');
   }
 
+  static const Duration _voiceUploadTimeout = Duration(seconds: 75);
+
   String _mediaStatusLabel(_PendingMediaSend pending) {
     return switch (pending.kind) {
       _PendingMediaKind.image => 'Загрузка фото…',
@@ -781,12 +787,73 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     };
   }
 
+  String _mediaUploadProgressLabel(
+    _PendingMediaSend pending,
+    double progress, {
+    int? totalBytes,
+  }) {
+    final safeProgress = progress.clamp(0.0, 1.0).toDouble();
+    if (totalBytes == null || totalBytes <= 0) {
+      return _mediaStatusLabel(pending);
+    }
+    final sent = (totalBytes * safeProgress).round();
+    final sentMb = sent / (1024 * 1024);
+    final totalMb = totalBytes / (1024 * 1024);
+    final noun = switch (pending.kind) {
+      _PendingMediaKind.image => 'фото',
+      _PendingMediaKind.video => 'видео',
+      _PendingMediaKind.file => 'файла',
+      _PendingMediaKind.voice => 'голосового',
+    };
+    return 'Загрузка $noun ${sentMb.toStringAsFixed(1)} / ${totalMb.toStringAsFixed(1)} МБ…';
+  }
+
+  int _newLocalTempId() =>
+      -(DateTime.now().microsecondsSinceEpoch + math.Random().nextInt(999));
+
+  bool _removeMediaFromQueue(String clientMessageId) {
+    final index = _mediaOutboundQueue
+        .indexWhere((p) => p.clientMessageId == clientMessageId);
+    if (index < 0) return false;
+    _mediaOutboundQueue.removeAt(index);
+    return true;
+  }
+
   void _enqueueMediaSend(_PendingMediaSend pending) {
     if (_mediaOutboundQueue
         .any((p) => p.clientMessageId == pending.clientMessageId)) {
       return;
     }
-    setState(() => _mediaOutboundQueue.add(pending));
+    final uid = AuthService.instance.currentUser?.id ?? 0;
+    final optimistic = ChatMessage(
+      id: pending.tempId,
+      conversationId: widget.conversationId,
+      senderId: uid,
+      type: switch (pending.kind) {
+        _PendingMediaKind.image => 'image',
+        _PendingMediaKind.video => 'video',
+        _PendingMediaKind.file => 'file',
+        _PendingMediaKind.voice => 'voice',
+      },
+      content: switch (pending.kind) {
+        _PendingMediaKind.file => pending.fileName ?? 'Файл',
+        _PendingMediaKind.voice => '${pending.voiceDurationSec ?? 1}',
+        _ => '',
+      },
+      createdAt: DateTime.now(),
+      isMine: true,
+      isRead: false,
+      replyToMessageId: pending.replyToMessageId,
+    );
+    setState(() {
+      _pendingMediaByTempId[pending.tempId] = pending;
+      _pendingMediaTempIdByClientId[pending.clientMessageId] = pending.tempId;
+      _pendingMediaProgressByClientId[pending.clientMessageId] = 0.0;
+      _messages.removeWhere((m) => m.id == pending.tempId);
+      _messages.add(optimistic);
+      _mediaOutboundQueue.add(pending);
+    });
+    _scrollToBottom();
     unawaited(_drainMediaOutboundQueue());
   }
 
@@ -818,7 +885,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         try {
           await _deliverMediaPending(pending);
-          _mediaOutboundQueue.removeAt(0);
+          _removeMediaFromQueue(pending.clientMessageId);
           if (_pendingMediaRetry?.clientMessageId == pending.clientMessageId) {
             setState(() => _pendingMediaRetry = null);
           }
@@ -829,6 +896,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           }
           _scrollToBottom();
         } catch (e) {
+          if (e is _CancelledPendingMediaException) {
+            _removeMediaFromQueue(pending.clientMessageId);
+            if (_mediaOutboundQueue.isEmpty) {
+              _endSending();
+            }
+            continue;
+          }
+          if (e is TimeoutException &&
+              pending.kind == _PendingMediaKind.voice) {
+            _removeMediaFromQueue(pending.clientMessageId);
+            _endSending();
+            pending.lastRetryAfterSeconds = null;
+            pending.lastLimitedAt = null;
+            _rememberFailedMedia(pending);
+            if (mounted) {
+              showErrorSnackBar(
+                context,
+                e,
+                fallback:
+                    'Загрузка голосового заняла слишком много времени. Проверьте сеть и нажмите «Повторить».',
+              );
+            }
+            continue;
+          }
           final err = e.toString().toLowerCase();
           if (err.contains('group_slow_mode')) {
             final retryAfter =
@@ -836,7 +927,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             pending.lastRetryAfterSeconds =
                 (retryAfter ?? _conversation.slowModeSeconds).clamp(1, 3600);
             pending.lastLimitedAt = DateTime.now().toUtc();
-            _mediaOutboundQueue.removeAt(0);
+            _removeMediaFromQueue(pending.clientMessageId);
             _endSending();
             _rememberFailedMedia(pending);
             if (mounted) {
@@ -866,7 +957,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 e is ApiClientException ? e.retryAfterSeconds : null;
             pending.lastRetryAfterSeconds = (retryAfter ?? 60).clamp(1, 3600);
             pending.lastLimitedAt = DateTime.now().toUtc();
-            _mediaOutboundQueue.removeAt(0);
+            _removeMediaFromQueue(pending.clientMessageId);
             _endSending();
             _rememberFailedMedia(pending);
             if (mounted) {
@@ -892,8 +983,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             continue;
           }
           pending.attempts++;
-          if (_isRetryableSendError(e) && pending.attempts < 8) {
-            final waitSec = (2 * pending.attempts).clamp(2, 45);
+          final maxAttempts = pending.kind == _PendingMediaKind.voice ? 3 : 8;
+          if (_isRetryableSendError(e) && pending.attempts < maxAttempts) {
+            final waitSec = pending.kind == _PendingMediaKind.voice
+                ? (pending.attempts * 2).clamp(2, 8)
+                : (2 * pending.attempts).clamp(2, 45);
             if (mounted) {
               setState(() {
                 _sendingStatus = 'Повтор через $waitSec с…';
@@ -902,7 +996,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             await Future<void>.delayed(Duration(seconds: waitSec));
             continue;
           }
-          _mediaOutboundQueue.removeAt(0);
+          _removeMediaFromQueue(pending.clientMessageId);
           _endSending();
           pending.lastRetryAfterSeconds = null;
           pending.lastLimitedAt = null;
@@ -932,26 +1026,50 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final reply = pending.replyToMessageId ?? _replyTo?.id;
       String? mediaUrl = pending.uploadedMediaUrl;
       if (mediaUrl == null) {
+        final totalBytes = pending.totalBytes;
         final fileType = switch (pending.kind) {
           _PendingMediaKind.image => 'image',
           _PendingMediaKind.video => 'video',
           _PendingMediaKind.file => 'document',
           _PendingMediaKind.voice => 'audio',
         };
-        final uploaded = await MediaUploadService.uploadMediaFile(
+        final uploadFuture = MediaUploadService.uploadMediaFile(
           file: pending.file,
           fileType: fileType,
           clientUploadId: pending.clientMessageId,
           waitForProcessing: pending.kind != _PendingMediaKind.video,
-          onProgress: (p) =>
-              _setUploadProgress(p, status: _mediaStatusLabel(pending)),
+          onProgress: (p) {
+            if (!mounted) return;
+            final clamped = p.clamp(0.0, 1.0).toDouble();
+            setState(() {
+              _pendingMediaProgressByClientId[pending.clientMessageId] =
+                  clamped;
+            });
+            _setUploadProgress(
+              clamped,
+              status: _mediaUploadProgressLabel(
+                pending,
+                clamped,
+                totalBytes: totalBytes,
+              ),
+            );
+          },
         );
+        final uploaded = pending.kind == _PendingMediaKind.voice
+            ? await uploadFuture.timeout(_voiceUploadTimeout)
+            : await uploadFuture;
+        if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
+          throw _CancelledPendingMediaException();
+        }
         final url = uploaded.url;
         if (url == null || url.isEmpty) throw Exception('Нет URL файла');
         mediaUrl = pending.kind == _PendingMediaKind.voice
             ? ServerConfig.resolveVoiceMediaUrl(url)
             : ServerConfig.resolveMediaUrl(url);
         pending.uploadedMediaUrl = mediaUrl;
+      }
+      if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
+        throw _CancelledPendingMediaException();
       }
       _setUploadProgress(1, status: 'Отправка…');
       final ChatMessage msg;
@@ -987,9 +1105,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
           );
       }
+      if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
+        throw _CancelledPendingMediaException();
+      }
       if (!mounted) return;
       setState(() {
-        _integrateMessage(msg);
+        _integrateMessage(msg, removeTempId: pending.tempId);
         _replyTo = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
@@ -1495,11 +1616,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _integrateMessage(ChatMessage msg, {int? removeTempId}) {
     if (removeTempId != null) {
       _messages.removeWhere((m) => m.id == removeTempId);
-      _failedTextSends.remove(removeTempId);
-      unawaited(_persistFailedTextSends());
+      final removedFailedText = _failedTextSends.remove(removeTempId) != null;
+      _removePendingMediaByTempId(removeTempId);
+      if (removedFailedText) {
+        unawaited(_persistFailedTextSends());
+      }
     }
     _messages.removeWhere(
-      (m) => m.id < 0 && m.isMine && !_failedTextSends.containsKey(m.id),
+      (m) =>
+          m.id < 0 &&
+          m.isMine &&
+          !_failedTextSends.containsKey(m.id) &&
+          !_pendingMediaByTempId.containsKey(m.id),
     );
     final idx = _messages.indexWhere(
       (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
@@ -1699,8 +1827,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _discardPendingMedia() {
+    final pending = _pendingMediaRetry;
     _clearPendingMediaAutoRetry();
-    setState(() => _pendingMediaRetry = null);
+    setState(() {
+      _pendingMediaRetry = null;
+      if (pending != null) {
+        _removePendingMediaByTempId(pending.tempId, removeMessage: true);
+      }
+    });
     if (!_hasFailedPendingItems) {
       _clearManualReadyRetrySchedule();
     }
@@ -2114,9 +2248,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _clearFailedTextAutoRetry(tempId);
     }
     setState(() {
+      final failedMediaTempId = _pendingMediaRetry?.tempId;
       _pendingMediaRetry = null;
       _failedTextSends.removeWhere((_, __) => true);
-      _messages.removeWhere((m) => m.id < 0);
+      _messages.removeWhere(
+        (m) =>
+            failedTextIds.contains(m.id) ||
+            (failedMediaTempId != null && m.id == failedMediaTempId),
+      );
+      if (failedMediaTempId != null) {
+        _removePendingMediaByTempId(failedMediaTempId);
+      }
     });
     unawaited(_persistFailedTextSends());
     unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
@@ -2185,6 +2327,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     pending.lastRetryAfterSeconds = null;
     pending.lastLimitedAt = null;
     _enqueueMediaSend(pending);
+  }
+
+  void _cancelPendingMediaUploadByTempId(int tempId) {
+    final pending = _pendingMediaByTempId[tempId];
+    if (pending == null) return;
+    _cancelledPendingMediaClientIds.add(pending.clientMessageId);
+    _clearPendingMediaAutoRetry();
+    setState(() {
+      _mediaOutboundQueue
+          .removeWhere((p) => p.clientMessageId == pending.clientMessageId);
+      if (_pendingMediaRetry?.clientMessageId == pending.clientMessageId) {
+        _pendingMediaRetry = null;
+      }
+      _removePendingMediaByTempId(tempId, removeMessage: true);
+    });
+    if (_mediaOutboundQueue.isEmpty) {
+      _endSending();
+    }
+  }
+
+  void _removePendingMediaByTempId(int tempId, {bool removeMessage = false}) {
+    final pending = _pendingMediaByTempId.remove(tempId);
+    if (pending == null) return;
+    _pendingMediaTempIdByClientId.remove(pending.clientMessageId);
+    _pendingMediaProgressByClientId.remove(pending.clientMessageId);
+    _cancelledPendingMediaClientIds.remove(pending.clientMessageId);
+    if (removeMessage) {
+      _messages.removeWhere((m) => m.id == tempId);
+    }
   }
 
   Widget _pendingMediaRetryBanner(ColorScheme scheme) {
@@ -3226,7 +3397,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Неотправленные медиа видны в нижней панели, текстовых неотправленных нет',
+            'Неотправленные медиа отображаются прямо в чате',
           ),
         ),
       );
@@ -3539,8 +3710,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   List<ChatMessage> get _visibleMessages {
     if (_showOnlyFailedMessages) {
+      final failedMediaTempId = _pendingMediaRetry?.tempId;
       return _messages
-          .where((m) => _failedTextSends.containsKey(m.id))
+          .where((m) =>
+              _failedTextSends.containsKey(m.id) ||
+              (failedMediaTempId != null && m.id == failedMediaTempId))
           .toList(growable: false);
     }
     return _messages;
@@ -4104,12 +4278,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } else {
         file = XFile(path!);
       }
+      int? totalBytes;
+      try {
+        totalBytes = await file.length();
+      } catch (_) {
+        totalBytes = null;
+      }
       _enqueueMediaSend(_PendingMediaSend(
+        tempId: _newLocalTempId(),
         kind: _PendingMediaKind.voice,
         file: file,
         clientMessageId: clientMessageId,
         voiceDurationSec: durationSec,
         replyToMessageId: _replyTo?.id,
+        totalBytes: totalBytes,
       ));
     } finally {
       _voiceSending = false;
@@ -4442,6 +4624,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
     Set<String> callbackLoadingData = const <String>{},
   }) {
+    final pendingMedia = msg.id < 0 ? _pendingMediaByTempId[msg.id] : null;
+    if (pendingMedia != null) {
+      return _pendingMediaBubbleWidget(
+        msg: msg,
+        pending: pendingMedia,
+        scheme: scheme,
+        wrapWithAlign: wrapWithAlign,
+      );
+    }
     return _Bubble(
       message: msg,
       scheme: scheme,
@@ -4475,6 +4666,229 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
+    );
+  }
+
+  Widget _pendingMediaBubbleWidget({
+    required ChatMessage msg,
+    required _PendingMediaSend pending,
+    required ColorScheme scheme,
+    required bool wrapWithAlign,
+  }) {
+    final isUploading =
+        _inFlightMediaClientIds.contains(pending.clientMessageId);
+    final isQueued = _mediaOutboundQueue
+        .any((p) => p.clientMessageId == pending.clientMessageId);
+    final isFailed =
+        _pendingMediaRetry?.clientMessageId == pending.clientMessageId;
+    final progress =
+        _pendingMediaProgressByClientId[pending.clientMessageId] ?? 0.0;
+    final statusLabel = isFailed
+        ? 'Не отправлено'
+        : isUploading
+            ? _mediaUploadProgressLabel(
+                pending,
+                progress,
+                totalBytes: pending.totalBytes,
+              )
+            : (isQueued ? 'В очереди…' : _mediaStatusLabel(pending));
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bubbleBg = isDark
+        ? AppColors.telegramOutgoingDark
+        : AppColors.telegramOutgoingLight;
+    final width = switch (pending.kind) {
+      _PendingMediaKind.image => 210.0,
+      _PendingMediaKind.video => 210.0,
+      _PendingMediaKind.file => 220.0,
+      _PendingMediaKind.voice => 210.0,
+    };
+    final height = switch (pending.kind) {
+      _PendingMediaKind.image => 220.0,
+      _PendingMediaKind.video => 220.0,
+      _PendingMediaKind.file => 80.0,
+      _PendingMediaKind.voice => 76.0,
+    };
+
+    Widget content;
+    if (pending.kind == _PendingMediaKind.image &&
+        pending.previewBytes != null) {
+      content = Image.memory(
+        pending.previewBytes!,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+      );
+    } else if (pending.kind == _PendingMediaKind.video) {
+      content = ColoredBox(
+        color: Colors.black.withValues(alpha: 0.25),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: const Center(
+            child: Icon(Icons.movie_creation_outlined, color: Colors.white70),
+          ),
+        ),
+      );
+    } else if (pending.kind == _PendingMediaKind.file) {
+      content = SizedBox(
+        width: width,
+        height: height,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            const Icon(Icons.insert_drive_file_outlined, color: Colors.white70),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                pending.fileName ?? 'Файл',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+        ),
+      );
+    } else {
+      content = SizedBox(
+        width: width,
+        height: height,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            const Icon(Icons.mic_none_rounded, color: Colors.white70),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${pending.voiceDurationSec ?? 1} c',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+          ],
+        ),
+      );
+    }
+
+    final bubble = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: width,
+        height: height,
+        color: bubbleBg,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            content,
+            if (!isFailed)
+              Container(color: Colors.black.withValues(alpha: 0.25))
+            else
+              Container(color: scheme.error.withValues(alpha: 0.18)),
+            Positioned(
+              left: 10,
+              right: 56,
+              top: 8,
+              child: Text(
+                statusLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _cancelPendingMediaUploadByTempId(msg.id),
+                  child: const SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: Icon(Icons.close, color: Colors.white, size: 20),
+                  ),
+                ),
+              ),
+            ),
+            if (!isFailed)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  minHeight: 3,
+                  backgroundColor: Colors.white24,
+                  color: Colors.white,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final withMeta = Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        bubble,
+        if (isFailed)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Wrap(
+              spacing: 4,
+              children: [
+                TextButton(
+                  onPressed: _sending ? null : _retryPendingMedia,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: scheme.error,
+                  ),
+                  child: const Text('Повторить'),
+                ),
+                TextButton(
+                  onPressed: _sending ? null : _discardPendingMedia,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: scheme.error,
+                  ),
+                  child: const Text('Удалить'),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+
+    if (!wrapWithAlign) return withMeta;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: withMeta,
     );
   }
 
@@ -5963,11 +6377,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
+    int? totalBytes;
+    Uint8List? previewBytes;
+    try {
+      totalBytes = await file.length();
+      if (totalBytes <= 8 * 1024 * 1024) {
+        previewBytes = await file.readAsBytes();
+      }
+    } catch (_) {
+      try {
+        totalBytes = await file.length();
+      } catch (_) {
+        totalBytes = null;
+      }
+    }
     _enqueueMediaSend(_PendingMediaSend(
+      tempId: _newLocalTempId(),
       kind: _PendingMediaKind.image,
       file: file,
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
+      totalBytes: totalBytes,
+      previewBytes: previewBytes,
     ));
   }
 
@@ -5976,11 +6407,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
+    int? totalBytes;
+    try {
+      totalBytes = await file.length();
+    } catch (_) {
+      totalBytes = null;
+    }
     _enqueueMediaSend(_PendingMediaSend(
+      tempId: _newLocalTempId(),
       kind: _PendingMediaKind.video,
       file: file,
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
+      totalBytes: totalBytes,
     ));
   }
 
@@ -6035,12 +6474,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
+    int? totalBytes;
+    try {
+      totalBytes = await file.length();
+    } catch (_) {
+      totalBytes = null;
+    }
     _enqueueMediaSend(_PendingMediaSend(
+      tempId: _newLocalTempId(),
       kind: _PendingMediaKind.file,
       file: file,
       fileName: fileName,
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
+      totalBytes: totalBytes,
     ));
   }
 
@@ -6703,7 +7150,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 child: Text(
                                   _showOnlyFailedMessages
                                       ? _pendingMediaRetry != null
-                                          ? 'Есть неотправленное медиа.\nУправление отправкой доступно в панели ниже.'
+                                          ? 'Есть неотправленное медиа.\nПовтор/удаление доступны прямо у сообщения.'
                                           : 'Нет неотправленных сообщений'
                                       : 'Напишите первое сообщение',
                                   textAlign: TextAlign.center,
@@ -7276,7 +7723,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ),
                             ),
                           ),
-                        if (_pendingMediaRetry != null)
+                        if (_pendingMediaRetry != null &&
+                            !_pendingMediaByTempId
+                                .containsKey(_pendingMediaRetry!.tempId))
                           _pendingMediaRetryBanner(scheme),
                         _animatedVisibility(
                           visible: _showVoiceHint && !_recording && !_sending,
@@ -7689,22 +8138,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
 enum _PendingMediaKind { image, video, file, voice }
 
+class _CancelledPendingMediaException implements Exception {}
+
 class _PendingMediaSend {
   _PendingMediaSend({
+    required this.tempId,
     required this.kind,
     required this.file,
     required this.clientMessageId,
     this.fileName,
     this.replyToMessageId,
     this.voiceDurationSec,
+    this.totalBytes,
+    this.previewBytes,
   });
 
+  final int tempId;
   final _PendingMediaKind kind;
   final XFile file;
   final String clientMessageId;
   final String? fileName;
   final int? replyToMessageId;
   final int? voiceDurationSec;
+  final int? totalBytes;
+  final Uint8List? previewBytes;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -8155,16 +8612,20 @@ class _Bubble extends StatelessWidget {
             maxWidthDiskCache: 960,
             maxHeightDiskCache: 960,
             placeholder: (_, __) => SizedBox(
+              width: 180,
               height: 180,
               child: ColoredBox(color: quoteBg),
             ),
             errorWidget: (_, __, ___) => SizedBox(
+              width: 180,
               height: 120,
               child: ColoredBox(
                 color: quoteBg,
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  color: fg.withValues(alpha: 0.6),
+                child: Center(
+                  child: Icon(
+                    Icons.broken_image_outlined,
+                    color: fg.withValues(alpha: 0.6),
+                  ),
                 ),
               ),
             ),
