@@ -11,7 +11,6 @@ import 'package:intl/intl.dart';
 import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
 
 import '../../../../core/haptics/app_haptics.dart';
-import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
@@ -1477,7 +1476,7 @@ class _RecentFileTile extends StatelessWidget {
       case 'HEIC':
         return const Color(0xFF34C759);
       default:
-        return AppColors.primary;
+        return _ChatAttachSheetState._telegramBlue;
     }
   }
 }

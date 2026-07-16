@@ -94,9 +94,11 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final groupBg =
-        isDark ? const Color(0xFF2C2C2E) : theme.colorScheme.surfaceContainerHighest;
-    final labelColor = theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75);
+    final groupBg = isDark
+        ? const Color(0xFF2C2C2E)
+        : theme.colorScheme.surfaceContainerHighest;
+    final labelColor =
+        theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75);
 
     return ListView(
       controller: widget.scrollController,
@@ -155,8 +157,8 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
                       )
                     : null,
                 onChanged: (_) {
-                setState(_notifyValidity);
-              },
+                  setState(_notifyValidity);
+                },
               ),
             ],
             Divider(
@@ -166,19 +168,20 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
             InkWell(
               onTap: _remainingOptions > 0 ? _addOption : null,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
                   children: [
                     Icon(
                       Icons.add,
-                      color: AppColors.primary,
+                      color: AppColors.telegramBlue,
                       size: 22,
                     ),
                     const SizedBox(width: 12),
                     Text(
                       'Добавить ответ',
                       style: theme.textTheme.bodyLarge?.copyWith(
-                        color: AppColors.primary,
+                        color: AppColors.telegramBlue,
                       ),
                     ),
                   ],
@@ -330,7 +333,10 @@ class _PollTextField extends StatelessWidget {
                 ),
               ),
               maxLength: hint.contains('вопрос') ? 300 : 120,
-              buildCounter: (_, {required currentLength, required isFocused, maxLength}) =>
+              buildCounter: (_,
+                      {required currentLength,
+                      required isFocused,
+                      maxLength}) =>
                   null,
             ),
           ),

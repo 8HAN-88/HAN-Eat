@@ -7661,7 +7661,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ],
                             ),
                           ),
-                        if (_sending)
+                        if (_sending && _pendingMediaByTempId.isEmpty)
                           Material(
                             color: scheme.secondaryContainer
                                 .withValues(alpha: 0.55),
@@ -7888,11 +7888,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 4),
                             decoration: BoxDecoration(
-                              color: scheme.surface,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF111822)
+                                  : scheme.surface,
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(
                                 color: scheme.outlineVariant
-                                    .withValues(alpha: 0.3),
+                                    .withValues(alpha: 0.16),
                               ),
                               boxShadow: [
                                 BoxShadow(
