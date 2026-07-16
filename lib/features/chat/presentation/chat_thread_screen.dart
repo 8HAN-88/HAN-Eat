@@ -6939,6 +6939,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       )
                     : null,
                 actions: [
+                  IconButton(
+                    tooltip: 'Отложенные',
+                    icon: const Icon(Icons.schedule_outlined),
+                    onPressed: _openScheduledMessagesManager,
+                  ),
                   if (!isGroup && peer != null) ...[
                     IconButton(
                       tooltip: 'Связь',
