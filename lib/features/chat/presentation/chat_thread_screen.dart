@@ -6939,46 +6939,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       )
                     : null,
                 actions: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      IconButton(
-                        tooltip: 'Отложенные',
-                        icon: const Icon(Icons.schedule_outlined),
-                        onPressed: _openScheduledMessagesManager,
-                      ),
-                      if (_scheduledPendingCount > 0)
-                        Positioned(
-                          right: 6,
-                          top: 7,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: scheme.error,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            constraints: const BoxConstraints(minWidth: 16),
-                            child: Text(
-                              _scheduledPendingCount > 99
-                                  ? '99+'
-                                  : '$_scheduledPendingCount',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
-                                    color: scheme.onError,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                  ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
                   if (!isGroup && peer != null) ...[
                     IconButton(
                       tooltip: 'Связь',
@@ -7052,16 +7012,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 child: _pinnedMessage == null
                     ? const SizedBox.shrink()
                     : Material(
-                        color: scheme.surfaceContainerHighest,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xB3202630)
+                            : scheme.surfaceContainerHighest,
                         child: InkWell(
                           onTap: () => _scrollToMessage(_pinnedMessage!.id),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                                horizontal: 12, vertical: 6),
                             child: Row(
                               children: [
                                 Icon(Icons.push_pin,
-                                    size: 18, color: scheme.primary),
+                                    size: 16, color: scheme.primary),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
@@ -7074,7 +7036,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             .textTheme
                                             .labelMedium
                                             ?.copyWith(
-                                              color: scheme.primary,
+                                              color: Theme.of(context)
+                                                          .brightness ==
+                                                      Brightness.dark
+                                                  ? Colors.white70
+                                                  : scheme.primary,
                                               fontWeight: FontWeight.w600,
                                             ),
                                       ),
@@ -7884,29 +7850,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: AnimatedContainer(
                             duration: _uiAnimDuration,
                             curve: Curves.easeOutCubic,
-                            margin: const EdgeInsets.fromLTRB(10, 5, 10, 8),
+                            margin: const EdgeInsets.fromLTRB(8, 4, 8, 6),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 4),
+                                horizontal: 2, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF111822)
-                                  : scheme.surface,
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: scheme.outlineVariant
-                                    .withValues(alpha: 0.16),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: scheme.shadow.withValues(
-                                    alpha:
-                                        (_recording || _sending) ? 0.09 : 0.05,
-                                  ),
-                                  blurRadius: (_recording || _sending) ? 11 : 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(26),
                             ),
                             child: Row(
                               children: [
@@ -7951,8 +7900,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                           ? 'Сообщение'
                                                           : 'Сообщение или голосовое')))),
                                       filled: true,
-                                      fillColor: scheme.surfaceContainerHighest
-                                          .withValues(alpha: 0.9),
+                                      fillColor: scheme.surfaceContainerHigh
+                                          .withValues(alpha: 0.88),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(22),
                                         borderSide: BorderSide.none,

@@ -244,7 +244,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
   static const _sheetBgDark = Color(0xFF1C1C1E);
   static const _groupBgDark = Color(0xFF2C2C2E);
-  static const _telegramBlue = Color(0xFF007AFF);
+  static const _telegramBlue = Color(0xFF2AABEE);
   static const _brandAccent = _telegramBlue;
 
   @override
