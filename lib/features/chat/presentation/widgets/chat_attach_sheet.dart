@@ -1733,42 +1733,38 @@ class _StickerPanel extends StatelessWidget {
         Expanded(
           child: ListView(
             controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
             children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: groupBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Row(
                   children: [
-                    ChoiceChip(
-                      label: const Text('Паки'),
+                    _stickerSwitchChip(
+                      theme: theme,
+                      label: 'Паки',
                       selected: stickerView == 'packs',
-                      onSelected: (_) => onSelectView('packs'),
+                      onTap: () => onSelectView('packs'),
                     ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Избранные'),
+                    const SizedBox(width: 6),
+                    _stickerSwitchChip(
+                      theme: theme,
+                      label: 'Избранные',
                       selected: stickerView == 'favorites',
-                      onSelected: (_) => onSelectView('favorites'),
+                      onTap: () => onSelectView('favorites'),
                     ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Недавние'),
+                    const SizedBox(width: 6),
+                    _stickerSwitchChip(
+                      theme: theme,
+                      label: 'Недавние',
                       selected: stickerView == 'recent',
-                      onSelected: (_) => onSelectView('recent'),
+                      onTap: () => onSelectView('recent'),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 10),
-              _StickerQuickActions(
-                busy: busy,
-                editablePackId: targetEditablePack?.id,
-                editablePackTitle: targetEditablePack?.title,
-                onCreatePack: onCreatePack,
-                onImportByLink: onImportByLink,
-                onAddSticker: onAddSticker,
-                onAddAnimatedSticker: onAddAnimatedSticker,
-                onOpenPackManager: onOpenPackManager,
               ),
               const SizedBox(height: 12),
               if (stickerView == 'packs' && packs.isEmpty)
@@ -1879,6 +1875,39 @@ class _StickerPanel extends StatelessWidget {
           ),
         ),
       );
+
+  Widget _stickerSwitchChip({
+    required ThemeData theme,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? theme.colorScheme.primary.withValues(alpha: 0.2)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: selected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _StickerPacksContent extends StatelessWidget {
