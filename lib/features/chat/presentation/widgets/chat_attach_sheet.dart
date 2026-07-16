@@ -419,6 +419,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   void _close([ChatAttachSelection? result]) => Navigator.pop(context, result);
 
   void _setTab(ChatAttachTab tab) {
+    if (_tab == tab) return;
     AppHaptics.selection();
     setState(() {
       _tab = tab;
@@ -977,7 +978,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                 },
               ),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
+                duration: const Duration(milliseconds: 150),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, animation) => FadeTransition(
@@ -1019,7 +1020,25 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                       ),
               ),
               Expanded(
-                child: _buildBody(scrollController, isDark),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 150),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.02, 0.0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: KeyedSubtree(
+                    key: ValueKey<ChatAttachTab>(_tab),
+                    child: _buildBody(scrollController, isDark),
+                  ),
+                ),
               ),
               _TelegramAttachDock(
                 selected: _tab,

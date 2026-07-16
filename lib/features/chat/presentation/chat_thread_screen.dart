@@ -331,7 +331,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
-  static const _uiAnimDuration = Duration(milliseconds: 180);
+  static const _uiAnimDuration = Duration(milliseconds: 160);
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;
   static const _telegramAccent = Color(0xFF2AABEE);
