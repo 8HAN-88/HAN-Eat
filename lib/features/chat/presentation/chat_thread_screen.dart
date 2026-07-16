@@ -334,6 +334,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;
   static const _telegramAccent = Color(0xFF2AABEE);
+  static const _uploadAccent = AppColors.primary;
 
   @override
   void initState() {
@@ -4840,9 +4841,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 bottom: 0,
                 child: LinearProgressIndicator(
                   value: progress.clamp(0.0, 1.0),
-                  minHeight: 3,
+                  minHeight: 2.5,
                   backgroundColor: Colors.white24,
-                  color: Colors.white,
+                  color: _uploadAccent,
                 ),
               ),
           ],
@@ -4890,6 +4891,50 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Align(
       alignment: Alignment.centerRight,
       child: withMeta,
+    );
+  }
+
+  Widget _uploadTickerBar(ColorScheme scheme) {
+    final progress = (_uploadProgress ?? 0).clamp(0.0, 1.0).toDouble();
+    final percent = (progress * 100).round();
+    return Material(
+      color: scheme.surfaceContainerLow.withValues(alpha: 0.95),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+            child: Row(
+              children: [
+                Text(
+                  '$percent%',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _sendingStatus,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurface,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 3,
+            backgroundColor: scheme.outlineVariant.withValues(alpha: 0.4),
+            color: _uploadAccent,
+          ),
+        ],
+      ),
     );
   }
 
@@ -7632,69 +7677,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ],
                             ),
                           ),
-                        if (_sending && _pendingMediaByTempId.isEmpty)
-                          Material(
-                            color: scheme.secondaryContainer
-                                .withValues(alpha: 0.55),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Row(
-                                    children: [
-                                      if (_uploadProgress == null)
-                                        SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: scheme.onSecondaryContainer,
-                                          ),
-                                        )
-                                      else
-                                        Text(
-                                          '${(_uploadProgress! * 100).round()}%',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(
-                                                color:
-                                                    scheme.onSecondaryContainer,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          _sendingStatus,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                color:
-                                                    scheme.onSecondaryContainer,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (_uploadProgress != null) ...[
-                                    const SizedBox(height: 6),
-                                    LinearProgressIndicator(
-                                      value: _uploadProgress,
-                                      minHeight: 3,
-                                      borderRadius: BorderRadius.circular(2),
-                                      color: _telegramAccent,
-                                      backgroundColor: scheme
-                                          .onSecondaryContainer
-                                          .withValues(alpha: 0.2),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
+                        if (_sending && _uploadProgress != null)
+                          _uploadTickerBar(scheme),
                         if (_pendingMediaRetry != null &&
                             !_pendingMediaByTempId
                                 .containsKey(_pendingMediaRetry!.tempId))
