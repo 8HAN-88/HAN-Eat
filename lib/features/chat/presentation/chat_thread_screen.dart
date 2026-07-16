@@ -4630,6 +4630,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
     Set<String> callbackLoadingData = const <String>{},
   }) {
+    if (!_selectionMode && !searching) {
+      final visible = _visibleMessages;
+      final currentIndex = visible.indexWhere((m) => m.id == msg.id);
+      if (currentIndex >= 0) {
+        if (currentIndex > 0 &&
+            _canMergePhotoAlbum(visible[currentIndex - 1], msg)) {
+          return const SizedBox.shrink();
+        }
+        if (_isPhotoAlbumEligible(msg)) {
+          final album = <ChatMessage>[msg];
+          var captionSeen = msg.content.trim().isNotEmpty;
+          var i = currentIndex + 1;
+          while (i < visible.length &&
+              _canMergePhotoAlbum(album.last, visible[i])) {
+            final next = visible[i];
+            final nextHasCaption = next.content.trim().isNotEmpty;
+            if (nextHasCaption && captionSeen) break;
+            album.add(next);
+            if (nextHasCaption) {
+              captionSeen = true;
+              break;
+            }
+            if (album.length >= 8) break;
+            i++;
+          }
+          if (album.length >= 2) {
+            return _messageAlbumBubbleWidget(
+              messages: album,
+              scheme: scheme,
+              wrapWithAlign: wrapWithAlign,
+            );
+          }
+        }
+      }
+    }
+
     final pendingMedia = msg.id < 0 ? _pendingMediaByTempId[msg.id] : null;
     if (pendingMedia != null) {
       return _pendingMediaBubbleWidget(
@@ -4672,6 +4708,325 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
+    );
+  }
+
+  bool _isPhotoAlbumEligible(ChatMessage msg) {
+    if (msg.id <= 0) return false;
+    if (msg.type != 'image') return false;
+    if (msg.replyToMessageId != null) return false;
+    final media = msg.mediaUrl?.trim();
+    return media != null && media.isNotEmpty;
+  }
+
+  bool _canMergePhotoAlbum(ChatMessage left, ChatMessage right) {
+    if (!_isPhotoAlbumEligible(left) || !_isPhotoAlbumEligible(right)) {
+      return false;
+    }
+    if (left.content.trim().isNotEmpty) return false;
+    if (left.senderId != right.senderId || left.isMine != right.isMine) {
+      return false;
+    }
+    final diff = right.createdAt.difference(left.createdAt).inSeconds.abs();
+    return diff <= 90;
+  }
+
+  Widget _messageAlbumBubbleWidget({
+    required List<ChatMessage> messages,
+    required ColorScheme scheme,
+    required bool wrapWithAlign,
+  }) {
+    final anchor = messages.last;
+    final mine = anchor.isMine;
+    final caption = anchor.content.trim();
+    final hasCaption = caption.isNotEmpty;
+    final urls = messages
+        .map((m) => m.mediaUrl?.trim() ?? '')
+        .where((u) => u.isNotEmpty)
+        .toList(growable: false);
+    if (urls.length < 2) return const SizedBox.shrink();
+    final fg = mine && Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : scheme.onSurface;
+    final album = Container(
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+      ),
+      child: Column(
+        crossAxisAlignment:
+            mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          _chatAlbumGrid(
+            imageUrls: urls,
+            borderRadius: BorderRadius.circular(16),
+            footerOverlay: hasCaption
+                ? null
+                : _albumMetaOverlay(
+                    anchor: anchor,
+                    mine: mine,
+                    fg: fg,
+                  ),
+          ),
+          if (hasCaption)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 5, 6, 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    caption,
+                    style: TextStyle(
+                      color: fg,
+                      height: 1.24,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatChatMessageTime(anchor.createdAt),
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.62),
+                          fontSize: 10.5,
+                          height: 1.08,
+                        ),
+                      ),
+                      if (mine) ...[
+                        const SizedBox(width: 3),
+                        Icon(
+                          anchor.isRead ? Icons.done_all : Icons.done,
+                          size: 12.5,
+                          color: anchor.isRead
+                              ? _telegramAccent
+                              : fg.withValues(alpha: 0.55),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 3, left: 2, right: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    formatChatMessageTime(anchor.createdAt),
+                    style: TextStyle(
+                      color: fg.withValues(alpha: 0.62),
+                      fontSize: 10.5,
+                      height: 1.08,
+                    ),
+                  ),
+                  if (mine) ...[
+                    const SizedBox(width: 3),
+                    Icon(
+                      anchor.isRead ? Icons.done_all : Icons.done,
+                      size: 12.5,
+                      color: anchor.isRead
+                          ? _telegramAccent
+                          : fg.withValues(alpha: 0.55),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (!wrapWithAlign) return album;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: album,
+    );
+  }
+
+  Widget _chatAlbumGrid({
+    required List<String> imageUrls,
+    required BorderRadius borderRadius,
+    Widget? footerOverlay,
+  }) {
+    final spacing = 1.0;
+    final displayUrls = imageUrls.take(9).toList(growable: false);
+    final count = displayUrls.length;
+    if (count < 2) return const SizedBox.shrink();
+
+    Widget tile(String url, {required int index, int? remaining}) {
+      return GestureDetector(
+        onTap: () => _openImage(url),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _chatAlbumImage(url),
+            if (remaining != null && remaining > 0)
+              ColoredBox(
+                color: Colors.black.withValues(alpha: 0.42),
+                child: Center(
+                  child: Text(
+                    '+$remaining',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    Widget body;
+    if (count == 2) {
+      body = SizedBox(
+        height: 214,
+        child: Row(
+          children: [
+            Expanded(child: tile(displayUrls[0], index: 0)),
+            SizedBox(width: spacing),
+            Expanded(child: tile(displayUrls[1], index: 1)),
+          ],
+        ),
+      );
+    } else if (count == 3) {
+      body = SizedBox(
+        height: 234,
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: tile(displayUrls[0], index: 0),
+            ),
+            SizedBox(width: spacing),
+            Expanded(
+              child: Column(
+                children: [
+                  Expanded(child: tile(displayUrls[1], index: 1)),
+                  SizedBox(height: spacing),
+                  Expanded(child: tile(displayUrls[2], index: 2)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      final remaining = imageUrls.length - 4;
+      body = SizedBox(
+        height: 244,
+        child: Column(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: tile(displayUrls[0], index: 0)),
+                  SizedBox(width: spacing),
+                  Expanded(child: tile(displayUrls[1], index: 1)),
+                ],
+              ),
+            ),
+            SizedBox(height: spacing),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: tile(displayUrls[2], index: 2)),
+                  SizedBox(width: spacing),
+                  Expanded(
+                    child: tile(
+                      displayUrls[3],
+                      index: 3,
+                      remaining: remaining > 0 ? remaining : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: Stack(
+        children: [
+          ColoredBox(
+            color: Colors.black.withValues(alpha: 0.08),
+            child: body,
+          ),
+          if (footerOverlay != null)
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: footerOverlay,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chatAlbumImage(String mediaUrl) {
+    final resolved = ServerConfig.resolvePublisherAvatarUrl(
+      ServerConfig.resolveMediaUrl(mediaUrl),
+    );
+    return CachedNetworkImage(
+      imageUrl: resolved,
+      fit: BoxFit.cover,
+      memCacheWidth: 720,
+      memCacheHeight: 720,
+      maxWidthDiskCache: 960,
+      maxHeightDiskCache: 960,
+      placeholder: (_, __) => const ColoredBox(color: Color(0x22000000)),
+      errorWidget: (_, __, ___) => ColoredBox(
+        color: Colors.black.withValues(alpha: 0.22),
+        child: const Center(
+          child: Icon(Icons.broken_image_outlined, color: Colors.white70),
+        ),
+      ),
+    );
+  }
+
+  Widget _albumMetaOverlay({
+    required ChatMessage anchor,
+    required bool mine,
+    required Color fg,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              formatChatMessageTime(anchor.createdAt),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                height: 1.0,
+              ),
+            ),
+            if (mine) ...[
+              const SizedBox(width: 2),
+              Icon(
+                anchor.isRead ? Icons.done_all : Icons.done,
+                size: 12,
+                color:
+                    anchor.isRead ? _telegramAccent : fg.withValues(alpha: 0.6),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -8236,7 +8591,13 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
 
-  static const _metaReserveWidth = 52.0;
+  double _metaReserveWidth(bool mine) {
+    var width = 42.0; // time
+    if (message.isEdited) width += 28;
+    if (isConversationPinned) width += 16;
+    if (mine) width += 16; // single/double check mark area
+    return width;
+  }
 
   BorderRadius _bubbleRadius(bool mine) {
     const large = Radius.circular(16);
@@ -8323,12 +8684,28 @@ class _Bubble extends StatelessWidget {
     required Widget child,
     bool onMedia = false,
   }) {
+    if (!onMedia) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          child,
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: _messageMeta(fg: fg, mine: mine, onMedia: false),
+            ),
+          ),
+        ],
+      );
+    }
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Padding(
           padding: EdgeInsets.only(
-            right: onMedia ? 0 : _metaReserveWidth,
+            right: onMedia ? 0 : _metaReserveWidth(mine),
             bottom: onMedia ? 0 : 1,
           ),
           child: child,
