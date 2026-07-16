@@ -13,13 +13,13 @@ fi
 
 python3 <<'PY'
 import re
-import subprocess
 from pathlib import Path
 
 conf = Path("/etc/nginx/sites-available/haneat-web")
 text = conf.read_text()
 
-api_block = """
+managed = """
+    # BEGIN HAN-EAT MANAGED CACHE/API
     location = /health {
         proxy_pass http://127.0.0.1:8000/health;
         proxy_http_version 1.1;
@@ -42,9 +42,42 @@ api_block = """
         proxy_read_timeout 3600s;
         client_max_body_size 64M;
     }
-"""
 
-cache_block = """
+    # Force app shell revalidation for iOS/PWA standalone mode.
+    location = / {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files /index.html =404;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    location ~* ^/(flutter_service_worker\\.js|flutter_bootstrap\\.js|version\\.json|manifest\\.json|flutter\\.js)$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    # ^~ keeps query suffixes from hitting immutable regex location.
+    location ^~ /main.dart.js {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    location ^~ /icons/ {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files $uri =404;
+    }
+
     location ^~ /assets/ {
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
@@ -54,23 +87,39 @@ cache_block = """
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
     }
+    # END HAN-EAT MANAGED CACHE/API
 """
+
+legacy_patterns = [
+    r"\n\s*location\s*=\s*/health\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*/api/\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*~\*\s*\^/\(flutter_service_worker\\\.js\|flutter_bootstrap\\\.js\|version\\\.json\)\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*\^~\s*/main\.dart\.js\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*\^~\s*/icons/\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*\^~\s*/assets/\s*\{.*?\n\s*\}\n",
+    r"\n\s*location\s*\^~\s*/canvaskit/\s*\{.*?\n\s*\}\n",
+]
 
 def patch_server_block(block_text: str) -> str:
     patched = block_text
-    app_marker = "    location / {"
+
+    patched = re.sub(
+        r"\n\s*# BEGIN HAN-EAT MANAGED CACHE/API.*?# END HAN-EAT MANAGED CACHE/API\n",
+        "\n",
+        patched,
+        flags=re.DOTALL,
+    )
+    for pattern in legacy_patterns:
+        patched = re.sub(pattern, "\n", patched, flags=re.DOTALL)
+
     static_marker = "    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|wasm)$ {"
-    if "location /api/" not in patched:
-        if app_marker not in patched:
-            raise SystemExit("cannot find app insertion point in a server block")
-        patched = patched.replace(app_marker, api_block + "\n" + app_marker, 1)
-    if "location ^~ /assets/" not in patched:
-        if static_marker in patched:
-            patched = patched.replace(static_marker, cache_block + "\n" + static_marker, 1)
-        elif app_marker in patched:
-            patched = patched.replace(app_marker, cache_block + "\n" + app_marker, 1)
-        else:
-            raise SystemExit("cannot find cache insertion point in a server block")
+    app_marker = "    location / {"
+    if static_marker in patched:
+        patched = patched.replace(static_marker, managed + "\n" + static_marker, 1)
+    elif app_marker in patched:
+        patched = patched.replace(app_marker, managed + "\n" + app_marker, 1)
+    else:
+        patched = patched.replace("\n}\n", "\n" + managed + "\n}\n", 1)
     return patched
 
 parts = re.split(r"(?=\nserver\s*\{)", text)
@@ -92,7 +141,7 @@ if changed:
     conf.write_text(new_text)
     print("patched:", conf)
 else:
-    print("ok: all haneat.app server blocks already have /api/ proxy and web cache policy")
+    print("ok: config already up to date")
 PY
 
 nginx -t

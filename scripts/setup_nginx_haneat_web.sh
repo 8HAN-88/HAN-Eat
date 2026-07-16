@@ -67,14 +67,32 @@ server {
         client_max_body_size 64M;
     }
 
-    location ~* ^/(flutter_service_worker\.js|flutter_bootstrap\.js|version\.json)$ {
-        add_header Cache-Control "no-cache";
+    location = / {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files /index.html =404;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    location ~* ^/(flutter_service_worker\.js|flutter_bootstrap\.js|version\.json|manifest\.json|flutter\.js)$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
         try_files $uri =404;
     }
 
     # ^~ чтобы main.dart.js?v=… не попадал под immutable-regex ниже.
     location ^~ /main.dart.js {
-        add_header Cache-Control "no-cache, must-revalidate";
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
         try_files $uri =404;
     }
 
@@ -100,7 +118,9 @@ server {
 
     location / {
         try_files $uri $uri/ /index.html;
-        add_header Cache-Control "no-cache";
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
     }
 }
 EOF
