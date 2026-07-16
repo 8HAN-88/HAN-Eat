@@ -6687,6 +6687,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 centerTitle: true,
               )
             : AppBar(
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF18222D)
+                    : scheme.surface,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                toolbarHeight: 56,
+                titleSpacing: 4,
                 title: GestureDetector(
                   onTap: isSaved
                       ? null
@@ -7188,7 +7196,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 keyboardDismissBehavior:
                                     ScrollViewKeyboardDismissBehavior.onDrag,
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
+                                  horizontal: 8,
                                   vertical: 6,
                                 ),
                                 itemCount:
@@ -7848,10 +7856,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             curve: Curves.easeOutCubic,
                             margin: const EdgeInsets.fromLTRB(8, 4, 8, 6),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 2, vertical: 2),
+                                horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.transparent,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xCC1A2632)
+                                  : scheme.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(26),
+                              border: Border.all(
+                                color: scheme.outlineVariant
+                                    .withValues(alpha: 0.18),
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -7896,8 +7911,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                           ? 'Сообщение'
                                                           : 'Сообщение или голосовое')))),
                                       filled: true,
-                                      fillColor: scheme.surfaceContainerHigh
-                                          .withValues(alpha: 0.88),
+                                      fillColor: Colors.transparent,
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(22),
                                         borderSide: BorderSide.none,
