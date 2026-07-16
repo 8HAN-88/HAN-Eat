@@ -1180,7 +1180,7 @@ class _TelegramHeader extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Container(
-              height: subtitle == null ? 46 : 52,
+              height: subtitle == null ? 44 : 50,
               decoration: BoxDecoration(
                 color: headerChipBg,
                 borderRadius: BorderRadius.circular(24),
@@ -1192,7 +1192,7 @@ class _TelegramHeader extends StatelessWidget {
                     title,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       height: 1.1,
                     ),
                   ),
@@ -1206,7 +1206,7 @@ class _TelegramHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 11,
+                          fontSize: 10.5,
                           height: 1.1,
                         ),
                       ),

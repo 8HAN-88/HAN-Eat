@@ -6695,6 +6695,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 scrolledUnderElevation: 0,
                 toolbarHeight: 56,
                 titleSpacing: 4,
+                iconTheme: IconThemeData(
+                  size: 21,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : scheme.onSurface,
+                ),
                 title: GestureDetector(
                   onTap: isSaved
                       ? null
@@ -6721,6 +6727,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               _conversation.displayTitle,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.1,
+                                  ),
                             ),
                             if (subtitle.isNotEmpty)
                               Text(
@@ -7913,13 +7926,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       filled: true,
                                       fillColor: Colors.transparent,
                                       border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(22),
+                                        borderRadius: BorderRadius.circular(20),
                                         borderSide: BorderSide.none,
                                       ),
                                       contentPadding:
                                           const EdgeInsets.symmetric(
                                         horizontal: 16,
-                                        vertical: 11,
+                                        vertical: 10,
                                       ),
                                     ),
                                   ),
