@@ -6646,12 +6646,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     children: [
                       if (!isSaved && !isGroup && peer != null) ...[
                         AppUserAvatar(
-                          radius: 20,
+                          radius: 18,
                           imageUrl: peer.avatarUrl,
                           displayName: peer.displayName,
                           onTap: _openPeerProfile,
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                       ],
                       Expanded(
                         child: Column(
@@ -6667,7 +6667,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 subtitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: subtitleStyle,
+                                style: subtitleStyle?.copyWith(fontSize: 12),
                               ),
                           ],
                         ),

@@ -1540,11 +1540,11 @@ class _GalleryPanel extends StatelessWidget {
 
     return GridView.builder(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+      padding: const EdgeInsets.fromLTRB(1, 0, 1, 6),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
+        crossAxisSpacing: 1,
+        mainAxisSpacing: 1,
       ),
       itemCount: cells.length,
       itemBuilder: (_, i) => cells[i],
@@ -2279,7 +2279,7 @@ class _StickerPacksBottomBar extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        height: 68,
+        height: 62,
         decoration: BoxDecoration(
           color: bg,
           border: Border(
@@ -2290,7 +2290,7 @@ class _StickerPacksBottomBar extends StatelessWidget {
         ),
         child: ListView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           children: [
             _StickerPackBottomTab(
               selected: selectedPackId == null,
@@ -2880,17 +2880,17 @@ class _DockItem extends StatelessWidget {
                   scale: selected ? 1.03 : 1.0,
                   child: Icon(
                     icon,
-                    size: compact ? 19 : 26,
+                    size: compact ? 18 : 26,
                     color: selected ? activeColor : inactiveColor,
                   ),
                 ),
-                SizedBox(height: compact ? 1.5 : 5),
+                SizedBox(height: compact ? 1 : 5),
                 Text(
                   label,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: selected ? activeColor : inactiveColor,
                     fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
-                    fontSize: compact ? 10 : null,
+                    fontSize: compact ? 9 : null,
                     height: 1.05,
                   ),
                 ),
