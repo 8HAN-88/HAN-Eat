@@ -1226,6 +1226,7 @@ class _RouterRecoveryScreen extends StatefulWidget {
 
 class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   bool _redirected = false;
+  bool _forcedLogout = false;
 
   @override
   void initState() {
@@ -1237,6 +1238,15 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
           AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
       final user = AuthService.instance.currentUser;
       context.go(user == null ? LoginRoute.path : homePath);
+    });
+    Future<void>.delayed(const Duration(seconds: 3), () async {
+      if (!mounted || !_redirected || _forcedLogout) return;
+      // If we're still on recovery screen after the first redirect attempt,
+      // reset broken auth state and force a clean login path.
+      _forcedLogout = true;
+      await AuthService.logout();
+      if (!mounted) return;
+      context.go(LoginRoute.path);
     });
   }
 

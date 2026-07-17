@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
-import '../../../../core/app/app_variant.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
@@ -30,11 +29,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  Timer? _loginRecoveryTimer;
 
   @override
   void dispose() {
-    _loginRecoveryTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -61,28 +58,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Let GoRouter redirect decide the destination to avoid navigation races
       // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
-      // Recovery: if redirect chain gets stuck on some devices/webviews,
-      // force a safe destination after a grace period.
-      _loginRecoveryTimer?.cancel();
-      _loginRecoveryTimer = Timer(const Duration(seconds: 2), () {
-        if (!mounted || !_isLoading) return;
-        final route = ModalRoute.of(context);
-        if (route != null && !route.isCurrent) return;
-        final userNow = AuthService.instance.currentUser;
-        if (userNow == null) return;
-        setState(() => _isLoading = false);
-        if (!userNow.emailVerified) {
-          context.go(VerifyEmailRoute.withEmail(userNow.email));
-          return;
-        }
-        if (userNow.legalConsentRequired) {
-          context.go(LegalConsentRoute.path);
-          return;
-        }
-        final homePath =
-            AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
-        context.go(homePath);
-      });
+      // Do not force extra navigation from login screen: redirects in GoRouter
+      // are the single source of truth and race-free.
+      setState(() => _isLoading = false);
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
