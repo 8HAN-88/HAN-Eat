@@ -29,9 +29,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  Timer? _loginRecoveryTimer;
 
   @override
   void dispose() {
+    _loginRecoveryTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -59,11 +61,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
       // Recovery: if redirect chain gets stuck on some devices/webviews,
-      // force a safe destination after a short grace period.
-      Future<void>.delayed(const Duration(seconds: 3), () {
+      // force a safe destination after a grace period.
+      _loginRecoveryTimer?.cancel();
+      _loginRecoveryTimer = Timer(const Duration(seconds: 6), () {
         if (!mounted || !_isLoading) return;
+        final route = ModalRoute.of(context);
+        if (route != null && !route.isCurrent) return;
         final userNow = AuthService.instance.currentUser;
         if (userNow == null) return;
+        setState(() => _isLoading = false);
         if (!userNow.emailVerified) {
           context.go(VerifyEmailRoute.withEmail(userNow.email));
           return;

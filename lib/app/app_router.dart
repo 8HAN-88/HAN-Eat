@@ -221,81 +221,87 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: Listenable.merge([
       AuthService.sessionRevision,
       AppBootstrapState.authReady,
-      AppBootstrapState.servicesReady,
     ]),
     redirect: (context, state) {
-      final loc = state.matchedLocation;
-      if (!AppBootstrapState.authReady.value) {
-        if (loc == BootScreen.path) return null;
-        return BootScreen.path;
-      }
-      if (loc == BootScreen.path) {
-        if (AuthService.instance.currentUser == null) {
+      try {
+        final loc = state.matchedLocation;
+        if (!AppBootstrapState.authReady.value) {
+          if (loc == BootScreen.path) return null;
+          return BootScreen.path;
+        }
+        if (loc == BootScreen.path) {
+          if (AuthService.instance.currentUser == null) {
+            return LoginRoute.path;
+          }
+          return homePath;
+        }
+        if (loc == ChannelsListRoute.path) {
+          return ChatsRoute.path;
+        }
+        if (loc == '/shopping') {
+          return ShoppingListRoute.path;
+        }
+        // Variant guards: prevent cross-app navigation
+        if (AppVariant.current.isKitchen) {
+          if (loc == FeedRoute.path ||
+              loc == ChatsRoute.path ||
+              loc == CreatePostRoute.path ||
+              loc == CreateReelRoute.path ||
+              (loc.startsWith('/channel/') && loc.contains('/create-post'))) {
+            return MenuRoute.path;
+          }
+        } else {
+          if (loc == MenuRoute.path ||
+              loc == MealPlanRoute.path ||
+              loc == ShoppingListRoute.path ||
+              loc == CreateRecipeRoute.path ||
+              (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
+            return FeedRoute.path;
+          }
+        }
+        final user = AuthService.instance.currentUser;
+        final isAuth = user != null;
+        if (isAuth &&
+            !user.emailVerified &&
+            loc != VerifyEmailRoute.path &&
+            !loc.startsWith('${VerifyEmailRoute.path}?')) {
+          final email = Uri.encodeComponent(user.email);
+          return '${VerifyEmailRoute.path}?email=$email';
+        }
+        if (isAuth &&
+            user.legalConsentRequired &&
+            loc != LegalConsentRoute.path &&
+            !loc.startsWith('${LegalConsentRoute.path}?')) {
+          final from = Uri.encodeComponent(state.uri.toString());
+          return '${LegalConsentRoute.path}?from=$from';
+        }
+        if (isAuth &&
+            user.emailVerified &&
+            (loc == LoginRoute.path || loc == RegisterRoute.path)) {
+          return homePath;
+        }
+        if (isAuth) return null;
+        final locBase = loc.split('?').first;
+        if (locBase == ProfileAuthRoute.path || locBase == SettingsRoute.path) {
           return LoginRoute.path;
         }
-        return homePath;
-      }
-      if (loc == ChannelsListRoute.path) {
-        return ChatsRoute.path;
-      }
-      if (loc == '/shopping') {
-        return ShoppingListRoute.path;
-      }
-      // Variant guards: prevent cross-app navigation
-      if (AppVariant.current.isKitchen) {
-        if (loc == FeedRoute.path ||
-            loc == ChatsRoute.path ||
-            loc == CreatePostRoute.path ||
-            loc == CreateReelRoute.path ||
-            (loc.startsWith('/channel/') && loc.contains('/create-post'))) {
-          return MenuRoute.path;
-        }
-      } else {
-        if (loc == MenuRoute.path ||
-            loc == MealPlanRoute.path ||
-            loc == ShoppingListRoute.path ||
-            loc == CreateRecipeRoute.path ||
-            (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
-          return FeedRoute.path;
-        }
-      }
-      final user = AuthService.instance.currentUser;
-      final isAuth = user != null;
-      if (isAuth &&
-          !user.emailVerified &&
-          loc != VerifyEmailRoute.path &&
-          !loc.startsWith('${VerifyEmailRoute.path}?')) {
-        final email = Uri.encodeComponent(user.email);
-        return '${VerifyEmailRoute.path}?email=$email';
-      }
-      if (isAuth &&
-          user.legalConsentRequired &&
-          loc != LegalConsentRoute.path &&
-          !loc.startsWith('${LegalConsentRoute.path}?')) {
-        final from = Uri.encodeComponent(state.uri.toString());
-        return '${LegalConsentRoute.path}?from=$from';
-      }
-      if (isAuth &&
-          user.emailVerified &&
-          (loc == LoginRoute.path || loc == RegisterRoute.path)) {
-        return homePath;
-      }
-      if (isAuth) return null;
-      final locBase = loc.split('?').first;
-      if (locBase == ProfileAuthRoute.path || locBase == SettingsRoute.path) {
+        if (routeAllowsGuestAccess(loc)) return null;
+        final isAuthRoute = loc == LoginRoute.path ||
+            loc == RegisterRoute.path ||
+            loc == '/invite' ||
+            loc.startsWith(ChatInviteJoinRoute.basePath) ||
+            loc == ForgotPasswordRoute.path ||
+            loc == ResetPasswordRoute.path ||
+            loc.startsWith(VerifyEmailRoute.path) ||
+            loc.startsWith(ConfirmEmailChangeRoute.path);
+        if (isAuthRoute) return null;
         return LoginRoute.path;
+      } catch (e, st) {
+        debugPrint('router.redirect recover: $e\n$st');
+        return AuthService.instance.currentUser == null
+            ? LoginRoute.path
+            : homePath;
       }
-      if (routeAllowsGuestAccess(loc)) return null;
-      final isAuthRoute = loc == LoginRoute.path ||
-          loc == RegisterRoute.path ||
-          loc == '/invite' ||
-          loc.startsWith(ChatInviteJoinRoute.basePath) ||
-          loc == ForgotPasswordRoute.path ||
-          loc == ResetPasswordRoute.path ||
-          loc.startsWith(VerifyEmailRoute.path) ||
-          loc.startsWith(ConfirmEmailChangeRoute.path);
-      if (isAuthRoute) return null;
-      return LoginRoute.path;
     },
     routes: [
       GoRoute(
