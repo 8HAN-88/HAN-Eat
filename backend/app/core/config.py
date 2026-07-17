@@ -177,7 +177,10 @@ class Settings(BaseSettings):
         "http://localhost:3000,"
         "http://localhost:8080,"
         "http://localhost:5000,"
-        "http://127.0.0.1:5000"
+        "http://127.0.0.1:5000,"
+        "https://haneat.app,"
+        "https://www.haneat.app,"
+        "https://kitchen.haneat.app"
     )
     # Mini Apps: разрешённые домены для публикации внешних приложений.
     # Пусто = разрешать все https/http в development и только https в production.

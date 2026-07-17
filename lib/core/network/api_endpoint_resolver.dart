@@ -131,6 +131,7 @@ class ApiEndpointResolver {
     final configuredHost = Uri.tryParse(configured)?.host.toLowerCase() ?? '';
     final onProductionWeb = page.host == 'haneat.app' ||
         page.host == 'www.haneat.app' ||
+        page.host == 'kitchen.haneat.app' ||
         configuredHost == 'haneat.app' ||
         configuredHost == 'www.haneat.app';
 
@@ -139,8 +140,10 @@ class ApiEndpointResolver {
       return;
     }
 
+    // Prefer same-origin immediately so a broken api.haneat.app CORS/env
+    // cannot leave the PWA on a blank/failed boot path.
+    _resolvedRoot = sameOrigin;
     if (await _probeHealthJson(sameOrigin)) {
-      _resolvedRoot = sameOrigin;
       debugPrint('📡 Web API: same-origin $sameOrigin');
       return;
     }

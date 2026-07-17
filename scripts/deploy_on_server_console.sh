@@ -26,6 +26,18 @@ if grep -q "^MAX_VIDEO_SIZE_MB=" "$ENV" 2>/dev/null; then
 else
   echo "MAX_VIDEO_SIZE_MB=0" >> "$ENV"
 fi
+# White-screen root cause on web: APP_ENV=development disables haneat.app CORS.
+if grep -q "^APP_ENV=" "$ENV" 2>/dev/null; then
+  sed -i "s|^APP_ENV=.*|APP_ENV=production|" "$ENV"
+else
+  echo "APP_ENV=production" >> "$ENV"
+fi
+PROD_ORIGINS='https://haneat.app,https://www.haneat.app,https://kitchen.haneat.app,http://localhost:3000,http://localhost:8080'
+if grep -q "^ALLOWED_ORIGINS=" "$ENV" 2>/dev/null; then
+  sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${PROD_ORIGINS}|" "$ENV"
+else
+  echo "ALLOWED_ORIGINS=${PROD_ORIGINS}" >> "$ENV"
+fi
 if [[ -f /etc/nginx/sites-available/haneat-api ]]; then
   sed -i 's/client_max_body_size .*/client_max_body_size 1024M;/' /etc/nginx/sites-available/haneat-api
   nginx -t && systemctl reload nginx

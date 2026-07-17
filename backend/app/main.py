@@ -30,26 +30,30 @@ app.add_middleware(PerformanceMonitoringMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # CORS
-# В development режиме разрешаем все localhost origins для удобства разработки
-# Flutter web может работать на разных портах (например, 51899, 51964 и т.д.)
+# Production web (haneat.app) must always work — even if APP_ENV was left as
+# "development" on the server by mistake. Localhost regex stays for Flutter web
+# debugging on random ports.
+_PRODUCTION_WEB_ORIGINS = (
+    "https://haneat.app",
+    "https://www.haneat.app",
+    "https://kitchen.haneat.app",
+)
+_cors_origins = list(
+    dict.fromkeys(
+        [*settings.ALLOWED_ORIGINS, *_PRODUCTION_WEB_ORIGINS],
+    )
+)
+_cors_kwargs = {
+    "allow_origins": _cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
 if settings.APP_ENV == "development":
-    # Используем allow_origin_regex для разрешения всех localhost портов
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+    _cors_kwargs["allow_origin_regex"] = (
+        r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?"
     )
-else:
-    # В production используем строгий список origins
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 # Подключение роутеров
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])

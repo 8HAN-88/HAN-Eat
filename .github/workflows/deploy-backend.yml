@@ -69,6 +69,18 @@ jobs:
           else
             echo 'RATE_LIMIT_PER_MINUTE=300' >> .env
           fi
+          # Production must never stay on APP_ENV=development: it breaks CORS for haneat.app.
+          if grep -q '^APP_ENV=' .env 2>/dev/null; then
+            sed -i 's/^APP_ENV=.*/APP_ENV=production/' .env
+          else
+            echo 'APP_ENV=production' >> .env
+          fi
+          PROD_ORIGINS='https://haneat.app,https://www.haneat.app,https://kitchen.haneat.app,http://localhost:3000,http://localhost:8080'
+          if grep -q '^ALLOWED_ORIGINS=' .env 2>/dev/null; then
+            sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${PROD_ORIGINS}|" .env
+          else
+            echo "ALLOWED_ORIGINS=${PROD_ORIGINS}" >> .env
+          fi
           alembic upgrade head
           bash "$APP_DIR/scripts/ensure_server_email_env.sh" "$APP_DIR/backend/.env"
           if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then
