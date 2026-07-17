@@ -53,13 +53,17 @@ Future<void> bootstrapEarly() async {
     } catch (e) {
       debugPrint('dotenv load error (continuing): $e');
     }
-    await ApiEndpointResolver.resolve().timeout(
-      const Duration(seconds: 3),
-      onTimeout: () {
-        debugPrint('⚠️ ApiEndpointResolver: timeout 3s — продолжаем с конфигом по умолчанию');
-      },
-    );
   }
+  // Web must resolve too: otherwise we stay on api.haneat.app and can brick
+  // the PWA when CORS/env drifts (blank/white boot).
+  await ApiEndpointResolver.resolve().timeout(
+    Duration(seconds: kIsWeb ? 5 : 3),
+    onTimeout: () {
+      debugPrint(
+        '⚠️ ApiEndpointResolver: timeout — продолжаем с конфигом по умолчанию',
+      );
+    },
+  );
 
   debugPrint(
     '📡 HANEAT env=${AppBuildConfig.environment} API ${ServerConfig.apiBaseUrl}'

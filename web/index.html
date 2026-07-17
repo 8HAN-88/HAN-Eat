@@ -55,6 +55,9 @@
       z-index: 9999;
       font-family: system-ui, -apple-system, sans-serif;
       color: #F7F8FA;
+      text-align: center;
+      padding: 24px;
+      box-sizing: border-box;
     }
     #boot-splash .spinner {
       width: 36px;
@@ -65,24 +68,125 @@
       animation: spin 0.9s linear infinite;
       margin-bottom: 16px;
     }
+    #boot-splash .hint {
+      margin-top: 14px;
+      color: #A8B0BB;
+      font-size: 14px;
+      line-height: 1.4;
+      max-width: 280px;
+      display: none;
+    }
+    #boot-splash .actions {
+      margin-top: 18px;
+      display: none;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #boot-splash button {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      background: #2AABEE;
+      color: #fff;
+    }
+    #boot-splash button.secondary {
+      background: #243041;
+      color: #F7F8FA;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
-    flt-scene-host, flt-glass-pane {
-      background-color: #0F1319;
+    flt-scene-host, flt-glass-pane, flutter-view {
+      background-color: #0F1319 !important;
     }
   </style>
 </head>
 <body>
   <div id="boot-splash">
-    <div class="spinner"></div>
+    <div class="spinner" id="boot-spinner"></div>
     <div style="font-weight:700;font-size:18px">HAN Eat</div>
+    <div class="hint" id="boot-hint">Загрузка занимает слишком долго. Можно обновить приложение и очистить кэш.</div>
+    <div class="actions" id="boot-actions">
+      <button type="button" id="boot-reload">Обновить</button>
+      <button type="button" class="secondary" id="boot-recover">Очистить кэш</button>
+    </div>
   </div>
   <script>
     (function () {
       var flutterStarted = false;
+      var firstFrame = false;
+      var splash = document.getElementById('boot-splash');
 
-      // HAN Eat deploy strategy: keep web updates predictable by disabling the
-      // Flutter service worker. We still keep manifest/icons for installability,
-      // while version.json + in-app banner handles visible updates.
+      function showRecovery() {
+        if (firstFrame) return;
+        var hint = document.getElementById('boot-hint');
+        var actions = document.getElementById('boot-actions');
+        var spinner = document.getElementById('boot-spinner');
+        if (hint) hint.style.display = 'block';
+        if (actions) actions.style.display = 'flex';
+        if (spinner) spinner.style.display = 'none';
+      }
+
+      function clearClientCaches() {
+        var jobs = [];
+        if ('serviceWorker' in navigator) {
+          jobs.push(
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              return Promise.all(regs.map(function (r) { return r.unregister(); }));
+            }).catch(function () {})
+          );
+        }
+        if (window.caches && caches.keys) {
+          jobs.push(
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            }).catch(function () {})
+          );
+        }
+        try {
+          // Drop only HAN Eat flutter prefs that can brick boot; keep unrelated site data.
+          Object.keys(localStorage || {}).forEach(function (key) {
+            if (key.indexOf('flutter.') === 0) {
+              // Keep auth tokens; clear volatile UI/cache keys that cause blank boots.
+              if (
+                key.indexOf('access_token') >= 0 ||
+                key.indexOf('refresh_token') >= 0 ||
+                key.indexOf('current_user') >= 0 ||
+                key.indexOf('user_json') >= 0
+              ) {
+                return;
+              }
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (e) {}
+        return Promise.all(jobs);
+      }
+
+      function hardRecover() {
+        clearClientCaches().finally(function () {
+          var url = new URL(window.location.href);
+          url.searchParams.set('recover', String(Date.now()));
+          window.location.replace(url.toString());
+        });
+      }
+
+      var reloadBtn = document.getElementById('boot-reload');
+      var recoverBtn = document.getElementById('boot-recover');
+      if (reloadBtn) reloadBtn.addEventListener('click', function () { window.location.reload(); });
+      if (recoverBtn) recoverBtn.addEventListener('click', hardRecover);
+
+      // Auto-recover once if previous boot failed.
+      try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.has('recover')) {
+          clearClientCaches();
+        }
+      } catch (e) {}
+
       function unregisterServiceWorkers() {
         if (!('serviceWorker' in navigator)) {
           return Promise.resolve();
@@ -112,6 +216,7 @@
           var s = document.createElement('script');
           s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
           s.async = true;
+          s.onerror = function () { showRecovery(); };
           document.body.appendChild(s);
         };
         unregisterServiceWorkers().finally(start);
@@ -126,13 +231,18 @@
         .catch(function () {
           loadFlutter(String(Date.now()));
         });
+
+      // If Flutter never paints, don't leave users on an endless blank state.
+      setTimeout(showRecovery, 10000);
+
+      window.addEventListener('flutter-first-frame', function () {
+        firstFrame = true;
+        // Slight delay avoids a white flash between splash removal and first paint.
+        setTimeout(function () {
+          if (splash && splash.parentNode) splash.remove();
+        }, 120);
+      });
     })();
-  </script>
-  <script>
-    window.addEventListener('flutter-first-frame', function () {
-      var s = document.getElementById('boot-splash');
-      if (s) s.remove();
-    });
   </script>
 </body>
 </html>

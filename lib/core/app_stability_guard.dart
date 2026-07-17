@@ -23,13 +23,13 @@ class AppStabilityGuard {
 
     ErrorWidget.builder = (FlutterErrorDetails details) {
       return Material(
-        color: const Color(0xFFFFF5F5),
+        color: const Color(0xFF0F1319),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: SelectableText(
               'Ошибка интерфейса:\n${details.exceptionAsString()}',
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              style: const TextStyle(fontSize: 14, color: Color(0xFFF7F8FA)),
             ),
           ),
         ),

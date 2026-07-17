@@ -37,6 +37,13 @@ class ServerConfig {
             final scheme = page.scheme == 'https' ? 'https' : 'http';
             return Uri(scheme: scheme, host: page.host, port: port).toString();
           }
+          // Production web: always same-origin so nginx /api proxy is used and
+          // a broken api.haneat.app CORS config cannot blank the app.
+          if (page.host == 'haneat.app' ||
+              page.host == 'www.haneat.app' ||
+              page.host == 'kitchen.haneat.app') {
+            return '${page.scheme}://${page.host}';
+          }
         }
       } catch (_) {}
       return root;
