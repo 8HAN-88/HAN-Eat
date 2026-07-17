@@ -180,9 +180,11 @@
       if (recoverBtn) recoverBtn.addEventListener('click', hardRecover);
 
       // Auto-recover once if previous boot failed.
+      var hadRecoverParam = false;
       try {
         var params = new URLSearchParams(window.location.search);
-        if (params.has('recover')) {
+        hadRecoverParam = params.has('recover');
+        if (hadRecoverParam) {
           clearClientCaches();
         }
       } catch (e) {}
@@ -234,6 +236,19 @@
 
       // If Flutter never paints, don't leave users on an endless blank state.
       setTimeout(showRecovery, 10000);
+
+      // Hard auto-recovery once per tab when boot is stuck.
+      setTimeout(function () {
+        if (firstFrame) return;
+        var autoKey = 'han.boot.auto_recover_once';
+        var already = false;
+        try {
+          already = sessionStorage.getItem(autoKey) === '1';
+        } catch (e) {}
+        if (hadRecoverParam || already) return;
+        try { sessionStorage.setItem(autoKey, '1'); } catch (e) {}
+        hardRecover();
+      }, 15000);
 
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;

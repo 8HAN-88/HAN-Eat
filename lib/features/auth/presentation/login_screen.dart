@@ -64,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Recovery: if redirect chain gets stuck on some devices/webviews,
       // force a safe destination after a grace period.
       _loginRecoveryTimer?.cancel();
-      _loginRecoveryTimer = Timer(const Duration(seconds: 6), () {
+      _loginRecoveryTimer = Timer(const Duration(seconds: 2), () {
         if (!mounted || !_isLoading) return;
         final route = ModalRoute.of(context);
         if (route != null && !route.isCurrent) return;
