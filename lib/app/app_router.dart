@@ -1204,22 +1204,63 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
     errorPageBuilder: (context, state) => MaterialPage(
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Ошибка')),
-        body: AppEmptyState(
-          icon: Icons.error_outline_rounded,
-          title: 'Не удалось открыть страницу',
-          subtitle:
-              kDebugMode ? '${state.error}' : 'Попробуйте вернуться на главную',
-          action: FilledButton(
-            onPressed: () => context.go(FeedRoute.path),
-            child: const Text('На главную'),
-          ),
-        ),
-      ),
+      child: _RouterRecoveryScreen(error: state.error),
     ),
   );
 });
+
+class _RouterRecoveryScreen extends StatefulWidget {
+  const _RouterRecoveryScreen({this.error});
+
+  final Object? error;
+
+  @override
+  State<_RouterRecoveryScreen> createState() => _RouterRecoveryScreenState();
+}
+
+class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
+  bool _redirected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted || _redirected) return;
+      _redirected = true;
+      final homePath =
+          AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+      final user = AuthService.instance.currentUser;
+      context.go(user == null ? LoginRoute.path : homePath);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F1319),
+      appBar: AppBar(
+        title: const Text('Восстановление'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: AppEmptyState(
+        icon: Icons.sync_problem_rounded,
+        title: 'Восстанавливаем экран',
+        subtitle: kDebugMode
+            ? '${widget.error}'
+            : 'Обнаружена ошибка маршрута. Выполняем автоматический возврат.',
+        action: FilledButton(
+          onPressed: () {
+            final homePath =
+                AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+            final user = AuthService.instance.currentUser;
+            context.go(user == null ? LoginRoute.path : homePath);
+          },
+          child: const Text('Продолжить'),
+        ),
+      ),
+    );
+  }
+}
 
 class HistoryRoute {
   static const path = '/history';

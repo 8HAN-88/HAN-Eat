@@ -58,6 +58,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Let GoRouter redirect decide the destination to avoid navigation races
       // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
+      // Recovery: if redirect chain gets stuck on some devices/webviews,
+      // force a safe destination after a short grace period.
+      Future<void>.delayed(const Duration(seconds: 3), () {
+        if (!mounted || !_isLoading) return;
+        final userNow = AuthService.instance.currentUser;
+        if (userNow == null) return;
+        if (!userNow.emailVerified) {
+          context.go(VerifyEmailRoute.withEmail(userNow.email));
+          return;
+        }
+        if (userNow.legalConsentRequired) {
+          context.go(LegalConsentRoute.path);
+          return;
+        }
+        context.go(FeedRoute.path);
+      });
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
