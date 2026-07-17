@@ -32,6 +32,16 @@ if grep -q "^APP_ENV=" "$ENV" 2>/dev/null; then
 else
   echo "APP_ENV=production" >> "$ENV"
 fi
+if grep -q "^DEBUG=" "$ENV" 2>/dev/null; then
+  sed -i "s|^DEBUG=.*|DEBUG=false|" "$ENV"
+else
+  echo "DEBUG=false" >> "$ENV"
+fi
+if grep -q "^API_PUBLIC_BASE_URL=" "$ENV" 2>/dev/null; then
+  sed -i "s|^API_PUBLIC_BASE_URL=.*|API_PUBLIC_BASE_URL=https://api.haneat.app|" "$ENV"
+else
+  echo "API_PUBLIC_BASE_URL=https://api.haneat.app" >> "$ENV"
+fi
 PROD_ORIGINS='https://haneat.app,https://www.haneat.app,https://kitchen.haneat.app,http://localhost:3000,http://localhost:8080'
 if grep -q "^ALLOWED_ORIGINS=" "$ENV" 2>/dev/null; then
   sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${PROD_ORIGINS}|" "$ENV"

@@ -78,6 +78,27 @@ if grep -q "^MAX_VIDEO_SIZE_MB=" "$ENV" 2>/dev/null; then
 else
   echo "MAX_VIDEO_SIZE_MB=0" >> "$ENV"
 fi
+if grep -q "^APP_ENV=" "$ENV" 2>/dev/null; then
+  sed -i "s|^APP_ENV=.*|APP_ENV=production|" "$ENV"
+else
+  echo "APP_ENV=production" >> "$ENV"
+fi
+if grep -q "^DEBUG=" "$ENV" 2>/dev/null; then
+  sed -i "s|^DEBUG=.*|DEBUG=false|" "$ENV"
+else
+  echo "DEBUG=false" >> "$ENV"
+fi
+if grep -q "^API_PUBLIC_BASE_URL=" "$ENV" 2>/dev/null; then
+  sed -i "s|^API_PUBLIC_BASE_URL=.*|API_PUBLIC_BASE_URL=https://api.haneat.app|" "$ENV"
+else
+  echo "API_PUBLIC_BASE_URL=https://api.haneat.app" >> "$ENV"
+fi
+PROD_ORIGINS='https://haneat.app,https://www.haneat.app,https://kitchen.haneat.app,http://localhost:3000,http://localhost:8080'
+if grep -q "^ALLOWED_ORIGINS=" "$ENV" 2>/dev/null; then
+  sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${PROD_ORIGINS}|" "$ENV"
+else
+  echo "ALLOWED_ORIGINS=${PROD_ORIGINS}" >> "$ENV"
+fi
 if [[ -f /etc/nginx/sites-available/haneat-api ]]; then
   sed -i 's/client_max_body_size .*/client_max_body_size 1024M;/' /etc/nginx/sites-available/haneat-api
   if [[ -f "$APP_DIR/scripts/patch_nginx_realtime_sse.sh" ]]; then
