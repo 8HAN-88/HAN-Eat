@@ -55,22 +55,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (!mounted) return;
-
-      final user = AuthService.instance.currentUser;
-      final target = () {
-        if (user != null && !user.emailVerified) {
-          return VerifyEmailRoute.withEmail(user.email);
-        }
-        if (user != null && user.legalConsentRequired) {
-          return LegalConsentRoute.path;
-        }
-        return FeedRoute.path;
-      }();
-
-      // Notify after we know the destination so redirect/session remount
-      // cannot leave the user on an empty shell.
+      // Let GoRouter redirect decide the destination to avoid navigation races
+      // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
-      context.go(target);
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
