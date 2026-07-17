@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../core/app/app_variant.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
@@ -78,7 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           context.go(LegalConsentRoute.path);
           return;
         }
-        context.go(FeedRoute.path);
+        final homePath =
+            AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+        context.go(homePath);
       });
     } on AuthException catch (e) {
       if (mounted) {
