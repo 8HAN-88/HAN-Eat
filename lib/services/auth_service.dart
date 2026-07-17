@@ -544,7 +544,7 @@ class AuthService {
     }
   }
   
-  static const Duration _authRequestTimeout = Duration(seconds: 60);
+  static const Duration _authRequestTimeout = Duration(seconds: 20);
 
   static AuthException _loginTimeoutException() => AuthException(
         'Сервер ${ServerConfig.apiBaseUrl} не ответил вовремя. '
@@ -639,9 +639,11 @@ class AuthService {
 
       await _saveTokens(authResponse.token, authResponse.refreshToken);
       await _saveUser(authResponse.user);
+      // Defer session notify to the login screen so GoRouter does not yank
+      // /login → /feed mid-request (long black boot, then blank white shell).
       instance.setUserAfterAuth(
         authResponse.user,
-        notifySessionListeners: true,
+        notifySessionListeners: false,
       );
 
       return authResponse;
@@ -650,6 +652,13 @@ class AuthService {
       response,
       'Ошибка входа: ${response.statusCode}',
     );
+  }
+
+  /// Call after a successful email/password login once navigation is ready.
+  static void notifySessionReadyAfterLogin() {
+    final user = instance._cachedUser;
+    if (user == null) return;
+    _dispatchSessionChanged(user);
   }
   
   static Future<MessageResponse> forgotPassword({required String email}) async {

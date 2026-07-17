@@ -47,15 +47,48 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_checked || !_showOnboarding) {
+    // Avoid a blank white flash while SharedPreferences resolves after login.
+    if (!_checked) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          widget.child,
+          const ColoredBox(
+            color: Color(0xFF0F1319),
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFF2AABEE),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    if (!_showOnboarding) {
       return widget.child;
     }
     return Stack(
       children: [
         widget.child,
         Material(
-          color: Theme.of(context).colorScheme.surface,
-          child: _OnboardingContent(onComplete: _complete),
+          color: const Color(0xFF0F1319),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              brightness: Brightness.dark,
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                    brightness: Brightness.dark,
+                    surface: const Color(0xFF0F1319),
+                    onSurface: const Color(0xFFF7F8FA),
+                    onSurfaceVariant: const Color(0xFFA8B0BB),
+                  ),
+            ),
+            child: _OnboardingContent(onComplete: _complete),
+          ),
         ),
       ],
     );

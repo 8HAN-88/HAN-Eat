@@ -70,10 +70,12 @@ class AccountSessionService {
         if (kDebugMode) debugPrint('AccountSession: meal plan clear: $e');
       }
       AiMealPlanService.instance.clear();
+      // Remount shell only on logout / account switch. Fresh login must not
+      // tear down the just-built home tree (black → white blank on web).
+      epoch.value++;
     }
 
     AuthService.profileVersion.value++;
-    epoch.value++;
 
     for (final listener in List<void Function(User?)>.from(_listeners)) {
       try {

@@ -54,12 +54,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       );
 
-      if (mounted) {
-        context.go(FeedRoute.path);
-      }
+      if (!mounted) return;
+
+      final user = AuthService.instance.currentUser;
+      final target = () {
+        if (user != null && !user.emailVerified) {
+          return VerifyEmailRoute.withEmail(user.email);
+        }
+        if (user != null && user.legalConsentRequired) {
+          return LegalConsentRoute.path;
+        }
+        return FeedRoute.path;
+      }();
+
+      // Notify after we know the destination so redirect/session remount
+      // cannot leave the user on an empty shell.
+      AuthService.notifySessionReadyAfterLogin();
+      context.go(target);
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
+          AuthService.notifySessionReadyAfterLogin();
           context.go(
             VerifyEmailRoute.withEmail(_emailController.text.trim()),
           );
@@ -81,7 +96,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) {
+      // Keep the dark "Входим…" overlay until route changes on success.
+      if (mounted && AuthService.instance.currentUser == null) {
         setState(() => _isLoading = false);
       }
     }
@@ -103,23 +119,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           surfaceTintColor: Colors.transparent,
           title: const Text('Вход'),
         ),
-        body: AppGradientBackground(
-          child: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 56),
-                    const Center(
-                      child: AppBrandLogo(
-                        layout: AppBrandLogoLayout.horizontal,
-                        width: 200,
-                      ),
-                    ),
-                    const SizedBox(height: 40),
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            AppGradientBackground(
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 56),
+                        const Center(
+                          child: AppBrandLogo(
+                            layout: AppBrandLogoLayout.horizontal,
+                            width: 200,
+                          ),
+                        ),
+                        const SizedBox(height: 40),
                   // Email поле
                   TextFormField(
                     controller: _emailController,
@@ -210,15 +229,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  const PwaInstallBanner(),
-                ],
+                        const SizedBox(height: 8),
+                        const PwaInstallBanner(),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            if (_isLoading)
+              const ColoredBox(
+                color: Color(0xE60F1319),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 34,
+                        height: 34,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.8,
+                          color: Color(0xFF2AABEE),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Входим…',
+                        style: TextStyle(
+                          color: Color(0xFFF7F8FA),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
-    ),
     );
   }
 }
