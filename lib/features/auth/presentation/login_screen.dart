@@ -69,10 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
 
-      // Normal in-app navigation. Full-page hard reloads after login were the
-      // root cause of Safari white screens + "server stopped responding".
-      AuthService.notifySessionReadyAfterLogin();
-
+      // CRITICAL: navigate FIRST, then notify session. Bumping sessionRevision
+      // before context.go races GoRouter's /login→/feed redirect with an
+      // explicit go into StatefulShellRoute and leaves an empty shell that
+      // CanvasKit paints as a white screen (same pattern as sign-out helper).
       final String destination;
       if (!auth.user.emailVerified) {
         destination = VerifyEmailRoute.withEmail(_emailController.text.trim());
@@ -83,6 +83,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
       }
       context.go(destination);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AuthService.notifySessionReadyAfterLogin();
+      });
 
       _postLoginFallbackTimer?.cancel();
       _postLoginFallbackTimer = Timer(const Duration(seconds: 3), () {
@@ -91,17 +94,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (userNow == null) return;
         final route = ModalRoute.of(context);
         if (route != null && !route.isCurrent) return;
-        // Soft fallback only — never hard-reload the whole document.
         context.go(destination);
       });
       setState(() => _isLoading = false);
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
-          AuthService.notifySessionReadyAfterLogin();
           context.go(
             VerifyEmailRoute.withEmail(_emailController.text.trim()),
           );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            AuthService.notifySessionReadyAfterLogin();
+          });
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(

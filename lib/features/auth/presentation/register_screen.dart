@@ -86,6 +86,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         } else {
           context.go(FeedRoute.path);
         }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AuthService.notifySessionReadyAfterLogin();
+        });
       }
     } on AuthException catch (e) {
       if (mounted) {

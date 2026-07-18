@@ -521,9 +521,11 @@ class AuthService {
         // Сохраняем токены и пользователя
         await _saveTokens(authResponse.token, authResponse.refreshToken);
         await _saveUser(authResponse.user);
+        // Same as login: defer session notify until the register screen has
+        // navigated, otherwise GoRouter refresh blanks the shell on web.
         instance.setUserAfterAuth(
           authResponse.user,
-          notifySessionListeners: true,
+          notifySessionListeners: false,
         );
 
         return authResponse;
@@ -654,7 +656,10 @@ class AuthService {
     );
   }
 
-  /// Call after a successful email/password login once navigation is ready.
+  /// Call after a successful email/password login once navigation has already
+  /// moved off `/login`. Must NOT run before `context.go` — bumping
+  /// [sessionRevision] while still on `/login` races GoRouter's redirect into
+  /// an empty StatefulShellRoute (white CanvasKit frame on Safari).
   static void notifySessionReadyAfterLogin() {
     final user = instance._cachedUser;
     if (user == null) return;

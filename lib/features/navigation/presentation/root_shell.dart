@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -594,22 +595,38 @@ class _ShellNavGlassPill extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : Colors.white.withValues(alpha: 0.55),
-                width: 0.8,
+        // BackdropFilter on Safari/WebKit can composite to a blank white layer
+        // right after shell mount (post-login). Skip blur on web.
+        child: kIsWeb
+            ? DecoratedBox(
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(radius),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.10)
+                        : Colors.white.withValues(alpha: 0.55),
+                    width: 0.8,
+                  ),
+                ),
+                child: child,
+              )
+            : BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: fill,
+                    borderRadius: BorderRadius.circular(radius),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.white.withValues(alpha: 0.55),
+                      width: 0.8,
+                    ),
+                  ),
+                  child: child,
+                ),
               ),
-            ),
-            child: child,
-          ),
-        ),
       ),
     );
   }

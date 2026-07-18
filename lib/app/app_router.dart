@@ -181,7 +181,14 @@ Widget _safeShellIndexedStack(
   StatefulNavigationShell shell,
   List<Widget> children,
 ) {
-  if (children.isEmpty) return const SizedBox.shrink();
+  // Empty children during a GoRouter shell remount must NOT be SizedBox.shrink:
+  // on Flutter web/CanvasKit that paints as a blank white frame.
+  if (children.isEmpty) {
+    return const ColoredBox(
+      color: Color(0xFF0F1319),
+      child: SizedBox.expand(),
+    );
+  }
   final last = children.length - 1;
   final raw = shell.currentIndex;
   final idx = raw < 0 || raw > last ? 0 : raw;
