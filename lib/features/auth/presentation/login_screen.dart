@@ -77,8 +77,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         } else if (auth.user.legalConsentRequired) {
           destination = LegalConsentRoute.path;
         } else {
-          destination =
-              AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+          destination = AppVariant.current.isKitchen
+              ? MenuRoute.path
+              : (kIsWeb ? ChatsRoute.path : FeedRoute.path);
         }
         // On web, complete login via a full-page route load using persisted
         // auth state. This avoids brittle in-memory transition races that can
@@ -98,8 +99,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (userNow == null) return;
         final route = ModalRoute.of(context);
         if (route != null && !route.isCurrent) return;
-        final homePath =
-            AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+        final homePath = AppVariant.current.isKitchen
+            ? MenuRoute.path
+            : (kIsWeb ? ChatsRoute.path : FeedRoute.path);
         // Web-only hard redirect if router got stuck on /login in some browsers.
         final redirected = hardNavigateToRoute(homePath);
         if (!redirected && mounted) {

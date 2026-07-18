@@ -199,6 +199,8 @@ Widget _safeShellIndexedStack(
 final appRouterProvider = Provider<GoRouter>((ref) {
   final homePath =
       AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+  final stableHomePath =
+      kIsWeb && AppVariant.current.isSocial ? ChatsRoute.path : homePath;
   final initialLoc = () {
     if (initialDeepLink != null) {
       final path = parseDeepLinkToGoPath(initialDeepLink!);
@@ -211,7 +213,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Сессия уже восстановлена в StartupShell — не мигаем /boot.
       return AuthService.instance.currentUser == null
           ? LoginRoute.path
-          : homePath;
+          : stableHomePath;
     }
     return BootScreen.path;
   }();
@@ -233,7 +235,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (AuthService.instance.currentUser == null) {
             return LoginRoute.path;
           }
-          return homePath;
+          return stableHomePath;
         }
         if (loc == ChannelsListRoute.path) {
           return ChatsRoute.path;
@@ -278,7 +280,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (isAuth &&
             user.emailVerified &&
             (loc == LoginRoute.path || loc == RegisterRoute.path)) {
-          return homePath;
+          return stableHomePath;
         }
         if (isAuth) return null;
         final locBase = loc.split('?').first;
@@ -300,7 +302,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         debugPrint('router.redirect recover: $e\n$st');
         return AuthService.instance.currentUser == null
             ? LoginRoute.path
-            : homePath;
+            : stableHomePath;
       }
     },
     routes: [
@@ -1229,24 +1231,25 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   bool _redirectedSecondPass = false;
   bool _forcedLogout = false;
 
+  String get _stableHomePath =>
+      kIsWeb && AppVariant.current.isSocial
+          ? ChatsRoute.path
+          : (AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path);
+
   @override
   void initState() {
     super.initState();
     Future<void>.delayed(const Duration(milliseconds: 900), () {
       if (!mounted || _redirected) return;
       _redirected = true;
-      final homePath =
-          AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
       final user = AuthService.instance.currentUser;
-      context.go(user == null ? LoginRoute.path : homePath);
+      context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
     Future<void>.delayed(const Duration(seconds: 4), () {
       if (!mounted || !_redirected || _redirectedSecondPass) return;
       _redirectedSecondPass = true;
-      final homePath =
-          AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
       final user = AuthService.instance.currentUser;
-      context.go(user == null ? LoginRoute.path : homePath);
+      context.go(user == null ? LoginRoute.path : _stableHomePath);
     });
     Future<void>.delayed(const Duration(seconds: 12), () async {
       if (!mounted || _forcedLogout) return;
@@ -1275,10 +1278,8 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
             : 'Обнаружена ошибка маршрута. Выполняем автоматический возврат.',
         action: FilledButton(
           onPressed: () {
-            final homePath =
-                AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
             final user = AuthService.instance.currentUser;
-            context.go(user == null ? LoginRoute.path : homePath);
+            context.go(user == null ? LoginRoute.path : _stableHomePath);
           },
           child: const Text('Продолжить'),
         ),
