@@ -112,6 +112,32 @@ def patch_server_block(block_text: str) -> str:
     for pattern in legacy_patterns:
         patched = re.sub(pattern, "\n", patched, flags=re.DOTALL)
 
+    gzip_block = """
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_proxied any;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/manifest+json
+        application/wasm
+        image/svg+xml;
+"""
+    patched = re.sub(
+        r"\n\s*gzip on;\n\s*gzip_vary on;\n\s*gzip_min_length 1024;\n\s*gzip_comp_level 6;\n\s*gzip_proxied any;\n\s*gzip_types.*?;\n",
+        "\n",
+        patched,
+        flags=re.DOTALL,
+    )
+    root_marker = "    client_max_body_size 64M;\n"
+    if root_marker in patched:
+        patched = patched.replace(root_marker, root_marker + gzip_block, 1)
+
     static_marker = "    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|wasm)$ {"
     app_marker = "    location / {"
     if static_marker in patched:

@@ -28,6 +28,20 @@ server {
     index index.html;
 
     client_max_body_size 64M;
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    gzip_proxied any;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/manifest+json
+        application/wasm
+        image/svg+xml;
 
     location = /.well-known/assetlinks.json {
         default_type application/json;

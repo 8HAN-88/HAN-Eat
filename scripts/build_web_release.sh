@@ -18,10 +18,10 @@ fi
 HANEAT_API_BASE="$API_BASE" ./scripts/with_dart_defines.sh \
   flutter build web \
   --release \
+  --wasm \
   --base-href / \
   --pwa-strategy none \
   --no-web-resources-cdn \
-  --no-wasm-dry-run \
   --dart-define=APP_VARIANT="$APP_VARIANT" \
   --dart-define=WEB_BUILD_ID="$BUILD_ID"
 
