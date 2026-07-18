@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
+import '../../../../core/app/app_variant.dart';
+import '../../../../core/web/hard_web_redirect.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../services/push_notification_service.dart';
@@ -29,9 +31,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  Timer? _postLoginFallbackTimer;
 
   @override
   void dispose() {
+    _postLoginFallbackTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -58,6 +62,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Let GoRouter redirect decide the destination to avoid navigation races
       // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
+      _postLoginFallbackTimer?.cancel();
+      _postLoginFallbackTimer = Timer(const Duration(seconds: 4), () {
+        if (!mounted) return;
+        final userNow = AuthService.instance.currentUser;
+        if (userNow == null) return;
+        final route = ModalRoute.of(context);
+        if (route != null && !route.isCurrent) return;
+        final homePath =
+            AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+        // Web-only hard redirect if router got stuck on /login in some browsers.
+        final redirected = hardNavigateToRoute(homePath);
+        if (!redirected && mounted) {
+          context.go(homePath);
+        }
+      });
       // Do not force extra navigation from login screen: redirects in GoRouter
       // are the single source of truth and race-free.
       setState(() => _isLoading = false);
