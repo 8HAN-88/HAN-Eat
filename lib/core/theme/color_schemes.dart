@@ -6,15 +6,16 @@ class AppColors {
   static const primaryDark = Color(0xFFE85A2B);
   static const primaryLight = Color(0xFFFF9D7A);
   static const foodOrange = primary;
-  static const telegramBlue = Color(0xFF2AABEE);
-  static const telegramBlueDark = Color(0xFF1D8ECF);
+  // Keep the historical name, but map it to brand orange — not Telegram blue.
+  static const telegramBlue = primary;
+  static const telegramBlueDark = primaryDark;
   static const telegramOutgoingLight = Color(0xFFEFFEDD);
-  static const telegramOutgoingDark = Color(0xFF2B5278);
+  static const telegramOutgoingDark = Color(0xFF6A3423);
   static const telegramChatBgLight = Color(0xFFE7EBF0);
   static const telegramChatBgDark = Color(0xFF0E1621);
 
-  static const secondary = telegramBlue;
-  static const secondaryDark = telegramBlueDark;
+  static const secondary = primary;
+  static const secondaryDark = primaryDark;
 
   /// Telegram light lists are mostly white, with pale gray behind grouped areas.
   static const backgroundLight = Color(0xFFF4F4F5);
@@ -41,19 +42,19 @@ class AppColors {
 
 ColorScheme buildLightColorScheme() {
   final base = ColorScheme.fromSeed(
-    seedColor: AppColors.telegramBlue,
+    seedColor: AppColors.primary,
     brightness: Brightness.light,
   );
 
   return base.copyWith(
-    primary: AppColors.telegramBlue,
+    primary: AppColors.primary,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFE8F5FE),
-    onPrimaryContainer: const Color(0xFF0B4D70),
-    secondary: AppColors.telegramBlue,
+    primaryContainer: const Color(0xFFFFEEE7),
+    onPrimaryContainer: const Color(0xFF6A321E),
+    secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFFDFF1FC),
-    onSecondaryContainer: const Color(0xFF0B4D70),
+    secondaryContainer: const Color(0xFFFFEEE7),
+    onSecondaryContainer: const Color(0xFF6A321E),
     tertiary: const Color(0xFF66BB6A),
     onTertiary: Colors.white,
     tertiaryContainer: const Color(0xFFE8F5E9),
@@ -73,7 +74,7 @@ ColorScheme buildLightColorScheme() {
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFF2A2D35),
     onInverseSurface: const Color(0xFFF1F3F6),
-    inversePrimary: AppColors.telegramBlueDark,
+    inversePrimary: AppColors.primaryLight,
     outline: const Color(0xFFDADCE0),
     outlineVariant: const Color(0xFFE6E7EA),
     shadow: Colors.black.withValues(alpha: 0.1),
@@ -83,19 +84,19 @@ ColorScheme buildLightColorScheme() {
 
 ColorScheme buildDarkColorScheme() {
   final base = ColorScheme.fromSeed(
-    seedColor: AppColors.telegramBlue,
+    seedColor: AppColors.primary,
     brightness: Brightness.dark,
   );
 
   return base.copyWith(
-    primary: AppColors.telegramBlue,
+    primary: AppColors.primary,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFF1C3F56),
-    onPrimaryContainer: const Color(0xFFDDF2FF),
-    secondary: AppColors.telegramBlue,
+    primaryContainer: const Color(0xFF5A2C20),
+    onPrimaryContainer: const Color(0xFFFFE8E0),
+    secondary: AppColors.foodOrange,
     onSecondary: Colors.white,
-    secondaryContainer: const Color(0xFF1A3A4F),
-    onSecondaryContainer: const Color(0xFFDDF2FF),
+    secondaryContainer: const Color(0xFF5A2C20),
+    onSecondaryContainer: const Color(0xFFFFE8E0),
     tertiary: const Color(0xFF81C784),
     onTertiary: Colors.white,
     tertiaryContainer: const Color(0xFF3A5A3F),
@@ -115,7 +116,7 @@ ColorScheme buildDarkColorScheme() {
     surfaceTint: Colors.transparent,
     inverseSurface: const Color(0xFFE8EAEF),
     onInverseSurface: const Color(0xFF1A1D22),
-    inversePrimary: AppColors.telegramBlueDark,
+    inversePrimary: AppColors.primaryDark,
     outline: const Color(0xFF334050),
     outlineVariant: const Color(0xFF1C2633),
     shadow: Colors.black,

@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
 
 import '../../../../core/haptics/app_haptics.dart';
+import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
@@ -244,8 +245,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
 
   static const _sheetBgDark = Color(0xFF1C1C1E);
   static const _groupBgDark = Color(0xFF2C2C2E);
-  static const _telegramBlue = Color(0xFF2AABEE);
-  static const _brandAccent = _telegramBlue;
+  static const _telegramBlue = AppColors.primary;
+  static const _brandAccent = AppColors.primary;
 
   @override
   void initState() {

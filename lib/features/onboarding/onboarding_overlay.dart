@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/color_schemes.dart';
+
 
 const _keyOnboardingDone = 'onboarding_done';
 
@@ -61,7 +63,7 @@ class _OnboardingOverlayState extends State<OnboardingOverlay> {
                 height: 28,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Color(0xFF2AABEE),
+                  color: AppColors.primary,
                 ),
               ),
             ),

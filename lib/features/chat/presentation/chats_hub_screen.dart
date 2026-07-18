@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_bootstrap_state.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../../../core/theme/color_schemes.dart';
 import '../../../core/web/boot_ready_signal.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -126,7 +127,7 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
       return const Scaffold(
         backgroundColor: Color(0xFF0F1319),
         body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF2AABEE)),
+          child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
     }

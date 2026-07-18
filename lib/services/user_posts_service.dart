@@ -2,13 +2,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/network/haneat_http_client.dart';
 import '../models/post_model.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
 class UserPostsService {
   static String get baseUrl => ServerConfig.apiBaseUrl;
-  
+
   /// Получить посты пользователя
   static Future<UserPostsResponse> getUserPosts({
     required int userId,
@@ -24,55 +25,55 @@ class UserPostsService {
       'limit': limit.toString(),
       'offset': offset.toString(),
     };
-    
+
     if (postType != null) {
       queryParams['post_type'] = postType;
     }
-    
+
     final uri = Uri.parse('$baseUrl/users/$userId/posts').replace(
       queryParameters: queryParams,
     );
-    
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-    
-    if (token != null) {
-      headers['Authorization'] = 'Bearer $token';
+
+    Future<http.Response> getOnce(String? bearer) {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (bearer != null) 'Authorization': 'Bearer $bearer',
+      };
+      return HanEatHttpClient.withShared(
+        (client) => client.get(uri, headers: headers).timeout(
+              const Duration(seconds: 25),
+              onTimeout: () => throw TimeoutException('user posts'),
+            ),
+      );
     }
 
-    var response = await http.get(uri, headers: headers).timeout(
-      const Duration(seconds: 15),
-      onTimeout: () => throw TimeoutException('user posts'),
-    );
+    var response = await getOnce(token);
 
     if (response.statusCode == 401) {
       token = await AuthService.refreshToken();
-      headers['Authorization'] = 'Bearer $token';
-      response = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw TimeoutException('user posts'),
-      );
+      response = await getOnce(token);
     }
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return UserPostsResponse.fromJson(data);
-    } else {
-      throw Exception('Failed to load user posts: ${response.statusCode}');
     }
+
+    throw Exception(
+      'Не удалось загрузить посты профиля (${response.statusCode})',
+    );
   }
 }
 
 class UserPostsResponse {
   final List<PostModel> posts;
   final int total;
-  
+
   UserPostsResponse({
     required this.posts,
     required this.total,
   });
-  
+
   factory UserPostsResponse.fromJson(Map<String, dynamic> json) {
     return UserPostsResponse(
       posts: (json['posts'] as List<dynamic>)
@@ -82,4 +83,3 @@ class UserPostsResponse {
     );
   }
 }
-

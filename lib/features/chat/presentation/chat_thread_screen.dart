@@ -334,7 +334,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _uiAnimDuration = Duration(milliseconds: 160);
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;
-  static const _telegramAccent = Color(0xFF2AABEE);
+  static const _telegramAccent = AppColors.primary;
   static const _uploadAccent = AppColors.primary;
 
   @override

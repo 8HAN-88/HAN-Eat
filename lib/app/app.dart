@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/color_schemes.dart';
 import '../core/app/app_variant.dart';
 import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
@@ -126,11 +127,11 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                       Icon(
                         Icons.restaurant_rounded,
                         size: 48,
-                        color: const Color(0xFF2AABEE),
+                        color: AppColors.primary,
                       ),
                       const SizedBox(height: 16),
                       const CircularProgressIndicator(
-                        color: Color(0xFF2AABEE),
+                        color: AppColors.primary,
                       ),
                       const SizedBox(height: 16),
                       Text(

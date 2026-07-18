@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'app_bootstrap_state.dart';
 import '../core/app/app_variant.dart';
+import '../core/theme/color_schemes.dart';
 import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_brand_logo.dart';
@@ -73,7 +74,7 @@ class _WebSessionLandingScreenState extends State<WebSessionLandingScreen> {
                 ),
                 SizedBox(height: 28),
                 CircularProgressIndicator(
-                  color: Color(0xFF2AABEE),
+                  color: AppColors.primary,
                   strokeWidth: 2.5,
                 ),
               ],

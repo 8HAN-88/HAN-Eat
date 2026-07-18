@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../app/app_bootstrap_state.dart';
 import '../../../../core/app/app_variant.dart';
+import '../../../../core/theme/color_schemes.dart';
 import '../../../../core/web/boot_ready_signal.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
@@ -272,7 +273,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         height: 34,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.8,
-                          color: Color(0xFF2AABEE),
+                          color: AppColors.primary,
                         ),
                       ),
                       SizedBox(height: 16),
