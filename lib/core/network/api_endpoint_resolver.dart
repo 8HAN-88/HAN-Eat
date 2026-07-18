@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../config/app_build_config.dart';
-import 'haneat_http_client.dart';
 
 /// Выбор API-хоста: домен или IP, если DNS домена недоступен.
 class ApiEndpointResolver {
@@ -94,8 +94,6 @@ class ApiEndpointResolver {
       usingIpFallback = false;
       await resolve();
       if (previous != _resolvedRoot) {
-        // ignore: invalid_use_of_visible_for_testing_member
-        HanEatHttpClient.resetForTest();
         debugPrint('📡 API: endpoint switched → $resolvedRoot');
       }
       return;
@@ -107,8 +105,6 @@ class ApiEndpointResolver {
     usingIpFallback = false;
     await resolve();
     if (previous != _resolvedRoot) {
-      // ignore: invalid_use_of_visible_for_testing_member
-      HanEatHttpClient.resetForTest();
       debugPrint('📡 API: endpoint switched → $resolvedRoot');
     }
   }
@@ -157,9 +153,11 @@ class ApiEndpointResolver {
   static Future<bool> _probeHealthJson(String root) async {
     try {
       final uri = Uri.parse('$root/health');
-      final response = await HanEatHttpClient.withShared(
-        (client) => client.get(uri).timeout(const Duration(seconds: 5)),
-      );
+      final client = http.Client();
+      final response = await client
+          .get(uri)
+          .timeout(const Duration(seconds: 5))
+          .whenComplete(client.close);
       return response.statusCode == 200 && _isHealthJson(response.body);
     } catch (_) {
       return false;

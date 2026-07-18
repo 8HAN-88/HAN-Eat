@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'api_endpoint_resolver.dart';
 import 'haneat_http_client_io.dart'
     if (dart.library.html) 'haneat_http_client_web.dart' as platform;
 
@@ -37,18 +38,17 @@ class HanEatHttpClient {
   static Future<T> withShared<T>(
     Future<T> Function(http.Client client) action,
   ) async {
-    for (var attempt = 0; attempt < 3; attempt++) {
+    for (var attempt = 0; attempt < 4; attempt++) {
       try {
         return await action(shared);
       } catch (error) {
-        final canRetry = attempt < 2 && _isRetryableNetworkError(error);
+        final canRetry = attempt < 3 && _isRetryableNetworkError(error);
         if (canRetry) {
+          await ApiEndpointResolver.revalidateIfNeeded();
           recreateShared();
-          if (attempt > 0) {
-            await Future<void>.delayed(
-              Duration(milliseconds: 150 * (attempt + 1)),
-            );
-          }
+          await Future<void>.delayed(
+            Duration(milliseconds: 250 * (attempt + 1)),
+          );
           continue;
         }
         rethrow;

@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/network/api_rate_limit_backoff.dart';
 import 'auth_service.dart';
@@ -92,6 +93,7 @@ class ChatStreamService {
     _closeStreamClient();
 
     try {
+      await ApiEndpointResolver.revalidateIfNeeded();
       final token = await AuthService.getAccessTokenForApi();
       if (token == null || _disposed) return;
 
@@ -113,6 +115,7 @@ class ChatStreamService {
           );
       if (response.statusCode == 401) {
         await AuthService.refreshToken();
+        await ApiEndpointResolver.revalidateIfNeeded();
         if (!_disposed) _scheduleReconnect();
         return;
       }
@@ -126,6 +129,7 @@ class ChatStreamService {
         return;
       }
       if (response.statusCode != 200) {
+        await ApiEndpointResolver.revalidateIfNeeded();
         if (!_disposed) _scheduleReconnect();
         return;
       }
@@ -147,6 +151,7 @@ class ChatStreamService {
       );
     } catch (e) {
       debugPrint('ChatStreamService: $e');
+      await ApiEndpointResolver.revalidateIfNeeded();
       _handleDisconnect();
     } finally {
       _connecting = false;

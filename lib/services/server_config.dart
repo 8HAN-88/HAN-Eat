@@ -42,7 +42,13 @@ class ServerConfig {
           if (page.host == 'haneat.app' ||
               page.host == 'www.haneat.app' ||
               page.host == 'kitchen.haneat.app') {
-            return '${page.scheme}://${page.host}';
+            try {
+              final resolvedHost = Uri.parse(root).host.toLowerCase();
+              if (resolvedHost == page.host.toLowerCase()) {
+                return '${page.scheme}://${page.host}';
+              }
+            } catch (_) {}
+            return root;
           }
         }
       } catch (_) {}
