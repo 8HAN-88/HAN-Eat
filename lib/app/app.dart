@@ -7,9 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_router.dart';
+import 'app_bootstrap_state.dart';
 import 'theme_mode_controller.dart';
 import '../core/theme/app_theme.dart';
 import '../core/app/app_variant.dart';
+import '../core/web/boot_ready_signal.dart';
 import '../services/api_reachability_service.dart';
 import '../services/account_session_service.dart';
 import '../services/auth_service.dart';
@@ -141,6 +143,12 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                   ),
                 ),
               );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!AppBootstrapState.primaryUiReady.value) {
+              AppBootstrapState.primaryUiReady.value = true;
+            }
+            notifyPrimaryUiReady();
+          });
           return MediaQuery(
             data: media.copyWith(
               textScaler: media.textScaler.clamp(
