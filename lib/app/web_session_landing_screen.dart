@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'app_bootstrap_state.dart';
 import '../core/app/app_variant.dart';
+import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
 import '../widgets/app_brand_logo.dart';
 import 'app_router.dart';
@@ -22,6 +24,8 @@ class _WebSessionLandingScreenState extends State<WebSessionLandingScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppBootstrapState.primaryUiReady.value = true;
+      notifyPrimaryUiReady();
       unawaited(_continueToTarget());
     });
   }

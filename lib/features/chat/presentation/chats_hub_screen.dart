@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/app_bootstrap_state.dart';
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../../../core/web/boot_ready_signal.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -43,6 +45,10 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
     );
     _lastTabIndex = _tabs.index;
     _tabs.addListener(_onTabChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppBootstrapState.primaryUiReady.value = true;
+      notifyPrimaryUiReady();
+    });
   }
 
   void _onTabChanged() {
