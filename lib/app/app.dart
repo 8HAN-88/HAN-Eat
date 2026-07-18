@@ -93,12 +93,15 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
     try {
       final router = ref.watch(appRouterProvider);
       final themeMode = ref.watch(themeModeProvider);
+      // On web always prefer dark surfaces so system light mode cannot flash a
+      // white Material canvas before prefs/theme resolve.
+      final effectiveThemeMode = kIsWeb ? ThemeMode.dark : themeMode;
 
       return MaterialApp.router(
         title: AppVariant.current.appTitle,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
-        themeMode: themeMode,
+        themeMode: effectiveThemeMode,
         routerConfig: router,
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const [

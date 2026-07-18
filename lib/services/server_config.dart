@@ -37,18 +37,13 @@ class ServerConfig {
             final scheme = page.scheme == 'https' ? 'https' : 'http';
             return Uri(scheme: scheme, host: page.host, port: port).toString();
           }
-          // Production web: always same-origin so nginx /api proxy is used and
-          // a broken api.haneat.app CORS config cannot blank the app.
+          // Production web MUST stay same-origin. Falling back to api.haneat.app
+          // forces CORS preflights; on Safari that stalls boot/login into a white
+          // screen even when the API itself is healthy.
           if (page.host == 'haneat.app' ||
               page.host == 'www.haneat.app' ||
               page.host == 'kitchen.haneat.app') {
-            try {
-              final resolvedHost = Uri.parse(root).host.toLowerCase();
-              if (resolvedHost == page.host.toLowerCase()) {
-                return '${page.scheme}://${page.host}';
-              }
-            } catch (_) {}
-            return root;
+            return '${page.scheme}://${page.host}';
           }
         }
       } catch (_) {}

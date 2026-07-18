@@ -136,17 +136,16 @@ class ApiEndpointResolver {
       return;
     }
 
-    // Prefer same-origin immediately so a broken api.haneat.app CORS/env
-    // cannot leave the PWA on a blank/failed boot path.
+    // Always pin production web to same-origin. Never fall back to
+    // api.haneat.app here: CORS preflight stalls on Safari look like a white
+    // screen / "server stopped responding", even when /api is healthy via nginx.
     _resolvedRoot = sameOrigin;
-    if (await _probeHealthJson(sameOrigin)) {
-      debugPrint('📡 Web API: same-origin $sameOrigin');
-      return;
-    }
-
-    _resolvedRoot = 'https://$productionHost';
+    usingIpFallback = false;
+    final ok = await _probeHealthJson(sameOrigin);
     debugPrint(
-      '📡 Web API: nginx proxy not ready on $sameOrigin → $productionHost',
+      ok
+          ? '📡 Web API: same-origin $sameOrigin'
+          : '📡 Web API: same-origin $sameOrigin (health probe slow/failed, still pinned)',
     );
   }
 
@@ -167,16 +166,15 @@ class ApiEndpointResolver {
   static bool hostNeedsSslRelaxation(String host) =>
       usingIpFallback && host == productionFallbackIp;
 
-  /// На web haneat.app — same-origin для Safari, только если resolver выбрал page host.
+  /// На web haneat.app — always rewrite api.haneat.app → same-origin.
   static String rewriteProductionHost(String url) {
     if (url.isEmpty) return url;
     if (kIsWeb) {
       try {
         final page = Uri.base;
-        final root = Uri.tryParse(resolvedRoot);
-        if (root != null &&
-            (page.host == 'haneat.app' || page.host == 'www.haneat.app') &&
-            root.host == page.host) {
+        if (page.host == 'haneat.app' ||
+            page.host == 'www.haneat.app' ||
+            page.host == 'kitchen.haneat.app') {
           final uri = Uri.parse(url);
           if (uri.host.toLowerCase() == productionHost) {
             return uri.replace(host: page.host, scheme: page.scheme).toString();
