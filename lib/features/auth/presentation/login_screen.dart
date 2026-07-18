@@ -70,24 +70,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
       if (kIsWeb) {
-        String destination;
-        if (!auth.user.emailVerified) {
-          destination =
-              VerifyEmailRoute.withEmail(_emailController.text.trim());
-        } else if (auth.user.legalConsentRequired) {
-          destination = LegalConsentRoute.path;
-        } else {
-          destination = AppVariant.current.isKitchen
-              ? MenuRoute.path
-              : (kIsWeb ? WebSocialHomeRoute.path : FeedRoute.path);
-        }
-        // On web, complete login via a full-page route load using persisted
-        // auth state. This avoids brittle in-memory transition races that can
-        // leave Safari/WebKit on a blank screen right after pressing "Login".
-        final redirected = hardNavigateToRoute(destination);
-        if (redirected) {
-          return;
-        }
+        AuthService.notifySessionReadyAfterLogin();
+        context.go(WebSessionLandingRoute.path);
+        return;
       }
       // Let GoRouter redirect decide the destination to avoid navigation races
       // (manual context.go + auth redirect could produce white/error page).
@@ -99,9 +84,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (userNow == null) return;
         final route = ModalRoute.of(context);
         if (route != null && !route.isCurrent) return;
-        final homePath = AppVariant.current.isKitchen
-            ? MenuRoute.path
-            : (kIsWeb ? WebSocialHomeRoute.path : FeedRoute.path);
+        final homePath = kIsWeb
+            ? WebSessionLandingRoute.path
+            : (AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path);
         // Web-only hard redirect if router got stuck on /login in some browsers.
         final redirected = hardNavigateToRoute(homePath);
         if (!redirected && mounted) {

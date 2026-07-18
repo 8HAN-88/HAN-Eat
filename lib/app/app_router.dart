@@ -87,6 +87,7 @@ import 'app_bootstrap_state.dart';
 import 'boot_screen.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
+import 'web_session_landing_screen.dart';
 import 'invalid_link_screen.dart';
 import '../widgets/app_empty_state.dart';
 
@@ -200,9 +201,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final homePath =
       AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
   final stableHomePath =
-      kIsWeb && AppVariant.current.isSocial
-          ? WebSocialHomeRoute.path
-          : homePath;
+      kIsWeb ? WebSessionLandingRoute.path : homePath;
   final initialLoc = () {
     if (initialDeepLink != null) {
       final path = parseDeepLinkToGoPath(initialDeepLink!);
@@ -322,6 +321,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           name: WebSocialHomeRoute.name,
           pageBuilder: (context, state) => const MaterialPage(
             child: ChatsHubScreen(),
+          ),
+        ),
+      if (kIsWeb)
+        GoRoute(
+          path: WebSessionLandingRoute.path,
+          name: WebSessionLandingRoute.name,
+          pageBuilder: (context, state) => const MaterialPage(
+            child: WebSessionLandingScreen(),
           ),
         ),
       StatefulShellRoute(
@@ -1242,8 +1249,8 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   bool _forcedLogout = false;
 
   String get _stableHomePath =>
-      kIsWeb && AppVariant.current.isSocial
-          ? ChatsRoute.path
+      kIsWeb
+          ? WebSessionLandingRoute.path
           : (AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path);
 
   @override
@@ -1356,6 +1363,11 @@ class FeedRoute {
 class WebSocialHomeRoute {
   static const path = '/web-home';
   static const name = 'web_home';
+}
+
+class WebSessionLandingRoute {
+  static const path = '/web-session';
+  static const name = 'web_session';
 }
 
 class ChatsRoute {

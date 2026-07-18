@@ -198,10 +198,10 @@ class _StartupShellState extends State<StartupShell> {
                         final user = AuthService.instance.currentUser;
                         final homePath = user == null
                             ? LoginRoute.path
-                            : (AppVariant.current.isKitchen
-                                ? MenuRoute.path
-                                : (kIsWeb
-                                    ? WebSocialHomeRoute.path
+                            : (kIsWeb
+                                ? WebSessionLandingRoute.path
+                                : (AppVariant.current.isKitchen
+                                    ? MenuRoute.path
                                     : FeedRoute.path));
                         final redirected = hardNavigateToRoute(homePath);
                         if (!redirected) {
