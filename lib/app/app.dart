@@ -112,7 +112,8 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
         locale: const Locale('ru', 'RU'),
         builder: (context, child) {
           final theme = Theme.of(context);
-          final canvas = theme.scaffoldBackgroundColor;
+          const safeCanvas = Color(0xFF0F1319);
+          final canvas = kIsWeb ? safeCanvas : theme.scaffoldBackgroundColor;
           final defaultBody = theme.textTheme.bodyMedium ?? const TextStyle();
           final media = MediaQuery.of(context);
           final content = child ??
@@ -125,17 +126,16 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                       Icon(
                         Icons.restaurant_rounded,
                         size: 48,
-                        color: theme.colorScheme.primary,
+                        color: const Color(0xFF2AABEE),
                       ),
                       const SizedBox(height: 16),
-                      CircularProgressIndicator(
-                          color: theme.colorScheme.primary),
+                      const CircularProgressIndicator(
+                        color: Color(0xFF2AABEE),
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         'Загрузка ${AppVariant.current.appTitle}…',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                        ),
+                        style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white),
                       ),
                     ],
                   ),
@@ -151,7 +151,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
             child: ColoredBox(
               color: canvas,
               child: DefaultTextStyle(
-                style: defaultBody.copyWith(color: theme.colorScheme.onSurface),
+                style: defaultBody.copyWith(color: Colors.white),
                 child: Stack(
                   children: [
                     content,

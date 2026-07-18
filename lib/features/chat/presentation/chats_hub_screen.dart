@@ -124,7 +124,10 @@ class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen>
   Widget build(BuildContext context) {
     if (AuthService.instance.currentUser == null) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: Color(0xFF0F1319),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2AABEE)),
+        ),
       );
     }
     return AppGradientBackground(
