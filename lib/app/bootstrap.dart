@@ -232,6 +232,14 @@ Future<void> bootstrapServicesDeferred() async {
     }),
   );
 
+  Future<void> safeInit(Future<void> f, String name) async {
+    try {
+      await f;
+    } catch (e) {
+      debugPrint('bootstrapServicesDeferred $name: $e');
+    }
+  }
+
   if (kIsWeb) {
     AppBootstrapState.hiveReady.value = true;
     unawaited(
@@ -239,6 +247,62 @@ Future<void> bootstrapServicesDeferred() async {
         debugPrint('bootstrapServicesDeferred ensureHiveReady (web): $e');
       }),
     );
+    unawaited(_warmApiConnection());
+    unawaited(() async {
+      try {
+        await initializeDateFormatting('ru', null);
+      } catch (e) {
+        debugPrint('Date formatting init error: $e');
+      }
+    }());
+
+    // Web launch path must stay extremely light, especially on Safari/iPhone.
+    // Delay all heavyweight local caches, realtime, and sync services until the
+    // user already sees a stable first screen.
+    unawaited(() async {
+      await Future<void>.delayed(const Duration(seconds: 8));
+      await safeInit(HistoryStorage.ensureOpen(), 'HistoryStorage.ensureOpen');
+      await safeInit(UserService.init(), 'UserService');
+      await safeInit(UserRealtimeService.init(), 'UserRealtimeService');
+      await safeInit(SavedPostsService.init(), 'SavedPostsService');
+
+      if (AuthService.instance.currentUser != null) {
+        unawaited(ApiService.touchAiScanCreditsSilently());
+        unawaited(
+          SavedPostsService.processPendingOps().catchError((Object e) {
+            debugPrint('SavedPostsService.processPendingOps: $e');
+          }),
+        );
+        unawaited(
+          SavedPostsService.syncWithServer().catchError((Object e) {
+            debugPrint('SavedPostsService.syncWithServer: $e');
+            return const SavedSyncResult(success: false);
+          }),
+        );
+      }
+
+      await Future<void>.delayed(const Duration(seconds: 4));
+      await Future.wait<void>([
+        safeInit(FavoritesService.init(), 'FavoritesService'),
+        safeInit(ShoppingService.init(), 'ShoppingService'),
+        safeInit(MealPlanService.init(), 'MealPlanService'),
+        safeInit(CategoryService.init(), 'CategoryService'),
+        safeInit(RecipeService.init(), 'RecipeService'),
+      ], eagerError: false);
+    }());
+
+    AuthService.registerSessionListener((user) {
+      if (user != null) {
+        unawaited(ApiService.touchAiScanCreditsSilently());
+      }
+    });
+    if (AuthService.instance.currentUser != null) {
+      unawaited(ApiService.touchAiScanCreditsSilently());
+    }
+    if (kDebugMode) {
+      debugPrint('✅ bootstrapServicesDeferred web: lightweight mode');
+    }
+    return;
   } else {
     try {
       await ensureHiveReady().timeout(
@@ -354,14 +418,6 @@ Future<void> bootstrapServicesDeferred() async {
             debugPrint('PushNotificationService.syncTokenAfterAuth: $e');
           }),
     );
-  }
-
-  Future<void> safeInit(Future<void> f, String name) async {
-    try {
-      await f;
-    } catch (e) {
-      debugPrint('bootstrapServicesDeferred $name: $e');
-    }
   }
 
   final criticalInits = <Future<void>>[
