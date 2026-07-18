@@ -167,11 +167,12 @@
       }
 
       function hardRecover() {
-        clearClientCaches().finally(function () {
+        var after = function () {
           var url = new URL(window.location.href);
           url.searchParams.set('recover', String(Date.now()));
           window.location.replace(url.toString());
-        });
+        };
+        clearClientCaches().then(after, after);
       }
 
       var reloadBtn = document.getElementById('boot-reload');
@@ -221,7 +222,7 @@
           s.onerror = function () { showRecovery(); };
           document.body.appendChild(s);
         };
-        unregisterServiceWorkers().finally(start);
+        unregisterServiceWorkers().then(start, start);
       }
 
       fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
