@@ -200,7 +200,9 @@ class _StartupShellState extends State<StartupShell> {
                             ? LoginRoute.path
                             : (AppVariant.current.isKitchen
                                 ? MenuRoute.path
-                                : (kIsWeb ? ChatsRoute.path : FeedRoute.path));
+                                : (kIsWeb
+                                    ? WebSocialHomeRoute.path
+                                    : FeedRoute.path));
                         final redirected = hardNavigateToRoute(homePath);
                         if (!redirected) {
                           _retryBootstrap();

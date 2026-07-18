@@ -200,7 +200,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final homePath =
       AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
   final stableHomePath =
-      kIsWeb && AppVariant.current.isSocial ? ChatsRoute.path : homePath;
+      kIsWeb && AppVariant.current.isSocial
+          ? WebSocialHomeRoute.path
+          : homePath;
   final initialLoc = () {
     if (initialDeepLink != null) {
       final path = parseDeepLinkToGoPath(initialDeepLink!);
@@ -314,6 +316,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: BootScreen(),
         ),
       ),
+      if (kIsWeb && AppVariant.current.isSocial)
+        GoRoute(
+          path: WebSocialHomeRoute.path,
+          name: WebSocialHomeRoute.name,
+          pageBuilder: (context, state) => const MaterialPage(
+            child: ChatsHubScreen(),
+          ),
+        ),
       StatefulShellRoute(
         navigatorContainerBuilder: _safeShellIndexedStack,
         builder: (context, state, navigationShell) =>
@@ -1341,6 +1351,11 @@ class ChannelsListRoute {
 class FeedRoute {
   static const path = '/feed';
   static const name = 'feed';
+}
+
+class WebSocialHomeRoute {
+  static const path = '/web-home';
+  static const name = 'web_home';
 }
 
 class ChatsRoute {
