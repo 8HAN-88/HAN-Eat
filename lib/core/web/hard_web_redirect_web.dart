@@ -6,13 +6,15 @@ bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = false}) {
   try {
     final current = Uri.base;
     final normalized = routePath.startsWith('/') ? routePath : '/$routePath';
+    final query = <String, String>{...current.queryParameters};
+    query.remove('recover');
     final next = Uri(
       scheme: current.scheme,
       host: current.host,
       port: current.hasPort ? current.port : null,
       path: current.path,
       queryParameters: <String, String>{
-        ...current.queryParameters,
+        ...query,
         if (addRecoverQuery) 'recover': DateTime.now().millisecondsSinceEpoch.toString(),
       },
       fragment: normalized,

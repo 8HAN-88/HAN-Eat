@@ -95,7 +95,7 @@ class _StartupShellState extends State<StartupShell> {
 
     try {
       await bootstrapServicesForFirstFrame().timeout(
-        Duration(milliseconds: kIsWeb ? 500 : 6000),
+        Duration(milliseconds: kIsWeb ? 2500 : 6000),
         onTimeout: () {
           debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout');
         },
