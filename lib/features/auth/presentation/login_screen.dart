@@ -70,7 +70,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       if (!mounted) return;
       if (kIsWeb) {
-        AuthService.notifySessionReadyAfterLogin();
         context.go(WebSessionLandingRoute.path);
         return;
       }
