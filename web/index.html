@@ -116,6 +116,23 @@
   </div>
   <script>
     (function () {
+      // Older Safari/WebKit can fail before Flutter starts because generated
+      // bootstrap code uses Promise.finally(). Polyfill it up front.
+      if (typeof Promise !== 'undefined' && !Promise.prototype.finally) {
+        Promise.prototype.finally = function (onFinally) {
+          var P = this.constructor;
+          var handler = typeof onFinally === 'function' ? onFinally : function () {};
+          return this.then(
+            function (value) {
+              return P.resolve(handler()).then(function () { return value; });
+            },
+            function (reason) {
+              return P.resolve(handler()).then(function () { throw reason; });
+            }
+          );
+        };
+      }
+
       var flutterStarted = false;
       var firstFrame = false;
       var splash = document.getElementById('boot-splash');
