@@ -198,15 +198,13 @@ class _StartupShellState extends State<StartupShell> {
                         final user = AuthService.instance.currentUser;
                         final homePath = user == null
                             ? LoginRoute.path
-                            : (kIsWeb
-                                ? WebSessionLandingRoute.path
-                                : (AppVariant.current.isKitchen
-                                    ? MenuRoute.path
-                                    : FeedRoute.path));
-                        final redirected = hardNavigateToRoute(homePath);
-                        if (!redirected) {
-                          _retryBootstrap();
-                        }
+                            : (AppVariant.current.isKitchen
+                                ? MenuRoute.path
+                                : FeedRoute.path);
+                        // Soft retry first. Hard document reload is last resort
+                        // and must use path-based URLs (not hash fragments).
+                        _retryBootstrap();
+                        hardNavigateToRoute(homePath);
                       },
                       icon: const Icon(Icons.open_in_browser_rounded),
                       label: const Text('Открыть безопасно'),

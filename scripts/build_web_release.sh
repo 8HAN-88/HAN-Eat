@@ -15,13 +15,15 @@ if [[ -f "$ROOT/assets/app_icon_source.png" ]]; then
   python3 "$ROOT/scripts/generate_web_pwa_icons.py"
 fi
 
+# dart2js + canvaskit only. Dual wasm builds break Safari/iOS (skwasm/WasmGC)
+# and trigger white screens + browser "server stopped responding" during boot.
 HANEAT_API_BASE="$API_BASE" ./scripts/with_dart_defines.sh \
   flutter build web \
   --release \
-  --wasm \
   --base-href / \
   --pwa-strategy none \
   --no-web-resources-cdn \
+  --no-wasm-dry-run \
   --dart-define=APP_VARIANT="$APP_VARIANT" \
   --dart-define=WEB_BUILD_ID="$BUILD_ID"
 

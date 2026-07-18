@@ -272,18 +272,9 @@
         if (!primaryUiReady) showRecovery();
       }, 12000);
 
-      // Hard auto-recovery once per tab when boot is stuck.
-      setTimeout(function () {
-        if (firstFrame) return;
-        var autoKey = 'han.boot.auto_recover_once';
-        var already = false;
-        try {
-          already = sessionStorage.getItem(autoKey) === '1';
-        } catch (e) {}
-        if (hadRecoverParam || already) return;
-        try { sessionStorage.setItem(autoKey, '1'); } catch (e) {}
-        hardRecover();
-      }, 15000);
+      // Do NOT auto hardRecover/reload. On Safari that produces a white page
+      // and "server stopped responding" while large assets are still loading.
+      // Recovery stays manual via the buttons above.
 
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;

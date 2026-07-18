@@ -77,5 +77,23 @@ if version.exists():
     data["build_number"] = build_id
     version.write_text(json.dumps(data, ensure_ascii=False) + "\n", encoding="utf-8")
 
+
+# Flutter sometimes emits an empty {} build entry alongside dart2js; drop it.
+text = bootstrap.read_text(encoding="utf-8")
+cfg_m = re.search(r'_flutter\.buildConfig = (\{.*?\});', text)
+if cfg_m:
+    cfg = json.loads(cfg_m.group(1))
+    builds = [
+        b for b in cfg.get("builds", [])
+        if isinstance(b, dict)
+        and b.get("compileTarget") == "dart2js"
+        and b.get("mainJsPath")
+    ]
+    if not builds:
+        raise SystemExit("patch_web_cache_bust: no dart2js build in buildConfig")
+    cfg["builds"] = builds
+    text = text[:cfg_m.start()] + "_flutter.buildConfig = " + json.dumps(cfg, separators=(",", ":")) + ";" + text[cfg_m.end():]
+    bootstrap.write_text(text, encoding="utf-8")
+
 print(f"✓ cache bust build={build_id}")
 PY

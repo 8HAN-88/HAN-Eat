@@ -200,8 +200,9 @@ Widget _safeShellIndexedStack(
 final appRouterProvider = Provider<GoRouter>((ref) {
   final homePath =
       AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
-  final stableHomePath =
-      kIsWeb ? WebSessionLandingRoute.path : homePath;
+  // Use the real authenticated home (shell). Temporary /web-session landing
+  // and hard reloads after login caused blank Safari pages, not stability.
+  final stableHomePath = homePath;
   final initialLoc = () {
     if (initialDeepLink != null) {
       final path = parseDeepLinkToGoPath(initialDeepLink!);
@@ -1249,9 +1250,7 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   bool _forcedLogout = false;
 
   String get _stableHomePath =>
-      kIsWeb
-          ? WebSessionLandingRoute.path
-          : (AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path);
+      AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
 
   @override
   void initState() {

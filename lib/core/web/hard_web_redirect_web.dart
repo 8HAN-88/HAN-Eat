@@ -8,16 +8,17 @@ bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = false}) {
     final normalized = routePath.startsWith('/') ? routePath : '/$routePath';
     final query = <String, String>{...current.queryParameters};
     query.remove('recover');
+    // GoRouter uses path-based URLs, not hash fragments.
     final next = Uri(
       scheme: current.scheme,
       host: current.host,
       port: current.hasPort ? current.port : null,
-      path: current.path,
+      path: normalized,
       queryParameters: <String, String>{
         ...query,
-        if (addRecoverQuery) 'recover': DateTime.now().millisecondsSinceEpoch.toString(),
+        if (addRecoverQuery)
+          'recover': DateTime.now().millisecondsSinceEpoch.toString(),
       },
-      fragment: normalized,
     );
     html.window.location.replace(next.toString());
     return true;
