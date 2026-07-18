@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/app_router.dart';
 import '../../../../app/app_bootstrap_state.dart';
 import '../../../../core/app/app_variant.dart';
+import '../../../../core/web/boot_ready_signal.dart';
 import '../../../../core/web/hard_web_redirect.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../utils/api_error_parser.dart';
@@ -38,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     AppBootstrapState.primaryUiReady.value = true;
+    notifyPrimaryUiReady();
   }
 
   @override

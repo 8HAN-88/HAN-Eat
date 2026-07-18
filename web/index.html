@@ -135,10 +135,18 @@
 
       var flutterStarted = false;
       var firstFrame = false;
+      var primaryUiReady = false;
       var splash = document.getElementById('boot-splash');
 
+      function maybeHideSplash() {
+        if (!firstFrame || !primaryUiReady) return;
+        setTimeout(function () {
+          if (splash && splash.parentNode) splash.remove();
+        }, 120);
+      }
+
       function showRecovery() {
-        if (firstFrame) return;
+        if (firstFrame && primaryUiReady) return;
         var hint = document.getElementById('boot-hint');
         var actions = document.getElementById('boot-actions');
         var spinner = document.getElementById('boot-spinner');
@@ -255,6 +263,13 @@
       // If Flutter never paints, don't leave users on an endless blank state.
       setTimeout(showRecovery, 10000);
 
+      // If Flutter paints a frame but never reaches a usable login/shell screen,
+      // keep the dark splash visible and offer recovery instead of exposing a
+      // blank white canvas.
+      setTimeout(function () {
+        if (!primaryUiReady) showRecovery();
+      }, 12000);
+
       // Hard auto-recovery once per tab when boot is stuck.
       setTimeout(function () {
         if (firstFrame) return;
@@ -270,10 +285,12 @@
 
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;
-        // Slight delay avoids a white flash between splash removal and first paint.
-        setTimeout(function () {
-          if (splash && splash.parentNode) splash.remove();
-        }, 120);
+        maybeHideSplash();
+      });
+
+      window.addEventListener('han-primary-ui-ready', function () {
+        primaryUiReady = true;
+        maybeHideSplash();
       });
     })();
   </script>
