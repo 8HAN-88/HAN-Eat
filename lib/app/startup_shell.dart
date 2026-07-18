@@ -4,14 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/app/app_variant.dart';
-import '../core/web/hard_web_redirect.dart';
 import '../services/auth_service.dart';
 import '../utils/api_error_parser.dart';
 import '../widgets/app_brand_logo.dart';
 import 'app.dart';
 import 'app_bootstrap_state.dart';
-import 'app_router.dart';
 import 'bootstrap.dart';
 
 /// Фон загрузки — тёмный, без белой вспышки на PWA.
@@ -26,30 +23,11 @@ class StartupShell extends StatefulWidget {
 
 class _StartupShellState extends State<StartupShell> {
   Object? _error;
-  bool _webUiRecoveryShown = false;
 
   void _openMainUi() {
     if (AppBootstrapState.authReady.value) return;
     AppBootstrapState.authReady.value = true;
     AuthService.sessionRevision.value++;
-    _scheduleWebUiGuard();
-  }
-
-  void _scheduleWebUiGuard() {
-    if (!kIsWeb) return;
-    Future<void>.delayed(const Duration(seconds: 8), () {
-      if (!mounted ||
-          _webUiRecoveryShown ||
-          !AppBootstrapState.authReady.value ||
-          AppBootstrapState.primaryUiReady.value) {
-        return;
-      }
-      debugPrint('⚠️ StartupShell: main UI did not paint on web, showing recovery');
-      setState(() {
-        _webUiRecoveryShown = true;
-        _error = StateError('Основной экран не загрузился');
-      });
-    });
   }
 
   @override
@@ -58,7 +36,7 @@ class _StartupShellState extends State<StartupShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
-    // Страховка: если bootstrap завис — не вечный спиннер (сессия уже могла восстановиться).
+    // Страховка: если bootstrap завис — не вечный спиннер.
     Future<void>.delayed(const Duration(seconds: 12), () {
       if (mounted && !AppBootstrapState.authReady.value) {
         debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
@@ -70,7 +48,6 @@ class _StartupShellState extends State<StartupShell> {
   void _retryBootstrap() {
     setState(() {
       _error = null;
-      _webUiRecoveryShown = false;
       AppBootstrapState.authReady.value = false;
       AppBootstrapState.hiveReady.value = false;
       AppBootstrapState.servicesReady.value = false;
@@ -102,9 +79,12 @@ class _StartupShellState extends State<StartupShell> {
       );
     } catch (e, st) {
       debugPrint('bootstrapServicesForFirstFrame: $e\n$st');
-      if (mounted) setState(() => _error = e);
+      // On web never trap the user on a recovery screen — open the app and
+      // let screens load with their own empty/error states.
+      if (!kIsWeb && mounted) {
+        setState(() => _error = e);
+      }
     } finally {
-      // Только после восстановления сессии — иначе redirect на /login при F5.
       _openMainUi();
     }
 
@@ -191,25 +171,6 @@ class _StartupShellState extends State<StartupShell> {
                     icon: const Icon(Icons.refresh),
                     label: const Text('Повторить'),
                   ),
-                  if (kIsWeb) ...[
-                    const SizedBox(height: 12),
-                    FilledButton.tonalIcon(
-                      onPressed: () {
-                        final user = AuthService.instance.currentUser;
-                        final homePath = user == null
-                            ? LoginRoute.path
-                            : (AppVariant.current.isKitchen
-                                ? MenuRoute.path
-                                : FeedRoute.path);
-                        // Soft retry first. Hard document reload is last resort
-                        // and must use path-based URLs (not hash fragments).
-                        _retryBootstrap();
-                        hardNavigateToRoute(homePath);
-                      },
-                      icon: const Icon(Icons.open_in_browser_rounded),
-                      label: const Text('Открыть безопасно'),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -227,19 +188,8 @@ class _StartupShellState extends State<StartupShell> {
       valueListenable: AppBootstrapState.authReady,
       builder: (context, ready, _) {
         if (!ready) return _loadingApp();
-        return const HanEatApp();
+        return const ProviderScope(child: HanEatApp());
       },
     );
   }
-}
-
-/// Для integration-тестов: тот же вход, что и [main].
-void runHanEatApp() {
-  AppBootstrapState.authReady.value = false;
-  AppBootstrapState.primaryUiReady.value = false;
-  runApp(
-    const ProviderScope(
-      child: HanEatApp(),
-    ),
-  );
 }

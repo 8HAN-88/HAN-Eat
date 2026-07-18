@@ -81,36 +81,6 @@
       animation: spin 0.9s linear infinite;
       margin-bottom: 16px;
     }
-    #boot-splash .hint {
-      margin-top: 14px;
-      color: #A8B0BB;
-      font-size: 14px;
-      line-height: 1.4;
-      max-width: 280px;
-      display: none;
-    }
-    #boot-splash .actions {
-      margin-top: 18px;
-      display: none;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    #boot-splash button {
-      appearance: none;
-      border: 0;
-      border-radius: 12px;
-      padding: 12px 18px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      background: #FF6B35;
-      color: #fff;
-    }
-    #boot-splash button.secondary {
-      background: #243041;
-      color: #F7F8FA;
-    }
     @keyframes spin { to { transform: rotate(360deg); } }
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
       background-color: #0F1319 !important;
@@ -120,18 +90,11 @@
 <body>
   <div id="app-underlay" aria-hidden="true"></div>
   <div id="boot-splash">
-    <div class="spinner" id="boot-spinner"></div>
+    <div class="spinner"></div>
     <div style="font-weight:700;font-size:18px">HAN Eat</div>
-    <div class="hint" id="boot-hint">Загрузка занимает слишком долго. Можно обновить приложение и очистить кэш.</div>
-    <div class="actions" id="boot-actions">
-      <button type="button" id="boot-reload">Обновить</button>
-      <button type="button" class="secondary" id="boot-recover">Очистить кэш</button>
-    </div>
   </div>
   <script>
     (function () {
-      // Older Safari/WebKit can fail before Flutter starts because generated
-      // bootstrap code uses Promise.finally(). Polyfill it up front.
       if (typeof Promise !== 'undefined' && !Promise.prototype.finally) {
         Promise.prototype.finally = function (onFinally) {
           var P = this.constructor;
@@ -156,90 +119,17 @@
       function maybeHideSplash() {
         if (splashHidden || !firstFrame || !primaryUiReady) return;
         splashHidden = true;
-        // Keep the dark splash covering CanvasKit until the first real UI
-        // has had time to paint. Early removal is what users see as a white screen.
         setTimeout(function () {
           if (!splash) return;
           splash.classList.add('is-hiding');
           setTimeout(function () {
             if (splash && splash.parentNode) splash.remove();
           }, 260);
-        }, 700);
+        }, 400);
       }
-
-      function showRecovery() {
-        if (firstFrame && primaryUiReady) return;
-        var hint = document.getElementById('boot-hint');
-        var actions = document.getElementById('boot-actions');
-        var spinner = document.getElementById('boot-spinner');
-        if (hint) hint.style.display = 'block';
-        if (actions) actions.style.display = 'flex';
-        if (spinner) spinner.style.display = 'none';
-      }
-
-      function clearClientCaches() {
-        var jobs = [];
-        if ('serviceWorker' in navigator) {
-          jobs.push(
-            navigator.serviceWorker.getRegistrations().then(function (regs) {
-              return Promise.all(regs.map(function (r) { return r.unregister(); }));
-            }).catch(function () {})
-          );
-        }
-        if (window.caches && caches.keys) {
-          jobs.push(
-            caches.keys().then(function (keys) {
-              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
-            }).catch(function () {})
-          );
-        }
-        try {
-          Object.keys(localStorage || {}).forEach(function (key) {
-            if (key.indexOf('flutter.') === 0) {
-              if (
-                key.indexOf('access_token') >= 0 ||
-                key.indexOf('refresh_token') >= 0 ||
-                key === 'flutter.user' ||
-                key.indexOf('.user') >= 0 ||
-                key.indexOf('current_user') >= 0 ||
-                key.indexOf('user_json') >= 0
-              ) {
-                return;
-              }
-              localStorage.removeItem(key);
-            }
-          });
-        } catch (e) {}
-        return Promise.all(jobs);
-      }
-
-      function hardRecover() {
-        var after = function () {
-          var url = new URL(window.location.href);
-          url.searchParams.set('recover', String(Date.now()));
-          window.location.replace(url.toString());
-        };
-        clearClientCaches().then(after, after);
-      }
-
-      var reloadBtn = document.getElementById('boot-reload');
-      var recoverBtn = document.getElementById('boot-recover');
-      if (reloadBtn) reloadBtn.addEventListener('click', function () { window.location.reload(); });
-      if (recoverBtn) recoverBtn.addEventListener('click', hardRecover);
-
-      var hadRecoverParam = false;
-      try {
-        var params = new URLSearchParams(window.location.search);
-        hadRecoverParam = params.has('recover');
-        if (hadRecoverParam) {
-          clearClientCaches();
-        }
-      } catch (e) {}
 
       function unregisterServiceWorkers() {
-        if (!('serviceWorker' in navigator)) {
-          return Promise.resolve();
-        }
+        if (!('serviceWorker' in navigator)) return Promise.resolve();
         return navigator.serviceWorker.getRegistrations().then(function (regs) {
           return Promise.all(regs.map(function (r) { return r.unregister(); }));
         }).catch(function () {});
@@ -268,7 +158,6 @@
           var s = document.createElement('script');
           s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
           s.async = true;
-          s.onerror = function () { showRecovery(); };
           document.body.appendChild(s);
         };
         unregisterServiceWorkers().then(start, start);
@@ -277,18 +166,11 @@
       fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.json(); })
         .then(function (v) {
-          var build = String(v.build_number || v.version || Date.now());
-          loadFlutter(build);
+          loadFlutter(String(v.build_number || v.version || Date.now()));
         })
         .catch(function () {
           loadFlutter(String(Date.now()));
         });
-
-      // Manual recovery only — never auto-reload (Safari white/"server stopped").
-      setTimeout(showRecovery, 14000);
-      setTimeout(function () {
-        if (!primaryUiReady) showRecovery();
-      }, 16000);
 
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;
@@ -300,12 +182,13 @@
         maybeHideSplash();
       });
 
-      window.addEventListener('error', function () {
-        if (!firstFrame || !primaryUiReady) showRecovery();
-      });
-      window.addEventListener('unhandledrejection', function () {
-        if (!firstFrame || !primaryUiReady) showRecovery();
-      });
+      // If first frame painted but primary signal is late, still enter the app.
+      setTimeout(function () {
+        if (firstFrame && !primaryUiReady) {
+          primaryUiReady = true;
+          maybeHideSplash();
+        }
+      }, 2500);
     })();
   </script>
 </body>
