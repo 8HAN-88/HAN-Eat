@@ -13,6 +13,9 @@ class AppBootstrapState {
   /// Hive, Firebase, локальные сервисы.
   static final ValueNotifier<bool> servicesReady = ValueNotifier(false);
 
+  /// Любой основной экран (login/root shell/etc.) реально отрисовался.
+  static final ValueNotifier<bool> primaryUiReady = ValueNotifier(false);
+
   /// Главный UI после auth — Hive подгружается в фоне, не блокирует вход.
   static bool get canOpenMainShell => authReady.value;
 }

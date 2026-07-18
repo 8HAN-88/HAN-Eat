@@ -26,6 +26,7 @@ import '../../chat/application/channel_inbox_badge.dart';
 import '../../chat/application/chats_hub_refresh_provider.dart';
 import '../../chat/application/chat_realtime_signals.dart';
 import '../application/shell_chat_badge_refresh_provider.dart';
+import '../../../../app/app_bootstrap_state.dart';
 
 class RootShell extends ConsumerStatefulWidget {
   const RootShell({super.key, required this.navigationShell});
@@ -134,6 +135,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   @override
   void initState() {
     super.initState();
+    AppBootstrapState.primaryUiReady.value = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final raw = widget.navigationShell.currentIndex;
