@@ -42,7 +42,14 @@
     html, body {
       margin: 0;
       height: 100%;
-      background-color: #0F1319;
+      background-color: #0F1319 !important;
+      color: #F7F8FA;
+    }
+    #app-underlay {
+      position: fixed;
+      inset: 0;
+      background: #0F1319;
+      z-index: 0;
     }
     #boot-splash {
       position: fixed;
@@ -58,6 +65,12 @@
       text-align: center;
       padding: 24px;
       box-sizing: border-box;
+      opacity: 1;
+      transition: opacity 220ms ease;
+    }
+    #boot-splash.is-hiding {
+      opacity: 0;
+      pointer-events: none;
     }
     #boot-splash .spinner {
       width: 36px;
@@ -91,7 +104,7 @@
       font-size: 15px;
       font-weight: 700;
       cursor: pointer;
-      background: #2AABEE;
+      background: #FF6B35;
       color: #fff;
     }
     #boot-splash button.secondary {
@@ -99,12 +112,13 @@
       color: #F7F8FA;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    flt-scene-host, flt-glass-pane, flutter-view {
+    flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
       background-color: #0F1319 !important;
     }
   </style>
 </head>
 <body>
+  <div id="app-underlay" aria-hidden="true"></div>
   <div id="boot-splash">
     <div class="spinner" id="boot-spinner"></div>
     <div style="font-weight:700;font-size:18px">HAN Eat</div>
@@ -136,13 +150,21 @@
       var flutterStarted = false;
       var firstFrame = false;
       var primaryUiReady = false;
+      var splashHidden = false;
       var splash = document.getElementById('boot-splash');
 
       function maybeHideSplash() {
-        if (!firstFrame || !primaryUiReady) return;
+        if (splashHidden || !firstFrame || !primaryUiReady) return;
+        splashHidden = true;
+        // Keep the dark splash covering CanvasKit until the first real UI
+        // has had time to paint. Early removal is what users see as a white screen.
         setTimeout(function () {
-          if (splash && splash.parentNode) splash.remove();
-        }, 120);
+          if (!splash) return;
+          splash.classList.add('is-hiding');
+          setTimeout(function () {
+            if (splash && splash.parentNode) splash.remove();
+          }, 260);
+        }, 700);
       }
 
       function showRecovery() {
@@ -172,10 +194,8 @@
           );
         }
         try {
-          // Drop only HAN Eat flutter prefs that can brick boot; keep unrelated site data.
           Object.keys(localStorage || {}).forEach(function (key) {
             if (key.indexOf('flutter.') === 0) {
-              // Keep auth tokens; clear volatile UI/cache keys that cause blank boots.
               if (
                 key.indexOf('access_token') >= 0 ||
                 key.indexOf('refresh_token') >= 0 ||
@@ -207,7 +227,6 @@
       if (reloadBtn) reloadBtn.addEventListener('click', function () { window.location.reload(); });
       if (recoverBtn) recoverBtn.addEventListener('click', hardRecover);
 
-      // Auto-recover once if previous boot failed.
       var hadRecoverParam = false;
       try {
         var params = new URLSearchParams(window.location.search);
@@ -234,6 +253,9 @@
           };
           navigator.serviceWorker.getRegistration = function () {
             return Promise.resolve(undefined);
+          };
+          navigator.serviceWorker.getRegistrations = function () {
+            return Promise.resolve([]);
           };
         } catch (e) {}
       }
@@ -262,19 +284,11 @@
           loadFlutter(String(Date.now()));
         });
 
-      // If Flutter never paints, don't leave users on an endless blank state.
-      setTimeout(showRecovery, 10000);
-
-      // If Flutter paints a frame but never reaches a usable login/shell screen,
-      // keep the dark splash visible and offer recovery instead of exposing a
-      // blank white canvas.
+      // Manual recovery only — never auto-reload (Safari white/"server stopped").
+      setTimeout(showRecovery, 14000);
       setTimeout(function () {
         if (!primaryUiReady) showRecovery();
-      }, 12000);
-
-      // Do NOT auto hardRecover/reload. On Safari that produces a white page
-      // and "server stopped responding" while large assets are still loading.
-      // Recovery stays manual via the buttons above.
+      }, 16000);
 
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;
@@ -284,6 +298,13 @@
       window.addEventListener('han-primary-ui-ready', function () {
         primaryUiReady = true;
         maybeHideSplash();
+      });
+
+      window.addEventListener('error', function () {
+        if (!firstFrame || !primaryUiReady) showRecovery();
+      });
+      window.addEventListener('unhandledrejection', function () {
+        if (!firstFrame || !primaryUiReady) showRecovery();
       });
     })();
   </script>

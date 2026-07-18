@@ -89,21 +89,35 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H 89.19.216.60 >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Rsync to Timeweb
+      - name: Rsync to Timeweb (atomic switch)
         run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
-            build/web/ \
-            root@89.19.216.60:/var/www/haneat-web/
+          set -euo pipefail
+          SSH='ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30'
+          RSYNC_SSH='ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30'
+
+          deploy_atomic() {
+            local src="$1"
+            local live="$2"
+            local next="${live}.next"
+            local prev="${live}.prev"
+            rsync -avz --delete -e "${RSYNC_SSH}" "${src}/" "root@89.19.216.60:${next}/"
+            ${SSH} root@89.19.216.60 "set -euo pipefail
+              test -f '${next}/index.html'
+              test -f '${next}/main.dart.js'
+              test -f '${next}/flutter_bootstrap.js'
+              test -f '${next}/version.json'
+              rm -rf '${prev}'
+              if [ -d '${live}' ]; then mv '${live}' '${prev}'; fi
+              mv '${next}' '${live}'
+              chown -R www-data:www-data '${live}' 2>/dev/null || true
+              rm -rf '${prev}'
+            "
+          }
+
+          deploy_atomic build/web /var/www/haneat-web
           if [ -d build/web-kitchen ]; then
-            rsync -avz --delete \
-              -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30" \
-              build/web-kitchen/ \
-              root@89.19.216.60:/var/www/haneat-kitchen-web/
+            deploy_atomic build/web-kitchen /var/www/haneat-kitchen-web
           fi
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new \
-            root@89.19.216.60 \
-            "chown -R www-data:www-data /var/www/haneat-web /var/www/haneat-kitchen-web 2>/dev/null || true"
 
       - name: Patch nginx (same-origin API for Safari Web)
         continue-on-error: true

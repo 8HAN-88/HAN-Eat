@@ -92,8 +92,26 @@ if cfg_m:
     if not builds:
         raise SystemExit("patch_web_cache_bust: no dart2js build in buildConfig")
     cfg["builds"] = builds
+    cfg["useLocalCanvasKit"] = True
     text = text[:cfg_m.start()] + "_flutter.buildConfig = " + json.dumps(cfg, separators=(",", ":")) + ";" + text[cfg_m.end():]
-    bootstrap.write_text(text, encoding="utf-8")
+
+# Force canvaskit-only boot and disable Flutter service worker registration.
+# SW + mid-deploy asset gaps are a common Safari white-screen trigger.
+load_re = re.compile(
+    r'_flutter\.loader\.load\(\{.*?\n\}\);',
+    re.DOTALL,
+)
+load_block = """_flutter.loader.load({
+  config: {
+    renderer: "canvaskit",
+    useLocalCanvasKit: true,
+    canvasKitBaseUrl: "canvaskit/",
+  },
+});"""
+text2, load_n = load_re.subn(load_block, text, count=1)
+if load_n != 1:
+    raise SystemExit(f"patch_web_cache_bust: loader.load not patched ({load_n})")
+bootstrap.write_text(text2, encoding="utf-8")
 
 print(f"✓ cache bust build={build_id}")
 PY

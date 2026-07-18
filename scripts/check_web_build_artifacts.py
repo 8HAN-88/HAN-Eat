@@ -38,6 +38,32 @@ def main() -> None:
     if expected_api not in main_js:
         fail(f"HANEAT_API_BASE {expected_api!r} is not embedded in main.dart.js")
 
+    bootstrap = bootstrap_path.read_text(encoding="utf-8", errors="ignore")
+    cfg_marker = "_flutter.buildConfig = "
+    cfg_start = bootstrap.find(cfg_marker)
+    if cfg_start < 0:
+        fail("flutter_bootstrap.js missing _flutter.buildConfig")
+    cfg_json = bootstrap[cfg_start + len(cfg_marker) :].split(";", 1)[0]
+    cfg = json.loads(cfg_json)
+    builds = cfg.get("builds") or []
+    if any(
+        isinstance(b, dict) and b.get("compileTarget") == "dart2wasm"
+        for b in builds
+    ):
+        fail("wasm dual-build must not ship (Safari white-screen risk)")
+    if not any(
+        isinstance(b, dict) and b.get("compileTarget") == "dart2js"
+        for b in builds
+    ):
+        fail("dart2js build missing from buildConfig")
+    load_tail = bootstrap[bootstrap.rfind("_flutter.loader.load") :]
+    if 'renderer: "canvaskit"' not in load_tail and 'renderer:"canvaskit"' not in load_tail:
+        fail("flutter_bootstrap.js must force canvaskit renderer")
+    if "serviceWorkerSettings" in load_tail:
+        fail("flutter_bootstrap.js must not enable serviceWorkerSettings")
+    if (root / "main.dart.wasm").exists():
+        fail("main.dart.wasm must not be present in build/web")
+
     print(f"web build check passed: build={build_number}, api={expected_api}")
 
 
