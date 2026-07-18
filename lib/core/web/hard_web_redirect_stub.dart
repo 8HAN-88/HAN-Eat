@@ -1,3 +1,3 @@
-bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = true}) {
+bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = false}) {
   return false;
 }

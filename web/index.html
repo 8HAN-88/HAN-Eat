@@ -179,6 +179,8 @@
               if (
                 key.indexOf('access_token') >= 0 ||
                 key.indexOf('refresh_token') >= 0 ||
+                key === 'flutter.user' ||
+                key.indexOf('.user') >= 0 ||
                 key.indexOf('current_user') >= 0 ||
                 key.indexOf('user_json') >= 0
               ) {

@@ -2,7 +2,7 @@
 
 import 'dart:html' as html;
 
-bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = true}) {
+bool hardNavigateToRoute(String routePath, {bool addRecoverQuery = false}) {
   try {
     final current = Uri.base;
     final normalized = routePath.startsWith('/') ? routePath : '/$routePath';
