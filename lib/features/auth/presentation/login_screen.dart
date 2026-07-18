@@ -1,6 +1,7 @@
 // Экран входа
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,7 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await AuthService.login(
+      final auth = await AuthService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
@@ -68,6 +69,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
 
       if (!mounted) return;
+      if (kIsWeb) {
+        String destination;
+        if (!auth.user.emailVerified) {
+          destination =
+              VerifyEmailRoute.withEmail(_emailController.text.trim());
+        } else if (auth.user.legalConsentRequired) {
+          destination = LegalConsentRoute.path;
+        } else {
+          destination =
+              AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+        }
+        // On web, complete login via a full-page route load using persisted
+        // auth state. This avoids brittle in-memory transition races that can
+        // leave Safari/WebKit on a blank screen right after pressing "Login".
+        final redirected = hardNavigateToRoute(destination);
+        if (redirected) {
+          return;
+        }
+      }
       // Let GoRouter redirect decide the destination to avoid navigation races
       // (manual context.go + auth redirect could produce white/error page).
       AuthService.notifySessionReadyAfterLogin();
