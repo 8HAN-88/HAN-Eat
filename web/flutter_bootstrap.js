@@ -6,10 +6,9 @@ _flutter.loader.load({
     serviceWorkerVersion: {{flutter_service_worker_version}},
   },
   config: {
-    // Prefer local CanvasKit assets instead of gstatic CDN.
-    // This improves startup reliability on restrictive networks/devices.
-    renderer: "canvaskit",
+    // Keep Flutter's own renderer auto-selection (best Safari/iPhone compatibility),
+    // but avoid dependency on external gstatic CDN for CanvasKit assets.
     useLocalCanvasKit: true,
-    canvasKitVariant: "full",
+    canvasKitBaseUrl: "canvaskit/",
   },
 });
