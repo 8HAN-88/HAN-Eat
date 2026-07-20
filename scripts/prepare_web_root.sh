@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Собирает публичный корень сайта:
-#   /           — мгновенный редирект на /app/ (meta refresh, работает без JS)
+#   /           — HTML auth gate (без Flutter/CanvasKit)
 #   /app/       — Flutter Web (base-href /app/)
 #   /version.json — для автообновления
 set -euo pipefail
@@ -39,26 +39,9 @@ if [[ -d "${WEB_DIR}/.well-known" ]]; then
   cp -a "${WEB_DIR}/.well-known/." "${OUT_DIR}/.well-known/"
 fi
 
-# Tiny root shell: meta-refresh works even when mobile browsers block/skip JS.
-cat > "${OUT_DIR}/index.html" <<EOF
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0F1319">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta http-equiv="refresh" content="0;url=/app/?v=${BUILD_ID}">
-  <title>HAN Eat</title>
-  <style>
-    html, body { margin: 0; height: 100%; background: #0F1319; }
-  </style>
-  <script>
-    location.replace('/app/?v=${BUILD_ID}&_cb=' + Date.now());
-  </script>
-</head>
-<body></body>
-</html>
-EOF
+# HTML auth gate at site root — iPhone must never cold-boot into /app/ from "/".
+# Keep <base href="/app/"> so relative icon/manifest URLs resolve under /app/.
+cp -f "${OUT_DIR}/app/index.html" "${OUT_DIR}/index.html"
+cp -f "${OUT_DIR}/app/index.html" "${OUT_DIR}/login.html"
 
-echo "✓ web_root ready (build=${BUILD_ID}) → ${OUT_DIR}"
+echo "✓ web_root ready (build=${BUILD_ID}) → ${OUT_DIR} (HTML auth at / and /login.html)"

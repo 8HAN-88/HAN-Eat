@@ -21,17 +21,21 @@ END = "# END HAN-EAT IOS FIX"
 BLOCK = f"""
     {BEGIN}
     location = / {{
+        try_files /index.html =404;
+        default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
-        return 302 /app/;
+        add_header Clear-Site-Data '"cache"' always;
     }}
     location = /index.html {{
+        try_files /index.html =404;
+        default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
-        return 302 /app/;
+        add_header Clear-Site-Data '"cache"' always;
     }}
     location = /fresh {{
-        add_header Clear-Site-Data '"cache", "storage"' always;
+        add_header Clear-Site-Data '"cache", "storage", "executionContexts"' always;
         add_header Cache-Control "no-store" always;
-        return 302 /app/?fresh=1;
+        return 302 /?fresh=1;
     }}
     location ^~ /assets/ {{ return 302 /app$request_uri; }}
     location ^~ /canvaskit/ {{ return 302 /app$request_uri; }}

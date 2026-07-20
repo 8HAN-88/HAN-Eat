@@ -502,6 +502,26 @@
       });
 
       // Boot decision
+      // Site root (/) is HTML-only: never load CanvasKit there (kills stuck PWA shells).
+      // Flutter loads only under /app/?go=1 after auth / continue tap.
+      var path = location.pathname || '';
+      var atRoot = path === '/' || path === '/index.html' || path === '/login.html';
+
+      if (atRoot) {
+        if (hasSession()) {
+          if (isIOS && !goFlutter && !forceFlutter) {
+            showOnly('continue-gate');
+            ping('continue=1&root=1');
+          } else {
+            location.replace(goUrl());
+          }
+        } else {
+          showOnly('auth-gate');
+          ping('auth=1&root=1');
+        }
+        return;
+      }
+
       // 1) Explicit go=1 / flutter=1 → load Flutter
       // 2) Session on iOS without go → continue interstitial (no CanvasKit yet)
       // 3) Session on desktop → load Flutter

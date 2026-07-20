@@ -43,12 +43,12 @@ managed = """
         client_max_body_size 64M;
     }
 
-    # One-shot Safari/PWA recovery: wipe Cache API + SW, then open /app/.
+    # One-shot Safari/PWA recovery: wipe Cache API + storage + SW, then HTML login.
     location = /fresh {
-        add_header Clear-Site-Data '"cache", "storage"' always;
+        add_header Clear-Site-Data '"cache", "storage", "executionContexts"' always;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        return 302 /app/?fresh=1;
+        return 302 /?fresh=1;
     }
 
     # Tiny JS beacon used by app shell to prove the device reached the new build.
@@ -58,16 +58,35 @@ managed = """
         return 204;
     }
 
-    # Hard HTTP redirect — more reliable on iOS than HTML meta-refresh/JS.
-    # Mac Safari often runs JS; stuck iPhone tabs sometimes do not.
+    # HTML auth gate at site root (no Flutter). Clear HTTP/Cache API so stuck
+    # Safari/PWA shells cannot keep serving an old CanvasKit boot.
     location = / {
+        try_files /index.html =404;
+        default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
-        return 302 /app/;
+        add_header Pragma "no-cache" always;
+        add_header Clear-Site-Data '"cache"' always;
     }
 
     location = /index.html {
+        try_files /index.html =404;
+        default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
-        return 302 /app/;
+        add_header Pragma "no-cache" always;
+        add_header Clear-Site-Data '"cache"' always;
+    }
+
+    location = /login.html {
+        try_files /login.html =404;
+        default_type text/html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        add_header Clear-Site-Data '"cache"' always;
+    }
+
+    location = /login {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        return 302 /login.html;
     }
 
     location = /version.json {
