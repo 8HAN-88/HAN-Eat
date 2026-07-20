@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/auth_service.dart';
+import '../services/web_app_update_service.dart';
 import '../utils/api_error_parser.dart';
 import '../widgets/app_brand_logo.dart';
 import 'app.dart' deferred as full_app;
@@ -35,6 +36,10 @@ class _StartupShellState extends State<StartupShell> {
     if (AppBootstrapState.authReady.value) return;
     AppBootstrapState.authReady.value = true;
     AuthService.sessionRevision.value++;
+    // Keep WEB_BUILD_ID in the cold-start JS chunk (not only in deferred full app).
+    if (kIsWeb) {
+      WebAppUpdateService.start();
+    }
     // Native / already signed-in web: go straight to the full app chunk.
     if (!kIsWeb || AuthService.instance.currentUser != null) {
       AppBootstrapState.enterFullApp();

@@ -33,10 +33,26 @@ def main() -> None:
         fail("HANEAT_API_BASE env is required")
 
     main_js = main_js_path.read_text(encoding="utf-8", errors="ignore")
+    # Deferred loading may place some strings in *.part.js — search all JS chunks.
+    js_blobs = [main_js]
+    for part in sorted(root.glob("main.dart.js_*.part.js")):
+        js_blobs.append(part.read_text(encoding="utf-8", errors="ignore"))
+    all_js = "\n".join(js_blobs)
+    if build_number not in all_js:
+        fail("WEB_BUILD_ID from version.json is not embedded in main.dart.js / parts")
+    # Cold-start chunk must still carry the build id (auth shell + auto-update).
     if build_number not in main_js:
-        fail("WEB_BUILD_ID from version.json is not embedded in main.dart.js")
+        fail(
+            "WEB_BUILD_ID must be present in main.dart.js (cold-start chunk), "
+            "not only in deferred parts"
+        )
+    if expected_api not in all_js:
+        fail(f"HANEAT_API_BASE {expected_api!r} is not embedded in main.dart.js / parts")
     if expected_api not in main_js:
-        fail(f"HANEAT_API_BASE {expected_api!r} is not embedded in main.dart.js")
+        fail(
+            f"HANEAT_API_BASE {expected_api!r} must be present in main.dart.js "
+            "(auth/API cold start)"
+        )
 
     bootstrap = bootstrap_path.read_text(encoding="utf-8", errors="ignore")
     cfg_marker = "_flutter.buildConfig = "

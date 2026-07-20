@@ -153,6 +153,13 @@ def main() -> int:
             print(f"WARNING: {marker} still present in main.dart.js", file=sys.stderr)
         else:
             print(f"✓ main chunk free of {marker}")
+    if build_id and build_id not in text:
+        print(
+            f"ERROR: WEB_BUILD_ID {build_id!r} missing from recompiled main.dart.js",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"✓ WEB_BUILD_ID {build_id} present in main.dart.js")
     return 0
 
 
