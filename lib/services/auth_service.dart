@@ -237,8 +237,32 @@ class AuthService {
         debugPrint('⚠️ Не удалось перезагрузить SharedPreferences: $e');
       }
 
-      final user = await getCurrentUser();
+      var user = await getCurrentUser();
       final token = await getAccessToken();
+
+      // HTML auth gate may persist tokens before Flutter; recover user via API
+      // if the cached user JSON is missing/corrupt.
+      if (user == null &&
+          token != null &&
+          token.isNotEmpty &&
+          (kIsWeb || deferTokenRefresh)) {
+        try {
+          final uri = Uri.parse('$baseUrl/users/me');
+          final response = await http
+              .get(uri, headers: {'Authorization': 'Bearer $token'})
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode == 200) {
+            final restored = User.fromJson(
+              jsonDecode(response.body) as Map<String, dynamic>,
+            );
+            user = restored;
+            await _saveUser(restored);
+            debugPrint('✅ AuthService: user restored from /users/me');
+          }
+        } catch (e) {
+          debugPrint('⚠️ AuthService: /users/me restore failed: $e');
+        }
+      }
 
       if (user != null && token != null) {
         instance._cachedUser = user;
