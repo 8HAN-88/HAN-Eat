@@ -1,29 +1,13 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided by `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="HAN Eat — рецепты, лента, каналы и meal plan">
   <meta name="theme-color" content="#0F1319">
   <meta name="han-eat-build" content="__HAN_BUILD_ID__">
-
-  <!-- PWA / Add to Home Screen -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -31,66 +15,158 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-180.png">
   <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
   <link rel="apple-touch-icon" href="icons/Icon-180.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
   <title>HAN Eat</title>
   <link rel="manifest" href="manifest.json">
   <style>
+    :root {
+      --bg: #0F1319;
+      --card: #1A212B;
+      --text: #F7F8FA;
+      --muted: #9AA3B2;
+      --accent: #FF6B35;
+      --danger: #FF6B6B;
+      --field: #121821;
+      --border: #2A3340;
+    }
     html, body {
       margin: 0;
-      height: 100%;
-      background-color: #0F1319 !important;
-      color: #F7F8FA;
+      min-height: 100%;
+      background: radial-gradient(120% 80% at 50% -10%, #243041 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     }
     #app-underlay {
       position: fixed;
       inset: 0;
-      background: #0F1319;
+      background: var(--bg);
       z-index: 0;
     }
-    #boot-splash {
+    #boot-splash, #auth-gate {
       position: fixed;
       inset: 0;
+      z-index: 9999;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #0F1319;
-      z-index: 9999;
-      font-family: system-ui, -apple-system, sans-serif;
-      color: #F7F8FA;
-      text-align: center;
       padding: 24px;
       box-sizing: border-box;
-      opacity: 1;
-      transition: opacity 220ms ease;
+      text-align: center;
     }
+    #boot-splash { background: var(--bg); }
     #boot-splash.is-hiding {
       opacity: 0;
       pointer-events: none;
+      transition: opacity 220ms ease;
     }
     #boot-splash .spinner {
       width: 36px;
       height: 36px;
       border: 3px solid #E8E8E4;
-      border-top-color: #FF6B35;
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.9s linear infinite;
       margin-bottom: 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    #auth-gate { display: none; }
+    #auth-gate.is-visible { display: flex; }
+    .auth-card {
+      width: min(100%, 400px);
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 22px 22px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      text-align: left;
+    }
+    .brand {
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      margin: 0 0 6px;
+      text-align: center;
+    }
+    .brand span { color: var(--accent); }
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--field);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 16px;
+      padding: 14px 14px;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    button.primary {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 14px;
+      margin-top: 4px;
+      cursor: pointer;
+    }
+    button.primary:disabled { opacity: .6; cursor: wait; }
+    .switch {
+      margin-top: 16px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .switch a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .error {
+      display: none;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,107,107,.12);
+      color: var(--danger);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .error.is-visible { display: block; }
+    .hint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      line-height: 1.35;
+    }
     flt-scene-host, flt-glass-pane, flutter-view, flt-renderer, canvas {
-      background-color: #0F1319 !important;
+      background-color: var(--bg) !important;
     }
   </style>
-  <!-- Boot Flutter as early as possible; do not gate on version.json / SW. -->
   <script>
     (function () {
-      // Visible in nginx access.log — proves inline JS executed on device.
+      // Prove inline JS ran (nginx access.log).
       try {
-        new Image().src = '/boot-ping?b=__HAN_BUILD_ID__&t=' + Date.now();
+        new Image().src = '/boot-ping?b=__HAN_BUILD_ID__&gate=1&t=' + Date.now();
       } catch (e) {}
 
       try {
@@ -117,61 +193,226 @@
       } catch (e) {}
     })();
   </script>
-  <script src="flutter_bootstrap.js?v=__HAN_BUILD_ID__" async></script>
 </head>
 <body>
   <div id="app-underlay" aria-hidden="true"></div>
-  <div id="boot-splash">
+
+  <div id="boot-splash" hidden>
     <div class="spinner"></div>
     <div style="font-weight:700;font-size:18px">HAN Eat</div>
+    <div id="boot-splash-sub" style="margin-top:10px;color:#9AA3B2;font-size:14px">Загружаем приложение…</div>
   </div>
+
+  <div id="auth-gate">
+    <div class="auth-card">
+      <h1 class="brand">HAN <span>Eat</span></h1>
+      <p class="subtitle" id="auth-subtitle">Войдите, чтобы открыть ленту и рецепты</p>
+      <div id="auth-error" class="error" role="alert"></div>
+
+      <form id="login-form">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required placeholder="example@mail.com">
+        <label for="password">Пароль</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="Минимум 8 символов">
+        <div id="name-wrap" hidden>
+          <label for="name">Имя</label>
+          <input id="name" name="name" type="text" autocomplete="name" placeholder="Как к вам обращаться">
+        </div>
+        <button class="primary" id="auth-submit" type="submit">Войти</button>
+      </form>
+
+      <div class="switch">
+        <span id="switch-text">Нет аккаунта?</span>
+        <a id="switch-mode">Зарегистрироваться</a>
+      </div>
+      <p class="hint">Лёгкий вход без тяжёлой загрузки — приложение подключится после авторизации.</p>
+    </div>
+  </div>
+
   <script>
     (function () {
-      var firstFrame = false;
-      var primaryUiReady = false;
-      var splashHidden = false;
-      var splash = document.getElementById('boot-splash');
+      var BUILD = '__HAN_BUILD_ID__';
+      var PREFIX = 'flutter.';
+      var forceFlutter = /[?&]flutter=1(?:&|$)/.test(location.search);
+      var mode = 'login'; // or register
+      var flutterStarted = false;
 
-      function maybeHideSplash() {
-        if (splashHidden || !firstFrame || !primaryUiReady) return;
-        splashHidden = true;
-        setTimeout(function () {
-          if (!splash) return;
-          splash.classList.add('is-hiding');
-          setTimeout(function () {
-            if (splash && splash.parentNode) splash.remove();
-          }, 260);
-        }, 400);
+      function prefGet(key) {
+        try {
+          var raw = localStorage.getItem(PREFIX + key);
+          if (raw == null) return null;
+          return JSON.parse(raw);
+        } catch (e) {
+          return null;
+        }
       }
 
-      window.addEventListener('flutter-first-frame', function () {
-        firstFrame = true;
-        maybeHideSplash();
-      });
+      function prefSet(key, value) {
+        localStorage.setItem(PREFIX + key, JSON.stringify(value));
+      }
 
-      window.addEventListener('han-primary-ui-ready', function () {
-        primaryUiReady = true;
-        maybeHideSplash();
-      });
+      function hasSession() {
+        var token = prefGet('access_token');
+        return typeof token === 'string' && token.length > 16;
+      }
 
-      setTimeout(function () {
-        if (firstFrame && !primaryUiReady) {
+      function showError(msg) {
+        var el = document.getElementById('auth-error');
+        el.textContent = msg || 'Не удалось выполнить запрос';
+        el.classList.add('is-visible');
+      }
+
+      function clearError() {
+        var el = document.getElementById('auth-error');
+        el.textContent = '';
+        el.classList.remove('is-visible');
+      }
+
+      function setMode(next) {
+        mode = next;
+        var isReg = mode === 'register';
+        document.getElementById('name-wrap').hidden = !isReg;
+        document.getElementById('name').required = isReg;
+        document.getElementById('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
+        document.getElementById('auth-subtitle').textContent = isReg
+          ? 'Создайте аккаунт — дальше откроется приложение'
+          : 'Войдите, чтобы открыть ленту и рецепты';
+        document.getElementById('switch-text').textContent = isReg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
+        document.getElementById('switch-mode').textContent = isReg ? 'Войти' : 'Зарегистрироваться';
+        clearError();
+      }
+
+      function apiUrl(path) {
+        // Same-origin API (Safari-safe).
+        return '/api/v1' + path;
+      }
+
+      function saveSession(data) {
+        if (!data || !data.token || !data.refresh_token || !data.user) {
+          throw new Error('Некорректный ответ сервера');
+        }
+        prefSet('access_token', data.token);
+        prefSet('refresh_token', data.refresh_token);
+        prefSet('user', data.user);
+      }
+
+      function showAuth() {
+        document.getElementById('boot-splash').hidden = true;
+        document.getElementById('auth-gate').classList.add('is-visible');
+        try {
+          new Image().src = '/boot-ping?b=' + encodeURIComponent(BUILD) + '&auth=1&t=' + Date.now();
+        } catch (e) {}
+      }
+
+      function showSplash(sub) {
+        document.getElementById('auth-gate').classList.remove('is-visible');
+        var splash = document.getElementById('boot-splash');
+        splash.hidden = false;
+        if (sub) document.getElementById('boot-splash-sub').textContent = sub;
+      }
+
+      function startFlutter() {
+        if (flutterStarted) return;
+        flutterStarted = true;
+        showSplash('Загружаем приложение…');
+        try {
+          new Image().src = '/boot-ping?b=' + encodeURIComponent(BUILD) + '&flutter=1&t=' + Date.now();
+        } catch (e) {}
+
+        var s = document.createElement('script');
+        s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(BUILD);
+        s.async = true;
+        s.onerror = function () {
+          showError('Не удалось загрузить приложение. Обновите страницу.');
+          showAuth();
+          flutterStarted = false;
+        };
+        document.head.appendChild(s);
+
+        // Splash hide wiring (same as before).
+        var firstFrame = false;
+        var primaryUiReady = false;
+        var splashHidden = false;
+        var splash = document.getElementById('boot-splash');
+        function maybeHideSplash() {
+          if (splashHidden || !firstFrame || !primaryUiReady) return;
+          splashHidden = true;
+          setTimeout(function () {
+            if (!splash) return;
+            splash.classList.add('is-hiding');
+            setTimeout(function () {
+              if (splash && splash.parentNode) splash.remove();
+            }, 260);
+          }, 400);
+        }
+        window.addEventListener('flutter-first-frame', function () {
+          firstFrame = true;
+          maybeHideSplash();
+        });
+        window.addEventListener('han-primary-ui-ready', function () {
           primaryUiReady = true;
           maybeHideSplash();
-        }
-      }, 2500);
+        });
+        setTimeout(function () {
+          if (firstFrame && !primaryUiReady) {
+            primaryUiReady = true;
+            maybeHideSplash();
+          }
+        }, 2500);
+      }
 
-      // Silent auto-recovery: if Flutter never paints, wipe stale SW/cache once.
-      // No buttons — users just get the latest shell automatically.
-      setTimeout(function () {
-        if (firstFrame) return;
-        if (/[?&]fresh=/.test(location.search)) return;
+      document.getElementById('switch-mode').addEventListener('click', function (e) {
+        e.preventDefault();
+        setMode(mode === 'login' ? 'register' : 'login');
+      });
+
+      document.getElementById('login-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        clearError();
+        var email = document.getElementById('email').value.trim();
+        var password = document.getElementById('password').value;
+        var name = document.getElementById('name').value.trim();
+        var btn = document.getElementById('auth-submit');
+        btn.disabled = true;
+        btn.textContent = mode === 'register' ? 'Создаём…' : 'Входим…';
         try {
-          if (sessionStorage.getItem('haneat_boot_fresh_once') === '1') return;
-          sessionStorage.setItem('haneat_boot_fresh_once', '1');
-        } catch (e) {}
-        location.replace('/fresh');
-      }, 16000);
+          var path = mode === 'register' ? '/auth/register' : '/auth/login';
+          var body = mode === 'register'
+            ? { email: email, password: password, name: name || email.split('@')[0], accept_legal: true }
+            : { email: email, password: password };
+          var res = await fetch(apiUrl(path), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(body),
+            credentials: 'same-origin',
+          });
+          var data = null;
+          try { data = await res.json(); } catch (err) {}
+          if (!res.ok) {
+            var detail = data && (data.detail || data.message);
+            if (detail && typeof detail === 'object') {
+              detail = detail.message || detail.code || JSON.stringify(detail);
+            }
+            if (Array.isArray(detail)) {
+              detail = detail.map(function (x) { return x.msg || x; }).join('; ');
+            }
+            throw new Error(detail || ('Ошибка ' + res.status));
+          }
+          saveSession(data);
+          startFlutter();
+        } catch (err) {
+          showError((err && err.message) ? err.message : 'Не удалось войти');
+          btn.disabled = false;
+          btn.textContent = mode === 'register' ? 'Создать аккаунт' : 'Войти';
+        }
+      });
+
+      // Boot decision: session → Flutter; else HTML auth (no CanvasKit yet).
+      if (forceFlutter || hasSession()) {
+        startFlutter();
+      } else {
+        showAuth();
+      }
     })();
   </script>
 </body>
