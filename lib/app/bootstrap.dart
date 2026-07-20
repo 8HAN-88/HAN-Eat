@@ -1,10 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:app_links/app_links.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import '../core/config/google_auth_config.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../../firebase_options.dart';
 import '../services/push_notification_service.dart';
@@ -31,108 +27,24 @@ import '../services/global_search_cache.dart';
 import '../services/subscription_status_cache.dart';
 import '../services/api_reachability_service.dart';
 import '../services/history_storage.dart';
-import '../core/config/app_build_config.dart';
 import '../core/config/legacy_firestore_config.dart';
 import '../core/crash_reporting.dart';
 import '../services/server_config.dart';
 import '../services/api_service.dart';
 import '../services/user_realtime_service.dart';
-import '../core/network/api_endpoint_resolver.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/storage/hive_bootstrap.dart';
 import 'app_bootstrap_state.dart';
+import 'bootstrap_light.dart';
 
-/// Начальная глубокая ссылка (haneat://...) при запуске приложения.
-String? initialDeepLink;
-
-/// Лёгкая часть до первого кадра UI ([runHanEatApp] / [StartupShell]).
-Future<void> bootstrapEarly() async {
-  if (!kIsWeb) {
-    try {
-      await dotenv.load(fileName: '.env');
-    } catch (e) {
-      debugPrint('dotenv load error (continuing): $e');
-    }
-  }
-  // Web must resolve too: otherwise we stay on api.haneat.app and can brick
-  // the PWA when CORS/env drifts (blank/white boot).
-  await ApiEndpointResolver.resolve().timeout(
-    Duration(seconds: kIsWeb ? 5 : 3),
-    onTimeout: () {
-      debugPrint(
-        '⚠️ ApiEndpointResolver: timeout — продолжаем с конфигом по умолчанию',
-      );
-    },
-  );
-
-  debugPrint(
-    '📡 HANEAT env=${AppBuildConfig.environment} API ${ServerConfig.apiBaseUrl}'
-    '${ApiEndpointResolver.usingIpFallback ? ' (IP fallback)' : ''}',
-  );
-  if (kReleaseMode && !AppBuildConfig.apiBaseWasConfigured) {
-    debugPrint(
-      '⚠️ Release без --dart-define=HANEAT_API_BASE — используется ${AppBuildConfig.apiBaseRoot}',
-    );
-  }
-  if (LegacyFirestoreConfig.disabled) {
-    debugPrint('Legacy Firestore sync: отключён (release)');
-  }
-  final linkTimeout = (!kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.iOS ||
-              defaultTargetPlatform == TargetPlatform.android))
-      ? const Duration(milliseconds: 600)
-      : const Duration(seconds: 2);
-
-  unawaited(() async {
-    try {
-      final uri = await AppLinks()
-          .getInitialLink()
-          .timeout(linkTimeout, onTimeout: () => null);
-      if (uri != null) initialDeepLink = uri.toString();
-    } catch (e) {
-      debugPrint('getInitialLink error: $e');
-    }
-  }());
-  unawaited(() async {
-    try {
-      await SharedPreferences.getInstance();
-    } catch (e) {
-      debugPrint('SharedPreferences at bootstrap: $e');
-    }
-  }());
-
-  // Форматирование дат и шрифты — в [bootstrapServicesDeferred], не блокируем runApp.
-
-  // .env уже загружен в начале bootstrapEarly; здесь только лог Google Sign-In.
-  if (!kIsWeb) {
-    try {
-      if (GoogleAuthConfig.isConfigured) {
-        debugPrint('Google Sign-In: Web client ID загружен');
-        final scheme = GoogleAuthConfig.iosReversedClientId;
-        if (scheme != null) {
-          debugPrint(
-            'Google Sign-In iOS: добавьте в Info.plist CFBundleURLSchemes → $scheme',
-          );
-        }
-      }
-    } catch (e) {
-      // ignore, continues if no .env provided
-      debugPrint('dotenv load error (continuing): $e');
-    }
-  } else {
-    // On web, environment variables should be set via build-time configuration
-    // or loaded from a different source (e.g., from backend API)
-    debugPrint('Skipping .env load on web platform');
-  }
-}
+export 'bootstrap_light.dart';
 
 /// Минимум в фоне: сессия из кэша (без Firebase — он в deferred).
+///
+/// On web, only auth — cache warm-up waits until after first paint / full app.
 Future<void> bootstrapServicesForFirstFrame() async {
-  try {
-    await AuthService.init(deferTokenRefresh: true);
-  } catch (e) {
-    debugPrint('AuthService init error (сессия из кэша сохранена): $e');
-  }
+  await bootstrapAuthForFirstFrame();
+  if (kIsWeb) return;
 
   unawaited(
     Future.wait<void>([

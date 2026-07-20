@@ -84,6 +84,7 @@ import '../models/chat_models.dart';
 import '../services/auth_service.dart';
 import '../core/app/app_variant.dart';
 import 'app_bootstrap_state.dart';
+import 'auth_route_paths.dart';
 import 'boot_screen.dart';
 import 'bootstrap.dart';
 import 'router_keys.dart';
@@ -1568,39 +1569,39 @@ class BackupRoute {
 }
 
 class LoginRoute {
-  static const path = '/login';
+  static const path = AuthPaths.login;
   static const name = 'login';
 }
 
 class RegisterRoute {
-  static const path = '/register';
+  static const path = AuthPaths.register;
   static const name = 'register';
 }
 
 class LegalConsentRoute {
-  static const path = LegalConsentScreen.path;
+  static const path = AuthPaths.legalConsent;
   static const name = 'legal_consent';
 }
 
 class ForgotPasswordRoute {
-  static const path = '/forgot-password';
+  static const path = AuthPaths.forgotPassword;
   static const name = 'forgot_password';
 
   static String withEmail(String email) =>
-      '$path?email=${Uri.encodeComponent(email)}';
+      AuthPaths.forgotPasswordWithEmail(email);
 }
 
 class ResetPasswordRoute {
-  static const path = '/reset-password';
+  static const path = AuthPaths.resetPassword;
   static const name = 'reset_password';
 }
 
 class VerifyEmailRoute {
-  static const path = '/verify-email';
+  static const path = AuthPaths.verifyEmail;
   static const name = 'verify_email';
 
   static String withEmail(String email) =>
-      '$path?email=${Uri.encodeComponent(email)}';
+      AuthPaths.verifyEmailWithEmail(email);
 }
 
 class ConfirmEmailChangeRoute {

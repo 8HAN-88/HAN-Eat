@@ -46,15 +46,18 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.prebuilt_tag == '' }}
         run: |
           ./scripts/build_web_release.sh https://api.haneat.app social
-          rm -rf build/web-social
+          rm -rf build/web-social build/web-social-root
           mv build/web build/web-social
+          mv build/web_root build/web-social-root
 
           ./scripts/build_web_release.sh https://api.haneat.app kitchen
-          rm -rf build/web-kitchen
+          rm -rf build/web-kitchen build/web-kitchen-root
           mv build/web build/web-kitchen
+          mv build/web_root build/web-kitchen-root
 
-          mkdir -p build/web
+          mkdir -p build/web build/web_root
           cp -R build/web-social/. build/web/
+          cp -R build/web-social-root/. build/web_root/
         env:
           HANEAT_API_BASE: https://api.haneat.app
 
@@ -66,11 +69,18 @@ jobs:
           gh release download "${{ inputs.prebuilt_tag }}" -R "${{ github.repository }}" -p 'haneat-web.tgz' -D /tmp
           mkdir -p build
           tar xzf /tmp/haneat-web.tgz -C build
-          test -f build/web/index.html
+          if [ -f build/web_root/app/main.dart.js ]; then
+            test -f build/web_root/index.html
+          else
+            test -f build/web/index.html
+            bash scripts/prepare_web_root.sh
+          fi
 
       - name: Verify web build artifacts
         run: |
           python3 scripts/check_web_build_artifacts.py
+          test -f build/web_root/app/main.dart.js
+          test -f build/web_root/index.html
           if [ -d build/web-kitchen ]; then
             rm -rf /tmp/haneat-social-build
             mv build/web /tmp/haneat-social-build
@@ -103,8 +113,9 @@ jobs:
             rsync -avz --delete -e "${RSYNC_SSH}" "${src}/" "root@89.19.216.60:${next}/"
             ${SSH} root@89.19.216.60 "set -euo pipefail
               test -f '${next}/index.html'
-              test -f '${next}/main.dart.js'
-              test -f '${next}/flutter_bootstrap.js'
+              test -f '${next}/app/main.dart.js'
+              test -f '${next}/app/flutter_bootstrap.js'
+              test -f '${next}/app/index.html'
               test -f '${next}/version.json'
               rm -rf '${prev}'
               if [ -d '${live}' ]; then mv '${live}' '${prev}'; fi
@@ -114,9 +125,9 @@ jobs:
             "
           }
 
-          deploy_atomic build/web /var/www/haneat-web
-          if [ -d build/web-kitchen ]; then
-            deploy_atomic build/web-kitchen /var/www/haneat-kitchen-web
+          deploy_atomic build/web_root /var/www/haneat-web
+          if [ -d build/web-kitchen-root ]; then
+            deploy_atomic build/web-kitchen-root /var/www/haneat-kitchen-web
           fi
 
       - name: Patch nginx (same-origin API for Safari Web)
@@ -134,5 +145,6 @@ jobs:
           curl -sf https://haneat.app/version.json
           curl -sf https://haneat.app/health | grep -q '"status"'
           curl -sf https://haneat.app/api/v1/system/readiness | grep -q '"app_env"'
-          curl -sfI https://haneat.app/flutter_bootstrap.js | grep -i cache-control
-          curl -sfI https://haneat.app/assets/AssetManifest.bin.json | grep -i cache-control | grep -qi no-cache
+          curl -sfI https://haneat.app/app/flutter_bootstrap.js | grep -i cache-control
+          curl -sfI https://haneat.app/app/assets/AssetManifest.bin.json | grep -i cache-control | grep -qi no-cache
+          curl -sfI https://haneat.app/ | grep -qi 'text/html'

@@ -7,7 +7,8 @@ import 'package:http/http.dart' as http;
 import 'web_app_update_service_stub.dart'
     if (dart.library.html) 'web_app_update_service_web.dart' as reload;
 
-/// Авто-обновление PWA/web: сравнивает вшитый билд с [version.json] на сервере.
+/// Авто-обновление web: сравнивает вшитый билд с [version.json] и
+/// тихо перезагружает страницу при новом деплое (без кнопок для пользователя).
 class WebAppUpdateService {
   WebAppUpdateService._();
 
@@ -17,6 +18,7 @@ class WebAppUpdateService {
   );
 
   static Timer? _pollTimer;
+  static Timer? _initialTimer;
   static bool _checking = false;
   static bool _reloadScheduled = false;
   static final ValueNotifier<String?> availableUpdateBuild =
@@ -25,19 +27,28 @@ class WebAppUpdateService {
   static void start() {
     if (!kIsWeb || embeddedBuild.isEmpty) return;
     _pollTimer?.cancel();
-    // Не проверяем сразу при старте — иначе цикл reload при устаревшем кэше main.dart.js.
+    _initialTimer?.cancel();
+
+    // Даём приложению стабильно открыться, затем проверяем обновление.
+    _initialTimer = Timer(const Duration(seconds: 12), () {
+      unawaited(checkForUpdate(autoReload: true));
+    });
+
     _pollTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) => unawaited(checkForUpdate()),
+      const Duration(minutes: 2),
+      (_) => unawaited(checkForUpdate(autoReload: true)),
     );
   }
 
   static void stop() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _initialTimer?.cancel();
+    _initialTimer = null;
   }
 
-  static Future<void> checkForUpdate() async {
+  /// [autoReload] — сразу применить новый билд без UI-баннера.
+  static Future<void> checkForUpdate({bool autoReload = true}) async {
     if (!kIsWeb || embeddedBuild.isEmpty) return;
     if (_checking || _reloadScheduled) return;
     _checking = true;
@@ -60,6 +71,9 @@ class WebAppUpdateService {
       );
       availableUpdateBuild.value = remote;
       stop();
+      if (autoReload) {
+        await reloadNow();
+      }
     } catch (e) {
       debugPrint('WebAppUpdateService: $e');
     } finally {
@@ -69,7 +83,7 @@ class WebAppUpdateService {
 
   static Future<void> reloadNow() async {
     if (!kIsWeb || _reloadScheduled) return;
-    final build = availableUpdateBuild.value;
+    final build = availableUpdateBuild.value ?? embeddedBuild;
     _reloadScheduled = true;
     stop();
     await reload.reloadWebPage(build: build);

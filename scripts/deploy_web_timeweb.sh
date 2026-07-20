@@ -17,7 +17,8 @@ SSH_HOST="${HAN_SSH_HOST:-89.19.216.60}"
 REMOTE_WEB_ROOT="${HAN_WEB_ROOT:-/var/www/haneat-web}"
 REMOTE_WEB_NEXT="${REMOTE_WEB_ROOT}.next"
 REMOTE_WEB_PREV="${REMOTE_WEB_ROOT}.prev"
-BUILD_DIR="${ROOT}/build/web"
+BUILD_DIR="${ROOT}/build/web_root"
+LEGACY_BUILD_DIR="${ROOT}/build/web"
 SSH_CONNECT_TIMEOUT="${SSH_CONNECT_TIMEOUT:-10}"
 RSYNC_RETRIES="${RSYNC_RETRIES:-3}"
 
@@ -30,8 +31,15 @@ if [[ ! -f "${SSH_KEY}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${BUILD_DIR}/index.html" ]]; then
-  echo "Нет ${BUILD_DIR}/index.html — сначала: ./scripts/build_web_release.sh"
+if [[ ! -f "${BUILD_DIR}/index.html" || ! -f "${BUILD_DIR}/app/main.dart.js" ]]; then
+  if [[ -f "${LEGACY_BUILD_DIR}/index.html" && ! -f "${BUILD_DIR}/app/main.dart.js" ]]; then
+    echo "Готовлю web_root из build/web…"
+    bash "${ROOT}/scripts/prepare_web_root.sh"
+  fi
+fi
+
+if [[ ! -f "${BUILD_DIR}/index.html" || ! -f "${BUILD_DIR}/app/main.dart.js" ]]; then
+  echo "Нет ${BUILD_DIR}/app/main.dart.js — сначала: ./scripts/build_web_release.sh"
   exit 1
 fi
 
@@ -77,8 +85,9 @@ ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new \
   "${SSH_USER}@${SSH_HOST}" \
   "set -euo pipefail
    test -f '${REMOTE_WEB_NEXT}/index.html'
-   test -f '${REMOTE_WEB_NEXT}/main.dart.js'
-   test -f '${REMOTE_WEB_NEXT}/flutter_bootstrap.js'
+   test -f '${REMOTE_WEB_NEXT}/app/main.dart.js'
+   test -f '${REMOTE_WEB_NEXT}/app/flutter_bootstrap.js'
+   test -f '${REMOTE_WEB_NEXT}/app/index.html'
    test -f '${REMOTE_WEB_NEXT}/version.json'
    rm -rf '${REMOTE_WEB_PREV}'
    if [ -d '${REMOTE_WEB_ROOT}' ]; then
@@ -91,8 +100,9 @@ ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new \
 
 echo ""
 echo "✓ Web deployed (atomic)"
-echo "  URL: https://haneat.app"
-echo "  PWA manifest: https://haneat.app/manifest.json"
+echo "  URL: https://haneat.app/app/"
+echo "  Entry: https://haneat.app/  (redirect → /app/)"
+echo "  PWA manifest: https://haneat.app/app/manifest.json"
 echo "  Asset links:  https://haneat.app/.well-known/assetlinks.json"
 echo ""
 echo "Smoke: откройте https://haneat.app в Chrome → DevTools → Application → Manifest"

@@ -43,50 +43,105 @@ managed = """
         client_max_body_size 64M;
     }
 
-    # Force app shell revalidation for iOS/PWA standalone mode.
+    # One-shot Safari/PWA recovery: wipe Cache API + SW, then open /app/.
+    location = /fresh {
+        add_header Clear-Site-Data '"cache", "storage"' always;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        add_header Pragma "no-cache" always;
+        return 302 /app/?fresh=1;
+    }
+
+    # Tiny JS beacon used by app shell to prove the device reached the new build.
+    location = /boot-ping {
+        add_header Cache-Control "no-store" always;
+        add_header Access-Control-Allow-Origin "*" always;
+        return 204;
+    }
+
+    # Hard HTTP redirect — more reliable on iOS than HTML meta-refresh/JS.
+    # Mac Safari often runs JS; stuck iPhone tabs sometimes do not.
     location = / {
-        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
-        add_header Pragma "no-cache";
-        add_header Expires "0";
-        try_files /index.html =404;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        return 302 /app/;
     }
 
     location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+        return 302 /app/;
+    }
+
+    location = /version.json {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
         try_files $uri =404;
     }
 
-    location ~* ^/(flutter_service_worker\\.js|flutter_bootstrap\\.js|version\\.json|manifest\\.json|flutter\\.js)$ {
+    # Flutter app shell under /app/
+    location = /app {
+        return 302 /app/;
+    }
+
+    location = /app/ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files /app/index.html =404;
+    }
+
+    location = /app/index.html {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
         try_files $uri =404;
     }
 
-    # ^~ keeps query suffixes from hitting immutable regex location.
-    location ^~ /main.dart.js {
+    location ~* ^/app/(flutter_service_worker\\.js|flutter_bootstrap\\.js|version\\.json|manifest\\.json|flutter\\.js)$ {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
         try_files $uri =404;
     }
 
-    location ^~ /icons/ {
+    location ^~ /app/main.dart.js {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    location ^~ /app/icons/ {
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
     }
 
-    location ^~ /assets/ {
+    location ^~ /app/assets/ {
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
     }
 
-    location ^~ /canvaskit/ {
+    location ^~ /app/canvaskit/ {
         add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri =404;
     }
+
+    # SPA routes under /app/feed, /app/login, ...
+    location ^~ /app/ {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /app/index.html;
+    }
+
+    # Stuck Safari/YaBrowser shells still request legacy root asset paths.
+    # ^~ beats the immutable regex location that would otherwise 404.
+    location ^~ /assets/ { return 302 /app$request_uri; }
+    location ^~ /canvaskit/ { return 302 /app$request_uri; }
+    location ^~ /icons/ { return 302 /app$request_uri; }
+    location ^~ /main.dart.js { return 302 /app$request_uri; }
+    location = /flutter_bootstrap.js { return 302 /app/flutter_bootstrap.js; }
+    location = /flutter.js { return 302 /app/flutter.js; }
+    location = /flutter_service_worker.js { return 302 /app/flutter_service_worker.js; }
+    location = /manifest.json { return 302 /app/manifest.json; }
+    location = /favicon.png { return 302 /app/favicon.png; }
     # END HAN-EAT MANAGED CACHE/API
 """
 
@@ -146,6 +201,33 @@ def patch_server_block(block_text: str) -> str:
         patched = patched.replace(app_marker, managed + "\n" + app_marker, 1)
     else:
         patched = patched.replace("\n}\n", "\n" + managed + "\n}\n", 1)
+
+    # Prefer /app$uri for any leftover static hits under the old root layout.
+    patched = re.sub(
+        r"(location\s+~\*\s+\\\.\(js\|css\|png\|jpg\|jpeg\|gif\|ico\|svg\|woff2\?\|ttf\|wasm\)\$\s*\{.*?try_files\s+)\$uri\s+=404;",
+        r"\1$uri /app$uri =404;",
+        patched,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+    # Old bookmarks like /feed must land in /app/feed (not the root redirector).
+    patched = re.sub(
+        r"location\s*/\s*\{\s*try_files\s+\$uri\s+\$uri/\s+/index\.html;\s*(?:add_header\s+Cache-Control\s+\"no-cache\";\s*)?\}",
+        "location / {\n        return 302 /app$request_uri;\n    }",
+        patched,
+        count=1,
+        flags=re.DOTALL,
+    )
+    # If already rewritten to 302, keep it; if still try_files to index, force /app.
+    if "return 302 /app$request_uri;" not in patched:
+        patched = re.sub(
+            r"location\s*/\s*\{[^}]*\}",
+            "location / {\n        return 302 /app$request_uri;\n    }",
+            patched,
+            count=1,
+            flags=re.DOTALL,
+        )
     return patched
 
 parts = re.split(r"(?=\nserver\s*\{)", text)

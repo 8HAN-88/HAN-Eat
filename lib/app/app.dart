@@ -74,7 +74,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
         UserRealtimeService.instance.resumeFromBackground();
         unawaited(ApiReachabilityService.instance.warmUp(force: true));
         unawaited(AuthService.getAccessTokenForApi());
-        unawaited(WebAppUpdateService.checkForUpdate());
+        unawaited(WebAppUpdateService.checkForUpdate(autoReload: true));
       }
       return;
     }
@@ -156,27 +156,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
               color: canvas,
               child: DefaultTextStyle(
                 style: defaultBody.copyWith(color: Colors.white),
-                child: Stack(
-                  children: [
-                    content,
-                    if (kIsWeb)
-                      ValueListenableBuilder<String?>(
-                        valueListenable:
-                            WebAppUpdateService.availableUpdateBuild,
-                        builder: (context, build, _) {
-                          if (build == null || build.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          return Positioned(
-                            left: 12,
-                            right: 12,
-                            top: media.padding.top + 8,
-                            child: const _WebUpdateBanner(),
-                          );
-                        },
-                      ),
-                  ],
-                ),
+                child: content,
               ),
             ),
           );
@@ -211,55 +191,5 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
         ),
       );
     }
-  }
-}
-
-class _WebUpdateBanner extends StatelessWidget {
-  const _WebUpdateBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(18),
-      color: scheme.primaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            Icon(Icons.system_update_alt_rounded,
-                color: scheme.onPrimaryContainer),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Доступно обновление',
-                    style: TextStyle(
-                      color: scheme.onPrimaryContainer,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    'Нажмите, чтобы получить последние изменения',
-                    style: TextStyle(
-                      color: scheme.onPrimaryContainer.withValues(alpha: 0.78),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: WebAppUpdateService.reloadNow,
-              child: const Text('Обновить'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

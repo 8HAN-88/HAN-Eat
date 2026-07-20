@@ -42,6 +42,9 @@ bootstrap.write_text(text, encoding="utf-8")
 index_html = pathlib.Path("${INDEX_HTML}")
 if index_html.exists():
     html = index_html.read_text(encoding="utf-8")
+    if "__HAN_BUILD_ID__" in html:
+        html = html.replace("__HAN_BUILD_ID__", build_id)
+    # Idempotent: already-patched index from a prior pass is OK.
     html = re.sub(
         r'href="icons/Icon-(\d+)\.png(\?v=[^"]*)?"',
         lambda m: f'href="icons/Icon-{m.group(1)}.png{icon_qs}"',
@@ -62,6 +65,9 @@ if index_html.exists():
 manifest = pathlib.Path("${MANIFEST}")
 if manifest.exists():
     data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["start_url"] = f"/app/?v={build_id}"
+    data["scope"] = "/app/"
+    data["id"] = "https://haneat.app/app/"
     for icon in data.get("icons", []):
         src = icon.get("src", "")
         base = src.split("?")[0]

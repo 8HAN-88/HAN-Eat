@@ -7,9 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
 import '../utils/api_error_parser.dart';
 import '../widgets/app_brand_logo.dart';
-import 'app.dart';
+import 'app.dart' deferred as full_app;
 import 'app_bootstrap_state.dart';
-import 'bootstrap.dart';
+import 'bootstrap.dart' deferred as heavy_boot;
+import 'bootstrap_light.dart';
+import 'web_auth_app.dart';
+import 'web_plugins_heavy_stub.dart'
+    if (dart.library.html) 'web_plugins_heavy.dart' deferred as heavy_plugins;
 
 /// Фон загрузки — тёмный, без белой вспышки на PWA.
 const _kStartupCanvas = Color(0xFF0F1319);
@@ -23,20 +27,27 @@ class StartupShell extends StatefulWidget {
 
 class _StartupShellState extends State<StartupShell> {
   Object? _error;
+  Object? _fullAppLoadError;
+  bool _fullAppLibraryLoaded = false;
+  bool _fullAppLoadStarted = false;
 
   void _openMainUi() {
     if (AppBootstrapState.authReady.value) return;
     AppBootstrapState.authReady.value = true;
     AuthService.sessionRevision.value++;
+    // Native / already signed-in web: go straight to the full app chunk.
+    if (!kIsWeb || AuthService.instance.currentUser != null) {
+      AppBootstrapState.enterFullApp();
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    AppBootstrapState.loadFullApp.addListener(_onLoadFullAppChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
     });
-    // Страховка: если bootstrap завис — не вечный спиннер.
     Future<void>.delayed(const Duration(seconds: 12), () {
       if (mounted && !AppBootstrapState.authReady.value) {
         debugPrint('⚠️ StartupShell: timeout 12s — открываем UI');
@@ -45,13 +56,78 @@ class _StartupShellState extends State<StartupShell> {
     });
   }
 
+  @override
+  void dispose() {
+    AppBootstrapState.loadFullApp.removeListener(_onLoadFullAppChanged);
+    super.dispose();
+  }
+
+  void _onLoadFullAppChanged() {
+    if (AppBootstrapState.loadFullApp.value) {
+      unawaited(_ensureFullAppLoaded());
+    }
+  }
+
+  Future<void> _ensureFullAppLoaded() async {
+    if (_fullAppLibraryLoaded || _fullAppLoadStarted) return;
+    _fullAppLoadStarted = true;
+    try {
+      final loaders = <Future<void>>[
+        full_app.loadLibrary(),
+        heavy_boot.loadLibrary(),
+      ];
+      if (kIsWeb) {
+        loaders.add(heavy_plugins.loadLibrary());
+      }
+      await Future.wait<void>(loaders);
+      if (kIsWeb) {
+        heavy_plugins.registerHeavyWebPlugins();
+      }
+      if (!mounted) return;
+      setState(() {
+        _fullAppLibraryLoaded = true;
+        _fullAppLoadError = null;
+      });
+      unawaited(_runHeavyBootstrap());
+    } catch (e, st) {
+      debugPrint('full_app.loadLibrary failed: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _fullAppLoadStarted = false;
+        _fullAppLoadError = e;
+      });
+    }
+  }
+
+  Future<void> _runHeavyBootstrap() async {
+    try {
+      if (!kIsWeb) {
+        await heavy_boot.bootstrapServicesForFirstFrame().timeout(
+          const Duration(seconds: 6),
+          onTimeout: () {
+            debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout');
+          },
+        );
+      }
+      await heavy_boot.bootstrapServicesDeferred();
+    } catch (e, st) {
+      debugPrint('heavy bootstrap: $e\n$st');
+    } finally {
+      AppBootstrapState.servicesReady.value = true;
+    }
+  }
+
   void _retryBootstrap() {
     setState(() {
       _error = null;
+      _fullAppLoadError = null;
+      _fullAppLibraryLoaded = false;
+      _fullAppLoadStarted = false;
       AppBootstrapState.authReady.value = false;
       AppBootstrapState.hiveReady.value = false;
       AppBootstrapState.servicesReady.value = false;
       AppBootstrapState.primaryUiReady.value = false;
+      AppBootstrapState.loadFullApp.value = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_runBootstrapInBackground());
@@ -71,35 +147,23 @@ class _StartupShellState extends State<StartupShell> {
     }
 
     try {
-      await bootstrapServicesForFirstFrame().timeout(
+      await bootstrapAuthForFirstFrame().timeout(
         Duration(milliseconds: kIsWeb ? 2500 : 6000),
         onTimeout: () {
-          debugPrint('⚠️ bootstrapServicesForFirstFrame: timeout');
+          debugPrint('⚠️ bootstrapAuthForFirstFrame: timeout');
         },
       );
     } catch (e, st) {
-      debugPrint('bootstrapServicesForFirstFrame: $e\n$st');
-      // On web never trap the user on a recovery screen — open the app and
-      // let screens load with their own empty/error states.
+      debugPrint('bootstrapAuthForFirstFrame: $e\n$st');
       if (!kIsWeb && mounted) {
         setState(() => _error = e);
       }
     } finally {
       _openMainUi();
     }
-
-    unawaited(() async {
-      try {
-        await bootstrapServicesDeferred();
-      } catch (e, st) {
-        debugPrint('bootstrapServicesDeferred: $e\n$st');
-      } finally {
-        AppBootstrapState.servicesReady.value = true;
-      }
-    }());
   }
 
-  Widget _loadingApp() {
+  Widget _loadingApp({String? subtitle}) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -107,24 +171,35 @@ class _StartupShellState extends State<StartupShell> {
         scaffoldBackgroundColor: _kStartupCanvas,
         brightness: Brightness.dark,
       ),
-      home: const Scaffold(
+      home: Scaffold(
         backgroundColor: _kStartupCanvas,
         body: SafeArea(
           child: Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  AppBrandLogo(
+                  const AppBrandLogo(
                     layout: AppBrandLogoLayout.horizontal,
                     width: 168,
                   ),
-                  SizedBox(height: 32),
-                  CircularProgressIndicator(
+                  const SizedBox(height: 32),
+                  const CircularProgressIndicator(
                     color: Color(0xFFFF6B35),
                     strokeWidth: 2.5,
                   ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFB0B8C4),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -135,8 +210,9 @@ class _StartupShellState extends State<StartupShell> {
   }
 
   Widget _errorApp() {
-    final message = _error != null
-        ? userVisibleError(_error!, fallback: 'Не удалось подключиться к серверу')
+    final err = _error ?? _fullAppLoadError;
+    final message = err != null
+        ? userVisibleError(err, fallback: 'Не удалось подключиться к серверу')
         : 'Не удалось запустить приложение';
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -182,13 +258,28 @@ class _StartupShellState extends State<StartupShell> {
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) return _errorApp();
+    if (_error != null || _fullAppLoadError != null) return _errorApp();
 
     return ValueListenableBuilder<bool>(
       valueListenable: AppBootstrapState.authReady,
       builder: (context, ready, _) {
         if (!ready) return _loadingApp();
-        return const ProviderScope(child: HanEatApp());
+
+        return ValueListenableBuilder<bool>(
+          valueListenable: AppBootstrapState.loadFullApp,
+          builder: (context, wantFull, _) {
+            if (kIsWeb && !wantFull) {
+              return const WebAuthApp();
+            }
+            if (!_fullAppLibraryLoaded) {
+              unawaited(_ensureFullAppLoaded());
+              return _loadingApp(
+                subtitle: kIsWeb ? 'Загружаем приложение…' : null,
+              );
+            }
+            return ProviderScope(child: full_app.HanEatApp());
+          },
+        );
       },
     );
   }

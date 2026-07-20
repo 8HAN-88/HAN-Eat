@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
+import '../../../app/auth_navigation.dart';
+import '../../../app/auth_route_paths.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 
@@ -57,9 +57,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       final stillAuth = await AuthService.isAuthenticated();
       if (!mounted) return;
       if (stillAuth) {
-        context.go(FeedRoute.path);
+        navigateAfterAuth(context, AuthPaths.feed);
       } else {
-        context.go(LoginRoute.path);
+        context.go(AuthPaths.login);
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -116,11 +116,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _returnToLogin() async {
     await AuthService.instance.signOut(notifySession: false);
-    if (UserService.isInitialized) {
-      UserService.instance.profile.value = null;
-    }
     if (!mounted) return;
-    context.go(LoginRoute.path);
+    context.go(AuthPaths.login);
     AuthService.instance.notifySessionCleared();
   }
 

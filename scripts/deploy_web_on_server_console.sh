@@ -21,15 +21,26 @@ fi
 
 mkdir -p "${TMP}"
 tar xzf "${TGZ}" -C "${TMP}"
-if [[ ! -f "${TMP}/web/index.html" ]]; then
-  echo "Архив должен содержать web/index.html"
+if [[ ! -f "${TMP}/web/index.html" || ! -f "${TMP}/web/app/main.dart.js" ]]; then
+  echo "Архив должен содержать web/index.html и web/app/main.dart.js"
   exit 1
 fi
 
-mkdir -p "${WEB_ROOT}"
-rsync -a --delete "${TMP}/web/" "${WEB_ROOT}/"
-chown -R www-data:www-data "${WEB_ROOT}" 2>/dev/null || true
+NEXT="${WEB_ROOT}.next"
+PREV="${WEB_ROOT}.prev"
+rm -rf "${NEXT}"
+mkdir -p "${NEXT}"
+rsync -a --delete "${TMP}/web/" "${NEXT}/"
+chown -R www-data:www-data "${NEXT}" 2>/dev/null || true
 rm -rf "${TMP}"
+
+# Atomic swap (same idea as deploy_web_timeweb.sh).
+if [[ -d "${WEB_ROOT}" ]]; then
+  rm -rf "${PREV}"
+  mv "${WEB_ROOT}" "${PREV}"
+fi
+mv "${NEXT}" "${WEB_ROOT}"
+rm -rf "${PREV}"
 
 # nginx: no-cache для bootstrap, version, icons, main.dart.js
 if [[ -f /etc/nginx/sites-available/haneat-web ]]; then

@@ -3,6 +3,8 @@ import 'dart:html' as html;
 String _reloadGuardKey(String? build) =>
     'haneat_web_update_reload_${build ?? 'unknown'}';
 
+/// Перезагрузка на свежий app shell. Один раз на билд за вкладку
+/// (sessionStorage), чтобы не зациклить Safari.
 Future<void> reloadWebPage({String? build}) async {
   try {
     final guardKey = _reloadGuardKey(build);
@@ -31,12 +33,7 @@ Future<void> reloadWebPage({String? build}) async {
     }
   } catch (_) {}
 
-  final uri = Uri.parse(html.window.location.href);
-  final params = Map<String, String>.from(uri.queryParameters);
-  if (build != null && build.isNotEmpty) {
-    params['v'] = build;
-  }
-  params['_cb'] = DateTime.now().millisecondsSinceEpoch.toString();
-  final next = uri.replace(queryParameters: params);
-  html.window.location.replace(next.toString());
+  final cb = DateTime.now().millisecondsSinceEpoch.toString();
+  final v = (build != null && build.isNotEmpty) ? build : cb;
+  html.window.location.replace('/app/?v=$v&_cb=$cb');
 }

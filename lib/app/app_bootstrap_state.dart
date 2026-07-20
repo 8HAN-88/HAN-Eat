@@ -16,6 +16,16 @@ class AppBootstrapState {
   /// Любой основной экран (login/root shell/etc.) реально отрисовался.
   static final ValueNotifier<bool> primaryUiReady = ValueNotifier(false);
 
+  /// Web: скачать deferred-чанк с полным GoRouter / WebRTC / reels.
+  /// Пока false и нет сессии — показываем лёгкий [WebAuthApp].
+  static final ValueNotifier<bool> loadFullApp = ValueNotifier(false);
+
   /// Главный UI после auth — Hive подгружается в фоне, не блокирует вход.
   static bool get canOpenMainShell => authReady.value;
+
+  static void enterFullApp() {
+    if (!loadFullApp.value) {
+      loadFullApp.value = true;
+    }
+  }
 }

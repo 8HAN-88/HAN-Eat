@@ -12,7 +12,7 @@
     * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
 
     This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    the `--base-href` argument provided by `flutter build`.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
@@ -21,6 +21,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="description" content="HAN Eat — рецепты, лента, каналы и meal plan">
   <meta name="theme-color" content="#0F1319">
+  <meta name="han-eat-build" content="__HAN_BUILD_ID__">
 
   <!-- PWA / Add to Home Screen -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -35,8 +36,6 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>HAN Eat</title>
-  <link rel="preconnect" href="https://api.haneat.app" crossorigin>
-  <link rel="dns-prefetch" href="https://api.haneat.app">
   <link rel="manifest" href="manifest.json">
   <style>
     html, body {
@@ -86,6 +85,39 @@
       background-color: #0F1319 !important;
     }
   </style>
+  <!-- Boot Flutter as early as possible; do not gate on version.json / SW. -->
+  <script>
+    (function () {
+      // Visible in nginx access.log — proves inline JS executed on device.
+      try {
+        new Image().src = '/boot-ping?b=__HAN_BUILD_ID__&t=' + Date.now();
+      } catch (e) {}
+
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register = function () {
+            return Promise.reject(new Error('HAN Eat: service worker disabled'));
+          };
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            for (var i = 0; i < regs.length; i++) {
+              try { regs[i].unregister(); } catch (err) {}
+            }
+          }).catch(function () {});
+        }
+      } catch (e) {}
+
+      try {
+        if (window.caches && caches.keys) {
+          caches.keys().then(function (keys) {
+            for (var i = 0; i < keys.length; i++) {
+              try { caches.delete(keys[i]); } catch (err) {}
+            }
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <script src="flutter_bootstrap.js?v=__HAN_BUILD_ID__" async></script>
 </head>
 <body>
   <div id="app-underlay" aria-hidden="true"></div>
@@ -95,22 +127,6 @@
   </div>
   <script>
     (function () {
-      if (typeof Promise !== 'undefined' && !Promise.prototype.finally) {
-        Promise.prototype.finally = function (onFinally) {
-          var P = this.constructor;
-          var handler = typeof onFinally === 'function' ? onFinally : function () {};
-          return this.then(
-            function (value) {
-              return P.resolve(handler()).then(function () { return value; });
-            },
-            function (reason) {
-              return P.resolve(handler()).then(function () { throw reason; });
-            }
-          );
-        };
-      }
-
-      var flutterStarted = false;
       var firstFrame = false;
       var primaryUiReady = false;
       var splashHidden = false;
@@ -128,50 +144,6 @@
         }, 400);
       }
 
-      function unregisterServiceWorkers() {
-        if (!('serviceWorker' in navigator)) return Promise.resolve();
-        return navigator.serviceWorker.getRegistrations().then(function (regs) {
-          return Promise.all(regs.map(function (r) { return r.unregister(); }));
-        }).catch(function () {});
-      }
-
-      function blockServiceWorkerRegistration() {
-        if (!('serviceWorker' in navigator)) return;
-        try {
-          navigator.serviceWorker.register = function () {
-            return Promise.reject(new Error('HAN Eat: service worker disabled'));
-          };
-          navigator.serviceWorker.getRegistration = function () {
-            return Promise.resolve(undefined);
-          };
-          navigator.serviceWorker.getRegistrations = function () {
-            return Promise.resolve([]);
-          };
-        } catch (e) {}
-      }
-
-      function loadFlutter(build) {
-        if (flutterStarted) return;
-        flutterStarted = true;
-        var start = function () {
-          blockServiceWorkerRegistration();
-          var s = document.createElement('script');
-          s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(build || Date.now());
-          s.async = true;
-          document.body.appendChild(s);
-        };
-        unregisterServiceWorkers().then(start, start);
-      }
-
-      fetch('/version.json?nocache=' + Date.now(), { cache: 'no-store' })
-        .then(function (r) { return r.json(); })
-        .then(function (v) {
-          loadFlutter(String(v.build_number || v.version || Date.now()));
-        })
-        .catch(function () {
-          loadFlutter(String(Date.now()));
-        });
-
       window.addEventListener('flutter-first-frame', function () {
         firstFrame = true;
         maybeHideSplash();
@@ -182,13 +154,24 @@
         maybeHideSplash();
       });
 
-      // If first frame painted but primary signal is late, still enter the app.
       setTimeout(function () {
         if (firstFrame && !primaryUiReady) {
           primaryUiReady = true;
           maybeHideSplash();
         }
       }, 2500);
+
+      // Silent auto-recovery: if Flutter never paints, wipe stale SW/cache once.
+      // No buttons — users just get the latest shell automatically.
+      setTimeout(function () {
+        if (firstFrame) return;
+        if (/[?&]fresh=/.test(location.search)) return;
+        try {
+          if (sessionStorage.getItem('haneat_boot_fresh_once') === '1') return;
+          sessionStorage.setItem('haneat_boot_fresh_once', '1');
+        } catch (e) {}
+        location.replace('/fresh');
+      }, 16000);
     })();
   </script>
 </body>

@@ -24,6 +24,7 @@ void main() {
     AppBootstrapState.authReady.value = false;
     AppBootstrapState.hiveReady.value = true;
     AppBootstrapState.primaryUiReady.value = false;
+    AppBootstrapState.loadFullApp.value = false;
 
     // Лёгкий первый кадр (StartupShell), затем HanEatApp + GoRouter — иначе белый Launch Screen на iOS 26.
     runApp(

@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../app/app_router.dart';
 import '../../../../app/app_bootstrap_state.dart';
+import '../../../../app/auth_navigation.dart';
+import '../../../../app/auth_route_paths.dart';
 import '../../../../core/app/app_variant.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../core/web/boot_ready_signal.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
-import '../../../../services/push_notification_service.dart';
 import '../../../../widgets/app_brand_logo.dart';
 import '../../../../widgets/app_gradient_background.dart';
 import '../../../../widgets/pwa_install_banner.dart';
@@ -61,11 +62,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         password: _passwordController.text,
       );
 
-      unawaited(
-        PushNotificationService.syncTokenAfterAuth().catchError(
-          (Object e) => debugPrint('FCM after login: $e'),
-        ),
-      );
+      unawaited(() async {
+        try {
+          await push_svc.loadLibrary();
+          await push_svc.PushNotificationService.syncTokenAfterAuth();
+        } catch (e) {
+          debugPrint('FCM after login: $e');
+        }
+      }());
 
       if (!mounted) return;
 
@@ -73,16 +77,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // before context.go races GoRouter's /login→/feed redirect with an
       // explicit go into StatefulShellRoute and leaves an empty shell that
       // CanvasKit paints as a white screen (same pattern as sign-out helper).
+      // On web, destinations outside the auth shell load the deferred full app.
       final String destination;
       if (!auth.user.emailVerified) {
-        destination = VerifyEmailRoute.withEmail(_emailController.text.trim());
+        destination =
+            AuthPaths.verifyEmailWithEmail(_emailController.text.trim());
       } else if (auth.user.legalConsentRequired) {
-        destination = LegalConsentRoute.path;
+        destination = AuthPaths.legalConsent;
       } else {
         destination =
-            AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+            AppVariant.current.isKitchen ? AuthPaths.menu : AuthPaths.feed;
       }
-      context.go(destination);
+      navigateAfterAuth(context, destination);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         AuthService.notifySessionReadyAfterLogin();
       });
@@ -94,14 +100,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (userNow == null) return;
         final route = ModalRoute.of(context);
         if (route != null && !route.isCurrent) return;
-        context.go(destination);
+        navigateAfterAuth(context, destination);
       });
       setState(() => _isLoading = false);
     } on AuthException catch (e) {
       if (mounted) {
         if (e.isEmailNotVerified) {
-          context.go(
-            VerifyEmailRoute.withEmail(_emailController.text.trim()),
+          navigateAfterAuth(
+            context,
+            AuthPaths.verifyEmailWithEmail(_emailController.text.trim()),
           );
           WidgetsBinding.instance.addPostFrameCallback((_) {
             AuthService.notifySessionReadyAfterLogin();
@@ -222,7 +229,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () => context.push(
-                                ForgotPasswordRoute.withEmail(
+                                AuthPaths.forgotPasswordWithEmail(
                                   _emailController.text.trim(),
                                 ),
                               ),
@@ -252,7 +259,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       TextButton(
                         onPressed: _isLoading
                             ? null
-                            : () => context.push(RegisterRoute.path),
+                            : () => context.push(AuthPaths.register),
                         child: const Text('Зарегистрироваться'),
                       ),
                     ],

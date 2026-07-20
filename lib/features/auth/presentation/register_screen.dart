@@ -4,10 +4,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../app/auth_navigation.dart';
+import '../../../../app/auth_route_paths.dart';
 import '../../../../services/auth_service.dart';
+import '../../../../services/push_notification_service.dart' deferred as push_svc;
 import '../../../../utils/api_error_parser.dart';
-import '../../../../services/push_notification_service.dart';
-import '../../../../app/app_router.dart';
 import '../../../../widgets/app_gradient_background.dart';
 import '../../../../widgets/server_connecting_hint.dart';
 import '../../../../widgets/legal_consent_checkbox.dart';
@@ -69,11 +70,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         acceptLegal: true,
       );
 
-      unawaited(
-        PushNotificationService.syncTokenAfterAuth().catchError(
-          (Object e) => debugPrint('FCM after register: $e'),
-        ),
-      );
+      unawaited(() async {
+        try {
+          await push_svc.loadLibrary();
+          await push_svc.PushNotificationService.syncTokenAfterAuth();
+        } catch (e) {
+          debugPrint('FCM after register: $e');
+        }
+      }());
 
       if (mounted) {
         if (response.message != null && response.message!.isNotEmpty) {
@@ -82,9 +86,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
         }
         if (!response.user.emailVerified) {
-          context.go(VerifyEmailRoute.withEmail(response.user.email));
+          navigateAfterAuth(
+            context,
+            AuthPaths.verifyEmailWithEmail(response.user.email),
+          );
         } else {
-          context.go(FeedRoute.path);
+          navigateAfterAuth(context, AuthPaths.feed);
         }
         WidgetsBinding.instance.addPostFrameCallback((_) {
           AuthService.notifySessionReadyAfterLogin();
@@ -270,7 +277,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       TextButton(
                         onPressed: _isLoading
                             ? null
-                            : () => context.go(LoginRoute.path),
+                            : () => context.go(AuthPaths.login),
                         child: const Text('Войти'),
                       ),
                     ],

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
+import '../../../app/auth_route_paths.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/server_connecting_hint.dart';
@@ -49,7 +49,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(result.message)),
         );
-        context.go(LoginRoute.path);
+        context.go(AuthPaths.login);
       }
     } on AuthException catch (e) {
       if (mounted) {

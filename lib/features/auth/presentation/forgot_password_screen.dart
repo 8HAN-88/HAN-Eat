@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
+import '../../../app/auth_route_paths.dart';
 import '../../../services/auth_service.dart';
 import '../../../widgets/app_brand_logo.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -147,13 +147,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: () => context.push(ResetPasswordRoute.path),
+              onPressed: () => context.push(AuthPaths.resetPassword),
               child: const Text('Уже есть код из письма?'),
             ),
           ),
           Center(
             child: TextButton(
-              onPressed: () => context.go(LoginRoute.path),
+              onPressed: () => context.go(AuthPaths.login),
               child: const Text('Вернуться ко входу'),
             ),
           ),
@@ -265,11 +265,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           child: const Text('Указать другой email'),
         ),
         TextButton(
-          onPressed: () => context.push(ResetPasswordRoute.path),
+          onPressed: () => context.push(AuthPaths.resetPassword),
           child: const Text('Ввести код вручную'),
         ),
         TextButton(
-          onPressed: () => context.go(LoginRoute.path),
+          onPressed: () => context.go(AuthPaths.login),
           child: const Text('Вернуться ко входу'),
         ),
       ],
