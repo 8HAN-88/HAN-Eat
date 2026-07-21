@@ -58,14 +58,15 @@ managed = """
         return 204;
     }
 
-    # HTML auth gate at site root (no Flutter). Clear HTTP/Cache API so stuck
-    # Safari/PWA shells cannot keep serving an old CanvasKit boot.
+    # HTML auth gate at site root (no Flutter).
+    # Do NOT send Clear-Site-Data here — on iPhone Safari it can hang the tab
+    # for ~60s (black screen → «сервер перестал отвечать») and never finish
+    # the navigation. Nuclear wipe stays only on /fresh.
     location = / {
         try_files /index.html =404;
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        add_header Clear-Site-Data '"cache"' always;
     }
 
     location = /index.html {
@@ -73,7 +74,6 @@ managed = """
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        add_header Clear-Site-Data '"cache"' always;
     }
 
     location = /login.html {
@@ -81,7 +81,6 @@ managed = """
         default_type text/html;
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
         add_header Pragma "no-cache" always;
-        add_header Clear-Site-Data '"cache"' always;
     }
 
     location = /login {
@@ -122,25 +121,26 @@ managed = """
         try_files $uri =404;
     }
 
+    # main.dart.js is requested as main.dart.js?v=BUILD — safe to cache by URL.
+    # no-store forced every phone to re-download ~3MB and often died mid-transfer.
     location ^~ /app/main.dart.js {
-        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
-        add_header Pragma "no-cache";
-        add_header Expires "0";
+        add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;
     }
 
     location ^~ /app/icons/ {
-        add_header Cache-Control "no-cache, must-revalidate";
+        add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;
     }
 
     location ^~ /app/assets/ {
-        add_header Cache-Control "no-cache, must-revalidate";
+        add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;
     }
 
+    # CanvasKit is engine-tied; long cache after first successful phone download.
     location ^~ /app/canvaskit/ {
-        add_header Cache-Control "no-cache, must-revalidate";
+        add_header Cache-Control "public, max-age=31536000, immutable";
         try_files $uri =404;
     }
 

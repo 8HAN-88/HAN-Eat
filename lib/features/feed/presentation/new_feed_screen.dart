@@ -10,6 +10,7 @@ import '../../../core/network/feed_connectivity.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../models/post_model.dart';
 import '../../../models/post_types.dart';
+import '../../../services/api_reachability_service.dart';
 import '../../../services/feed_api_cache.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
@@ -69,6 +70,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   bool _servingFromCache = false;
   Object? _cacheLoadError;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  VoidCallback? _apiReconnectedListener;
 
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
       'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
@@ -93,6 +95,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       if (_isLoading) return;
       unawaited(_loadFeed(refresh: true));
     });
+    _apiReconnectedListener = () {
+      if (!mounted || _isLoading) return;
+      unawaited(_loadFeed(refresh: true));
+    };
+    ApiReachabilityService.addReconnectedListener(_apiReconnectedListener!);
     if (!widget.deferLoad) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -126,6 +133,9 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   @override
   void dispose() {
     _realtimeSub?.cancel();
+    if (_apiReconnectedListener != null) {
+      ApiReachabilityService.removeReconnectedListener(_apiReconnectedListener!);
+    }
     _scrollController.dispose();
     super.dispose();
   }

@@ -422,6 +422,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _onConnectionRestored() {
     if (!mounted || _appPaused) return;
+    // Re-queue failed text sends (like Telegram) instead of leaving them stuck.
+    if (_failedTextSends.isNotEmpty) {
+      final failed = _failedTextSends.values.toList(growable: false);
+      _failedTextSends.clear();
+      for (final pending in failed) {
+        _clearFailedTextAutoRetry(pending.tempId);
+        pending.attempts = 0;
+        pending.lastRetryAfterSeconds = null;
+        pending.lastLimitedAt = null;
+        _textOutboundQueue.add(pending);
+      }
+      unawaited(_persistFailedTextSends());
+      if (mounted) setState(() {});
+    }
     if (_textOutboundQueue.isNotEmpty) {
       unawaited(_drainTextOutboundQueue());
     }

@@ -112,9 +112,10 @@ load_re = re.compile(
     r'_flutter\.loader\.load\(\{.*?\n\}\);',
     re.DOTALL,
 )
+# Do not force renderer — Safari/iPhone sometimes fails hard on CanvasKit/WASM
+# and recovers better when Flutter can choose. Keep local CanvasKit assets only.
 load_block = """_flutter.loader.load({
   config: {
-    renderer: "canvaskit",
     useLocalCanvasKit: true,
     canvasKitBaseUrl: "canvaskit/",
   },

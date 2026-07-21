@@ -35,5 +35,7 @@ Future<void> reloadWebPage({String? build}) async {
 
   final cb = DateTime.now().millisecondsSinceEpoch.toString();
   final v = (build != null && build.isNotEmpty) ? build : cb;
-  html.window.location.replace('/app/?v=$v&_cb=$cb');
+  // go=1 is required on iPhone: /app/ without it only shows the continue gate
+  // and never starts Flutter (users see a stuck dark screen).
+  html.window.location.replace('/app/?v=$v&go=1&_cb=$cb');
 }

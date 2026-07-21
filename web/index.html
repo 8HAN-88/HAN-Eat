@@ -54,9 +54,12 @@
       box-sizing: border-box;
       text-align: center;
     }
+    /* Never leave iPhone on a blank black page before JS runs. */
+    #auth-gate { display: flex; }
     #boot-splash.is-visible,
-    #auth-gate.is-visible,
     #continue-gate.is-visible { display: flex; }
+    #auth-gate.is-hidden { display: none !important; }
+    #auth-gate.is-visible { display: flex !important; }
     #boot-splash { background: var(--bg); }
     #boot-splash.is-hiding {
       opacity: 0;
@@ -227,11 +230,20 @@
   </div>
 
   <div id="continue-gate">
-    <div class="auth-card" style="text-align:center">
+    <!-- Default: обычный экран загрузки, сразу открываем приложение. -->
+    <div id="continue-loading">
+      <div class="spinner"></div>
+      <div style="font-weight:700;font-size:18px">HAN Eat</div>
+      <div id="continue-loading-sub" style="margin-top:10px;color:#9AA3B2;font-size:14px">Открываем…</div>
+    </div>
+    <!-- Только если не удалось открыть. -->
+    <div id="continue-retry" class="auth-card" style="text-align:center;display:none">
       <h1 class="brand">HAN <span>Eat</span></h1>
-      <p class="subtitle">Сессия найдена. Нажмите, чтобы открыть приложение — так Safari не падает на холодном старте.</p>
-      <button class="primary" id="continue-btn" type="button">Открыть HAN Eat</button>
-      <button class="linkish" id="continue-logout" type="button">Выйти и сменить аккаунт</button>
+      <p class="subtitle">Не получилось открыть. Попробуйте ещё раз.</p>
+      <div id="continue-error" class="error" role="alert"></div>
+      <button class="primary" id="continue-btn" type="button">Попробовать снова</button>
+      <button class="linkish" id="continue-logout" type="button">Выйти из аккаунта</button>
+      <p class="hint" style="margin-top:10px">Если снова не выйдет — выключите VPN и зайдите по Wi‑Fi.</p>
     </div>
   </div>
 
@@ -261,7 +273,7 @@
         <span id="switch-text">Нет аккаунта?</span>
         <a id="switch-mode">Зарегистрироваться</a>
       </div>
-      <p class="hint">Сначала лёгкий вход. Тяжёлое приложение загрузится только после авторизации.</p>
+      <p class="hint">Войдите — и откроется лента с рецептами.</p>
     </div>
   </div>
 
@@ -276,6 +288,16 @@
       var flutterStarted = false;
       var isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      // After one successful Flutter paint, skip the manual continue tap next time.
+      var BOOT_OK_KEY = 'han_ios_boot_ok_v1';
+
+      function hasBootOk() {
+        try { return localStorage.getItem(BOOT_OK_KEY) === '1'; } catch (e) { return false; }
+      }
+
+      function markBootOk() {
+        try { localStorage.setItem(BOOT_OK_KEY, '1'); } catch (e) {}
+      }
 
       function prefGet(key) {
         try {
@@ -297,6 +319,7 @@
           localStorage.removeItem(PREFIX + 'access_token');
           localStorage.removeItem(PREFIX + 'refresh_token');
           localStorage.removeItem(PREFIX + 'user');
+          localStorage.removeItem(BOOT_OK_KEY);
         } catch (e) {}
       }
 
@@ -307,20 +330,79 @@
 
       function showOnly(id) {
         ['boot-splash', 'auth-gate', 'continue-gate'].forEach(function (x) {
-          document.getElementById(x).classList.toggle('is-visible', x === id);
+          var el = document.getElementById(x);
+          if (!el) return;
+          var on = x === id;
+          el.classList.toggle('is-visible', on);
+          if (x === 'auth-gate') {
+            el.classList.toggle('is-hidden', !on);
+          }
         });
       }
 
       function showError(msg) {
-        var el = document.getElementById('auth-error');
+        // Prefer the visible gate (continue on iPhone, auth otherwise).
+        var cont = document.getElementById('continue-gate');
+        var useContinue = cont && cont.classList.contains('is-visible');
+        var el = document.getElementById(useContinue ? 'continue-error' : 'auth-error');
+        if (!el) el = document.getElementById('auth-error');
+        if (!el) return;
         el.textContent = msg || 'Не удалось выполнить запрос';
         el.classList.add('is-visible');
       }
 
       function clearError() {
-        var el = document.getElementById('auth-error');
-        el.textContent = '';
-        el.classList.remove('is-visible');
+        ['auth-error', 'continue-error'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = '';
+          el.classList.remove('is-visible');
+        });
+      }
+
+      function looksLikeEmail(value) {
+        // Soft check: local@domain.tld (domain must contain a dot).
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value || '');
+      }
+
+      function humanAuthError(data, status) {
+        var detail = data && (data.detail || data.message);
+        if (Array.isArray(detail)) {
+          var msgs = detail.map(function (x) {
+            if (!x || typeof x !== 'object') return String(x);
+            var loc = Array.isArray(x.loc) ? x.loc.join('.') : '';
+            var msg = String(x.msg || '');
+            var input = typeof x.input === 'string' ? x.input : '';
+            if (loc.indexOf('email') !== -1 || /email/i.test(msg)) {
+              if (input && input.indexOf('@') !== -1 && input.indexOf('.') === -1) {
+                return 'Проверьте email: после @ нужна точка, например name@gmail.com';
+              }
+              return 'Некорректный email. Пример: name@gmail.com';
+            }
+            if (loc.indexOf('password') !== -1) {
+              return 'Проверьте пароль';
+            }
+            if (msg.indexOf('Field required') !== -1) {
+              return 'Заполните все поля';
+            }
+            // Drop English pydantic noise; keep short Russian fallbacks.
+            if (/valid email|not a valid email/i.test(msg)) {
+              return 'Некорректный email. Пример: name@gmail.com';
+            }
+            return msg || 'Ошибка ввода';
+          }).filter(Boolean);
+          return msgs[0] || ('Ошибка ' + status);
+        }
+        if (detail && typeof detail === 'object') {
+          if (detail.code === 'EMAIL_NOT_VERIFIED') {
+            return detail.message || 'Подтвердите email — проверьте почту';
+          }
+          return detail.message || detail.code || ('Ошибка ' + status);
+        }
+        if (typeof detail === 'string' && detail) return detail;
+        if (status === 401 || status === 403) return 'Неверный email или пароль';
+        if (status === 422) return 'Проверьте правильность email и пароля';
+        return 'Ошибка ' + status;
       }
 
       function setMode(next) {
@@ -361,35 +443,82 @@
         } catch (e) {}
       }
 
-      function goUrl() {
-        return '/app/?v=' + encodeURIComponent(BUILD) + '&go=1&_cb=' + Date.now();
+      function goUrl(extraQuery) {
+        var url = '/app/?v=' + encodeURIComponent(BUILD) + '&go=1&_cb=' + Date.now();
+        if (extraQuery) url += '&' + extraQuery;
+        return url;
+      }
+
+      function showContinueRetry(msg) {
+        var loading = document.getElementById('continue-loading');
+        var retry = document.getElementById('continue-retry');
+        if (loading) loading.style.display = 'none';
+        if (retry) retry.style.display = 'block';
+        var btn = document.getElementById('continue-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Попробовать снова';
+        }
+        showError(msg || 'Не получилось открыть. Попробуйте ещё раз.');
+      }
+
+      function showRecovery(msg) {
+        flutterStarted = false;
+        if (hasSession()) {
+          showOnly('continue-gate');
+          showContinueRetry(msg);
+        } else {
+          showOnly('auth-gate');
+          showError(msg);
+        }
+      }
+
+      function preflightHealth() {
+        return new Promise(function (resolve) {
+          var done = false;
+          var timer = setTimeout(function () {
+            if (done) return;
+            done = true;
+            resolve(false);
+          }, 7000);
+          fetch('/health', { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (res) {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              resolve(!!res && res.ok);
+            })
+            .catch(function () {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              resolve(false);
+            });
+        });
       }
 
       function startFlutter() {
         if (flutterStarted) return;
         flutterStarted = true;
         showOnly('boot-splash');
-        document.getElementById('boot-splash-sub').textContent = 'Загружаем приложение…';
+        var sub = document.getElementById('boot-splash-sub');
+        sub.textContent = 'Проверяем связь…';
         ping('flutter=1');
 
-        var s = document.createElement('script');
-        s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(BUILD);
-        s.async = true;
-        s.onerror = function () {
-          flutterStarted = false;
-          showError('Не удалось загрузить приложение. Попробуйте ещё раз.');
-          if (hasSession()) showOnly('continue-gate');
-          else showOnly('auth-gate');
-        };
-        document.head.appendChild(s);
-
+        var bootRetry = params.get('retry') === '1';
         var firstFrame = false;
         var primaryUiReady = false;
         var splashHidden = false;
+        var settled = false;
         var splash = document.getElementById('boot-splash');
+        var scriptEl = null;
+
         function maybeHideSplash() {
           if (splashHidden || !firstFrame || !primaryUiReady) return;
           splashHidden = true;
+          settled = true;
+          markBootOk();
+          ping('flutter_ok=1');
           setTimeout(function () {
             if (!splash) return;
             splash.classList.add('is-hiding');
@@ -398,6 +527,26 @@
             }, 260);
           }, 400);
         }
+
+        function failBoot(reason) {
+          if (settled || firstFrame) return;
+          settled = true;
+          ping('flutter_fail=1&r=' + encodeURIComponent(reason || 'unknown'));
+          try { if (scriptEl) scriptEl.remove(); } catch (e) {}
+
+          // One automatic hard retry — clears half-loaded CanvasKit on iPhone.
+          if (!bootRetry && hasSession()) {
+            sub.textContent = 'Повторная загрузка…';
+            location.replace(goUrl('retry=1'));
+            return;
+          }
+
+          var vpnHint = (reason === 'health' || reason === 'timeout')
+            ? ' Если включён VPN — выключите его.'
+            : '';
+          showRecovery('Не получилось открыть.' + vpnHint + ' Нажмите «Попробовать снова».');
+        }
+
         window.addEventListener('flutter-first-frame', function () {
           firstFrame = true;
           maybeHideSplash();
@@ -406,28 +555,52 @@
           primaryUiReady = true;
           maybeHideSplash();
         });
-        setTimeout(function () {
-          if (firstFrame && !primaryUiReady) {
-            primaryUiReady = true;
-            maybeHideSplash();
-          }
-        }, 2500);
+        window.addEventListener('offline', function () {
+          if (!firstFrame) failBoot('offline');
+        });
 
-        // If Flutter never paints on iPhone, fall back to continue gate.
-        setTimeout(function () {
-          if (firstFrame) return;
-          flutterStarted = false;
-          try {
-            s.remove();
-          } catch (e) {}
-          if (hasSession()) {
-            showOnly('continue-gate');
-            showError('Safari не смог загрузить приложение. Нажмите «Открыть» ещё раз или освободите память (закройте другие вкладки).');
+        // VPN often delays /health — do not block Flutter boot on it.
+        preflightHealth().then(function (ok) {
+          if (settled) return;
+          if (!ok) {
+            sub.textContent = 'Слабая связь / VPN — всё равно загружаем…';
+            ping('health_soft=1');
           } else {
-            showOnly('auth-gate');
-            showError('Не удалось загрузить приложение. Попробуйте снова.');
+            sub.textContent = 'Загружаем приложение…';
           }
-        }, 20000);
+
+          scriptEl = document.createElement('script');
+          scriptEl.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(BUILD);
+          scriptEl.async = true;
+          scriptEl.onerror = function () { failBoot('bootstrap'); };
+          document.head.appendChild(scriptEl);
+
+          setTimeout(function () {
+            if (firstFrame && !primaryUiReady) {
+              primaryUiReady = true;
+              maybeHideSplash();
+            }
+          }, 2500);
+
+          // Give VPN / slow mobile more time before recovery UI.
+          setTimeout(function () {
+            if (!firstFrame) failBoot(ok ? 'timeout' : 'health');
+          }, isIOS ? (ok ? 20000 : 28000) : 24000);
+        });
+      }
+
+      function openContinueOrAuto() {
+        // Обычный пользователь видит только «Открываем…» — без технических текстов.
+        showOnly('continue-gate');
+        var loading = document.getElementById('continue-loading');
+        var retry = document.getElementById('continue-retry');
+        if (loading) loading.style.display = 'block';
+        if (retry) retry.style.display = 'none';
+        clearError();
+        ping(hasBootOk() ? 'continue=1&auto=1' : 'continue=1&first=1');
+        setTimeout(function () {
+          location.replace(goUrl());
+        }, hasBootOk() ? 120 : 220);
       }
 
       document.getElementById('switch-mode').addEventListener('click', function (e) {
@@ -436,7 +609,16 @@
       });
 
       document.getElementById('continue-btn').addEventListener('click', function () {
-        // Hard navigation keeps iOS memory cleaner than injecting Flutter into the auth page.
+        clearError();
+        var loading = document.getElementById('continue-loading');
+        var retry = document.getElementById('continue-retry');
+        if (loading) loading.style.display = 'block';
+        if (retry) retry.style.display = 'none';
+        var btn = document.getElementById('continue-btn');
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Открываем…';
+        }
         location.replace(goUrl());
       });
 
@@ -454,6 +636,10 @@
         var btn = document.getElementById('auth-submit');
         if (mode === 'register' && !document.getElementById('legal').checked) {
           showError('Примите политику конфиденциальности и пользовательское соглашение');
+          return;
+        }
+        if (!looksLikeEmail(email)) {
+          showError('Проверьте email: после @ нужна точка, например name@gmail.com');
           return;
         }
         btn.disabled = true;
@@ -477,18 +663,7 @@
           var data = null;
           try { data = await res.json(); } catch (err) {}
           if (!res.ok) {
-            var detail = data && (data.detail || data.message);
-            if (detail && typeof detail === 'object') {
-              if (detail.code === 'EMAIL_NOT_VERIFIED') {
-                detail = detail.message || 'Подтвердите email — проверьте почту';
-              } else {
-                detail = detail.message || detail.code || JSON.stringify(detail);
-              }
-            }
-            if (Array.isArray(detail)) {
-              detail = detail.map(function (x) { return x.msg || x; }).join('; ');
-            }
-            throw new Error(detail || ('Ошибка ' + res.status));
+            throw new Error(humanAuthError(data, res.status));
           }
           saveSession(data);
           ping('authed=1');
@@ -510,8 +685,8 @@
       if (atRoot) {
         if (hasSession()) {
           if (isIOS && !goFlutter && !forceFlutter) {
-            showOnly('continue-gate');
-            ping('continue=1&root=1');
+            openContinueOrAuto();
+            ping('root=1');
           } else {
             location.replace(goUrl());
           }
@@ -535,8 +710,7 @@
         }
       } else if (hasSession()) {
         if (isIOS) {
-          showOnly('continue-gate');
-          ping('continue=1');
+          openContinueOrAuto();
         } else {
           startFlutter();
         }

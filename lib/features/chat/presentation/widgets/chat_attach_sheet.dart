@@ -454,7 +454,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   String get _headerTitle {
     switch (_tab) {
       case ChatAttachTab.gallery:
-        return 'Недавние';
+        return 'Фото и видео';
       case ChatAttachTab.file:
         return 'Файл';
       case ChatAttachTab.poll:
@@ -469,7 +469,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   String get _headerSubtitle {
     switch (_tab) {
       case ChatAttachTab.gallery:
-        return 'Последние фото и видео';
+        return kIsWeb
+            ? 'Нажмите на значок галереи, чтобы выбрать фото'
+            : 'Выберите фото или снимите на камеру';
       case ChatAttachTab.file:
         return 'Документы и недавние';
       case ChatAttachTab.poll:
