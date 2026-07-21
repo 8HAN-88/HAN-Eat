@@ -4948,41 +4948,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _failedSendActions(int tempId, ColorScheme scheme) {
     final retryIn = _failedTextAutoRetryRemainingSeconds(tempId);
     final autoRetrying = retryIn > 0;
+    // Compact Telegram-like footer — no giant Retry/Delete row under every bubble.
     return Padding(
-      padding: const EdgeInsets.only(top: 2, bottom: 4),
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 4,
-        children: [
-          Icon(Icons.error_outline, size: 14, color: scheme.error),
-          Text(
-            autoRetrying
-                ? 'Не отправлено • повтор через ${_formatSlowModeCountdown(retryIn)}'
-                : 'Не отправлено • нажмите, чтобы повторить',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.error,
-                ),
-          ),
-          if (!autoRetrying)
-            TextButton(
-              onPressed: _sending ? null : () => _retryFailedText(tempId),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('Повторить'),
+      padding: const EdgeInsets.only(top: 1, bottom: 2, right: 2),
+      child: GestureDetector(
+        onTap: _sending || autoRetrying ? null : () => _retryFailedText(tempId),
+        onLongPress: _sending ? null : () => _discardFailedText(tempId),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 13, color: scheme.error),
+            const SizedBox(width: 4),
+            Text(
+              autoRetrying
+                  ? 'Повтор через ${_formatSlowModeCountdown(retryIn)}'
+                  : 'Не отправлено',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: scheme.error,
+                    fontSize: 11.5,
+                  ),
             ),
-          TextButton(
-            onPressed: _sending ? null : () => _discardFailedText(tempId),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -5147,7 +5134,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final album = Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+        maxWidth: MediaQuery.sizeOf(context).width * 0.78,
       ),
       child: Column(
         crossAxisAlignment:
@@ -5155,7 +5142,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         children: [
           _chatAlbumGrid(
             imageUrls: urls,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             // No-caption albums: meta only on the grid (Telegram-style).
             footerOverlay: hasCaption
                 ? null
@@ -5640,39 +5627,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         bubble,
         if (isFailed)
           Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Wrap(
-              spacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 14, color: scheme.error),
-                Text(
-                  'Не отправлено • нажмите, чтобы повторить',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: scheme.error,
-                      ),
-                ),
-                TextButton(
-                  onPressed: _sending ? null : _retryPendingMedia,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: scheme.error,
+            padding: const EdgeInsets.only(top: 1, bottom: 2),
+            child: GestureDetector(
+              onTap: _sending ? null : _retryPendingMedia,
+              onLongPress: _sending ? null : _discardPendingMedia,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, size: 13, color: scheme.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Не отправлено',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.error,
+                          fontSize: 11.5,
+                        ),
                   ),
-                  child: const Text('Повторить'),
-                ),
-                TextButton(
-                  onPressed: _sending ? null : _discardPendingMedia,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: scheme.error,
-                  ),
-                  child: const Text('Удалить'),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
       ],
@@ -9088,8 +9060,9 @@ class _Bubble extends StatelessWidget {
   }
 
   BorderRadius _bubbleRadius(bool mine) {
-    const large = Radius.circular(16);
-    const small = Radius.circular(4);
+    // Telegram-like corner radii (tighter than a card).
+    const large = Radius.circular(12);
+    const small = Radius.circular(3);
     return BorderRadius.only(
       topLeft: !mine && !cluster.starts ? small : large,
       topRight: mine && !cluster.starts ? small : large,
@@ -9198,34 +9171,35 @@ class _Bubble extends StatelessWidget {
     bool onMedia = false,
   }) {
     if (!onMedia) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          child,
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: _messageMeta(fg: fg, mine: mine, onMedia: false),
+      // IntrinsicWidth keeps short texts tight (Telegram). A plain Align
+      // inside Column expands to the parent's max width → huge empty bubbles.
+      return IntrinsicWidth(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            child,
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: _messageMeta(fg: fg, mine: mine, onMedia: false),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Padding(
-          padding: EdgeInsets.only(
-            right: onMedia ? 0 : _metaReserveWidth(mine),
-            bottom: onMedia ? 0 : 1,
-          ),
+          padding: const EdgeInsets.only(bottom: 1),
           child: child,
         ),
         Positioned(
-          right: onMedia ? 6 : 0,
-          bottom: onMedia ? 4 : 0,
+          right: 6,
+          bottom: 4,
           child: _messageMeta(fg: fg, mine: mine, onMedia: onMedia),
         ),
       ],
@@ -9392,7 +9366,7 @@ class _Bubble extends StatelessWidget {
     final isFullBleedMedia = (isImage || isVideo) && !hasCaption;
     final bubbleRadius = _bubbleRadius(mine);
     final contentPadding =
-        isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 5, 8, 4);
+        isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 3);
     final bubbleNeedsBackground = !isFullBleedMedia ||
         replyQuote != null ||
         (showSenderName && (senderLabel?.isNotEmpty ?? false)) ||
@@ -9600,7 +9574,7 @@ class _Bubble extends StatelessWidget {
             HighlightedText(
               text: message.content,
               query: highlightQuery,
-              style: TextStyle(color: fg, height: 1.25),
+              style: TextStyle(color: fg, height: 1.22, fontSize: 15.5),
             ),
             if (extractFirstHttpUrl(message.content) case final url?)
               Padding(
@@ -9623,41 +9597,34 @@ class _Bubble extends StatelessWidget {
     }
 
     final bubble = Container(
-      margin: const EdgeInsets.symmetric(vertical: 1),
+      margin: EdgeInsets.only(
+        top: cluster.starts ? 2 : 0.5,
+        bottom: cluster.ends ? 2 : 0.5,
+      ),
       padding:
-          isMedia ? contentPadding : const EdgeInsets.fromLTRB(10, 6, 10, 4),
+          isMedia ? contentPadding : const EdgeInsets.fromLTRB(8, 4, 7, 3),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+        // Telegram ~78% of screen; bubble itself shrink-wraps short text.
+        maxWidth: MediaQuery.sizeOf(context).width * 0.78,
       ),
       decoration: BoxDecoration(
         color: bubbleNeedsBackground ? bg : Colors.transparent,
         borderRadius: bubbleRadius,
+        // No outline/shadow on normal bubbles — Telegram is fill-only.
         border: isActiveSearchMatch
-            ? Border.all(color: activeBorderColor, width: 1.6)
-            : (!mine && bubbleNeedsBackground
-                ? Border.all(
-                    color: scheme.outlineVariant.withValues(alpha: 0.35),
-                  )
-                : null),
+            ? Border.all(color: activeBorderColor, width: 1.4)
+            : null,
         boxShadow: isActiveSearchMatch
             ? [
                 BoxShadow(
                   color: activeShadowColor,
-                  blurRadius: 12,
-                  spreadRadius: 0.5,
+                  blurRadius: 10,
+                  spreadRadius: 0.4,
                   offset: const Offset(0, 2),
                 ),
               ]
-            : (!mine && bubbleNeedsBackground
-                ? [
-                    BoxShadow(
-                      color: scheme.shadow.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null),
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
