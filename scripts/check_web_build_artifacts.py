@@ -73,8 +73,15 @@ def main() -> None:
     ):
         fail("dart2js build missing from buildConfig")
     load_tail = bootstrap[bootstrap.rfind("_flutter.loader.load") :]
-    if 'renderer: "canvaskit"' not in load_tail and 'renderer:"canvaskit"' not in load_tail:
-        fail("flutter_bootstrap.js must force canvaskit renderer")
+    # Keep Flutter renderer auto-selection for Safari/iPhone; only require local
+    # CanvasKit assets (no gstatic CDN) and no offline service worker.
+    if (
+        "useLocalCanvasKit: true" not in load_tail
+        and "useLocalCanvasKit:true" not in load_tail
+    ):
+        fail("flutter_bootstrap.js must set useLocalCanvasKit: true")
+    if "canvasKitBaseUrl" not in load_tail:
+        fail("flutter_bootstrap.js must set canvasKitBaseUrl for local assets")
     if "serviceWorkerSettings" in load_tail:
         fail("flutter_bootstrap.js must not enable serviceWorkerSettings")
     if (root / "main.dart.wasm").exists():
