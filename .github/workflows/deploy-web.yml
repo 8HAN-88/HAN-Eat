@@ -149,7 +149,8 @@ jobs:
           curl -sf https://haneat.app/health | grep -q '"status"'
           curl -sf https://haneat.app/api/v1/system/readiness | grep -q '"app_env"'
           curl -sfI https://haneat.app/app/flutter_bootstrap.js | grep -i cache-control
-          curl -sfI https://haneat.app/app/assets/AssetManifest.bin.json | grep -i cache-control | grep -qi no-cache
-          curl -sf https://haneat.app/ | grep -qi 'auth-gate'
+          # Assets are versioned under /app/ and may be cached for phone cold-start.
+          curl -sfI https://haneat.app/app/assets/AssetManifest.bin.json | grep -i cache-control
+          curl -sf https://haneat.app/ | grep -qiE 'auth-gate|continue-loading|Открываем'
           curl -sfI https://haneat.app/ | grep -qi 'text/html'
           curl -sfI https://haneat.app/fresh | grep -qi 'Clear-Site-Data\|location:.*/'
