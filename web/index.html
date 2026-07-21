@@ -200,19 +200,11 @@
           navigator.serviceWorker.register = function () {
             return Promise.reject(new Error('HAN Eat: service worker disabled'));
           };
+          // Do not bulk-delete Cache Storage on every open — Safari iOS can hang
+          // (black→white→"server stopped responding"). Only unregister SW quietly.
           navigator.serviceWorker.getRegistrations().then(function (regs) {
             for (var i = 0; i < regs.length; i++) {
               try { regs[i].unregister(); } catch (err) {}
-            }
-          }).catch(function () {});
-        }
-      } catch (e) {}
-
-      try {
-        if (window.caches && caches.keys) {
-          caches.keys().then(function (keys) {
-            for (var i = 0; i < keys.length; i++) {
-              try { caches.delete(keys[i]); } catch (err) {}
             }
           }).catch(function () {});
         }
@@ -449,6 +441,33 @@
         return url;
       }
 
+      function isAppPath() {
+        var p = location.pathname || '';
+        return p === '/app' || p.indexOf('/app/') === 0;
+      }
+
+      // Safari iOS: location.replace during boot → white screen +
+      // "server stopped responding". Prefer in-place start or assign.
+      function softGoApp(extraQuery) {
+        var url = goUrl(extraQuery);
+        try {
+          location.assign(url);
+        } catch (e) {
+          location.href = url;
+        }
+      }
+
+      function markGoQueryInPlace() {
+        try {
+          var u = new URL(location.href);
+          u.searchParams.set('go', '1');
+          u.searchParams.set('v', BUILD);
+          history.replaceState(null, '', u.pathname + u.search + u.hash);
+          goFlutter = true;
+          params = u.searchParams;
+        } catch (e) {}
+      }
+
       function showContinueRetry(msg) {
         var loading = document.getElementById('continue-loading');
         var retry = document.getElementById('continue-retry');
@@ -534,10 +553,24 @@
           ping('flutter_fail=1&r=' + encodeURIComponent(reason || 'unknown'));
           try { if (scriptEl) scriptEl.remove(); } catch (e) {}
 
-          // One automatic hard retry — clears half-loaded CanvasKit on iPhone.
-          if (!bootRetry && hasSession()) {
+          // One in-place retry on /app/ — never location.replace (Safari white-screen).
+          if (!bootRetry && hasSession() && isAppPath()) {
             sub.textContent = 'Повторная загрузка…';
-            location.replace(goUrl('retry=1'));
+            bootRetry = true;
+            flutterStarted = false;
+            firstFrame = false;
+            primaryUiReady = false;
+            splashHidden = false;
+            settled = false;
+            try {
+              var u = new URL(location.href);
+              u.searchParams.set('retry', '1');
+              history.replaceState(null, '', u.pathname + u.search + u.hash);
+              params = u.searchParams;
+            } catch (e) {}
+            setTimeout(function () {
+              if (!firstFrame) startFlutter();
+            }, 350);
             return;
           }
 
@@ -598,9 +631,18 @@
         if (retry) retry.style.display = 'none';
         clearError();
         ping(hasBootOk() ? 'continue=1&auto=1' : 'continue=1&first=1');
+
+        // Already on /app/ → start Flutter in place (no document reload).
+        if (isAppPath()) {
+          markGoQueryInPlace();
+          setTimeout(function () { startFlutter(); }, hasBootOk() ? 40 : 100);
+          return;
+        }
+
+        // From site root → soft assign (not replace).
         setTimeout(function () {
-          location.replace(goUrl());
-        }, hasBootOk() ? 120 : 220);
+          softGoApp();
+        }, hasBootOk() ? 80 : 160);
       }
 
       document.getElementById('switch-mode').addEventListener('click', function (e) {
@@ -619,12 +661,23 @@
           btn.disabled = true;
           btn.textContent = 'Открываем…';
         }
-        location.replace(goUrl());
+        // User gesture: in-place start if already under /app/.
+        if (isAppPath()) {
+          markGoQueryInPlace();
+          flutterStarted = false;
+          startFlutter();
+          return;
+        }
+        softGoApp();
       });
 
       document.getElementById('continue-logout').addEventListener('click', function () {
         clearSession();
-        location.replace('/app/?v=' + encodeURIComponent(BUILD) + '&_cb=' + Date.now());
+        try {
+          location.assign('/?_cb=' + Date.now());
+        } catch (e) {
+          location.href = '/?_cb=' + Date.now();
+        }
       });
 
       document.getElementById('login-form').addEventListener('submit', async function (e) {
@@ -667,8 +720,8 @@
           }
           saveSession(data);
           ping('authed=1');
-          // Fresh navigation: HTML auth unloads before CanvasKit download.
-          location.replace(goUrl());
+          // User-gesture navigation after login (assign, never replace).
+          softGoApp();
         } catch (err) {
           showError((err && err.message) ? err.message : 'Не удалось войти');
           btn.disabled = false;
@@ -684,12 +737,8 @@
 
       if (atRoot) {
         if (hasSession()) {
-          if (isIOS && !goFlutter && !forceFlutter) {
-            openContinueOrAuto();
-            ping('root=1');
-          } else {
-            location.replace(goUrl());
-          }
+          openContinueOrAuto();
+          ping('root=1');
         } else {
           showOnly('auth-gate');
           ping('auth=1&root=1');
@@ -697,10 +746,10 @@
         return;
       }
 
+      // Under /app/: never document-reload to add go=1 — start Flutter in place.
       // 1) Explicit go=1 / flutter=1 → load Flutter
-      // 2) Session on iOS without go → continue interstitial (no CanvasKit yet)
-      // 3) Session on desktop → load Flutter
-      // 4) No session → HTML auth
+      // 2) Session → load Flutter (iOS included)
+      // 3) No session → HTML auth
       if (forceFlutter || goFlutter) {
         if (!hasSession() && !forceFlutter) {
           showOnly('auth-gate');
@@ -709,11 +758,8 @@
           startFlutter();
         }
       } else if (hasSession()) {
-        if (isIOS) {
-          openContinueOrAuto();
-        } else {
-          startFlutter();
-        }
+        markGoQueryInPlace();
+        startFlutter();
       } else {
         showOnly('auth-gate');
         ping('auth=1');

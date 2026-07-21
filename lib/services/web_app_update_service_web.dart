@@ -24,18 +24,11 @@ Future<void> reloadWebPage({String? build}) async {
     }
   } catch (_) {}
 
-  try {
-    final keys = await html.window.caches?.keys();
-    if (keys != null) {
-      for (final key in keys) {
-        await html.window.caches?.delete(key);
-      }
-    }
-  } catch (_) {}
+  // Do not wipe Cache Storage here — on iPhone Safari that stalls the tab
+  // into a white screen / "server stopped responding" during reload.
 
   final cb = DateTime.now().millisecondsSinceEpoch.toString();
   final v = (build != null && build.isNotEmpty) ? build : cb;
-  // go=1 is required on iPhone: /app/ without it only shows the continue gate
-  // and never starts Flutter (users see a stuck dark screen).
-  html.window.location.replace('/app/?v=$v&go=1&_cb=$cb');
+  // assign (not replace): Safari iOS often hangs on location.replace at boot.
+  html.window.location.assign('/app/?v=$v&go=1&_cb=$cb');
 }
