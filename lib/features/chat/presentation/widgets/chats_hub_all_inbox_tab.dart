@@ -330,8 +330,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     UserRealtimeService.instance.connected
         .addListener(_realtimeConnectedListener!);
     _apiReachabilityListener = () {
+      if (!mounted) return;
+      setState(() {}); // offline banner visibility
       if (!ApiReachabilityService.instance.isApiReachable.value) return;
-      if (mounted && _started && ShellTabVisibility.chatsActive && !_loading) {
+      if (_started && ShellTabVisibility.chatsActive && !_loading) {
         _load(silent: true);
       }
     };
@@ -1143,7 +1145,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             SliverToBoxAdapter(
               child: ChatsHubGesturesHint(onDismiss: _dismissGesturesHint),
             ),
-          if (_servingFromCache) SliverToBoxAdapter(child: _hubOfflineBanner()),
+          // Silent cache while online (Telegram-style). Banner only when offline.
+          if (_servingFromCache &&
+              !ApiReachabilityService.instance.isApiReachable.value)
+            SliverToBoxAdapter(child: _hubOfflineBanner()),
           if (widget.searchQuery.trim().isEmpty)
             SliverToBoxAdapter(
               child: ChatHubFolderBar(

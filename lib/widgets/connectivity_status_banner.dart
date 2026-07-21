@@ -120,11 +120,12 @@ class _ConnectivityStatusBannerState extends State<ConnectivityStatusBanner> {
       );
     }
 
+    // Same wording as Telegram's chats header.
     return _BannerShell(
       color: scheme.surfaceContainerHighest,
       foreground: scheme.onSurfaceVariant,
       icon: Icons.sync_rounded,
-      message: 'Подключение…',
+      message: 'Соединение…',
       textTheme: textTheme,
       showSpinner: true,
     );

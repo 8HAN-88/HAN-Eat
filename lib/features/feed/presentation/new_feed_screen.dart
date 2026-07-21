@@ -71,6 +71,13 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
   Object? _cacheLoadError;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
   VoidCallback? _apiReconnectedListener;
+  VoidCallback? _apiReachabilityUiListener;
+
+  /// Show cache strip only when offline / confirmed error — not during silent hydrate.
+  bool get _showCacheBanner =>
+      _servingFromCache &&
+      (_cacheLoadError != null ||
+          !ApiReachabilityService.instance.isApiReachable.value);
 
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
       'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
@@ -100,6 +107,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       unawaited(_loadFeed(refresh: true));
     };
     ApiReachabilityService.addReconnectedListener(_apiReconnectedListener!);
+    _apiReachabilityUiListener = () {
+      if (mounted) setState(() {});
+    };
+    ApiReachabilityService.instance.isApiReachable
+        .addListener(_apiReachabilityUiListener!);
     if (!widget.deferLoad) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -135,6 +147,10 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     _realtimeSub?.cancel();
     if (_apiReconnectedListener != null) {
       ApiReachabilityService.removeReconnectedListener(_apiReconnectedListener!);
+    }
+    if (_apiReachabilityUiListener != null) {
+      ApiReachabilityService.instance.isApiReachable
+          .removeListener(_apiReachabilityUiListener!);
     }
     _scrollController.dispose();
     super.dispose();
@@ -355,11 +371,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                     addRepaintBoundaries: true,
                     padding: EdgeInsets.only(
                         bottom: _listBottomPadding(context, chromeHidden)),
-                    itemCount: (_servingFromCache ? 1 : 0) +
+                    itemCount: (_showCacheBanner ? 1 : 0) +
                         _posts.length +
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
-                      final banner = _servingFromCache ? 1 : 0;
+                      final banner = _showCacheBanner ? 1 : 0;
                       if (banner == 1 && index == 0) {
                         final scheme = Theme.of(context).colorScheme;
                         return Padding(

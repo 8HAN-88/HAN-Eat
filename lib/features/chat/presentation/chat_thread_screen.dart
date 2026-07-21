@@ -37,6 +37,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
+import '../../../services/feed_sync_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
@@ -258,6 +259,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   OverlayEntry? _botAutocompleteOverlayEntry;
   StreamSubscription<void>? _signalSub;
   VoidCallback? _apiReachabilityListener;
+  VoidCallback? _apiConnectingListener;
+  VoidCallback? _deviceOnlineListener;
+  ValueListenable<bool>? _deviceOnlineListenable;
   ChatStreamService? _stream;
   ChatMessage? _replyTo;
   bool _appPaused = false;
@@ -365,6 +369,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!_appPaused) _pollNew();
     });
     _apiReachabilityListener = () {
+      if (!mounted) return;
+      // Rebuild AppBar subtitle immediately (Telegram: «соединение…»).
+      setState(() {});
       if (!ApiReachabilityService.instance.isApiReachable.value || _appPaused) {
         return;
       }
@@ -374,6 +381,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     };
     ApiReachabilityService.instance.isApiReachable
         .addListener(_apiReachabilityListener!);
+    _apiConnectingListener = () {
+      if (mounted) setState(() {});
+    };
+    ApiReachabilityService.instance.isApiConnecting
+        .addListener(_apiConnectingListener!);
+    _deviceOnlineListener = () {
+      if (mounted) setState(() {});
+    };
+    _deviceOnlineListenable = FeedSyncService.onlineListenable;
+    _deviceOnlineListenable!.addListener(_deviceOnlineListener!);
     _stream = ChatStreamService(
       conversationId: widget.conversationId,
       onEvent: _onStreamEvent,
@@ -3054,6 +3071,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ApiReachabilityService.instance.isApiReachable
           .removeListener(_apiReachabilityListener!);
     }
+    if (_apiConnectingListener != null) {
+      ApiReachabilityService.instance.isApiConnecting
+          .removeListener(_apiConnectingListener!);
+    }
+    if (_deviceOnlineListener != null && _deviceOnlineListenable != null) {
+      _deviceOnlineListenable!.removeListener(_deviceOnlineListener!);
+    }
     _holdActive = false;
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
@@ -4581,36 +4605,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         children: [
           Icon(Icons.error_outline, size: 14, color: scheme.error),
           Text(
-            retryIn > 0
-                ? 'Не отправлено • автоповтор через ${_formatSlowModeCountdown(retryIn)}'
-                : (!_autoRetryOnLimitsEnabled
-                    ? 'Не отправлено • автоповтор отключен'
-                    : 'Не отправлено'),
+            autoRetrying
+                ? 'Не отправлено • повтор через ${_formatSlowModeCountdown(retryIn)}'
+                : 'Не отправлено • нажмите, чтобы повторить',
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: scheme.error,
                 ),
           ),
-          TextButton(
-            onPressed: (_sending || autoRetrying)
-                ? null
-                : () => _retryFailedText(tempId),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(autoRetrying ? 'Отправим автоматически' : 'Повторить'),
-          ),
-          if (autoRetrying)
+          if (!autoRetrying)
             TextButton(
-              onPressed:
-                  _sending ? null : () => _cancelFailedTextAutoRetry(tempId),
+              onPressed: _sending ? null : () => _retryFailedText(tempId),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: const Text('Отменить автоповтор'),
+              child: const Text('Повторить'),
             ),
           TextButton(
             onPressed: _sending ? null : () => _discardFailedText(tempId),
@@ -4689,9 +4699,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         wrapWithAlign: wrapWithAlign,
       );
     }
+    final isFailed = msg.isMine &&
+        (_failedTextSends.containsKey(msg.id) ||
+            (_pendingMediaRetry?.tempId == msg.id));
+    // Temp ids (< 0) that are not failed = still sending (Telegram clock).
+    final isPending = msg.isMine && msg.id < 0 && !isFailed;
     return _Bubble(
       message: msg,
       scheme: scheme,
+      isPending: isPending,
+      isFailed: isFailed,
       highlightQuery: searching ? _threadSearchQuery : null,
       isActiveSearchMatch: isActiveSearchMatch,
       replyQuote: replyQuote,
@@ -4810,7 +4827,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       if (mine) ...[
                         const SizedBox(width: 3),
                         Icon(
-                          anchor.isRead ? Icons.done_all : Icons.done,
+                          anchor.id < 0
+                              ? Icons.access_time
+                              : (anchor.isRead ? Icons.done_all : Icons.done),
                           size: 12.5,
                           color: anchor.isRead
                               ? _telegramAccent
@@ -4839,7 +4858,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   if (mine) ...[
                     const SizedBox(width: 3),
                     Icon(
-                      anchor.isRead ? Icons.done_all : Icons.done,
+                      anchor.id < 0
+                          ? Icons.access_time
+                          : (anchor.isRead ? Icons.done_all : Icons.done),
                       size: 12.5,
                       color: anchor.isRead
                           ? _telegramAccent
@@ -4995,7 +5016,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       memCacheHeight: 720,
       maxWidthDiskCache: 960,
       maxHeightDiskCache: 960,
-      placeholder: (_, __) => const ColoredBox(color: Color(0x22000000)),
+      progressIndicatorBuilder: (_, __, progress) => ColoredBox(
+        color: const Color(0x22000000),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              value: progress.progress,
+              color: Colors.white70,
+            ),
+          ),
+        ),
+      ),
       errorWidget: (_, __, ___) => ColoredBox(
         color: Colors.black.withValues(alpha: 0.22),
         child: const Center(
@@ -5032,7 +5066,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             if (mine) ...[
               const SizedBox(width: 2),
               Icon(
-                anchor.isRead ? Icons.done_all : Icons.done,
+                anchor.id < 0
+                    ? Icons.access_time
+                    : (anchor.isRead ? Icons.done_all : Icons.done),
                 size: 12,
                 color:
                     anchor.isRead ? _telegramAccent : fg.withValues(alpha: 0.6),
@@ -6935,8 +6971,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isGroup = _conversation.isGroup;
     final isSaved = _conversation.isSaved;
     final peer = _conversation.peer;
+    final apiReachable = ApiReachabilityService.instance.isApiReachable.value;
+    final apiConnecting = ApiReachabilityService.instance.isApiConnecting.value;
     String subtitle = '';
-    if (isSaved) {
+    // Telegram-style: connection status takes priority over last-seen.
+    if (!FeedSyncService.onlineListenable.value) {
+      subtitle = 'Ожидание сети…';
+    } else if (!apiReachable || apiConnecting) {
+      subtitle = 'соединение…';
+    } else if (!_sseConnected) {
+      subtitle = 'обновление…';
+    } else if (isSaved) {
       subtitle = 'Сохраняйте сообщения и заметки';
     } else if (isGroup) {
       subtitle =
@@ -6946,15 +6991,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } else if (peer != null) {
       subtitle = formatLastSeen(peer.lastSeenAt);
     }
-    if (_muted && subtitle.isNotEmpty) {
+    if (_muted &&
+        subtitle.isNotEmpty &&
+        !subtitle.startsWith('соединение') &&
+        !subtitle.startsWith('обновление') &&
+        !subtitle.startsWith('Ожидание')) {
       subtitle = '$subtitle · без звука';
-    } else if (_muted) {
+    } else if (_muted && subtitle.isEmpty) {
       subtitle = 'без звука';
     }
+    final connectingHeader = subtitle == 'соединение…' ||
+        subtitle == 'обновление…' ||
+        subtitle == 'Ожидание сети…';
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
           color: isSaved
               ? scheme.onSurfaceVariant
-              : _peerTyping || (!isGroup && (peer?.isOnline ?? false))
+              : connectingHeader ||
+                      _peerTyping ||
+                      (!isGroup && (peer?.isOnline ?? false))
                   ? scheme.primary
                   : scheme.onSurfaceVariant,
         );
@@ -7514,37 +7568,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                       ),
               ),
-              _animatedVisibility(
-                visible: !_sseConnected,
-                keyName: 'thread-sse',
-                child: Material(
-                  color: scheme.tertiaryContainer.withValues(alpha: 0.72),
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.sync_problem_rounded,
-                          size: 16,
-                          color: scheme.onTertiaryContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Соединение обновляется через polling. Сообщения не потеряются.',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: scheme.onTertiaryContainer,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              // Connection status lives in the AppBar subtitle (Telegram-style).
+              // No sticky "polling" strip — it made the chat feel broken.
               Expanded(
                 child: Stack(
                   alignment: Alignment.bottomCenter,
@@ -7689,7 +7714,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                         _toggleMessageSelection(
                                                                           msg.id,
                                                                         )
-                                                                    : null,
+                                                                    : (failed
+                                                                        ? () {
+                                                                            if (_failedTextSends.containsKey(msg.id)) {
+                                                                              unawaited(_retryFailedText(msg.id));
+                                                                            } else if (_pendingMediaRetry?.tempId == msg.id) {
+                                                                              unawaited(_retryPendingMedia());
+                                                                            }
+                                                                          }
+                                                                        : null),
                                                             onDoubleTap:
                                                                 _selectionMode
                                                                     ? null
@@ -8560,6 +8593,8 @@ class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.message,
     required this.scheme,
+    this.isPending = false,
+    this.isFailed = false,
     this.highlightQuery,
     this.isActiveSearchMatch = false,
     this.replyQuote,
@@ -8584,6 +8619,10 @@ class _Bubble extends StatelessWidget {
 
   final ChatMessage message;
   final ColorScheme scheme;
+  /// Still sending to server (Telegram clock icon).
+  final bool isPending;
+  /// Send failed (tap to retry).
+  final bool isFailed;
   final String? highlightQuery;
   final bool isActiveSearchMatch;
   final String? replyQuote;
@@ -8635,9 +8674,28 @@ class _Bubble extends StatelessWidget {
     final editedColor = onMedia
         ? Colors.white.withValues(alpha: 0.75)
         : fg.withValues(alpha: 0.45);
-    final statusColor = onMedia
-        ? Colors.white.withValues(alpha: message.isRead ? 0.95 : 0.7)
-        : (message.isRead ? scheme.primary : fg.withValues(alpha: 0.45));
+    final IconData statusIcon;
+    final Color statusColor;
+    if (isFailed) {
+      statusIcon = Icons.error_outline;
+      statusColor = onMedia ? Colors.white : scheme.error;
+    } else if (isPending) {
+      // Telegram: clock while the message is still leaving the device.
+      statusIcon = Icons.access_time;
+      statusColor = onMedia
+          ? Colors.white.withValues(alpha: 0.85)
+          : fg.withValues(alpha: 0.55);
+    } else if (message.isRead) {
+      statusIcon = Icons.done_all;
+      statusColor = onMedia
+          ? Colors.white.withValues(alpha: 0.95)
+          : scheme.primary;
+    } else {
+      statusIcon = Icons.done;
+      statusColor = onMedia
+          ? Colors.white.withValues(alpha: 0.7)
+          : fg.withValues(alpha: 0.45);
+    }
 
     final row = Row(
       mainAxisSize: MainAxisSize.min,
@@ -8670,7 +8728,7 @@ class _Bubble extends StatelessWidget {
         if (mine) ...[
           const SizedBox(width: 3),
           Icon(
-            message.isRead ? Icons.done_all : Icons.done,
+            statusIcon,
             size: 12.5,
             color: statusColor,
           ),
@@ -8978,10 +9036,23 @@ class _Bubble extends StatelessWidget {
             memCacheHeight: 720,
             maxWidthDiskCache: 960,
             maxHeightDiskCache: 960,
-            placeholder: (_, __) => SizedBox(
+            progressIndicatorBuilder: (_, __, progress) => SizedBox(
               width: 180,
               height: 180,
-              child: ColoredBox(color: quoteBg),
+              child: ColoredBox(
+                color: quoteBg,
+                child: Center(
+                  child: SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      value: progress.progress,
+                      color: fg.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
+              ),
             ),
             errorWidget: (_, __, ___) => SizedBox(
               width: 180,
