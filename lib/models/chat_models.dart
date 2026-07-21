@@ -146,6 +146,7 @@ class ChatMessage {
     required this.createdAt,
     this.editedAt,
     this.isMine = false,
+    this.isDelivered = false,
     this.isRead = false,
     this.reactions = const [],
     this.inlineKeyboard = const [],
@@ -162,6 +163,8 @@ class ChatMessage {
   final DateTime createdAt;
   final DateTime? editedAt;
   final bool isMine;
+  /// Peer device received the message (Telegram gray ✓✓).
+  final bool isDelivered;
   final bool isRead;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
@@ -217,6 +220,8 @@ class ChatMessage {
       createdAt: _parseDate(json['created_at']),
       editedAt: editedAt,
       isMine: json['is_mine'] as bool? ?? false,
+      isDelivered: json['is_delivered'] as bool? ??
+          (json['is_read'] as bool? ?? false),
       isRead: json['is_read'] as bool? ?? false,
       reactions: reactions,
       inlineKeyboard: keyboard,
@@ -224,6 +229,7 @@ class ChatMessage {
   }
 
   ChatMessage copyWith({
+    bool? isDelivered,
     bool? isRead,
     String? content,
     DateTime? editedAt,
@@ -242,6 +248,7 @@ class ChatMessage {
       createdAt: createdAt,
       editedAt: editedAt ?? this.editedAt,
       isMine: isMine,
+      isDelivered: isDelivered ?? this.isDelivered,
       isRead: isRead ?? this.isRead,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,

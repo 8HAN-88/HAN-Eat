@@ -35,6 +35,7 @@ from app.schemas.chat import (
     ScheduledMessageListResponse,
     ScheduledMessageResponse,
     ScheduleMessageRequest,
+    MarkDeliveredRequest,
     MarkReadRequest,
     MessageReactionRequest,
     MessageReactionSummary,
@@ -338,6 +339,31 @@ def _peer_last_read_id(
     return member.last_read_message_id if member else None
 
 
+def _peer_last_delivered_id(
+    db: Session, svc: ChatService, conv, current_user_id: int
+) -> Optional[int]:
+    if conv.type != "direct":
+        return None
+    peer_id = svc.peer_user_id(conv, current_user_id)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conv.id,
+            ConversationMember.user_id == peer_id,
+        )
+        .first()
+    )
+    if not member:
+        return None
+    delivered = getattr(member, "last_delivered_message_id", None)
+    read = member.last_read_message_id
+    if delivered is None:
+        return read
+    if read is None:
+        return delivered
+    return max(delivered, read)
+
+
 def _sender_name(user: Optional[User]) -> Optional[str]:
     if not user:
         return None
@@ -409,6 +435,7 @@ def _message_response(
     reactions: Optional[List[MessageReactionSummary]] = None,
     db: Optional[Session] = None,
     poll_content_cache: Optional[Dict[int, str]] = None,
+    peer_last_delivered_id: Optional[int] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
     if is_mine and conv and conv.type == "group" and svc:
@@ -423,6 +450,33 @@ def _message_response(
         is_read = True
     else:
         is_read = False
+
+    if (
+        peer_last_delivered_id is None
+        and is_mine
+        and conv is not None
+        and conv.type == "direct"
+        and svc is not None
+        and db is not None
+    ):
+        peer_last_delivered_id = _peer_last_delivered_id(
+            db, svc, conv, current_user_id
+        )
+
+    if is_read:
+        is_delivered = True
+    elif is_mine and conv and conv.type == "saved":
+        is_delivered = True
+    elif is_mine and conv and conv.type == "group" and svc:
+        is_delivered = svc.group_all_delivered(conv.id, msg.id, current_user_id)
+    elif is_mine:
+        is_delivered = bool(
+            peer_last_delivered_id is not None
+            and msg.id <= peer_last_delivered_id
+        )
+    else:
+        is_delivered = False
+
     content = msg.content
     if db is not None and getattr(msg, "type", None) == "poll":
         content = _enriched_content(db, msg, current_user_id, poll_content_cache)
@@ -440,6 +494,7 @@ def _message_response(
         created_at=msg.created_at,
         edited_at=getattr(msg, "edited_at", None),
         is_mine=is_mine,
+        is_delivered=is_delivered,
         is_read=is_read,
         reactions=reactions or [],
     )
@@ -514,6 +569,7 @@ def _conversation_response(
             or 0
         )
     peer_read = _peer_last_read_id(db, svc, conv, current_user.id)
+    peer_delivered = _peer_last_delivered_id(db, svc, conv, current_user.id)
     last = row.get("last_message")
     last_resp = None
     if last:
@@ -530,6 +586,7 @@ def _conversation_response(
             conv,
             svc,
             sender,
+            peer_last_delivered_id=peer_delivered,
         )
     return ConversationResponse(
         id=conv.id,
@@ -590,6 +647,7 @@ def _search_response_items(
             .first()
         )
         peer_read = _peer_last_read_id(db, svc, conv, current_user.id)
+        peer_delivered = _peer_last_delivered_id(db, svc, conv, current_user.id)
         msg_resp = _message_response(
             msg,
             current_user.id,
@@ -599,6 +657,7 @@ def _search_response_items(
             svc,
             hit.get("sender"),
             db=db,
+            peer_last_delivered_id=peer_delivered,
         )
         items.append(
             MessageSearchItem(
@@ -1142,6 +1201,9 @@ async def list_messages(
         .first()
     )
     peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    peer_delivered = (
+        _peer_last_delivered_id(db, svc, conv, current_user.id) if conv else None
+    )
     sender_ids = {m.sender_id for m in messages}
     senders = {
         u.id: u
@@ -1165,6 +1227,7 @@ async def list_messages(
             reactions=reactions_map.get(m.id, []),
             db=db,
             poll_content_cache=poll_cache,
+            peer_last_delivered_id=peer_delivered,
         )
         for m in messages
     ]
@@ -1190,6 +1253,7 @@ async def list_messages(
             reactions=pinned_reactions,
             db=db,
             poll_content_cache=poll_cache,
+            peer_last_delivered_id=peer_delivered,
         )
     next_cursor = None
     if after_id is None:
@@ -2137,6 +2201,31 @@ async def chat_event_stream(
     )
 
 
+@router.post("/chats/{conversation_id}/delivered")
+async def mark_delivered(
+    conversation_id: int,
+    body: MarkDeliveredRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.mark_delivered(conversation_id, current_user.id, body.message_id)
+        db.commit()
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    _emit(
+        conversation_id,
+        {
+            "type": "message.delivered",
+            "user_id": current_user.id,
+            "last_delivered_message_id": body.message_id,
+        },
+    )
+    return {"ok": True}
+
+
 @router.post("/chats/{conversation_id}/read")
 async def mark_read(
     conversation_id: int,
@@ -2151,6 +2240,14 @@ async def mark_read(
     except ValueError:
         db.rollback()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    _emit(
+        conversation_id,
+        {
+            "type": "message.delivered",
+            "user_id": current_user.id,
+            "last_delivered_message_id": body.message_id,
+        },
+    )
     _emit(
         conversation_id,
         {

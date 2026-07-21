@@ -36,6 +36,7 @@ class MessageResponse(BaseModel):
     edited_at: Optional[datetime] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     is_mine: bool = False
+    is_delivered: bool = False
     is_read: bool = False
     reactions: List["MessageReactionSummary"] = []
 
@@ -199,6 +200,10 @@ class ConversationMembersResponse(BaseModel):
 
 
 class MarkReadRequest(BaseModel):
+    message_id: int
+
+
+class MarkDeliveredRequest(BaseModel):
     message_id: int
 
 

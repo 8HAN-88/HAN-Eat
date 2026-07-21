@@ -37,6 +37,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
+import '../../../services/chat_media_outbox_service.dart';
 import '../../../services/feed_sync_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/product_analytics.dart';
@@ -282,6 +283,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Timer? _recordTimer;
   StreamSubscription<Amplitude>? _amplitudeSub;
   Timer? _markReadDebounce;
+  Timer? _markDeliveredDebounce;
   Timer? _draftSaveDebounce;
   final List<double> _waveLevels = [];
   final _audioRecorder = AudioRecorder();
@@ -356,7 +358,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _inputFocusNode.addListener(_onComposerFocusChanged);
     _scroll.addListener(_onScrollChanged);
     _controller.addListener(_onInputChanged);
-    unawaited(_loadCachedMessages().then((_) => _restoreFailedTextSends()));
+    unawaited(_loadCachedMessages().then((_) async {
+      await _restoreFailedTextSends();
+      await _restoreMediaOutbox();
+    }));
     unawaited(_loadSlowModeUiPrefs());
     unawaited(_restoreDraft());
     unawaited(_restoreVoiceHint());
@@ -406,6 +411,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _restartPolling();
         unawaited(_pollNew());
         _onConnectionRestored();
+        _scheduleMarkDelivered();
       },
       onDisconnected: () {
         if (!mounted) return;
@@ -890,6 +896,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _messages.add(optimistic);
       _mediaOutboundQueue.add(pending);
     });
+    unawaited(_persistMediaOutbox(pending, failed: false));
     _scrollToBottom();
     unawaited(_drainMediaOutboundQueue());
   }
@@ -1150,6 +1157,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _integrateMessage(msg, removeTempId: pending.tempId);
         _replyTo = null;
       });
+      unawaited(_removeMediaOutbox(pending.clientMessageId));
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
       if (pending.kind == _PendingMediaKind.file &&
           pending.fileName != null &&
@@ -1515,6 +1523,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _clearTypingState();
           }
         });
+        // Delivered as soon as the client receives the message (Telegram).
+        if (!msg.isMine) {
+          _scheduleMarkDelivered();
+        }
         // Same as poll path: only auto-scroll/mark-read when near bottom.
         if (_isNearBottom()) {
           _scrollToBottom();
@@ -1544,6 +1556,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final rawUid = event['user_id'];
       final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
       _onPeerTyping(uid);
+      return;
+    }
+    if (type == 'message.delivered') {
+      final delivererId = event['user_id'];
+      final myId = AuthService.instance.currentUser?.id;
+      if (delivererId == myId) return;
+      final raw = event['last_delivered_message_id'];
+      final deliveredId = raw is int ? raw : int.tryParse('$raw');
+      if (deliveredId != null) _applyDeliveredReceipt(deliveredId);
       return;
     }
     if (type == 'message.read') {
@@ -1882,6 +1903,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _removePendingMediaByTempId(pending.tempId, removeMessage: true);
       }
     });
+    if (pending != null) {
+      unawaited(_removeMediaOutbox(pending.clientMessageId));
+    }
     if (!_hasFailedPendingItems) {
       _clearManualReadyRetrySchedule();
     }
@@ -2318,6 +2342,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _rememberFailedMedia(_PendingMediaSend pending) {
     _clearPendingMediaAutoRetry();
     setState(() => _pendingMediaRetry = pending);
+    unawaited(_persistMediaOutbox(pending, failed: true));
   }
 
   void _clearPendingMediaAutoRetry() {
@@ -2402,6 +2427,167 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _cancelledPendingMediaClientIds.remove(pending.clientMessageId);
     if (removeMessage) {
       _messages.removeWhere((m) => m.id == tempId);
+      unawaited(_removeMediaOutbox(pending.clientMessageId));
+    }
+  }
+
+  Future<Uint8List?> _bytesForMediaOutbox(_PendingMediaSend pending) async {
+    final cached = pending.payloadBytes ?? pending.previewBytes;
+    if (cached != null &&
+        cached.isNotEmpty &&
+        cached.length <= ChatMediaOutboxService.maxBytesPerItem) {
+      return cached;
+    }
+    try {
+      final bytes = await pending.file.readAsBytes();
+      if (bytes.isEmpty ||
+          bytes.length > ChatMediaOutboxService.maxBytesPerItem) {
+        return null;
+      }
+      pending.payloadBytes = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _persistMediaOutbox(
+    _PendingMediaSend pending, {
+    required bool failed,
+  }) async {
+    final bytes = await _bytesForMediaOutbox(pending);
+    if (bytes == null) return;
+    await ChatMediaOutboxService.upsert(
+      conversationId: widget.conversationId,
+      clientMessageId: pending.clientMessageId,
+      tempId: pending.tempId,
+      kind: pending.kind.name,
+      bytes: bytes,
+      fileName: pending.fileName,
+      replyToMessageId: pending.replyToMessageId,
+      voiceDurationSec: pending.voiceDurationSec,
+      uploadedMediaUrl: pending.uploadedMediaUrl,
+      attempts: pending.attempts,
+      lastRetryAfterSeconds: pending.lastRetryAfterSeconds,
+      lastLimitedAtIso: pending.lastLimitedAt?.toUtc().toIso8601String(),
+      failed: failed,
+    );
+  }
+
+  Future<void> _removeMediaOutbox(String clientMessageId) {
+    return ChatMediaOutboxService.remove(
+      conversationId: widget.conversationId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  Future<void> _restoreMediaOutbox() async {
+    final rows =
+        await ChatMediaOutboxService.loadConversation(widget.conversationId);
+    if (rows.isEmpty || !mounted) return;
+    final uid = AuthService.instance.currentUser?.id ?? 0;
+    final restoredMessages = <ChatMessage>[];
+    _PendingMediaSend? firstFailed;
+    for (final row in rows) {
+      final clientMessageId = row['client_message_id'] as String? ?? '';
+      final tempId = row['temp_id'] as int? ?? 0;
+      final kindName = row['kind'] as String? ?? '';
+      final bytes = row['bytes'];
+      if (clientMessageId.isEmpty ||
+          tempId >= 0 ||
+          bytes is! Uint8List ||
+          bytes.isEmpty) {
+        continue;
+      }
+      if (_pendingMediaByTempId.containsKey(tempId) ||
+          _pendingMediaTempIdByClientId.containsKey(clientMessageId)) {
+        continue;
+      }
+      final kind = _PendingMediaKind.values.firstWhere(
+        (k) => k.name == kindName,
+        orElse: () => _PendingMediaKind.file,
+      );
+      final fileName = row['file_name'] as String?;
+      final mime = switch (kind) {
+        _PendingMediaKind.image => 'image/jpeg',
+        _PendingMediaKind.video => 'video/mp4',
+        _PendingMediaKind.voice => 'audio/m4a',
+        _PendingMediaKind.file => 'application/octet-stream',
+      };
+      final file = XFile.fromData(
+        bytes,
+        name: fileName ?? 'media',
+        mimeType: mime,
+      );
+      final pending = _PendingMediaSend(
+        tempId: tempId,
+        kind: kind,
+        file: file,
+        clientMessageId: clientMessageId,
+        fileName: fileName,
+        replyToMessageId: row['reply_to_message_id'] as int?,
+        voiceDurationSec: row['voice_duration_sec'] as int?,
+        totalBytes: bytes.length,
+        previewBytes: kind == _PendingMediaKind.image ? bytes : null,
+      );
+      pending.payloadBytes = bytes;
+      pending.uploadedMediaUrl = row['uploaded_media_url'] as String?;
+      pending.attempts = row['attempts'] as int? ?? 0;
+      pending.lastRetryAfterSeconds =
+          (row['last_retry_after_seconds'] as int?)?.clamp(1, 3600);
+      pending.lastLimitedAt = DateTime.tryParse(
+        row['last_limited_at'] as String? ?? '',
+      );
+      final failed = row['failed'] as bool? ?? true;
+      _pendingMediaByTempId[tempId] = pending;
+      _pendingMediaTempIdByClientId[clientMessageId] = tempId;
+      if (!_messages.any((m) => m.id == tempId)) {
+        restoredMessages.add(
+          ChatMessage(
+            id: tempId,
+            conversationId: widget.conversationId,
+            senderId: uid,
+            type: switch (kind) {
+              _PendingMediaKind.image => 'image',
+              _PendingMediaKind.video => 'video',
+              _PendingMediaKind.file => 'file',
+              _PendingMediaKind.voice => 'voice',
+            },
+            content: switch (kind) {
+              _PendingMediaKind.file => fileName ?? 'Файл',
+              _PendingMediaKind.voice => '${pending.voiceDurationSec ?? 1}',
+              _ => '',
+            },
+            replyToMessageId: pending.replyToMessageId,
+            createdAt:
+                DateTime.tryParse(row['created_at'] as String? ?? '') ??
+                    DateTime.now(),
+            isMine: true,
+            isDelivered: false,
+            isRead: false,
+          ),
+        );
+      }
+      if (failed) {
+        firstFailed ??= pending;
+      } else {
+        _mediaOutboundQueue.add(pending);
+      }
+    }
+    if (restoredMessages.isEmpty &&
+        firstFailed == null &&
+        _mediaOutboundQueue.isEmpty) {
+      return;
+    }
+    setState(() {
+      _messages.addAll(restoredMessages);
+      _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      if (firstFailed != null) {
+        _pendingMediaRetry = firstFailed;
+      }
+    });
+    if (_mediaOutboundQueue.isNotEmpty) {
+      unawaited(_drainMediaOutboundQueue());
     }
   }
 
@@ -2607,6 +2793,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   (IconData icon, Color color) _outgoingStatusVisual({
     required bool isPending,
     required bool isFailed,
+    required bool isDelivered,
     required bool isRead,
     required Color fg,
     required ColorScheme scheme,
@@ -2630,6 +2817,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return (
         Icons.done_all,
         onMedia ? Colors.white.withValues(alpha: 0.95) : scheme.primary,
+      );
+    }
+    if (isDelivered) {
+      // Telegram gray double-check = delivered, not yet read.
+      return (
+        Icons.done_all,
+        onMedia
+            ? Colors.white.withValues(alpha: 0.78)
+            : fg.withValues(alpha: 0.55),
       );
     }
     return (
@@ -3181,12 +3377,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _applyDeliveredReceipt(int deliveredUpToId) {
+    setState(() {
+      for (var i = 0; i < _messages.length; i++) {
+        final m = _messages[i];
+        if (m.isMine && m.id <= deliveredUpToId && !m.isDelivered) {
+          _messages[i] = m.copyWith(isDelivered: true);
+        }
+      }
+    });
+  }
+
   void _applyReadReceipt(int readUpToId) {
     setState(() {
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
-        if (m.isMine && m.id <= readUpToId && !m.isRead) {
-          _messages[i] = m.copyWith(isRead: true);
+        if (m.isMine && m.id <= readUpToId && (!m.isRead || !m.isDelivered)) {
+          _messages[i] = m.copyWith(isRead: true, isDelivered: true);
         }
       }
     });
@@ -3208,6 +3415,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _inlineDebounce?.cancel();
     _hideInlineOverlay();
     _markReadDebounce?.cancel();
+    _markDeliveredDebounce?.cancel();
     _draftSaveDebounce?.cancel();
     _signalSub?.cancel();
     if (_apiReachabilityListener != null) {
@@ -4930,6 +5138,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? _outgoingStatusVisual(
             isPending: isPending,
             isFailed: isFailed,
+            isDelivered: anchor.isDelivered,
             isRead: anchor.isRead,
             fg: fg,
             scheme: scheme,
@@ -5174,6 +5383,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? _outgoingStatusVisual(
             isPending: isPending,
             isFailed: isFailed,
+            isDelivered: anchor.isDelivered,
             isRead: anchor.isRead,
             fg: fg,
             scheme: scheme,
@@ -5834,6 +6044,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (refresh) {
         unawaited(_refreshScheduledPendingCount());
       }
+      // Acknowledge receipt even if the user is still above unread.
+      _scheduleMarkDelivered();
       if (refresh) {
         _scrollAfterInitialLoad();
       } else if (_isNearBottom()) {
@@ -5884,6 +6096,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (hasIncoming && _peerTyping) {
         setState(_clearTypingState);
       }
+      if (hasIncoming) {
+        _scheduleMarkDelivered();
+      }
       if (_isNearBottom()) {
         _scrollToBottom();
         _scheduleMarkRead();
@@ -5907,6 +6122,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } finally {
       _pollInFlight = false;
     }
+  }
+
+  void _scheduleMarkDelivered() {
+    _markDeliveredDebounce?.cancel();
+    _markDeliveredDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_markLatestDelivered());
+    });
+  }
+
+  Future<void> _markLatestDelivered() async {
+    if (_messages.isEmpty) return;
+    ChatMessage? last;
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      if (_messages[i].id > 0) {
+        last = _messages[i];
+        break;
+      }
+    }
+    if (last == null) return;
+    await ChatService.markDelivered(
+      conversationId: widget.conversationId,
+      messageId: last.id,
+    );
   }
 
   void _scheduleMarkRead() {
@@ -7044,6 +7282,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyToId ?? _replyTo?.id,
       totalBytes: totalBytes,
       previewBytes: previewBytes,
+      payloadBytes: previewBytes,
     ));
   }
 
@@ -8722,6 +8961,7 @@ class _PendingMediaSend {
     this.voiceDurationSec,
     this.totalBytes,
     this.previewBytes,
+    this.payloadBytes,
   });
 
   final int tempId;
@@ -8733,6 +8973,8 @@ class _PendingMediaSend {
   final int? voiceDurationSec;
   final int? totalBytes;
   final Uint8List? previewBytes;
+  /// Full bytes for Hive outbox / reload retry (web-safe).
+  Uint8List? payloadBytes;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -8883,6 +9125,12 @@ class _Bubble extends StatelessWidget {
       statusColor = onMedia
           ? Colors.white.withValues(alpha: 0.95)
           : scheme.primary;
+    } else if (message.isDelivered) {
+      // Telegram gray ✓✓ = delivered to peer device.
+      statusIcon = Icons.done_all;
+      statusColor = onMedia
+          ? Colors.white.withValues(alpha: 0.78)
+          : fg.withValues(alpha: 0.55);
     } else {
       statusIcon = Icons.done;
       statusColor = onMedia

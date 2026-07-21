@@ -231,6 +231,7 @@ class ChatCacheService {
       if (m.editedAt != null)
         'edited_at': m.editedAt!.toUtc().toIso8601String(),
       'is_mine': m.isMine,
+      'is_delivered': m.isDelivered,
       'is_read': m.isRead,
       'reactions': m.reactions
           .map(

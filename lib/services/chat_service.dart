@@ -752,6 +752,16 @@ class ChatService {
     );
   }
 
+  static Future<void> markDelivered({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/delivered');
+    try {
+      await _post(uri, body: jsonEncode({'message_id': messageId}));
+    } catch (_) {}
+  }
+
   static Future<void> markRead({
     required int conversationId,
     required int messageId,
@@ -1223,6 +1233,7 @@ class ChatService {
     final uid = AuthService.instance.currentUser?.id;
     final msg = ChatMessage.fromJson(json);
     if (uid == null) return msg;
+    final mine = msg.senderId == uid;
     return ChatMessage(
       id: msg.id,
       conversationId: msg.conversationId,
@@ -1234,8 +1245,10 @@ class ChatService {
       replyToMessageId: msg.replyToMessageId,
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
-      isMine: msg.senderId == uid,
-      isRead: msg.senderId == uid,
+      isMine: mine,
+      // Own outgoing starts as sent (single ✓), not read/delivered.
+      isDelivered: mine ? false : msg.isDelivered,
+      isRead: mine ? false : msg.isRead,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
     );

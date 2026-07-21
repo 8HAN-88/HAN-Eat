@@ -451,6 +451,29 @@ class ChatService:
             for m in others
         )
 
+    def group_all_delivered(
+        self, conversation_id: int, message_id: int, sender_id: int
+    ) -> bool:
+        others = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id != sender_id,
+            )
+            .all()
+        )
+        if not others:
+            return False
+        return all(
+            (
+                (m.last_delivered_message_id is not None
+                 and m.last_delivered_message_id >= message_id)
+                or (m.last_read_message_id is not None
+                    and m.last_read_message_id >= message_id)
+            )
+            for m in others
+        )
+
     def list_conversations(
         self, user_id: int, *, archived_only: bool = False
     ) -> List[dict]:
@@ -2343,6 +2366,27 @@ class ChatService:
             return None
         return msg
 
+    def mark_delivered(
+        self, conversation_id: int, user_id: int, message_id: int
+    ) -> None:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if not member:
+            return
+        if (
+            member.last_delivered_message_id is None
+            or message_id > member.last_delivered_message_id
+        ):
+            member.last_delivered_message_id = message_id
+
     def mark_read(self, conversation_id: int, user_id: int, message_id: int) -> None:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
@@ -2358,6 +2402,12 @@ class ChatService:
             return
         if member.last_read_message_id is None or message_id > member.last_read_message_id:
             member.last_read_message_id = message_id
+        # Read implies delivered (Telegram).
+        if (
+            member.last_delivered_message_id is None
+            or message_id > member.last_delivered_message_id
+        ):
+            member.last_delivered_message_id = message_id
 
     def mark_unread(self, conversation_id: int, user_id: int) -> Optional[int]:
         if not self._is_member(conversation_id, user_id):
