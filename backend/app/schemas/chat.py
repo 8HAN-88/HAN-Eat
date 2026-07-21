@@ -419,3 +419,4 @@ MessageResponse.model_rebuild()
 SendMessageRequest.model_rebuild()
 ScheduleMessageRequest.model_rebuild()
 RescheduleMessageRequest.model_rebuild()
+
