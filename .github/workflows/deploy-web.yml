@@ -17,6 +17,7 @@ on:
       - 'scripts/patch_web_cache_bust.sh'
       - 'scripts/patch_web_service_worker.sh'
       - 'scripts/patch_nginx_web_api_proxy.sh'
+      - 'scripts/check_web_build_artifacts.py'
       - 'scripts/setup_nginx_haneat_web.sh'
       - 'scripts/generate_web_pwa_icons.py'
       - '.github/workflows/deploy-web.yml'
