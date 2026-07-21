@@ -65,6 +65,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   StreamSubscription<void>? _signalSub;
   StreamSubscription<UserRealtimeEvent>? _realtimeSub;
   VoidCallback? _apiReachabilityListener;
+  VoidCallback? _apiConnectingListener;
   VoidCallback? _realtimeConnectedListener;
   bool _appPaused = false;
   List<ChatFolder> _folders = [];
@@ -990,10 +991,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
   Widget _hubOfflineBanner() {
     final scheme = Theme.of(context).colorScheme;
-    final apiOk = ApiReachabilityService.instance.isApiReachable.value;
-    final message = apiOk
-        ? 'Показан сохранённый список чатов'
-        : 'Нет связи с сервером — сохранённый список чатов';
+    final connecting = ApiReachabilityService.instance.isApiConnecting.value;
+    final message = connecting
+        ? 'Соединение…'
+        : 'Ожидание сети…';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: Material(
@@ -1003,11 +1004,21 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              Icon(
-                Icons.offline_pin_outlined,
-                size: 20,
-                color: scheme.onSecondaryContainer,
-              ),
+              if (connecting)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: scheme.onSecondaryContainer,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.cloud_off_outlined,
+                  size: 20,
+                  color: scheme.onSecondaryContainer,
+                ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

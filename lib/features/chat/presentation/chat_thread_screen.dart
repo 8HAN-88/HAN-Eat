@@ -251,7 +251,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _pollInFlight = false;
   Timer? _presenceTimer;
   Timer? _typingDebounce;
-  Timer? _peerTypingClear;
   Timer? _inlineDebounce;
   List<InlineResult> _inlineResults = [];
   OverlayEntry? _inlineOverlayEntry;
@@ -304,6 +303,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _showJumpToBottom = false;
   int _newMessagesBelow = 0;
   bool _suppressMarkRead = false;
+  /// Telegram-style unread divider shown above this message id.
+  int? _unreadDividerBeforeId;
+  final Set<int> _typingUserIds = <int>{};
+  final Map<int, Timer> _typingUserTimers = <int, Timer>{};
   bool _selectionMode = false;
   bool _chatExitActionRunning = false;
   final _selectedMessageIds = <int>{};
@@ -1508,11 +1511,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         final msg = ChatService.messageFromStreamPayload(raw);
         setState(() {
           _integrateMessage(msg);
-          if (!msg.isMine) _peerTyping = false;
+          if (!msg.isMine) {
+            _clearTypingState();
+          }
         });
-        if (!msg.isMine) _peerTypingClear?.cancel();
-        _scrollToBottom();
-        _scheduleMarkRead();
+        // Same as poll path: only auto-scroll/mark-read when near bottom.
+        if (_isNearBottom()) {
+          _scrollToBottom();
+          _scheduleMarkRead();
+        } else if (!msg.isMine) {
+          setState(() {
+            _newMessagesBelow += 1;
+            _showJumpToBottom = true;
+          });
+        }
       } catch (e) {
         debugPrint('Chat SSE message parse failed: $e');
       }
@@ -1529,11 +1541,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'typing') {
-      setState(() => _peerTyping = true);
-      _peerTypingClear?.cancel();
-      _peerTypingClear = Timer(const Duration(seconds: 4), () {
-        if (mounted) setState(() => _peerTyping = false);
-      });
+      final rawUid = event['user_id'];
+      final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
+      _onPeerTyping(uid);
       return;
     }
     if (type == 'message.read') {
@@ -2496,11 +2506,138 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _newMessagesBelow = 0;
         });
       }
+      // Telegram: mark read when the user actually reaches the bottom.
+      _scheduleMarkRead();
       return;
     }
     if (!_showJumpToBottom) {
       setState(() => _showJumpToBottom = true);
     }
+  }
+
+  void _clearTypingState() {
+    for (final t in _typingUserTimers.values) {
+      t.cancel();
+    }
+    _typingUserTimers.clear();
+    _typingUserIds.clear();
+    _peerTyping = false;
+  }
+
+  void _onPeerTyping(int? userId) {
+    final myId = AuthService.instance.currentUser?.id;
+    if (userId != null && userId == myId) return;
+    final key = userId ?? 0;
+    setState(() {
+      _typingUserIds.add(key);
+      _peerTyping = true;
+    });
+    _typingUserTimers[key]?.cancel();
+    _typingUserTimers[key] = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _typingUserIds.remove(key);
+        _peerTyping = _typingUserIds.isNotEmpty;
+      });
+      _typingUserTimers.remove(key);
+    });
+  }
+
+  String? _displayNameForUserId(int id) {
+    final mapped = _senderNames[id]?.trim();
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    for (final m in _groupMembers) {
+      if (m.id == id) {
+        final name = m.displayName.trim();
+        if (name.isNotEmpty) return name;
+      }
+    }
+    for (final m in _conversation.membersPreview) {
+      if (m.id == id) {
+        final name = m.displayName.trim();
+        if (name.isNotEmpty) return name;
+      }
+    }
+    return null;
+  }
+
+  String _typingSubtitleLabel({required bool isGroup}) {
+    if (!_peerTyping) return '';
+    if (!isGroup) return 'печатает…';
+    final names = <String>[];
+    for (final id in _typingUserIds) {
+      if (id == 0) continue;
+      final name = _displayNameForUserId(id);
+      if (name == null || name.isEmpty) continue;
+      names.add(name.split(' ').first);
+    }
+    if (names.isEmpty) return 'печатает…';
+    if (names.length == 1) return '${names.first} печатает…';
+    if (names.length == 2) {
+      return '${names[0]} и ${names[1]} печатают…';
+    }
+    return '${names.length} печатают…';
+  }
+
+  Widget _unreadMessagesSeparator() {
+    final scheme = Theme.of(context).colorScheme;
+    final line = scheme.primary.withValues(alpha: 0.4);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: Divider(height: 1, color: line)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              'Непрочитанные сообщения',
+              style: TextStyle(
+                color: scheme.primary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(height: 1, color: line)),
+        ],
+      ),
+    );
+  }
+
+  (IconData icon, Color color) _outgoingStatusVisual({
+    required bool isPending,
+    required bool isFailed,
+    required bool isRead,
+    required Color fg,
+    required ColorScheme scheme,
+    bool onMedia = false,
+  }) {
+    if (isFailed) {
+      return (
+        Icons.error_outline,
+        onMedia ? Colors.white : scheme.error,
+      );
+    }
+    if (isPending) {
+      return (
+        Icons.access_time,
+        onMedia
+            ? Colors.white.withValues(alpha: 0.85)
+            : fg.withValues(alpha: 0.55),
+      );
+    }
+    if (isRead) {
+      return (
+        Icons.done_all,
+        onMedia ? Colors.white.withValues(alpha: 0.95) : scheme.primary,
+      );
+    }
+    return (
+      Icons.done,
+      onMedia
+          ? Colors.white.withValues(alpha: 0.7)
+          : fg.withValues(alpha: 0.45),
+    );
   }
 
   bool _isNearBottom([double threshold = 120]) {
@@ -2530,6 +2667,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
+        setState(() => _unreadDividerBeforeId = firstUnread);
         _scrollToMessage(firstUnread);
         final idx = _messages.indexWhere((m) => m.id == firstUnread);
         final below = idx >= 0 ? _messages.length - idx - 1 : 0;
@@ -2541,6 +2679,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       } else {
         _scrollToBottom();
+        _scheduleMarkRead();
       }
     });
   }
@@ -3061,7 +3200,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollTimer?.cancel();
     _presenceTimer?.cancel();
     _typingDebounce?.cancel();
-    _peerTypingClear?.cancel();
+    for (final t in _typingUserTimers.values) {
+      t.cancel();
+    }
+    _typingUserTimers.clear();
+    _typingUserIds.clear();
     _inlineDebounce?.cancel();
     _hideInlineOverlay();
     _markReadDebounce?.cancel();
@@ -4779,6 +4922,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final fg = mine && Theme.of(context).brightness == Brightness.dark
         ? Colors.white
         : scheme.onSurface;
+    final isPending = mine && anchor.id < 0;
+    final isFailed = mine &&
+        (_failedTextSends.containsKey(anchor.id) ||
+            _pendingMediaRetry?.tempId == anchor.id);
+    final status = mine
+        ? _outgoingStatusVisual(
+            isPending: isPending,
+            isFailed: isFailed,
+            isRead: anchor.isRead,
+            fg: fg,
+            scheme: scheme,
+          )
+        : null;
     final album = Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       constraints: BoxConstraints(
@@ -4791,12 +4947,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _chatAlbumGrid(
             imageUrls: urls,
             borderRadius: BorderRadius.circular(16),
+            // No-caption albums: meta only on the grid (Telegram-style).
             footerOverlay: hasCaption
                 ? null
                 : _albumMetaOverlay(
                     anchor: anchor,
                     mine: mine,
                     fg: fg,
+                    isPending: isPending,
+                    isFailed: isFailed,
+                    scheme: scheme,
                   ),
           ),
           if (hasCaption)
@@ -4824,49 +4984,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           height: 1.08,
                         ),
                       ),
-                      if (mine) ...[
+                      if (status != null) ...[
                         const SizedBox(width: 3),
-                        Icon(
-                          anchor.id < 0
-                              ? Icons.access_time
-                              : (anchor.isRead ? Icons.done_all : Icons.done),
-                          size: 12.5,
-                          color: anchor.isRead
-                              ? _telegramAccent
-                              : fg.withValues(alpha: 0.55),
-                        ),
+                        Icon(status.$1, size: 12.5, color: status.$2),
                       ],
                     ],
                   ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(top: 3, left: 2, right: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    formatChatMessageTime(anchor.createdAt),
-                    style: TextStyle(
-                      color: fg.withValues(alpha: 0.62),
-                      fontSize: 10.5,
-                      height: 1.08,
-                    ),
-                  ),
-                  if (mine) ...[
-                    const SizedBox(width: 3),
-                    Icon(
-                      anchor.id < 0
-                          ? Icons.access_time
-                          : (anchor.isRead ? Icons.done_all : Icons.done),
-                      size: 12.5,
-                      color: anchor.isRead
-                          ? _telegramAccent
-                          : fg.withValues(alpha: 0.55),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -5043,7 +5166,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required ChatMessage anchor,
     required bool mine,
     required Color fg,
+    required bool isPending,
+    required bool isFailed,
+    required ColorScheme scheme,
   }) {
+    final status = mine
+        ? _outgoingStatusVisual(
+            isPending: isPending,
+            isFailed: isFailed,
+            isRead: anchor.isRead,
+            fg: fg,
+            scheme: scheme,
+            onMedia: true,
+          )
+        : null;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.4),
@@ -5063,16 +5199,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 height: 1.0,
               ),
             ),
-            if (mine) ...[
+            if (status != null) ...[
               const SizedBox(width: 2),
-              Icon(
-                anchor.id < 0
-                    ? Icons.access_time
-                    : (anchor.isRead ? Icons.done_all : Icons.done),
-                size: 12,
-                color:
-                    anchor.isRead ? _telegramAccent : fg.withValues(alpha: 0.6),
-              ),
+              Icon(status.$1, size: 12, color: status.$2),
             ],
           ],
         ),
@@ -5255,6 +5384,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   color: _uploadAccent,
                 ),
               ),
+            // Telegram corner: time + clock / error while media is outgoing.
+            Positioned(
+              right: 8,
+              bottom: isFailed ? 8 : 10,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatChatMessageTime(msg.createdAt),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.0,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        isFailed ? Icons.error_outline : Icons.access_time,
+                        size: 12,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -5269,7 +5433,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             padding: const EdgeInsets.only(top: 2),
             child: Wrap(
               spacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                Icon(Icons.error_outline, size: 14, color: scheme.error),
+                Text(
+                  'Не отправлено • нажмите, чтобы повторить',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.error,
+                      ),
+                ),
                 TextButton(
                   onPressed: _sending ? null : _retryPendingMedia,
                   style: TextButton.styleFrom(
@@ -5664,8 +5836,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       if (refresh) {
         _scrollAfterInitialLoad();
+      } else if (_isNearBottom()) {
+        // Pagination/background reload should not wipe unread while scrolled up.
+        _scheduleMarkRead();
       }
-      _scheduleMarkRead();
     } catch (e) {
       if (!mounted || seq != _messageLoadSeq) return;
       if (FeedLoadHelper.isSessionError(e)) {
@@ -5707,11 +5881,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       if (added == 0) return;
       final hasIncoming = fresh.any((m) => !m.isMine);
-      if (hasIncoming) {
-        _peerTypingClear?.cancel();
-        if (_peerTyping) {
-          setState(() => _peerTyping = false);
-        }
+      if (hasIncoming && _peerTyping) {
+        setState(_clearTypingState);
       }
       if (_isNearBottom()) {
         _scrollToBottom();
@@ -5740,6 +5911,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _scheduleMarkRead() {
     if (_suppressMarkRead) return;
+    if (!_isNearBottom()) return;
     _markReadDebounce?.cancel();
     _markReadDebounce = Timer(const Duration(milliseconds: 500), () {
       unawaited(_markLatestRead());
@@ -5747,12 +5919,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _markLatestRead() async {
-    if (_messages.isEmpty) return;
-    final last = _messages.last;
+    if (_messages.isEmpty || _suppressMarkRead) return;
+    if (!_isNearBottom()) return;
+    ChatMessage? last;
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      if (_messages[i].id > 0) {
+        last = _messages[i];
+        break;
+      }
+    }
+    if (last == null) return;
     await ChatService.markRead(
       conversationId: widget.conversationId,
       messageId: last.id,
     );
+    if (!mounted) return;
+    if (_unreadDividerBeforeId != null || _conversation.unreadCount > 0) {
+      setState(() {
+        _unreadDividerBeforeId = null;
+        _conversation = _conversation.copyWith(unreadCount: 0);
+      });
+    }
   }
 
   void _scrollToBottom({bool animated = true}) {
@@ -5769,8 +5956,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (_suppressMarkRead) {
       setState(() => _suppressMarkRead = false);
-      _scheduleMarkRead();
     }
+    _scheduleMarkRead();
   }
 
   void _scrollToBottomAfterKeyboard() {
@@ -6983,11 +7170,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       subtitle = 'обновление…';
     } else if (isSaved) {
       subtitle = 'Сохраняйте сообщения и заметки';
-    } else if (isGroup) {
-      subtitle =
-          _peerTyping ? 'печатает…' : '${_conversation.memberCount} участников';
     } else if (_peerTyping) {
-      subtitle = 'печатает…';
+      subtitle = _typingSubtitleLabel(isGroup: isGroup);
+    } else if (isGroup) {
+      subtitle = '${_conversation.memberCount} участников';
     } else if (peer != null) {
       subtitle = formatLastSeen(peer.lastSeenAt);
     }
@@ -7636,7 +7822,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   final selected =
                                       _selectedMessageIds.contains(msg.id);
                                   final failed =
-                                      _failedTextSends.containsKey(msg.id);
+                                      _failedTextSends.containsKey(msg.id) ||
+                                          _pendingMediaRetry?.tempId == msg.id;
                                   final cluster = messageClusters[msgIndex];
                                   final showDateSeparator =
                                       messageDateSeparators[msgIndex];
@@ -7665,6 +7852,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           children: [
                                             if (showDateSeparator)
                                               _chatDateSeparator(msg.createdAt),
+                                            if (_unreadDividerBeforeId ==
+                                                msg.id)
+                                              _unreadMessagesSeparator(),
                                             Row(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
@@ -7848,7 +8038,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                           ),
                                                         ),
                                                       ),
-                                                      if (failed)
+                                                      if (failed &&
+                                                          _failedTextSends
+                                                              .containsKey(
+                                                                  msg.id))
                                                         _failedSendActions(
                                                             msg.id, scheme),
                                                     ],
