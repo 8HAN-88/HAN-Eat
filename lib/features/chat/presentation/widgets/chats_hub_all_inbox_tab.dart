@@ -340,6 +340,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     };
     ApiReachabilityService.instance.isApiReachable
         .addListener(_apiReachabilityListener!);
+    _apiConnectingListener = () {
+      if (mounted) setState(() {});
+    };
+    ApiReachabilityService.instance.isApiConnecting
+        .addListener(_apiConnectingListener!);
     unawaited(_restoreHubUiPrefs());
     unawaited(_loadFolders());
     _maybeStartLoading();
@@ -382,6 +387,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (_apiReachabilityListener != null) {
       ApiReachabilityService.instance.isApiReachable
           .removeListener(_apiReachabilityListener!);
+    }
+    if (_apiConnectingListener != null) {
+      ApiReachabilityService.instance.isApiConnecting
+          .removeListener(_apiConnectingListener!);
     }
     super.dispose();
   }
