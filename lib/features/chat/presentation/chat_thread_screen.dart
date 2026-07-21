@@ -906,7 +906,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _mediaDrainActive = true;
     try {
       while (_mediaOutboundQueue.isNotEmpty && mounted) {
-        if (_isAnyCooldownActive) {
+        if (_conversation.isGroup && _isAnyCooldownActive) {
           final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
           if (_sending) {
             _beginSending(
@@ -916,12 +916,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await Future<void>.delayed(Duration(seconds: wait));
           if (!mounted) return;
           continue;
-        }
-        while (ApiRateLimitBackoff.isActive) {
-          final wait =
-              ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
-          await Future<void>.delayed(wait);
-          if (!mounted) return;
         }
         final pending = _mediaOutboundQueue.first;
         if (!_sending) {
@@ -2389,11 +2383,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final pending = _pendingMediaRetry;
     if (pending == null) return;
     _clearPendingMediaAutoRetry();
-    while (ApiRateLimitBackoff.isActive) {
-      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
-      await Future<void>.delayed(wait);
-      if (!mounted) return;
-    }
     setState(() => _pendingMediaRetry = null);
     pending.attempts = 0;
     pending.lastRetryAfterSeconds = null;
@@ -6186,16 +6175,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _textDrainActive = true;
     try {
       while (_textOutboundQueue.isNotEmpty && mounted) {
-        if (_isAnyCooldownActive) {
+        // Group slow-mode / flood only — never stall DMs on leftover timers.
+        if (_conversation.isGroup && _isAnyCooldownActive) {
           final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
           await Future<void>.delayed(Duration(seconds: wait));
           if (!mounted) return;
-          continue;
-        }
-        if (ApiRateLimitBackoff.isActive) {
-          final wait =
-              ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
-          await Future<void>.delayed(wait);
           continue;
         }
         final pending = _textOutboundQueue.first;
@@ -6286,9 +6270,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             continue;
           }
           pending.attempts++;
-          if (_isRetryableSendError(e) && pending.attempts < 6) {
-            final waitSec = (2 * pending.attempts).clamp(2, 30);
-            await Future<void>.delayed(Duration(seconds: waitSec));
+          // Quick retries only (Telegram-like). Long sleeps made sends feel delayed.
+          if (_isRetryableSendError(e) && pending.attempts < 3) {
+            final waitMs = pending.attempts == 1 ? 200 : 500;
+            await Future<void>.delayed(Duration(milliseconds: waitMs));
             continue;
           }
           _textOutboundQueue.removeAt(0);
@@ -6389,7 +6374,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     )) {
       return;
     }
-    if (_editingMessage == null && _isAnyCooldownActive) {
+    // Client cooldown only for real group slow-mode / flood — not DMs.
+    if (_editingMessage == null &&
+        _conversation.isGroup &&
+        _isAnyCooldownActive) {
       final remain = _formatSlowModeCountdown(_activeCooldownRemainingSeconds);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -77,8 +77,11 @@ class ChatService {
     ) request, {
     int retries = 3,
     Duration? timeout,
+    bool bypassRateLimitGate = false,
   }) async {
-    if (ApiRateLimitBackoff.isActive) {
+    // Chat sends must never wait on a global backoff from unrelated 429s
+    // (feed/health) — that made messages appear "seconds later" like a queue.
+    if (!bypassRateLimitGate && ApiRateLimitBackoff.isActive) {
       final sec = ApiRateLimitBackoff.remaining?.inSeconds ?? 60;
       return http.Response(
         '{"detail":"Too many requests. Please try again later.","code":"RATE_LIMIT_EXCEEDED"}',
@@ -125,7 +128,10 @@ class ChatService {
     if (response.statusCode == 429) {
       final retryAfter =
           int.tryParse(response.headers['retry-after'] ?? '') ?? 60;
-      ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+      // Don't freeze the whole app after a chat send 429.
+      if (!bypassRateLimitGate) {
+        ApiRateLimitBackoff.register(retryAfterSeconds: retryAfter);
+      }
       return response;
     }
     if (retries > 0 && _shouldRetry(response.statusCode)) {
@@ -134,12 +140,13 @@ class ChatService {
         await ApiEndpointResolver.revalidateIfNeeded();
       }
       await Future<void>.delayed(
-        Duration(milliseconds: 350 * (4 - retries)),
+        Duration(milliseconds: bypassRateLimitGate ? 120 : (350 * (4 - retries))),
       );
       return _request(
         request,
         retries: retries - 1,
         timeout: timeout,
+        bypassRateLimitGate: bypassRateLimitGate,
       );
     }
     return response;
@@ -154,11 +161,13 @@ class ChatService {
     Object? body,
     int retries = 3,
     Duration? timeout,
+    bool bypassRateLimitGate = false,
   }) =>
       _request(
         (client, headers) => client.post(uri, headers: headers, body: body),
         retries: retries,
         timeout: timeout,
+        bypassRateLimitGate: bypassRateLimitGate,
       );
 
   static Future<http.Response> _delete(Uri uri) => _request(
@@ -630,13 +639,6 @@ class ChatService {
     );
   }
 
-  static Future<void> _waitForRateLimit() async {
-    while (ApiRateLimitBackoff.isActive) {
-      final wait = ApiRateLimitBackoff.remaining ?? const Duration(seconds: 15);
-      await Future<void>.delayed(wait);
-    }
-  }
-
   static Future<ChatMessage> _send({
     required int conversationId,
     required String type,
@@ -645,12 +647,13 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
   }) async {
-    await _waitForRateLimit();
+    // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
-      retries: 2,
+      retries: 1,
       timeout: _sendTimeout,
+      bypassRateLimitGate: true,
       body: jsonEncode({
         'type': type,
         'content': content,
