@@ -14,11 +14,30 @@ class ChatCacheService {
   static const _failedTextPrefix = 'chat_failed_text_v1_';
 
   static List<ChatConversation>? _memoryConversations;
+  static final Map<int, String> _memoryDrafts = {};
 
   static List<ChatConversation>? peekConversations() {
     final cached = _memoryConversations;
     if (cached == null || cached.isEmpty) return null;
     return List<ChatConversation>.from(cached);
+  }
+
+  /// Instant draft peek for hub list (Telegram "Черновик: …").
+  static String? peekDraft(int conversationId) {
+    final text = _memoryDrafts[conversationId];
+    if (text == null || text.trim().isEmpty) return null;
+    return text;
+  }
+
+  static Future<Map<int, String>> loadDrafts(Iterable<int> conversationIds) async {
+    final out = <int, String>{};
+    for (final id in conversationIds) {
+      final draft = await loadDraft(id);
+      if (draft != null && draft.trim().isNotEmpty) {
+        out[id] = draft;
+      }
+    }
+    return out;
   }
 
   static Future<void> warmUp() async {
@@ -134,6 +153,7 @@ class ChatCacheService {
   }
 
   static Future<void> clearDraft(int conversationId) async {
+    _memoryDrafts.remove(conversationId);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('$_draftPrefix$conversationId');
@@ -144,12 +164,17 @@ class ChatCacheService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final text = prefs.getString('$_draftPrefix$conversationId');
-      if (text == null || text.trim().isEmpty) return null;
+      if (text == null || text.trim().isEmpty) {
+        _memoryDrafts.remove(conversationId);
+        return null;
+      }
       final trimmed = text.trim();
       if (_isLikelyErrorDraft(trimmed)) {
         await prefs.remove('$_draftPrefix$conversationId');
+        _memoryDrafts.remove(conversationId);
         return null;
       }
+      _memoryDrafts[conversationId] = text;
       return text;
     } catch (_) {
       return null;
@@ -173,8 +198,10 @@ class ChatCacheService {
       final trimmed = text.trim();
       final key = '$_draftPrefix$conversationId';
       if (trimmed.isEmpty) {
+        _memoryDrafts.remove(conversationId);
         await prefs.remove(key);
       } else {
+        _memoryDrafts[conversationId] = text;
         await prefs.setString(key, text);
       }
     } catch (_) {}

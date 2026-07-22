@@ -12,32 +12,64 @@ class ChatHubTile extends StatelessWidget {
     required this.chat,
     required this.onTap,
     this.onLongPress,
+    this.draftText,
   });
 
   final ChatConversation chat;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  /// Local composer draft (Telegram hub: red "Черновик: …").
+  final String? draftText;
 
-  String _preview(ChatMessage? msg) {
+  String _bodyPreview(ChatMessage? msg) {
     if (msg == null) {
       return chat.isSaved ? 'Сохраняйте сообщения и заметки' : 'Нет сообщений';
     }
-    if (msg.type == 'voice') return '🎤 Голосовое';
+    if (msg.type == 'voice') return 'Голосовое сообщение';
     if (msg.type == 'poll') {
       final poll = msg.poll;
       if (poll != null) return chatPollPreviewText(poll);
-      return '📊 Опрос';
+      return 'Опрос';
     }
-    if (msg.type == 'image') return '📷 Фото';
-    if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'image') return 'Фото';
+    if (msg.type == 'video') return 'Видео';
+    if (msg.type == 'sticker') return 'Стикер';
     if (msg.type == 'file') {
       final name = msg.content.trim();
-      return name.isEmpty ? '📎 Файл' : '📎 $name';
+      return name.isEmpty ? 'Файл' : name;
     }
+    final content = msg.content.trim();
+    return content.isEmpty ? 'Сообщение' : content;
+  }
+
+  String? _previewPrefix(ChatMessage? msg, {required bool hasDraft}) {
+    if (hasDraft) return null;
+    if (msg == null) return null;
+    if (msg.isMine) return 'Вы: ';
     if (chat.isGroup && (msg.senderName?.isNotEmpty ?? false)) {
-      return '${msg.senderName}: ${msg.content}';
+      return '${msg.senderName}: ';
     }
-    return msg.content;
+    return null;
+  }
+
+  IconData? _mediaIcon(ChatMessage? msg) {
+    if (msg == null) return null;
+    switch (msg.type) {
+      case 'voice':
+        return Icons.mic_rounded;
+      case 'image':
+        return Icons.photo_rounded;
+      case 'video':
+        return Icons.videocam_rounded;
+      case 'sticker':
+        return Icons.emoji_emotions_outlined;
+      case 'file':
+        return Icons.insert_drive_file_outlined;
+      case 'poll':
+        return Icons.poll_outlined;
+      default:
+        return null;
+    }
   }
 
   @override
@@ -46,6 +78,13 @@ class ChatHubTile extends StatelessWidget {
     final last = chat.lastMessage;
     final hasUnread = chat.unreadCount > 0;
     final hasStateIcons = chat.pinned || chat.muted;
+    final draft = draftText?.trim();
+    final hasDraft = draft != null && draft.isNotEmpty;
+    final prefix = _previewPrefix(last, hasDraft: hasDraft);
+    final body = hasDraft ? draft : _bodyPreview(last);
+    final mediaIcon = hasDraft ? null : _mediaIcon(last);
+    final showOutgoingTicks =
+        !hasDraft && last != null && last.isMine && !chat.isSaved;
 
     final tile = ListTile(
       minVerticalPadding: 10,
@@ -82,13 +121,45 @@ class ChatHubTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: Text(
-        _preview(last),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-        ),
+      subtitle: Row(
+        children: [
+          if (hasDraft)
+            Text(
+              'Черновик: ',
+              style: TextStyle(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else if (prefix != null)
+            Text(
+              prefix,
+              style: TextStyle(
+                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          if (mediaIcon != null) ...[
+            Icon(
+              mediaIcon,
+              size: 14,
+              color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 3),
+          ],
+          Expanded(
+            child: Text(
+              body,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hasDraft
+                    ? scheme.error
+                    : (hasUnread ? scheme.onSurface : scheme.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ],
       ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -97,6 +168,18 @@ class ChatHubTile extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (showOutgoingTicks) ...[
+                Icon(
+                  last.isRead || last.isDelivered
+                      ? Icons.done_all
+                      : Icons.done,
+                  size: 15,
+                  color: last.isRead
+                      ? scheme.primary
+                      : scheme.onSurfaceVariant.withValues(alpha: 0.75),
+                ),
+                const SizedBox(width: 3),
+              ],
               if (hasStateIcons) ...[
                 if (chat.pinned) ...[
                   Icon(Icons.push_pin_rounded,

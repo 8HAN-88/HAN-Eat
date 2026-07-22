@@ -10,6 +10,9 @@ class HighlightedText extends StatelessWidget {
     this.highlightColor,
     this.maxLines,
     this.overflow,
+    /// Invisible trailing space so bubble meta (time/ticks) can sit on the
+    /// last line like Telegram.
+    this.trailingReserveWidth,
   });
 
   final String text;
@@ -18,21 +21,46 @@ class HighlightedText extends StatelessWidget {
   final Color? highlightColor;
   final int? maxLines;
   final TextOverflow? overflow;
+  final double? trailingReserveWidth;
+
+  InlineSpan? get _trailingReserve {
+    final w = trailingReserveWidth;
+    if (w == null || w <= 0) return null;
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.baseline,
+      baseline: TextBaseline.alphabetic,
+      child: SizedBox(width: w, height: 1),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final reserve = _trailingReserve;
     final q = query?.trim().toLowerCase();
     if (q == null || q.isEmpty) {
-      return Text(
-        text,
-        style: style,
+      if (reserve == null) {
+        return Text(
+          text,
+          style: style,
+          maxLines: maxLines,
+          overflow: overflow,
+        );
+      }
+      return Text.rich(
+        TextSpan(
+          style: style,
+          children: [
+            TextSpan(text: text),
+            reserve,
+          ],
+        ),
         maxLines: maxLines,
         overflow: overflow,
       );
     }
 
     final lower = text.toLowerCase();
-    final spans = <TextSpan>[];
+    final spans = <InlineSpan>[];
     var start = 0;
     while (true) {
       final index = lower.indexOf(q, start);
@@ -57,6 +85,7 @@ class HighlightedText extends StatelessWidget {
       );
       start = index + q.length;
     }
+    if (reserve != null) spans.add(reserve);
 
     return Text.rich(
       TextSpan(style: style, children: spans),

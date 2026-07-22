@@ -304,6 +304,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
   int _newMessagesBelow = 0;
+  int? _replySwipeMsgId;
+  double _replySwipeDx = 0;
   bool _suppressMarkRead = false;
   /// Telegram-style unread divider shown above this message id.
   int? _unreadDividerBeforeId;
@@ -370,7 +372,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_refreshScheduledPendingCount());
     _load(refresh: true);
     _startPolling();
-    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _presenceTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       if (!_appPaused) _refreshConversation();
     });
     _signalSub = ChatRealtimeSignals.instance.threadPoll.listen((_) {
@@ -1759,9 +1761,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _restoreVoiceHint() async {
-    final dismissed = await ChatHubUiPrefs.isVoiceHintDismissed();
-    if (!mounted) return;
-    if (!dismissed) setState(() => _showVoiceHint = true);
+    // Keep composer clean like Telegram — no sticky mic tutorial strip.
   }
 
   Future<void> _dismissVoiceHint() async {
@@ -2923,20 +2923,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _suppressMarkRead = false;
     });
     _scheduleMarkRead();
-  }
-
-  String _newMessagesChipLabel() {
-    final n = _newMessagesBelow;
-    if (n <= 0) return '↓ Новые';
-    if (n == 1) return '↓ 1 новое';
-    if (n >= 10) return '↓ $n новых';
-    final mod10 = n % 10;
-    final mod100 = n % 100;
-    if (mod10 == 1 && mod100 != 11) return '↓ $n новое';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-      return '↓ $n новых';
-    }
-    return '↓ $n новых';
   }
 
   bool _isSameChatDay(DateTime a, DateTime b) {
@@ -4971,6 +4957,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required bool isGroup,
     _MessageCluster cluster = const _MessageCluster.single(),
     String? replyQuote,
+    String? replyAuthor,
     VoidCallback? onReplyTap,
     bool interactive = true,
     bool wrapWithAlign = true,
@@ -5039,6 +5026,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       highlightQuery: searching ? _threadSearchQuery : null,
       isActiveSearchMatch: isActiveSearchMatch,
       replyQuote: replyQuote,
+      replyAuthor: replyAuthor,
       onReplyTap: onReplyTap,
       showSenderName: isGroup && !msg.isMine && cluster.starts,
       senderLabel: msg.senderName ?? _senderNames[msg.senderId],
@@ -5773,6 +5761,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final replyQuote = replyTarget != null
         ? _messagePreview(replyTarget)
         : (msg.replyToMessageId != null ? 'Сообщение' : null);
+    final replyAuthor = replyTarget == null
+        ? null
+        : (replyTarget.isMine
+            ? 'Вы'
+            : (replyTarget.senderName ??
+                _senderNames[replyTarget.senderId] ??
+                'Сообщение'));
 
     await ChatMessageActionOverlay.show(
       context: context,
@@ -5787,6 +5782,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           searching: searching,
           isGroup: isGroup,
           replyQuote: replyQuote,
+          replyAuthor: replyAuthor,
           onReplyTap: null,
           wrapWithAlign: false,
         ),
@@ -5854,6 +5850,121 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       child: visible
           ? KeyedSubtree(key: ValueKey(keyName), child: child)
           : const SizedBox.shrink(key: ValueKey('hidden')),
+    );
+  }
+
+  Widget _compactComposerStrip({
+    required IconData icon,
+    required String label,
+    required String actionLabel,
+    VoidCallback? onAction,
+    String? secondaryActionLabel,
+    VoidCallback? onSecondaryAction,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+            if (secondaryActionLabel != null)
+              TextButton(
+                onPressed: onSecondaryAction,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                child: Text(secondaryActionLabel),
+              ),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                foregroundColor: scheme.primary,
+              ),
+              child: Text(actionLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _telegramReplyStrip({
+    required String author,
+    required String preview,
+    required VoidCallback onClose,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF1A2632)
+          : scheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 2, 6),
+        child: Row(
+          children: [
+            Container(
+              width: 2.5,
+              height: 34,
+              decoration: BoxDecoration(
+                color: scheme.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    author,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.15,
+                    ),
+                  ),
+                  Text(
+                    preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 13,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Отменить ответ',
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: onClose,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -7374,7 +7485,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } else if (isGroup) {
       subtitle = '${_conversation.memberCount} участников';
     } else if (peer != null) {
-      subtitle = formatLastSeen(peer.lastSeenAt);
+      subtitle =
+          peer.isOnline ? 'в сети' : formatLastSeen(peer.lastSeenAt);
     }
     if (_muted &&
         subtitle.isNotEmpty &&
@@ -7451,14 +7563,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final slowModePulseScale =
         isSlowModeUnlockSoon && activeCooldownSeconds.isOdd ? 1.08 : 1.0;
     final canSendNow = canSendInGroup && activeCooldownSeconds <= 0;
-    final nextManualRetryRemainingSeconds = _nextManualRetryRemainingSeconds;
-    final manualReadyRetryRemainingSeconds = _manualReadyRetryRemainingSeconds;
-    final showRetryAllReadyHint = !_retryAllBulkBusy &&
-        nextManualRetryRemainingSeconds != null &&
-        nextManualRetryRemainingSeconds > 8;
-    final hasReadyManualRetryItems = !_retryAllBulkBusy &&
-        (nextManualRetryRemainingSeconds == null ||
-            nextManualRetryRemainingSeconds <= 0);
     final retryBulkProgressLabel = _retryAllBulkBusy && _retryAllBulkTotal > 0
         ? '${_retryAllBulkDone.clamp(0, _retryAllBulkTotal)}/$_retryAllBulkTotal'
         : null;
@@ -7519,11 +7623,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: Row(
                     children: [
                       if (!isSaved && !isGroup && peer != null) ...[
-                        AppUserAvatar(
-                          radius: 18,
-                          imageUrl: peer.avatarUrl,
-                          displayName: peer.displayName,
-                          onTap: _openPeerProfile,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            AppUserAvatar(
+                              radius: 18,
+                              imageUrl: peer.avatarUrl,
+                              displayName: peer.displayName,
+                              onTap: _openPeerProfile,
+                            ),
+                            if (peer.isOnline)
+                              Positioned(
+                                right: -1,
+                                bottom: -1,
+                                child: Container(
+                                  width: 11,
+                                  height: 11,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? const Color(0xFF18222D)
+                                          : scheme.surface,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -8018,6 +8147,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       : (msg.replyToMessageId != null
                                           ? 'Сообщение'
                                           : null);
+                                  final replyAuthor = replyTarget == null
+                                      ? null
+                                      : (replyTarget.isMine
+                                          ? 'Вы'
+                                          : (replyTarget.senderName ??
+                                              _senderNames[
+                                                  replyTarget.senderId] ??
+                                              'Сообщение'));
                                   final selected =
                                       _selectedMessageIds.contains(msg.id);
                                   final failed =
@@ -8120,29 +8257,79 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                           msg,
                                                                           '👍',
                                                                         ),
+                                                            onHorizontalDragUpdate:
+                                                                _selectionMode
+                                                                    ? null
+                                                                    : (details) {
+                                                                        final next = (_replySwipeDx +
+                                                                                details
+                                                                                    .delta
+                                                                                    .dx)
+                                                                            .clamp(
+                                                                                0.0,
+                                                                                72.0);
+                                                                        if (_replySwipeMsgId !=
+                                                                                msg.id ||
+                                                                            (next - _replySwipeDx)
+                                                                                    .abs() >
+                                                                                0.5) {
+                                                                          setState(
+                                                                            () {
+                                                                              _replySwipeMsgId =
+                                                                                  msg.id;
+                                                                              _replySwipeDx =
+                                                                                  next;
+                                                                            },
+                                                                          );
+                                                                        }
+                                                                      },
                                                             onHorizontalDragEnd:
                                                                 _selectionMode
                                                                     ? null
                                                                     : (details) {
                                                                         final v =
                                                                             details.primaryVelocity;
-                                                                        if (v ==
-                                                                                null ||
-                                                                            v.abs() <
-                                                                                320) {
+                                                                        final shouldReply =
+                                                                            _replySwipeDx >
+                                                                                    48 ||
+                                                                                (v != null &&
+                                                                                    v >
+                                                                                        280);
+                                                                        setState(
+                                                                          () {
+                                                                            _replySwipeMsgId =
+                                                                                null;
+                                                                            _replySwipeDx =
+                                                                                0;
+                                                                            if (shouldReply) {
+                                                                              _replyTo =
+                                                                                  msg;
+                                                                              _editingMessage =
+                                                                                  null;
+                                                                            }
+                                                                          },
+                                                                        );
+                                                                        if (shouldReply) {
+                                                                          _inputFocusNode
+                                                                              .requestFocus();
+                                                                        }
+                                                                      },
+                                                            onHorizontalDragCancel:
+                                                                _selectionMode
+                                                                    ? null
+                                                                    : () {
+                                                                        if (_replySwipeMsgId ==
+                                                                            null) {
                                                                           return;
                                                                         }
                                                                         setState(
                                                                           () {
-                                                                            _replyTo =
-                                                                                msg;
-                                                                            _editingMessage =
+                                                                            _replySwipeMsgId =
                                                                                 null;
-                                                                            _controller.clear();
+                                                                            _replySwipeDx =
+                                                                                0;
                                                                           },
                                                                         );
-                                                                        _inputFocusNode
-                                                                            .requestFocus();
                                                                       },
                                                             onLongPress:
                                                                 _selectionMode
@@ -8162,12 +8349,59 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                           );
                                                                         }
                                                                       },
-                                                            child: Opacity(
-                                                              opacity: failed
-                                                                  ? 0.55
-                                                                  : 1,
-                                                              child:
-                                                                  _messageBubbleWidget(
+                                                            child: Transform
+                                                                .translate(
+                                                              offset: Offset(
+                                                                _replySwipeMsgId ==
+                                                                        msg.id
+                                                                    ? _replySwipeDx
+                                                                    : 0,
+                                                                0,
+                                                              ),
+                                                              child: Stack(
+                                                                clipBehavior:
+                                                                    Clip.none,
+                                                                children: [
+                                                                  if (_replySwipeMsgId ==
+                                                                          msg
+                                                                              .id &&
+                                                                      _replySwipeDx >
+                                                                          8)
+                                                                    Positioned(
+                                                                      left: msg
+                                                                              .isMine
+                                                                          ? null
+                                                                          : -28,
+                                                                      right: msg
+                                                                              .isMine
+                                                                          ? -28
+                                                                          : null,
+                                                                      top: 0,
+                                                                      bottom: 0,
+                                                                      child:
+                                                                          Opacity(
+                                                                        opacity:
+                                                                            (_replySwipeDx /
+                                                                                    56)
+                                                                                .clamp(0.0, 1.0),
+                                                                        child:
+                                                                            Icon(
+                                                                          Icons
+                                                                              .reply_rounded,
+                                                                          size:
+                                                                              20,
+                                                                          color:
+                                                                              scheme.primary,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  Opacity(
+                                                                    opacity:
+                                                                        failed
+                                                                            ? 0.55
+                                                                            : 1,
+                                                                    child:
+                                                                        _messageBubbleWidget(
                                                                 msg: msg,
                                                                 scheme: scheme,
                                                                 searching:
@@ -8181,6 +8415,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                     cluster,
                                                                 replyQuote:
                                                                     replyQuote,
+                                                                replyAuthor:
+                                                                    replyAuthor,
                                                                 interactive:
                                                                     !_selectionMode,
                                                                 wrapWithAlign:
@@ -8233,6 +8469,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                             )
                                                                         : null,
                                                               ),
+                                                                  ),
+                                                                ],
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -8282,59 +8521,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 },
                               ),
                     if (_showJumpToBottom && !_selectionMode)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
                         child: TweenAnimationBuilder<double>(
                           tween: Tween<double>(
-                            begin: 0.96,
-                            end: _newMessagesBelow > 0 ? 1.0 : 0.985,
+                            begin: 0.9,
+                            end: 1,
                           ),
-                          duration: const Duration(milliseconds: 220),
+                          duration: const Duration(milliseconds: 180),
                           curve: Curves.easeOutBack,
-                          child: Material(
-                            elevation: 2,
-                            borderRadius: BorderRadius.circular(20),
-                            color: _telegramAccent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: _jumpToBottomAndMarkRead,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 180),
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) =>
-                                      FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: const Offset(0, 0.25),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _newMessagesBelow > 0
-                                        ? _newMessagesChipLabel()
-                                        : '↓ Вниз',
-                                    key: ValueKey<int>(_newMessagesBelow),
-                                    style: TextStyle(
-                                      color: scheme.onPrimary,
-                                      fontWeight: FontWeight.w600,
+                          builder: (context, value, child) => Transform.scale(
+                            scale: value,
+                            child: child,
+                          ),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Material(
+                                elevation: 2,
+                                shape: const CircleBorder(),
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? const Color(0xFF2B3A4A)
+                                    : scheme.surface,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: _jumpToBottomAndMarkRead,
+                                  child: SizedBox(
+                                    width: 42,
+                                    height: 42,
+                                    child: Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      size: 28,
+                                      color: scheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                          builder: (context, value, child) => Transform.scale(
-                            scale: value,
-                            child: child,
+                              if (_newMessagesBelow > 0)
+                                Positioned(
+                                  top: -6,
+                                  left: 0,
+                                  right: 0,
+                                  child: Center(
+                                    child: TelegramUnreadBadge(
+                                      count: _newMessagesBelow,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -8360,144 +8596,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (_isAutoRetryActive && !_sending)
-                          _composerInfoBanner(
-                            backgroundColor: scheme.secondaryContainer
-                                .withValues(alpha: 0.42),
-                            foregroundColor: scheme.onSecondaryContainer,
+                          _compactComposerStrip(
                             icon: _autoRetryReasonIcon,
-                            title: _autoRetryPendingCount > 1
-                                ? 'Автоповтор активен для $_autoRetryPendingCount сообщений'
-                                : 'Автоповтор активен',
-                            subtitle:
-                                'Причина: $_autoRetryReasonLabel • следующая попытка через '
-                                '${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}',
-                            trailing: Wrap(
-                              spacing: 6,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: scheme.primaryContainer
-                                        .withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    'Режим: авто',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: scheme.onPrimaryContainer,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => unawaited(
-                                    _toggleAutoRetryOnLimitsInThread(false),
-                                  ),
-                                  child: const Text('Отключить'),
-                                ),
-                              ],
+                            label: _autoRetryPendingCount > 1
+                                ? 'Повтор $_autoRetryPendingCount сообщ. через ${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}'
+                                : 'Повтор через ${_formatSlowModeCountdown(_autoRetryRemainingSeconds)}',
+                            actionLabel: 'Откл.',
+                            onAction: () => unawaited(
+                              _toggleAutoRetryOnLimitsInThread(false),
                             ),
                           ),
                         if (!_autoRetryOnLimitsEnabled &&
                             _hasFailedPendingItems &&
                             !_sending)
-                          _composerInfoBanner(
-                            backgroundColor:
-                                scheme.tertiaryContainer.withValues(alpha: 0.4),
-                            foregroundColor: scheme.onTertiaryContainer,
-                            icon: Icons.pause_circle_outline,
-                            title: 'Автоповтор выключен',
-                            subtitle:
-                                'Неотправленные элементы ожидают ручного повтора'
-                                '\nТекст: ${_failedTextSends.length} • Медиа: ${_pendingMediaRetry != null ? 1 : 0}'
-                                '${retryBulkProgressLabel != null ? '\nПакетный повтор: $retryBulkProgressLabel' : ''}'
-                                '${_retryAllBulkCancelRequested ? '\nОстановка после текущего элемента…' : ''}'
-                                '${_clearAllAfterBulkStopRequested ? '\nПосле остановки откроется очистка…' : ''}'
-                                '${manualReadyRetryRemainingSeconds > 0 ? '\nАвтозапуск готовых через ${_formatSlowModeCountdown(manualReadyRetryRemainingSeconds)}' : ''}'
-                                '${nextManualRetryRemainingSeconds != null ? '\nБлижайшая готовность: через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}' : ''}',
-                            trailing: Wrap(
-                              spacing: 6,
-                              children: [
-                                TextButton(
-                                  onPressed: (_sending || _retryAllBulkBusy)
-                                      ? null
-                                      : _retryAllFailedPendingWithGuard,
-                                  style: showRetryAllReadyHint
-                                      ? TextButton.styleFrom(
-                                          foregroundColor: scheme.primary,
-                                        )
-                                      : null,
-                                  child: Text(
-                                    _retryAllBulkBusy
-                                        ? 'Повтор: ${retryBulkProgressLabel ?? '…'}'
-                                        : showRetryAllReadyHint
-                                            ? 'Повторить через ${_formatSlowModeCountdown(nextManualRetryRemainingSeconds)}'
-                                            : 'Повторить все',
-                                  ),
-                                ),
-                                if (_retryAllBulkBusy)
-                                  TextButton(
-                                    onPressed: _cancelRetryAllBulk,
-                                    child: Text(
-                                      _retryAllBulkCancelRequested
-                                          ? 'Останавливаем...'
-                                          : 'Остановить',
-                                    ),
-                                  ),
-                                TextButton(
-                                  onPressed: (_sending || _retryAllBulkBusy)
-                                      ? null
-                                      : _retryReadyFailedPending,
-                                  style: hasReadyManualRetryItems
-                                      ? TextButton.styleFrom(
-                                          foregroundColor: scheme.primary,
-                                        )
-                                      : null,
-                                  child: const Text('Повторить готовые'),
-                                ),
-                                if (manualReadyRetryRemainingSeconds > 0)
-                                  TextButton(
-                                    onPressed: (_sending || _retryAllBulkBusy)
-                                        ? null
-                                        : _cancelManualReadyRetrySchedule,
-                                    child: const Text('Отменить автозапуск'),
-                                  ),
-                                TextButton(
-                                  onPressed: (_sending || _retryAllBulkBusy)
-                                      ? null
-                                      : _clearAllFailedPending,
-                                  child: const Text('Очистить'),
-                                ),
-                                TextButton(
-                                  onPressed: (_sending || _retryAllBulkBusy)
-                                      ? null
-                                      : () => _setShowOnlyFailedMessages(
-                                            !_showOnlyFailedMessages,
-                                          ),
-                                  child: Text(
-                                    _showOnlyFailedMessages
-                                        ? 'Показать все'
-                                        : 'Показать в чате',
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: (_sending || _retryAllBulkBusy)
-                                      ? null
-                                      : () => unawaited(
-                                            _toggleAutoRetryOnLimitsInThread(
-                                                true),
-                                          ),
-                                  child: const Text('Включить'),
-                                ),
-                              ],
-                            ),
+                          _compactComposerStrip(
+                            icon: Icons.error_outline_rounded,
+                            label: _retryAllBulkBusy
+                                ? 'Повтор… ${retryBulkProgressLabel ?? ''}'
+                                : 'Не отправлено · ${_failedTextSends.length + (_pendingMediaRetry != null ? 1 : 0)}',
+                            actionLabel: _retryAllBulkBusy
+                                ? 'Стоп'
+                                : 'Повторить',
+                            onAction: _retryAllBulkBusy
+                                ? _cancelRetryAllBulk
+                                : (_sending
+                                    ? null
+                                    : _retryAllFailedPendingWithGuard),
+                            secondaryActionLabel: _retryAllBulkBusy
+                                ? null
+                                : 'Очистить',
+                            onSecondaryAction: (_sending || _retryAllBulkBusy)
+                                ? null
+                                : _clearAllFailedPending,
                           ),
                         if (_sending && _uploadProgress != null)
                           _uploadTickerBar(scheme),
@@ -8545,21 +8675,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           keyName: 'reply-banner',
                           child: _replyTo == null
                               ? const SizedBox.shrink()
-                              : _composerInfoBanner(
-                                  backgroundColor:
-                                      scheme.surfaceContainerHighest,
-                                  icon: Icons.reply_rounded,
-                                  title: _replyTo!.isMine
+                              : _telegramReplyStrip(
+                                  author: _replyTo!.isMine
                                       ? 'Вы'
                                       : (_replyTo!.senderName ??
                                           _senderNames[_replyTo!.senderId] ??
                                           _conversation.displayTitle),
-                                  subtitle: _messagePreview(_replyTo!),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close, size: 20),
-                                    onPressed: () =>
-                                        setState(() => _replyTo = null),
-                                  ),
+                                  preview: _messagePreview(_replyTo!),
+                                  onClose: () =>
+                                      setState(() => _replyTo = null),
                                 ),
                         ),
                         _animatedVisibility(
@@ -8993,6 +9117,7 @@ class _Bubble extends StatelessWidget {
     this.highlightQuery,
     this.isActiveSearchMatch = false,
     this.replyQuote,
+    this.replyAuthor,
     this.onReplyTap,
     this.showSenderName = false,
     this.senderLabel,
@@ -9021,6 +9146,7 @@ class _Bubble extends StatelessWidget {
   final String? highlightQuery;
   final bool isActiveSearchMatch;
   final String? replyQuote;
+  final String? replyAuthor;
   final VoidCallback? onReplyTap;
   final bool showSenderName;
   final String? senderLabel;
@@ -9157,10 +9283,26 @@ class _Bubble extends StatelessWidget {
     required bool mine,
     required Widget child,
     bool onMedia = false,
+    bool inlineMeta = false,
   }) {
+    final meta = _messageMeta(fg: fg, mine: mine, onMedia: onMedia);
     if (!onMedia) {
-      // IntrinsicWidth keeps short texts tight (Telegram). A plain Align
-      // inside Column expands to the parent's max width → huge empty bubbles.
+      // IntrinsicWidth keeps short texts tight (Telegram). Inline meta sits
+      // on the last text line via trailingReserveWidth on HighlightedText.
+      if (inlineMeta) {
+        return IntrinsicWidth(
+          child: Stack(
+            children: [
+              child,
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: meta,
+              ),
+            ],
+          ),
+        );
+      }
       return IntrinsicWidth(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -9171,7 +9313,7 @@ class _Bubble extends StatelessWidget {
               padding: const EdgeInsets.only(top: 1),
               child: Align(
                 alignment: Alignment.centerRight,
-                child: _messageMeta(fg: fg, mine: mine, onMedia: false),
+                child: meta,
               ),
             ),
           ],
@@ -9188,7 +9330,7 @@ class _Bubble extends StatelessWidget {
         Positioned(
           right: 6,
           bottom: 4,
-          child: _messageMeta(fg: fg, mine: mine, onMedia: onMedia),
+          child: meta,
         ),
       ],
     );
@@ -9237,31 +9379,50 @@ class _Bubble extends StatelessWidget {
     if (replyQuote == null) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onReplyTap,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             decoration: BoxDecoration(
               color: quoteBg,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               border: Border(
-                left: BorderSide(color: scheme.primary, width: 3),
+                left: BorderSide(color: scheme.primary, width: 2.5),
               ),
             ),
-            child: HighlightedText(
-              text: replyQuote!,
-              query: highlightQuery,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: fg.withValues(alpha: 0.85),
-                fontSize: 13,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (replyAuthor != null && replyAuthor!.isNotEmpty)
+                  Text(
+                    replyAuthor!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.15,
+                    ),
+                  ),
+                HighlightedText(
+                  text: replyQuote!,
+                  query: highlightQuery,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.85),
+                    fontSize: 12.5,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -9552,31 +9713,45 @@ class _Bubble extends StatelessWidget {
         );
       }
     } else if (message.content.isNotEmpty && message.type != 'voice') {
-      mainContent = _withBottomMeta(
-        fg: fg,
-        mine: mine,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            HighlightedText(
-              text: message.content,
-              query: highlightQuery,
-              style: TextStyle(color: fg, height: 1.22, fontSize: 15.5),
-            ),
-            if (extractFirstHttpUrl(message.content) case final url?)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: ChatLinkPreview(
-                  url: url,
-                  foregroundColor: fg,
-                  accentColor: scheme.primary,
-                  backgroundColor: quoteBg,
-                ),
-              ),
-          ],
-        ),
+      final hasLinkPreview =
+          extractFirstHttpUrl(message.content) != null;
+      final textStyle = TextStyle(color: fg, height: 1.22, fontSize: 15.5);
+      final textChild = HighlightedText(
+        text: message.content,
+        query: highlightQuery,
+        style: textStyle,
+        trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
       );
+      if (hasLinkPreview) {
+        mainContent = _withBottomMeta(
+          fg: fg,
+          mine: mine,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              textChild,
+              if (extractFirstHttpUrl(message.content) case final url?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: ChatLinkPreview(
+                    url: url,
+                    foregroundColor: fg,
+                    accentColor: scheme.primary,
+                    backgroundColor: quoteBg,
+                  ),
+                ),
+            ],
+          ),
+        );
+      } else {
+        mainContent = _withBottomMeta(
+          fg: fg,
+          mine: mine,
+          inlineMeta: true,
+          child: textChild,
+        );
+      }
     } else {
       mainContent = Align(
         alignment: Alignment.centerRight,

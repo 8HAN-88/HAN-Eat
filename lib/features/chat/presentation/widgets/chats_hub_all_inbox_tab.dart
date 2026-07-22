@@ -72,6 +72,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   int? _selectedFolderId;
   bool _showGesturesHint = false;
   bool _servingFromCache = false;
+  Map<int, String> _drafts = {};
 
   void _selectFolder(int? folderId) {
     setState(() => _selectedFolderId = folderId);
@@ -293,6 +294,18 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       ..addAll(cachedRest.map(ChatInboxEntry.new));
     _servingFromCache = true;
     _loading = false;
+    unawaited(_refreshDrafts());
+  }
+
+  Future<void> _refreshDrafts() async {
+    final ids = <int>[
+      for (final entry in _entries)
+        if (entry is ChatInboxEntry) entry.chat.id,
+      if (_savedChat != null) _savedChat!.id,
+    ];
+    final drafts = await ChatCacheService.loadDrafts(ids);
+    if (!mounted) return;
+    setState(() => _drafts = drafts);
   }
 
   @override
@@ -530,6 +543,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         _loading = false;
         _servingFromCache = false;
       });
+      unawaited(_refreshDrafts());
     }
 
     await channelsFuture;
@@ -1290,6 +1304,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 children: [
                   ChatHubTile(
                     chat: _savedChatTile,
+                    draftText: _drafts[_savedChatTile.id],
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
@@ -1311,12 +1326,16 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     onDelete: () => _deleteChatFromHub(chat),
                     child: ChatHubTile(
                       chat: chat,
+                      draftText: _drafts[chat.id],
                       onTap: () async {
                         await context.push(
                           ChatThreadRoute.pathFor(chat),
                           extra: chat,
                         );
-                        if (mounted) _load();
+                        if (mounted) {
+                          unawaited(_refreshDrafts());
+                          _load();
+                        }
                       },
                       onLongPress: () => _showChatHubActions(chat),
                     ),
