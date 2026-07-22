@@ -30,7 +30,6 @@ import '../../../app/app_router.dart';
 import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
-import '../../../core/network/api_rate_limit_backoff.dart';
 import '../../../core/network/haneat_http_client.dart';
 import '../../../core/platform/web_page_visibility.dart';
 import '../../../models/chat_models.dart';
@@ -57,7 +56,6 @@ import '../application/chat_realtime_signals.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
-import '../../../services/chat_hub_ui_prefs.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../utils/presence_format.dart';
 import '../../../utils/video_player_helper.dart';
@@ -245,7 +243,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<String, double> _pendingMediaProgressByClientId = {};
   final Set<String> _cancelledPendingMediaClientIds = {};
   bool _voiceSending = false;
-  bool _showVoiceHint = false;
   bool _hasMore = false;
   int? _nextCursor;
   Timer? _pollTimer;
@@ -366,7 +363,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }));
     unawaited(_loadSlowModeUiPrefs());
     unawaited(_restoreDraft());
-    unawaited(_restoreVoiceHint());
     unawaited(AuthService.getAccessTokenForApi());
     unawaited(_loadMyBots());
     unawaited(_refreshScheduledPendingCount());
@@ -510,16 +506,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _clearAllAutoRetrySchedules();
       }
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          enabled
-              ? 'Автоповтор при лимитах включен'
-              : 'Автоповтор при лимитах выключен',
-        ),
-      ),
-    );
+    // State is visible in the compact composer strip — no SnackBar.
   }
 
   void _clearAllAutoRetrySchedules() {
@@ -979,16 +966,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 retryAfterSeconds: retryAfter ?? _conversation.slowModeSeconds,
                 reason: 'slow',
               );
-              if (!_autoRetryOnLimitsEnabled) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Автоповтор отключен — нажмите «Повторить» вручную',
-                    ),
-                  ),
-                );
-              }
-              showErrorSnackBar(context, e);
+              // Failed bubble + compact strip already explain retry state.
             }
             continue;
           }
@@ -1009,16 +987,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 retryAfterSeconds: retryAfter ?? 60,
                 reason: 'flood',
               );
-              if (!_autoRetryOnLimitsEnabled) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Автоповтор отключен — нажмите «Повторить» вручную',
-                    ),
-                  ),
-                );
-              }
-              showErrorSnackBar(context, e);
+              // Failed bubble + compact strip already explain retry state.
             }
             continue;
           }
@@ -1760,15 +1729,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Future<void> _restoreVoiceHint() async {
-    // Keep composer clean like Telegram — no sticky mic tutorial strip.
-  }
-
-  Future<void> _dismissVoiceHint() async {
-    await ChatHubUiPrefs.dismissVoiceHint();
-    if (mounted) setState(() => _showVoiceHint = false);
-  }
-
   void _beginSending({String status = 'Отправка…'}) {
     setState(() {
       _sending = true;
@@ -1829,10 +1789,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _cancelFailedTextAutoRetry(int tempId) {
     _clearFailedTextAutoRetry(tempId);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Автоповтор для сообщения отменен')),
-    );
   }
 
   void _scheduleFailedTextAutoRetry(
@@ -2350,10 +2306,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _cancelPendingMediaAutoRetry() {
     _clearPendingMediaAutoRetry();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Автоповтор для медиа отменен')),
-    );
   }
 
   void _schedulePendingMediaAutoRetry(
@@ -2592,45 +2544,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _PendingMediaKind.file => 'файл',
       _PendingMediaKind.voice => 'голосовое',
     };
-    final autoRetryDisabledHint = !_autoRetryOnLimitsEnabled && !autoRetrying
-        ? ' • автоповтор отключен'
-        : '';
-    return Material(
-      color: scheme.errorContainer.withValues(alpha: 0.55),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            Icon(Icons.error_outline, size: 18, color: scheme.error),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                autoRetrying
-                    ? 'Не удалось отправить $label • автоповтор через '
-                        '${_formatSlowModeCountdown(_pendingMediaAutoRetryRemainingSeconds)}'
-                    : 'Не удалось отправить $label$autoRetryDisabledHint',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onErrorContainer,
-                    ),
-              ),
-            ),
-            TextButton(
-              onPressed: (_sending || autoRetrying) ? null : _retryPendingMedia,
-              child:
-                  Text(autoRetrying ? 'Отправим автоматически' : 'Повторить'),
-            ),
-            if (autoRetrying)
-              TextButton(
-                onPressed: _sending ? null : _cancelPendingMediaAutoRetry,
-                child: const Text('Отменить автоповтор'),
-              ),
-            TextButton(
-              onPressed: _sending ? null : _discardPendingMedia,
-              child: const Text('Отмена'),
-            ),
-          ],
-        ),
-      ),
+    return _compactComposerStrip(
+      icon: Icons.error_outline_rounded,
+      label: autoRetrying
+          ? 'Медиа ($label) · повтор через ${_formatSlowModeCountdown(_pendingMediaAutoRetryRemainingSeconds)}'
+          : 'Не отправлено · $label',
+      actionLabel: autoRetrying ? 'Стоп' : 'Повторить',
+      onAction: _sending
+          ? null
+          : (autoRetrying
+              ? _cancelPendingMediaAutoRetry
+              : () => unawaited(_retryPendingMedia())),
+      secondaryActionLabel: 'Удалить',
+      onSecondaryAction: _sending ? null : _discardPendingMedia,
     );
   }
 
@@ -3025,22 +2951,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return Center(
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2.5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.black.withValues(alpha: 0.35)
-              : scheme.surfaceContainerHighest.withValues(alpha: 0.92),
-          border: Border.all(
-            color: scheme.outlineVariant.withValues(alpha: 0.35),
-          ),
+              ? Colors.black.withValues(alpha: 0.28)
+              : Colors.black.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           _chatDateSeparatorLabel(date),
           style: TextStyle(
-            color: isDark ? Colors.white : scheme.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white.withValues(alpha: 0.92) : scheme.onSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -4531,7 +4454,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    if (_showVoiceHint) unawaited(_dismissVoiceHint());
     final dir = kIsWeb ? null : await getTemporaryDirectory();
     final path = dir == null
         ? null
@@ -4814,6 +4736,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     await Share.share(texts);
+  }
+
+  void _replySelectedMessage() {
+    final selected = _selectedMessages;
+    if (selected.length != 1) return;
+    final msg = selected.first;
+    setState(() {
+      _replyTo = msg;
+      _editingMessage = null;
+      _selectionMode = false;
+      _selectedMessageIds.clear();
+    });
+    _inputFocusNode.requestFocus();
   }
 
   Future<void> _forwardSelectedMessages() async {
@@ -6971,6 +6906,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Future<void> _showStickerPicker() async {
+    if (_recording) return;
+    final selection = await showChatAttachSheet(
+      context,
+      initialTab: ChatAttachTab.sticker,
+    );
+    if (!mounted || selection == null) return;
+    if (selection.kind == ChatAttachResult.sticker) {
+      final stickerUrl = selection.stickerMediaUrl;
+      if (stickerUrl != null && stickerUrl.trim().isNotEmpty) {
+        await _sendStickerByUrl(stickerUrl, emoji: selection.stickerEmoji);
+      }
+    }
+  }
+
   Future<void> _showAttachMenu() async {
     if (_recording) return;
     final selection = await showChatAttachSheet(context);
@@ -7587,14 +7537,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         resizeToAvoidBottomInset: false,
         appBar: _selectionMode
             ? AppBar(
-                leading: TextButton(
+                leading: IconButton(
+                  tooltip: 'Закрыть',
                   onPressed: _exitSelectionMode,
-                  child: const Text('Отмена'),
+                  icon: const Icon(Icons.close),
                 ),
                 title: Text(
                   _selectedMessageIds.length == 1
-                      ? 'Выбрано 1'
-                      : 'Выбрано ${_selectedMessageIds.length}',
+                      ? '1'
+                      : '${_selectedMessageIds.length}',
                 ),
                 centerTitle: true,
               )
@@ -8028,51 +7979,60 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     ? const SizedBox.shrink()
                     : Material(
                         color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xB3202630)
-                            : scheme.surfaceContainerHighest,
+                            ? const Color(0xFF18222D)
+                            : scheme.surface,
                         child: InkWell(
                           onTap: () => _scrollToMessage(_pinnedMessage!.id),
+                          onLongPress: () =>
+                              _togglePinMessage(_pinnedMessage!),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
                             child: Row(
                               children: [
-                                Icon(Icons.push_pin,
-                                    size: 16, color: scheme.primary),
-                                const SizedBox(width: 8),
+                                Container(
+                                  width: 2.5,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primary,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Закреплённое сообщение',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelMedium
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                          .brightness ==
-                                                      Brightness.dark
-                                                  ? Colors.white70
-                                                  : scheme.primary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                        'Закреплено',
+                                        style: TextStyle(
+                                          color: scheme.primary,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.15,
+                                        ),
                                       ),
                                       Text(
                                         _pinnedPreview(_pinnedMessage!),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall,
+                                        style: TextStyle(
+                                          color: scheme.onSurfaceVariant,
+                                          fontSize: 13,
+                                          height: 1.2,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 IconButton(
                                   tooltip: 'Открепить',
-                                  icon: const Icon(Icons.close, size: 18),
+                                  visualDensity: VisualDensity.compact,
+                                  icon: Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: scheme.onSurfaceVariant,
+                                  ),
                                   onPressed: () =>
                                       _togglePinMessage(_pinnedMessage!),
                                 ),
@@ -8191,7 +8151,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             if (_unreadDividerBeforeId ==
                                                 msg.id)
                                               _unreadMessagesSeparator(),
-                                            Row(
+                                            AnimatedContainer(
+                                              duration: const Duration(
+                                                  milliseconds: 140),
+                                              curve: Curves.easeOutCubic,
+                                              decoration: BoxDecoration(
+                                                color: selected
+                                                    ? scheme.primary.withValues(
+                                                        alpha: 0.12,
+                                                      )
+                                                    : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                vertical: 1,
+                                              ),
+                                              child: Row(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
                                               children: [
@@ -8487,6 +8464,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                 ),
                                               ],
                                             ),
+                                            ),
                                           ],
                                         ),
                                         builder: (context, value, child) {
@@ -8580,6 +8558,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               if (_selectionMode)
                 ChatMessageSelectionToolbar(
                   enabled: _selectedMessageIds.isNotEmpty,
+                  canReply: _selectedMessageIds.length == 1,
+                  onReply: _replySelectedMessage,
                   onDelete: _deleteSelectedMessages,
                   onCopy: _copySelectedMessages,
                   onShare: _shareSelectedMessages,
@@ -8636,38 +8616,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 .containsKey(_pendingMediaRetry!.tempId))
                           _pendingMediaRetryBanner(scheme),
                         _animatedVisibility(
-                          visible: _showVoiceHint && !_recording && !_sending,
-                          keyName: 'voice-hint',
-                          child: _composerInfoBanner(
-                            backgroundColor: scheme.tertiaryContainer
-                                .withValues(alpha: 0.45),
-                            foregroundColor: scheme.onTertiaryContainer,
-                            icon: Icons.mic_none_rounded,
-                            title:
-                                'Удерживайте кнопку микрофона для голосового',
-                            trailing: IconButton(
-                              tooltip: 'Скрыть',
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: _dismissVoiceHint,
-                            ),
-                          ),
-                        ),
-                        _animatedVisibility(
                           visible: _editingMessage != null,
                           keyName: 'edit-banner',
                           child: _editingMessage == null
                               ? const SizedBox.shrink()
-                              : _composerInfoBanner(
-                                  backgroundColor: scheme.primaryContainer
-                                      .withValues(alpha: 0.35),
-                                  foregroundColor: scheme.onPrimaryContainer,
-                                  icon: Icons.edit_outlined,
-                                  title: 'Редактирование',
-                                  subtitle: _editingMessage!.content,
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.close, size: 20),
-                                    onPressed: _cancelEdit,
-                                  ),
+                              : _telegramReplyStrip(
+                                  author: 'Редактирование',
+                                  preview: _editingMessage!.content,
+                                  onClose: _cancelEdit,
                                 ),
                         ),
                         _animatedVisibility(
@@ -8747,57 +8703,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 : 'Только админы могут отправлять сообщения',
                           ),
                         ),
-                        _animatedVisibility(
-                          visible: showPostingLimitsHint,
-                          keyName: 'group-posting-limits-banner',
-                          child: _composerInfoBanner(
-                            backgroundColor:
-                                scheme.tertiaryContainer.withValues(alpha: 0.4),
-                            foregroundColor: scheme.onTertiaryContainer,
+                        if (!canSendNow && canSendInGroup)
+                          _compactComposerStrip(
                             icon: activeCooldownIcon,
-                            title: postingLimitsHint,
-                            onTap: () => _showPostingLimitsInfo(
+                            label:
+                                '$activeCooldownLabel · ${_formatSlowModeCountdown(activeCooldownSeconds)}',
+                            actionLabel: 'Инфо',
+                            onAction: () => _showPostingLimitsInfo(
+                              floodCooldownActive: floodCooldownActive,
+                              activeCooldownSeconds: activeCooldownSeconds,
+                            ),
+                          )
+                        else if (showPostingLimitsHint)
+                          _compactComposerStrip(
+                            icon: activeCooldownIcon,
+                            label: postingLimitsHint,
+                            actionLabel: 'Инфо',
+                            onAction: () => _showPostingLimitsInfo(
                               floodCooldownActive: floodCooldownActive,
                               activeCooldownSeconds: activeCooldownSeconds,
                             ),
                           ),
-                        ),
-                        _animatedVisibility(
-                          visible: !canSendNow && canSendInGroup,
-                          keyName: 'group-active-cooldown-banner',
-                          child: _composerInfoBanner(
-                            backgroundColor:
-                                scheme.tertiaryContainer.withValues(alpha: 0.6),
-                            foregroundColor: scheme.onTertiaryContainer,
-                            icon: activeCooldownIcon,
-                            title:
-                                '$activeCooldownLabel: временная пауза перед отправкой',
-                            subtitle:
-                                'Можно отправить через ${_formatSlowModeCountdown(activeCooldownSeconds)}',
-                            onTap: () => _showPostingLimitsInfo(
-                              floodCooldownActive: floodCooldownActive,
-                              activeCooldownSeconds: activeCooldownSeconds,
-                            ),
-                          ),
-                        ),
                         SafeArea(
                           top: false,
                           child: AnimatedContainer(
                             duration: _uiAnimDuration,
                             curve: Curves.easeOutCubic,
-                            margin: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+                            margin: const EdgeInsets.fromLTRB(6, 2, 6, 4),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 4, vertical: 2),
+                                horizontal: 2, vertical: 2),
                             decoration: BoxDecoration(
                               color: Theme.of(context).brightness ==
                                       Brightness.dark
                                   ? const Color(0xCC1A2632)
                                   : scheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(26),
-                              border: Border.all(
-                                color: scheme.outlineVariant
-                                    .withValues(alpha: 0.18),
-                              ),
+                              borderRadius: BorderRadius.circular(24),
                             ),
                             child: Row(
                               children: [
@@ -8829,18 +8769,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         _hasText ? _sendText() : null,
                                     decoration: InputDecoration(
                                       hintText: _recording
-                                          ? 'Удерживайте микрофон…'
+                                          ? 'Удерживайте…'
                                           : (!canSendInGroup
                                               ? (isRestrictedByModeration
-                                                  ? 'Ваши сообщения временно ограничены'
-                                                  : 'В этой группе писать могут только админы')
+                                                  ? 'Отправка ограничена'
+                                                  : 'Только админы')
                                               : (activeCooldownSeconds > 0
-                                                  ? '$activeCooldownLabel: подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
+                                                  ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
                                                   : (_editingMessage != null
-                                                      ? 'Изменить сообщение'
-                                                      : (_hasText
-                                                          ? 'Сообщение'
-                                                          : 'Сообщение или голосовое')))),
+                                                      ? 'Изменить…'
+                                                      : 'Сообщение'))),
                                       filled: true,
                                       fillColor: Colors.transparent,
                                       border: OutlineInputBorder(
@@ -8849,12 +8787,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       ),
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        horizontal: 16,
+                                        horizontal: 10,
                                         vertical: 10,
                                       ),
                                     ),
                                   ),
                                 ),
+                                if (!_hasText && !_recording)
+                                  IconButton(
+                                    onPressed: !canSendNow
+                                        ? null
+                                        : () => unawaited(
+                                              _showStickerPicker(),
+                                            ),
+                                    icon: const Icon(
+                                      Icons.emoji_emotions_outlined,
+                                    ),
+                                    tooltip: 'Стикеры',
+                                    color: scheme.onSurfaceVariant,
+                                    iconSize: _composerIconSize,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: _composerButtonSide,
+                                      height: _composerButtonSide,
+                                    ),
+                                  ),
                                 const SizedBox(width: 2),
                                 AnimatedSwitcher(
                                   duration: _uiAnimDuration,
@@ -8894,17 +8851,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                 (_recording || !canSendNow)
                                                     ? null
                                                     : _sendText,
-                                            icon: _sending
-                                                ? SizedBox(
-                                                    width: 18,
-                                                    height: 18,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white,
-                                                    ),
-                                                  )
-                                                : (activeCooldownSeconds > 0
+                                            icon: activeCooldownSeconds > 0
                                                     ? AnimatedScale(
                                                         duration:
                                                             const Duration(
@@ -9002,7 +8949,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                             : Icons
                                                                 .send_rounded,
                                                         size: _composerIconSize,
-                                                      )),
+                                                      ),
                                           ),
                                         )
                                       : ChatVoiceMicButton(

@@ -133,19 +133,24 @@ class ChatAttachSelection {
       );
 }
 
-Future<ChatAttachSelection?> showChatAttachSheet(BuildContext context) {
+Future<ChatAttachSelection?> showChatAttachSheet(
+  BuildContext context, {
+  ChatAttachTab initialTab = ChatAttachTab.gallery,
+}) {
   return showModalBottomSheet<ChatAttachSelection>(
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
     enableDrag: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const _ChatAttachSheet(),
+    builder: (_) => _ChatAttachSheet(initialTab: initialTab),
   );
 }
 
 class _ChatAttachSheet extends StatefulWidget {
-  const _ChatAttachSheet();
+  const _ChatAttachSheet({this.initialTab = ChatAttachTab.gallery});
+
+  final ChatAttachTab initialTab;
 
   @override
   State<_ChatAttachSheet> createState() => _ChatAttachSheetState();
@@ -251,6 +256,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
     _loadContacts();
     _loadRecentFiles();
     _loadStickerPacks();

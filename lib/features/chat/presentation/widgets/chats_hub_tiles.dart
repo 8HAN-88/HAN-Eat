@@ -86,149 +86,162 @@ class ChatHubTile extends StatelessWidget {
     final showOutgoingTicks =
         !hasDraft && last != null && last.isMine && !chat.isSaved;
 
-    final tile = ListTile(
-      minVerticalPadding: 10,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      onTap: onTap,
-      onLongPress: onLongPress,
-      leading: chat.isSaved
-          ? CircleAvatar(
-              radius: 25,
-              backgroundColor: scheme.primaryContainer,
-              child: Icon(
-                Icons.bookmark_rounded,
-                color: scheme.onPrimaryContainer,
-              ),
-            )
-          : chat.isGroup
-              ? ChatHubGroupAvatar(members: chat.membersPreview)
-              : ChatHubUserAvatar(
-                  user: chat.peer ?? const ChatUserBrief(id: 0, name: 'Чат'),
-                ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              chat.displayTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-      subtitle: Row(
-        children: [
-          if (hasDraft)
-            Text(
-              'Черновик: ',
-              style: TextStyle(
-                color: scheme.error,
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else if (prefix != null)
-            Text(
-              prefix,
-              style: TextStyle(
-                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          if (mediaIcon != null) ...[
-            Icon(
-              mediaIcon,
-              size: 14,
-              color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 3),
-          ],
-          Expanded(
-            child: Text(
-              body,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: hasDraft
-                    ? scheme.error
-                    : (hasUnread ? scheme.onSurface : scheme.onSurfaceVariant),
-              ),
-            ),
-          ),
-        ],
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+    // Telegram-style flat row (no card chrome).
+    return Material(
+      color: hasUnread
+          ? scheme.primaryContainer.withValues(alpha: 0.18)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
             children: [
-              if (showOutgoingTicks) ...[
-                Icon(
-                  last.isRead || last.isDelivered
-                      ? Icons.done_all
-                      : Icons.done,
-                  size: 15,
-                  color: last.isRead
-                      ? scheme.primary
-                      : scheme.onSurfaceVariant.withValues(alpha: 0.75),
-                ),
-                const SizedBox(width: 3),
-              ],
-              if (hasStateIcons) ...[
-                if (chat.pinned) ...[
-                  Icon(Icons.push_pin_rounded,
-                      size: 13, color: scheme.primary.withValues(alpha: 0.85)),
-                  const SizedBox(width: 3),
-                ],
-                if (chat.muted) ...[
-                  Icon(Icons.notifications_off_outlined,
-                      size: 13, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: 6),
-                ],
-              ],
-              Text(
-                chatHubFormatInboxTime(chat.updatedAt),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
+              chat.isSaved
+                  ? CircleAvatar(
+                      radius: 28,
+                      backgroundColor: scheme.primaryContainer,
+                      child: Icon(
+                        Icons.bookmark_rounded,
+                        color: scheme.onPrimaryContainer,
+                      ),
+                    )
+                  : chat.isGroup
+                      ? ChatHubGroupAvatar(members: chat.membersPreview)
+                      : ChatHubUserAvatar(
+                          user: chat.peer ??
+                              const ChatUserBrief(id: 0, name: 'Чат'),
+                        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            chat.displayTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight:
+                                  hasUnread ? FontWeight.w700 : FontWeight.w600,
+                              fontSize: 16,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        if (showOutgoingTicks) ...[
+                          Icon(
+                            last.isRead || last.isDelivered
+                                ? Icons.done_all
+                                : Icons.done,
+                            size: 15,
+                            color: last.isRead
+                                ? scheme.primary
+                                : scheme.onSurfaceVariant
+                                    .withValues(alpha: 0.75),
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        if (hasStateIcons) ...[
+                          if (chat.pinned) ...[
+                            Icon(
+                              Icons.push_pin_rounded,
+                              size: 13,
+                              color: scheme.primary.withValues(alpha: 0.85),
+                            ),
+                            const SizedBox(width: 3),
+                          ],
+                          if (chat.muted) ...[
+                            Icon(
+                              Icons.notifications_off_outlined,
+                              size: 13,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                        ],
+                        Text(
+                          chatHubFormatInboxTime(chat.updatedAt),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontSize: 12,
+                                  ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (hasDraft)
+                                Text(
+                                  'Черновик: ',
+                                  style: TextStyle(
+                                    color: scheme.error,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                )
+                              else if (prefix != null)
+                                Text(
+                                  prefix,
+                                  style: TextStyle(
+                                    color: hasUnread
+                                        ? scheme.onSurface
+                                        : scheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              if (mediaIcon != null) ...[
+                                Icon(
+                                  mediaIcon,
+                                  size: 15,
+                                  color: hasUnread
+                                      ? scheme.onSurface
+                                      : scheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 3),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  body,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: hasDraft
+                                        ? scheme.error
+                                        : (hasUnread
+                                            ? scheme.onSurface
+                                            : scheme.onSurfaceVariant),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (hasUnread) ...[
+                          const SizedBox(width: 8),
+                          TelegramUnreadBadge(
+                            count: chat.unreadCount,
+                            muted: chat.muted,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-          if (hasUnread) ...[
-            const SizedBox(height: 5),
-            TelegramUnreadBadge(count: chat.unreadCount, muted: chat.muted),
-          ],
-        ],
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-      child: Material(
-        color: hasUnread
-            ? scheme.primaryContainer.withValues(alpha: 0.36)
-            : scheme.surfaceContainer.withValues(alpha: 0.72),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: hasUnread
-                  ? scheme.primary.withValues(alpha: 0.28)
-                  : scheme.outlineVariant.withValues(alpha: 0.34),
-              width: 0.7,
-            ),
-          ),
-          child: tile,
         ),
       ),
     );
@@ -287,14 +300,14 @@ class ChatHubGroupAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (members.isEmpty) {
-      return CircleAvatar(
-        radius: 24,
-        backgroundColor: scheme.primaryContainer,
-        child: Icon(Icons.groups_rounded, color: scheme.onPrimaryContainer),
-      );
+    return CircleAvatar(
+      radius: 28,
+      backgroundColor: scheme.primaryContainer,
+      child: Icon(Icons.groups_rounded, color: scheme.onPrimaryContainer),
+    );
     }
     return CircleAvatar(
-      radius: 24,
+      radius: 28,
       backgroundColor: scheme.primaryContainer,
       child: Text(
         members.first.displayName.characters.first.toUpperCase(),
@@ -320,7 +333,7 @@ class ChatHubUserAvatar extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         CircleAvatar(
-          radius: 24,
+          radius: 28,
           backgroundImage: background,
           child: background == null
               ? Text(
@@ -331,11 +344,11 @@ class ChatHubUserAvatar extends StatelessWidget {
         ),
         if (user.isOnline)
           Positioned(
-            right: 0,
-            bottom: 0,
+            right: 1,
+            bottom: 1,
             child: Container(
-              width: 12,
-              height: 12,
+              width: 13,
+              height: 13,
               decoration: BoxDecoration(
                 color: scheme.primary,
                 shape: BoxShape.circle,
@@ -357,7 +370,7 @@ class ChatHubChannelAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final background = resolvedAvatarImage(channel.avatarUrl, decodeWidth: 96);
     return CircleAvatar(
-      radius: 24,
+      radius: 28,
       backgroundImage: background,
       child: background == null
           ? Text(
@@ -515,80 +528,85 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
     final scheme = Theme.of(context).colorScheme;
     final hasUnread = _newPostsCount > 0;
 
-    final tile = ListTile(
-      onTap: () async {
-        await _markAsSeen();
-        widget.onTap();
-      },
-      onLongPress: widget.onLongPress,
-      minVerticalPadding: 10,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      leading: ChatHubChannelAvatar(channel: _channel),
-      title: Row(
-        children: [
-          Icon(Icons.campaign_outlined, size: 16, color: scheme.primary),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              _channel.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
-                letterSpacing: -0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-      subtitle: Text(
-        _subtitle(),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-        ),
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            chatHubFormatInboxTime(_lastPostAt ?? _channel.createdAt),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+    return Material(
+      color: hasUnread
+          ? scheme.primaryContainer.withValues(alpha: 0.18)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          await _markAsSeen();
+          widget.onTap();
+        },
+        onLongPress: widget.onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              ChatHubChannelAvatar(channel: _channel),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.campaign_outlined,
+                            size: 15, color: scheme.primary),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _channel.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight:
+                                  hasUnread ? FontWeight.w700 : FontWeight.w600,
+                              fontSize: 16,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          chatHubFormatInboxTime(
+                              _lastPostAt ?? _channel.createdAt),
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    fontSize: 12,
+                                  ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _subtitle(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: hasUnread
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        if (hasUnread) ...[
+                          const SizedBox(width: 8),
+                          TelegramUnreadBadge(
+                            count: _newPostsCount,
+                            muted: false,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
+              ),
+            ],
           ),
-          if (hasUnread) ...[
-            const SizedBox(height: 4),
-            TelegramUnreadBadge(count: _newPostsCount, muted: false),
-          ],
-        ],
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-      child: Material(
-        color: hasUnread
-            ? scheme.primaryContainer.withValues(alpha: 0.36)
-            : scheme.surfaceContainer.withValues(alpha: 0.72),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: hasUnread
-                  ? scheme.primary.withValues(alpha: 0.28)
-                  : scheme.outlineVariant.withValues(alpha: 0.34),
-              width: 0.7,
-            ),
-          ),
-          child: tile,
         ),
       ),
     );

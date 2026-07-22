@@ -9,6 +9,8 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
     required this.onCopy,
     required this.onShare,
     required this.onForward,
+    this.onReply,
+    this.canReply = false,
   });
 
   final bool enabled;
@@ -16,11 +18,16 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
   final VoidCallback? onCopy;
   final VoidCallback? onShare;
   final VoidCallback? onForward;
+  final VoidCallback? onReply;
+  final bool canReply;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final iconColor = enabled ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
+    final iconColor =
+        enabled ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
+    final replyColor =
+        canReply ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -31,6 +38,11 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              IconButton(
+                tooltip: 'Ответить',
+                onPressed: canReply ? onReply : null,
+                icon: Icon(Icons.reply_rounded, color: replyColor),
+              ),
               IconButton(
                 tooltip: 'Удалить',
                 onPressed: enabled ? onDelete : null,
