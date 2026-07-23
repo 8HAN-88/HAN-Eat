@@ -32,6 +32,8 @@ from app.schemas.chat import (
     DirectChatRequest,
     EditMessageRequest,
     ForwardMessageRequest,
+    MessageReaderItem,
+    MessageReadersResponse,
     RescheduleMessageRequest,
     ScheduledMessageListResponse,
     ScheduledMessageResponse,
@@ -2374,6 +2376,33 @@ async def mark_delivered(
         },
     )
     return {"ok": True}
+
+
+@router.get(
+    "/chats/{conversation_id}/messages/{message_id}/readers",
+    response_model=MessageReadersResponse,
+)
+async def list_message_readers(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        users, other_count = svc.message_readers(
+            conversation_id, message_id, current_user.id
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return MessageReadersResponse(
+        items=[MessageReaderItem(user=_brief(u)) for u in users],
+        reader_count=len(users),
+        other_member_count=other_count,
+    )
 
 
 @router.post("/chats/{conversation_id}/read")

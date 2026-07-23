@@ -433,6 +433,53 @@ class ChatService:
             datetime.now(timezone.utc).replace(tzinfo=None) if archived else None
         )
 
+    def message_readers(
+        self, conversation_id: int, message_id: int, viewer_id: int
+    ) -> tuple[list[User], int]:
+        """Users (excluding sender) who have read up to this message."""
+        if not self._is_member(conversation_id, viewer_id):
+            raise ValueError("forbidden")
+        msg = (
+            self.db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not msg:
+            raise ValueError("not_found")
+        # Only sender (or any member) can inspect reads; keep open to members.
+        others = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id != msg.sender_id,
+            )
+            .all()
+        )
+        other_count = len(others)
+        reader_ids = [
+            m.user_id
+            for m in others
+            if m.last_read_message_id is not None
+            and m.last_read_message_id >= message_id
+        ]
+        if not reader_ids:
+            return [], other_count
+        users = (
+            self.db.query(User)
+            .filter(
+                User.id.in_(reader_ids),
+                User.deleted_at.is_(None),
+            )
+            .all()
+        )
+        by_id = {u.id: u for u in users}
+        ordered = [by_id[uid] for uid in reader_ids if uid in by_id]
+        return ordered, other_count
+
     def group_all_read(
         self, conversation_id: int, message_id: int, sender_id: int
     ) -> bool:
@@ -1811,6 +1858,8 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "video" and not media_url:
             raise ValueError("missing_media")
+        if msg_type == "video_note" and not media_url:
+            raise ValueError("missing_media")
         if msg_type == "sticker" and not media_url:
             raise ValueError("missing_media")
         if msg_type == "poll" and not content.strip():
@@ -2061,6 +2110,8 @@ class ChatService:
             preview = f"📎 {name[:80]}"
         elif msg_type == "video":
             preview = "🎬 Видео"
+        elif msg_type == "video_note":
+            preview = "⭕ Видеосообщение"
         elif msg_type == "sticker":
             preview = "🧩 Стикер"
         elif msg_type == "location":

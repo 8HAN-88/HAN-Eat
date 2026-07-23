@@ -52,6 +52,16 @@ class ForwardMessageRequest(BaseModel):
     message_id: int
 
 
+class MessageReaderItem(BaseModel):
+    user: ChatUserBrief
+
+
+class MessageReadersResponse(BaseModel):
+    items: List[MessageReaderItem]
+    reader_count: int = 0
+    other_member_count: int = 0
+
+
 class MessageReactionSummary(BaseModel):
     emoji: str
     count: int
@@ -125,7 +135,7 @@ class PinMessageRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|poll|sticker|location)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
@@ -141,7 +151,7 @@ class SendMessageRequest(BaseModel):
 class ScheduleMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|poll|sticker|location)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)

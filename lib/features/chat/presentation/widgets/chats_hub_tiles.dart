@@ -38,6 +38,7 @@ class ChatHubTile extends StatelessWidget {
     }
     if (msg.type == 'image') return 'Фото';
     if (msg.type == 'video') return 'Видео';
+    if (msg.type == 'video_note') return 'Видеосообщение';
     if (msg.type == 'sticker') return 'Стикер';
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
@@ -72,6 +73,8 @@ class ChatHubTile extends StatelessWidget {
         return Icons.photo_rounded;
       case 'video':
         return Icons.videocam_rounded;
+      case 'video_note':
+        return Icons.circle_outlined;
       case 'sticker':
         return Icons.emoji_emotions_outlined;
       case 'location':

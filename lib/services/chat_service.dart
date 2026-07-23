@@ -377,6 +377,32 @@ class ChatService {
     _ensureOk(response, 'Не удалось удалить сообщение');
   }
 
+  static Future<ChatMessageReadersResult> listMessageReaders({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/readers',
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить, кто прочитал');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final readers = <ChatUserBrief>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      final userRaw = raw['user'];
+      if (userRaw is Map<String, dynamic>) {
+        readers.add(ChatUserBrief.fromJson(userRaw));
+      }
+    }
+    return ChatMessageReadersResult(
+      readers: readers,
+      readerCount: (data['reader_count'] as num?)?.toInt() ?? readers.length,
+      otherMemberCount: (data['other_member_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   static Future<ChatMessage> editMessage({
     required int conversationId,
     required int messageId,
@@ -583,6 +609,23 @@ class ChatService {
       conversationId: conversationId,
       type: 'video',
       content: caption,
+      mediaUrl: mediaUrl,
+      replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  static Future<ChatMessage> sendVideoNote({
+    required int conversationId,
+    required String mediaUrl,
+    int durationSec = 1,
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) async {
+    return _send(
+      conversationId: conversationId,
+      type: 'video_note',
+      content: '${durationSec < 1 ? 1 : durationSec}',
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,

@@ -185,7 +185,7 @@ class ChatMessage {
       type == 'poll' ? parseChatPollFromContent(content) : null;
 
   int? get voiceDurationSec {
-    if (type != 'voice') return null;
+    if (type != 'voice' && type != 'video_note') return null;
     return int.tryParse(content.trim());
   }
 
@@ -274,6 +274,18 @@ class ChatMessage {
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );
   }
+}
+
+class ChatMessageReadersResult {
+  const ChatMessageReadersResult({
+    required this.readers,
+    this.readerCount = 0,
+    this.otherMemberCount = 0,
+  });
+
+  final List<ChatUserBrief> readers;
+  final int readerCount;
+  final int otherMemberCount;
 }
 
 /// Не затирает локально закрытый опрос устаревшими данными чата/кэша.

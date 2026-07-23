@@ -126,6 +126,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required this.onReaction,
     required this.onAction,
     required this.onExpandReactions,
+    this.canShowReaders = false,
     this.bottomComposerReserve = 88,
   });
 
@@ -137,6 +138,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool isPinned;
   final bool canDelete;
   final bool hasCopyableText;
+  final bool canShowReaders;
   final ValueChanged<String> onReaction;
   final ValueChanged<String> onAction;
   final VoidCallback onExpandReactions;
@@ -155,6 +157,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required ValueChanged<String> onReaction,
     required ValueChanged<String> onAction,
     required VoidCallback onExpandReactions,
+    bool canShowReaders = false,
     double bottomComposerReserve = 88,
   }) {
     AppHaptics.medium();
@@ -178,6 +181,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         isPinned: isPinned,
         canDelete: canDelete,
         hasCopyableText: hasCopyableText,
+        canShowReaders: canShowReaders,
         bottomComposerReserve: bottomComposerReserve,
         onReaction: (emoji) {
           Navigator.pop(ctx);
@@ -266,6 +270,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
         icon: Icons.forward_rounded,
         label: 'Переслать',
       ),
+      if (widget.canShowReaders)
+        _MenuItem(
+          action: 'readers',
+          icon: Icons.done_all,
+          label: 'Кто прочитал',
+        ),
       if (widget.canDelete)
         _MenuItem(
           action: 'delete',

@@ -70,6 +70,8 @@ import '../application/chat_recent_files_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
+import 'widgets/chat_message_readers_sheet.dart';
+import 'widgets/chat_video_note_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
@@ -1753,6 +1755,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'video_note') return '⭕ Видеосообщение';
     if (msg.type == 'sticker') return '🧩 Стикер';
     if (msg.type == 'file') {
       final name = msg.content.trim();
@@ -3794,6 +3797,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case _ThreadSearchFilter.media:
         return msg.type == 'image' ||
             msg.type == 'video' ||
+            msg.type == 'video_note' ||
             msg.type == 'voice' ||
             msg.type == 'sticker';
       case _ThreadSearchFilter.files:
@@ -3814,6 +3818,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice' && 'голосовое'.contains(q)) return true;
     if (msg.type == 'image' && 'фото'.contains(q)) return true;
     if (msg.type == 'video' && 'видео'.contains(q)) return true;
+    if (msg.type == 'video_note' &&
+        ('кружок'.contains(q) ||
+            'видеосообщение'.contains(q) ||
+            'видео'.contains(q))) {
+      return true;
+    }
     if (msg.type == 'sticker' && 'стикер'.contains(q)) return true;
     if (msg.type == 'file') {
       final name = msg.content.trim().toLowerCase();
@@ -4471,6 +4481,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'video_note') return '⭕ Видеосообщение';
     if (msg.type == 'sticker') return '🧩 Стикер';
     if (msg.type == 'poll') {
       final poll = msg.poll;
@@ -4927,6 +4938,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'forward':
         unawaited(_forwardMessage(msg));
         break;
+      case 'readers':
+        unawaited(_showMessageReaders(msg));
+        break;
       case 'delete':
         unawaited(_confirmDeleteMessage(msg));
         break;
@@ -4934,6 +4948,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _enterSelectionMode(msg);
         break;
     }
+  }
+
+  Future<void> _showMessageReaders(ChatMessage msg) async {
+    if (msg.id <= 0) return;
+    await showChatMessageReadersSheet(
+      context,
+      conversationId: widget.conversationId,
+      messageId: msg.id,
+    );
   }
 
   Future<void> _confirmDeleteMessage(ChatMessage msg) async {
@@ -5762,10 +5785,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final screenH = MediaQuery.sizeOf(context).height;
     final padding = MediaQuery.paddingOf(context);
     final targetBottom = screenH - composerReserve - 16;
+    final isGroup = _conversation.isGroup;
+    final canShowReaders = msg.isMine && isGroup && msg.id > 0;
     final menuItemCount = 4 +
         (msg.isMine && msg.type == 'text' ? 1 : 0) +
         (_copyableText(msg).isNotEmpty ? 1 : 0) +
         (msg.isMine ? 1 : 0) +
+        (canShowReaders ? 1 : 0) +
         1; // reply, pin, forward, select + optional
     final preLayout = ChatMessageOverlayLayout.compute(
       messageRect: rect,
@@ -5809,7 +5835,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isPinned = _pinnedMessage?.id == msg.id;
     final scheme = Theme.of(context).colorScheme;
     final searching = _threadSearchQuery.trim().isNotEmpty;
-    final isGroup = _conversation.isGroup;
     final replyTarget = _replyTargetFor(msg);
     final replyQuote = replyTarget != null
         ? _messagePreview(replyTarget)
@@ -5845,6 +5870,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isPinned: isPinned,
       canDelete: msg.isMine,
       hasCopyableText: _copyableText(msg).isNotEmpty,
+      canShowReaders: canShowReaders,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -7087,6 +7113,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
       case ChatAttachResult.location:
         await _sendCurrentLocation();
+      case ChatAttachResult.videoNote:
+        await _recordAndSendVideoNote();
       case ChatAttachResult.resendFile:
         final url = selection.resendFileUrl;
         final name = selection.resendFileName;
@@ -7165,6 +7193,60 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       } else {
         await _sendPickedImage(file, caption: itemCaption);
+      }
+    }
+  }
+
+  Future<void> _recordAndSendVideoNote() async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(seconds: 60),
+      );
+      if (file == null || !mounted) return;
+
+      setState(() {
+        _sending = true;
+        _uploadProgress = 0.05;
+      });
+      final prepared = await _normalizeVideoFileForUpload(file);
+      if (!mounted) return;
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: prepared,
+        fileType: 'video',
+        waitForProcessing: false,
+        onProgress: (p) {
+          if (!mounted) return;
+          _setUploadProgress(0.05 + p * 0.85, status: 'Загрузка…');
+        },
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) {
+        throw Exception('Не удалось загрузить видео');
+      }
+      _setUploadProgress(0.95, status: 'Отправка…');
+      await ChatService.sendVideoNote(
+        conversationId: widget.conversationId,
+        mediaUrl: ServerConfig.resolveMediaUrl(url),
+        durationSec: 1,
+        replyToMessageId: _replyTo?.id,
+      );
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+      AppHaptics.selection();
+      await _pollNew();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploadProgress = null;
+        });
       }
     }
   }
@@ -9842,16 +9924,17 @@ class _Bubble extends StatelessWidget {
     final isImage = message.type == 'image' && message.mediaUrl != null;
     final isVideo = message.type == 'video' && message.mediaUrl != null;
     final isSticker = message.type == 'sticker' && message.mediaUrl != null;
+    final isVideoNote = message.type == 'video_note' && message.mediaUrl != null;
     final isMedia = isImage || isVideo || isSticker;
     final hasCaption = message.content.trim().isNotEmpty;
     final isFullBleedMedia = (isImage || isVideo) && !hasCaption;
     final bubbleRadius = _bubbleRadius(mine);
-    final contentPadding = isSticker
+    final contentPadding = (isSticker || isVideoNote)
         ? const EdgeInsets.fromLTRB(2, 2, 2, 0)
         : (isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 3));
-    // Stickers and full-bleed media stay transparent; reactions live outside.
+    // Stickers / video notes / full-bleed media stay transparent.
     final isForwarded = message.isForwarded;
-    final bubbleNeedsBackground = isSticker
+    final bubbleNeedsBackground = (isSticker || isVideoNote)
         ? (replyQuote != null ||
             isForwarded ||
             (showSenderName && (senderLabel?.isNotEmpty ?? false)))
@@ -9873,6 +9956,16 @@ class _Bubble extends StatelessWidget {
           foregroundColor: fg,
           accentColor: scheme.primary,
           activeColor: mine ? scheme.primary : scheme.secondary,
+        ),
+      );
+    } else if (message.type == 'video_note' && message.mediaUrl != null) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: ChatVideoNoteBubble(
+          mediaUrl: message.mediaUrl!,
+          durationSec: message.voiceDurationSec,
+          accentColor: scheme.primary,
         ),
       );
     } else if (message.type == 'poll' && message.poll != null) {

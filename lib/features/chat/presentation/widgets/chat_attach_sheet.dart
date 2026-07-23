@@ -30,7 +30,16 @@ import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
 
-enum ChatAttachTab { gallery, gif, file, poll, contact, location, sticker }
+enum ChatAttachTab {
+  gallery,
+  gif,
+  file,
+  poll,
+  contact,
+  location,
+  videoNote,
+  sticker,
+}
 
 enum ChatAttachResult {
   galleryFiles,
@@ -39,6 +48,7 @@ enum ChatAttachResult {
   poll,
   contact,
   location,
+  videoNote,
   resendFile,
   sticker,
 }
@@ -135,6 +145,9 @@ class ChatAttachSelection {
 
   factory ChatAttachSelection.location() =>
       ChatAttachSelection._(kind: ChatAttachResult.location);
+
+  factory ChatAttachSelection.videoNote() =>
+      ChatAttachSelection._(kind: ChatAttachResult.videoNote);
 }
 
 Future<ChatAttachSelection?> showChatAttachSheet(
@@ -475,6 +488,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Контакты';
       case ChatAttachTab.location:
         return 'Геопозиция';
+      case ChatAttachTab.videoNote:
+        return 'Кружок';
       case ChatAttachTab.sticker:
         return 'Стикеры';
     }
@@ -496,6 +511,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Контакты и телефонная книга';
       case ChatAttachTab.location:
         return 'Отправьте текущее местоположение';
+      case ChatAttachTab.videoNote:
+        return 'Короткое круглое видеосообщение (до 60 сек)';
       case ChatAttachTab.sticker:
         return 'Паки, избранные и недавние';
     }
@@ -1117,6 +1134,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           onSend: () => _close(ChatAttachSelection.location()),
           isDark: isDark,
         );
+      case ChatAttachTab.videoNote:
+        return _VideoNotePickPanel(
+          scrollController: scrollController,
+          onRecord: () => _close(ChatAttachSelection.videoNote()),
+          isDark: isDark,
+        );
       case ChatAttachTab.file:
         return _FilePanel(
           scrollController: scrollController,
@@ -1288,6 +1311,57 @@ class _LocationPickPanel extends StatelessWidget {
           onPressed: onSend,
           icon: const Icon(Icons.my_location_outlined),
           label: const Text('Отправить мою геопозицию'),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoNotePickPanel extends StatelessWidget {
+  const _VideoNotePickPanel({
+    required this.scrollController,
+    required this.onRecord,
+    required this.isDark,
+  });
+
+  final ScrollController scrollController;
+  final VoidCallback onRecord;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        const SizedBox(height: 24),
+        Icon(
+          Icons.videocam_outlined,
+          size: 56,
+          color: scheme.primary.withValues(alpha: 0.9),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Видеосообщение',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Запишите короткое видео — оно отправится кружком, как в Telegram.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 28),
+        FilledButton.icon(
+          onPressed: onRecord,
+          icon: const Icon(Icons.fiber_manual_record),
+          label: const Text('Записать кружок'),
         ),
       ],
     );
@@ -2936,10 +3010,9 @@ class _TelegramAttachDock extends StatelessWidget {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final width = ((constraints.maxWidth - 10) / 8)
-                      .clamp(40.0, 58.0)
-                      .toDouble();
-                  return Padding(
+                  const width = 52.0;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                     child: Row(
@@ -2989,6 +3062,14 @@ class _TelegramAttachDock extends StatelessWidget {
                           label: 'Гео',
                           selected: selected == ChatAttachTab.location,
                           onTap: () => onSelect(ChatAttachTab.location),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.circle_outlined,
+                          label: 'Кружок',
+                          selected: selected == ChatAttachTab.videoNote,
+                          onTap: () => onSelect(ChatAttachTab.videoNote),
                           compact: true,
                           width: width,
                         ),
