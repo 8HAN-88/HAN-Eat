@@ -303,6 +303,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _newMessagesBelow = 0;
   int? _replySwipeMsgId;
   double _replySwipeDx = 0;
+  String? _floatingDateLabel;
+  bool _floatingDateVisible = false;
+  Timer? _floatingDateHideTimer;
   bool _suppressMarkRead = false;
   /// Telegram-style unread divider shown above this message id.
   int? _unreadDividerBeforeId;
@@ -2609,11 +2612,53 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       // Telegram: mark read when the user actually reaches the bottom.
       _scheduleMarkRead();
-      return;
-    }
-    if (!_showJumpToBottom) {
+    } else if (!_showJumpToBottom) {
       setState(() => _showJumpToBottom = true);
     }
+    // Auto-load older history near the top (Telegram infinite scroll).
+    if (_hasMore &&
+        !_loadingMore &&
+        !_loading &&
+        _scroll.position.pixels < 140) {
+      unawaited(_load(refresh: false));
+    }
+    _updateFloatingDateFromScroll();
+  }
+
+  void _updateFloatingDateFromScroll() {
+    final messages = _visibleMessages;
+    if (messages.isEmpty || !_scroll.hasClients) return;
+    final threshold =
+        MediaQuery.paddingOf(context).top + kToolbarHeight + 72;
+    String? label;
+    for (final msg in messages) {
+      final ctx = _messageItemKeys[msg.id]?.currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize || !box.attached) continue;
+      final y = box.localToGlobal(Offset.zero).dy;
+      if (y <= threshold) {
+        label = _chatDateSeparatorLabel(msg.createdAt);
+      } else if (label != null) {
+        break;
+      }
+    }
+    label ??= _chatDateSeparatorLabel(messages.first.createdAt);
+    final changed =
+        label != _floatingDateLabel || !_floatingDateVisible;
+    if (changed) {
+      setState(() {
+        _floatingDateLabel = label;
+        _floatingDateVisible = true;
+      });
+    } else {
+      _floatingDateVisible = true;
+    }
+    _floatingDateHideTimer?.cancel();
+    _floatingDateHideTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (!mounted) return;
+      setState(() => _floatingDateVisible = false);
+    });
   }
 
   void _clearTypingState() {
@@ -3302,6 +3347,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ActiveChatSession.instance.clearIfOpen(widget.conversationId);
     _scroll.removeListener(_onScrollChanged);
     WidgetsBinding.instance.removeObserver(this);
+    _floatingDateHideTimer?.cancel();
     _pollTimer?.cancel();
     _presenceTimer?.cancel();
     _typingDebounce?.cancel();
@@ -8084,19 +8130,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     visibleMessages.length + (_hasMore ? 1 : 0),
                                 itemBuilder: (context, index) {
                                   if (_hasMore && index == 0) {
-                                    return TextButton(
-                                      onPressed: _loadingMore
-                                          ? null
-                                          : () => _load(refresh: false),
-                                      child: _loadingMore
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Text('Загрузить раньше'),
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
+                                      child: Center(
+                                        child: _loadingMore
+                                            ? SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: scheme.primary
+                                                      .withValues(alpha: 0.7),
+                                                ),
+                                              )
+                                            : const SizedBox(height: 18),
+                                      ),
                                     );
                                   }
                                   final msgIndex = index - (_hasMore ? 1 : 0);
@@ -8498,6 +8549,47 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   );
                                 },
                               ),
+                    if (_floatingDateVisible &&
+                        (_floatingDateLabel?.isNotEmpty ?? false) &&
+                        !_selectionMode)
+                      Positioned(
+                        top: 8,
+                        left: 0,
+                        right: 0,
+                        child: IgnorePointer(
+                          child: AnimatedOpacity(
+                            opacity: _floatingDateVisible ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Colors.black.withValues(alpha: 0.4)
+                                      : Colors.black.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  _floatingDateLabel!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.white
+                                            .withValues(alpha: 0.92)
+                                        : scheme.onSurface,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     if (_showJumpToBottom && !_selectionMode)
                       Positioned(
                         right: 10,
@@ -8643,54 +8735,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 ),
                         ),
                         _animatedVisibility(
-                          visible: _recording,
-                          keyName: 'record-banner',
-                          child: Material(
-                            color: _recordCancelled
-                                ? scheme.errorContainer.withValues(alpha: 0.5)
-                                : scheme.primaryContainer
-                                    .withValues(alpha: 0.35),
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text(
-                                    _recordCancelled
-                                        ? '← Отпустите для отмены'
-                                        : 'Отпустите для отправки',
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: _recordCancelled
-                                              ? scheme.error
-                                              : scheme.onSurface,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ChatVoiceWaveform(
-                                    levels: List<double>.from(_waveLevels),
-                                    color: scheme.onSurfaceVariant,
-                                    activeColor: scheme.primary,
-                                    barCount: 32,
-                                    height: 32,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    _formatRecordDuration(_recordDuration),
-                                    textAlign: TextAlign.center,
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        _animatedVisibility(
                           visible: !canSendInGroup,
                           keyName: 'group-readonly-banner',
                           child: _composerInfoBanner(
@@ -8726,72 +8770,152 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ),
                         SafeArea(
                           top: false,
-                          child: AnimatedContainer(
-                            duration: _uiAnimDuration,
-                            curve: Curves.easeOutCubic,
-                            margin: const EdgeInsets.fromLTRB(6, 2, 6, 4),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 2, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xCC1A2632)
-                                  : scheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                IconButton(
-                                  onPressed: (_recording || !canSendNow)
-                                      ? null
-                                      : _showAttachMenu,
-                                  icon: const Icon(Icons.attach_file_outlined),
-                                  tooltip: 'Вложение',
-                                  color: scheme.onSurfaceVariant,
-                                  iconSize: _composerIconSize,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: _composerButtonSide,
-                                    height: _composerButtonSide,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _controller,
-                                    focusNode: _inputFocusNode,
-                                    enabled: !_recording && canSendInGroup,
-                                    minLines: 1,
-                                    maxLines: 5,
-                                    textInputAction: TextInputAction.send,
-                                    scrollPadding:
-                                        const EdgeInsets.only(bottom: 96),
-                                    onSubmitted: (_) =>
-                                        _hasText ? _sendText() : null,
-                                    decoration: InputDecoration(
-                                      hintText: _recording
-                                          ? 'Удерживайте…'
-                                          : (!canSendInGroup
-                                              ? (isRestrictedByModeration
-                                                  ? 'Отправка ограничена'
-                                                  : 'Только админы')
-                                              : (activeCooldownSeconds > 0
-                                                  ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
-                                                  : (_editingMessage != null
-                                                      ? 'Изменить…'
-                                                      : 'Сообщение'))),
-                                      filled: true,
-                                      fillColor: Colors.transparent,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                        borderSide: BorderSide.none,
-                                      ),
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 10,
-                                      ),
+                                if (!_recording)
+                                  IconButton(
+                                    onPressed: !canSendNow
+                                        ? null
+                                        : _showAttachMenu,
+                                    icon:
+                                        const Icon(Icons.attach_file_outlined),
+                                    tooltip: 'Вложение',
+                                    color: scheme.onSurfaceVariant,
+                                    iconSize: _composerIconSize,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: _composerButtonSide,
+                                      height: _composerButtonSide,
                                     ),
                                   ),
+                                Expanded(
+                                  child: _recording
+                                      ? Container(
+                                          height: 44,
+                                          alignment: Alignment.centerLeft,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _recordCancelled
+                                                ? scheme.errorContainer
+                                                    .withValues(alpha: 0.55)
+                                                : (Theme.of(context)
+                                                            .brightness ==
+                                                        Brightness.dark
+                                                    ? const Color(0xCC1A2632)
+                                                    : scheme
+                                                        .surfaceContainerLow),
+                                            borderRadius:
+                                                BorderRadius.circular(22),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.mic_rounded,
+                                                size: 18,
+                                                color: _recordCancelled
+                                                    ? scheme.error
+                                                    : scheme.primary,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _formatRecordDuration(
+                                                  _recordDuration,
+                                                ),
+                                                style: TextStyle(
+                                                  color: _recordCancelled
+                                                      ? scheme.error
+                                                      : scheme.onSurface,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 15,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: ChatVoiceWaveform(
+                                                  levels: List<double>.from(
+                                                    _waveLevels,
+                                                  ),
+                                                  color: scheme
+                                                      .onSurfaceVariant,
+                                                  activeColor: _recordCancelled
+                                                      ? scheme.error
+                                                      : scheme.primary,
+                                                  barCount: 28,
+                                                  height: 22,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _recordCancelled
+                                                    ? 'Отмена'
+                                                    : '← Отмена',
+                                                style: TextStyle(
+                                                  color: _recordCancelled
+                                                      ? scheme.error
+                                                      : scheme
+                                                          .onSurfaceVariant,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                        .brightness ==
+                                                    Brightness.dark
+                                                ? const Color(0xCC1A2632)
+                                                : scheme.surfaceContainerLow,
+                                            borderRadius:
+                                                BorderRadius.circular(22),
+                                          ),
+                                          child: TextField(
+                                            controller: _controller,
+                                            focusNode: _inputFocusNode,
+                                            enabled: canSendInGroup,
+                                            minLines: 1,
+                                            maxLines: 5,
+                                            textInputAction:
+                                                TextInputAction.newline,
+                                            keyboardType:
+                                                TextInputType.multiline,
+                                            scrollPadding:
+                                                const EdgeInsets.only(
+                                              bottom: 96,
+                                            ),
+                                            decoration: InputDecoration(
+                                              hintText: !canSendInGroup
+                                                  ? (isRestrictedByModeration
+                                                      ? 'Отправка ограничена'
+                                                      : 'Только админы')
+                                                  : (activeCooldownSeconds > 0
+                                                      ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
+                                                      : (_editingMessage !=
+                                                              null
+                                                          ? 'Изменить…'
+                                                          : 'Сообщение')),
+                                              filled: true,
+                                              fillColor: Colors.transparent,
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(22),
+                                                borderSide: BorderSide.none,
+                                              ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 14,
+                                                vertical: 10,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                 ),
                                 if (!_hasText && !_recording)
                                   IconButton(
@@ -9283,42 +9407,61 @@ class _Bubble extends StatelessWidget {
     );
   }
 
+  Color _senderNameColor() {
+    // Telegram-like stable pastel palette from sender id.
+    const palette = <Color>[
+      Color(0xFFE17076),
+      Color(0xFFFAA774),
+      Color(0xFFA695E7),
+      Color(0xFF7BC862),
+      Color(0xFF6EC9CB),
+      Color(0xFF65AADD),
+      Color(0xFFEE7AAE),
+    ];
+    return palette[message.senderId.abs() % palette.length];
+  }
+
   Widget _buildReactions(Color fg, Color quoteBg) {
     if (message.reactions.isEmpty) return const SizedBox.shrink();
+    final isDark = scheme.brightness == Brightness.dark;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: message.reactions
-            .where((r) => r.emoji.isNotEmpty && r.count > 0)
-            .map(
-              (r) => Material(
-                color: r.reactedByMe
-                    ? scheme.primary.withValues(alpha: 0.18)
-                    : quoteBg,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: onReactionTap == null
-                      ? null
-                      : () => onReactionTap!(r.emoji),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Text(
-                      '${r.emoji} ${r.count}',
-                      style: TextStyle(color: fg, fontSize: 12),
+    return Wrap(
+      spacing: 3,
+      runSpacing: 3,
+      children: message.reactions
+          .where((r) => r.emoji.isNotEmpty && r.count > 0)
+          .map(
+            (r) => Material(
+              elevation: 0.5,
+              color: r.reactedByMe
+                  ? scheme.primary.withValues(alpha: isDark ? 0.28 : 0.16)
+                  : (isDark
+                      ? const Color(0xFF2B3A4A)
+                      : scheme.surface.withValues(alpha: 0.95)),
+              borderRadius: BorderRadius.circular(999),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: onReactionTap == null
+                    ? null
+                    : () => onReactionTap!(r.emoji),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  child: Text(
+                    r.count > 1 ? '${r.emoji} ${r.count}' : r.emoji,
+                    style: TextStyle(
+                      color: fg.withValues(alpha: 0.92),
+                      fontSize: 13,
+                      height: 1.1,
                     ),
                   ),
                 ),
               ),
-            )
-            .toList(),
-      ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -9461,12 +9604,17 @@ class _Bubble extends StatelessWidget {
     final hasCaption = message.content.trim().isNotEmpty;
     final isFullBleedMedia = (isImage || isVideo) && !hasCaption;
     final bubbleRadius = _bubbleRadius(mine);
-    final contentPadding =
-        isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 3);
-    final bubbleNeedsBackground = !isFullBleedMedia ||
-        replyQuote != null ||
-        (showSenderName && (senderLabel?.isNotEmpty ?? false)) ||
-        message.reactions.isNotEmpty;
+    final contentPadding = isSticker
+        ? const EdgeInsets.fromLTRB(2, 2, 2, 0)
+        : (isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 3));
+    // Stickers and full-bleed media stay transparent; reactions live outside.
+    final bubbleNeedsBackground = isSticker
+        ? (replyQuote != null ||
+            (showSenderName && (senderLabel?.isNotEmpty ?? false)))
+        : (!isFullBleedMedia ||
+            replyQuote != null ||
+            (showSenderName && (senderLabel?.isNotEmpty ?? false)));
+    final hasReactions = message.reactions.isNotEmpty;
     final activeBorderColor = scheme.primary.withValues(alpha: 0.75);
     final activeShadowColor = scheme.primary.withValues(alpha: 0.28);
 
@@ -9593,10 +9741,12 @@ class _Bubble extends StatelessWidget {
               child: _withBottomMeta(
                 fg: fg,
                 mine: mine,
+                inlineMeta: true,
                 child: HighlightedText(
                   text: message.content,
                   query: highlightQuery,
                   style: TextStyle(color: fg, height: 1.25),
+                  trailingReserveWidth: _metaReserveWidth(mine),
                 ),
               ),
             ),
@@ -9616,10 +9766,11 @@ class _Bubble extends StatelessWidget {
         animated: ChatStickerTile.looksAnimated(message.mediaUrl!),
         onTap: onImageTap,
       );
+      // Telegram: sticker has no filled bubble; soft time/ticks under it.
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
-        onMedia: true,
+        onMedia: false,
         child: sticker,
       );
     } else if (isVideo) {
@@ -9642,10 +9793,12 @@ class _Bubble extends StatelessWidget {
               child: _withBottomMeta(
                 fg: fg,
                 mine: mine,
+                inlineMeta: true,
                 child: HighlightedText(
                   text: message.content,
                   query: highlightQuery,
                   style: TextStyle(color: fg, height: 1.25),
+                  trailingReserveWidth: _metaReserveWidth(mine),
                 ),
               ),
             ),
@@ -9706,13 +9859,15 @@ class _Bubble extends StatelessWidget {
       );
     }
 
-    final bubble = Container(
+    final nameColor = _senderNameColor();
+    final bubbleCore = Container(
       margin: EdgeInsets.only(
         top: cluster.starts ? 2 : 0.5,
-        bottom: cluster.ends ? 2 : 0.5,
+        bottom: hasReactions ? 0 : (cluster.ends ? 2 : 0.5),
       ),
-      padding:
-          isMedia ? contentPadding : const EdgeInsets.fromLTRB(8, 4, 7, 3),
+      padding: isMedia
+          ? contentPadding
+          : const EdgeInsets.fromLTRB(8, 4, 7, 3),
       clipBehavior: Clip.antiAlias,
       constraints: BoxConstraints(
         // Telegram ~78% of screen; bubble itself shrink-wraps short text.
@@ -9742,7 +9897,7 @@ class _Bubble extends StatelessWidget {
         children: [
           if (showSenderName && (senderLabel?.isNotEmpty ?? false)) ...[
             Padding(
-              padding: isMedia
+              padding: isMedia && !isSticker
                   ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
                   : EdgeInsets.zero,
               child: onSenderTap != null
@@ -9752,8 +9907,8 @@ class _Bubble extends StatelessWidget {
                       child: Text(
                         senderLabel!,
                         style: TextStyle(
-                          color: scheme.primary,
-                          fontSize: 12,
+                          color: nameColor,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -9761,32 +9916,49 @@ class _Bubble extends StatelessWidget {
                   : Text(
                       senderLabel!,
                       style: TextStyle(
-                        color: scheme.primary,
-                        fontSize: 12,
+                        color: nameColor,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
             ),
-            SizedBox(height: isMedia ? 4 : 4),
+            const SizedBox(height: 2),
           ],
           if (replyQuote != null)
             Padding(
-              padding: isMedia
+              padding: isMedia && !isSticker
                   ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
                   : EdgeInsets.zero,
               child: _buildReplyQuote(fg, quoteBg),
             ),
           mainContent,
           _buildInlineKeyboard(fg, quoteBg),
-          Padding(
-            padding: isMedia
-                ? const EdgeInsets.fromLTRB(8, 0, 8, 4)
-                : EdgeInsets.zero,
-            child: _buildReactions(fg, quoteBg),
-          ),
         ],
       ),
     );
+
+    // Reactions float under the bubble like Telegram (not inside fill).
+    final bubble = hasReactions
+        ? Column(
+            crossAxisAlignment:
+                mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              bubbleCore,
+              Transform.translate(
+                offset: const Offset(0, -4),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: mine ? 0 : 4,
+                    right: mine ? 4 : 0,
+                    bottom: cluster.ends ? 4 : 2,
+                  ),
+                  child: _buildReactions(fg, quoteBg),
+                ),
+              ),
+            ],
+          )
+        : bubbleCore;
 
     if (!wrapWithAlign) return bubble;
     return Align(

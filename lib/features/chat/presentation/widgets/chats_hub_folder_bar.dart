@@ -25,58 +25,101 @@ class ChatHubFolderBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 44,
+      height: 42,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: const Text('Все чаты'),
-              selected: selectedFolderId == null,
-              onSelected: (_) {
-                AppHaptics.selection();
-                onSelectFolder(null);
-              },
-            ),
+          _FolderTab(
+            label: 'Все',
+            selected: selectedFolderId == null,
+            onTap: () {
+              AppHaptics.selection();
+              onSelectFolder(null);
+            },
           ),
           for (final folder in folders)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onLongPress: () {
-                  AppHaptics.medium();
-                  onFolderLongPress(folder);
-                },
-                child: FilterChip(
-                  label: Text(folder.displayLabel),
-                  selected: selectedFolderId == folder.id,
-                  onSelected: (_) {
-                    AppHaptics.selection();
-                    onSelectFolder(folder.id);
-                  },
-                ),
-              ),
+            _FolderTab(
+              label: folder.displayLabel,
+              selected: selectedFolderId == folder.id,
+              onTap: () {
+                AppHaptics.selection();
+                onSelectFolder(folder.id);
+              },
+              onLongPress: () {
+                AppHaptics.medium();
+                onFolderLongPress(folder);
+              },
             ),
-          ActionChip(
-            avatar: Icon(Icons.add, size: 18, color: scheme.primary),
-            label: const Text('Папка'),
+          IconButton(
+            tooltip: 'Новая папка',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.add, size: 20, color: scheme.primary),
             onPressed: () {
               AppHaptics.light();
               onCreateFolder();
             },
           ),
           if (folders.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: IconButton(
-                tooltip: 'Порядок папок',
-                icon: const Icon(Icons.sort),
-                onPressed: onManageFolders,
+            IconButton(
+              tooltip: 'Порядок папок',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant,
               ),
+              onPressed: onManageFolders,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _FolderTab extends StatelessWidget {
+  const _FolderTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? scheme.primary : Colors.transparent,
+                width: 2.2,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              fontSize: 14.5,
+            ),
+          ),
+        ),
       ),
     );
   }
