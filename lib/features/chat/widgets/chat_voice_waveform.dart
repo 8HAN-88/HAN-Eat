@@ -13,6 +13,7 @@ class ChatVoiceWaveform extends StatelessWidget {
     this.activeColor,
     this.barCount = 28,
     this.height = 28,
+    this.onSeek,
   });
 
   final List<double>? levels;
@@ -22,6 +23,8 @@ class ChatVoiceWaveform extends StatelessWidget {
   final Color? activeColor;
   final int barCount;
   final double height;
+  /// 0.0–1.0 scrub callback (Telegram-style tap/drag on waveform).
+  final ValueChanged<double>? onSeek;
 
   List<double> _resolveBars() {
     if (levels != null && levels!.isNotEmpty) {
@@ -37,13 +40,18 @@ class ChatVoiceWaveform extends StatelessWidget {
     return List.generate(barCount, (_) => 0.18 + r.nextDouble() * 0.82);
   }
 
+  void _seekAt(Offset local, double width) {
+    if (onSeek == null || width <= 0) return;
+    onSeek!((local.dx / width).clamp(0.0, 1.0));
+  }
+
   @override
   Widget build(BuildContext context) {
     final bars = _resolveBars();
     final played = (progress.clamp(0.0, 1.0) * barCount).floor();
     final highlight = activeColor ?? color;
 
-    return SizedBox(
+    final row = SizedBox(
       height: height,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -65,6 +73,20 @@ class ChatVoiceWaveform extends StatelessWidget {
           );
         }),
       ),
+    );
+
+    if (onSeek == null) return row;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _seekAt(d.localPosition, width),
+          onHorizontalDragUpdate: (d) => _seekAt(d.localPosition, width),
+          child: row,
+        );
+      },
     );
   }
 }

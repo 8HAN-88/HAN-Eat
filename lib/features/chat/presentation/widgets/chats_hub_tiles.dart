@@ -5,6 +5,7 @@ import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
+import 'chat_contact_bubble.dart';
 
 class ChatHubTile extends StatelessWidget {
   const ChatHubTile({
@@ -38,6 +39,8 @@ class ChatHubTile extends StatelessWidget {
       final name = msg.content.trim();
       return name.isEmpty ? 'Файл' : name;
     }
+    final contact = ChatContactPayload.tryParse(msg.content);
+    if (contact != null) return contact.displayName;
     final content = msg.content.trim();
     return content.isEmpty ? 'Сообщение' : content;
   }
@@ -68,6 +71,9 @@ class ChatHubTile extends StatelessWidget {
       case 'poll':
         return Icons.poll_outlined;
       default:
+        if (ChatContactPayload.tryParse(msg.content) != null) {
+          return Icons.person_rounded;
+        }
         return null;
     }
   }

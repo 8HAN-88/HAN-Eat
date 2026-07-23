@@ -67,6 +67,7 @@ import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
 import 'widgets/chat_attach_sheet.dart';
+import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
@@ -1693,6 +1694,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
     }
+    final contact = ChatContactPayload.tryParse(msg.content);
+    if (contact != null) return '👤 ${contact.displayName}';
     final text = msg.content.trim();
     return text.isEmpty ? 'Сообщение' : text;
   }
@@ -4454,6 +4457,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
     }
+    final contact = ChatContactPayload.tryParse(msg.content);
+    if (contact != null) return '👤 ${contact.displayName}';
     final t = msg.content.trim();
     return t.isEmpty ? 'Сообщение' : t;
   }
@@ -5062,6 +5067,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
+      onOpenContactUser:
+          interactive ? (userId) => _openUserProfile(userId) : null,
     );
   }
 
@@ -7124,12 +7131,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendContact(ChatContact contact) async {
     if (_sending || _recording) return;
     final user = contact.user;
-    final lines = <String>['👤 Контакт', user.displayName];
-    final username = user.username?.trim();
-    if (username != null && username.isNotEmpty) {
-      lines.add(username.startsWith('@') ? username : '@$username');
-    }
-    await _sendContactText(lines.join('\n'));
+    await _sendContactText(
+      ChatContactPayload.encode(
+        displayName: user.displayName,
+        username: user.username,
+        userId: user.id,
+      ),
+    );
   }
 
   Future<void> _sendPhoneContact({
@@ -7137,8 +7145,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String phoneE164,
   }) async {
     if (_sending || _recording) return;
-    final lines = <String>['👤 Контакт', displayName.trim(), phoneE164.trim()];
-    await _sendContactText(lines.join('\n'));
+    await _sendContactText(
+      ChatContactPayload.encode(
+        displayName: displayName,
+        phone: phoneE164,
+      ),
+    );
   }
 
   Future<void> _sendContactText(String text) async {
@@ -9341,6 +9353,7 @@ class _Bubble extends StatelessWidget {
     this.pollClosing = false,
     this.onInlineButtonTap,
     this.callbackLoadingData = const <String>{},
+    this.onOpenContactUser,
   });
 
   final ChatMessage message;
@@ -9370,6 +9383,7 @@ class _Bubble extends StatelessWidget {
   final bool pollClosing;
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
+  final ValueChanged<int>? onOpenContactUser;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -9780,6 +9794,22 @@ class _Bubble extends StatelessWidget {
           canClose: onPollClose != null,
           onClose: onPollClose,
           closing: pollClosing,
+        ),
+      );
+    } else if (ChatContactPayload.tryParse(message.content)
+        case final contact?) {
+      final contactUserId = contact.userId;
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: ChatContactBubble(
+          payload: contact,
+          foregroundColor: fg,
+          accentColor: scheme.primary,
+          cardColor: quoteBg,
+          onOpenProfile: contactUserId == null || onOpenContactUser == null
+              ? null
+              : () => onOpenContactUser!(contactUserId),
         ),
       );
     } else if (message.type == 'file' && message.mediaUrl != null) {

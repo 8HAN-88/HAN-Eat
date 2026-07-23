@@ -8,7 +8,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/server_config.dart';
 import '../widgets/chat_voice_waveform.dart';
 
-/// Пузырь голосового сообщения с waveform и прогрессом воспроизведения.
+/// Пузырь голосового сообщения с waveform, scrub и скоростью 1×/1.5×/2×.
 class ChatVoiceBubble extends StatefulWidget {
   const ChatVoiceBubble({
     super.key,
@@ -28,18 +28,23 @@ class ChatVoiceBubble extends StatefulWidget {
 }
 
 class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
+  static const _speeds = <double>[1.0, 1.5, 2.0];
+
   final _player = AudioPlayer();
   bool _playing = false;
   bool _loading = false;
   String? _playError;
   Duration _position = Duration.zero;
   Duration _total = Duration.zero;
+  int _speedIndex = 0;
   StreamSubscription<Duration>? _posSub;
   StreamSubscription<Duration>? _durSub;
   StreamSubscription<void>? _completeSub;
   bool _audioContextReady = false;
+  bool _sourceReady = false;
 
   int get _fallbackSec => widget.message.voiceDurationSec ?? 0;
+  double get _speed => _speeds[_speedIndex];
 
   String _format(Duration d) {
     final s = d.inSeconds;
@@ -50,12 +55,18 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
   }
 
   double get _progress {
-    final totalMs = _total.inMilliseconds;
-    if (totalMs > 0) return _position.inMilliseconds / totalMs;
-    if (_fallbackSec > 0 && _playing) {
-      return (_position.inSeconds / _fallbackSec).clamp(0.0, 1.0);
-    }
-    return 0;
+    final totalMs = _total.inMilliseconds > 0
+        ? _total.inMilliseconds
+        : (_fallbackSec * 1000);
+    if (totalMs <= 0) return 0;
+    return (_position.inMilliseconds / totalMs).clamp(0.0, 1.0);
+  }
+
+  String get _speedLabel {
+    final s = _speed;
+    if (s == 1.0) return '1×';
+    if (s == 1.5) return '1.5×';
+    return '2×';
   }
 
   @override
@@ -121,6 +132,72 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
     });
   }
 
+  Future<void> _applySpeed() async {
+    try {
+      await _player.setPlaybackRate(_speed);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('ChatVoiceBubble: setPlaybackRate failed: $e');
+      }
+    }
+  }
+
+  Future<void> _cycleSpeed() async {
+    setState(() => _speedIndex = (_speedIndex + 1) % _speeds.length);
+    if (_sourceReady || _playing) {
+      await _applySpeed();
+    }
+  }
+
+  Future<void> _seekTo(double fraction) async {
+    final totalMs = _total.inMilliseconds > 0
+        ? _total.inMilliseconds
+        : (_fallbackSec * 1000);
+    if (totalMs <= 0) return;
+    final target = Duration(milliseconds: (totalMs * fraction).round());
+    setState(() => _position = target);
+    try {
+      if (!_sourceReady) {
+        await _prepareSource(autoPlay: false);
+      }
+      await _player.seek(target);
+      if (_playing) {
+        await _player.resume();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('ChatVoiceBubble: seek failed: $e');
+    }
+  }
+
+  Future<void> _prepareSource({required bool autoPlay}) async {
+    final url = widget.message.mediaUrl;
+    if (url == null || url.isEmpty) {
+      throw Exception('Нет файла');
+    }
+    await _ensureAudioContext();
+    _bindStreams();
+    final candidates = _voiceUrlCandidates(url);
+    Object? lastError;
+    for (final candidate in candidates) {
+      try {
+        if (kDebugMode) {
+          debugPrint('ChatVoiceBubble: play $candidate');
+        }
+        if (autoPlay) {
+          await _player.play(UrlSource(candidate));
+        } else {
+          await _player.setSource(UrlSource(candidate));
+        }
+        await _applySpeed();
+        _sourceReady = true;
+        return;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError ?? Exception('Не удалось загрузить');
+  }
+
   Future<void> _togglePlay() async {
     final url = widget.message.mediaUrl;
     if (url == null || url.isEmpty) {
@@ -140,29 +217,11 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
       _playError = null;
     });
     try {
-      await _ensureAudioContext();
-      _bindStreams();
-      final candidates = _voiceUrlCandidates(url);
-      if (_position > Duration.zero && _total > Duration.zero) {
+      if (_sourceReady && _position > Duration.zero) {
+        await _applySpeed();
         await _player.resume();
       } else {
-        var played = false;
-        Object? lastError;
-        for (final candidate in candidates) {
-          try {
-            if (kDebugMode) {
-              debugPrint('ChatVoiceBubble: play $candidate');
-            }
-            await _player.play(UrlSource(candidate));
-            played = true;
-            break;
-          } catch (e) {
-            lastError = e;
-          }
-        }
-        if (!played && lastError != null) {
-          throw lastError;
-        }
+        await _prepareSource(autoPlay: true);
       }
       if (!mounted) return;
       setState(() {
@@ -206,7 +265,7 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
         : _format(Duration(seconds: _fallbackSec));
 
     return SizedBox(
-      width: 200,
+      width: 220,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -242,15 +301,41 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
                   activeColor: active,
                   barCount: 24,
                   height: 26,
+                  onSeek: _seekTo,
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                timeLabel,
-                style: TextStyle(
-                  color: widget.foregroundColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: _cycleSpeed,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: active.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _speedLabel,
+                    style: TextStyle(
+                      color: active,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 34,
+                child: Text(
+                  timeLabel,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: widget.foregroundColor,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
