@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Текст с подсветкой совпадений поиска.
+/// Текст с подсветкой совпадений поиска и/или @mentions.
 class HighlightedText extends StatelessWidget {
   const HighlightedText({
     super.key,
@@ -13,6 +13,8 @@ class HighlightedText extends StatelessWidget {
     /// Invisible trailing space so bubble meta (time/ticks) can sit on the
     /// last line like Telegram.
     this.trailingReserveWidth,
+    this.highlightMentions = false,
+    this.mentionColor,
   });
 
   final String text;
@@ -22,6 +24,10 @@ class HighlightedText extends StatelessWidget {
   final int? maxLines;
   final TextOverflow? overflow;
   final double? trailingReserveWidth;
+  final bool highlightMentions;
+  final Color? mentionColor;
+
+  static final _mentionRe = RegExp(r'@[a-zA-Z0-9_]{2,}');
 
   InlineSpan? get _trailingReserve {
     final w = trailingReserveWidth;
@@ -33,11 +39,33 @@ class HighlightedText extends StatelessWidget {
     );
   }
 
+  List<InlineSpan> _mentionSpans(BuildContext context, String source) {
+    final mentionStyle = style.copyWith(
+      color: mentionColor ?? Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    );
+    final spans = <InlineSpan>[];
+    var start = 0;
+    for (final m in _mentionRe.allMatches(source)) {
+      if (m.start > start) {
+        spans.add(TextSpan(text: source.substring(start, m.start)));
+      }
+      spans.add(TextSpan(text: m.group(0), style: mentionStyle));
+      start = m.end;
+    }
+    if (start < source.length) {
+      spans.add(TextSpan(text: source.substring(start)));
+    }
+    return spans;
+  }
+
   @override
   Widget build(BuildContext context) {
     final reserve = _trailingReserve;
     final q = query?.trim().toLowerCase();
-    if (q == null || q.isEmpty) {
+    final hasQuery = q != null && q.isNotEmpty;
+
+    if (!hasQuery && !highlightMentions) {
       if (reserve == null) {
         return Text(
           text,
@@ -59,32 +87,51 @@ class HighlightedText extends StatelessWidget {
       );
     }
 
-    final lower = text.toLowerCase();
     final spans = <InlineSpan>[];
-    var start = 0;
-    while (true) {
-      final index = lower.indexOf(q, start);
-      if (index < 0) {
-        if (start < text.length) {
-          spans.add(TextSpan(text: text.substring(start)));
+
+    if (hasQuery) {
+      final lower = text.toLowerCase();
+      var start = 0;
+      while (true) {
+        final index = lower.indexOf(q, start);
+        if (index < 0) {
+          if (start < text.length) {
+            final rest = text.substring(start);
+            if (highlightMentions) {
+              spans.addAll(_mentionSpans(context, rest));
+            } else {
+              spans.add(TextSpan(text: rest));
+            }
+          }
+          break;
         }
-        break;
-      }
-      if (index > start) {
-        spans.add(TextSpan(text: text.substring(start, index)));
-      }
-      spans.add(
-        TextSpan(
-          text: text.substring(index, index + q.length),
-          style: style.copyWith(
-            backgroundColor: highlightColor ??
-                Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.55),
-            fontWeight: FontWeight.w600,
+        if (index > start) {
+          final chunk = text.substring(start, index);
+          if (highlightMentions) {
+            spans.addAll(_mentionSpans(context, chunk));
+          } else {
+            spans.add(TextSpan(text: chunk));
+          }
+        }
+        spans.add(
+          TextSpan(
+            text: text.substring(index, index + q.length),
+            style: style.copyWith(
+              backgroundColor: highlightColor ??
+                  Theme.of(context)
+                      .colorScheme
+                      .tertiary
+                      .withValues(alpha: 0.55),
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-      );
-      start = index + q.length;
+        );
+        start = index + q.length;
+      }
+    } else {
+      spans.addAll(_mentionSpans(context, text));
     }
+
     if (reserve != null) spans.add(reserve);
 
     return Text.rich(

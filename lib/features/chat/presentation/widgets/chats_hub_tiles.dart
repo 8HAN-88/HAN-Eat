@@ -14,6 +14,7 @@ class ChatHubTile extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.draftText,
+    this.typingLabel,
   });
 
   final ChatConversation chat;
@@ -21,6 +22,8 @@ class ChatHubTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   /// Local composer draft (Telegram hub: red "Черновик: …").
   final String? draftText;
+  /// Live typing preview from user SSE (`chat.typing`).
+  final String? typingLabel;
 
   String _bodyPreview(ChatMessage? msg) {
     if (msg == null) {
@@ -85,12 +88,26 @@ class ChatHubTile extends StatelessWidget {
     final hasUnread = chat.unreadCount > 0;
     final hasStateIcons = chat.pinned || chat.muted;
     final draft = draftText?.trim();
-    final hasDraft = draft != null && draft.isNotEmpty;
-    final prefix = _previewPrefix(last, hasDraft: hasDraft);
-    final body = hasDraft ? draft : _bodyPreview(last);
-    final mediaIcon = hasDraft ? null : _mediaIcon(last);
-    final showOutgoingTicks =
-        !hasDraft && last != null && last.isMine && !chat.isSaved;
+    final typing = typingLabel?.trim();
+    final hasTyping = typing != null && typing.isNotEmpty;
+    final hasDraft = !hasTyping && draft != null && draft.isNotEmpty;
+    final prefix =
+        hasTyping ? null : _previewPrefix(last, hasDraft: hasDraft);
+    final String body;
+    if (hasTyping) {
+      body = typing;
+    } else if (hasDraft) {
+      body = draft;
+    } else {
+      body = _bodyPreview(last);
+    }
+    final mediaIcon =
+        (hasTyping || hasDraft) ? null : _mediaIcon(last);
+    final showOutgoingTicks = !hasTyping &&
+        !hasDraft &&
+        last != null &&
+        last.isMine &&
+        !chat.isSaved;
 
     // Telegram-style flat row (no card chrome).
     return Material(
@@ -222,12 +239,17 @@ class ChatHubTile extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: hasDraft
-                                        ? scheme.error
-                                        : (hasUnread
-                                            ? scheme.onSurface
-                                            : scheme.onSurfaceVariant),
+                                    color: hasTyping
+                                        ? scheme.primary
+                                        : (hasDraft
+                                            ? scheme.error
+                                            : (hasUnread
+                                                ? scheme.onSurface
+                                                : scheme.onSurfaceVariant)),
                                     fontSize: 14,
+                                    fontStyle: hasTyping
+                                        ? FontStyle.italic
+                                        : FontStyle.normal,
                                   ),
                                 ),
                               ),

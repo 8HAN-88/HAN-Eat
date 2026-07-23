@@ -1269,7 +1269,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // === Live Inline Mode (@bot) ===
     _scheduleInlineSuggestions();
 
-    // === Autocomplete @botname from my bots ===
+    // === Autocomplete @bots + @group members ===
     _scheduleBotAutocomplete();
 
     if (!has) {
@@ -1320,9 +1320,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
-  void _scheduleBotAutocomplete() {
-    if (_myBots.isEmpty) return;
+  Future<void> _ensureGroupMembersForMentions() async {
+    if (!_conversation.isGroup || _groupMembers.isNotEmpty) return;
+    try {
+      final members = await ChatService.listMembers(widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _groupMembers = members;
+        _senderNames = {for (final m in members) m.id: m.displayName};
+      });
+      _scheduleBotAutocomplete();
+    } catch (_) {}
+  }
 
+  void _scheduleBotAutocomplete() {
     final text = _controller.text;
     // Ищем @word в конце строки (или после пробела)
     final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
@@ -1331,23 +1342,70 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
 
-    final query = match.group(1)!.toLowerCase();
+    if (_conversation.isGroup && _groupMembers.isEmpty) {
+      unawaited(_ensureGroupMembersForMentions());
+    }
 
-    // Фильтруем своих ботов
-    final filtered = _myBots
-        .where((b) => b.username.toLowerCase().contains(query))
-        .take(8)
-        .toList();
+    final query = match.group(1)!.toLowerCase();
+    final myId = AuthService.instance.currentUser?.id;
+    final candidates = <_MentionCandidate>[];
+
+    // Group members with @username (Telegram-style mentions).
+    if (_conversation.isGroup) {
+      for (final m in _groupMembers) {
+        if (myId != null && m.id == myId) continue;
+        final u = m.username?.trim();
+        if (u == null || u.isEmpty) continue;
+        final handle = u.startsWith('@') ? u.substring(1) : u;
+        if (handle.isEmpty) continue;
+        if (query.isNotEmpty &&
+            !handle.toLowerCase().contains(query) &&
+            !(m.name?.toLowerCase().contains(query) ?? false)) {
+          continue;
+        }
+        candidates.add(
+          _MentionCandidate(
+            username: handle,
+            title: '@$handle',
+            subtitle: m.displayName,
+            avatarUrl: m.avatarUrl,
+            isBot: false,
+          ),
+        );
+      }
+    }
+
+    for (final b in _myBots) {
+      if (query.isNotEmpty && !b.username.toLowerCase().contains(query)) {
+        continue;
+      }
+      candidates.add(
+        _MentionCandidate(
+          username: b.username,
+          title: '@${b.username}',
+          subtitle: b.name.isNotEmpty ? b.name : null,
+          avatarUrl: b.avatarUrl,
+          isBot: true,
+        ),
+      );
+    }
+
+    // Prefer people, then bots; cap list.
+    candidates.sort((a, b) {
+      if (a.isBot != b.isBot) return a.isBot ? 1 : -1;
+      return a.username.toLowerCase().compareTo(b.username.toLowerCase());
+    });
+    final filtered = candidates.take(8).toList();
 
     if (filtered.isEmpty) {
       _hideBotAutocompleteOverlay();
       return;
     }
 
-    _showBotAutocompleteOverlay(filtered, query);
+    _showBotAutocompleteOverlay(filtered);
   }
 
-  void _showBotAutocompleteOverlay(List<BotListItem> bots, String query) {
+  void _showBotAutocompleteOverlay(List<_MentionCandidate> items) {
     _botAutocompleteOverlayEntry?.remove();
 
     _botAutocompleteOverlayEntry = OverlayEntry(
@@ -1362,22 +1420,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             constraints: const BoxConstraints(maxHeight: 280),
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: bots.length,
+              itemCount: items.length,
               itemBuilder: (context, index) {
-                final bot = bots[index];
+                final item = items[index];
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: bot.avatarUrl != null
-                        ? CachedNetworkImageProvider(bot.avatarUrl!)
+                    backgroundImage: item.avatarUrl != null
+                        ? CachedNetworkImageProvider(item.avatarUrl!)
                         : null,
-                    child: bot.avatarUrl == null
-                        ? const Icon(Icons.smart_toy_outlined)
+                    child: item.avatarUrl == null
+                        ? Icon(
+                            item.isBot
+                                ? Icons.smart_toy_outlined
+                                : Icons.person_outline,
+                          )
                         : null,
                   ),
-                  title: Text('@${bot.username}'),
-                  subtitle: bot.name.isNotEmpty ? Text(bot.name) : null,
+                  title: Text(item.title),
+                  subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
                   onTap: () {
-                    _insertBotMention(bot.username);
+                    _insertBotMention(item.username);
                     _hideBotAutocompleteOverlay();
                   },
                 );
@@ -4909,27 +4971,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _confirmDeleteMessage(ChatMessage msg) async {
-    final confirmed = await showDialog<bool>(
+    final scope = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить сообщение?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+      builder: (ctx) {
+        final err = Theme.of(ctx).colorScheme.error;
+        return AlertDialog(
+          title: const Text('Удалить сообщение?'),
+          content: Text(
+            msg.isMine
+                ? 'Можно убрать только у себя или удалить у всех участников.'
+                : 'Сообщение исчезнет только в вашем чате.',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Удалить',
-              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
             ),
-          ),
-        ],
-      ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'me'),
+              child: Text('Удалить у меня', style: TextStyle(color: err)),
+            ),
+            if (msg.isMine)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'all'),
+                child: Text('Удалить у всех', style: TextStyle(color: err)),
+              ),
+          ],
+        );
+      },
     );
-    if (confirmed == true && mounted) {
-      await _deleteMessage(msg);
+    if (scope != null && mounted) {
+      await _deleteMessage(msg, scope: scope);
     }
   }
 
@@ -6052,11 +6124,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Future<void> _deleteMessage(ChatMessage msg) async {
+  Future<void> _deleteMessage(ChatMessage msg, {String scope = 'all'}) async {
     try {
       await ChatService.deleteMessage(
         conversationId: widget.conversationId,
         messageId: msg.id,
+        scope: scope,
       );
       if (!mounted) return;
       setState(() {
@@ -9248,6 +9321,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
 enum _PendingMediaKind { image, video, file, voice }
 
+class _MentionCandidate {
+  const _MentionCandidate({
+    required this.username,
+    required this.title,
+    this.subtitle,
+    this.avatarUrl,
+    this.isBot = false,
+  });
+
+  final String username;
+  final String title;
+  final String? subtitle;
+  final String? avatarUrl;
+  final bool isBot;
+}
+
 class _CancelledPendingMediaException implements Exception {}
 
 class _PendingMediaSend {
@@ -9986,6 +10075,7 @@ class _Bubble extends StatelessWidget {
         query: highlightQuery,
         style: textStyle,
         trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
+        highlightMentions: true,
       );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(

@@ -27,6 +27,7 @@ from app.models.conversation import (
     Message,
     Contact,
     MessageReaction,
+    MessageHide,
     ScheduledMessage,
 )
 from app.models.user_block import UserBlock

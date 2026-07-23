@@ -196,6 +196,25 @@ class MessageReaction(Base):
     )
 
 
+class MessageHide(Base):
+    """Per-user hide (Telegram «удалить у меня»)."""
+
+    __tablename__ = "message_hides"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_message_hide_user"),
+    )
+
+
 class Contact(Base):
     __tablename__ = "contacts"
 

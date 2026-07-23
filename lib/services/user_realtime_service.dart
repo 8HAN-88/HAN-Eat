@@ -19,11 +19,17 @@ class UserRealtimeEvent {
     required this.event,
     this.notificationType,
     this.notifications,
+    this.conversationId,
+    this.userId,
+    this.messageId,
   });
 
   final String event;
   final String? notificationType;
   final int? notifications;
+  final int? conversationId;
+  final int? userId;
+  final int? messageId;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -33,10 +39,20 @@ class UserRealtimeEvent {
     } else if (rawCount is num) {
       count = rawCount.toInt();
     }
+    int? asInt(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+
     return UserRealtimeEvent(
       event: '${json['event'] ?? json['type'] ?? ''}',
       notificationType: json['notification_type'] as String?,
       notifications: count,
+      conversationId: asInt(json['conversation_id']),
+      userId: asInt(json['user_id']),
+      messageId: asInt(json['message_id']),
     );
   }
 }

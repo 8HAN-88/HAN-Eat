@@ -17,6 +17,7 @@ from app.models.conversation import (
     GroupMemberBan,
     GroupJoinRequest,
     Message,
+    MessageHide,
     MessageReaction,
     ScheduledMessage,
 )
@@ -1605,6 +1606,12 @@ class ChatService:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
 
+        hidden_ids = (
+            self.db.query(MessageHide.message_id)
+            .filter(MessageHide.user_id == user_id)
+            .subquery()
+        )
+
         if after_id is not None:
             rows = (
                 self.db.query(Message)
@@ -1612,6 +1619,7 @@ class ChatService:
                     Message.conversation_id == conversation_id,
                     Message.deleted_at.is_(None),
                     Message.id > after_id,
+                    ~Message.id.in_(hidden_ids),
                 )
                 .order_by(Message.id.asc())
                 .limit(limit + 1)
@@ -1627,6 +1635,7 @@ class ChatService:
             .filter(
                 Message.conversation_id == conversation_id,
                 Message.deleted_at.is_(None),
+                ~Message.id.in_(hidden_ids),
             )
             .order_by(Message.id.desc())
         )
@@ -2169,8 +2178,14 @@ class ChatService:
         return sent_messages
 
     def delete_message(
-        self, conversation_id: int, message_id: int, user_id: int
-    ) -> None:
+        self,
+        conversation_id: int,
+        message_id: int,
+        user_id: int,
+        *,
+        scope: str = "all",
+    ) -> str:
+        """Delete message. Returns 'me' or 'all' for event fanout."""
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         msg = (
@@ -2184,6 +2199,27 @@ class ChatService:
         )
         if not msg:
             raise ValueError("not_found")
+
+        normalized = (scope or "all").strip().lower()
+        if normalized not in ("me", "all"):
+            raise ValueError("bad_scope")
+
+        # Anyone can hide for themselves; only sender can delete for everyone.
+        if normalized == "me":
+            existing = (
+                self.db.query(MessageHide)
+                .filter(
+                    MessageHide.message_id == message_id,
+                    MessageHide.user_id == user_id,
+                )
+                .first()
+            )
+            if not existing:
+                self.db.add(
+                    MessageHide(message_id=message_id, user_id=user_id)
+                )
+            return "me"
+
         if msg.sender_id != user_id:
             raise ValueError("forbidden")
         msg.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -2196,6 +2232,7 @@ class ChatService:
             conv.pinned_message_id = None
             conv.pinned_at = None
             conv.pinned_by_user_id = None
+        return "all"
 
     def _get_active_message(
         self, conversation_id: int, message_id: int, user_id: int

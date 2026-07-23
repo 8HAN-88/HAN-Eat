@@ -30,7 +30,7 @@ import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
 
-enum ChatAttachTab { gallery, file, poll, contact, sticker }
+enum ChatAttachTab { gallery, gif, file, poll, contact, sticker }
 
 enum ChatAttachResult {
   galleryFiles,
@@ -461,6 +461,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     switch (_tab) {
       case ChatAttachTab.gallery:
         return 'Фото и видео';
+      case ChatAttachTab.gif:
+        return 'GIF';
       case ChatAttachTab.file:
         return 'Файл';
       case ChatAttachTab.poll:
@@ -478,6 +480,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return kIsWeb
             ? 'Нажмите на значок галереи, чтобы выбрать фото'
             : 'Выберите фото или снимите на камеру';
+      case ChatAttachTab.gif:
+        return 'Выберите GIF или анимированный WebP с устройства';
       case ChatAttachTab.file:
         return 'Документы и недавние';
       case ChatAttachTab.poll:
@@ -512,6 +516,27 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         }
       }
     });
+  }
+
+  Future<void> _pickGifFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['gif', 'webp'],
+      allowMultiple: true,
+      withData: kIsWeb,
+    );
+    if (result == null || result.files.isEmpty || !mounted) return;
+    final picked = <XFile>[];
+    for (final f in result.files) {
+      final path = f.path;
+      if (path != null && path.isNotEmpty) {
+        picked.add(XFile(path, name: f.name));
+      } else if (f.bytes != null) {
+        picked.add(XFile.fromData(f.bytes!, name: f.name));
+      }
+    }
+    if (picked.isEmpty) return;
+    _close(ChatAttachSelection.gallery(picked));
   }
 
   Future<void> _capturePhoto() async {
@@ -1072,6 +1097,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           onRemove: (i) => setState(() => _gallerySelection.removeAt(i)),
           isDark: isDark,
         );
+      case ChatAttachTab.gif:
+        return _GifPickPanel(
+          scrollController: scrollController,
+          onPick: () => unawaited(_pickGifFiles()),
+          isDark: isDark,
+        );
       case ChatAttachTab.file:
         return _FilePanel(
           scrollController: scrollController,
@@ -1142,6 +1173,57 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           isDark: isDark,
         );
     }
+  }
+}
+
+class _GifPickPanel extends StatelessWidget {
+  const _GifPickPanel({
+    required this.scrollController,
+    required this.onPick,
+    required this.isDark,
+  });
+
+  final ScrollController scrollController;
+  final VoidCallback onPick;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        const SizedBox(height: 24),
+        Icon(
+          Icons.gif_box_outlined,
+          size: 56,
+          color: scheme.primary.withValues(alpha: 0.9),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Отправьте GIF как фото',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Выберите файл .gif или анимированный .webp с устройства.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 28),
+        FilledButton.icon(
+          onPressed: onPick,
+          icon: const Icon(Icons.folder_open_outlined),
+          label: const Text('Выбрать GIF'),
+        ),
+      ],
+    );
   }
 }
 
@@ -2787,8 +2869,8 @@ class _TelegramAttachDock extends StatelessWidget {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final width = ((constraints.maxWidth - 10) / 6)
-                      .clamp(50.0, 68.0)
+                  final width = ((constraints.maxWidth - 10) / 7)
+                      .clamp(44.0, 64.0)
                       .toDouble();
                   return Padding(
                     padding:
@@ -2800,6 +2882,14 @@ class _TelegramAttachDock extends StatelessWidget {
                           label: 'Галерея',
                           selected: selected == ChatAttachTab.gallery,
                           onTap: () => onSelect(ChatAttachTab.gallery),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.gif_box_outlined,
+                          label: 'GIF',
+                          selected: selected == ChatAttachTab.gif,
+                          onTap: () => onSelect(ChatAttachTab.gif),
                           compact: true,
                           width: width,
                         ),

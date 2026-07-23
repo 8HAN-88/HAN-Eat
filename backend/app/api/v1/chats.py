@@ -1927,12 +1927,18 @@ async def close_chat_poll(
 async def delete_message(
     conversation_id: int,
     message_id: int,
+    scope: str = "all",
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
     try:
-        svc.delete_message(conversation_id, message_id, current_user.id)
+        applied = svc.delete_message(
+            conversation_id,
+            message_id,
+            current_user.id,
+            scope=scope,
+        )
         db.commit()
     except ValueError as e:
         db.rollback()
@@ -1941,12 +1947,25 @@ async def delete_message(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "bad_scope":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid scope")
         raise
-    _emit(
-        conversation_id,
-        {"type": "message.deleted", "message_id": message_id},
-    )
-    return {"ok": True}
+    if applied == "all":
+        _emit(
+            conversation_id,
+            {"type": "message.deleted", "message_id": message_id},
+        )
+    else:
+        # Only the requester should drop the bubble locally; no room fanout.
+        publish_user_event(
+            current_user.id,
+            {
+                "event": "chat.message_hidden",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            },
+        )
+    return {"ok": True, "scope": applied}
 
 
 @router.patch(
@@ -2156,6 +2175,23 @@ async def send_typing(
             "conversation_id": conversation_id,
         },
     )
+    # Fan-out to hub list (Telegram «печатает…» in chat preview).
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == conversation_id)
+        .all()
+    )
+    for (uid,) in member_ids:
+        if uid == current_user.id:
+            continue
+        publish_user_event(
+            uid,
+            {
+                "event": "chat.typing",
+                "conversation_id": conversation_id,
+                "user_id": current_user.id,
+            },
+        )
     return {"ok": True}
 
 

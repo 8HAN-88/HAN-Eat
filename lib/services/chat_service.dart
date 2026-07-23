@@ -367,8 +367,12 @@ class ChatService {
   static Future<void> deleteMessage({
     required int conversationId,
     required int messageId,
+    /// `me` — только у себя; `all` — у всех (только свои сообщения).
+    String scope = 'all',
   }) async {
-    final uri = Uri.parse('$_base/chats/$conversationId/messages/$messageId');
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId',
+    ).replace(queryParameters: {'scope': scope});
     final response = await _delete(uri);
     _ensureOk(response, 'Не удалось удалить сообщение');
   }

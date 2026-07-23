@@ -73,6 +73,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool _showGesturesHint = false;
   bool _servingFromCache = false;
   Map<int, String> _drafts = {};
+  /// conversationId → typing expires at (local clock).
+  final Map<int, DateTime> _typingUntil = {};
+  Timer? _typingTicker;
 
   void _selectFolder(int? folderId) {
     setState(() => _selectedFolderId = folderId);
@@ -320,12 +323,20 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
     });
     _realtimeSub = UserRealtimeService.instance.events.listen((event) {
-      if (!mounted ||
-          !_started ||
-          !ShellTabVisibility.chatsActive ||
-          _loading) {
+      if (!mounted || !_started) return;
+
+      if (event.event == 'chat.typing') {
+        final cid = event.conversationId;
+        if (cid == null) return;
+        setState(() {
+          _typingUntil[cid] =
+              DateTime.now().add(const Duration(seconds: 5));
+        });
+        _ensureTypingTicker();
         return;
       }
+
+      if (!ShellTabVisibility.chatsActive || _loading) return;
       if (event.event == 'chat.inbox' ||
           event.event == 'chat.join_request.new' ||
           event.event == 'sync' ||
@@ -386,11 +397,51 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     });
   }
 
+  void _ensureTypingTicker() {
+    if (_typingTicker != null) return;
+    _typingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      final expired = _typingUntil.entries
+          .where((e) => !e.value.isAfter(now))
+          .map((e) => e.key)
+          .toList();
+      if (expired.isEmpty && _typingUntil.isEmpty) {
+        _typingTicker?.cancel();
+        _typingTicker = null;
+        return;
+      }
+      if (expired.isEmpty) return;
+      setState(() {
+        for (final id in expired) {
+          _typingUntil.remove(id);
+        }
+      });
+      if (_typingUntil.isEmpty) {
+        _typingTicker?.cancel();
+        _typingTicker = null;
+      }
+    });
+  }
+
+  String? _typingLabelFor(int conversationId) {
+    final until = _typingUntil[conversationId];
+    if (until == null || !until.isAfter(DateTime.now())) return null;
+    // Resolve group vs DM for label.
+    for (final e in _entries) {
+      if (e is ChatInboxEntry && e.chat.id == conversationId) {
+        return e.chat.isGroup ? 'печатают…' : 'печатает…';
+      }
+    }
+    return 'печатает…';
+  }
+
   @override
   void dispose() {
     ShellTabVisibility.activeIndex.removeListener(_onShellTabChanged);
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _typingTicker?.cancel();
     _signalSub?.cancel();
     _realtimeSub?.cancel();
     if (_realtimeConnectedListener != null) {
@@ -1327,6 +1378,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     child: ChatHubTile(
                       chat: chat,
                       draftText: _drafts[chat.id],
+                      typingLabel: _typingLabelFor(chat.id),
                       onTap: () async {
                         await context.push(
                           ChatThreadRoute.pathFor(chat),
