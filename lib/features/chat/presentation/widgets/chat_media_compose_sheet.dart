@@ -23,10 +23,12 @@ class ChatMediaComposeResult {
   const ChatMediaComposeResult({
     required this.files,
     required this.caption,
+    this.schedule = false,
   });
 
   final List<XFile> files;
   final String caption;
+  final bool schedule;
 }
 
 class _ChatMediaComposeSheet extends StatefulWidget {
@@ -237,7 +239,24 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: 'Отложить',
+                        onPressed: () {
+                          Navigator.pop(
+                            context,
+                            ChatMediaComposeResult(
+                              files: List<XFile>.from(_files),
+                              caption: _caption.text.trim(),
+                              schedule: true,
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.schedule_outlined,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                       IconButton.filled(
                         style: IconButton.styleFrom(
                           backgroundColor: scheme.primary,

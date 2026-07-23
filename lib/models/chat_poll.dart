@@ -179,8 +179,82 @@ ChatPollMessage? parseChatPollFromContent(String content) {
 
 String chatPollPreviewText(ChatPollMessage poll) {
   final q = poll.question.trim();
-  if (q.isEmpty) return '📊 Опрос';
+  if (q.isEmpty) return poll.settings.quizMode ? '📊 Викторина' : '📊 Опрос';
   return '📊 $q';
+}
+
+class ChatPollVoter {
+  const ChatPollVoter({
+    required this.id,
+    this.name,
+    this.username,
+    this.avatarUrl,
+  });
+
+  final int id;
+  final String? name;
+  final String? username;
+  final String? avatarUrl;
+
+  String get displayName {
+    final n = name?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    final u = username?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    return 'Пользователь';
+  }
+
+  factory ChatPollVoter.fromJson(Map<String, dynamic> json) {
+    return ChatPollVoter(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String?,
+      username: json['username'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+}
+
+class ChatPollVotersOption {
+  const ChatPollVotersOption({
+    required this.index,
+    required this.text,
+    required this.voters,
+  });
+
+  final int index;
+  final String text;
+  final List<ChatPollVoter> voters;
+
+  factory ChatPollVotersOption.fromJson(Map<String, dynamic> json) {
+    return ChatPollVotersOption(
+      index: (json['index'] as num?)?.toInt() ?? 0,
+      text: json['text'] as String? ?? '',
+      voters: (json['voters'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(ChatPollVoter.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class ChatPollVotersResult {
+  const ChatPollVotersResult({
+    required this.options,
+    required this.total,
+  });
+
+  final List<ChatPollVotersOption> options;
+  final int total;
+
+  factory ChatPollVotersResult.fromJson(Map<String, dynamic> json) {
+    return ChatPollVotersResult(
+      options: (json['options'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(ChatPollVotersOption.fromJson)
+          .toList(),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+    );
+  }
 }
 
 /// Патчит `is_closed` в JSON-содержимом опроса.

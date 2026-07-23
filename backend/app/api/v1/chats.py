@@ -2034,6 +2034,35 @@ async def vote_chat_poll(
     return response
 
 
+@router.get("/chats/{conversation_id}/messages/{message_id}/poll/voters")
+async def get_chat_poll_voters(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_poll_service import list_message_poll_voters
+
+    try:
+        return list_message_poll_voters(
+            db,
+            conversation_id=conversation_id,
+            message_id=message_id,
+            user_id=current_user.id,
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "not_poll_message":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "voters_hidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "invalid_poll":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+
+
 @router.post(
     "/chats/{conversation_id}/messages/{message_id}/poll/close",
     response_model=MessageResponse,

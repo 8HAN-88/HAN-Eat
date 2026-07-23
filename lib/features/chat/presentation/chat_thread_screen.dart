@@ -75,6 +75,7 @@ import 'widgets/chat_video_note_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
+import 'widgets/chat_poll_voters_sheet.dart';
 import 'widgets/create_chat_poll_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
@@ -354,6 +355,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? _lastSlowModeTick;
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
+  ChatWallpaperStyle _wallpaperStyle = ChatWallpaperStyle.defaultStyle;
   String? _pendingMediaAutoRetryClientMessageId;
   String? _pendingMediaAutoRetryReason;
 
@@ -496,15 +498,75 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await ChatThreadUiPrefs.isSlowModeCountdownHapticsEnabled();
       final autoRetryEnabled =
           await ChatThreadUiPrefs.isAutoRetryOnLimitsEnabled();
+      final wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
+        widget.conversationId,
+      );
       if (!mounted) return;
       setState(() {
         _slowModeCountdownHapticsEnabled = hapticsEnabled;
         _autoRetryOnLimitsEnabled = autoRetryEnabled;
+        _wallpaperStyle = wallpaper;
       });
       if (!autoRetryEnabled) {
         _clearAllAutoRetrySchedules();
       }
     } catch (_) {}
+  }
+
+  Future<void> _showWallpaperPicker() async {
+    final picked = await showModalBottomSheet<ChatWallpaperStyle>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Text(
+                  'Обои чата',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final style in ChatWallpaperStyle.values)
+                ListTile(
+                  leading: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: ChatWallpaper(
+                        isDark: isDark,
+                        style: style,
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
+                  title: Text(style.label),
+                  trailing: _wallpaperStyle == style
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, style),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted || picked == _wallpaperStyle) return;
+    final previous = _wallpaperStyle;
+    setState(() => _wallpaperStyle = picked);
+    try {
+      await ChatThreadUiPrefs.setWallpaperStyle(
+        widget.conversationId,
+        picked,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _wallpaperStyle = previous);
+    }
   }
 
   Future<void> _toggleAutoRetryOnLimitsInThread(bool enabled) async {
@@ -3265,6 +3327,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           onTap: () => unawaited(_pickAndJumpToDate()),
         ),
         TelegramActionSheetAction(
+          icon: Icons.wallpaper_outlined,
+          title: 'Обои чата',
+          onTap: () => unawaited(_showWallpaperPicker()),
+        ),
+        TelegramActionSheetAction(
           icon: _autoRetryOnLimitsEnabled
               ? Icons.autorenew_rounded
               : Icons.autorenew_outlined,
@@ -5238,6 +5305,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     bool pollVoting = false,
     VoidCallback? onPollClose,
     bool pollClosing = false,
+    VoidCallback? onShowPollVoters,
     ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
     Set<String> callbackLoadingData = const <String>{},
   }) {
@@ -5312,6 +5380,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       pollVoting: pollVoting,
       onPollClose: onPollClose,
       pollClosing: pollClosing,
+      onShowPollVoters: onShowPollVoters,
       onInlineButtonTap: onInlineButtonTap,
       callbackLoadingData: callbackLoadingData,
       onImageTap: interactive &&
@@ -6948,11 +7017,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  Future<void> _scheduleCurrentTextMessage() async {
-    if (_recording || _editingMessage != null) return;
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-
+  Future<({DateTime sendAt, bool sendWhenOnline})?> _pickScheduleDelivery() async {
     var sendWhenOnline = false;
     DateTime? sendAt;
     final canUseWhenOnline =
@@ -6981,7 +7046,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
         ),
       );
-      if (mode == null || !mounted) return;
+      if (mode == null || !mounted) return null;
       if (mode == 'online') {
         sendWhenOnline = true;
         sendAt = DateTime.now().add(const Duration(minutes: 1));
@@ -6989,23 +7054,46 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (!sendWhenOnline) {
       sendAt = await _pickScheduleDateTime();
-      if (sendAt == null || !mounted) return;
+      if (sendAt == null || !mounted) return null;
       if (!sendAt.isAfter(DateTime.now().add(const Duration(seconds: 30)))) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Выберите время минимум на 30 секунд позже'),
           ),
         );
-        return;
+        return null;
       }
     }
+    return (sendAt: sendAt!, sendWhenOnline: sendWhenOnline);
+  }
+
+  void _showScheduledSnack(ScheduledChatMessage item) {
+    final when = DateFormat('dd.MM HH:mm').format(item.sendAt);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          item.sendWhenOnline
+              ? 'Сообщение будет отправлено, когда собеседник онлайн'
+              : 'Сообщение запланировано на $when',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scheduleCurrentTextMessage() async {
+    if (_recording || _editingMessage != null) return;
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    final delivery = await _pickScheduleDelivery();
+    if (delivery == null || !mounted) return;
 
     try {
       final item = await ChatService.scheduleText(
         conversationId: widget.conversationId,
         content: text,
-        sendAt: sendAt!,
-        sendWhenOnline: sendWhenOnline,
+        sendAt: delivery.sendAt,
+        sendWhenOnline: delivery.sendWhenOnline,
         replyToMessageId: _replyTo?.id,
         clientMessageId: const Uuid().v4(),
       );
@@ -7014,16 +7102,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _controller.clear();
         _replyTo = null;
       });
-      final when = DateFormat('dd.MM HH:mm').format(item.sendAt);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            item.sendWhenOnline
-                ? 'Сообщение будет отправлено, когда собеседник онлайн'
-                : 'Сообщение запланировано на $when',
-          ),
-        ),
-      );
+      _showScheduledSnack(item);
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
@@ -7362,10 +7441,86 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (files.isEmpty) return;
     final composed = await showChatMediaCompose(context, files: files);
     if (!mounted || composed == null || composed.files.isEmpty) return;
+    if (composed.schedule) {
+      await _scheduleGallerySelection(
+        composed.files,
+        caption: composed.caption,
+      );
+      return;
+    }
     await _sendGallerySelection(
       composed.files,
       caption: composed.caption,
     );
+  }
+
+  Future<void> _scheduleGallerySelection(
+    List<XFile> files, {
+    String caption = '',
+  }) async {
+    if (files.isEmpty) return;
+    final delivery = await _pickScheduleDelivery();
+    if (delivery == null || !mounted) return;
+
+    final trimmedCaption = caption.trim();
+    setState(() {
+      _sending = true;
+      _uploadProgress = 0.05;
+    });
+    try {
+      ScheduledChatMessage? lastItem;
+      for (var i = 0; i < files.length; i++) {
+        final file = files[i];
+        if (!mounted) return;
+        final itemCaption =
+            (i == files.length - 1 && trimmedCaption.isNotEmpty)
+                ? trimmedCaption
+                : '';
+        final isVideo = _looksLikeVideoFile(file);
+        final prepared =
+            isVideo ? await _normalizeVideoFileForUpload(file) : file;
+        final uploaded = await MediaUploadService.uploadMediaFile(
+          file: prepared,
+          fileType: isVideo ? 'video' : 'image',
+          waitForProcessing: false,
+          onProgress: (p) {
+            if (!mounted) return;
+            final base = i / files.length;
+            final span = 1 / files.length;
+            _setUploadProgress(0.05 + (base + p * span) * 0.85, status: 'Загрузка…');
+          },
+        );
+        final url = uploaded.url;
+        if (url == null || url.isEmpty) {
+          throw Exception('Не удалось загрузить медиа');
+        }
+        lastItem = await ChatService.scheduleMessage(
+          conversationId: widget.conversationId,
+          type: isVideo ? 'video' : 'image',
+          content: itemCaption,
+          mediaUrl: ServerConfig.resolveMediaUrl(url),
+          sendAt: delivery.sendAt,
+          sendWhenOnline: delivery.sendWhenOnline,
+          replyToMessageId: i == 0 ? _replyTo?.id : null,
+          clientMessageId: const Uuid().v4(),
+        );
+      }
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+      if (lastItem != null) _showScheduledSnack(lastItem);
+      unawaited(_refreshScheduledPendingCount());
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e,
+          fallback: 'Не удалось запланировать медиа');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploadProgress = null;
+        });
+      }
+    }
   }
 
   Future<void> _sendGallerySelection(
@@ -7505,6 +7660,46 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         latitude: pos.latitude,
         longitude: pos.longitude,
       );
+      final mode = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.send_rounded),
+                title: const Text('Отправить сейчас'),
+                onTap: () => Navigator.pop(ctx, 'now'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Отложить'),
+                onTap: () => Navigator.pop(ctx, 'schedule'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (mode == null || !mounted) return;
+      if (mode == 'schedule') {
+        final delivery = await _pickScheduleDelivery();
+        if (delivery == null || !mounted) return;
+        final item = await ChatService.scheduleMessage(
+          conversationId: widget.conversationId,
+          type: 'location',
+          content: content,
+          sendAt: delivery.sendAt,
+          sendWhenOnline: delivery.sendWhenOnline,
+          replyToMessageId: _replyTo?.id,
+          clientMessageId: const Uuid().v4(),
+        );
+        if (!mounted) return;
+        setState(() => _replyTo = null);
+        _showScheduledSnack(item);
+        unawaited(_refreshScheduledPendingCount());
+        return;
+      }
       await ChatService.sendLocation(
         conversationId: widget.conversationId,
         content: content,
@@ -8452,6 +8647,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           padding: EdgeInsets.only(bottom: keyboardInset),
           child: ChatWallpaper(
             isDark: Theme.of(context).brightness == Brightness.dark,
+            style: _wallpaperStyle,
             child: Column(
             children: [
               _animatedVisibility(
@@ -8961,6 +9157,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                     _closingPollIds
                                                                         .contains(
                                                                             msg.id),
+                                                                onShowPollVoters: (!_selectionMode &&
+                                                                        msg.type ==
+                                                                            'poll' &&
+                                                                        msg.poll !=
+                                                                            null &&
+                                                                        msg.poll!
+                                                                            .settings
+                                                                            .showVoterNames &&
+                                                                        msg.poll!
+                                                                            .showResults &&
+                                                                        msg.poll!
+                                                                                .totalVotes >
+                                                                            0)
+                                                                    ? () => unawaited(
+                                                                          showChatPollVotersSheet(
+                                                                            context,
+                                                                            conversationId:
+                                                                                widget.conversationId,
+                                                                            messageId:
+                                                                                msg.id,
+                                                                          ),
+                                                                        )
+                                                                    : null,
                                                                 onInlineButtonTap:
                                                                     !_selectionMode
                                                                         ? (button) =>
@@ -9865,6 +10084,7 @@ class _Bubble extends StatelessWidget {
     this.pollVoting = false,
     this.onPollClose,
     this.pollClosing = false,
+    this.onShowPollVoters,
     this.onInlineButtonTap,
     this.callbackLoadingData = const <String>{},
     this.onOpenContactUser,
@@ -9896,6 +10116,7 @@ class _Bubble extends StatelessWidget {
   final bool pollVoting;
   final VoidCallback? onPollClose;
   final bool pollClosing;
+  final VoidCallback? onShowPollVoters;
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
   final ValueChanged<int>? onOpenContactUser;
@@ -10324,6 +10545,7 @@ class _Bubble extends StatelessWidget {
           canClose: onPollClose != null,
           onClose: onPollClose,
           closing: pollClosing,
+          onShowVoters: onShowPollVoters,
         ),
       );
     } else if (message.type == 'location' ||

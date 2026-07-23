@@ -3,6 +3,10 @@ import 'chat_poll.dart';
 export 'chat_poll.dart'
     show
         ChatPollMessage,
+        ChatPollSettings,
+        ChatPollVoter,
+        ChatPollVotersOption,
+        ChatPollVotersResult,
         parseChatPollFromContent,
         chatPollPreviewText,
         patchChatPollClosedInContent;

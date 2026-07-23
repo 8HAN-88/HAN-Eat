@@ -536,12 +536,34 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
   }) async {
-    return _scheduleMessage(
+    return scheduleMessage(
       conversationId: conversationId,
       type: 'text',
       content: content,
       sendAt: sendAt,
       sendWhenOnline: sendWhenOnline,
+      replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  static Future<ScheduledChatMessage> scheduleMessage({
+    required int conversationId,
+    required String type,
+    required String content,
+    required DateTime sendAt,
+    bool sendWhenOnline = false,
+    String? mediaUrl,
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) {
+    return _scheduleMessage(
+      conversationId: conversationId,
+      type: type,
+      content: content,
+      sendAt: sendAt,
+      sendWhenOnline: sendWhenOnline,
+      mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
     );
@@ -707,6 +729,19 @@ class ChatService {
     return ChatMessage.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  static Future<ChatPollVotersResult> listPollVoters({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/poll/voters',
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить голоса');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return ChatPollVotersResult.fromJson(data);
   }
 
   static Future<ChatMessage> sendInlineCallback({

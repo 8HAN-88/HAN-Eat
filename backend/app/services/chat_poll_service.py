@@ -322,3 +322,91 @@ def poll_preview_text(content: str) -> str:
     if q:
         return f"📊 {q[:80]}"
     return "📊 Опрос"
+
+
+def list_message_poll_voters(
+    db: Session,
+    *,
+    conversation_id: int,
+    message_id: int,
+    user_id: int,
+) -> Dict[str, Any]:
+    """Voters grouped by option (when show_voter_names is enabled)."""
+    from app.models.conversation import ConversationMember, Message
+    from app.models.user import User
+
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == user_id,
+        )
+        .first()
+    )
+    if not member:
+        raise ValueError("forbidden")
+
+    msg = (
+        db.query(Message)
+        .filter(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not msg or msg.type != "poll":
+        raise ValueError("not_poll_message")
+
+    data = parse_poll_content(msg.content)
+    if not data:
+        raise ValueError("invalid_poll")
+    poll = data.get("poll") or {}
+    settings = poll.get("settings") or {}
+    if not bool(settings.get("show_voter_names", True)):
+        raise ValueError("voters_hidden")
+
+    raw_options = poll.get("options") if isinstance(poll.get("options"), list) else []
+    rows = (
+        db.query(
+            MessagePollVote.option_index,
+            User.id,
+            User.name,
+            User.username,
+            User.avatar_url,
+        )
+        .join(User, User.id == MessagePollVote.user_id)
+        .filter(MessagePollVote.message_id == message_id)
+        .order_by(MessagePollVote.created_at.desc())
+        .all()
+    )
+    voters_by_option: Dict[int, List[Dict[str, Any]]] = {}
+    for option_index, uid, name, username, avatar_url in rows:
+        voters_by_option.setdefault(int(option_index), []).append(
+            {
+                "id": int(uid),
+                "name": name,
+                "username": username,
+                "avatar_url": avatar_url,
+            }
+        )
+
+    options_out: List[Dict[str, Any]] = []
+    total = 0
+    for item in raw_options:
+        if not isinstance(item, dict):
+            continue
+        idx = item.get("index")
+        if idx is None:
+            continue
+        index = int(idx)
+        voters = voters_by_option.get(index, [])
+        total += len(voters)
+        options_out.append(
+            {
+                "index": index,
+                "text": item.get("text") or "",
+                "voters": voters,
+            }
+        )
+    return {"options": options_out, "total": total}
