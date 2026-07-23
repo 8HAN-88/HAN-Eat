@@ -283,6 +283,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _holdActive = false;
   bool _recordCancelled = false;
   bool _voiceLocked = false;
+  /// Empty-composer mode: false = voice hold, true = video note (tap).
+  bool _videoNoteComposerMode = false;
   bool _stickerPanelOpen = false;
   bool _hasText = false;
   Duration _recordDuration = Duration.zero;
@@ -6324,9 +6326,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       messageId: last.id,
     );
     if (!mounted) return;
-    if (_unreadDividerBeforeId != null || _conversation.unreadCount > 0) {
+    // Keep the unread divider for this open session (Telegram-like);
+    // only clear the badge/count once we've marked read on the server.
+    if (_conversation.unreadCount > 0) {
       setState(() {
-        _unreadDividerBeforeId = null;
         _conversation = _conversation.copyWith(unreadCount: 0);
       });
     }
@@ -8183,9 +8186,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     : null,
                 actions: [
                   IconButton(
-                    tooltip: 'Отложенные',
-                    icon: const Icon(Icons.schedule_outlined),
+                    tooltip: _scheduledPendingCount > 0
+                        ? 'Отложенные ($_scheduledPendingCount)'
+                        : 'Отложенные',
                     onPressed: _openScheduledMessagesManager,
+                    icon: Badge(
+                      isLabelVisible: _scheduledPendingCount > 0,
+                      label: Text(
+                        _scheduledPendingCount > 99
+                            ? '99+'
+                            : '$_scheduledPendingCount',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                      child: const Icon(Icons.schedule_outlined),
+                    ),
                   ),
                   if (!isGroup && peer != null) ...[
                     IconButton(
@@ -9378,14 +9392,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                       ),
                                           ),
                                         )
-                                      : ChatVoiceMicButton(
-                                          key: const ValueKey('mic-btn'),
-                                          enabled: !_sending && canSendNow,
-                                          recording: _recording,
-                                          locked: _voiceLocked,
-                                          onHoldStart: _onHoldStart,
-                                          onHoldEnd: _onHoldEnd,
-                                          onHoldDrag: _onHoldDrag,
+                                      : Row(
+                                          key: ValueKey(
+                                            _videoNoteComposerMode
+                                                ? 'video-note-btn'
+                                                : 'mic-btn',
+                                          ),
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (!_recording)
+                                              IconButton(
+                                                tooltip: _videoNoteComposerMode
+                                                    ? 'Голосовое'
+                                                    : 'Кружок',
+                                                onPressed: !canSendNow
+                                                    ? null
+                                                    : () => setState(() {
+                                                          _videoNoteComposerMode =
+                                                              !_videoNoteComposerMode;
+                                                        }),
+                                                icon: Icon(
+                                                  _videoNoteComposerMode
+                                                      ? Icons.mic_none_rounded
+                                                      : Icons.videocam_outlined,
+                                                ),
+                                                color: scheme.onSurfaceVariant,
+                                                iconSize: _composerIconSize,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints
+                                                        .tightFor(
+                                                  width: 32,
+                                                  height: _composerButtonSide,
+                                                ),
+                                              ),
+                                            ChatVoiceMicButton(
+                                              enabled:
+                                                  !_sending && canSendNow,
+                                              recording: _recording,
+                                              locked: _voiceLocked,
+                                              tapToRecord:
+                                                  _videoNoteComposerMode,
+                                              idleIcon: _videoNoteComposerMode
+                                                  ? Icons.videocam_rounded
+                                                  : Icons.mic_none_rounded,
+                                              activeIcon:
+                                                  _videoNoteComposerMode
+                                                      ? Icons.videocam_rounded
+                                                      : Icons.mic_rounded,
+                                              onHoldStart: _onHoldStart,
+                                              onHoldEnd: _onHoldEnd,
+                                              onHoldDrag: _onHoldDrag,
+                                              onTap: _videoNoteComposerMode
+                                                  ? () => unawaited(
+                                                        _recordAndSendVideoNote(),
+                                                      )
+                                                  : null,
+                                            ),
+                                          ],
                                         ),
                                 ),
                               ],

@@ -56,8 +56,28 @@ String? extractFirstHttpUrl(String text) {
 
 class LinkPreviewService {
   static String get _base => ServerConfig.apiBaseUrl;
+  static final Map<String, LinkPreview?> _cache = {};
+  static final Map<String, Future<LinkPreview?>> _inflight = {};
 
   static Future<LinkPreview?> fetch(String url) async {
+    final key = url.trim();
+    if (key.isEmpty) return null;
+    if (_cache.containsKey(key)) return _cache[key];
+    final pending = _inflight[key];
+    if (pending != null) return pending;
+
+    final future = _fetchUncached(key);
+    _inflight[key] = future;
+    try {
+      final preview = await future;
+      _cache[key] = preview;
+      return preview;
+    } finally {
+      _inflight.remove(key);
+    }
+  }
+
+  static Future<LinkPreview?> _fetchUncached(String url) async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) return null;
     final uri = Uri.parse('$_base/link-preview').replace(
@@ -109,9 +129,22 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant ChatLinkPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _load();
+    }
+  }
+
   Future<void> _load() async {
-    final preview = await LinkPreviewService.fetch(widget.url);
-    if (!mounted) return;
+    final requested = widget.url.trim();
+    setState(() {
+      _loading = true;
+      _preview = null;
+    });
+    final preview = await LinkPreviewService.fetch(requested);
+    if (!mounted || widget.url.trim() != requested) return;
     setState(() {
       _preview = preview;
       _loading = false;
