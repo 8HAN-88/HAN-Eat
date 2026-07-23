@@ -324,6 +324,82 @@ def poll_preview_text(content: str) -> str:
     return "📊 Опрос"
 
 
+def add_option_to_message_poll(
+    db: Session,
+    message_id: int,
+    user_id: int,
+    text: str,
+) -> str:
+    """Append a new option when allow_add_options is enabled."""
+    from app.models.conversation import Message
+
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg or msg.type != "poll":
+        raise ValueError("not_poll_message")
+
+    data = parse_poll_content(msg.content)
+    if not data:
+        raise ValueError("invalid_poll")
+
+    poll = data["poll"]
+    if poll.get("is_closed"):
+        raise ValueError("poll_closed")
+
+    closes_at = poll.get("closes_at")
+    if closes_at:
+        try:
+            deadline = datetime.fromisoformat(str(closes_at))
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if deadline.tzinfo is not None:
+                deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+            if deadline <= now:
+                raise ValueError("poll_closed")
+        except ValueError as e:
+            if str(e) == "poll_closed":
+                raise
+        except Exception:
+            pass
+
+    settings = poll.get("settings") or {}
+    if not bool(settings.get("allow_add_options")):
+        raise ValueError("add_options_disabled")
+
+    cleaned = (text or "").strip()
+    if len(cleaned) < 1:
+        raise ValueError("empty_option")
+    if len(cleaned) > 120:
+        cleaned = cleaned[:120]
+
+    raw_opts = poll.get("options") if isinstance(poll.get("options"), list) else []
+    options: List[Dict[str, Any]] = []
+    for raw in raw_opts:
+        if not isinstance(raw, dict):
+            continue
+        idx = raw.get("index")
+        if idx is None:
+            continue
+        opt_text = str(raw.get("text") or "").strip()
+        if not opt_text:
+            continue
+        if opt_text.lower() == cleaned.lower():
+            raise ValueError("duplicate_option")
+        options.append({"index": int(idx), "text": opt_text})
+
+    if len(options) >= 12:
+        raise ValueError("poll_too_many_options")
+
+    next_index = max((o["index"] for o in options), default=-1) + 1
+    options.append({"index": next_index, "text": cleaned})
+    poll["options"] = options
+    poll.pop("total_votes", None)
+    poll.pop("voted_option_indices", None)
+    poll.pop("voted_option_index", None)
+    data["poll"] = poll
+    msg.content = json.dumps(data, ensure_ascii=False)
+    db.flush()
+    return enrich_poll_content(db, message_id, msg.content, user_id)
+
+
 def list_message_poll_voters(
     db: Session,
     *,

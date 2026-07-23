@@ -206,6 +206,10 @@ class ChatPollVoteRequest(BaseModel):
     option_index: int = Field(..., ge=0, le=11)
 
 
+class ChatPollAddOptionRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=120)
+
+
 class DirectChatRequest(BaseModel):
     user_id: int
 

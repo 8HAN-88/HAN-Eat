@@ -744,6 +744,24 @@ class ChatService {
     return ChatPollVotersResult.fromJson(data);
   }
 
+  static Future<ChatMessage> addPollOption({
+    required int conversationId,
+    required int messageId,
+    required String text,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/poll/options',
+    );
+    final response = await _post(
+      uri,
+      body: jsonEncode({'text': text.trim()}),
+    );
+    _ensureOk(response, 'Не удалось добавить вариант');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatMessage> sendInlineCallback({
     required int conversationId,
     required int messageId,

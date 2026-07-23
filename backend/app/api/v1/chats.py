@@ -72,6 +72,7 @@ from app.schemas.chat import (
     PhoneSyncRequest,
     PhoneSyncResponse,
     SendMessageRequest,
+    ChatPollAddOptionRequest,
     ChatPollVoteRequest,
     CallbackQueryRequest,
 )
@@ -1587,8 +1588,6 @@ async def forward_message(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
-        if code == "cannot_forward_poll":
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in (
             "empty_message",
             "missing_media",
@@ -1997,6 +1996,100 @@ async def vote_chat_poll(
         if code == "not_poll_message":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code in ("poll_closed", "invalid_option", "vote_locked", "invalid_poll"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
+    response = _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        reactions=reactions,
+        db=db,
+    )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/poll/options",
+    response_model=MessageResponse,
+)
+async def add_chat_poll_option(
+    conversation_id: int,
+    message_id: int,
+    body: ChatPollAddOptionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    from app.services.chat_poll_service import add_option_to_message_poll
+
+    try:
+        enriched = add_option_to_message_poll(
+            db, message_id, current_user.id, body.text
+        )
+        from app.models.conversation import Message
+
+        msg = (
+            db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if not msg:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        msg.content = enriched
+        db.commit()
+        db.refresh(msg)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_poll_message":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code in (
+            "poll_closed",
+            "add_options_disabled",
+            "empty_option",
+            "duplicate_option",
+            "poll_too_many_options",
+            "invalid_poll",
+        ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         raise
 

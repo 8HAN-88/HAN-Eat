@@ -2077,8 +2077,6 @@ class ChatService:
         )
         if not src:
             raise ValueError("not_found")
-        if src.type == "poll":
-            raise ValueError("cannot_forward_poll")
 
         # Preserve original author when re-forwarding an already-forwarded msg.
         if getattr(src, "forward_from_user_id", None):
@@ -2093,12 +2091,41 @@ class ChatService:
                 else "Пользователь"
             )
 
+        content = src.content or ""
+        media_url = src.media_url
+        if src.type == "poll":
+            # Clone as a fresh poll (no votes / closed state).
+            from app.services.chat_poll_service import (
+                build_poll_content,
+                parse_poll_content,
+            )
+
+            data = parse_poll_content(content)
+            if not data:
+                raise ValueError("empty_poll")
+            poll = data.get("poll") or {}
+            texts = [
+                str(o.get("text") or "").strip()
+                for o in (poll.get("options") or [])
+                if isinstance(o, dict)
+            ]
+            texts = [t for t in texts if t]
+            content = build_poll_content(
+                poll.get("question") or "",
+                texts,
+                description=poll.get("description") or "",
+                settings=poll.get("settings")
+                if isinstance(poll.get("settings"), dict)
+                else None,
+            )
+            media_url = None
+
         msg, _ = self.send_message(
             conversation_id=target_conversation_id,
             sender_id=sender_id,
             msg_type=src.type,
-            content=src.content or "",
-            media_url=src.media_url,
+            content=content,
+            media_url=media_url,
         )
         msg.forward_from_user_id = forward_user_id
         msg.forward_from_name = (forward_name or "")[:120] or None

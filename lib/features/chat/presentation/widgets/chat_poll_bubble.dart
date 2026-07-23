@@ -17,6 +17,7 @@ class ChatPollBubble extends StatelessWidget {
     this.onClose,
     this.closing = false,
     this.onShowVoters,
+    this.onAddOption,
   });
 
   final ChatPollMessage poll;
@@ -30,6 +31,7 @@ class ChatPollBubble extends StatelessWidget {
   final VoidCallback? onClose;
   final bool closing;
   final VoidCallback? onShowVoters;
+  final VoidCallback? onAddOption;
 
   bool get _quiz => poll.settings.quizMode;
 
@@ -44,6 +46,10 @@ class ChatPollBubble extends StatelessWidget {
         poll.settings.showVoterNames &&
         poll.totalVotes > 0 &&
         onShowVoters != null;
+    final canAddOption = !poll.isClosed &&
+        poll.settings.allowAddOptions &&
+        poll.options.length < 12 &&
+        onAddOption != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -221,6 +227,25 @@ class ChatPollBubble extends StatelessWidget {
             '${poll.totalVotes} ${_votesLabel(poll.totalVotes)}',
             style: TextStyle(color: mutedColor, fontSize: 12),
           ),
+        if (canAddOption) ...[
+          const SizedBox(height: 6),
+          TextButton(
+            onPressed: (voting || closing) ? null : onAddOption,
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text(
+              'Добавить вариант',
+              style: TextStyle(
+                color: accentColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
         if (canOpenVoters) ...[
           const SizedBox(height: 6),
           TextButton(

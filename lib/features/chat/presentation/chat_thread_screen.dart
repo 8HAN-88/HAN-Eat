@@ -3701,9 +3701,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.id <= 0) {
       throw Exception('Нельзя переслать неотправленное сообщение');
     }
-    if (msg.type == 'poll') {
-      throw Exception('Опросы пока нельзя пересылать');
-    }
     await ChatService.forwardMessage(
       targetConversationId: target.id,
       sourceConversationId: widget.conversationId,
@@ -3715,12 +3712,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.id <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сначала дождитесь отправки')),
-      );
-      return;
-    }
-    if (msg.type == 'poll') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Опросы пока нельзя сохранить')),
       );
       return;
     }
@@ -5306,6 +5297,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     VoidCallback? onPollClose,
     bool pollClosing = false,
     VoidCallback? onShowPollVoters,
+    VoidCallback? onAddPollOption,
     ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
     Set<String> callbackLoadingData = const <String>{},
   }) {
@@ -5381,6 +5373,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onPollClose: onPollClose,
       pollClosing: pollClosing,
       onShowPollVoters: onShowPollVoters,
+      onAddPollOption: onAddPollOption,
       onInlineButtonTap: onInlineButtonTap,
       callbackLoadingData: callbackLoadingData,
       onImageTap: interactive &&
@@ -6145,9 +6138,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canDelete: msg.isMine,
       hasCopyableText: _copyableText(msg).isNotEmpty,
       canShowReaders: canShowReaders,
-      canSaveToFavorites: msg.id > 0 &&
-          msg.type != 'poll' &&
-          !_conversation.isSaved,
+      canSaveToFavorites: msg.id > 0 && !_conversation.isSaved,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -7650,7 +7641,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             content: Text(
               kIsWeb
                   ? 'Не удалось получить геолокацию. Разрешите доступ в браузере.'
-                  : 'Геолокация пока доступна в веб-версии haneat.app',
+                  : 'Не удалось получить геолокацию. Включите GPS и разрешите доступ к местоположению.',
             ),
           ),
         );
@@ -7891,6 +7882,60 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } finally {
       if (mounted) setState(() => _closingPollIds.remove(msg.id));
+    }
+  }
+
+  Future<void> _addPollOption(ChatMessage msg) async {
+    if (msg.id <= 0 || msg.type != 'poll') return;
+    final controller = TextEditingController();
+    String? text;
+    try {
+      text = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Новый вариант'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 120,
+            decoration: const InputDecoration(
+              hintText: 'Текст варианта',
+            ),
+            onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Добавить'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      controller.dispose();
+    }
+    if (text == null || text.isEmpty || !mounted) return;
+    try {
+      final updated = await ChatService.addPollOption(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        text: text,
+      );
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == msg.id);
+        if (i >= 0) _messages[i] = updated;
+        if (_pinnedMessage?.id == msg.id) _pinnedMessage = updated;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackBar(context, e, fallback: 'Не удалось добавить вариант');
+      }
     }
   }
 
@@ -9180,6 +9225,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                           ),
                                                                         )
                                                                     : null,
+                                                                onAddPollOption: (!_selectionMode &&
+                                                                        msg.type ==
+                                                                            'poll' &&
+                                                                        msg.poll !=
+                                                                            null &&
+                                                                        !msg.poll!
+                                                                            .isClosed &&
+                                                                        msg.poll!
+                                                                            .settings
+                                                                            .allowAddOptions &&
+                                                                        msg.poll!
+                                                                                .options
+                                                                                .length <
+                                                                            12)
+                                                                    ? () => unawaited(
+                                                                          _addPollOption(
+                                                                            msg,
+                                                                          ),
+                                                                        )
+                                                                    : null,
                                                                 onInlineButtonTap:
                                                                     !_selectionMode
                                                                         ? (button) =>
@@ -10085,6 +10150,7 @@ class _Bubble extends StatelessWidget {
     this.onPollClose,
     this.pollClosing = false,
     this.onShowPollVoters,
+    this.onAddPollOption,
     this.onInlineButtonTap,
     this.callbackLoadingData = const <String>{},
     this.onOpenContactUser,
@@ -10117,6 +10183,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onPollClose;
   final bool pollClosing;
   final VoidCallback? onShowPollVoters;
+  final VoidCallback? onAddPollOption;
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
   final ValueChanged<int>? onOpenContactUser;
@@ -10546,6 +10613,7 @@ class _Bubble extends StatelessWidget {
           onClose: onPollClose,
           closing: pollClosing,
           onShowVoters: onShowPollVoters,
+          onAddOption: onAddPollOption,
         ),
       );
     } else if (message.type == 'location' ||
