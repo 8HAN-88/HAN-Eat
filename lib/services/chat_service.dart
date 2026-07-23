@@ -1377,6 +1377,34 @@ class ChatService {
     return out;
   }
 
+  /// Shared media / links for a conversation (full history, paginated).
+  static Future<({List<ChatMessage> items, bool hasMore, int? nextCursor})>
+      listChatMedia({
+    required int conversationId,
+    String kind = 'all',
+    int? cursor,
+    int limit = 60,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/media').replace(
+      queryParameters: {
+        'kind': kind,
+        if (cursor != null) 'cursor': '$cursor',
+        'limit': '$limit',
+      },
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить медиа чата');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = (data['items'] as List<dynamic>? ?? [])
+        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return (
+      items: items,
+      hasMore: data['has_more'] as bool? ?? false,
+      nextCursor: data['next_cursor'] as int?,
+    );
+  }
+
   static Future<List<ChatMessageSearchItem>> searchMessages({
     required String query,
     int? conversationId,

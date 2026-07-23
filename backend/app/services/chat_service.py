@@ -1696,6 +1696,66 @@ class ChatService:
         rows.reverse()
         return rows, has_more
 
+    def list_media_messages(
+        self,
+        conversation_id: int,
+        user_id: int,
+        *,
+        kind: str = "all",
+        cursor: Optional[int] = None,
+        limit: int = 60,
+    ) -> Tuple[List[Message], bool]:
+        """Shared media / links for a chat (Telegram-style gallery source)."""
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+
+        hidden_ids = (
+            self.db.query(MessageHide.message_id)
+            .filter(MessageHide.user_id == user_id)
+            .subquery()
+        )
+
+        q = (
+            self.db.query(Message)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+                ~Message.id.in_(hidden_ids),
+            )
+            .order_by(Message.id.desc())
+        )
+        if cursor:
+            q = q.filter(Message.id < cursor)
+
+        kind_norm = (kind or "all").strip().lower()
+        if kind_norm == "photos":
+            q = q.filter(Message.type == "image", Message.media_url.isnot(None))
+        elif kind_norm == "videos":
+            q = q.filter(
+                Message.type.in_(("video", "video_note")),
+                Message.media_url.isnot(None),
+            )
+        elif kind_norm == "files":
+            q = q.filter(Message.type == "file", Message.media_url.isnot(None))
+        elif kind_norm == "links":
+            q = q.filter(
+                or_(
+                    Message.content.ilike("%http://%"),
+                    Message.content.ilike("%https://%"),
+                )
+            )
+        else:
+            q = q.filter(
+                Message.type.in_(("image", "video", "video_note", "file")),
+                Message.media_url.isnot(None),
+            )
+
+        rows = q.limit(limit + 1).all()
+        has_more = len(rows) > limit
+        if has_more:
+            rows = rows[:limit]
+        return rows, has_more
+
     def search_messages(
         self,
         user_id: int,

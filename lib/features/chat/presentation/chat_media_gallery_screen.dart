@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/chat_models.dart';
+import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
@@ -11,14 +15,16 @@ import '../../../widgets/inline_video_player.dart';
 
 enum _MediaFilter { all, photos, videos, files, links }
 
-/// Медиа из сообщений чата с фильтрами по типу.
+/// Медиа из сообщений чата с фильтрами по типу (полная история через API).
 class ChatMediaGalleryScreen extends StatefulWidget {
   const ChatMediaGalleryScreen({
     super.key,
-    required this.messages,
+    required this.conversationId,
+    this.seedMessages = const [],
   });
 
-  final List<ChatMessage> messages;
+  final int conversationId;
+  final List<ChatMessage> seedMessages;
 
   @override
   State<ChatMediaGalleryScreen> createState() => _ChatMediaGalleryScreenState();
@@ -26,61 +32,184 @@ class ChatMediaGalleryScreen extends StatefulWidget {
 
 class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
   _MediaFilter _filter = _MediaFilter.all;
+  final List<ChatMessage> _media = [];
+  final List<({ChatMessage message, String url})> _links = [];
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  int? _cursor;
+  String? _error;
 
-  List<({ChatMessage message, String url})> get _allLinks {
-    final items = <({ChatMessage message, String url})>[];
-    for (final msg in widget.messages) {
-      final url = extractFirstHttpUrl(msg.content);
-      if (url == null || url.isEmpty) continue;
-      items.add((message: msg, url: url));
-    }
-    items.sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
-    return items;
-  }
-
-  List<ChatMessage> get _allMedia {
-    return widget.messages
-        .where(
-          (m) =>
-              m.mediaUrl != null &&
-              m.mediaUrl!.trim().isNotEmpty &&
-              (m.type == 'image' ||
-                  m.type == 'video' ||
-                  m.type == 'video_note' ||
-                  m.type == 'file'),
-        )
-        .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  }
-
-  List<ChatMessage> get _filtered {
+  String get _kindParam {
     switch (_filter) {
       case _MediaFilter.photos:
-        return _allMedia.where((m) => m.type == 'image').toList();
+        return 'photos';
       case _MediaFilter.videos:
-        return _allMedia
-            .where((m) => m.type == 'video' || m.type == 'video_note')
-            .toList();
+        return 'videos';
       case _MediaFilter.files:
-        return _allMedia.where((m) => m.type == 'file').toList();
+        return 'files';
       case _MediaFilter.links:
-        return _allMedia;
+        return 'links';
       case _MediaFilter.all:
-        return _allMedia;
+        return 'all';
     }
   }
 
   @override
+  void initState() {
+    super.initState();
+    _seedFromLocal();
+    unawaited(_reload());
+  }
+
+  void _seedFromLocal() {
+    final media = <ChatMessage>[];
+    final links = <({ChatMessage message, String url})>[];
+    final seenMedia = <int>{};
+    final seenLinks = <String>{};
+    for (final msg in widget.seedMessages) {
+      final mediaUrl = msg.mediaUrl?.trim();
+      if (mediaUrl != null &&
+          mediaUrl.isNotEmpty &&
+          (msg.type == 'image' ||
+              msg.type == 'video' ||
+              msg.type == 'video_note' ||
+              msg.type == 'file') &&
+          seenMedia.add(msg.id)) {
+        media.add(msg);
+      }
+      final url = extractFirstHttpUrl(msg.content);
+      if (url != null && url.isNotEmpty && seenLinks.add(url)) {
+        links.add((message: msg, url: url));
+      }
+    }
+    media.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    links.sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
+    _media
+      ..clear()
+      ..addAll(media);
+    _links
+      ..clear()
+      ..addAll(links);
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _hasMore = true;
+      _cursor = null;
+      _loadingMore = false;
+    });
+    try {
+      final page = await ChatService.listChatMedia(
+        conversationId: widget.conversationId,
+        kind: _kindParam,
+        limit: 60,
+      );
+      if (!mounted) return;
+      _applyPage(page.items, replace: true);
+      setState(() {
+        _hasMore = page.hasMore;
+        _cursor = page.nextCursor;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userVisibleError(e, fallback: 'Не удалось загрузить медиа');
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ChatService.listChatMedia(
+        conversationId: widget.conversationId,
+        kind: _kindParam,
+        cursor: _cursor,
+        limit: 60,
+      );
+      if (!mounted) return;
+      _applyPage(page.items, replace: false);
+      setState(() {
+        _hasMore = page.hasMore;
+        _cursor = page.nextCursor ?? _cursor;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingMore = false);
+    }
+  }
+
+  void _applyPage(List<ChatMessage> items, {required bool replace}) {
+    if (replace) {
+      if (_filter == _MediaFilter.links) {
+        _links.clear();
+      } else {
+        _media.clear();
+      }
+    }
+    final seenMedia = {for (final m in _media) m.id};
+    final seenLinks = {for (final l in _links) l.url};
+    if (_filter == _MediaFilter.links) {
+      for (final msg in items) {
+        final url = extractFirstHttpUrl(msg.content);
+        if (url == null || url.isEmpty || !seenLinks.add(url)) continue;
+        _links.add((message: msg, url: url));
+      }
+      _links.sort(
+        (a, b) => b.message.createdAt.compareTo(a.message.createdAt),
+      );
+    } else {
+      for (final msg in items) {
+        final mediaUrl = msg.mediaUrl?.trim();
+        if (mediaUrl == null || mediaUrl.isEmpty) continue;
+        if (!seenMedia.add(msg.id)) continue;
+        _media.add(msg);
+      }
+      _media.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+  }
+
+  List<ChatMessage> get _filteredMedia {
+    switch (_filter) {
+      case _MediaFilter.photos:
+        return _media.where((m) => m.type == 'image').toList();
+      case _MediaFilter.videos:
+        return _media
+            .where((m) => m.type == 'video' || m.type == 'video_note')
+            .toList();
+      case _MediaFilter.files:
+        return _media.where((m) => m.type == 'file').toList();
+      case _MediaFilter.links:
+      case _MediaFilter.all:
+        return _media;
+    }
+  }
+
+  void _onFilterChanged(_MediaFilter value) {
+    if (_filter == value) return;
+    setState(() => _filter = value);
+    unawaited(_reload());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = _filtered;
-    final links = _allLinks;
+    final items = _filteredMedia;
+    final links = _links;
     final imageItems =
         items.where((m) => m.type == 'image').toList(growable: false);
     final imageUrls =
         imageItems.map((m) => m.mediaUrl!).toList(growable: false);
+    final count = _filter == _MediaFilter.links ? links.length : items.length;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Медиа (${items.length})')),
+      appBar: AppBar(title: Text('Медиа ($count)')),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -99,138 +228,196 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                 ButtonSegment(value: _MediaFilter.links, label: Text('Ссылки')),
               ],
               selected: {_filter},
-              onSelectionChanged: (s) => setState(() => _filter = s.first),
+              onSelectionChanged: (s) => _onFilterChanged(s.first),
             ),
           ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
           Expanded(
-            child: _filter == _MediaFilter.links
-                ? links.isEmpty
-                    ? const Center(child: Text('Пока нет ссылок в этом чате'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(8),
-                        itemCount: links.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final item = links[index];
-                          return ListTile(
-                            leading: const Icon(Icons.link_outlined),
-                            title: Text(
-                              item.url,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              formatChatMessageTime(item.message.createdAt),
-                            ),
-                            onTap: () => _openExternal(item.url),
-                          );
-                        },
-                      )
-                : items.isEmpty
-                ? Center(
-                    child: Text(
-                      _filter == _MediaFilter.all
-                          ? 'Пока нет медиа в этом чате'
-                          : 'Ничего не найдено',
-                    ),
-                  )
-                : _filter == _MediaFilter.files
-                    ? ListView.separated(
-                        padding: const EdgeInsets.all(8),
-                        itemCount: items.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final msg = items[index];
-                          return ListTile(
-                            leading: const Icon(Icons.insert_drive_file_outlined),
-                            title: Text(
-                              msg.content.trim().isEmpty
-                                  ? 'Файл'
-                                  : msg.content.trim(),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              formatChatMessageTime(msg.createdAt),
-                            ),
-                            onTap: () {
-                              final url = msg.mediaUrl?.trim();
-                              if (url == null || url.isEmpty) return;
-                              _openExternal(ServerConfig.resolveMediaUrl(url));
-                            },
-                          );
-                        },
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(4),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 4,
-                          mainAxisSpacing: 4,
-                        ),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final msg = items[index];
-                          final url = msg.mediaUrl!;
-                          if (msg.type == 'video' || msg.type == 'video_note') {
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => _openExternal(
-                                    ServerConfig.resolveMediaUrl(url),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                if (n.metrics.pixels >= n.metrics.maxScrollExtent - 240) {
+                  unawaited(_loadMore());
+                }
+                return false;
+              },
+              child: _loading && count == 0
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filter == _MediaFilter.links
+                      ? links.isEmpty
+                          ? const Center(
+                              child: Text('Пока нет ссылок в этом чате'),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(8),
+                              itemCount: links.length + (_loadingMore ? 1 : 0),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                if (index >= links.length) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  );
+                                }
+                                final item = links[index];
+                                return ListTile(
+                                  leading: const Icon(Icons.link_outlined),
+                                  title: Text(
+                                    item.url,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: InlineVideoPlayer(
-                                      videoUrl: ServerConfig.resolveMediaUrl(url),
-                                      onTap: () {},
+                                  subtitle: Text(
+                                    formatChatMessageTime(
+                                      item.message.createdAt,
                                     ),
                                   ),
-                                ),
-                                const IgnorePointer(
-                                  child: Align(
-                                    alignment: Alignment.center,
-                                    child: Icon(
-                                      Icons.play_circle_outline,
-                                      color: Colors.white,
-                                      size: 36,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }
-                          final imageIndex = imageItems.indexOf(msg);
-                          return GestureDetector(
-                            onTap: () {
-                              if (imageIndex < 0) return;
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute(
-                                  builder: (_) => FullscreenImageViewer(
-                                    imageUrls: imageUrls,
-                                    initialIndex: imageIndex,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: Hero(
-                              tag: 'chat_media_${msg.id}_$url',
-                              child: CachedNetworkImage(
-                                imageUrl: url,
-                                fit: BoxFit.cover,
-                                errorWidget: (_, __, ___) => ColoredBox(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                                  child: const Icon(Icons.broken_image_outlined),
-                                ),
+                                  onTap: () => _openExternal(item.url),
+                                );
+                              },
+                            )
+                      : items.isEmpty
+                          ? Center(
+                              child: Text(
+                                _filter == _MediaFilter.all
+                                    ? 'Пока нет медиа в этом чате'
+                                    : 'Ничего не найдено',
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            )
+                          : _filter == _MediaFilter.files
+                              ? ListView.separated(
+                                  padding: const EdgeInsets.all(8),
+                                  itemCount:
+                                      items.length + (_loadingMore ? 1 : 0),
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    if (index >= items.length) {
+                                      return const Padding(
+                                        padding: EdgeInsets.all(16),
+                                        child: Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                    }
+                                    final msg = items[index];
+                                    return ListTile(
+                                      leading: const Icon(
+                                        Icons.insert_drive_file_outlined,
+                                      ),
+                                      title: Text(
+                                        msg.content.trim().isEmpty
+                                            ? 'Файл'
+                                            : msg.content.trim(),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Text(
+                                        formatChatMessageTime(msg.createdAt),
+                                      ),
+                                      onTap: () {
+                                        final url = msg.mediaUrl?.trim();
+                                        if (url == null || url.isEmpty) return;
+                                        _openExternal(
+                                          ServerConfig.resolveMediaUrl(url),
+                                        );
+                                      },
+                                    );
+                                  },
+                                )
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(4),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    crossAxisSpacing: 4,
+                                    mainAxisSpacing: 4,
+                                  ),
+                                  itemCount:
+                                      items.length + (_loadingMore ? 1 : 0),
+                                  itemBuilder: (context, index) {
+                                    if (index >= items.length) {
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+                                    }
+                                    final msg = items[index];
+                                    final url = msg.mediaUrl!;
+                                    if (msg.type == 'video' ||
+                                        msg.type == 'video_note') {
+                                      return Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _openExternal(
+                                              ServerConfig.resolveMediaUrl(url),
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              child: InlineVideoPlayer(
+                                                videoUrl: ServerConfig
+                                                    .resolveMediaUrl(url),
+                                                onTap: () {},
+                                              ),
+                                            ),
+                                          ),
+                                          const IgnorePointer(
+                                            child: Align(
+                                              alignment: Alignment.center,
+                                              child: Icon(
+                                                Icons.play_circle_outline,
+                                                color: Colors.white,
+                                                size: 36,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }
+                                    final imageIndex = imageItems.indexOf(msg);
+                                    return GestureDetector(
+                                      onTap: () {
+                                        if (imageIndex < 0) return;
+                                        Navigator.of(context).push<void>(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                FullscreenImageViewer(
+                                              imageUrls: imageUrls,
+                                              initialIndex: imageIndex,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Hero(
+                                        tag: 'chat_media_${msg.id}_$url',
+                                        child: CachedNetworkImage(
+                                          imageUrl: url,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) =>
+                                              ColoredBox(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainerHighest,
+                                            child: const Icon(
+                                              Icons.broken_image_outlined,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+            ),
           ),
         ],
       ),

@@ -3644,6 +3644,51 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Future<void> _saveMessageToFavorites(ChatMessage msg) async {
+    if (msg.id <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала дождитесь отправки')),
+      );
+      return;
+    }
+    if (msg.type == 'poll') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Опросы пока нельзя сохранить')),
+      );
+      return;
+    }
+    if (_conversation.isSaved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сообщение уже в избранном')),
+      );
+      return;
+    }
+    try {
+      final saved = await ChatService.ensureSavedChat();
+      if (!mounted) return;
+      if (saved.id == widget.conversationId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Сообщение уже в избранном')),
+        );
+        return;
+      }
+      await ChatService.forwardMessage(
+        targetConversationId: saved.id,
+        sourceConversationId: widget.conversationId,
+        messageId: msg.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Добавлено в избранное')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _deleteChat() async {
     if (_conversation.isGroup) {
       await _leaveGroup();
@@ -3804,7 +3849,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _openMediaGallery() {
     Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => ChatMediaGalleryScreen(messages: _messages),
+        builder: (_) => ChatMediaGalleryScreen(
+          conversationId: widget.conversationId,
+          seedMessages: _messages,
+        ),
       ),
     );
   }
@@ -5086,6 +5134,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'forward':
         unawaited(_forwardMessage(msg));
         break;
+      case 'save':
+        unawaited(_saveMessageToFavorites(msg));
+        break;
       case 'readers':
         unawaited(_showMessageReaders(msg));
         break;
@@ -6025,6 +6076,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canDelete: msg.isMine,
       hasCopyableText: _copyableText(msg).isNotEmpty,
       canShowReaders: canShowReaders,
+      canSaveToFavorites: msg.id > 0 &&
+          msg.type != 'poll' &&
+          !_conversation.isSaved,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),

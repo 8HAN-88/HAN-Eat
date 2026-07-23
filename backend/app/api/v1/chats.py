@@ -1275,6 +1275,87 @@ async def list_messages(
     )
 
 
+@router.get(
+    "/chats/{conversation_id}/media",
+    response_model=MessageListResponse,
+)
+async def list_chat_media(
+    conversation_id: int,
+    kind: str = Query(
+        "all",
+        pattern="^(all|photos|videos|files|links)$",
+    ),
+    cursor: Optional[int] = Query(None),
+    limit: int = Query(60, ge=1, le=100),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Shared media / links across full chat history."""
+    svc = ChatService(db)
+    try:
+        messages, has_more = svc.list_media_messages(
+            conversation_id,
+            current_user.id,
+            kind=kind,
+            cursor=cursor,
+            limit=limit,
+        )
+    except ValueError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    last_read = member.last_read_message_id if member else None
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    peer_delivered = (
+        _peer_last_delivered_id(db, svc, conv, current_user.id) if conv else None
+    )
+    sender_ids = {m.sender_id for m in messages}
+    senders = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(sender_ids)).all()
+    } if sender_ids else {}
+    message_ids = [m.id for m in messages]
+    reactions_map = _reaction_summaries(svc, message_ids, current_user.id)
+    from app.services.chat_poll_service import enrich_messages_poll_batch
+
+    poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
+    items = [
+        _message_response(
+            m,
+            current_user.id,
+            last_read,
+            peer_read,
+            conv,
+            svc,
+            senders.get(m.sender_id),
+            reactions=reactions_map.get(m.id, []),
+            db=db,
+            poll_content_cache=poll_cache,
+            peer_last_delivered_id=peer_delivered,
+        )
+        for m in messages
+    ]
+    next_cursor = messages[-1].id if has_more and messages else None
+    return MessageListResponse(
+        items=items,
+        has_more=has_more,
+        next_cursor=next_cursor,
+        pinned_message=None,
+    )
+
+
 @router.get("/chats/messages/search", response_model=MessageSearchResponse)
 async def search_messages_global(
     q: str = Query(..., min_length=2),
