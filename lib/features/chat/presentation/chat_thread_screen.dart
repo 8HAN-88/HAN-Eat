@@ -50,6 +50,7 @@ import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_realtime_signals.dart';
@@ -66,6 +67,8 @@ import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
 import 'widgets/chat_attach_sheet.dart';
+import 'widgets/chat_inline_sticker_panel.dart';
+import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
 import 'widgets/create_chat_poll_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
@@ -274,6 +277,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _recording = false;
   bool _holdActive = false;
   bool _recordCancelled = false;
+  bool _voiceLocked = false;
+  bool _stickerPanelOpen = false;
   bool _hasText = false;
   Duration _recordDuration = Duration.zero;
   int _messageLoadSeq = 0;
@@ -1090,6 +1095,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           msg = await ChatService.sendImage(
             conversationId: widget.conversationId,
             mediaUrl: mediaUrl,
+            caption: pending.caption,
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
           );
@@ -1097,6 +1103,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           msg = await ChatService.sendVideo(
             conversationId: widget.conversationId,
             mediaUrl: mediaUrl,
+            caption: pending.caption,
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
           );
@@ -4459,11 +4466,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _onHoldStart() {
     _holdActive = true;
+    _voiceLocked = false;
     unawaited(_startRecording());
   }
 
-  void _onHoldDrag(double dx) {
-    if (!_recording || !mounted) return;
+  void _onHoldDrag(double dx, double dy) {
+    if (!_recording || !mounted || _voiceLocked) return;
+    // Telegram: swipe up to lock, left to cancel.
+    if (dy < -64) {
+      setState(() {
+        _voiceLocked = true;
+        _recordCancelled = false;
+        _holdActive = false;
+      });
+      AppHaptics.medium();
+      return;
+    }
     final cancel = dx < -72;
     if (cancel != _recordCancelled) {
       setState(() => _recordCancelled = cancel);
@@ -4471,6 +4489,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onHoldEnd() {
+    // Locked mode continues until Send / Delete.
+    if (_voiceLocked) {
+      _holdActive = false;
+      return;
+    }
     _holdActive = false;
     if (!_recording) return;
     if (_recordCancelled) {
@@ -4572,6 +4595,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     setState(() {
       _recording = false;
+      _voiceLocked = false;
       _recordCancelled = false;
       _recordDuration = Duration.zero;
       _waveLevels.clear();
@@ -4582,6 +4606,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!_recording || _voiceSending) return;
     _voiceSending = true;
     _recording = false;
+    _voiceLocked = false;
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
@@ -4594,6 +4619,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final durationSec = math.max(1, _recordDuration.inSeconds);
       if (!mounted) return;
       setState(() {
+        _recording = false;
+        _voiceLocked = false;
         _recordCancelled = false;
         _recordDuration = Duration.zero;
         _waveLevels.clear();
@@ -6954,6 +6981,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _showStickerPicker() async {
     if (_recording) return;
+    // Toggle compact panel above composer (Telegram). Full sheet via "Все".
+    setState(() {
+      _stickerPanelOpen = !_stickerPanelOpen;
+      if (_stickerPanelOpen) _inputFocusNode.unfocus();
+    });
+  }
+
+  Future<void> _showFullStickerSheet() async {
+    if (_recording) return;
+    setState(() => _stickerPanelOpen = false);
     final selection = await showChatAttachSheet(
       context,
       initialTab: ChatAttachTab.sticker,
@@ -6969,11 +7006,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _showAttachMenu() async {
     if (_recording) return;
+    setState(() => _stickerPanelOpen = false);
     final selection = await showChatAttachSheet(context);
     if (!mounted || selection == null) return;
     switch (selection.kind) {
       case ChatAttachResult.galleryFiles:
-        await _sendGallerySelection(selection.galleryFiles);
+        await _composeAndSendGallery(selection.galleryFiles);
       case ChatAttachResult.file:
         await _pickFile();
       case ChatAttachResult.pickedFile:
@@ -7035,10 +7073,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _sendGallerySelection(List<XFile> files) async {
+  Future<void> _composeAndSendGallery(List<XFile> files) async {
     if (files.isEmpty) return;
-    for (final file in files) {
+    final composed = await showChatMediaCompose(context, files: files);
+    if (!mounted || composed == null || composed.files.isEmpty) return;
+    await _sendGallerySelection(
+      composed.files,
+      caption: composed.caption,
+    );
+  }
+
+  Future<void> _sendGallerySelection(
+    List<XFile> files, {
+    String caption = '',
+  }) async {
+    if (files.isEmpty) return;
+    final trimmedCaption = caption.trim();
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
       if (!mounted) return;
+      // Caption on the last item (Telegram album caption).
+      final itemCaption =
+          (i == files.length - 1 && trimmedCaption.isNotEmpty)
+              ? trimmedCaption
+              : '';
       if (_looksLikeVideoFile(file)) {
         final bytes = await file.length();
         if (bytes > 80 * 1024 * 1024) {
@@ -7053,9 +7111,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           }
           continue;
         }
-        await _sendPickedVideo(await _normalizeVideoFileForUpload(file));
+        await _sendPickedVideo(
+          await _normalizeVideoFileForUpload(file),
+          caption: itemCaption,
+        );
       } else {
-        await _sendPickedImage(file);
+        await _sendPickedImage(file, caption: itemCaption);
       }
     }
   }
@@ -7326,6 +7387,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     XFile file, {
     int? replyToId,
     String? clientMessageId,
+    String caption = '',
   }) async {
     int? totalBytes;
     Uint8List? previewBytes;
@@ -7347,6 +7409,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       file: file,
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
+      caption: caption,
       totalBytes: totalBytes,
       previewBytes: previewBytes,
       payloadBytes: previewBytes,
@@ -7357,6 +7420,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     XFile file, {
     int? replyToId,
     String? clientMessageId,
+    String caption = '',
   }) async {
     int? totalBytes;
     try {
@@ -7370,6 +7434,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       file: file,
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
+      caption: caption,
       totalBytes: totalBytes,
     ));
   }
@@ -7969,7 +8034,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: keyboardInset),
-          child: Column(
+          child: ChatWallpaper(
+            isDark: Theme.of(context).brightness == Brightness.dark,
+            child: Column(
             children: [
               _animatedVisibility(
                 visible: _loading,
@@ -8768,6 +8835,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               activeCooldownSeconds: activeCooldownSeconds,
                             ),
                           ),
+                        if (_stickerPanelOpen && !_recording)
+                          ChatInlineStickerPanel(
+                            onOpenFull: () =>
+                                unawaited(_showFullStickerSheet()),
+                            onPick: (url, {emoji}) {
+                              setState(() => _stickerPanelOpen = false);
+                              unawaited(
+                                _sendStickerByUrl(url, emoji: emoji),
+                              );
+                            },
+                          ),
                         SafeArea(
                           top: false,
                           child: Padding(
@@ -8800,7 +8878,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             horizontal: 10,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: _recordCancelled
+                                            color: _recordCancelled &&
+                                                    !_voiceLocked
                                                 ? scheme.errorContainer
                                                     .withValues(alpha: 0.55)
                                                 : (Theme.of(context)
@@ -8815,9 +8894,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           child: Row(
                                             children: [
                                               Icon(
-                                                Icons.mic_rounded,
+                                                _voiceLocked
+                                                    ? Icons.lock_rounded
+                                                    : Icons.mic_rounded,
                                                 size: 18,
-                                                color: _recordCancelled
+                                                color: _recordCancelled &&
+                                                        !_voiceLocked
                                                     ? scheme.error
                                                     : scheme.primary,
                                               ),
@@ -8827,7 +8909,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                   _recordDuration,
                                                 ),
                                                 style: TextStyle(
-                                                  color: _recordCancelled
+                                                  color: _recordCancelled &&
+                                                          !_voiceLocked
                                                       ? scheme.error
                                                       : scheme.onSurface,
                                                   fontWeight: FontWeight.w600,
@@ -8842,27 +8925,69 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                   ),
                                                   color: scheme
                                                       .onSurfaceVariant,
-                                                  activeColor: _recordCancelled
+                                                  activeColor: _recordCancelled &&
+                                                          !_voiceLocked
                                                       ? scheme.error
                                                       : scheme.primary,
                                                   barCount: 28,
                                                   height: 22,
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                _recordCancelled
-                                                    ? 'Отмена'
-                                                    : '← Отмена',
-                                                style: TextStyle(
-                                                  color: _recordCancelled
-                                                      ? scheme.error
-                                                      : scheme
-                                                          .onSurfaceVariant,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
+                                              if (_voiceLocked) ...[
+                                                IconButton(
+                                                  tooltip: 'Удалить',
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  padding: EdgeInsets.zero,
+                                                  constraints:
+                                                      const BoxConstraints
+                                                          .tightFor(
+                                                    width: 34,
+                                                    height: 34,
+                                                  ),
+                                                  onPressed: () => unawaited(
+                                                    _cancelRecording(),
+                                                  ),
+                                                  icon: Icon(
+                                                    Icons.delete_outline,
+                                                    color: scheme.error,
+                                                  ),
                                                 ),
-                                              ),
+                                                IconButton(
+                                                  tooltip: 'Отправить',
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  padding: EdgeInsets.zero,
+                                                  constraints:
+                                                      const BoxConstraints
+                                                          .tightFor(
+                                                    width: 34,
+                                                    height: 34,
+                                                  ),
+                                                  onPressed: () => unawaited(
+                                                    _stopAndSendVoice(),
+                                                  ),
+                                                  icon: Icon(
+                                                    Icons.send_rounded,
+                                                    color: scheme.primary,
+                                                  ),
+                                                ),
+                                              ] else ...[
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  _recordCancelled
+                                                      ? 'Отмена'
+                                                      : '← отмена · ↑ lock',
+                                                  style: TextStyle(
+                                                    color: _recordCancelled
+                                                        ? scheme.error
+                                                        : scheme
+                                                            .onSurfaceVariant,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
                                             ],
                                           ),
                                         )
@@ -8924,11 +9049,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         : () => unawaited(
                                               _showStickerPicker(),
                                             ),
-                                    icon: const Icon(
-                                      Icons.emoji_emotions_outlined,
+                                    icon: Icon(
+                                      _stickerPanelOpen
+                                          ? Icons.keyboard_outlined
+                                          : Icons.emoji_emotions_outlined,
                                     ),
-                                    tooltip: 'Стикеры',
-                                    color: scheme.onSurfaceVariant,
+                                    tooltip: _stickerPanelOpen
+                                        ? 'Клавиатура'
+                                        : 'Стикеры',
+                                    color: _stickerPanelOpen
+                                        ? scheme.primary
+                                        : scheme.onSurfaceVariant,
                                     iconSize: _composerIconSize,
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints.tightFor(
@@ -9080,9 +9211,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           key: const ValueKey('mic-btn'),
                                           enabled: !_sending && canSendNow,
                                           recording: _recording,
+                                          locked: _voiceLocked,
                                           onHoldStart: _onHoldStart,
                                           onHoldEnd: _onHoldEnd,
-                                          onHoldDragDx: _onHoldDrag,
+                                          onHoldDrag: _onHoldDrag,
                                         ),
                                 ),
                               ],
@@ -9094,6 +9226,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                 ),
             ],
+          ),
           ),
         ),
       ),
@@ -9113,6 +9246,7 @@ class _PendingMediaSend {
     required this.clientMessageId,
     this.fileName,
     this.replyToMessageId,
+    this.caption = '',
     this.voiceDurationSec,
     this.totalBytes,
     this.previewBytes,
@@ -9125,6 +9259,7 @@ class _PendingMediaSend {
   final String clientMessageId;
   final String? fileName;
   final int? replyToMessageId;
+  final String caption;
   final int? voiceDurationSec;
   final int? totalBytes;
   final Uint8List? previewBytes;

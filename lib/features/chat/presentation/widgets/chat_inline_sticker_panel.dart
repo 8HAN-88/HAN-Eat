@@ -1,0 +1,267 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../../../models/sticker_models.dart';
+import '../../../../services/server_config.dart';
+import '../../../../services/sticker_service.dart';
+import '../../application/chat_recent_stickers_store.dart';
+
+/// Compact sticker picker above the composer (Telegram-style).
+class ChatInlineStickerPanel extends StatefulWidget {
+  const ChatInlineStickerPanel({
+    super.key,
+    required this.onPick,
+    this.onOpenFull,
+    this.height = 268,
+  });
+
+  final void Function(String mediaUrl, {String? emoji}) onPick;
+  final VoidCallback? onOpenFull;
+  final double height;
+
+  @override
+  State<ChatInlineStickerPanel> createState() => _ChatInlineStickerPanelState();
+}
+
+class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
+  List<StickerPack> _packs = const [];
+  List<ChatRecentStickerEntry> _recent = const [];
+  bool _loading = true;
+  String? _error;
+  int? _selectedPackId; // null = recent
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final packs = await StickerService.listMyPacks();
+      final recent = await ChatRecentStickersStore.loadRecent();
+      if (!mounted) return;
+      setState(() {
+        _packs = packs.where((p) => p.isInstalled || p.stickers.isNotEmpty).toList();
+        _recent = recent;
+        _loading = false;
+        if (_selectedPackId == null &&
+            _recent.isEmpty &&
+            _packs.isNotEmpty) {
+          _selectedPackId = _packs.first.id;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось загрузить стикеры';
+      });
+    }
+  }
+
+  List<_StickerThumb> get _items {
+    if (_selectedPackId == null) {
+      return [
+        for (final e in _recent)
+          if (e.mediaUrl.trim().isNotEmpty)
+            _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
+      ];
+    }
+    for (final pack in _packs) {
+      if (pack.id != _selectedPackId) continue;
+      return [
+        for (final s in pack.stickers)
+          if (s.mediaUrl.trim().isNotEmpty)
+            _StickerThumb(mediaUrl: s.mediaUrl, emoji: s.emoji),
+      ];
+    }
+    return const [];
+  }
+
+  Future<void> _pick(_StickerThumb item) async {
+    unawaited(
+      ChatRecentStickersStore.remember(
+        mediaUrl: item.mediaUrl,
+        emoji: item.emoji,
+      ),
+    );
+    widget.onPick(item.mediaUrl, emoji: item.emoji);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: isDark ? const Color(0xFF1A2632) : scheme.surface,
+      child: SizedBox(
+        height: widget.height,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 4, 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Стикеры',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.onOpenFull != null)
+                    TextButton(
+                      onPressed: widget.onOpenFull,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Все'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : _error != null
+                      ? Center(
+                          child: TextButton(
+                            onPressed: _load,
+                            child: Text(_error!),
+                          ),
+                        )
+                      : _items.isEmpty
+                          ? Center(
+                              child: Text(
+                                _selectedPackId == null
+                                    ? 'Нет недавних стикеров'
+                                    : 'В паке пока пусто',
+                                style: TextStyle(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                          : GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                mainAxisSpacing: 6,
+                                crossAxisSpacing: 6,
+                              ),
+                              itemCount: _items.length,
+                              itemBuilder: (context, index) {
+                                final item = _items[index];
+                                final url = ServerConfig.resolveMediaUrl(
+                                  item.mediaUrl,
+                                );
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(10),
+                                  onTap: () => unawaited(_pick(item)),
+                                  child: Image.network(
+                                    url,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.broken_image_outlined,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: [
+                  _PackChip(
+                    selected: _selectedPackId == null,
+                    label: '⏱',
+                    onTap: () => setState(() => _selectedPackId = null),
+                  ),
+                  for (final pack in _packs)
+                    _PackChip(
+                      selected: _selectedPackId == pack.id,
+                      label: pack.title.isEmpty
+                          ? '#'
+                          : pack.title.characters.first.toUpperCase(),
+                      onTap: () =>
+                          setState(() => _selectedPackId = pack.id),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerThumb {
+  const _StickerThumb({required this.mediaUrl, this.emoji});
+  final String mediaUrl;
+  final String? emoji;
+}
+
+class _PackChip extends StatelessWidget {
+  const _PackChip({
+    required this.selected,
+    required this.label,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6, bottom: 6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected
+                ? scheme.primary.withValues(alpha: 0.18)
+                : scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? scheme.primary : Colors.transparent,
+              width: 1.2,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
