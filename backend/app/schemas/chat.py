@@ -121,7 +121,8 @@ class MessageSearchResponse(BaseModel):
 
 
 class EditMessageRequest(BaseModel):
-    content: str = Field(..., min_length=1, max_length=4000)
+    # Empty allowed for clearing image/video/file captions.
+    content: str = Field(default="", max_length=4000)
 
 
 class MessageReactionRequest(BaseModel):

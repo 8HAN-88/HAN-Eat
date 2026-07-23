@@ -202,6 +202,11 @@ class ChatThreadScreen extends StatefulWidget {
   State<ChatThreadScreen> createState() => _ChatThreadScreenState();
 }
 
+bool _chatIsGifMediaUrl(String url) {
+  final path = (Uri.tryParse(url)?.path ?? url).toLowerCase();
+  return path.endsWith('.gif');
+}
+
 enum _ThreadSearchFilter {
   all,
   text,
@@ -5026,56 +5031,49 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _deleteSelectedMessages() async {
     final selected = _selectedMessages;
-    final mine = selected.where((m) => m.isMine).toList();
-    final skipped = selected.length - mine.length;
+    if (selected.isEmpty) return;
 
-    if (mine.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Можно удалить только свои сообщения')),
-      );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
+    final canDeleteForAll = selected.every((m) => m.isMine);
+    final scope = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          mine.length == 1
-              ? 'Удалить сообщение?'
-              : 'Удалить ${mine.length} сообщения?',
-        ),
-        content: skipped > 0
-            ? Text(
-                'Чужие сообщения ($skipped) останутся — удаляются только ваши.',
-              )
-            : null,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
+      builder: (ctx) {
+        final err = Theme.of(ctx).colorScheme.error;
+        return AlertDialog(
+          title: Text(
+            selected.length == 1
+                ? 'Удалить сообщение?'
+                : 'Удалить ${selected.length} сообщ.?',
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Удалить',
-              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+          content: Text(
+            canDeleteForAll
+                ? 'Можно убрать только у себя или удалить у всех участников.'
+                : 'Выбранные сообщения исчезнут только в вашем чате.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
             ),
-          ),
-        ],
-      ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'me'),
+              child: Text('Удалить у меня', style: TextStyle(color: err)),
+            ),
+            if (canDeleteForAll)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'all'),
+                child: Text('Удалить у всех', style: TextStyle(color: err)),
+              ),
+          ],
+        );
+      },
     );
-    if (confirmed != true || !mounted) return;
+    if (scope == null || !mounted) return;
 
-    for (final msg in mine) {
-      await _deleteMessage(msg);
+    for (final msg in selected) {
+      await _deleteMessage(msg, scope: scope);
     }
     if (!mounted) return;
     _exitSelectionMode();
-    if (skipped > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Удалено ${mine.length}, пропущено $skipped')),
-      );
-    }
   }
 
   void _copySelectedMessages() {
@@ -5645,13 +5643,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final resolved = ServerConfig.resolvePublisherAvatarUrl(
       ServerConfig.resolveMediaUrl(mediaUrl),
     );
+    final animated =
+        _chatIsGifMediaUrl(resolved) || _chatIsGifMediaUrl(mediaUrl);
     return CachedNetworkImage(
       imageUrl: resolved,
       fit: BoxFit.cover,
-      memCacheWidth: 720,
-      memCacheHeight: 720,
-      maxWidthDiskCache: 960,
-      maxHeightDiskCache: 960,
+      memCacheWidth: animated ? null : 720,
+      memCacheHeight: animated ? null : 720,
+      maxWidthDiskCache: animated ? null : 960,
+      maxHeightDiskCache: animated ? null : 960,
       progressIndicatorBuilder: (_, __, progress) => ColoredBox(
         color: const Color(0x22000000),
         child: Center(
@@ -6133,7 +6133,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
       quickReactions: _overlayReactions,
-      canEdit: msg.isMine && msg.type == 'text',
+      canEdit: msg.isMine &&
+          msg.id > 0 &&
+          (msg.type == 'text' ||
+              msg.type == 'image' ||
+              msg.type == 'video' ||
+              msg.type == 'file'),
       isPinned: isPinned,
       canDelete: msg.isMine,
       hasCopyableText: _copyableText(msg).isNotEmpty,
@@ -6756,7 +6761,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _sendText() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _recording) return;
+    final editingMedia = _editingMessage != null &&
+        (_editingMessage!.type == 'image' ||
+            _editingMessage!.type == 'video' ||
+            _editingMessage!.type == 'file');
+    if ((!editingMedia && text.isEmpty) || _recording) return;
     if (_conversation.isGroup &&
         _conversation.amISendRestricted &&
         !_conversation.amIGroupAdmin) {
@@ -9524,8 +9533,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           child: _editingMessage == null
                               ? const SizedBox.shrink()
                               : _telegramReplyStrip(
-                                  author: 'Редактирование',
-                                  preview: _editingMessage!.content,
+                                  author: _editingMessage!.type == 'text'
+                                      ? 'Редактирование'
+                                      : 'Подпись',
+                                  preview: _editingMessage!.content.trim().isEmpty
+                                      ? (_editingMessage!.type == 'image'
+                                          ? 'Фото'
+                                          : _editingMessage!.type == 'video'
+                                              ? 'Видео'
+                                              : 'Файл')
+                                      : _editingMessage!.content,
                                   onClose: _cancelEdit,
                                 ),
                         ),
@@ -9827,7 +9844,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       child: child,
                                     ),
                                   ),
-                                  child: (_hasText && !_recording)
+                                  child: ((_hasText ||
+                                              _editingMessage != null) &&
+                                          !_recording)
                                       ? GestureDetector(
                                           key: const ValueKey('send-btn'),
                                           onLongPress:
@@ -10690,46 +10709,53 @@ class _Bubble extends StatelessWidget {
         onTap: onImageTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 320),
-          child: CachedNetworkImage(
-            imageUrl: ServerConfig.resolvePublisherAvatarUrl(
-              ServerConfig.resolveMediaUrl(message.mediaUrl!),
-            ),
-            fit: BoxFit.cover,
-            memCacheWidth: 720,
-            memCacheHeight: 720,
-            maxWidthDiskCache: 960,
-            maxHeightDiskCache: 960,
-            progressIndicatorBuilder: (_, __, progress) => SizedBox(
-              width: 180,
-              height: 180,
-              child: ColoredBox(
-                color: quoteBg,
-                child: Center(
-                  child: SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      value: progress.progress,
-                      color: fg.withValues(alpha: 0.7),
+          child: Builder(
+            builder: (context) {
+              final resolved = ServerConfig.resolvePublisherAvatarUrl(
+                ServerConfig.resolveMediaUrl(message.mediaUrl!),
+              );
+              final animated = _chatIsGifMediaUrl(resolved) ||
+                  _chatIsGifMediaUrl(message.mediaUrl!);
+              return CachedNetworkImage(
+                imageUrl: resolved,
+                fit: BoxFit.cover,
+                memCacheWidth: animated ? null : 720,
+                memCacheHeight: animated ? null : 720,
+                maxWidthDiskCache: animated ? null : 960,
+                maxHeightDiskCache: animated ? null : 960,
+                progressIndicatorBuilder: (_, __, progress) => SizedBox(
+                  width: 180,
+                  height: 180,
+                  child: ColoredBox(
+                    color: quoteBg,
+                    child: Center(
+                      child: SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          value: progress.progress,
+                          color: fg.withValues(alpha: 0.7),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            errorWidget: (_, __, ___) => SizedBox(
-              width: 180,
-              height: 120,
-              child: ColoredBox(
-                color: quoteBg,
-                child: Center(
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: fg.withValues(alpha: 0.6),
+                errorWidget: (_, __, ___) => SizedBox(
+                  width: 180,
+                  height: 120,
+                  child: ColoredBox(
+                    color: quoteBg,
+                    child: Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: fg.withValues(alpha: 0.6),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       );

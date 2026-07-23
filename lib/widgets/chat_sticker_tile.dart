@@ -70,8 +70,15 @@ class ChatStickerTile extends StatelessWidget {
         child: CachedNetworkImage(
           imageUrl: resolvedUrl,
           fit: BoxFit.contain,
-          memCacheWidth: 512,
-          memCacheHeight: 512,
+          // Keep GIF frames; resize cache freezes animation.
+          memCacheWidth: looksAnimated(mediaUrl) &&
+                  mediaUrl.toLowerCase().contains('.gif')
+              ? null
+              : 512,
+          memCacheHeight: looksAnimated(mediaUrl) &&
+                  mediaUrl.toLowerCase().contains('.gif')
+              ? null
+              : 512,
           placeholder: (_, __) => const SizedBox(
             height: 120,
             width: 120,

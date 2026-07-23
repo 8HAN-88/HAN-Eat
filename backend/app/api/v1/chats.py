@@ -1284,14 +1284,14 @@ async def list_chat_media(
     conversation_id: int,
     kind: str = Query(
         "all",
-        pattern="^(all|photos|videos|files|links)$",
+        pattern="^(all|photos|videos|files|links|voices)$",
     ),
     cursor: Optional[int] = Query(None),
     limit: int = Query(60, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Shared media / links across full chat history."""
+    """Shared media / links / voice across full chat history."""
     svc = ChatService(db)
     try:
         messages, has_more = svc.list_media_messages(

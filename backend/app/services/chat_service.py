@@ -1744,9 +1744,11 @@ class ChatService:
                     Message.content.ilike("%https://%"),
                 )
             )
+        elif kind_norm == "voices":
+            q = q.filter(Message.type == "voice", Message.media_url.isnot(None))
         else:
             q = q.filter(
-                Message.type.in_(("image", "video", "video_note", "file")),
+                Message.type.in_(("image", "video", "video_note", "file", "voice")),
                 Message.media_url.isnot(None),
             )
 
@@ -2514,10 +2516,10 @@ class ChatService:
         msg = self._get_active_message(conversation_id, message_id, user_id)
         if msg.sender_id != user_id:
             raise ValueError("forbidden")
-        if msg.type != "text":
+        if msg.type not in ("text", "image", "video", "file"):
             raise ValueError("not_editable")
-        clean = content.strip()
-        if not clean:
+        clean = (content or "").strip()
+        if msg.type == "text" and not clean:
             raise ValueError("empty_message")
         msg.content = clean[:4000]
         msg.edited_at = datetime.now(timezone.utc).replace(tzinfo=None)

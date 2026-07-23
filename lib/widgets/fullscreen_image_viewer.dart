@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../services/server_config.dart';
 import '../utils/file_helper.dart';
 import '../utils/image_url_helper.dart';
 
@@ -44,6 +46,24 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
     setState(() {
       _showControls = !_showControls;
     });
+  }
+
+  Future<void> _shareCurrent() async {
+    final raw = widget.imageUrls[_currentIndex].trim();
+    if (raw.isEmpty) return;
+    final candidates = getFullscreenImageUrlCandidates(raw);
+    final url = candidates.isNotEmpty
+        ? candidates.first
+        : ServerConfig.resolveMediaUrl(raw);
+    if (url.trim().isEmpty) return;
+    try {
+      await Share.share(url);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось поделиться')),
+      );
+    }
   }
 
   @override
@@ -90,6 +110,13 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
                           )
                         : null,
                     centerTitle: true,
+                    actions: [
+                      IconButton(
+                        tooltip: 'Поделиться',
+                        icon: const Icon(Icons.share_outlined, color: Colors.white),
+                        onPressed: _shareCurrent,
+                      ),
+                    ],
                   ),
                 ],
               ),

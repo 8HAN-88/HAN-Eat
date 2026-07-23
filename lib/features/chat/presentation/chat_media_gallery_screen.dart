@@ -13,7 +13,7 @@ import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/inline_video_player.dart';
 
-enum _MediaFilter { all, photos, videos, files, links }
+enum _MediaFilter { all, photos, videos, files, voices, links }
 
 /// Медиа из сообщений чата с фильтрами по типу (полная история через API).
 class ChatMediaGalleryScreen extends StatefulWidget {
@@ -48,6 +48,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         return 'videos';
       case _MediaFilter.files:
         return 'files';
+      case _MediaFilter.voices:
+        return 'voices';
       case _MediaFilter.links:
         return 'links';
       case _MediaFilter.all:
@@ -74,7 +76,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
           (msg.type == 'image' ||
               msg.type == 'video' ||
               msg.type == 'video_note' ||
-              msg.type == 'file') &&
+              msg.type == 'file' ||
+              msg.type == 'voice') &&
           seenMedia.add(msg.id)) {
         media.add(msg);
       }
@@ -186,10 +189,37 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
             .toList();
       case _MediaFilter.files:
         return _media.where((m) => m.type == 'file').toList();
+      case _MediaFilter.voices:
+        return _media.where((m) => m.type == 'voice').toList();
       case _MediaFilter.links:
-      case _MediaFilter.all:
         return _media;
+      case _MediaFilter.all:
+        return _media
+            .where(
+              (m) =>
+                  m.type == 'image' ||
+                  m.type == 'video' ||
+                  m.type == 'video_note' ||
+                  m.type == 'file',
+            )
+            .toList();
     }
+  }
+
+  String _voiceDurationLabel(ChatMessage msg) {
+    final sec = msg.voiceDurationSec;
+    if (sec == null || sec <= 0) {
+      final parsed = int.tryParse(msg.content.trim());
+      if (parsed == null || parsed <= 0) return 'Голосовое';
+      return _formatDuration(parsed);
+    }
+    return _formatDuration(sec);
+  }
+
+  String _formatDuration(int totalSec) {
+    final m = totalSec ~/ 60;
+    final s = totalSec % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   void _onFilterChanged(_MediaFilter value) {
@@ -225,6 +255,10 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                   label: Text('Видео'),
                 ),
                 ButtonSegment(value: _MediaFilter.files, label: Text('Файлы')),
+                ButtonSegment(
+                  value: _MediaFilter.voices,
+                  label: Text('Голос'),
+                ),
                 ButtonSegment(value: _MediaFilter.links, label: Text('Ссылки')),
               ],
               selected: {_filter},
@@ -293,7 +327,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                     : 'Ничего не найдено',
                               ),
                             )
-                          : _filter == _MediaFilter.files
+                          : (_filter == _MediaFilter.files ||
+                                  _filter == _MediaFilter.voices)
                               ? ListView.separated(
                                   padding: const EdgeInsets.all(8),
                                   itemCount:
@@ -310,14 +345,21 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                       );
                                     }
                                     final msg = items[index];
+                                    final isVoice =
+                                        _filter == _MediaFilter.voices ||
+                                            msg.type == 'voice';
                                     return ListTile(
-                                      leading: const Icon(
-                                        Icons.insert_drive_file_outlined,
+                                      leading: Icon(
+                                        isVoice
+                                            ? Icons.mic_none_rounded
+                                            : Icons.insert_drive_file_outlined,
                                       ),
                                       title: Text(
-                                        msg.content.trim().isEmpty
-                                            ? 'Файл'
-                                            : msg.content.trim(),
+                                        isVoice
+                                            ? _voiceDurationLabel(msg)
+                                            : (msg.content.trim().isEmpty
+                                                ? 'Файл'
+                                                : msg.content.trim()),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
