@@ -30,7 +30,7 @@ import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
 
-enum ChatAttachTab { gallery, gif, file, poll, contact, sticker }
+enum ChatAttachTab { gallery, gif, file, poll, contact, location, sticker }
 
 enum ChatAttachResult {
   galleryFiles,
@@ -38,6 +38,7 @@ enum ChatAttachResult {
   pickedFile,
   poll,
   contact,
+  location,
   resendFile,
   sticker,
 }
@@ -131,6 +132,9 @@ class ChatAttachSelection {
         stickerMediaUrl: mediaUrl,
         stickerEmoji: emoji,
       );
+
+  factory ChatAttachSelection.location() =>
+      ChatAttachSelection._(kind: ChatAttachResult.location);
 }
 
 Future<ChatAttachSelection?> showChatAttachSheet(
@@ -469,6 +473,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Новый опрос';
       case ChatAttachTab.contact:
         return 'Контакты';
+      case ChatAttachTab.location:
+        return 'Геопозиция';
       case ChatAttachTab.sticker:
         return 'Стикеры';
     }
@@ -488,6 +494,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Создайте новый опрос';
       case ChatAttachTab.contact:
         return 'Контакты и телефонная книга';
+      case ChatAttachTab.location:
+        return 'Отправьте текущее местоположение';
       case ChatAttachTab.sticker:
         return 'Паки, избранные и недавние';
     }
@@ -1103,6 +1111,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           onPick: () => unawaited(_pickGifFiles()),
           isDark: isDark,
         );
+      case ChatAttachTab.location:
+        return _LocationPickPanel(
+          scrollController: scrollController,
+          onSend: () => _close(ChatAttachSelection.location()),
+          isDark: isDark,
+        );
       case ChatAttachTab.file:
         return _FilePanel(
           scrollController: scrollController,
@@ -1221,6 +1235,59 @@ class _GifPickPanel extends StatelessWidget {
           onPressed: onPick,
           icon: const Icon(Icons.folder_open_outlined),
           label: const Text('Выбрать GIF'),
+        ),
+      ],
+    );
+  }
+}
+
+class _LocationPickPanel extends StatelessWidget {
+  const _LocationPickPanel({
+    required this.scrollController,
+    required this.onSend,
+    required this.isDark,
+  });
+
+  final ScrollController scrollController;
+  final VoidCallback onSend;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        const SizedBox(height: 24),
+        Icon(
+          Icons.location_on_outlined,
+          size: 56,
+          color: scheme.primary.withValues(alpha: 0.9),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Отправить геопозицию',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          kIsWeb
+              ? 'Браузер запросит доступ к вашей геолокации.'
+              : 'Геолокация сейчас надёжнее работает в веб-версии haneat.app.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 28),
+        FilledButton.icon(
+          onPressed: onSend,
+          icon: const Icon(Icons.my_location_outlined),
+          label: const Text('Отправить мою геопозицию'),
         ),
       ],
     );
@@ -2869,8 +2936,8 @@ class _TelegramAttachDock extends StatelessWidget {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final width = ((constraints.maxWidth - 10) / 7)
-                      .clamp(44.0, 64.0)
+                  final width = ((constraints.maxWidth - 10) / 8)
+                      .clamp(40.0, 58.0)
                       .toDouble();
                   return Padding(
                     padding:
@@ -2914,6 +2981,14 @@ class _TelegramAttachDock extends StatelessWidget {
                           label: 'Контакт',
                           selected: selected == ChatAttachTab.contact,
                           onTap: () => onSelect(ChatAttachTab.contact),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.location_on_outlined,
+                          label: 'Гео',
+                          selected: selected == ChatAttachTab.location,
+                          onTap: () => onSelect(ChatAttachTab.location),
                           compact: true,
                           width: width,
                         ),

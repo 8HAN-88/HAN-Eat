@@ -143,6 +143,9 @@ class ChatMessage {
     required this.content,
     this.mediaUrl,
     this.replyToMessageId,
+    this.forwardFromUserId,
+    this.forwardFromName,
+    this.forwardedFromMessageId,
     required this.createdAt,
     this.editedAt,
     this.isMine = false,
@@ -160,6 +163,9 @@ class ChatMessage {
   final String content;
   final String? mediaUrl;
   final int? replyToMessageId;
+  final int? forwardFromUserId;
+  final String? forwardFromName;
+  final int? forwardedFromMessageId;
   final DateTime createdAt;
   final DateTime? editedAt;
   final bool isMine;
@@ -168,6 +174,10 @@ class ChatMessage {
   final bool isRead;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
+
+  bool get isForwarded =>
+      forwardFromUserId != null ||
+      (forwardFromName != null && forwardFromName!.trim().isNotEmpty);
 
   bool get isEdited => editedAt != null;
 
@@ -217,6 +227,13 @@ class ChatMessage {
       replyToMessageId: json['reply_to_message_id'] != null
           ? _parseInt(json['reply_to_message_id'])
           : null,
+      forwardFromUserId: json['forward_from_user_id'] != null
+          ? _parseInt(json['forward_from_user_id'])
+          : null,
+      forwardFromName: json['forward_from_name'] as String?,
+      forwardedFromMessageId: json['forwarded_from_message_id'] != null
+          ? _parseInt(json['forwarded_from_message_id'])
+          : null,
       createdAt: _parseDate(json['created_at']),
       editedAt: editedAt,
       isMine: json['is_mine'] as bool? ?? false,
@@ -245,6 +262,9 @@ class ChatMessage {
       content: content ?? this.content,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
+      forwardFromUserId: forwardFromUserId,
+      forwardFromName: forwardFromName,
+      forwardedFromMessageId: forwardedFromMessageId,
       createdAt: createdAt,
       editedAt: editedAt ?? this.editedAt,
       isMine: isMine,

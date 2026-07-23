@@ -31,6 +31,7 @@ from app.schemas.chat import (
     ReorderChatFoldersRequest,
     DirectChatRequest,
     EditMessageRequest,
+    ForwardMessageRequest,
     RescheduleMessageRequest,
     ScheduledMessageListResponse,
     ScheduledMessageResponse,
@@ -135,6 +136,9 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "content": msg.content,
         "media_url": msg.media_url,
         "reply_to_message_id": msg.reply_to_message_id,
+        "forward_from_user_id": getattr(msg, "forward_from_user_id", None),
+        "forward_from_name": getattr(msg, "forward_from_name", None),
+        "forwarded_from_message_id": getattr(msg, "forwarded_from_message_id", None),
         "inline_keyboard": inline_keyboard,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
@@ -490,6 +494,9 @@ def _message_response(
         content=content,
         media_url=msg.media_url,
         reply_to_message_id=msg.reply_to_message_id,
+        forward_from_user_id=getattr(msg, "forward_from_user_id", None),
+        forward_from_name=getattr(msg, "forward_from_name", None),
+        forwarded_from_message_id=getattr(msg, "forwarded_from_message_id", None),
         inline_keyboard=inline_keyboard,
         created_at=msg.created_at,
         edited_at=getattr(msg, "edited_at", None),
@@ -1387,7 +1394,13 @@ async def send_message(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-        if code in ("empty_message", "missing_media", "empty_poll", "invalid_reply"):
+        if code in (
+            "empty_message",
+            "missing_media",
+            "empty_poll",
+            "empty_location",
+            "invalid_reply",
+        ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
@@ -1437,6 +1450,107 @@ async def send_message(
         ) or webhook_touched
     if webhook_touched:
         db.commit()
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    return _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/forward",
+    response_model=MessageResponse,
+)
+async def forward_message(
+    conversation_id: int,
+    body: ForwardMessageRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        msg = svc.forward_message(
+            target_conversation_id=conversation_id,
+            source_conversation_id=body.source_conversation_id,
+            message_id=body.message_id,
+            sender_id=current_user.id,
+        )
+        db.commit()
+        db.refresh(msg)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        if code == "cannot_forward_poll":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code in (
+            "empty_message",
+            "missing_media",
+            "empty_poll",
+            "empty_location",
+            "invalid_reply",
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "user_blocked":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code in (
+            "group_write_restricted",
+            "group_user_restricted",
+        ):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "group_slow_mode":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_slow_mode_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
+        if code == "group_flood_limited":
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                {
+                    "code": code,
+                    "retry_after_seconds": svc.group_flood_retry_after_seconds(
+                        conversation_id,
+                        current_user.id,
+                    ),
+                },
+            )
+        raise
+
+    _emit(
+        conversation_id,
+        {"type": "message.new", "message": _message_payload(msg)},
+    )
+    _notify_chat_inbox(db, conversation_id, current_user.id)
+
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)

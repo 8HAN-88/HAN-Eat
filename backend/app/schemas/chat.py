@@ -32,6 +32,9 @@ class MessageResponse(BaseModel):
     content: str
     media_url: Optional[str] = None
     reply_to_message_id: Optional[int] = None
+    forward_from_user_id: Optional[int] = None
+    forward_from_name: Optional[str] = None
+    forwarded_from_message_id: Optional[int] = None
     created_at: datetime
     edited_at: Optional[datetime] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
@@ -42,6 +45,11 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ForwardMessageRequest(BaseModel):
+    source_conversation_id: int
+    message_id: int
 
 
 class MessageReactionSummary(BaseModel):
@@ -115,7 +123,10 @@ class PinMessageRequest(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll|sticker)$")
+    type: str = Field(
+        default="text",
+        pattern="^(text|image|voice|file|video|poll|sticker|location)$",
+    )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None
@@ -128,7 +139,10 @@ class SendMessageRequest(BaseModel):
 
 
 class ScheduleMessageRequest(BaseModel):
-    type: str = Field(default="text", pattern="^(text|image|voice|file|video|poll|sticker)$")
+    type: str = Field(
+        default="text",
+        pattern="^(text|image|voice|file|video|poll|sticker|location)$",
+    )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
     reply_to_message_id: Optional[int] = None

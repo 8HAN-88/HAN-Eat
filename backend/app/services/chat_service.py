@@ -1815,6 +1815,8 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "poll" and not content.strip():
             raise ValueError("empty_poll")
+        if msg_type == "location" and not content.strip():
+            raise ValueError("empty_location")
         if reply_to_message_id is not None:
             reply_target = (
                 self.db.query(Message.id)
@@ -1939,15 +1941,117 @@ class ChatService:
                     member.last_group_message_at = now
 
         self.db.flush()
+        self._notify_new_message(msg, sender_id=sender_id, msg_type=msg_type, content=content)
+        return msg, True
 
-        # Уведомление получателю
+    def forward_message(
+        self,
+        *,
+        target_conversation_id: int,
+        source_conversation_id: int,
+        message_id: int,
+        sender_id: int,
+    ) -> Message:
+        if not self._is_member(target_conversation_id, sender_id):
+            raise ValueError("forbidden")
+        if not self._is_member(source_conversation_id, sender_id):
+            raise ValueError("forbidden")
+
+        src = (
+            self.db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == source_conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not src:
+            raise ValueError("not_found")
+        if src.type == "poll":
+            raise ValueError("cannot_forward_poll")
+
+        # Preserve original author when re-forwarding an already-forwarded msg.
+        if getattr(src, "forward_from_user_id", None):
+            forward_user_id = src.forward_from_user_id
+            forward_name = src.forward_from_name
+        else:
+            forward_user_id = src.sender_id
+            author = self.db.query(User).filter(User.id == src.sender_id).first()
+            forward_name = (
+                (author.name or author.username or "Пользователь")
+                if author
+                else "Пользователь"
+            )
+
+        msg, _ = self.send_message(
+            conversation_id=target_conversation_id,
+            sender_id=sender_id,
+            msg_type=src.type,
+            content=src.content or "",
+            media_url=src.media_url,
+        )
+        msg.forward_from_user_id = forward_user_id
+        msg.forward_from_name = (forward_name or "")[:120] or None
+        msg.forwarded_from_message_id = src.id
+        self.db.flush()
+        return msg
+
+    def _mentioned_member_ids(self, conversation_id: int, content: str) -> set[int]:
+        if not content:
+            return set()
+        import re
+
+        handles = {
+            m.group(1).lower()
+            for m in re.finditer(r"(?<!\w)@([a-zA-Z0-9_]{2,})", content)
+        }
+        if not handles:
+            return set()
+        members = (
+            self.db.query(ConversationMember.user_id)
+            .filter(ConversationMember.conversation_id == conversation_id)
+            .all()
+        )
+        member_ids = [uid for (uid,) in members]
+        if not member_ids:
+            return set()
+        users = (
+            self.db.query(User)
+            .filter(
+                User.id.in_(member_ids),
+                User.username.isnot(None),
+                User.deleted_at.is_(None),
+            )
+            .all()
+        )
+        out: set[int] = set()
+        for u in users:
+            uname = (u.username or "").lstrip("@").lower()
+            if uname and uname in handles:
+                out.add(u.id)
+        return out
+
+    def _notify_new_message(
+        self,
+        msg: Message,
+        *,
+        sender_id: int,
+        msg_type: str,
+        content: str,
+    ) -> None:
+        conversation_id = msg.conversation_id
         members = (
             self.db.query(ConversationMember)
             .filter(ConversationMember.conversation_id == conversation_id)
             .all()
         )
         sender = self.db.query(User).filter(User.id == sender_id).first()
-        sender_name = (sender.name or sender.username or "Пользователь") if sender else "Пользователь"
+        sender_name = (
+            (sender.name or sender.username or "Пользователь")
+            if sender
+            else "Пользователь"
+        )
         if msg_type == "voice":
             preview = "🎤 Голосовое"
         elif msg_type == "image":
@@ -1959,16 +2063,32 @@ class ChatService:
             preview = "🎬 Видео"
         elif msg_type == "sticker":
             preview = "🧩 Стикер"
+        elif msg_type == "location":
+            preview = "📍 Геопозиция"
         elif msg_type == "poll":
             from app.services.chat_poll_service import poll_preview_text
+
             preview = poll_preview_text(content)
         else:
             preview = content[:120] if content else ""
+
+        mentioned_ids = self._mentioned_member_ids(conversation_id, content or "")
+        mentioned_ids.discard(sender_id)
         notif = NotificationService(self.db)
         for m in members:
             if m.user_id == sender_id:
                 continue
             if m.muted_at is not None:
+                continue
+            if m.user_id in mentioned_ids:
+                notif.notify_chat_mention(
+                    mentioned_user_id=m.user_id,
+                    mentioner_id=sender_id,
+                    conversation_id=conversation_id,
+                    message_id=msg.id,
+                    mentioner_name=sender_name,
+                    preview=preview,
+                )
                 continue
             notif.create_notification(
                 user_id=m.user_id,
@@ -1984,8 +2104,6 @@ class ChatService:
                     "route": "chat",
                 },
             )
-
-        return msg, True
 
     def schedule_message(
         self,

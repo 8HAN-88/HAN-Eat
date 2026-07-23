@@ -464,6 +464,44 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendLocation({
+    required int conversationId,
+    required String content,
+    int? replyToMessageId,
+    String? clientMessageId,
+  }) async {
+    return _send(
+      conversationId: conversationId,
+      type: 'location',
+      content: content,
+      replyToMessageId: replyToMessageId,
+      clientMessageId: clientMessageId,
+    );
+  }
+
+  static Future<ChatMessage> forwardMessage({
+    required int targetConversationId,
+    required int sourceConversationId,
+    required int messageId,
+  }) async {
+    final uri =
+        Uri.parse('$_base/chats/$targetConversationId/messages/forward');
+    final response = await _post(
+      uri,
+      retries: 1,
+      timeout: _sendTimeout,
+      bypassRateLimitGate: true,
+      body: jsonEncode({
+        'source_conversation_id': sourceConversationId,
+        'message_id': messageId,
+      }),
+    );
+    _ensureOk(response, 'Не удалось переслать сообщение');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ScheduledChatMessage> scheduleText({
     required int conversationId,
     required String content,

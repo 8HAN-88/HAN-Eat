@@ -31,6 +31,7 @@ import '../../../core/theme/color_schemes.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/network/feed_load_helper.dart';
 import '../../../core/network/haneat_http_client.dart';
+import '../../../core/platform/device_location.dart';
 import '../../../core/platform/web_page_visibility.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
@@ -68,6 +69,7 @@ import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
+import 'widgets/chat_location_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
@@ -1755,6 +1757,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
+    }
+    if (msg.type == 'location' ||
+        ChatLocationPayload.tryParse(msg.content) != null) {
+      return '📍 Геопозиция';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
@@ -3561,60 +3567,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendForwardTo(ChatConversation target, ChatMessage msg) async {
-    final mediaUrl = msg.mediaUrl?.trim();
-    if (msg.type == 'image' && mediaUrl != null && mediaUrl.isNotEmpty) {
-      await ChatService.sendImage(
-        conversationId: target.id,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
-        caption: msg.content.trim(),
-      );
-      return;
+    if (msg.id <= 0) {
+      throw Exception('Нельзя переслать неотправленное сообщение');
     }
-    if (msg.type == 'voice' && mediaUrl != null && mediaUrl.isNotEmpty) {
-      await ChatService.sendVoice(
-        conversationId: target.id,
-        mediaUrl: ServerConfig.resolveVoiceMediaUrl(mediaUrl),
-        durationSec: msg.voiceDurationSec ?? 1,
-      );
-      return;
+    if (msg.type == 'poll') {
+      throw Exception('Опросы пока нельзя пересылать');
     }
-    if (msg.type == 'file' && mediaUrl != null && mediaUrl.isNotEmpty) {
-      await ChatService.sendFile(
-        conversationId: target.id,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
-        fileName: msg.content.trim().isEmpty ? 'Файл' : msg.content.trim(),
-      );
-      return;
-    }
-    if (msg.type == 'video' && mediaUrl != null && mediaUrl.isNotEmpty) {
-      await ChatService.sendVideo(
-        conversationId: target.id,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
-        caption: msg.content.trim(),
-      );
-      return;
-    }
-    if (msg.type == 'sticker' && mediaUrl != null && mediaUrl.isNotEmpty) {
-      await ChatService.sendSticker(
-        conversationId: target.id,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
-        emoji: msg.content.trim(),
-      );
-      return;
-    }
-    final label = msg.isMine
-        ? 'Вы'
-        : (msg.senderName ?? _senderNames[msg.senderId] ?? 'Сообщение');
-    final body = msg.type == 'voice'
-        ? '🎤 Голосовое'
-        : msg.type == 'image'
-            ? '📷 Фото'
-            : msg.type == 'sticker'
-                ? '🧩 Стикер'
-                : msg.content.trim();
-    await ChatService.sendText(
-      conversationId: target.id,
-      content: '↪ $label: ${body.isEmpty ? 'Сообщение' : body}',
+    await ChatService.forwardMessage(
+      targetConversationId: target.id,
+      sourceConversationId: widget.conversationId,
+      messageId: msg.id,
     );
   }
 
@@ -4518,6 +4480,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
+    }
+    if (msg.type == 'location' ||
+        ChatLocationPayload.tryParse(msg.content) != null) {
+      return '📍 Геопозиция';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
@@ -7119,6 +7085,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             phoneE164: phoneE164,
           );
         }
+      case ChatAttachResult.location:
+        await _sendCurrentLocation();
       case ChatAttachResult.resendFile:
         final url = selection.resendFileUrl;
         final name = selection.resendFileName;
@@ -7198,6 +7166,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } else {
         await _sendPickedImage(file, caption: itemCaption);
       }
+    }
+  }
+
+  Future<void> _sendCurrentLocation() async {
+    try {
+      final pos = await getDeviceLocation();
+      if (!mounted) return;
+      if (pos == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              kIsWeb
+                  ? 'Не удалось получить геолокацию. Разрешите доступ в браузере.'
+                  : 'Геолокация пока доступна в веб-версии haneat.app',
+            ),
+          ),
+        );
+        return;
+      }
+      final content = ChatLocationPayload.encode(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+      );
+      await ChatService.sendLocation(
+        conversationId: widget.conversationId,
+        content: content,
+        replyToMessageId: _replyTo?.id,
+      );
+      setState(() => _replyTo = null);
+      AppHaptics.selection();
+      await _pollNew();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -9846,11 +9850,14 @@ class _Bubble extends StatelessWidget {
         ? const EdgeInsets.fromLTRB(2, 2, 2, 0)
         : (isMedia ? EdgeInsets.zero : const EdgeInsets.fromLTRB(8, 4, 8, 3));
     // Stickers and full-bleed media stay transparent; reactions live outside.
+    final isForwarded = message.isForwarded;
     final bubbleNeedsBackground = isSticker
         ? (replyQuote != null ||
+            isForwarded ||
             (showSenderName && (senderLabel?.isNotEmpty ?? false)))
         : (!isFullBleedMedia ||
             replyQuote != null ||
+            isForwarded ||
             (showSenderName && (senderLabel?.isNotEmpty ?? false)));
     final hasReactions = message.reactions.isNotEmpty;
     final activeBorderColor = scheme.primary.withValues(alpha: 0.75);
@@ -9884,6 +9891,21 @@ class _Bubble extends StatelessWidget {
           onClose: onPollClose,
           closing: pollClosing,
         ),
+      );
+    } else if (message.type == 'location' ||
+        ChatLocationPayload.tryParse(message.content) != null) {
+      final loc = ChatLocationPayload.tryParse(message.content);
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: loc == null
+            ? Text('📍 Геопозиция', style: TextStyle(color: fg))
+            : ChatLocationBubble(
+                payload: loc,
+                foregroundColor: fg,
+                accentColor: scheme.primary,
+                backgroundColor: quoteBg,
+              ),
       );
     } else if (ChatContactPayload.tryParse(message.content)
         case final contact?) {
@@ -10179,6 +10201,22 @@ class _Bubble extends StatelessWidget {
             ),
             const SizedBox(height: 2),
           ],
+          if (isForwarded)
+            Padding(
+              padding: isMedia && !isSticker
+                  ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
+                  : EdgeInsets.zero,
+              child: Text(
+                'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? message.forwardFromName!.trim() : 'пользователя'}',
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.15,
+                ),
+              ),
+            ),
+          if (isForwarded) const SizedBox(height: 2),
           if (replyQuote != null)
             Padding(
               padding: isMedia && !isSticker

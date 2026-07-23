@@ -181,6 +181,33 @@ class NotificationService:
         )
         
         return notification
+
+    def notify_chat_mention(
+        self,
+        *,
+        mentioned_user_id: int,
+        mentioner_id: int,
+        conversation_id: int,
+        message_id: int,
+        mentioner_name: str,
+        preview: str = "",
+    ):
+        """Уведомить об @упоминании в чате."""
+        return self.create_notification(
+            user_id=mentioned_user_id,
+            type="mention",
+            title=f"{mentioner_name} упомянул(а) вас",
+            body=(preview or None),
+            entity_type="conversation",
+            entity_id=conversation_id,
+            actor_id=mentioner_id,
+            data={
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "route": "chat",
+                "action": "mention",
+            },
+        )
     
     def _send_push_notification(self, notification: Notification):
         """Отправить push-уведомление через FCM/APNs"""

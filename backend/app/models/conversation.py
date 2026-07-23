@@ -148,6 +148,14 @@ class Message(Base):
     reply_to_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
     client_message_id = Column(String(64), nullable=True)
     inline_keyboard_json = Column(String(4000), nullable=True)
+    # Forward attribution (Telegram «Переслано от…»)
+    forward_from_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    forward_from_name = Column(String(120), nullable=True)
+    forwarded_from_message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime, server_default=func.now(), index=True)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)

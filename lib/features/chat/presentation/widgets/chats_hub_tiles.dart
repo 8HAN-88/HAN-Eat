@@ -6,6 +6,7 @@ import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
 import 'chat_contact_bubble.dart';
+import 'chat_location_bubble.dart';
 
 class ChatHubTile extends StatelessWidget {
   const ChatHubTile({
@@ -38,6 +39,10 @@ class ChatHubTile extends StatelessWidget {
     if (msg.type == 'image') return 'Фото';
     if (msg.type == 'video') return 'Видео';
     if (msg.type == 'sticker') return 'Стикер';
+    if (msg.type == 'location' ||
+        ChatLocationPayload.tryParse(msg.content) != null) {
+      return 'Геопозиция';
+    }
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? 'Файл' : name;
@@ -69,11 +74,16 @@ class ChatHubTile extends StatelessWidget {
         return Icons.videocam_rounded;
       case 'sticker':
         return Icons.emoji_emotions_outlined;
+      case 'location':
+        return Icons.location_on_rounded;
       case 'file':
         return Icons.insert_drive_file_outlined;
       case 'poll':
         return Icons.poll_outlined;
       default:
+        if (ChatLocationPayload.tryParse(msg.content) != null) {
+          return Icons.location_on_rounded;
+        }
         if (ChatContactPayload.tryParse(msg.content) != null) {
           return Icons.person_rounded;
         }
