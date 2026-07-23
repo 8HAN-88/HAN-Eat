@@ -97,6 +97,7 @@ class ChatContactBubble extends StatelessWidget {
     required this.accentColor,
     required this.cardColor,
     this.onOpenProfile,
+    this.onMessageUser,
   });
 
   final ChatContactPayload payload;
@@ -104,6 +105,7 @@ class ChatContactBubble extends StatelessWidget {
   final Color accentColor;
   final Color cardColor;
   final VoidCallback? onOpenProfile;
+  final VoidCallback? onMessageUser;
 
   Future<void> _callPhone() async {
     final phone = payload.phone;
@@ -115,6 +117,55 @@ class ChatContactBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = payload.username ?? payload.phone ?? 'Контакт';
+    final actions = <Widget>[];
+    if (payload.userId != null && onMessageUser != null) {
+      actions.add(
+        Expanded(
+          child: FilledButton(
+            onPressed: onMessageUser,
+            style: FilledButton.styleFrom(
+              backgroundColor: accentColor,
+              foregroundColor: Colors.white,
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Написать'),
+          ),
+        ),
+      );
+    }
+    if (payload.userId != null) {
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
+      actions.add(
+        Expanded(
+          child: OutlinedButton(
+            onPressed: onOpenProfile,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: accentColor,
+              side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Профиль'),
+          ),
+        ),
+      );
+    }
+    if (payload.phone != null) {
+      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
+      actions.add(
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _callPhone,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: accentColor,
+              side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('Позвонить'),
+          ),
+        ),
+      );
+    }
+
     return Material(
       color: cardColor,
       borderRadius: BorderRadius.circular(12),
@@ -163,42 +214,9 @@ class ChatContactBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              if (payload.hasAction) ...[
+              if (actions.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (payload.userId != null)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: onOpenProfile,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: accentColor,
-                            side: BorderSide(
-                              color: accentColor.withValues(alpha: 0.45),
-                            ),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          child: const Text('Профиль'),
-                        ),
-                      ),
-                    if (payload.userId != null && payload.phone != null)
-                      const SizedBox(width: 8),
-                    if (payload.phone != null)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _callPhone,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: accentColor,
-                            side: BorderSide(
-                              color: accentColor.withValues(alpha: 0.45),
-                            ),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          child: const Text('Позвонить'),
-                        ),
-                      ),
-                  ],
-                ),
+                Row(children: actions),
               ],
             ],
           ),

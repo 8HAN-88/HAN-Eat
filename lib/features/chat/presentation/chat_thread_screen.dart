@@ -287,6 +287,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _videoNoteComposerMode = false;
   bool _stickerPanelOpen = false;
   bool _hasText = false;
+  String? _composerLinkPreviewUrl;
+  String? _composerLinkPreviewDismissedUrl;
+  Timer? _composerLinkDebounce;
+  List<ChatMessage> _serverSearchHits = const [];
+  int _serverSearchSeq = 0;
   Duration _recordDuration = Duration.zero;
   int _messageLoadSeq = 0;
   Timer? _recordTimer;
@@ -1271,6 +1276,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final has = _controller.text.trim().isNotEmpty;
     if (has != _hasText) setState(() => _hasText = has);
     _scheduleDraftSave();
+    _scheduleComposerLinkPreview();
 
     // === Live Inline Mode (@bot) ===
     _scheduleInlineSuggestions();
@@ -1287,6 +1293,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _typingDebounce?.cancel();
     _typingDebounce = Timer(const Duration(milliseconds: 800), () {
       ChatService.sendTyping(conversationId: widget.conversationId);
+    });
+  }
+
+  void _scheduleComposerLinkPreview() {
+    _composerLinkDebounce?.cancel();
+    _composerLinkDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      final url = extractFirstHttpUrl(_controller.text);
+      if (url == null) {
+        if (_composerLinkPreviewUrl != null ||
+            _composerLinkPreviewDismissedUrl != null) {
+          setState(() {
+            _composerLinkPreviewUrl = null;
+            _composerLinkPreviewDismissedUrl = null;
+          });
+        }
+        return;
+      }
+      if (url == _composerLinkPreviewDismissedUrl) return;
+      if (url == _composerLinkPreviewUrl) return;
+      setState(() => _composerLinkPreviewUrl = url);
     });
   }
 
@@ -3440,6 +3467,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _typingUserTimers.clear();
     _typingUserIds.clear();
     _inlineDebounce?.cancel();
+    _composerLinkDebounce?.cancel();
     _hideInlineOverlay();
     _markReadDebounce?.cancel();
     _markDeliveredDebounce?.cancel();
@@ -3486,6 +3514,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _openUserProfile(int userId) {
     if (userId <= 0) return;
     context.push(ProfileRoute.withUserId(userId));
+  }
+
+  Future<void> _messageContactUser(int userId) async {
+    if (userId <= 0) return;
+    final peer = _conversation.peer;
+    if (!_conversation.isGroup && peer?.id == userId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вы уже в этом чате')),
+      );
+      return;
+    }
+    try {
+      final conv = await ChatService.openDirectChat(userId);
+      if (!mounted) return;
+      if (conv.id == widget.conversationId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Вы уже в этом чате')),
+        );
+        return;
+      }
+      await context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось открыть чат'),
+          ),
+        ),
+      );
+    }
   }
 
   void _openPeerProfile() {
@@ -3755,12 +3814,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _threadSearchOpen = !_threadSearchOpen;
       if (!_threadSearchOpen) {
         _searchBackfillSeq++;
+        _serverSearchSeq++;
         _searchAutoloading = false;
         _searchBackfillLoads = 0;
         _threadSearchQuery = '';
         _threadSearchFilter = _ThreadSearchFilter.all;
         _threadSearchSenderId = null;
         _searchMatchIndex = 0;
+        _serverSearchHits = const [];
         _threadSearchController.clear();
       }
     });
@@ -3840,14 +3901,76 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _threadSearchSenderId != null;
   }
 
+  bool _serverHitMatchesFilters(ChatMessage msg) {
+    if (_threadSearchSenderId != null &&
+        msg.senderId != _threadSearchSenderId) {
+      return false;
+    }
+    return _messageMatchesFilter(msg);
+  }
+
   List<int> get _searchMatchIds {
     final sourceMessages = _visibleMessages;
     final q = _threadSearchQuery.trim().toLowerCase();
     if (!_threadSearchHasCriteria) return const [];
-    return [
-      for (final msg in sourceMessages)
-        if (_messageMatchesSearch(msg, q)) msg.id,
-    ];
+    final seen = <int>{};
+    final ids = <int>[];
+    for (final msg in _serverSearchHits) {
+      if (_serverHitMatchesFilters(msg) && seen.add(msg.id)) {
+        ids.add(msg.id);
+      }
+    }
+    for (final msg in sourceMessages) {
+      if (_messageMatchesSearch(msg, q) && seen.add(msg.id)) {
+        ids.add(msg.id);
+      }
+    }
+    return ids;
+  }
+
+  String? _searchTypeForFilter(_ThreadSearchFilter filter) {
+    switch (filter) {
+      case _ThreadSearchFilter.files:
+        return 'file';
+      case _ThreadSearchFilter.text:
+        return 'text';
+      case _ThreadSearchFilter.media:
+      case _ThreadSearchFilter.all:
+      case _ThreadSearchFilter.links:
+      case _ThreadSearchFilter.mine:
+        return null;
+    }
+  }
+
+  Future<void> _runServerThreadSearch(String query) async {
+    final q = query.trim();
+    if (q.length < 2) {
+      if (_serverSearchHits.isNotEmpty && mounted) {
+        setState(() => _serverSearchHits = const []);
+      }
+      return;
+    }
+    final seq = ++_serverSearchSeq;
+    try {
+      final hits = await ChatService.searchMessages(
+        query: q,
+        conversationId: widget.conversationId,
+        type: _searchTypeForFilter(_threadSearchFilter),
+        limit: 60,
+      );
+      if (!mounted || seq != _serverSearchSeq) return;
+      setState(() {
+        _serverSearchHits = [
+          for (final hit in hits) hit.message,
+        ];
+        if (_searchMatchIndex >= _searchMatchIds.length) {
+          _searchMatchIndex = 0;
+        }
+      });
+      _scrollToCurrentSearchMatch();
+    } catch (_) {
+      // Keep local matches if server search fails.
+    }
   }
 
   void _onThreadSearchChanged(String value) {
@@ -3860,10 +3983,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _threadSearchQuery = value;
       _searchMatchIndex = 0;
       _searchBackfillLoads = 0;
-      if (!hasCriteria) _searchAutoloading = false;
+      if (!hasCriteria) {
+        _searchAutoloading = false;
+        _serverSearchHits = const [];
+      }
     });
     _scrollToCurrentSearchMatch();
     if (hasCriteria) {
+      unawaited(_runServerThreadSearch(value));
       unawaited(
         _backfillSearchFromHistory(
           normalized,
@@ -3885,10 +4012,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _threadSearchFilter = value;
       _searchMatchIndex = 0;
       _searchBackfillLoads = 0;
-      if (!hasCriteria) _searchAutoloading = false;
+      if (!hasCriteria) {
+        _searchAutoloading = false;
+        _serverSearchHits = const [];
+      }
     });
     _scrollToCurrentSearchMatch();
     if (hasCriteria) {
+      unawaited(_runServerThreadSearch(_threadSearchQuery));
       unawaited(
         _backfillSearchFromHistory(
           normalized,
@@ -3985,10 +4116,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _threadSearchSenderId = senderId;
       _searchMatchIndex = 0;
       _searchBackfillLoads = 0;
-      if (!hasCriteria) _searchAutoloading = false;
+      if (!hasCriteria) {
+        _searchAutoloading = false;
+        _serverSearchHits = const [];
+      }
     });
     _scrollToCurrentSearchMatch();
     if (hasCriteria) {
+      unawaited(_runServerThreadSearch(_threadSearchQuery));
       unawaited(
         _backfillSearchFromHistory(
           normalized,
@@ -4003,7 +4138,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final ids = _searchMatchIds;
     if (ids.isEmpty) return;
     final idx = _searchMatchIndex.clamp(0, ids.length - 1);
-    _scrollToMessage(ids[idx]);
+    unawaited(_focusSearchMatchId(ids[idx]));
+  }
+
+  Future<void> _focusSearchMatchId(int messageId) async {
+    if (_messages.any((m) => m.id == messageId)) {
+      _scrollToMessage(messageId);
+      _focusMessageTemporarily(messageId);
+      return;
+    }
+    await _scrollToReplyMessage(messageId);
+    if (!mounted) return;
+    _focusMessageTemporarily(messageId);
   }
 
   void _goToSearchMatch(bool forward) {
@@ -4016,14 +4162,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _searchMatchIndex = (_searchMatchIndex - 1 + ids.length) % ids.length;
       }
     });
-    _scrollToMessage(ids[_searchMatchIndex]);
+    unawaited(_focusSearchMatchId(ids[_searchMatchIndex]));
   }
 
   void _jumpToFirstSearchMatch() {
     final ids = _searchMatchIds;
     if (ids.isEmpty) return;
     setState(() => _searchMatchIndex = 0);
-    _scrollToMessage(ids.first);
+    unawaited(_focusSearchMatchId(ids.first));
   }
 
   Future<void> _backfillSearchFromHistory(
@@ -5132,6 +5278,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : null,
       onOpenContactUser:
           interactive ? (userId) => _openUserProfile(userId) : null,
+      onMessageContactUser: interactive
+          ? (userId) => unawaited(_messageContactUser(userId))
+          : null,
     );
   }
 
@@ -5769,6 +5918,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     var reserve = bottom + keyboard + composerRow + 12;
     if (_replyTo != null) reserve += bannerRow;
     if (_editingMessage != null) reserve += bannerRow;
+    if (_composerLinkPreviewUrl != null && _editingMessage == null) {
+      reserve += 72;
+    }
     if (_recording) reserve += 96;
     if (_sending) reserve += 40;
     return reserve;
@@ -7200,6 +7352,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<int> _probeVideoDurationSec(XFile file) async {
+    VideoPlayerController? controller;
+    try {
+      final path = file.path.trim();
+      if (path.isEmpty) return 1;
+      final uri = kIsWeb ||
+              path.startsWith('blob:') ||
+              path.startsWith('http://') ||
+              path.startsWith('https://')
+          ? Uri.parse(path)
+          : Uri.file(path);
+      controller = VideoPlayerController.networkUrl(uri);
+      await controller.initialize().timeout(const Duration(seconds: 8));
+      return math.max(1, controller.value.duration.inSeconds);
+    } catch (_) {
+      return 1;
+    } finally {
+      final c = controller;
+      controller = null;
+      await c?.dispose();
+    }
+  }
+
   Future<void> _recordAndSendVideoNote() async {
     try {
       final picker = ImagePicker();
@@ -7214,6 +7389,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _uploadProgress = 0.05;
       });
       final prepared = await _normalizeVideoFileForUpload(file);
+      if (!mounted) return;
+      final durationSec = await _probeVideoDurationSec(prepared);
       if (!mounted) return;
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: prepared,
@@ -7232,7 +7409,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await ChatService.sendVideoNote(
         conversationId: widget.conversationId,
         mediaUrl: ServerConfig.resolveMediaUrl(url),
-        durationSec: 1,
+        durationSec: durationSec,
         replyToMessageId: _replyTo?.id,
       );
       if (!mounted) return;
@@ -8960,6 +9137,50 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 .containsKey(_pendingMediaRetry!.tempId))
                           _pendingMediaRetryBanner(scheme),
                         _animatedVisibility(
+                          visible: _composerLinkPreviewUrl != null &&
+                              _editingMessage == null,
+                          keyName: 'composer-link-preview',
+                          child: _composerLinkPreviewUrl == null
+                              ? const SizedBox.shrink()
+                              : Material(
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? const Color(0xFF1A2632)
+                                      : scheme.surface,
+                                  child: Padding(
+                                    padding:
+                                        const EdgeInsets.fromLTRB(10, 4, 2, 4),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: ChatLinkPreview(
+                                            url: _composerLinkPreviewUrl!,
+                                            foregroundColor: scheme.onSurface,
+                                            accentColor: scheme.primary,
+                                            backgroundColor: scheme
+                                                .surfaceContainerHighest
+                                                .withValues(alpha: 0.55),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Скрыть превью',
+                                          icon: const Icon(Icons.close, size: 18),
+                                          onPressed: () {
+                                            setState(() {
+                                              _composerLinkPreviewDismissedUrl =
+                                                  _composerLinkPreviewUrl;
+                                              _composerLinkPreviewUrl = null;
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        _animatedVisibility(
                           visible: _editingMessage != null,
                           keyName: 'edit-banner',
                           child: _editingMessage == null
@@ -9593,6 +9814,7 @@ class _Bubble extends StatelessWidget {
     this.onInlineButtonTap,
     this.callbackLoadingData = const <String>{},
     this.onOpenContactUser,
+    this.onMessageContactUser,
   });
 
   final ChatMessage message;
@@ -9623,6 +9845,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
   final ValueChanged<int>? onOpenContactUser;
+  final ValueChanged<int>? onMessageContactUser;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -10078,6 +10301,10 @@ class _Bubble extends StatelessWidget {
           onOpenProfile: contactUserId == null || onOpenContactUser == null
               ? null
               : () => onOpenContactUser!(contactUserId),
+          onMessageUser:
+              contactUserId == null || onMessageContactUser == null
+                  ? null
+                  : () => onMessageContactUser!(contactUserId),
         ),
       );
     } else if (message.type == 'file' && message.mediaUrl != null) {

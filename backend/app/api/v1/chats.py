@@ -1280,7 +1280,7 @@ async def search_messages_global(
     q: str = Query(..., min_length=2),
     type: Optional[str] = Query(
         None,
-        pattern="^(text|image|voice|file|video|poll|sticker)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
@@ -1308,7 +1308,7 @@ async def search_messages_in_chat(
     q: str = Query(..., min_length=2),
     type: Optional[str] = Query(
         None,
-        pattern="^(text|image|voice|file|video|poll|sticker)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),

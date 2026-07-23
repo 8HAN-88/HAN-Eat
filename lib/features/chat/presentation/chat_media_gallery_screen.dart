@@ -44,7 +44,10 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
           (m) =>
               m.mediaUrl != null &&
               m.mediaUrl!.trim().isNotEmpty &&
-              (m.type == 'image' || m.type == 'video' || m.type == 'file'),
+              (m.type == 'image' ||
+                  m.type == 'video' ||
+                  m.type == 'video_note' ||
+                  m.type == 'file'),
         )
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -55,7 +58,9 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
       case _MediaFilter.photos:
         return _allMedia.where((m) => m.type == 'image').toList();
       case _MediaFilter.videos:
-        return _allMedia.where((m) => m.type == 'video').toList();
+        return _allMedia
+            .where((m) => m.type == 'video' || m.type == 'video_note')
+            .toList();
       case _MediaFilter.files:
         return _allMedia.where((m) => m.type == 'file').toList();
       case _MediaFilter.links:
@@ -168,7 +173,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                         itemBuilder: (context, index) {
                           final msg = items[index];
                           final url = msg.mediaUrl!;
-                          if (msg.type == 'video') {
+                          if (msg.type == 'video' || msg.type == 'video_note') {
                             return Stack(
                               fit: StackFit.expand,
                               children: [
