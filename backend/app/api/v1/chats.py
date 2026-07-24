@@ -580,6 +580,9 @@ def _conversation_response(
         )
     peer_read = _peer_last_read_id(db, svc, conv, current_user.id)
     peer_delivered = _peer_last_delivered_id(db, svc, conv, current_user.id)
+    peer_blocked_by_me = False
+    if conv.type == "direct" and peer is not None:
+        peer_blocked_by_me = svc.is_user_blocked_by_me(current_user.id, peer.id)
     last = row.get("last_message")
     last_resp = None
     if last:
@@ -629,6 +632,7 @@ def _conversation_response(
         am_i_send_restricted=am_i_send_restricted,
         am_i_send_restricted_until=am_i_send_restricted_until,
         am_i_send_restriction_reason=am_i_send_restriction_reason,
+        peer_blocked_by_me=peer_blocked_by_me,
     )
 
 

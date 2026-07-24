@@ -337,6 +337,7 @@ class ChatConversation {
     this.amISendRestricted = false,
     this.amISendRestrictedUntil,
     this.amISendRestrictionReason,
+    this.peerBlockedByMe = false,
   });
 
   final int id;
@@ -363,6 +364,7 @@ class ChatConversation {
   final bool amISendRestricted;
   final DateTime? amISendRestrictedUntil;
   final String? amISendRestrictionReason;
+  final bool peerBlockedByMe;
 
   bool get isGroup => type == 'group';
 
@@ -435,6 +437,7 @@ class ChatConversation {
           ? DateTime.tryParse(json['am_i_send_restricted_until'] as String)
           : null,
       amISendRestrictionReason: json['am_i_send_restriction_reason'] as String?,
+      peerBlockedByMe: json['peer_blocked_by_me'] as bool? ?? false,
     );
   }
 
@@ -456,6 +459,7 @@ class ChatConversation {
     bool? amISendRestricted,
     DateTime? amISendRestrictedUntil,
     String? amISendRestrictionReason,
+    bool? peerBlockedByMe,
   }) {
     return ChatConversation(
       id: id,
@@ -487,6 +491,7 @@ class ChatConversation {
           amISendRestrictedUntil ?? this.amISendRestrictedUntil,
       amISendRestrictionReason:
           amISendRestrictionReason ?? this.amISendRestrictionReason,
+      peerBlockedByMe: peerBlockedByMe ?? this.peerBlockedByMe,
     );
   }
 }

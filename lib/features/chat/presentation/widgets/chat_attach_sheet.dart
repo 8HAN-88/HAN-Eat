@@ -5,12 +5,14 @@ import 'dart:ui' show ImageFilter;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../miniapps/presentation/miniapps_catalog_screen.dart';
 
 import '../../../../core/haptics/app_haptics.dart';
+import '../../../../core/platform/device_location.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../models/sticker_models.dart';
@@ -26,6 +28,7 @@ import '../../application/chat_recent_stickers_store.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
+import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
 import 'create_chat_poll_sheet.dart';
@@ -67,6 +70,8 @@ class ChatAttachSelection {
     this.pickedFileName,
     this.stickerMediaUrl,
     this.stickerEmoji,
+    this.latitude,
+    this.longitude,
   });
 
   final ChatAttachResult kind;
@@ -81,6 +86,8 @@ class ChatAttachSelection {
   final String? pickedFileName;
   final String? stickerMediaUrl;
   final String? stickerEmoji;
+  final double? latitude;
+  final double? longitude;
 
   factory ChatAttachSelection.gallery(List<XFile> files) =>
       ChatAttachSelection._(
@@ -143,8 +150,15 @@ class ChatAttachSelection {
         stickerEmoji: emoji,
       );
 
-  factory ChatAttachSelection.location() =>
-      ChatAttachSelection._(kind: ChatAttachResult.location);
+  factory ChatAttachSelection.location({
+    double? latitude,
+    double? longitude,
+  }) =>
+      ChatAttachSelection._(
+        kind: ChatAttachResult.location,
+        latitude: latitude,
+        longitude: longitude,
+      );
 
   factory ChatAttachSelection.videoNote() =>
       ChatAttachSelection._(kind: ChatAttachResult.videoNote);
@@ -1131,7 +1145,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.location:
         return _LocationPickPanel(
           scrollController: scrollController,
-          onSend: () => _close(ChatAttachSelection.location()),
+          onSend: (lat, lng) => _close(
+            ChatAttachSelection.location(latitude: lat, longitude: lng),
+          ),
           isDark: isDark,
         );
       case ChatAttachTab.videoNote:
@@ -1264,7 +1280,7 @@ class _GifPickPanel extends StatelessWidget {
   }
 }
 
-class _LocationPickPanel extends StatelessWidget {
+class _LocationPickPanel extends StatefulWidget {
   const _LocationPickPanel({
     required this.scrollController,
     required this.onSend,
@@ -1272,46 +1288,171 @@ class _LocationPickPanel extends StatelessWidget {
   });
 
   final ScrollController scrollController;
-  final VoidCallback onSend;
+  final void Function(double latitude, double longitude) onSend;
   final bool isDark;
+
+  @override
+  State<_LocationPickPanel> createState() => _LocationPickPanelState();
+}
+
+class _LocationPickPanelState extends State<_LocationPickPanel> {
+  bool _loading = true;
+  String? _error;
+  DeviceLatLng? _position;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadLocation());
+  }
+
+  Future<void> _loadLocation() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final pos = await getDeviceLocation();
+      if (!mounted) return;
+      if (pos == null) {
+        setState(() {
+          _loading = false;
+          _error = kIsWeb
+              ? 'Не удалось получить геолокацию. Разрешите доступ в браузере.'
+              : 'Не удалось получить геолокацию. Включите GPS и разрешите доступ.';
+          _position = null;
+        });
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _position = pos;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось получить геолокацию';
+        _position = null;
+      });
+    }
+  }
+
+  Future<void> _copyCoords() async {
+    final pos = _position;
+    if (pos == null) return;
+    final text =
+        '${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Координаты скопированы')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final pos = _position;
+    final payload = pos == null
+        ? null
+        : ChatLocationPayload(
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+          );
+
     return ListView(
-      controller: scrollController,
+      controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       children: [
-        const SizedBox(height: 24),
-        Icon(
-          Icons.location_on_outlined,
-          size: 56,
-          color: scheme.primary.withValues(alpha: 0.9),
-        ),
-        const SizedBox(height: 16),
         Text(
-          'Отправить геопозицию',
+          'Моя геопозиция',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          kIsWeb
-              ? 'Браузер запросит доступ к вашей геолокации.'
-              : 'Геолокация сейчас надёжнее работает в веб-версии haneat.app.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
+        const SizedBox(height: 12),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (payload != null) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 2,
+              child: Image.network(
+                payload.staticMapUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => ColoredBox(
+                  color: scheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.map_outlined,
+                    size: 40,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
               ),
-        ),
-        const SizedBox(height: 28),
-        FilledButton.icon(
-          onPressed: onSend,
-          icon: const Icon(Icons.my_location_outlined),
-          label: const Text('Отправить мою геопозицию'),
-        ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${payload.latitude.toStringAsFixed(5)}, ${payload.longitude.toStringAsFixed(5)}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => unawaited(_loadLocation()),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Обновить'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => unawaited(_copyCoords()),
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('Копировать'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => widget.onSend(pos!.latitude, pos.longitude),
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('Отправить'),
+          ),
+        ] else ...[
+          Icon(
+            Icons.location_off_outlined,
+            size: 48,
+            color: scheme.error.withValues(alpha: 0.85),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _error ?? 'Геолокация недоступна',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: () => unawaited(_loadLocation()),
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Повторить'),
+          ),
+        ],
       ],
     );
   }

@@ -3470,12 +3470,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: 'О группе',
               onTap: _openGroupInfo,
             ),
-          if (!isGroup && peer != null)
+          if (!isGroup && !isSaved && peer != null)
             TelegramActionSheetAction(
-              icon: Icons.block_outlined,
-              title: 'Заблокировать',
-              destructive: true,
-              onTap: _blockPeer,
+              icon: _conversation.peerBlockedByMe
+                  ? Icons.lock_open_outlined
+                  : Icons.block_outlined,
+              title: _conversation.peerBlockedByMe
+                  ? 'Разблокировать'
+                  : 'Заблокировать',
+              destructive: !_conversation.peerBlockedByMe,
+              onTap: _conversation.peerBlockedByMe ? _unblockPeer : _blockPeer,
             ),
           if (isGroup)
             TelegramActionSheetAction(
@@ -4761,7 +4765,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       await ChatService.blockUser(peer.id);
       if (!mounted) return;
-      Navigator.of(context).pop();
+      setState(() {
+        _conversation = _conversation.copyWith(peerBlockedByMe: true);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${peer.displayName} заблокирован')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _unblockPeer() async {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    try {
+      await ChatService.unblockUser(peer.id);
+      if (!mounted) return;
+      setState(() {
+        _conversation = _conversation.copyWith(peerBlockedByMe: false);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${peer.displayName} разблокирован')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5277,6 +5306,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             sent == selected.length
                 ? 'Переслано $sent в «${picked.displayTitle}»'
                 : 'Переслано $sent из ${selected.length} в «${picked.displayTitle}»',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _saveSelectedMessagesToFavorites() async {
+    if (_conversation.isSaved) return;
+    final selected = _selectedMessages.where((m) => m.id > 0).toList();
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сначала дождитесь отправки')),
+      );
+      return;
+    }
+    try {
+      final saved = await ChatService.ensureSavedChat();
+      if (!mounted) return;
+      var sent = 0;
+      for (final msg in selected) {
+        try {
+          await ChatService.forwardMessage(
+            targetConversationId: saved.id,
+            sourceConversationId: widget.conversationId,
+            messageId: msg.id,
+          );
+          sent += 1;
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      _exitSelectionMode();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sent == selected.length
+                ? 'В избранное: $sent'
+                : 'В избранное: $sent из ${selected.length}',
           ),
         ),
       );
@@ -7542,7 +7613,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
         }
       case ChatAttachResult.location:
-        await _sendCurrentLocation();
+        await _sendCurrentLocation(
+          latitude: selection.latitude,
+          longitude: selection.longitude,
+        );
       case ChatAttachResult.videoNote:
         await _recordAndSendVideoNote();
       case ChatAttachResult.resendFile:
@@ -7782,9 +7856,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _sendCurrentLocation() async {
+  Future<void> _sendCurrentLocation({
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
-      final pos = await getDeviceLocation();
+      DeviceLatLng? pos;
+      if (latitude != null && longitude != null) {
+        pos = DeviceLatLng(latitude: latitude, longitude: longitude);
+      } else {
+        pos = await getDeviceLocation();
+      }
       if (!mounted) return;
       if (pos == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -8381,10 +8463,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isRestrictedByModeration = _conversation.isGroup &&
         _conversation.amISendRestricted &&
         !_conversation.amIGroupAdmin;
+    final peerBlockedByMe = !isGroup &&
+        !isSaved &&
+        _conversation.peerBlockedByMe;
     final canSendInGroup = !(_conversation.isGroup &&
             _conversation.onlyAdminsCanPost &&
             !_conversation.amIGroupAdmin) &&
         !isRestrictedByModeration;
+    final canCompose = canSendInGroup && !peerBlockedByMe;
     String formatSlowMode(int seconds) {
       if (seconds <= 0) return 'выкл';
       if (seconds < 60) return '$seconds сек';
@@ -8393,7 +8479,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
 
     final showPostingLimitsHint = _conversation.isGroup &&
-        canSendInGroup &&
+        canCompose &&
         !_conversation.amIGroupAdmin &&
         (_conversation.slowModeSeconds > 0 ||
             _conversation.antiFloodMaxMessagesPerMinute > 0);
@@ -8419,7 +8505,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         activeCooldownSeconds > 0 && activeCooldownSeconds <= 3;
     final slowModePulseScale =
         isSlowModeUnlockSoon && activeCooldownSeconds.isOdd ? 1.08 : 1.0;
-    final canSendNow = canSendInGroup && activeCooldownSeconds <= 0;
+    final canSendNow = canCompose && activeCooldownSeconds <= 0;
     final retryBulkProgressLabel = _retryAllBulkBusy && _retryAllBulkTotal > 0
         ? '${_retryAllBulkDone.clamp(0, _retryAllBulkTotal)}/$_retryAllBulkTotal'
         : null;
@@ -9574,6 +9660,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   onCopy: _copySelectedMessages,
                   onShare: _shareSelectedMessages,
                   onForward: _forwardSelectedMessages,
+                  onSaveToFavorites: _conversation.isSaved
+                      ? null
+                      : _saveSelectedMessagesToFavorites,
                 )
               else
                 KeyedSubtree(
@@ -9717,7 +9806,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 : 'Только админы могут отправлять сообщения',
                           ),
                         ),
-                        if (!canSendNow && canSendInGroup)
+                        _animatedVisibility(
+                          visible: peerBlockedByMe,
+                          keyName: 'peer-blocked-banner',
+                          child: _composerInfoBanner(
+                            backgroundColor: scheme.errorContainer
+                                .withValues(alpha: 0.55),
+                            foregroundColor: scheme.onErrorContainer,
+                            icon: Icons.block_outlined,
+                            title: 'Пользователь заблокирован',
+                            subtitle: 'Вы не можете писать друг другу',
+                            trailing: TextButton(
+                              onPressed: () => unawaited(_unblockPeer()),
+                              child: const Text('Разблокировать'),
+                            ),
+                          ),
+                        ),
+                        if (!canSendNow && canCompose)
                           _compactComposerStrip(
                             icon: activeCooldownIcon,
                             label:
@@ -9907,7 +10012,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           child: TextField(
                                             controller: _controller,
                                             focusNode: _inputFocusNode,
-                                            enabled: canSendInGroup,
+                                            enabled: canCompose,
                                             minLines: 1,
                                             maxLines: 5,
                                             textInputAction:
@@ -9919,10 +10024,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               bottom: 96,
                                             ),
                                             decoration: InputDecoration(
-                                              hintText: !canSendInGroup
-                                                  ? (isRestrictedByModeration
-                                                      ? 'Отправка ограничена'
-                                                      : 'Только админы')
+                                              hintText: !canCompose
+                                                  ? (peerBlockedByMe
+                                                      ? 'Пользователь заблокирован'
+                                                      : (isRestrictedByModeration
+                                                          ? 'Отправка ограничена'
+                                                          : 'Только админы'))
                                                   : (activeCooldownSeconds > 0
                                                       ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
                                                       : (_editingMessage !=

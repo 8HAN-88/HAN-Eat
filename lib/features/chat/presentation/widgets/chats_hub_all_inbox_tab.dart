@@ -1064,7 +1064,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 icon: Icons.bookmark_rounded,
                 title: 'Избранное',
                 subtitle: 'Личное хранилище — только вы видите эти сообщения',
-                onTap: () {},
+                onTap: _openSavedChat,
               ),
             ]
           : [
@@ -1095,6 +1095,17 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 title: 'В архив',
                 onTap: () => _archiveChatFromHub(chat),
               ),
+              if (!chat.isGroup && chat.peer != null)
+                TelegramActionSheetAction(
+                  icon: chat.peerBlockedByMe
+                      ? Icons.lock_open_outlined
+                      : Icons.block_outlined,
+                  title: chat.peerBlockedByMe
+                      ? 'Разблокировать'
+                      : 'Заблокировать',
+                  destructive: !chat.peerBlockedByMe,
+                  onTap: () => _toggleBlockFromHub(chat),
+                ),
               TelegramActionSheetAction(
                 icon: chat.isGroup ? Icons.logout : Icons.delete_outline,
                 title: chat.isGroup ? 'Выйти из группы' : 'Удалить чат',
@@ -1103,6 +1114,60 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               ),
             ],
     );
+  }
+
+  Future<void> _toggleBlockFromHub(ChatConversation chat) async {
+    final peer = chat.peer;
+    if (peer == null || _hubActionChatId != null) return;
+    if (!chat.peerBlockedByMe) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Заблокировать?'),
+          content: Text(
+            '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Заблокировать'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    setState(() => _hubActionChatId = chat.id);
+    try {
+      if (chat.peerBlockedByMe) {
+        await ChatService.unblockUser(peer.id);
+      } else {
+        await ChatService.blockUser(peer.id);
+      }
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            chat.peerBlockedByMe
+                ? '${peer.displayName} разблокирован'
+                : '${peer.displayName} заблокирован',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _hubActionChatId = null);
+    }
   }
 
   Widget _hubOfflineBanner() {

@@ -11,6 +11,7 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
     required this.onForward,
     this.onReply,
     this.canReply = false,
+    this.onSaveToFavorites,
   });
 
   final bool enabled;
@@ -20,6 +21,7 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
   final VoidCallback? onForward;
   final VoidCallback? onReply;
   final bool canReply;
+  final VoidCallback? onSaveToFavorites;
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +30,10 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
         enabled ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
     final replyColor =
         canReply ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
+    final saveEnabled = enabled && onSaveToFavorites != null;
+    final saveColor = saveEnabled
+        ? scheme.onSurface
+        : scheme.onSurface.withValues(alpha: 0.35);
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -53,6 +59,12 @@ class ChatMessageSelectionToolbar extends StatelessWidget {
                 onPressed: enabled ? onCopy : null,
                 icon: Icon(Icons.copy_rounded, color: iconColor),
               ),
+              if (onSaveToFavorites != null)
+                IconButton(
+                  tooltip: 'В избранное',
+                  onPressed: saveEnabled ? onSaveToFavorites : null,
+                  icon: Icon(Icons.bookmark_border_rounded, color: saveColor),
+                ),
               IconButton(
                 tooltip: 'Поделиться',
                 onPressed: enabled ? onShare : null,

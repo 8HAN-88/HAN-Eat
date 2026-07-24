@@ -93,6 +93,7 @@ class ConversationResponse(BaseModel):
     am_i_send_restricted: bool = False
     am_i_send_restricted_until: Optional[datetime] = None
     am_i_send_restriction_reason: Optional[str] = None
+    peer_blocked_by_me: bool = False
 
     class Config:
         from_attributes = True
