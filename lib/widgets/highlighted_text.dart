@@ -15,6 +15,7 @@ class HighlightedText extends StatelessWidget {
     this.trailingReserveWidth,
     this.highlightMentions = false,
     this.mentionColor,
+    this.onMentionTap,
   });
 
   final String text;
@@ -26,6 +27,7 @@ class HighlightedText extends StatelessWidget {
   final double? trailingReserveWidth;
   final bool highlightMentions;
   final Color? mentionColor;
+  final ValueChanged<String>? onMentionTap;
 
   static final _mentionRe = RegExp(r'@[a-zA-Z0-9_]{2,}');
 
@@ -50,7 +52,23 @@ class HighlightedText extends StatelessWidget {
       if (m.start > start) {
         spans.add(TextSpan(text: source.substring(start, m.start)));
       }
-      spans.add(TextSpan(text: m.group(0), style: mentionStyle));
+      final mention = m.group(0)!;
+      final handle = mention.substring(1);
+      if (onMentionTap != null) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: GestureDetector(
+              onTap: () => onMentionTap!(handle),
+              behavior: HitTestBehavior.opaque,
+              child: Text(mention, style: mentionStyle),
+            ),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: mention, style: mentionStyle));
+      }
       start = m.end;
     }
     if (start < source.length) {

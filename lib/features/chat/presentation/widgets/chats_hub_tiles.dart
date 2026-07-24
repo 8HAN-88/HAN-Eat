@@ -15,6 +15,7 @@ class ChatHubTile extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.draftText,
+    this.draftHasReply = false,
     this.typingLabel,
   });
 
@@ -23,6 +24,8 @@ class ChatHubTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   /// Local composer draft (Telegram hub: red "Черновик: …").
   final String? draftText;
+  /// Draft includes an in-progress reply target.
+  final bool draftHasReply;
   /// Live typing preview from user SSE (`chat.typing`).
   final String? typingLabel;
 
@@ -216,16 +219,16 @@ class ChatHubTile extends StatelessWidget {
                         Expanded(
                           child: Row(
                             children: [
-                              if (hasDraft)
+                              if (hasDraft) ...[
                                 Text(
-                                  'Черновик: ',
+                                  draftHasReply ? 'Ответ: ' : 'Черновик: ',
                                   style: TextStyle(
                                     color: scheme.error,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                   ),
-                                )
-                              else if (prefix != null)
+                                ),
+                              ] else if (prefix != null)
                                 Text(
                                   prefix,
                                   style: TextStyle(

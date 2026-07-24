@@ -379,6 +379,13 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Личные чаты'),
+                  value: _filters.direct,
+                  onChanged: (v) =>
+                      setState(() => _filters = _filters.copyWith(direct: v)),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Каналы'),
                   value: _filters.channels,
                   onChanged: (v) => setState(

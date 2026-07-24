@@ -1261,6 +1261,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ..addAll(cached);
       _loading = false;
     });
+    _tryRestorePendingDraftReply();
   }
 
   Future<void> _restoreFailedTextSends() async {
@@ -2747,16 +2748,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _restoreDraft() async {
     final draft = await ChatCacheService.loadDraft(widget.conversationId);
     if (!mounted || draft == null || draft.isEmpty) return;
-    if (_controller.text.trim().isNotEmpty) return;
-    _controller.text = draft;
-    _controller.selection = TextSelection.collapsed(offset: draft.length);
+    if (_controller.text.trim().isEmpty && draft.text.isNotEmpty) {
+      _controller.text = draft.text;
+      _controller.selection =
+          TextSelection.collapsed(offset: draft.text.length);
+    }
+    final replyId = draft.replyToMessageId;
+    if (replyId != null && replyId > 0 && _replyTo == null) {
+      ChatMessage? target;
+      for (final m in _messages) {
+        if (m.id == replyId) {
+          target = m;
+          break;
+        }
+      }
+      if (target != null) {
+        setState(() => _replyTo = target);
+      } else {
+        // Keep reply id until history loads; retry after messages arrive.
+        _pendingDraftReplyId = replyId;
+      }
+    }
+  }
+
+  int? _pendingDraftReplyId;
+
+  void _tryRestorePendingDraftReply() {
+    final replyId = _pendingDraftReplyId;
+    if (replyId == null || replyId <= 0 || _replyTo != null) return;
+    for (final m in _messages) {
+      if (m.id == replyId) {
+        _pendingDraftReplyId = null;
+        setState(() => _replyTo = m);
+        return;
+      }
+    }
   }
 
   void _scheduleDraftSave() {
     _draftSaveDebounce?.cancel();
     _draftSaveDebounce = Timer(const Duration(milliseconds: 400), () {
       unawaited(
-        ChatCacheService.saveDraft(widget.conversationId, _controller.text),
+        ChatCacheService.saveDraft(
+          widget.conversationId,
+          _controller.text,
+          replyToMessageId: _replyTo?.id,
+        ),
       );
     });
   }
@@ -3580,7 +3617,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     _failedTextAutoRetryTimers.clear();
     unawaited(
-      ChatCacheService.saveDraft(widget.conversationId, _controller.text),
+      ChatCacheService.saveDraft(
+        widget.conversationId,
+        _controller.text,
+        replyToMessageId: _replyTo?.id,
+      ),
     );
     _controller.removeListener(_onInputChanged);
     _inputFocusNode.removeListener(_onComposerFocusChanged);
@@ -3595,6 +3636,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _openUserProfile(int userId) {
     if (userId <= 0) return;
     context.push(ProfileRoute.withUserId(userId));
+  }
+
+  void _openMentionProfile(String handle) {
+    final username = handle.startsWith('@')
+        ? handle.substring(1).toLowerCase()
+        : handle.toLowerCase();
+    if (username.isEmpty) return;
+    for (final member in _groupMembers) {
+      final u = member.username?.trim().toLowerCase();
+      if (u != null && u == username) {
+        _openUserProfile(member.id);
+        return;
+      }
+    }
+    final peer = _conversation.peer;
+    final peerUser = peer?.username?.trim().toLowerCase();
+    if (peer != null && peerUser == username) {
+      _openUserProfile(peer.id);
+    }
   }
 
   Future<void> _messageContactUser(int userId) async {
@@ -4068,25 +4128,89 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _runServerThreadSearch(String query) async {
     final q = query.trim();
+    final filter = _threadSearchFilter;
+    final seq = ++_serverSearchSeq;
+
+    // Filter-only media/files/links: full history via media API.
     if (q.length < 2) {
-      if (_serverSearchHits.isNotEmpty && mounted) {
-        setState(() => _serverSearchHits = const []);
+      final kinds = switch (filter) {
+        _ThreadSearchFilter.media => const [
+            'photos',
+            'videos',
+            'voices',
+            'stickers',
+          ],
+        _ThreadSearchFilter.files => const ['files'],
+        _ThreadSearchFilter.links => const ['links'],
+        _ => const <String>[],
+      };
+      if (kinds.isEmpty) {
+        if (_serverSearchHits.isNotEmpty && mounted) {
+          setState(() => _serverSearchHits = const []);
+        }
+        return;
+      }
+      try {
+        final merged = <ChatMessage>[];
+        final seen = <int>{};
+        for (final kind in kinds) {
+          final page = await ChatService.listChatMedia(
+            conversationId: widget.conversationId,
+            kind: kind,
+            limit: 60,
+          );
+          if (!mounted || seq != _serverSearchSeq) return;
+          for (final msg in page.items) {
+            if (seen.add(msg.id)) merged.add(msg);
+          }
+        }
+        merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        if (!mounted || seq != _serverSearchSeq) return;
+        setState(() {
+          _serverSearchHits = merged;
+          if (_searchMatchIndex >= _searchMatchIds.length) {
+            _searchMatchIndex = 0;
+          }
+        });
+        _scrollToCurrentSearchMatch();
+      } catch (_) {
+        // Keep local matches if media listing fails.
       }
       return;
     }
-    final seq = ++_serverSearchSeq;
+
     try {
       final hits = await ChatService.searchMessages(
         query: q,
         conversationId: widget.conversationId,
-        type: _searchTypeForFilter(_threadSearchFilter),
+        type: _searchTypeForFilter(filter),
         limit: 60,
       );
       if (!mounted || seq != _serverSearchSeq) return;
+      var messages = [for (final hit in hits) hit.message];
+      // Typed search API may not cover media/links; merge media listing.
+      if (filter == _ThreadSearchFilter.media ||
+          filter == _ThreadSearchFilter.links) {
+        final kinds = filter == _ThreadSearchFilter.links
+            ? const ['links']
+            : const ['photos', 'videos', 'voices', 'stickers'];
+        final seen = {for (final m in messages) m.id};
+        for (final kind in kinds) {
+          final page = await ChatService.listChatMedia(
+            conversationId: widget.conversationId,
+            kind: kind,
+            limit: 60,
+          );
+          if (!mounted || seq != _serverSearchSeq) return;
+          for (final msg in page.items) {
+            if (!_messageMatchesSearch(msg, q.toLowerCase())) continue;
+            if (seen.add(msg.id)) messages.add(msg);
+          }
+        }
+      }
+      if (!mounted || seq != _serverSearchSeq) return;
       setState(() {
-        _serverSearchHits = [
-          for (final hit in hits) hit.message,
-        ];
+        _serverSearchHits = messages;
         if (_searchMatchIndex >= _searchMatchIds.length) {
           _searchMatchIndex = 0;
         }
@@ -5268,6 +5392,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _selectionMode = false;
       _selectedMessageIds.clear();
     });
+    _scheduleDraftSave();
     _inputFocusNode.requestFocus();
   }
 
@@ -5365,8 +5490,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         setState(() {
           _replyTo = msg;
           _editingMessage = null;
-          _controller.clear();
         });
+        _scheduleDraftSave();
         break;
       case 'reply_privately':
         unawaited(_messageContactUser(msg.senderId));
@@ -5594,6 +5719,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onAddHanContact: interactive
           ? (userId) => unawaited(_addHanContactFromBubble(userId))
           : null,
+      onMentionTap: interactive ? _openMentionProfile : null,
     );
   }
 
@@ -6679,6 +6805,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _loadError = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      _tryRestorePendingDraftReply();
       if (refresh) {
         unawaited(_refreshScheduledPendingCount());
       }
@@ -9789,8 +9916,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           _senderNames[_replyTo!.senderId] ??
                                           _conversation.displayTitle),
                                   preview: _messagePreview(_replyTo!),
-                                  onClose: () =>
-                                      setState(() => _replyTo = null),
+                                  onClose: () {
+                                    setState(() => _replyTo = null);
+                                    _scheduleDraftSave();
+                                  },
                                 ),
                         ),
                         _animatedVisibility(
@@ -10425,6 +10554,7 @@ class _Bubble extends StatelessWidget {
     this.onMessageContactUser,
     this.onSaveContactToPhone,
     this.onAddHanContact,
+    this.onMentionTap,
   });
 
   final ChatMessage message;
@@ -10460,6 +10590,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<int>? onMessageContactUser;
   final ValueChanged<ChatContactPayload>? onSaveContactToPhone;
   final ValueChanged<int>? onAddHanContact;
+  final ValueChanged<String>? onMentionTap;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -11111,6 +11242,7 @@ class _Bubble extends StatelessWidget {
         style: textStyle,
         trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
         highlightMentions: true,
+        onMentionTap: onMentionTap,
       );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(

@@ -4,6 +4,54 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_models.dart';
 
+/// Composer draft with optional in-progress reply target.
+class ChatDraft {
+  const ChatDraft({
+    this.text = '',
+    this.replyToMessageId,
+  });
+
+  final String text;
+  final int? replyToMessageId;
+
+  bool get isEmpty =>
+      text.trim().isEmpty &&
+      (replyToMessageId == null || replyToMessageId! <= 0);
+
+  /// Hub preview body (without the red «Черновик:» prefix).
+  String get hubPreview {
+    final t = text.trim();
+    if (t.isNotEmpty) return t;
+    if (replyToMessageId != null && replyToMessageId! > 0) {
+      return 'Ответ на сообщение';
+    }
+    return '';
+  }
+
+  bool get hasReply =>
+      replyToMessageId != null && replyToMessageId! > 0;
+
+  factory ChatDraft.fromJson(Map<String, dynamic> json) {
+    final replyRaw = json['reply_to_message_id'];
+    int? replyId;
+    if (replyRaw is int) {
+      replyId = replyRaw;
+    } else if (replyRaw is String) {
+      replyId = int.tryParse(replyRaw);
+    }
+    return ChatDraft(
+      text: json['text'] as String? ?? '',
+      replyToMessageId: replyId != null && replyId > 0 ? replyId : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        if (replyToMessageId != null && replyToMessageId! > 0)
+          'reply_to_message_id': replyToMessageId,
+      };
+}
+
 /// Локальный кэш чатов для мгновенного отображения при открытии.
 class ChatCacheService {
   ChatCacheService._();
@@ -11,10 +59,11 @@ class ChatCacheService {
   static const _conversationsKey = 'chat_cache_conversations_v1';
   static const _threadPrefix = 'chat_cache_thread_v1_';
   static const _draftPrefix = 'chat_draft_v1_';
+  static const _draftV2Prefix = 'chat_draft_v2_';
   static const _failedTextPrefix = 'chat_failed_text_v1_';
 
   static List<ChatConversation>? _memoryConversations;
-  static final Map<int, String> _memoryDrafts = {};
+  static final Map<int, ChatDraft> _memoryDrafts = {};
 
   static List<ChatConversation>? peekConversations() {
     final cached = _memoryConversations;
@@ -23,17 +72,19 @@ class ChatCacheService {
   }
 
   /// Instant draft peek for hub list (Telegram "Черновик: …").
-  static String? peekDraft(int conversationId) {
-    final text = _memoryDrafts[conversationId];
-    if (text == null || text.trim().isEmpty) return null;
-    return text;
+  static ChatDraft? peekDraft(int conversationId) {
+    final draft = _memoryDrafts[conversationId];
+    if (draft == null || draft.isEmpty) return null;
+    return draft;
   }
 
-  static Future<Map<int, String>> loadDrafts(Iterable<int> conversationIds) async {
-    final out = <int, String>{};
+  static Future<Map<int, ChatDraft>> loadDrafts(
+    Iterable<int> conversationIds,
+  ) async {
+    final out = <int, ChatDraft>{};
     for (final id in conversationIds) {
       final draft = await loadDraft(id);
-      if (draft != null && draft.trim().isNotEmpty) {
+      if (draft != null && !draft.isEmpty) {
         out[id] = draft;
       }
     }
@@ -157,12 +208,28 @@ class ChatCacheService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('$_draftPrefix$conversationId');
+      await prefs.remove('$_draftV2Prefix$conversationId');
     } catch (_) {}
   }
 
-  static Future<String?> loadDraft(int conversationId) async {
+  static Future<ChatDraft?> loadDraft(int conversationId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final v2Raw = prefs.getString('$_draftV2Prefix$conversationId');
+      if (v2Raw != null && v2Raw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(v2Raw);
+          if (decoded is Map<String, dynamic>) {
+            final draft = ChatDraft.fromJson(decoded);
+            if (draft.isEmpty || _isLikelyErrorDraft(draft.text.trim())) {
+              await clearDraft(conversationId);
+              return null;
+            }
+            _memoryDrafts[conversationId] = draft;
+            return draft;
+          }
+        } catch (_) {}
+      }
       final text = prefs.getString('$_draftPrefix$conversationId');
       if (text == null || text.trim().isEmpty) {
         _memoryDrafts.remove(conversationId);
@@ -170,12 +237,12 @@ class ChatCacheService {
       }
       final trimmed = text.trim();
       if (_isLikelyErrorDraft(trimmed)) {
-        await prefs.remove('$_draftPrefix$conversationId');
-        _memoryDrafts.remove(conversationId);
+        await clearDraft(conversationId);
         return null;
       }
-      _memoryDrafts[conversationId] = text;
-      return text;
+      final draft = ChatDraft(text: text);
+      _memoryDrafts[conversationId] = draft;
+      return draft;
     } catch (_) {
       return null;
     }
@@ -192,18 +259,29 @@ class ChatCacheService {
     }
   }
 
-  static Future<void> saveDraft(int conversationId, String text) async {
+  static Future<void> saveDraft(
+    int conversationId,
+    String text, {
+    int? replyToMessageId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final trimmed = text.trim();
-      final key = '$_draftPrefix$conversationId';
-      if (trimmed.isEmpty) {
+      final draft = ChatDraft(
+        text: text,
+        replyToMessageId: replyToMessageId,
+      );
+      final v1Key = '$_draftPrefix$conversationId';
+      final v2Key = '$_draftV2Prefix$conversationId';
+      if (draft.isEmpty) {
         _memoryDrafts.remove(conversationId);
-        await prefs.remove(key);
-      } else {
-        _memoryDrafts[conversationId] = text;
-        await prefs.setString(key, text);
+        await prefs.remove(v1Key);
+        await prefs.remove(v2Key);
+        return;
       }
+      _memoryDrafts[conversationId] = draft;
+      await prefs.setString(v2Key, jsonEncode(draft.toJson()));
+      // Drop legacy plain-text draft once v2 is written.
+      await prefs.remove(v1Key);
     } catch (_) {}
   }
 

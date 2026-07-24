@@ -753,23 +753,30 @@ class ChatFolderFilters {
   const ChatFolderFilters({
     this.groups = false,
     this.channels = false,
+    this.direct = false,
     this.unreadOnly = false,
   });
 
   final bool groups;
   final bool channels;
+  /// Private / direct chats (Telegram "Личные чаты").
+  final bool direct;
   final bool unreadOnly;
 
-  bool get isEmpty => !groups && !channels && !unreadOnly;
+  bool get isEmpty => !groups && !channels && !direct && !unreadOnly;
+
+  bool get hasTypeFilter => groups || channels || direct;
 
   ChatFolderFilters copyWith({
     bool? groups,
     bool? channels,
+    bool? direct,
     bool? unreadOnly,
   }) {
     return ChatFolderFilters(
       groups: groups ?? this.groups,
       channels: channels ?? this.channels,
+      direct: direct ?? this.direct,
       unreadOnly: unreadOnly ?? this.unreadOnly,
     );
   }
@@ -779,6 +786,9 @@ class ChatFolderFilters {
     return ChatFolderFilters(
       groups: json['groups'] as bool? ?? false,
       channels: json['channels'] as bool? ?? false,
+      direct: json['direct'] as bool? ??
+          json['private'] as bool? ??
+          false,
       unreadOnly: json['unread_only'] as bool? ?? false,
     );
   }
@@ -786,6 +796,7 @@ class ChatFolderFilters {
   Map<String, dynamic> toJson() => {
         'groups': groups,
         'channels': channels,
+        'direct': direct,
         'unread_only': unreadOnly,
       };
 }

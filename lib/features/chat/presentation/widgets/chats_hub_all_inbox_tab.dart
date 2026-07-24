@@ -74,7 +74,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   int? _selectedFolderId;
   bool _showGesturesHint = false;
   bool _servingFromCache = false;
-  Map<int, String> _drafts = {};
+  Map<int, ChatDraft> _drafts = {};
   /// conversationId → typing expires at (local clock).
   final Map<int, DateTime> _typingUntil = {};
   Timer? _typingTicker;
@@ -255,23 +255,53 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   }
 
   bool _entryMatchesFolder(InboxHubEntry entry, ChatFolder folder) {
+    final filters = folder.filters;
     if (entry is ChatInboxEntry) {
       final chat = entry.chat;
       if (chat.isSaved) return false;
       if (folder.containsConversation(chat.id)) return true;
-      if (folder.filters.groups && chat.isGroup) return true;
-      if (folder.filters.unreadOnly && chat.unreadCount > 0) return true;
-      return false;
+      if (filters.isEmpty) return false;
+      if (filters.hasTypeFilter) {
+        final typeOk = (filters.groups && chat.isGroup) ||
+            (filters.direct && !chat.isGroup);
+        if (!typeOk) return false;
+      } else if (!filters.unreadOnly) {
+        return false;
+      }
+      if (filters.unreadOnly && chat.unreadCount <= 0) return false;
+      return true;
     }
     if (entry is ChannelInboxEntry) {
       if (folder.containsChannel(entry.channel.id)) return true;
-      if (folder.filters.channels) return true;
-      if (folder.filters.unreadOnly && entry.channel.inboxUnreadPosts > 0) {
-        return true;
+      if (filters.isEmpty) return false;
+      if (filters.hasTypeFilter) {
+        if (!filters.channels) return false;
+      } else if (!filters.unreadOnly) {
+        return false;
       }
-      return false;
+      if (filters.unreadOnly && entry.channel.inboxUnreadPosts <= 0) {
+        return false;
+      }
+      return true;
     }
     return false;
+  }
+
+  Map<int, int> _folderUnreadCounts() {
+    final out = <int, int>{};
+    for (final folder in _folders) {
+      var total = 0;
+      for (final entry in _entries) {
+        if (!_entryMatchesFolder(entry, folder)) continue;
+        if (entry is ChatInboxEntry) {
+          total += entry.chat.unreadCount;
+        } else if (entry is ChannelInboxEntry) {
+          total += entry.channel.inboxUnreadPosts;
+        }
+      }
+      out[folder.id] = total;
+    }
+    return out;
   }
 
   ChatConversation? _savedChat;
@@ -1346,6 +1376,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               child: ChatHubFolderBar(
                 folders: _folders,
                 selectedFolderId: _selectedFolderId,
+                folderUnreadCounts: _folderUnreadCounts(),
                 onSelectFolder: _selectFolder,
                 onCreateFolder: _openCreateFolder,
                 onManageFolders: _openManageFolders,
@@ -1462,7 +1493,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 children: [
                   ChatHubTile(
                     chat: _savedChatTile,
-                    draftText: _drafts[_savedChatTile.id],
+                    draftText: _drafts[_savedChatTile.id]?.hubPreview,
+                    draftHasReply: _drafts[_savedChatTile.id]?.hasReply ?? false,
                     onTap: _openSavedChat,
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
@@ -1484,7 +1516,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     onDelete: () => _deleteChatFromHub(chat),
                     child: ChatHubTile(
                       chat: chat,
-                      draftText: _drafts[chat.id],
+                      draftText: _drafts[chat.id]?.hubPreview,
+                      draftHasReply: _drafts[chat.id]?.hasReply ?? false,
                       typingLabel: _typingLabelFor(chat.id),
                       onTap: () async {
                         await context.push(

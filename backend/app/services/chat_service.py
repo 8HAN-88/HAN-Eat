@@ -2222,8 +2222,7 @@ class ChatService:
         for m in members:
             if m.user_id == sender_id:
                 continue
-            if m.muted_at is not None:
-                continue
+            # Mentions still notify even when the chat is muted (Telegram-like).
             if m.user_id in mentioned_ids:
                 notif.notify_chat_mention(
                     mentioned_user_id=m.user_id,
@@ -2233,6 +2232,8 @@ class ChatService:
                     mentioner_name=sender_name,
                     preview=preview,
                 )
+                continue
+            if m.muted_at is not None:
                 continue
             notif.create_notification(
                 user_id=m.user_id,
