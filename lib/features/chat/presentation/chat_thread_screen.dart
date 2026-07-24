@@ -3572,6 +3572,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   @override
   void dispose() {
+    ChatVoicePlaybackCoordinator.instance.stopAll();
     ActiveChatSession.instance.clearIfOpen(widget.conversationId);
     _scroll.removeListener(_onScrollChanged);
     WidgetsBinding.instance.removeObserver(this);
