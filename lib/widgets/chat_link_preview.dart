@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/network/haneat_http_client.dart';
@@ -157,6 +158,52 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _copyUrl(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ссылка скопирована')),
+    );
+  }
+
+  Future<void> _showLinkActions(String url) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.open_in_browser_outlined),
+              title: const Text('Открыть'),
+              onTap: () => Navigator.pop(ctx, 'open'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('Копировать ссылку'),
+              onTap: () => Navigator.pop(ctx, 'copy'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'open') {
+      await _openUrl(url);
+    } else if (action == 'copy') {
+      await _copyUrl(url);
+    }
+  }
+
+  String _hostLabel(String url) {
+    final uri = Uri.tryParse(url);
+    final host = uri?.host.trim();
+    if (host != null && host.isNotEmpty) return host;
+    return url;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -177,11 +224,53 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
         ),
       );
     }
+
     final preview = _preview;
-    if (preview == null ||
-        ((preview.title?.trim().isEmpty ?? true) &&
-            (preview.description?.trim().isEmpty ?? true))) {
-      return const SizedBox.shrink();
+    final hasRich = preview != null &&
+        ((preview.title?.trim().isNotEmpty ?? false) ||
+            (preview.description?.trim().isNotEmpty ?? false));
+    final openUrl = (preview?.url.trim().isNotEmpty ?? false)
+        ? preview!.url.trim()
+        : widget.url.trim();
+
+    if (!hasRich) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Material(
+          color: widget.backgroundColor,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _openUrl(openUrl),
+            onLongPress: () => _showLinkActions(openUrl),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.link_rounded,
+                    size: 18,
+                    color: widget.accentColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _hostLabel(openUrl),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.accentColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     final imageUrl = preview.imageUrl;
@@ -196,7 +285,8 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
         borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => _openUrl(preview.url),
+          onTap: () => _openUrl(openUrl),
+          onLongPress: () => _showLinkActions(openUrl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

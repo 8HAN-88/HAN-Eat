@@ -56,6 +56,7 @@ import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_realtime_signals.dart';
+import '../application/chat_voice_playback_coordinator.dart';
 import '../application/chats_hub_refresh_provider.dart';
 import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
@@ -3657,6 +3658,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  void _playNextVoiceAfter(ChatMessage finished) {
+    if (finished.id <= 0) return;
+    final idx = _messages.indexWhere((m) => m.id == finished.id);
+    if (idx < 0) return;
+    for (var i = idx + 1; i < _messages.length; i++) {
+      final next = _messages[i];
+      if (next.type == 'voice' &&
+          next.id > 0 &&
+          (next.mediaUrl?.trim().isNotEmpty ?? false)) {
+        ChatVoicePlaybackCoordinator.instance.requestPlay(next.id);
+        return;
+      }
+    }
+  }
+
   Future<void> _messageContactUser(int userId) async {
     if (userId <= 0) return;
     final peer = _conversation.peer;
@@ -5720,6 +5736,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ? (userId) => unawaited(_addHanContactFromBubble(userId))
           : null,
       onMentionTap: interactive ? _openMentionProfile : null,
+      onForwardFromTap: interactive &&
+              msg.forwardFromUserId != null &&
+              msg.forwardFromUserId! > 0
+          ? () => _openUserProfile(msg.forwardFromUserId!)
+          : null,
+      onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
     );
   }
 
@@ -10555,6 +10577,8 @@ class _Bubble extends StatelessWidget {
     this.onSaveContactToPhone,
     this.onAddHanContact,
     this.onMentionTap,
+    this.onForwardFromTap,
+    this.onVoiceCompleted,
   });
 
   final ChatMessage message;
@@ -10591,6 +10615,8 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatContactPayload>? onSaveContactToPhone;
   final ValueChanged<int>? onAddHanContact;
   final ValueChanged<String>? onMentionTap;
+  final VoidCallback? onForwardFromTap;
+  final ValueChanged<ChatMessage>? onVoiceCompleted;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -10988,6 +11014,7 @@ class _Bubble extends StatelessWidget {
           foregroundColor: fg,
           accentColor: scheme.primary,
           activeColor: mine ? scheme.primary : scheme.secondary,
+          onCompleted: onVoiceCompleted,
         ),
       );
     } else if (message.type == 'video_note' && message.mediaUrl != null) {
@@ -11351,13 +11378,21 @@ class _Bubble extends StatelessWidget {
               padding: isMedia && !isSticker
                   ? const EdgeInsets.fromLTRB(8, 5, 8, 0)
                   : EdgeInsets.zero,
-              child: Text(
-                'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? message.forwardFromName!.trim() : 'пользователя'}',
-                style: TextStyle(
-                  color: scheme.primary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  height: 1.15,
+              child: GestureDetector(
+                onTap: onForwardFromTap,
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  'Переслано от ${message.forwardFromName?.trim().isNotEmpty == true ? message.forwardFromName!.trim() : 'пользователя'}',
+                  style: TextStyle(
+                    color: scheme.primary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.15,
+                    decoration: onForwardFromTap == null
+                        ? null
+                        : TextDecoration.underline,
+                    decorationColor: scheme.primary.withValues(alpha: 0.35),
+                  ),
                 ),
               ),
             ),

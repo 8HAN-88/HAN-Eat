@@ -5,6 +5,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../../services/server_config.dart';
 import '../../../../utils/video_player_helper.dart';
+import '../../application/chat_voice_playback_coordinator.dart';
 
 /// Telegram-style circular video note (кружок).
 class ChatVideoNoteBubble extends StatefulWidget {
@@ -27,9 +28,13 @@ class ChatVideoNoteBubble extends StatefulWidget {
 
 class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
   VideoPlayerController? _controller;
+  final Object _playbackToken = Object();
   bool _ready = false;
   bool _failed = false;
   bool _playing = false;
+
+  ChatVoicePlaybackCoordinator get _coord =>
+      ChatVoicePlaybackCoordinator.instance;
 
   @override
   void initState() {
@@ -73,20 +78,35 @@ class _ChatVideoNoteBubbleState extends State<ChatVideoNoteBubble> {
     }
   }
 
+  Future<void> _stopFromCoordinator() async {
+    final c = _controller;
+    if (c == null || !_playing) return;
+    try {
+      await c.pause();
+    } catch (_) {}
+    if (mounted) setState(() => _playing = false);
+  }
+
   Future<void> _toggle() async {
     final c = _controller;
     if (c == null || !_ready) return;
     if (c.value.isPlaying) {
       await c.pause();
+      _coord.release(_playbackToken);
       if (mounted) setState(() => _playing = false);
       return;
     }
+    _coord.claim(
+      _playbackToken,
+      onStolen: () => unawaited(_stopFromCoordinator()),
+    );
     await VideoPlayerHelper.ensurePlaying(c, shouldContinue: () => mounted);
     if (mounted) setState(() => _playing = true);
   }
 
   @override
   void dispose() {
+    _coord.release(_playbackToken);
     _controller?.dispose();
     super.dispose();
   }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
 import '../../../services/server_config.dart';
+import '../application/chat_voice_playback_coordinator.dart';
 import '../widgets/chat_voice_waveform.dart';
 
 /// Пузырь голосового сообщения с waveform, scrub и скоростью 1×/1.5×/2×.
@@ -16,12 +17,15 @@ class ChatVoiceBubble extends StatefulWidget {
     required this.foregroundColor,
     required this.accentColor,
     this.activeColor,
+    this.onCompleted,
   });
 
   final ChatMessage message;
   final Color foregroundColor;
   final Color accentColor;
   final Color? activeColor;
+  /// Called when playback finishes naturally (for play-next).
+  final ValueChanged<ChatMessage>? onCompleted;
 
   @override
   State<ChatVoiceBubble> createState() => _ChatVoiceBubbleState();
@@ -31,6 +35,7 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
   static const _speeds = <double>[1.0, 1.5, 2.0];
 
   final _player = AudioPlayer();
+  final Object _playbackToken = Object();
   bool _playing = false;
   bool _loading = false;
   String? _playError;
@@ -45,6 +50,8 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
 
   int get _fallbackSec => widget.message.voiceDurationSec ?? 0;
   double get _speed => _speeds[_speedIndex];
+  ChatVoicePlaybackCoordinator get _coord =>
+      ChatVoicePlaybackCoordinator.instance;
 
   String _format(Duration d) {
     final s = d.inSeconds;
@@ -72,16 +79,38 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
   @override
   void initState() {
     super.initState();
+    _coord.addListener(_onCoordinatorChanged);
     unawaited(_ensureAudioContext());
   }
 
   @override
   void dispose() {
+    _coord.removeListener(_onCoordinatorChanged);
+    _coord.release(_playbackToken);
     _posSub?.cancel();
     _durSub?.cancel();
     _completeSub?.cancel();
     unawaited(_player.dispose());
     super.dispose();
+  }
+
+  void _onCoordinatorChanged() {
+    final id = _coord.requestedPlayMessageId;
+    if (id == null || id != widget.message.id || _playing || _loading) return;
+    _coord.clearRequest(id);
+    unawaited(_togglePlay());
+  }
+
+  Future<void> _stopFromCoordinator() async {
+    if (!_playing && !_loading) return;
+    try {
+      await _player.pause();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _playing = false;
+      _loading = false;
+    });
   }
 
   Future<void> _ensureAudioContext() async {
@@ -129,6 +158,8 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
         _playing = false;
         _position = Duration.zero;
       });
+      _coord.release(_playbackToken);
+      widget.onCompleted?.call(widget.message);
     });
   }
 
@@ -209,8 +240,14 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
       await _player.pause();
       if (!mounted) return;
       setState(() => _playing = false);
+      _coord.release(_playbackToken);
       return;
     }
+
+    _coord.claim(
+      _playbackToken,
+      onStolen: () => unawaited(_stopFromCoordinator()),
+    );
 
     setState(() {
       _loading = true;
@@ -232,6 +269,7 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
       if (kDebugMode) {
         debugPrint('ChatVoiceBubble: playback failed: $e');
       }
+      _coord.release(_playbackToken);
       if (!mounted) return;
       setState(() {
         _loading = false;
