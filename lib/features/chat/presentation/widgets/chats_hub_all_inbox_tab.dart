@@ -16,6 +16,7 @@ import '../../../../services/chat_cache_service.dart';
 import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/chat_thread_ui_prefs.dart';
 import '../../../../services/user_realtime_service.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
@@ -29,6 +30,7 @@ import '../../application/chats_hub_refresh_provider.dart';
 import '../../widgets/inbox_slidable_tile.dart';
 import '../chat_folder_edit_screen.dart';
 import '../chat_folders_manage_sheet.dart';
+import 'chat_mute_duration_sheet.dart';
 import 'chats_hub_folder_bar.dart';
 import 'chats_hub_gestures_hint.dart';
 import 'chats_hub_tiles.dart';
@@ -569,6 +571,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
     try {
       chats = await ChatService.listConversations();
+      final expired = await _expireTimedMutes(chats);
+      if (expired > 0) {
+        chats = await ChatService.listConversations();
+      }
     } catch (e) {
       chatsError = e;
       if (kDebugMode) debugPrint('Chats load failed: $e');
@@ -914,19 +920,55 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<int> _expireTimedMutes(List<ChatConversation> chats) async {
+    var changed = 0;
+    final now = DateTime.now();
+    for (final chat in chats) {
+      if (!chat.muted) continue;
+      final until = await ChatThreadUiPrefs.getMuteUntil(chat.id);
+      if (until == null || until.isAfter(now)) continue;
+      try {
+        await ChatService.setMuted(conversationId: chat.id, muted: false);
+        await ChatThreadUiPrefs.setMuteUntil(chat.id, null);
+        changed++;
+      } catch (_) {}
+    }
+    return changed;
+  }
+
   Future<void> _toggleMuteFromHub(ChatConversation chat) async {
     if (_hubActionChatId != null) return;
+    final choice = await showChatMuteDurationSheet(
+      context,
+      currentlyMuted: chat.muted,
+    );
+    if (choice == null || !mounted) return;
     setState(() => _hubActionChatId = chat.id);
-    final next = !chat.muted;
     try {
-      await ChatService.setMuted(conversationId: chat.id, muted: next);
+      late final String snack;
+      if (choice.unmute) {
+        await ChatService.setMuted(conversationId: chat.id, muted: false);
+        await ChatThreadUiPrefs.setMuteUntil(chat.id, null);
+        snack = 'Уведомления включены';
+      } else {
+        final until = choice.duration == null
+            ? null
+            : DateTime.now().add(choice.duration!);
+        await ChatService.setMuted(conversationId: chat.id, muted: true);
+        await ChatThreadUiPrefs.setMuteUntil(chat.id, until);
+        snack = choice.duration == null
+            ? 'Чат без звука'
+            : choice.duration!.inHours >= 48
+                ? 'Без звука на 2 дня'
+                : choice.duration!.inHours >= 8
+                    ? 'Без звука на 8 часов'
+                    : 'Без звука на 1 час';
+      }
       if (!mounted) return;
       await _load(silent: true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(next ? 'Чат без звука' : 'Уведомления включены'),
-        ),
+        SnackBar(content: Text(snack)),
       );
     } catch (e) {
       if (!mounted) return;

@@ -46,4 +46,27 @@ class ChatThreadUiPrefs {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_wallpaperKey(conversationId), style.id);
   }
+
+  static String _muteUntilKey(int conversationId) =>
+      'chat_thread_mute_until_v1_$conversationId';
+
+  static Future<DateTime?> getMuteUntil(int conversationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_muteUntilKey(conversationId));
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw)?.toLocal();
+  }
+
+  static Future<void> setMuteUntil(
+    int conversationId,
+    DateTime? until,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _muteUntilKey(conversationId);
+    if (until == null) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setString(key, until.toUtc().toIso8601String());
+  }
 }

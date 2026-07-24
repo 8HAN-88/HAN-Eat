@@ -98,6 +98,8 @@ class ChatContactBubble extends StatelessWidget {
     required this.cardColor,
     this.onOpenProfile,
     this.onMessageUser,
+    this.onSaveToPhone,
+    this.onAddHanContact,
   });
 
   final ChatContactPayload payload;
@@ -106,6 +108,8 @@ class ChatContactBubble extends StatelessWidget {
   final Color cardColor;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onMessageUser;
+  final VoidCallback? onSaveToPhone;
+  final VoidCallback? onAddHanContact;
 
   Future<void> _callPhone() async {
     final phone = payload.phone;
@@ -114,55 +118,69 @@ class ChatContactBubble extends StatelessWidget {
     await launchUrl(uri);
   }
 
+  Widget _actionButton({
+    required String label,
+    required VoidCallback? onPressed,
+    bool filled = false,
+  }) {
+    if (filled) {
+      return Expanded(
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            backgroundColor: accentColor,
+            foregroundColor: Colors.white,
+            visualDensity: VisualDensity.compact,
+          ),
+          child: Text(label),
+        ),
+      );
+    }
+    return Expanded(
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: accentColor,
+          side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
+          visualDensity: VisualDensity.compact,
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final subtitle = payload.username ?? payload.phone ?? 'Контакт';
-    final actions = <Widget>[];
+    final primary = <Widget>[];
     if (payload.userId != null && onMessageUser != null) {
-      actions.add(
-        Expanded(
-          child: FilledButton(
-            onPressed: onMessageUser,
-            style: FilledButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-              visualDensity: VisualDensity.compact,
-            ),
-            child: const Text('Написать'),
-          ),
-        ),
+      primary.add(
+        _actionButton(label: 'Написать', onPressed: onMessageUser, filled: true),
       );
     }
     if (payload.userId != null) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
-      actions.add(
-        Expanded(
-          child: OutlinedButton(
-            onPressed: onOpenProfile,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: accentColor,
-              side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
-              visualDensity: VisualDensity.compact,
-            ),
-            child: const Text('Профиль'),
-          ),
-        ),
+      if (primary.isNotEmpty) primary.add(const SizedBox(width: 8));
+      primary.add(
+        _actionButton(label: 'Профиль', onPressed: onOpenProfile),
       );
     }
+
+    final secondary = <Widget>[];
     if (payload.phone != null) {
-      if (actions.isNotEmpty) actions.add(const SizedBox(width: 8));
-      actions.add(
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _callPhone,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: accentColor,
-              side: BorderSide(color: accentColor.withValues(alpha: 0.45)),
-              visualDensity: VisualDensity.compact,
-            ),
-            child: const Text('Позвонить'),
-          ),
-        ),
+      secondary.add(
+        _actionButton(label: 'Позвонить', onPressed: _callPhone),
+      );
+    }
+    if (payload.phone != null && onSaveToPhone != null) {
+      if (secondary.isNotEmpty) secondary.add(const SizedBox(width: 8));
+      secondary.add(
+        _actionButton(label: 'Сохранить', onPressed: onSaveToPhone),
+      );
+    }
+    if (payload.userId != null && onAddHanContact != null) {
+      if (secondary.isNotEmpty) secondary.add(const SizedBox(width: 8));
+      secondary.add(
+        _actionButton(label: 'В контакты', onPressed: onAddHanContact),
       );
     }
 
@@ -214,9 +232,13 @@ class ChatContactBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              if (actions.isNotEmpty) ...[
+              if (primary.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Row(children: actions),
+                Row(children: primary),
+              ],
+              if (secondary.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(children: secondary),
               ],
             ],
           ),

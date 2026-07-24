@@ -128,6 +128,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required this.onExpandReactions,
     this.canShowReaders = false,
     this.canSaveToFavorites = false,
+    this.canReplyPrivately = false,
     this.bottomComposerReserve = 88,
   });
 
@@ -141,6 +142,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool hasCopyableText;
   final bool canShowReaders;
   final bool canSaveToFavorites;
+  final bool canReplyPrivately;
   final ValueChanged<String> onReaction;
   final ValueChanged<String> onAction;
   final VoidCallback onExpandReactions;
@@ -161,6 +163,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required VoidCallback onExpandReactions,
     bool canShowReaders = false,
     bool canSaveToFavorites = false,
+    bool canReplyPrivately = false,
     double bottomComposerReserve = 88,
   }) {
     AppHaptics.medium();
@@ -186,6 +189,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         hasCopyableText: hasCopyableText,
         canShowReaders: canShowReaders,
         canSaveToFavorites: canSaveToFavorites,
+        canReplyPrivately: canReplyPrivately,
         bottomComposerReserve: bottomComposerReserve,
         onReaction: (emoji) {
           Navigator.pop(ctx);
@@ -252,6 +256,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
         icon: Icons.reply_rounded,
         label: 'Ответить',
       ),
+      if (widget.canReplyPrivately)
+        _MenuItem(
+          action: 'reply_privately',
+          icon: Icons.mark_chat_unread_outlined,
+          label: 'Ответить лично',
+        ),
       if (widget.hasCopyableText)
         _MenuItem(
           action: 'copy',

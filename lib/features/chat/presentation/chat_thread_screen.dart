@@ -43,6 +43,7 @@ import '../../../services/paid_features_service.dart';
 import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
+import '../../../services/phone_contacts_service.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
@@ -71,6 +72,7 @@ import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
 import 'widgets/chat_message_readers_sheet.dart';
+import 'widgets/chat_mute_duration_sheet.dart';
 import 'widgets/chat_video_note_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
@@ -351,6 +353,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Timer? _slowModeCountdownTimer;
   Timer? _pendingMediaAutoRetryTimer;
   Timer? _manualReadyRetryTimer;
+  Timer? _muteUnmuteTimer;
   DateTime? _slowModeLockUntil;
   DateTime? _floodLockUntil;
   DateTime? _pendingMediaAutoRetryUntil;
@@ -393,6 +396,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(AuthService.getAccessTokenForApi());
     unawaited(_loadMyBots());
     unawaited(_refreshScheduledPendingCount());
+    unawaited(_syncMuteSchedule());
     _load(refresh: true);
     _startPolling();
     _presenceTimer = Timer.periodic(const Duration(seconds: 12), (_) {
@@ -3566,6 +3570,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _slowModeCountdownTimer?.cancel();
     _pendingMediaAutoRetryTimer?.cancel();
     _manualReadyRetryTimer?.cancel();
+    _muteUnmuteTimer?.cancel();
     for (final t in _failedTextAutoRetryTimers.values) {
       t.cancel();
     }
@@ -3668,6 +3673,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _groupMembers = members;
       });
       _reconcileSlowModeCooldownWithConversation();
+      unawaited(_syncMuteSchedule());
     } catch (_) {}
   }
 
@@ -3909,8 +3915,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
-  void _openMediaGallery() {
-    Navigator.of(context).push<void>(
+  Future<void> _openMediaGallery() async {
+    final messageId = await Navigator.of(context).push<int>(
       MaterialPageRoute(
         builder: (_) => ChatMediaGalleryScreen(
           conversationId: widget.conversationId,
@@ -3918,6 +3924,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       ),
     );
+    if (messageId == null || messageId <= 0 || !mounted) return;
+    await _scrollToReplyMessage(messageId);
+    if (mounted) _focusMessageTemporarily(messageId);
   }
 
   void _toggleThreadSearch() {
@@ -4471,22 +4480,135 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _syncMuteSchedule() async {
+    _muteUnmuteTimer?.cancel();
+    _muteUnmuteTimer = null;
+    if (!_muted) {
+      await ChatThreadUiPrefs.setMuteUntil(widget.conversationId, null);
+      return;
+    }
+    final until = await ChatThreadUiPrefs.getMuteUntil(widget.conversationId);
+    if (until == null) return; // forever
+    final remaining = until.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      await _applyMuted(false);
+      return;
+    }
+    _muteUnmuteTimer = Timer(remaining, () {
+      unawaited(_applyMuted(false));
+    });
+  }
+
+  Future<void> _applyMuted(bool muted, {DateTime? until}) async {
+    await ChatService.setMuted(
+      conversationId: widget.conversationId,
+      muted: muted,
+    );
+    await ChatThreadUiPrefs.setMuteUntil(
+      widget.conversationId,
+      muted ? until : null,
+    );
+    if (!mounted) return;
+    setState(() {
+      _muted = muted;
+      _conversation = _conversation.copyWith(muted: muted);
+    });
+    await _syncMuteSchedule();
+  }
+
   Future<void> _toggleMute() async {
-    final next = !_muted;
+    final choice = await showChatMuteDurationSheet(
+      context,
+      currentlyMuted: _muted,
+    );
+    if (choice == null || !mounted) return;
     try {
-      await ChatService.setMuted(
-        conversationId: widget.conversationId,
-        muted: next,
-      );
+      if (choice.unmute) {
+        await _applyMuted(false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Уведомления включены')),
+        );
+        return;
+      }
+      final until = choice.duration == null
+          ? null
+          : DateTime.now().add(choice.duration!);
+      await _applyMuted(true, until: until);
       if (!mounted) return;
-      setState(() {
-        _muted = next;
-        _conversation = _conversation.copyWith(muted: next);
-      });
+      final label = choice.duration == null
+          ? 'Чат без звука'
+          : choice.duration!.inHours >= 48
+              ? 'Без звука на 2 дня'
+              : choice.duration!.inHours >= 8
+                  ? 'Без звука на 8 часов'
+                  : 'Без звука на 1 час';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(label)),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _saveContactToPhone(ChatContactPayload contact) async {
+    final phone = contact.phone?.trim();
+    if (phone == null || phone.isEmpty) return;
+    try {
+      await PhoneContactsService.addContactToDevice(
+        displayName: contact.displayName,
+        phoneRaw: phone,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            kIsWeb ? 'Контакт сохранён' : 'Контакт сохранён в телефоне',
+          ),
+        ),
+      );
+    } on PhoneContactsPermissionDenied {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Нужен доступ к контактам. '
+            'Настройки → HAN Eat → Контакты → разрешить изменения.',
+          ),
+        ),
+      );
+    } on PhoneContactsInvalidInput catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _addHanContactFromBubble(int userId) async {
+    if (userId <= 0) return;
+    try {
+      await ChatService.addContact(userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Добавлено в контакты')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось добавить контакт'),
+          ),
+        ),
       );
     }
   }
@@ -5175,6 +5297,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _controller.clear();
         });
         break;
+      case 'reply_privately':
+        unawaited(_messageContactUser(msg.senderId));
+        break;
       case 'copy':
         Clipboard.setData(ClipboardData(text: _copyableText(msg)));
         ScaffoldMessenger.of(context).showSnackBar(
@@ -5391,6 +5516,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           interactive ? (userId) => _openUserProfile(userId) : null,
       onMessageContactUser: interactive
           ? (userId) => unawaited(_messageContactUser(userId))
+          : null,
+      onSaveContactToPhone: interactive
+          ? (contact) => unawaited(_saveContactToPhone(contact))
+          : null,
+      onAddHanContact: interactive
+          ? (userId) => unawaited(_addHanContactFromBubble(userId))
           : null,
     );
   }
@@ -6054,11 +6185,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final targetBottom = screenH - composerReserve - 16;
     final isGroup = _conversation.isGroup;
     final canShowReaders = msg.isMine && isGroup && msg.id > 0;
+    final canReplyPrivately = isGroup && !msg.isMine && msg.senderId > 0;
+    final canSaveToFavorites = msg.id > 0 && !_conversation.isSaved;
     final menuItemCount = 4 +
-        (msg.isMine && msg.type == 'text' ? 1 : 0) +
+        (msg.isMine &&
+                (msg.type == 'text' ||
+                    msg.type == 'image' ||
+                    msg.type == 'video' ||
+                    msg.type == 'file')
+            ? 1
+            : 0) +
         (_copyableText(msg).isNotEmpty ? 1 : 0) +
         (msg.isMine ? 1 : 0) +
         (canShowReaders ? 1 : 0) +
+        (canReplyPrivately ? 1 : 0) +
+        (canSaveToFavorites ? 1 : 0) +
         1; // reply, pin, forward, select + optional
     final preLayout = ChatMessageOverlayLayout.compute(
       messageRect: rect,
@@ -6143,7 +6284,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canDelete: msg.isMine,
       hasCopyableText: _copyableText(msg).isNotEmpty,
       canShowReaders: canShowReaders,
-      canSaveToFavorites: msg.id > 0 && !_conversation.isSaved,
+      canSaveToFavorites: canSaveToFavorites,
+      canReplyPrivately: canReplyPrivately,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -10174,6 +10316,8 @@ class _Bubble extends StatelessWidget {
     this.callbackLoadingData = const <String>{},
     this.onOpenContactUser,
     this.onMessageContactUser,
+    this.onSaveContactToPhone,
+    this.onAddHanContact,
   });
 
   final ChatMessage message;
@@ -10207,6 +10351,8 @@ class _Bubble extends StatelessWidget {
   final Set<String> callbackLoadingData;
   final ValueChanged<int>? onOpenContactUser;
   final ValueChanged<int>? onMessageContactUser;
+  final ValueChanged<ChatContactPayload>? onSaveContactToPhone;
+  final ValueChanged<int>? onAddHanContact;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -10668,6 +10814,12 @@ class _Bubble extends StatelessWidget {
               contactUserId == null || onMessageContactUser == null
                   ? null
                   : () => onMessageContactUser!(contactUserId),
+          onSaveToPhone: contact.phone == null || onSaveContactToPhone == null
+              ? null
+              : () => onSaveContactToPhone!(contact),
+          onAddHanContact: contactUserId == null || onAddHanContact == null
+              ? null
+              : () => onAddHanContact!(contactUserId),
         ),
       );
     } else if (message.type == 'file' && message.mediaUrl != null) {

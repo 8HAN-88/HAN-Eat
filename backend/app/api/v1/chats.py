@@ -1284,7 +1284,7 @@ async def list_chat_media(
     conversation_id: int,
     kind: str = Query(
         "all",
-        pattern="^(all|photos|videos|files|links|voices)$",
+        pattern="^(all|photos|videos|files|links|voices|stickers)$",
     ),
     cursor: Optional[int] = Query(None),
     limit: int = Query(60, ge=1, le=100),

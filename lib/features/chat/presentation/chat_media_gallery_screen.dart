@@ -13,7 +13,7 @@ import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/inline_video_player.dart';
 
-enum _MediaFilter { all, photos, videos, files, voices, links }
+enum _MediaFilter { all, photos, videos, files, voices, stickers, links }
 
 /// Медиа из сообщений чата с фильтрами по типу (полная история через API).
 class ChatMediaGalleryScreen extends StatefulWidget {
@@ -50,6 +50,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         return 'files';
       case _MediaFilter.voices:
         return 'voices';
+      case _MediaFilter.stickers:
+        return 'stickers';
       case _MediaFilter.links:
         return 'links';
       case _MediaFilter.all:
@@ -77,7 +79,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
               msg.type == 'video' ||
               msg.type == 'video_note' ||
               msg.type == 'file' ||
-              msg.type == 'voice') &&
+              msg.type == 'voice' ||
+              msg.type == 'sticker') &&
           seenMedia.add(msg.id)) {
         media.add(msg);
       }
@@ -191,6 +194,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         return _media.where((m) => m.type == 'file').toList();
       case _MediaFilter.voices:
         return _media.where((m) => m.type == 'voice').toList();
+      case _MediaFilter.stickers:
+        return _media.where((m) => m.type == 'sticker').toList();
       case _MediaFilter.links:
         return _media;
       case _MediaFilter.all:
@@ -200,7 +205,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                   m.type == 'image' ||
                   m.type == 'video' ||
                   m.type == 'video_note' ||
-                  m.type == 'file',
+                  m.type == 'file' ||
+                  m.type == 'sticker',
             )
             .toList();
     }
@@ -228,12 +234,37 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
     unawaited(_reload());
   }
 
+  Future<void> _offerShowInChat(ChatMessage msg) async {
+    if (msg.id <= 0) return;
+    final go = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline),
+              title: const Text('Показать в чате'),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (go == true && mounted) {
+      Navigator.pop(context, msg.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _filteredMedia;
     final links = _links;
-    final imageItems =
-        items.where((m) => m.type == 'image').toList(growable: false);
+    final imageItems = items
+        .where((m) => m.type == 'image' || m.type == 'sticker')
+        .toList(growable: false);
     final imageUrls =
         imageItems.map((m) => m.mediaUrl!).toList(growable: false);
     final count = _filter == _MediaFilter.links ? links.length : items.length;
@@ -258,6 +289,10 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                 ButtonSegment(
                   value: _MediaFilter.voices,
                   label: Text('Голос'),
+                ),
+                ButtonSegment(
+                  value: _MediaFilter.stickers,
+                  label: Text('Стикеры'),
                 ),
                 ButtonSegment(value: _MediaFilter.links, label: Text('Ссылки')),
               ],
@@ -316,6 +351,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                     ),
                                   ),
                                   onTap: () => _openExternal(item.url),
+                                  onLongPress: () =>
+                                      unawaited(_offerShowInChat(item.message)),
                                 );
                               },
                             )
@@ -373,6 +410,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                           ServerConfig.resolveMediaUrl(url),
                                         );
                                       },
+                                      onLongPress: () =>
+                                          unawaited(_offerShowInChat(msg)),
                                     );
                                   },
                                 )
@@ -396,34 +435,40 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                     final url = msg.mediaUrl!;
                                     if (msg.type == 'video' ||
                                         msg.type == 'video_note') {
-                                      return Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () => _openExternal(
-                                              ServerConfig.resolveMediaUrl(url),
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                              child: InlineVideoPlayer(
-                                                videoUrl: ServerConfig
-                                                    .resolveMediaUrl(url),
-                                                onTap: () {},
+                                      return GestureDetector(
+                                        onLongPress: () =>
+                                            unawaited(_offerShowInChat(msg)),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () => _openExternal(
+                                                ServerConfig.resolveMediaUrl(
+                                                  url,
+                                                ),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                child: InlineVideoPlayer(
+                                                  videoUrl: ServerConfig
+                                                      .resolveMediaUrl(url),
+                                                  onTap: () {},
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const IgnorePointer(
-                                            child: Align(
-                                              alignment: Alignment.center,
-                                              child: Icon(
-                                                Icons.play_circle_outline,
-                                                color: Colors.white,
-                                                size: 36,
+                                            const IgnorePointer(
+                                              child: Align(
+                                                alignment: Alignment.center,
+                                                child: Icon(
+                                                  Icons.play_circle_outline,
+                                                  color: Colors.white,
+                                                  size: 36,
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       );
                                     }
                                     final imageIndex = imageItems.indexOf(msg);
@@ -440,6 +485,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                           ),
                                         );
                                       },
+                                      onLongPress: () =>
+                                          unawaited(_offerShowInChat(msg)),
                                       child: Hero(
                                         tag: 'chat_media_${msg.id}_$url',
                                         child: CachedNetworkImage(

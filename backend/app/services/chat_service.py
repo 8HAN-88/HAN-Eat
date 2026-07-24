@@ -1746,9 +1746,13 @@ class ChatService:
             )
         elif kind_norm == "voices":
             q = q.filter(Message.type == "voice", Message.media_url.isnot(None))
+        elif kind_norm == "stickers":
+            q = q.filter(Message.type == "sticker", Message.media_url.isnot(None))
         else:
             q = q.filter(
-                Message.type.in_(("image", "video", "video_note", "file", "voice")),
+                Message.type.in_(
+                    ("image", "video", "video_note", "file", "voice", "sticker")
+                ),
                 Message.media_url.isnot(None),
             )
 
