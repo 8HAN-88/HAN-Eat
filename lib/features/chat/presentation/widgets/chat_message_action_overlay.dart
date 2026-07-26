@@ -288,6 +288,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
         icon: Icons.forward_rounded,
         label: 'Переслать',
       ),
+      if (widget.hasCopyableText)
+        _MenuItem(
+          action: 'share',
+          icon: Icons.ios_share_rounded,
+          label: 'Поделиться',
+        ),
       if (widget.canSaveToFavorites)
         _MenuItem(
           action: 'save',

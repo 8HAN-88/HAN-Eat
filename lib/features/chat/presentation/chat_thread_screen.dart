@@ -14,8 +14,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
+
+import '../../../core/share/system_share.dart';
 
 import '../../bots/data/bot_inline_service.dart';
 import '../../bots/presentation/inline_suggestions.dart';
@@ -1860,6 +1861,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (msg.type == 'video') return '🎬 Видео';
     if (msg.type == 'video_note') return '⭕ Видеосообщение';
     if (msg.type == 'sticker') return '🧩 Стикер';
+    if (msg.type == 'poll') {
+      final poll = msg.poll;
+      if (poll != null) return chatPollPreviewText(poll);
+      return '📊 Опрос';
+    }
     if (msg.type == 'file') {
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
@@ -5464,7 +5470,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
-    await Share.share(texts);
+    await SystemShare.shareText(
+      context,
+      text: texts,
+      webSnackBarText: 'Скопировано в буфер обмена',
+    );
+  }
+
+  Future<void> _shareMessage(ChatMessage msg) async {
+    final text = _copyableText(msg);
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нечего отправить')),
+      );
+      return;
+    }
+    await SystemShare.shareText(
+      context,
+      text: text,
+      webSnackBarText: 'Скопировано в буфер обмена',
+    );
   }
 
   void _replySelectedMessage() {
@@ -5598,6 +5623,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         break;
       case 'forward':
         unawaited(_forwardMessage(msg));
+        break;
+      case 'share':
+        unawaited(_shareMessage(msg));
         break;
       case 'save':
         unawaited(_saveMessageToFavorites(msg));
@@ -6486,7 +6514,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     msg.type == 'file')
             ? 1
             : 0) +
-        (_copyableText(msg).isNotEmpty ? 1 : 0) +
+        (_copyableText(msg).isNotEmpty ? 2 : 0) + // copy + share
         (msg.isMine ? 1 : 0) +
         (canShowReaders ? 1 : 0) +
         (canReplyPrivately ? 1 : 0) +

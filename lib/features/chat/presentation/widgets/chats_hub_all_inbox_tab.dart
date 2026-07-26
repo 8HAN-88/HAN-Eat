@@ -75,8 +75,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool _showGesturesHint = false;
   bool _servingFromCache = false;
   Map<int, ChatDraft> _drafts = {};
-  /// conversationId → typing expires at (local clock).
-  final Map<int, DateTime> _typingUntil = {};
+  /// conversationId → (userId → typing expires at, local clock).
+  final Map<int, Map<int, DateTime>> _typingUntilByUser = {};
   Timer? _typingTicker;
 
   void _selectFolder(int? folderId) {
@@ -360,9 +360,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (event.event == 'chat.typing') {
         final cid = event.conversationId;
         if (cid == null) return;
+        final uid = event.userId ?? 0;
         setState(() {
-          _typingUntil[cid] =
-              DateTime.now().add(const Duration(seconds: 5));
+          final byUser = _typingUntilByUser.putIfAbsent(cid, () => {});
+          byUser[uid] = DateTime.now().add(const Duration(seconds: 5));
         });
         _ensureTypingTicker();
         return;
@@ -434,38 +435,86 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     _typingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final now = DateTime.now();
-      final expired = _typingUntil.entries
-          .where((e) => !e.value.isAfter(now))
-          .map((e) => e.key)
-          .toList();
-      if (expired.isEmpty && _typingUntil.isEmpty) {
-        _typingTicker?.cancel();
-        _typingTicker = null;
+      final hasAny = _typingUntilByUser.isNotEmpty;
+      var needsUpdate = false;
+      for (final byUser in _typingUntilByUser.values) {
+        if (byUser.values.any((until) => !until.isAfter(now))) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (!needsUpdate) {
+        if (!hasAny) {
+          _typingTicker?.cancel();
+          _typingTicker = null;
+        }
         return;
       }
-      if (expired.isEmpty) return;
       setState(() {
-        for (final id in expired) {
-          _typingUntil.remove(id);
+        final emptyConvs = <int>[];
+        for (final entry in _typingUntilByUser.entries) {
+          entry.value.removeWhere((_, until) => !until.isAfter(now));
+          if (entry.value.isEmpty) emptyConvs.add(entry.key);
+        }
+        for (final id in emptyConvs) {
+          _typingUntilByUser.remove(id);
         }
       });
-      if (_typingUntil.isEmpty) {
+      if (_typingUntilByUser.isEmpty) {
         _typingTicker?.cancel();
         _typingTicker = null;
       }
     });
   }
 
-  String? _typingLabelFor(int conversationId) {
-    final until = _typingUntil[conversationId];
-    if (until == null || !until.isAfter(DateTime.now())) return null;
-    // Resolve group vs DM for label.
-    for (final e in _entries) {
-      if (e is ChatInboxEntry && e.chat.id == conversationId) {
-        return e.chat.isGroup ? 'печатают…' : 'печатает…';
+  String? _displayNameForTyping(ChatConversation chat, int userId) {
+    if (userId <= 0) return null;
+    final peer = chat.peer;
+    if (peer != null && peer.id == userId) {
+      final name = peer.displayName.trim();
+      if (name.isNotEmpty) return name;
+    }
+    for (final m in chat.membersPreview) {
+      if (m.id == userId) {
+        final name = m.displayName.trim();
+        if (name.isNotEmpty) return name;
       }
     }
-    return 'печатает…';
+    return null;
+  }
+
+  String? _typingLabelFor(int conversationId) {
+    final byUser = _typingUntilByUser[conversationId];
+    if (byUser == null || byUser.isEmpty) return null;
+    final now = DateTime.now();
+    final activeIds =
+        byUser.entries.where((e) => e.value.isAfter(now)).map((e) => e.key);
+    final active = activeIds.toList();
+    if (active.isEmpty) return null;
+
+    ChatConversation? chat;
+    for (final e in _entries) {
+      if (e is ChatInboxEntry && e.chat.id == conversationId) {
+        chat = e.chat;
+        break;
+      }
+    }
+    if (chat == null || !chat.isGroup) return 'печатает…';
+
+    final names = <String>[];
+    for (final id in active) {
+      final name = _displayNameForTyping(chat, id);
+      if (name == null || name.isEmpty) continue;
+      names.add(name.split(' ').first);
+    }
+    if (names.isEmpty) {
+      return active.length > 1 ? 'печатают…' : 'печатает…';
+    }
+    if (names.length == 1) return '${names.first} печатает…';
+    if (names.length == 2) {
+      return '${names[0]} и ${names[1]} печатают…';
+    }
+    return '${names.length} печатают…';
   }
 
   @override
