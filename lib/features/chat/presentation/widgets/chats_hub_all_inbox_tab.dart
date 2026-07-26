@@ -801,6 +801,85 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<void> _showAllJoinRequestsInbox() async {
+    if (_joinRequestsInbox.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(ctx).height * 0.65,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Text(
+                    'Заявки в модерацию (${_joinRequestsInbox.length})',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: _joinRequestsInbox.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final item = _joinRequestsInbox[index];
+                      return ListTile(
+                        title: Text(
+                          '${item.user.displayName} → ${item.conversation.displayTitle}',
+                        ),
+                        subtitle: Text(
+                          '${item.requestedAt.day.toString().padLeft(2, '0')}.'
+                          '${item.requestedAt.month.toString().padLeft(2, '0')}.'
+                          '${item.requestedAt.year}',
+                        ),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.pop(ctx);
+                                await _reviewJoinInboxItem(
+                                  item,
+                                  approve: false,
+                                );
+                              },
+                              child: const Text('Нет'),
+                            ),
+                            FilledButton(
+                              onPressed: () async {
+                                Navigator.pop(ctx);
+                                await _reviewJoinInboxItem(
+                                  item,
+                                  approve: true,
+                                );
+                              },
+                              child: const Text('Да'),
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          context.push(
+                            ChatThreadRoute.pathFor(item.conversation),
+                            extra: item.conversation,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   List<InboxHubEntry> get _visibleEntries {
     final base = _folderFilteredEntries
         .where(
@@ -1437,6 +1516,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                           subtitle: Text(
                             '${_joinRequestsInbox.length} ожидают решения',
                           ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _showAllJoinRequestsInbox,
                         ),
                         ..._joinRequestsInbox.take(3).map((item) {
                           return ListTile(
@@ -1474,10 +1555,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         }),
                         if (_joinRequestsInbox.length > 3)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              'И ещё ${_joinRequestsInbox.length - 3} заявок',
-                              style: Theme.of(context).textTheme.bodySmall,
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: TextButton(
+                              onPressed: _showAllJoinRequestsInbox,
+                              child: Text(
+                                'И ещё ${_joinRequestsInbox.length - 3} заявок',
+                              ),
                             ),
                           ),
                       ],

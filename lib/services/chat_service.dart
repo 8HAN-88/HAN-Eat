@@ -556,6 +556,10 @@ class ChatService {
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
+    String? pollQuestion,
+    String? pollDescription,
+    List<String>? pollOptions,
+    Map<String, dynamic>? pollSettings,
   }) {
     return _scheduleMessage(
       conversationId: conversationId,
@@ -566,6 +570,10 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      pollQuestion: pollQuestion,
+      pollDescription: pollDescription,
+      pollOptions: pollOptions,
+      pollSettings: pollSettings,
     );
   }
 
@@ -815,6 +823,10 @@ class ChatService {
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
+    String? pollQuestion,
+    String? pollDescription,
+    List<String>? pollOptions,
+    Map<String, dynamic>? pollSettings,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages/scheduled');
     final response = await _post(
@@ -827,6 +839,10 @@ class ChatService {
         if (mediaUrl != null) 'media_url': mediaUrl,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         if (clientMessageId != null) 'client_message_id': clientMessageId,
+        if (pollQuestion != null) 'poll_question': pollQuestion,
+        if (pollDescription != null) 'poll_description': pollDescription,
+        if (pollOptions != null) 'poll_options': pollOptions,
+        if (pollSettings != null) 'poll_settings': pollSettings,
         'send_at': sendAt.toUtc().toIso8601String(),
         'send_when_online': sendWhenOnline,
       }),

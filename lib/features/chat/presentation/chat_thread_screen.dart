@@ -44,6 +44,7 @@ import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
 import '../../../services/phone_contacts_service.dart';
+import '../../../services/share_link_service.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
@@ -5238,6 +5239,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } else {
         file = XFile(path!);
       }
+      if (!mounted) return;
+      final mode = await _askSendOrSchedule();
+      if (mode == null || !mounted) return;
+      if (mode == 'schedule') {
+        await _scheduleVoiceFile(
+          file,
+          durationSec: durationSec,
+          clientMessageId: clientMessageId,
+        );
+        return;
+      }
       int? totalBytes;
       try {
         totalBytes = await file.length();
@@ -5255,6 +5267,62 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ));
     } finally {
       _voiceSending = false;
+    }
+  }
+
+  Future<void> _scheduleVoiceFile(
+    XFile file, {
+    required int durationSec,
+    required String clientMessageId,
+  }) async {
+    final delivery = await _pickScheduleDelivery();
+    if (delivery == null || !mounted) return;
+    setState(() {
+      _sending = true;
+      _uploadProgress = 0.1;
+    });
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
+        fileType: 'audio',
+        waitForProcessing: false,
+        onProgress: (p) {
+          if (!mounted) return;
+          _setUploadProgress(0.1 + p * 0.8, status: 'Загрузка…');
+        },
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) {
+        throw Exception('Не удалось загрузить голосовое');
+      }
+      final item = await ChatService.scheduleMessage(
+        conversationId: widget.conversationId,
+        type: 'voice',
+        content: '$durationSec',
+        mediaUrl: ServerConfig.resolveMediaUrl(url),
+        sendAt: delivery.sendAt,
+        sendWhenOnline: delivery.sendWhenOnline,
+        replyToMessageId: _replyTo?.id,
+        clientMessageId: clientMessageId,
+      );
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+      _showScheduledSnack(item);
+      unawaited(_refreshScheduledPendingCount());
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(
+        context,
+        e,
+        fallback: 'Не удалось запланировать голосовое',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploadProgress = null;
+        });
+      }
     }
   }
 
@@ -5518,6 +5586,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Скопировано')),
         );
+        break;
+      case 'copy_link':
+        unawaited(_copyMessageLink(msg));
         break;
       case 'edit':
         _startEdit(msg);
@@ -6420,6 +6491,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         (canShowReaders ? 1 : 0) +
         (canReplyPrivately ? 1 : 0) +
         (canSaveToFavorites ? 1 : 0) +
+        (msg.id > 0 ? 1 : 0) + // copy link
         1; // reply, pin, forward, select + optional
     final preLayout = ChatMessageOverlayLayout.compute(
       messageRect: rect,
@@ -6506,9 +6578,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canShowReaders: canShowReaders,
       canSaveToFavorites: canSaveToFavorites,
       canReplyPrivately: canReplyPrivately,
+      canCopyLink: msg.id > 0,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
+    );
+  }
+
+  Future<void> _copyMessageLink(ChatMessage msg) async {
+    if (msg.id <= 0) return;
+    final link = ShareLinkService.chatLink(
+      widget.conversationId,
+      messageId: msg.id,
+    );
+    await Clipboard.setData(ClipboardData(text: link));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Ссылка на сообщение скопирована')),
+    );
+  }
+
+  Future<String?> _askSendOrSchedule() {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.send_rounded),
+              title: const Text('Отправить сейчас'),
+              onTap: () => Navigator.pop(ctx, 'now'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('Отложить'),
+              onTap: () => Navigator.pop(ctx, 'schedule'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
@@ -7784,6 +7895,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendStickerByUrl(String mediaUrl, {String? emoji}) async {
+    // Stickers send immediately (Telegram); schedule via attach-sheet long path
+    // would interrupt the picker UX.
     try {
       await ChatService.sendSticker(
         conversationId: widget.conversationId,
@@ -8147,6 +8260,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _sendPollDraft(ChatPollDraft draft) async {
     if (_sending || _recording) return;
+    final mode = await _askSendOrSchedule();
+    if (mode == null || !mounted) return;
+    if (mode == 'schedule') {
+      final delivery = await _pickScheduleDelivery();
+      if (delivery == null || !mounted) return;
+      try {
+        final item = await ChatService.scheduleMessage(
+          conversationId: widget.conversationId,
+          type: 'poll',
+          content: draft.question,
+          sendAt: delivery.sendAt,
+          sendWhenOnline: delivery.sendWhenOnline,
+          replyToMessageId: _replyTo?.id,
+          clientMessageId: const Uuid().v4(),
+          pollQuestion: draft.question,
+          pollDescription: draft.description,
+          pollOptions: draft.options,
+          pollSettings: draft.settings.toJson(),
+        );
+        if (!mounted) return;
+        setState(() => _replyTo = null);
+        _showScheduledSnack(item);
+        unawaited(_refreshScheduledPendingCount());
+      } catch (e) {
+        if (!mounted) return;
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось запланировать опрос',
+        );
+      }
+      return;
+    }
     _beginSending(status: 'Отправка опроса…');
     try {
       final msg = await ChatService.sendPoll(
@@ -8177,11 +8323,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String mediaUrl,
   }) async {
     if (_sending || _recording) return;
+    final mode = await _askSendOrSchedule();
+    if (mode == null || !mounted) return;
+    final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
+    if (mode == 'schedule') {
+      final delivery = await _pickScheduleDelivery();
+      if (delivery == null || !mounted) return;
+      try {
+        final item = await ChatService.scheduleMessage(
+          conversationId: widget.conversationId,
+          type: 'file',
+          content: name,
+          mediaUrl: resolved,
+          sendAt: delivery.sendAt,
+          sendWhenOnline: delivery.sendWhenOnline,
+          replyToMessageId: _replyTo?.id,
+          clientMessageId: const Uuid().v4(),
+        );
+        if (!mounted) return;
+        setState(() => _replyTo = null);
+        _showScheduledSnack(item);
+        unawaited(_refreshScheduledPendingCount());
+      } catch (e) {
+        if (!mounted) return;
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось запланировать файл',
+        );
+      }
+      return;
+    }
     _beginSending(status: 'Отправка…');
     try {
       final msg = await ChatService.sendFile(
         conversationId: widget.conversationId,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        mediaUrl: resolved,
         fileName: name,
         replyToMessageId: _replyTo?.id,
       );
@@ -8518,6 +8695,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
   }) async {
+    final mode = await _askSendOrSchedule();
+    if (mode == null || !mounted) return;
+    if (mode == 'schedule') {
+      await _schedulePickedFile(file, fileName: fileName, replyToId: replyToId);
+      return;
+    }
     int? totalBytes;
     try {
       totalBytes = await file.length();
@@ -8533,6 +8716,61 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyToId ?? _replyTo?.id,
       totalBytes: totalBytes,
     ));
+  }
+
+  Future<void> _schedulePickedFile(
+    XFile file, {
+    required String fileName,
+    int? replyToId,
+  }) async {
+    final delivery = await _pickScheduleDelivery();
+    if (delivery == null || !mounted) return;
+    setState(() {
+      _sending = true;
+      _uploadProgress = 0.1;
+    });
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: file,
+        fileType: 'file',
+        waitForProcessing: false,
+        onProgress: (p) {
+          if (!mounted) return;
+          _setUploadProgress(0.1 + p * 0.8, status: 'Загрузка…');
+        },
+      );
+      final url = uploaded.url;
+      if (url == null || url.isEmpty) {
+        throw Exception('Не удалось загрузить файл');
+      }
+      final item = await ChatService.scheduleMessage(
+        conversationId: widget.conversationId,
+        type: 'file',
+        content: fileName,
+        mediaUrl: ServerConfig.resolveMediaUrl(url),
+        sendAt: delivery.sendAt,
+        sendWhenOnline: delivery.sendWhenOnline,
+        replyToMessageId: replyToId ?? _replyTo?.id,
+        clientMessageId: const Uuid().v4(),
+      );
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+      _showScheduledSnack(item);
+      unawaited(_refreshScheduledPendingCount());
+      unawaited(
+        _rememberRecentFile(name: fileName, file: file, mediaUrl: url),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось запланировать файл');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploadProgress = null;
+        });
+      }
+    }
   }
 
   Future<void> _rememberRecentFile({

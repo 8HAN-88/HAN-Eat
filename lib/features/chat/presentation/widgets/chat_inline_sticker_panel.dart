@@ -7,6 +7,8 @@ import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
 import '../../application/chat_recent_stickers_store.dart';
 
+enum _InlineStickerTab { recent, favorites, pack }
+
 /// Compact sticker picker above the composer (Telegram-style).
 class ChatInlineStickerPanel extends StatefulWidget {
   const ChatInlineStickerPanel({
@@ -27,9 +29,11 @@ class ChatInlineStickerPanel extends StatefulWidget {
 class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
   List<StickerPack> _packs = const [];
   List<ChatRecentStickerEntry> _recent = const [];
+  List<ChatRecentStickerEntry> _favorites = const [];
   bool _loading = true;
   String? _error;
-  int? _selectedPackId; // null = recent
+  _InlineStickerTab _tab = _InlineStickerTab.recent;
+  int? _selectedPackId;
 
   @override
   void initState() {
@@ -45,14 +49,22 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
     try {
       final packs = await StickerService.listMyPacks();
       final recent = await ChatRecentStickersStore.loadRecent();
+      final favorites = await ChatRecentStickersStore.loadFavorites();
       if (!mounted) return;
       setState(() {
-        _packs = packs.where((p) => p.isInstalled || p.stickers.isNotEmpty).toList();
+        _packs =
+            packs.where((p) => p.isInstalled || p.stickers.isNotEmpty).toList();
         _recent = recent;
+        _favorites = favorites;
         _loading = false;
-        if (_selectedPackId == null &&
+        if (_tab == _InlineStickerTab.recent &&
+            _recent.isEmpty &&
+            _favorites.isNotEmpty) {
+          _tab = _InlineStickerTab.favorites;
+        } else if (_tab == _InlineStickerTab.recent &&
             _recent.isEmpty &&
             _packs.isNotEmpty) {
+          _tab = _InlineStickerTab.pack;
           _selectedPackId = _packs.first.id;
         }
       });
@@ -66,22 +78,30 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
   }
 
   List<_StickerThumb> get _items {
-    if (_selectedPackId == null) {
-      return [
-        for (final e in _recent)
-          if (e.mediaUrl.trim().isNotEmpty)
-            _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
-      ];
+    switch (_tab) {
+      case _InlineStickerTab.recent:
+        return [
+          for (final e in _recent)
+            if (e.mediaUrl.trim().isNotEmpty)
+              _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
+        ];
+      case _InlineStickerTab.favorites:
+        return [
+          for (final e in _favorites)
+            if (e.mediaUrl.trim().isNotEmpty)
+              _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
+        ];
+      case _InlineStickerTab.pack:
+        for (final pack in _packs) {
+          if (pack.id != _selectedPackId) continue;
+          return [
+            for (final s in pack.stickers)
+              if (s.mediaUrl.trim().isNotEmpty)
+                _StickerThumb(mediaUrl: s.mediaUrl, emoji: s.emoji),
+          ];
+        }
+        return const [];
     }
-    for (final pack in _packs) {
-      if (pack.id != _selectedPackId) continue;
-      return [
-        for (final s in pack.stickers)
-          if (s.mediaUrl.trim().isNotEmpty)
-            _StickerThumb(mediaUrl: s.mediaUrl, emoji: s.emoji),
-      ];
-    }
-    return const [];
   }
 
   Future<void> _pick(_StickerThumb item) async {
@@ -92,6 +112,35 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
       ),
     );
     widget.onPick(item.mediaUrl, emoji: item.emoji);
+  }
+
+  Future<void> _toggleFavorite(_StickerThumb item) async {
+    final added = await ChatRecentStickersStore.toggleFavorite(
+      mediaUrl: item.mediaUrl,
+      emoji: item.emoji,
+    );
+    final favorites = await ChatRecentStickersStore.loadFavorites();
+    if (!mounted) return;
+    setState(() => _favorites = favorites);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          added ? 'Добавлено в избранные стикеры' : 'Убрано из избранных',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  String get _emptyLabel {
+    switch (_tab) {
+      case _InlineStickerTab.recent:
+        return 'Нет недавних стикеров';
+      case _InlineStickerTab.favorites:
+        return 'Нет избранных · долгий тап по стикеру';
+      case _InlineStickerTab.pack:
+        return 'В паке пока пусто';
+    }
   }
 
   @override
@@ -146,9 +195,8 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                       : _items.isEmpty
                           ? Center(
                               child: Text(
-                                _selectedPackId == null
-                                    ? 'Нет недавних стикеров'
-                                    : 'В паке пока пусто',
+                                _emptyLabel,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: scheme.onSurfaceVariant,
                                 ),
@@ -168,16 +216,38 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                                 final url = ServerConfig.resolveMediaUrl(
                                   item.mediaUrl,
                                 );
+                                final isFavorite = _favorites.any(
+                                  (e) => e.mediaUrl == item.mediaUrl,
+                                );
                                 return InkWell(
                                   borderRadius: BorderRadius.circular(10),
                                   onTap: () => unawaited(_pick(item)),
-                                  child: Image.network(
-                                    url,
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (_, __, ___) => Icon(
-                                      Icons.broken_image_outlined,
-                                      color: scheme.onSurfaceVariant,
-                                    ),
+                                  onLongPress: () =>
+                                      unawaited(_toggleFavorite(item)),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.network(
+                                        url,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) => Icon(
+                                          Icons.broken_image_outlined,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (isFavorite)
+                                        const Align(
+                                          alignment: Alignment.topRight,
+                                          child: Padding(
+                                            padding: EdgeInsets.all(2),
+                                            child: Icon(
+                                              Icons.star_rounded,
+                                              size: 14,
+                                              color: Color(0xFFFFC107),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 );
                               },
@@ -190,18 +260,32 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: [
                   _PackChip(
-                    selected: _selectedPackId == null,
+                    selected: _tab == _InlineStickerTab.recent,
                     label: '⏱',
-                    onTap: () => setState(() => _selectedPackId = null),
+                    onTap: () => setState(() {
+                      _tab = _InlineStickerTab.recent;
+                      _selectedPackId = null;
+                    }),
+                  ),
+                  _PackChip(
+                    selected: _tab == _InlineStickerTab.favorites,
+                    label: '★',
+                    onTap: () => setState(() {
+                      _tab = _InlineStickerTab.favorites;
+                      _selectedPackId = null;
+                    }),
                   ),
                   for (final pack in _packs)
                     _PackChip(
-                      selected: _selectedPackId == pack.id,
+                      selected: _tab == _InlineStickerTab.pack &&
+                          _selectedPackId == pack.id,
                       label: pack.title.isEmpty
                           ? '#'
                           : pack.title.characters.first.toUpperCase(),
-                      onTap: () =>
-                          setState(() => _selectedPackId = pack.id),
+                      onTap: () => setState(() {
+                        _tab = _InlineStickerTab.pack;
+                        _selectedPackId = pack.id;
+                      }),
                     ),
                 ],
               ),

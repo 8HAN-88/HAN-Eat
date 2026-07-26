@@ -9,10 +9,20 @@ class ShareLinkService {
   static String reelLink(int postId) => '$webOrigin/reel/$postId';
   static String recipeLink(int recipeId) => '$webOrigin/recipe/$recipeId';
   static String channelLink(int channelId) => '$webOrigin/channel/$channelId';
+  static String chatLink(int conversationId, {int? messageId}) {
+    final base = '$webOrigin/chats/thread/$conversationId';
+    if (messageId == null || messageId <= 0) return base;
+    return '$base?msg=$messageId';
+  }
 
   /// Deep link для нативного приложения (не для шаринга наружу).
   static String nativePostLink(int postId) => 'haneat://post/$postId';
   static String nativeRecipeLink(int recipeId) => 'haneat://recipe/$recipeId';
+  static String nativeChatLink(int conversationId, {int? messageId}) {
+    final base = 'haneat://chat/$conversationId';
+    if (messageId == null || messageId <= 0) return base;
+    return '$base?msg=$messageId';
+  }
 
   static String channelShareText(int channelId, String channelName) {
     final title = channelName.trim().isEmpty ? 'Канал' : channelName.trim();

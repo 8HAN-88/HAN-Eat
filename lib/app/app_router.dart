@@ -137,7 +137,12 @@ String? parseDeepLinkToGoPath(String raw) {
       return '/channel/${uri.pathSegments.first}';
     }
     if (uri.host == 'chat' && uri.pathSegments.isNotEmpty) {
-      return '/chats/thread/${uri.pathSegments.first}';
+      final chatPath = '/chats/thread/${uri.pathSegments.first}';
+      final msg = uri.queryParameters['msg'];
+      if (msg != null && msg.isNotEmpty) {
+        return '$chatPath?msg=${Uri.encodeComponent(msg)}';
+      }
+      return chatPath;
     }
     if (uri.host == 'chat-invite' && uri.pathSegments.isNotEmpty) {
       return '/chat-invite/${uri.pathSegments.first}';
@@ -1186,12 +1191,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             );
           }
+          final msgParam = state.uri.queryParameters['msg'];
+          final jumpFromQuery = int.tryParse(msgParam ?? '');
           return MaterialPage(
             child: ChatThreadLoaderScreen(
               conversationId: id,
               initialConversation: initialConversation,
               initialPeer: initialPeer,
-              initialJumpMessageId: openArgs?.jumpToMessageId,
+              initialJumpMessageId:
+                  openArgs?.jumpToMessageId ?? jumpFromQuery,
             ),
           );
         },
