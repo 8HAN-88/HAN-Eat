@@ -371,6 +371,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? _lastSlowModeTick;
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
+  bool _showFormatBar = false;
   ChatWallpaperStyle _wallpaperStyle = ChatWallpaperStyle.defaultStyle;
   String? _wallpaperCustomPath;
   ImageProvider? _wallpaperImage;
@@ -1827,6 +1828,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       text: newText,
       selection: TextSelection.collapsed(offset: newText.length),
     );
+  }
+
+  void _wrapComposerMarkup(String left, String right) {
+    final text = _controller.text;
+    final sel = _controller.selection;
+    final start = sel.start.clamp(0, text.length);
+    final end = sel.end.clamp(0, text.length);
+    final hasSelection = sel.isValid && !sel.isCollapsed && end > start;
+    final selected = hasSelection ? text.substring(start, end) : '';
+    final inner = selected.isEmpty ? '' : selected;
+    final insertion = '$left$inner$right';
+    final newText = text.replaceRange(start, end, insertion);
+    final cursorStart = start + left.length;
+    final cursorEnd = cursorStart + inner.length;
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection(
+        baseOffset: cursorStart,
+        extentOffset: cursorEnd,
+      ),
+    );
+    _inputFocusNode.requestFocus();
   }
 
   void _openBotCommandsMenu() {
@@ -4123,6 +4146,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _forwardMessage(ChatMessage msg) async {
+    if (_conversation.protectContent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('В этом чате запрещена пересылка сообщений'),
+        ),
+      );
+      return;
+    }
     try {
       final chats = await ChatService.listConversations();
       if (!mounted) return;
@@ -5847,6 +5879,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _shareMessage(ChatMessage msg) async {
+    if (_conversation.protectContent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('В этом чате запрещено делиться сообщениями'),
+        ),
+      );
+      return;
+    }
     final text = _copyableText(msg);
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -5878,6 +5919,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _forwardSelectedMessages() async {
     final selected = _selectedMessages;
     if (selected.isEmpty) return;
+    if (_conversation.protectContent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('В этом чате запрещена пересылка сообщений'),
+        ),
+      );
+      return;
+    }
     try {
       final chats = await ChatService.listConversations();
       if (!mounted) return;
@@ -5978,6 +6028,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_messageContactUser(msg.senderId));
         break;
       case 'copy':
+        if (_conversation.protectContent && !msg.isMine) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Копирование в этом чате ограничено'),
+            ),
+          );
+          break;
+        }
         Clipboard.setData(ClipboardData(text: _copyableText(msg)));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Скопировано')),
@@ -6001,6 +6059,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'save':
         unawaited(_saveMessageToFavorites(msg));
         break;
+      case 'translate':
+        unawaited(_translateMessage(msg));
+        break;
       case 'readers':
         unawaited(_showMessageReaders(msg));
         break;
@@ -6010,6 +6071,157 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'select':
         _enterSelectionMode(msg);
         break;
+    }
+  }
+
+  Future<void> _translateMessage(ChatMessage msg) async {
+    final source = _copyableText(msg).trim();
+    if (source.isEmpty) return;
+    try {
+      final translated = await ChatService.translateText(text: source);
+      if (!mounted) return;
+      if (translated.trim().isEmpty || translated.trim() == source) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Перевод недоступен или не изменился')),
+        );
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) {
+          final scheme = Theme.of(ctx).colorScheme;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Перевод',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    translated,
+                    style: Theme.of(ctx).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: translated));
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Перевод скопирован')),
+                        );
+                      },
+                      icon: Icon(Icons.copy_rounded, color: scheme.primary),
+                      label: const Text('Копировать'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _showMessageEditHistory(ChatMessage msg) async {
+    if (msg.id <= 0 || !msg.isEdited) return;
+    try {
+      final history = await ChatService.listMessageEdits(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+      );
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (ctx) {
+          final scheme = Theme.of(ctx).colorScheme;
+          final items = history.items;
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 8,
+                bottom: MediaQuery.paddingOf(ctx).bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'История изменений',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.55,
+                    ),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            history.currentContent.isEmpty
+                                ? '—'
+                                : history.currentContent,
+                          ),
+                          subtitle: Text(
+                            'Текущая версия',
+                            style: TextStyle(color: scheme.primary),
+                          ),
+                        ),
+                        if (items.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text('Предыдущие версии недоступны'),
+                          )
+                        else
+                          ...items.map(
+                            (item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                item.content.isEmpty ? '—' : item.content,
+                              ),
+                              subtitle: Text(
+                                formatChatMessageTime(item.editedAt),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -6216,6 +6428,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ? () => _openUserProfile(msg.forwardFromUserId!)
           : null,
       onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
+      onEditedTap: interactive && msg.isEdited && msg.id > 0
+          ? () => unawaited(_showMessageEditHistory(msg))
+          : null,
     );
   }
 
@@ -6949,6 +7164,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 _senderNames[replyTarget.senderId] ??
                 'Сообщение'));
 
+    final protectContent = _conversation.protectContent;
+    final copyable = _copyableText(msg).isNotEmpty;
     await ChatMessageActionOverlay.show(
       context: context,
       messageRect: rect,
@@ -6976,11 +7193,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               msg.type == 'file'),
       isPinned: isPinned,
       canDelete: msg.isMine,
-      hasCopyableText: _copyableText(msg).isNotEmpty,
+      hasCopyableText: copyable && (!protectContent || msg.isMine),
       canShowReaders: canShowReaders,
-      canSaveToFavorites: canSaveToFavorites,
+      canSaveToFavorites: canSaveToFavorites && !protectContent,
       canReplyPrivately: canReplyPrivately,
       canCopyLink: msg.id > 0,
+      canForward: !protectContent,
+      canTranslate: copyable,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -10890,6 +11109,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               );
                             },
                           ),
+                        if (_showFormatBar && !_recording)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                            child: Row(
+                              children: [
+                                _ComposerFormatChip(
+                                  label: 'B',
+                                  tooltip: 'Жирный',
+                                  onTap: () => _wrapComposerMarkup('*', '*'),
+                                ),
+                                const SizedBox(width: 6),
+                                _ComposerFormatChip(
+                                  label: 'I',
+                                  tooltip: 'Курсив',
+                                  italic: true,
+                                  onTap: () => _wrapComposerMarkup('_', '_'),
+                                ),
+                                const SizedBox(width: 6),
+                                _ComposerFormatChip(
+                                  label: '</>',
+                                  tooltip: 'Код',
+                                  onTap: () => _wrapComposerMarkup('`', '`'),
+                                ),
+                                const SizedBox(width: 6),
+                                _ComposerFormatChip(
+                                  label: 'S',
+                                  tooltip: 'Спойлер',
+                                  onTap: () =>
+                                      _wrapComposerMarkup('||', '||'),
+                                ),
+                              ],
+                            ),
+                          ),
                         SafeArea(
                           top: false,
                           child: Padding(
@@ -10906,6 +11158,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         const Icon(Icons.attach_file_outlined),
                                     tooltip: 'Вложение',
                                     color: scheme.onSurfaceVariant,
+                                    iconSize: _composerIconSize,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: _composerButtonSide,
+                                      height: _composerButtonSide,
+                                    ),
+                                  ),
+                                if (!_recording)
+                                  IconButton(
+                                    onPressed: !canCompose
+                                        ? null
+                                        : () => setState(
+                                              () => _showFormatBar =
+                                                  !_showFormatBar,
+                                            ),
+                                    icon: Icon(
+                                      _showFormatBar
+                                          ? Icons.text_format
+                                          : Icons.text_format_outlined,
+                                    ),
+                                    tooltip: 'Форматирование',
+                                    color: _showFormatBar
+                                        ? scheme.primary
+                                        : scheme.onSurfaceVariant,
                                     iconSize: _composerIconSize,
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints.tightFor(
@@ -11481,6 +11757,7 @@ class _Bubble extends StatelessWidget {
     this.onMentionTap,
     this.onForwardFromTap,
     this.onVoiceCompleted,
+    this.onEditedTap,
   });
 
   final ChatMessage message;
@@ -11520,6 +11797,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<String>? onMentionTap;
   final VoidCallback? onForwardFromTap;
   final ValueChanged<ChatMessage>? onVoiceCompleted;
+  final VoidCallback? onEditedTap;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -11599,13 +11877,21 @@ class _Bubble extends StatelessWidget {
         ),
         if (message.isEdited) ...[
           const SizedBox(width: 3),
-          Text(
-            'изм.',
-            style: TextStyle(
-              color: editedColor,
-              fontSize: 10.5,
-              fontStyle: FontStyle.italic,
-              height: 1.08,
+          GestureDetector(
+            onTap: onEditedTap,
+            behavior: HitTestBehavior.opaque,
+            child: Text(
+              'изм.',
+              style: TextStyle(
+                color: editedColor,
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                height: 1.08,
+                decoration: onEditedTap != null
+                    ? TextDecoration.underline
+                    : TextDecoration.none,
+                decorationColor: editedColor,
+              ),
             ),
           ),
         ],
@@ -12474,6 +12760,48 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
                       ),
                     ),
                   ),
+      ),
+    );
+  }
+}
+
+class _ComposerFormatChip extends StatelessWidget {
+  const _ComposerFormatChip({
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+    this.italic = false,
+  });
+
+  final String label;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool italic;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+                fontSize: 13,
+                color: scheme.onSurface,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

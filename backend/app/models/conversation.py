@@ -28,6 +28,8 @@ class Conversation(Base):
     join_by_request_enabled = Column(Boolean, default=False, nullable=False)
     slow_mode_seconds = Column(Integer, default=0, nullable=False)
     anti_flood_max_messages_per_minute = Column(Integer, default=0, nullable=False)
+    # Telegram-like: restrict forwarding / saving content from this chat.
+    protect_content = Column(Boolean, default=False, nullable=False)
     invite_token = Column(String(96), nullable=True, unique=True, index=True)
     invite_token_updated_at = Column(DateTime, nullable=True)
     pinned_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
@@ -221,6 +223,22 @@ class MessageHide(Base):
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", name="uq_message_hide_user"),
     )
+
+
+class MessageEditHistory(Base):
+    """Previous message bodies captured before each edit."""
+
+    __tablename__ = "message_edit_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    editor_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    previous_content = Column(String(4000), nullable=False, default="")
+    edited_at = Column(DateTime, nullable=False, index=True)
 
 
 class Contact(Base):

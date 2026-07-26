@@ -28,6 +28,7 @@ from app.models.conversation import (
     Contact,
     MessageReaction,
     MessageHide,
+    MessageEditHistory,
     ScheduledMessage,
 )
 from app.models.user_block import UserBlock
@@ -56,6 +57,7 @@ __all__ = [
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest", "Story",
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
+    "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
     "StickerPackInstall",
 ]

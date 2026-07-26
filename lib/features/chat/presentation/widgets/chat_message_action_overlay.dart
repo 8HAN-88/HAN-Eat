@@ -130,6 +130,8 @@ class ChatMessageActionOverlay extends StatefulWidget {
     this.canSaveToFavorites = false,
     this.canReplyPrivately = false,
     this.canCopyLink = false,
+    this.canForward = true,
+    this.canTranslate = false,
     this.bottomComposerReserve = 88,
   });
 
@@ -145,6 +147,8 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool canSaveToFavorites;
   final bool canReplyPrivately;
   final bool canCopyLink;
+  final bool canForward;
+  final bool canTranslate;
   final ValueChanged<String> onReaction;
   final ValueChanged<String> onAction;
   final VoidCallback onExpandReactions;
@@ -167,6 +171,8 @@ class ChatMessageActionOverlay extends StatefulWidget {
     bool canSaveToFavorites = false,
     bool canReplyPrivately = false,
     bool canCopyLink = false,
+    bool canForward = true,
+    bool canTranslate = false,
     double bottomComposerReserve = 88,
   }) {
     AppHaptics.medium();
@@ -194,6 +200,8 @@ class ChatMessageActionOverlay extends StatefulWidget {
         canSaveToFavorites: canSaveToFavorites,
         canReplyPrivately: canReplyPrivately,
         canCopyLink: canCopyLink,
+        canForward: canForward,
+        canTranslate: canTranslate,
         bottomComposerReserve: bottomComposerReserve,
         onReaction: (emoji) {
           Navigator.pop(ctx);
@@ -283,18 +291,25 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
         icon: widget.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
         label: widget.isPinned ? 'Открепить' : 'Закрепить',
       ),
-      _MenuItem(
-        action: 'forward',
-        icon: Icons.forward_rounded,
-        label: 'Переслать',
-      ),
-      if (widget.hasCopyableText)
+      if (widget.canForward)
+        _MenuItem(
+          action: 'forward',
+          icon: Icons.forward_rounded,
+          label: 'Переслать',
+        ),
+      if (widget.hasCopyableText && widget.canForward)
         _MenuItem(
           action: 'share',
           icon: Icons.ios_share_rounded,
           label: 'Поделиться',
         ),
-      if (widget.canSaveToFavorites)
+      if (widget.canTranslate)
+        _MenuItem(
+          action: 'translate',
+          icon: Icons.translate_rounded,
+          label: 'Перевести',
+        ),
+      if (widget.canSaveToFavorites && widget.canForward)
         _MenuItem(
           action: 'save',
           icon: Icons.bookmark_border_rounded,

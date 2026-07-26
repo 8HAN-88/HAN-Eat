@@ -371,6 +371,7 @@ class ChatConversation {
     this.joinByRequestEnabled = false,
     this.slowModeSeconds = 0,
     this.antiFloodMaxMessagesPerMinute = 0,
+    this.protectContent = false,
     this.amIGroupAdmin = false,
     this.amICanManageMembers = false,
     this.amICanManagePostingPermissions = false,
@@ -398,6 +399,7 @@ class ChatConversation {
   final bool joinByRequestEnabled;
   final int slowModeSeconds;
   final int antiFloodMaxMessagesPerMinute;
+  final bool protectContent;
   final bool amIGroupAdmin;
   final bool amICanManageMembers;
   final bool amICanManagePostingPermissions;
@@ -468,6 +470,7 @@ class ChatConversation {
       slowModeSeconds: _parseInt(json['slow_mode_seconds']),
       antiFloodMaxMessagesPerMinute:
           _parseInt(json['anti_flood_max_messages_per_minute']),
+      protectContent: json['protect_content'] as bool? ?? false,
       amIGroupAdmin: json['am_i_group_admin'] as bool? ?? false,
       amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
       amICanManagePostingPermissions:
@@ -493,6 +496,7 @@ class ChatConversation {
     bool? joinByRequestEnabled,
     int? slowModeSeconds,
     int? antiFloodMaxMessagesPerMinute,
+    bool? protectContent,
     bool? amIGroupAdmin,
     bool? amICanManageMembers,
     bool? amICanManagePostingPermissions,
@@ -522,6 +526,7 @@ class ChatConversation {
       slowModeSeconds: slowModeSeconds ?? this.slowModeSeconds,
       antiFloodMaxMessagesPerMinute:
           antiFloodMaxMessagesPerMinute ?? this.antiFloodMaxMessagesPerMinute,
+      protectContent: protectContent ?? this.protectContent,
       amIGroupAdmin: amIGroupAdmin ?? this.amIGroupAdmin,
       amICanManageMembers: amICanManageMembers ?? this.amICanManageMembers,
       amICanManagePostingPermissions:
@@ -917,6 +922,50 @@ class ChatFolder {
         'channel_ids': channelIds,
         'filters': filters.toJson(),
       };
+}
+
+class ChatMessageEditHistoryItem {
+  const ChatMessageEditHistoryItem({
+    required this.content,
+    required this.editedAt,
+    this.editorId,
+  });
+
+  final String content;
+  final DateTime editedAt;
+  final int? editorId;
+
+  factory ChatMessageEditHistoryItem.fromJson(Map<String, dynamic> json) {
+    return ChatMessageEditHistoryItem(
+      content: json['content'] as String? ?? '',
+      editedAt: _parseDate(json['edited_at']),
+      editorId: json['editor_id'] != null ? _parseInt(json['editor_id']) : null,
+    );
+  }
+}
+
+class ChatMessageEditHistory {
+  const ChatMessageEditHistory({
+    required this.items,
+    this.currentContent = '',
+  });
+
+  final List<ChatMessageEditHistoryItem> items;
+  final String currentContent;
+
+  factory ChatMessageEditHistory.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'] as List<dynamic>? ?? const [];
+    final items = <ChatMessageEditHistoryItem>[];
+    for (final item in raw) {
+      if (item is Map<String, dynamic>) {
+        items.add(ChatMessageEditHistoryItem.fromJson(item));
+      }
+    }
+    return ChatMessageEditHistory(
+      items: items,
+      currentContent: json['current_content'] as String? ?? '',
+    );
+  }
 }
 
 class ChatMessageSearchItem {

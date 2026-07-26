@@ -110,6 +110,7 @@ class ConversationResponse(BaseModel):
     join_by_request_enabled: bool = False
     slow_mode_seconds: int = 0
     anti_flood_max_messages_per_minute: int = 0
+    protect_content: bool = False
     am_i_group_admin: bool = False
     am_i_can_manage_members: bool = False
     am_i_can_manage_posting_permissions: bool = False
@@ -276,6 +277,29 @@ class UpdateGroupChatRequest(BaseModel):
     anti_flood_max_messages_per_minute: Optional[int] = Field(
         default=None, ge=0, le=120
     )
+    protect_content: Optional[bool] = None
+
+
+class TranslateTextRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=4000)
+    target_lang: str = Field(default="ru", min_length=2, max_length=8)
+
+
+class TranslateTextResponse(BaseModel):
+    text: str
+    translated: str
+    target_lang: str
+
+
+class MessageEditHistoryItem(BaseModel):
+    content: str
+    edited_at: datetime
+    editor_id: Optional[int] = None
+
+
+class MessageEditHistoryResponse(BaseModel):
+    items: List[MessageEditHistoryItem] = []
+    current_content: str = ""
 
 
 class AddGroupMembersRequest(BaseModel):

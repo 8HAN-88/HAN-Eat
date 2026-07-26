@@ -34,6 +34,10 @@ from app.schemas.chat import (
     DirectChatRequest,
     EditMessageRequest,
     ForwardMessageRequest,
+    MessageEditHistoryItem,
+    MessageEditHistoryResponse,
+    TranslateTextRequest,
+    TranslateTextResponse,
     MessageReaderItem,
     MessageReadersResponse,
     MessageReactionUserItem,
@@ -632,6 +636,7 @@ def _conversation_response(
         anti_flood_max_messages_per_minute=int(
             getattr(conv, "anti_flood_max_messages_per_minute", 0) or 0
         ),
+        protect_content=bool(getattr(conv, "protect_content", False)),
         am_i_group_admin=am_i_group_admin,
         am_i_can_manage_members=am_i_can_manage_members,
         am_i_can_manage_posting_permissions=am_i_can_manage_posting_permissions,
@@ -1609,6 +1614,11 @@ async def forward_message(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "protect_content":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Content is protected",
+            )
         if code in (
             "group_write_restricted",
             "group_user_restricted",
@@ -2364,6 +2374,61 @@ async def edit_message(
     )
 
 
+@router.get(
+    "/chats/{conversation_id}/messages/{message_id}/edits",
+    response_model=MessageEditHistoryResponse,
+)
+async def list_message_edits(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        msg, rows = svc.list_message_edit_history(
+            conversation_id, message_id, current_user.id
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    return MessageEditHistoryResponse(
+        current_content=msg.content or "",
+        items=[
+            MessageEditHistoryItem(
+                content=row.previous_content or "",
+                edited_at=row.edited_at,
+                editor_id=row.editor_id,
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.post("/chats/translate", response_model=TranslateTextResponse)
+async def translate_chat_text(
+    body: TranslateTextRequest,
+    current_user: User = Depends(get_current_user_required),
+):
+    del current_user  # auth required; no per-user state
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
+    target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
+    from app.api.v1.recipes import translate_text
+
+    translated = translate_text(text, target)
+    return TranslateTextResponse(
+        text=text,
+        translated=translated or text,
+        target_lang=target,
+    )
+
+
 @router.post("/chats/{conversation_id}/messages/{message_id}/reactions")
 async def add_message_reaction(
     conversation_id: int,
@@ -2839,6 +2904,7 @@ async def update_group_chat(
             and body.join_by_request_enabled is None
             and body.slow_mode_seconds is None
             and body.anti_flood_max_messages_per_minute is None
+            and body.protect_content is None
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
         if body.title is not None:
@@ -2919,6 +2985,24 @@ async def update_group_chat(
                         "disabled."
                         if int(body.anti_flood_max_messages_per_minute) <= 0
                         else f"max {int(body.anti_flood_max_messages_per_minute)} messages/min."
+                    ),
+                )
+            )
+        if body.protect_content is not None:
+            svc.set_group_protect_content(
+                conversation_id,
+                current_user.id,
+                body.protect_content,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 Content protection: "
+                    + (
+                        "enabled (forwarding restricted)."
+                        if body.protect_content
+                        else "disabled."
                     ),
                 )
             )

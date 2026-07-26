@@ -456,6 +456,39 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessageEditHistory> listMessageEdits({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/edits',
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить историю правок');
+    return ChatMessageEditHistory.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<String> translateText({
+    required String text,
+    String targetLang = 'ru',
+  }) async {
+    final uri = Uri.parse('$_base/chats/translate');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'text': text,
+        'target_lang': targetLang,
+      }),
+    );
+    _ensureOk(response, 'Не удалось перевести сообщение');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['translated'] as String?)?.trim().isNotEmpty == true
+        ? (data['translated'] as String)
+        : text;
+  }
+
   static Future<List<ChatReactionSummary>> setReaction({
     required int conversationId,
     required int messageId,
@@ -1089,6 +1122,21 @@ class ChatService {
       body: jsonEncode({'join_by_request_enabled': enabled}),
     );
     _ensureOk(response, 'Не удалось обновить режим вступления');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatConversation> setGroupProtectContent({
+    required int conversationId,
+    required bool enabled,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'protect_content': enabled}),
+    );
+    _ensureOk(response, 'Не удалось обновить защиту контента');
     return ChatConversation.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );

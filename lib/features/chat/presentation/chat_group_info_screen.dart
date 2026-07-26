@@ -184,6 +184,30 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     }
   }
 
+  Future<void> _toggleProtectContent() async {
+    if (!_canManagePostingPermissions) return;
+    final next = !_conversation.protectContent;
+    setState(() => _busy = true);
+    try {
+      final conv = await ChatService.setGroupProtectContent(
+        conversationId: _conversation.id,
+        enabled: next,
+      );
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _busy = false;
+      });
+      widget.onConversationChanged?.call(conv);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _toggleJoinByRequestEnabled() async {
     if (!_canManageMembers) return;
     final next = !_conversation.joinByRequestEnabled;
@@ -1506,6 +1530,19 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           onChanged: (_busy || !_canManagePostingPermissions)
                               ? null
                               : (_) => _toggleOnlyAdminsCanPost(),
+                        ),
+                        SwitchListTile(
+                          secondary: const Icon(Icons.lock_outline),
+                          title: const Text('Запретить пересылку'),
+                          subtitle: Text(
+                            _canManagePostingPermissions
+                                ? 'Участники не смогут пересылать и сохранять сообщения'
+                                : 'Нет права управлять этим параметром',
+                          ),
+                          value: _conversation.protectContent,
+                          onChanged: (_busy || !_canManagePostingPermissions)
+                              ? null
+                              : (_) => _toggleProtectContent(),
                         ),
                         ListTile(
                           leading: const Icon(Icons.timer_outlined),

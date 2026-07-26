@@ -17,6 +17,7 @@ from app.models.conversation import (
     GroupMemberBan,
     GroupJoinRequest,
     Message,
+    MessageEditHistory,
     MessageHide,
     MessageReaction,
     ScheduledMessage,
@@ -868,6 +869,18 @@ class ChatService:
             raise ValueError("forbidden")
         value = max(0, min(int(max_messages_per_minute), 120))
         conv.anti_flood_max_messages_per_minute = value
+        conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        return conv
+
+    def set_group_protect_content(
+        self, conversation_id: int, actor_id: int, enabled: bool
+    ) -> Conversation:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv = self._get_group_or_error(conversation_id)
+        if not self._can_manage_group_posting_permissions(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv.protect_content = bool(enabled)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 
@@ -2085,6 +2098,16 @@ class ChatService:
         if not src:
             raise ValueError("not_found")
 
+        source_conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == source_conversation_id)
+            .first()
+        )
+        if source_conv is not None and bool(
+            getattr(source_conv, "protect_content", False)
+        ):
+            raise ValueError("protect_content")
+
         content = src.content or ""
         media_url = src.media_url
         if src.type == "poll":
@@ -2531,16 +2554,55 @@ class ChatService:
         clean = (content or "").strip()
         if msg.type == "text" and not clean:
             raise ValueError("empty_message")
+        previous = (msg.content or "")[:4000]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if previous != clean[:4000]:
+            self.db.add(
+                MessageEditHistory(
+                    message_id=msg.id,
+                    editor_id=user_id,
+                    previous_content=previous,
+                    edited_at=now,
+                )
+            )
         msg.content = clean[:4000]
-        msg.edited_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        msg.edited_at = now
         conv = (
             self.db.query(Conversation)
             .filter(Conversation.id == conversation_id)
             .first()
         )
         if conv:
-            conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            conv.updated_at = now
         return msg
+
+    def list_message_edit_history(
+        self, conversation_id: int, message_id: int, user_id: int
+    ) -> Tuple[Message, List[MessageEditHistory]]:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        msg = (
+            self.db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not msg:
+            raise ValueError("not_found")
+        rows = (
+            self.db.query(MessageEditHistory)
+            .filter(MessageEditHistory.message_id == message_id)
+            .order_by(
+                MessageEditHistory.edited_at.desc(),
+                MessageEditHistory.id.desc(),
+            )
+            .limit(50)
+            .all()
+        )
+        return msg, rows
 
     def reactions_for_messages(
         self, message_ids: List[int], viewer_id: int
