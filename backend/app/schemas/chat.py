@@ -62,6 +62,16 @@ class MessageReadersResponse(BaseModel):
     other_member_count: int = 0
 
 
+class MessageReactionUserItem(BaseModel):
+    emoji: str
+    user: ChatUserBrief
+
+
+class MessageReactionsDetailResponse(BaseModel):
+    items: List[MessageReactionUserItem]
+    reaction_count: int = 0
+
+
 class MessageReactionSummary(BaseModel):
     emoji: str
     count: int

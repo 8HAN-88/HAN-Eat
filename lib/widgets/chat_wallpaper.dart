@@ -47,11 +47,13 @@ class ChatWallpaper extends StatelessWidget {
     required this.isDark,
     required this.child,
     this.style = ChatWallpaperStyle.defaultStyle,
+    this.backgroundImage,
   });
 
   final bool isDark;
   final Widget child;
   final ChatWallpaperStyle style;
+  final ImageProvider? backgroundImage;
 
   Color get _base {
     switch (style) {
@@ -87,6 +89,24 @@ class ChatWallpaper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final custom = backgroundImage;
+    if (custom != null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: _base,
+          image: DecorationImage(
+            image: custom,
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withValues(alpha: isDark ? 0.28 : 0.08),
+              BlendMode.darken,
+            ),
+          ),
+        ),
+        child: child,
+      );
+    }
+
     final showPattern = style != ChatWallpaperStyle.solid;
     return ColoredBox(
       color: _base,

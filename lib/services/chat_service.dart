@@ -403,6 +403,43 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessageReactionsResult> listMessageReactions({
+    required int conversationId,
+    required int messageId,
+    String? emoji,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/reactions',
+    ).replace(
+      queryParameters: {
+        if (emoji != null && emoji.trim().isNotEmpty) 'emoji': emoji.trim(),
+      },
+    );
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить реакции');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final itemsRaw = data['items'] as List<dynamic>? ?? const [];
+    final items = <ChatMessageReactionUser>[];
+    for (final raw in itemsRaw) {
+      if (raw is! Map<String, dynamic>) continue;
+      final userRaw = raw['user'];
+      if (userRaw is! Map<String, dynamic>) continue;
+      try {
+        items.add(
+          ChatMessageReactionUser(
+            emoji: raw['emoji'] as String? ?? '',
+            user: ChatUserBrief.fromJson(userRaw),
+          ),
+        );
+      } catch (_) {}
+    }
+    return ChatMessageReactionsResult(
+      items: items,
+      reactionCount:
+          (data['reaction_count'] as num?)?.toInt() ?? items.length,
+    );
+  }
+
   static Future<ChatMessage> editMessage({
     required int conversationId,
     required int messageId,

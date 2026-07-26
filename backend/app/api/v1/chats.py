@@ -34,6 +34,8 @@ from app.schemas.chat import (
     ForwardMessageRequest,
     MessageReaderItem,
     MessageReadersResponse,
+    MessageReactionUserItem,
+    MessageReactionsDetailResponse,
     RescheduleMessageRequest,
     ScheduledMessageListResponse,
     ScheduledMessageResponse,
@@ -2609,6 +2611,36 @@ async def list_message_readers(
         items=[MessageReaderItem(user=_brief(u)) for u in users],
         reader_count=len(users),
         other_member_count=other_count,
+    )
+
+
+@router.get(
+    "/chats/{conversation_id}/messages/{message_id}/reactions",
+    response_model=MessageReactionsDetailResponse,
+)
+async def list_message_reactions(
+    conversation_id: int,
+    message_id: int,
+    emoji: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        rows = svc.message_reaction_users(
+            conversation_id, message_id, current_user.id, emoji=emoji
+        )
+    except ValueError as e:
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return MessageReactionsDetailResponse(
+        items=[
+            MessageReactionUserItem(emoji=reaction_emoji, user=_brief(user))
+            for reaction_emoji, user in rows
+        ],
+        reaction_count=len(rows),
     )
 
 

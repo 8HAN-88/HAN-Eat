@@ -10,6 +10,7 @@ import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import 'chat_group_moderation_log_screen.dart';
+import 'chat_media_gallery_screen.dart';
 
 class ChatGroupInfoScreen extends StatefulWidget {
   const ChatGroupInfoScreen({
@@ -1474,6 +1475,23 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           subtitle: const Text('Не присылать push-уведомления'),
                           value: _conversation.muted,
                           onChanged: _busy ? null : (_) => _toggleMute(),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.photo_library_outlined),
+                          title: const Text('Медиа, файлы и ссылки'),
+                          subtitle: const Text('Общие фото, видео и документы'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: _busy
+                              ? null
+                              : () {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute(
+                                      builder: (_) => ChatMediaGalleryScreen(
+                                        conversationId: _conversation.id,
+                                      ),
+                                    ),
+                                  );
+                                },
                         ),
                         SwitchListTile(
                           secondary:

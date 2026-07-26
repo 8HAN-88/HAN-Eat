@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -75,6 +76,7 @@ import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
 import 'widgets/chat_message_readers_sheet.dart';
+import 'widgets/chat_message_reactors_sheet.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
 import 'widgets/chat_video_note_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
@@ -368,6 +370,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
   ChatWallpaperStyle _wallpaperStyle = ChatWallpaperStyle.defaultStyle;
+  String? _wallpaperCustomPath;
+  ImageProvider? _wallpaperImage;
   String? _pendingMediaAutoRetryClientMessageId;
   String? _pendingMediaAutoRetryReason;
 
@@ -514,11 +518,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
         widget.conversationId,
       );
+      final customPath = await ChatThreadUiPrefs.getCustomWallpaperPath(
+        widget.conversationId,
+      );
+      ImageProvider? customImage;
+      if (customPath != null && !kIsWeb) {
+        final file = File(customPath);
+        if (await file.exists()) {
+          customImage = FileImage(file);
+        }
+      }
       if (!mounted) return;
       setState(() {
         _slowModeCountdownHapticsEnabled = hapticsEnabled;
         _autoRetryOnLimitsEnabled = autoRetryEnabled;
         _wallpaperStyle = wallpaper;
+        _wallpaperCustomPath = customPath;
+        _wallpaperImage = customImage;
       });
       if (!autoRetryEnabled) {
         _clearAllAutoRetrySchedules();
@@ -526,10 +542,91 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (_) {}
   }
 
+  Future<void> _applyWallpaperStyle(
+    ChatWallpaperStyle style, {
+    bool applyToAll = false,
+  }) async {
+    final previousStyle = _wallpaperStyle;
+    final previousPath = _wallpaperCustomPath;
+    final previousImage = _wallpaperImage;
+    setState(() {
+      _wallpaperStyle = style;
+      _wallpaperCustomPath = null;
+      _wallpaperImage = null;
+    });
+    try {
+      if (applyToAll) {
+        await ChatThreadUiPrefs.applyWallpaperToAll(style: style);
+      } else {
+        await ChatThreadUiPrefs.setWallpaperStyle(
+          widget.conversationId,
+          style,
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _wallpaperStyle = previousStyle;
+        _wallpaperCustomPath = previousPath;
+        _wallpaperImage = previousImage;
+      });
+    }
+  }
+
+  Future<void> _pickCustomWallpaper({bool applyToAll = false}) async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Своё фото для обоев доступно в приложении'),
+        ),
+      );
+      return;
+    }
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1920,
+      );
+      if (picked == null || !mounted) return;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final wallDir = Directory('${dir.path}/chat_wallpapers');
+      if (!await wallDir.exists()) {
+        await wallDir.create(recursive: true);
+      }
+      final targetPath = applyToAll
+          ? '${wallDir.path}/default.jpg'
+          : '${wallDir.path}/c_${widget.conversationId}.jpg';
+      final out = File(targetPath);
+      await out.writeAsBytes(bytes, flush: true);
+      final image = FileImage(out);
+      setState(() {
+        _wallpaperCustomPath = targetPath;
+        _wallpaperImage = image;
+      });
+      if (applyToAll) {
+        await ChatThreadUiPrefs.applyWallpaperToAll(customPath: targetPath);
+      } else {
+        await ChatThreadUiPrefs.setCustomWallpaperPath(
+          widget.conversationId,
+          targetPath,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _showWallpaperPicker() async {
-    final picked = await showModalBottomSheet<ChatWallpaperStyle>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return SafeArea(
@@ -543,6 +640,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   style: Theme.of(ctx).textTheme.titleMedium,
                 ),
               ),
+              ListTile(
+                leading: const Icon(Icons.photo_outlined),
+                title: const Text('Своё фото'),
+                subtitle: const Text('Из галереи'),
+                onTap: () => Navigator.pop(ctx, 'custom'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Своё фото для всех чатов'),
+                onTap: () => Navigator.pop(ctx, 'custom_all'),
+              ),
+              const Divider(height: 1),
               for (final style in ChatWallpaperStyle.values)
                 ListTile(
                   leading: SizedBox(
@@ -558,28 +667,88 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     ),
                   ),
                   title: Text(style.label),
-                  trailing: _wallpaperStyle == style
+                  trailing: _wallpaperImage == null &&
+                          _wallpaperStyle == style
                       ? const Icon(Icons.check)
                       : null,
-                  onTap: () => Navigator.pop(ctx, style),
+                  onTap: () => Navigator.pop(ctx, 'style:${style.id}'),
+                  onLongPress: () =>
+                      Navigator.pop(ctx, 'style_all:${style.id}'),
                 ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.select_all),
+                title: const Text('Применить текущие ко всем'),
+                subtitle: Text(
+                  _wallpaperImage != null
+                      ? 'Своё фото'
+                      : _wallpaperStyle.label,
+                ),
+                onTap: () => Navigator.pop(ctx, 'apply_current_all'),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  'Долгое нажатие на пресет — сделать обоями по умолчанию для всех чатов',
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
             ],
           ),
         );
       },
     );
-    if (picked == null || !mounted || picked == _wallpaperStyle) return;
-    final previous = _wallpaperStyle;
-    setState(() => _wallpaperStyle = picked);
-    try {
-      await ChatThreadUiPrefs.setWallpaperStyle(
-        widget.conversationId,
-        picked,
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _wallpaperStyle = previous);
+    if (action == null || !mounted) return;
+    if (action == 'custom') {
+      await _pickCustomWallpaper();
+      return;
     }
+    if (action == 'custom_all') {
+      await _pickCustomWallpaper(applyToAll: true);
+      return;
+    }
+    if (action == 'apply_current_all') {
+      if (_wallpaperCustomPath != null) {
+        await ChatThreadUiPrefs.applyWallpaperToAll(
+          customPath: _wallpaperCustomPath,
+        );
+      } else {
+        await _applyWallpaperStyle(_wallpaperStyle, applyToAll: true);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Обои применены ко всем чатам')),
+      );
+      return;
+    }
+    if (action.startsWith('style_all:')) {
+      final id = action.substring('style_all:'.length);
+      await _applyWallpaperStyle(
+        ChatWallpaperStyle.fromId(id),
+        applyToAll: true,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Обои по умолчанию обновлены')),
+      );
+      return;
+    }
+    if (action.startsWith('style:')) {
+      final id = action.substring('style:'.length);
+      await _applyWallpaperStyle(ChatWallpaperStyle.fromId(id));
+    }
+  }
+
+  Future<void> _showMessageReactors(ChatMessage msg, {String? emoji}) async {
+    if (msg.id <= 0) return;
+    await showChatMessageReactorsSheet(
+      context,
+      conversationId: widget.conversationId,
+      messageId: msg.id,
+      initialEmoji: emoji,
+    );
   }
 
   Future<void> _toggleAutoRetryOnLimitsInThread(bool enabled) async {
@@ -3758,6 +3927,53 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer != null) _openUserProfile(peer.id);
   }
 
+  Future<void> _openDirectChatInfo() async {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: AppUserAvatar(
+                imageUrl: peer.avatarUrl,
+                displayName: peer.displayName,
+                radius: 22,
+              ),
+              title: Text(peer.displayName),
+              subtitle: Text(
+                peer.isOnline
+                    ? 'в сети'
+                    : formatLastSeen(peer.lastSeenAt),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Медиа, файлы и ссылки'),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(_openMediaGallery());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Профиль'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _openPeerProfile();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   ChatUserBrief? _userBriefForSender(ChatMessage msg) {
     if (!_conversation.isGroup) return _conversation.peer;
     for (final member in _groupMembers) {
@@ -5862,6 +6078,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : null,
       onReactionTap:
           interactive ? (emoji) => _toggleReaction(msg, emoji) : null,
+      onReactionLongPress: interactive && msg.id > 0
+          ? (emoji) => unawaited(_showMessageReactors(msg, emoji: emoji))
+          : null,
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
@@ -9223,7 +9442,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       ? null
                       : isGroup
                           ? _openGroupInfo
-                          : _openPeerProfile,
+                          : () => unawaited(_openDirectChatInfo()),
                   behavior: HitTestBehavior.opaque,
                   child: Row(
                     children: [
@@ -9591,6 +9810,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           child: ChatWallpaper(
             isDark: Theme.of(context).brightness == Brightness.dark,
             style: _wallpaperStyle,
+            backgroundImage: _wallpaperImage,
             child: Column(
             children: [
               _animatedVisibility(
@@ -11083,6 +11303,7 @@ class _Bubble extends StatelessWidget {
     this.onVideoTap,
     this.onFileTap,
     this.onReactionTap,
+    this.onReactionLongPress,
     this.wrapWithAlign = true,
     this.cluster = const _MessageCluster.single(),
     this.onPollVote,
@@ -11121,6 +11342,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onVideoTap;
   final VoidCallback? onFileTap;
   final ValueChanged<String>? onReactionTap;
+  final ValueChanged<String>? onReactionLongPress;
   final bool wrapWithAlign;
   final _MessageCluster cluster;
   final ValueChanged<int>? onPollVote;
@@ -11347,6 +11569,9 @@ class _Bubble extends StatelessWidget {
                 onTap: onReactionTap == null
                     ? null
                     : () => onReactionTap!(r.emoji),
+                onLongPress: onReactionLongPress == null
+                    ? null
+                    : () => onReactionLongPress!(r.emoji),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 7,

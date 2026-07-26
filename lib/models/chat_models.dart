@@ -292,6 +292,26 @@ class ChatMessageReadersResult {
   final int otherMemberCount;
 }
 
+class ChatMessageReactionUser {
+  const ChatMessageReactionUser({
+    required this.emoji,
+    required this.user,
+  });
+
+  final String emoji;
+  final ChatUserBrief user;
+}
+
+class ChatMessageReactionsResult {
+  const ChatMessageReactionsResult({
+    required this.items,
+    this.reactionCount = 0,
+  });
+
+  final List<ChatMessageReactionUser> items;
+  final int reactionCount;
+}
+
 /// Не затирает локально закрытый опрос устаревшими данными чата/кэша.
 ChatMessage applyIncomingChatMessagePreservingLocalPoll(
   ChatMessage local,

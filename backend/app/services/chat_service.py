@@ -2562,6 +2562,42 @@ class ChatService:
             for mid, by_emoji in grouped.items()
         }
 
+    def message_reaction_users(
+        self,
+        conversation_id: int,
+        message_id: int,
+        viewer_id: int,
+        emoji: Optional[str] = None,
+    ) -> list[tuple[str, User]]:
+        """Per-user reactions for a message (Telegram «кто поставил»)."""
+        if not self._is_member(conversation_id, viewer_id):
+            raise ValueError("forbidden")
+        msg = (
+            self.db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not msg:
+            raise ValueError("not_found")
+        query = (
+            self.db.query(MessageReaction, User)
+            .join(User, User.id == MessageReaction.user_id)
+            .filter(
+                MessageReaction.message_id == message_id,
+                User.deleted_at.is_(None),
+            )
+            .order_by(MessageReaction.created_at.asc(), MessageReaction.id.asc())
+        )
+        clean = (emoji or "").strip()
+        if clean:
+            query = query.filter(MessageReaction.emoji == clean)
+        rows = query.all()
+        return [(row.emoji, user) for row, user in rows]
+
     def set_message_reaction(
         self, conversation_id: int, message_id: int, user_id: int, emoji: str
     ) -> Optional[str]:
