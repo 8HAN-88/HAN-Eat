@@ -8732,7 +8732,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       final uploaded = await MediaUploadService.uploadMediaFile(
         file: file,
-        fileType: 'file',
+        fileType: 'document',
         waitForProcessing: false,
         onProgress: (p) {
           if (!mounted) return;
