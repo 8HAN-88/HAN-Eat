@@ -78,21 +78,26 @@ class ChannelInboxSlidable extends StatelessWidget {
     required this.child,
     required this.onArchive,
     required this.onLeave,
+    this.muted = false,
+    this.onToggleMute,
   });
 
   final int channelId;
   final Widget child;
   final VoidCallback onArchive;
   final VoidCallback onLeave;
+  final bool muted;
+  final VoidCallback? onToggleMute;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final hasMute = onToggleMute != null;
     return Slidable(
       key: ValueKey('channel_slidable_$channelId'),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
-        extentRatio: 0.38,
+        extentRatio: hasMute ? 0.56 : 0.38,
         children: [
           SlidableAction(
             onPressed: (_) => _run(context, onArchive),
@@ -101,6 +106,16 @@ class ChannelInboxSlidable extends StatelessWidget {
             icon: Icons.archive_outlined,
             label: 'Архив',
           ),
+          if (hasMute)
+            SlidableAction(
+              onPressed: (_) => _run(context, onToggleMute!),
+              backgroundColor: scheme.tertiaryContainer,
+              foregroundColor: scheme.onTertiaryContainer,
+              icon: muted
+                  ? Icons.notifications_outlined
+                  : Icons.notifications_off_outlined,
+              label: muted ? 'Вкл' : 'Тихо',
+            ),
           SlidableAction(
             onPressed: (_) => _run(context, onLeave),
             backgroundColor: scheme.errorContainer,

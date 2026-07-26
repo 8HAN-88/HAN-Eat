@@ -194,4 +194,14 @@ class ChannelSheetPrefs {
       ..sort();
     return ids;
   }
+
+  /// Channel ids with notifications disabled (muted).
+  static Future<Set<int>> listMutedIds() async {
+    await syncFromServer();
+    final cache = await _loadCache();
+    return cache.entries
+        .where((e) => !e.value.notificationsEnabled)
+        .map((e) => e.key)
+        .toSet();
+  }
 }

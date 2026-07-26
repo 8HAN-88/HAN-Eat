@@ -8,6 +8,8 @@ import '../../../services/channel_sheet_prefs.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/telegram_ui.dart';
+import 'widgets/chats_hub_tiles.dart';
 
 class ChatArchivedScreen extends StatefulWidget {
   const ChatArchivedScreen({super.key});
@@ -412,43 +414,89 @@ class _ArchivedChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tile = Column(
-      children: [
-        ListTile(
-          leading: selectionMode
-              ? Checkbox(
-                  value: selected,
-                  onChanged: (_) => onToggleSelect(),
-                )
-              : Icon(
-                  chat.isSaved
-                      ? Icons.bookmark_rounded
-                      : chat.isGroup
-                          ? Icons.groups_rounded
-                          : Icons.person_rounded,
+    final scheme = Theme.of(context).colorScheme;
+    final last = chat.lastMessage;
+    final hasUnread = chat.unreadCount > 0;
+    final preview = chatHubBodyPreview(last, isSaved: chat.isSaved);
+    final prefix = last == null
+        ? null
+        : (last.isMine
+            ? 'Вы: '
+            : (chat.isGroup && (last.senderName?.isNotEmpty ?? false)
+                ? '${last.senderName}: '
+                : null));
+
+    final tile = Material(
+      color: hasUnread
+          ? scheme.primaryContainer.withValues(alpha: 0.18)
+          : Colors.transparent,
+      child: Column(
+        children: [
+          ListTile(
+            leading: selectionMode
+                ? Checkbox(
+                    value: selected,
+                    onChanged: (_) => onToggleSelect(),
+                  )
+                : Icon(
+                    chat.isSaved
+                        ? Icons.bookmark_rounded
+                        : chat.isGroup
+                            ? Icons.groups_rounded
+                            : Icons.person_rounded,
+                  ),
+            title: Text(
+              chat.displayTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              prefix == null ? preview : '$prefix$preview',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
+              ),
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  chatHubFormatInboxTime(
+                    last?.createdAt ?? chat.updatedAt,
+                  ),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                 ),
-          title: Text(chat.displayTitle),
-          subtitle: Text(
-            chat.isSaved
-                ? 'Избранное'
-                : chat.isGroup
-                    ? '${chat.memberCount} участников'
-                    : 'Личный чат',
+                if (hasUnread) ...[
+                  const SizedBox(height: 4),
+                  TelegramUnreadBadge(
+                    count: chat.unreadCount,
+                    muted: chat.muted,
+                  ),
+                ],
+              ],
+            ),
+            onTap: () async {
+              if (selectionMode) {
+                onToggleSelect();
+                return;
+              }
+              await context.push(
+                ChatThreadRoute.pathFor(chat),
+                extra: chat,
+              );
+            },
+            onLongPress: onLongPress,
           ),
-          onTap: () async {
-            if (selectionMode) {
-              onToggleSelect();
-              return;
-            }
-            await context.push(
-              ChatThreadRoute.pathFor(chat),
-              extra: chat,
-            );
-          },
-          onLongPress: onLongPress,
-        ),
-        const Divider(height: 1, indent: 72),
-      ],
+          const Divider(height: 1, indent: 72),
+        ],
+      ),
     );
 
     if (selectionMode) return tile;
@@ -495,28 +543,74 @@ class _ArchivedChannelTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tile = Column(
-      children: [
-        ListTile(
-          leading: selectionMode
-              ? Checkbox(
-                  value: selected,
-                  onChanged: (_) => onToggleSelect(),
-                )
-              : const Icon(Icons.campaign_outlined),
-          title: Text(channel.name),
-          subtitle: const Text('Канал'),
-          onTap: () {
-            if (selectionMode) {
-              onToggleSelect();
-              return;
-            }
-            onOpen();
-          },
-          onLongPress: onLongPress,
-        ),
-        const Divider(height: 1, indent: 72),
-      ],
+    final scheme = Theme.of(context).colorScheme;
+    final unread = channel.inboxUnreadPosts;
+    final hasUnread = unread > 0;
+    final preview = (channel.lastPostPreview?.trim().isNotEmpty ?? false)
+        ? channel.lastPostPreview!.trim()
+        : ((channel.description?.trim().isNotEmpty ?? false)
+            ? channel.description!.trim()
+            : 'Канал');
+
+    final tile = Material(
+      color: hasUnread
+          ? scheme.primaryContainer.withValues(alpha: 0.18)
+          : Colors.transparent,
+      child: Column(
+        children: [
+          ListTile(
+            leading: selectionMode
+                ? Checkbox(
+                    value: selected,
+                    onChanged: (_) => onToggleSelect(),
+                  )
+                : const Icon(Icons.campaign_outlined),
+            title: Text(
+              channel.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              preview,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
+              ),
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  chatHubFormatInboxTime(
+                    channel.lastPostAt ?? channel.createdAt,
+                  ),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                if (hasUnread) ...[
+                  const SizedBox(height: 4),
+                  TelegramUnreadBadge(count: unread),
+                ],
+              ],
+            ),
+            onTap: () {
+              if (selectionMode) {
+                onToggleSelect();
+                return;
+              }
+              onOpen();
+            },
+            onLongPress: onLongPress,
+          ),
+          const Divider(height: 1, indent: 72),
+        ],
+      ),
     );
 
     if (selectionMode) return tile;

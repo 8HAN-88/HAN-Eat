@@ -29,33 +29,8 @@ class ChatHubTile extends StatelessWidget {
   /// Live typing preview from user SSE (`chat.typing`).
   final String? typingLabel;
 
-  String _bodyPreview(ChatMessage? msg) {
-    if (msg == null) {
-      return chat.isSaved ? 'Сохраняйте сообщения и заметки' : 'Нет сообщений';
-    }
-    if (msg.type == 'voice') return 'Голосовое сообщение';
-    if (msg.type == 'poll') {
-      final poll = msg.poll;
-      if (poll != null) return chatPollPreviewText(poll);
-      return 'Опрос';
-    }
-    if (msg.type == 'image') return 'Фото';
-    if (msg.type == 'video') return 'Видео';
-    if (msg.type == 'video_note') return 'Видеосообщение';
-    if (msg.type == 'sticker') return 'Стикер';
-    if (msg.type == 'location' ||
-        ChatLocationPayload.tryParse(msg.content) != null) {
-      return 'Геопозиция';
-    }
-    if (msg.type == 'file') {
-      final name = msg.content.trim();
-      return name.isEmpty ? 'Файл' : name;
-    }
-    final contact = ChatContactPayload.tryParse(msg.content);
-    if (contact != null) return contact.displayName;
-    final content = msg.content.trim();
-    return content.isEmpty ? 'Сообщение' : content;
-  }
+  String _bodyPreview(ChatMessage? msg) =>
+      chatHubBodyPreview(msg, isSaved: chat.isSaved);
 
   String? _previewPrefix(ChatMessage? msg, {required bool hasDraft}) {
     if (hasDraft) return null;
@@ -432,6 +407,34 @@ String chatHubAvatarLetter(String value) {
   return trimmed.characters.first.toUpperCase();
 }
 
+String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
+  if (msg == null) {
+    return isSaved ? 'Сохраняйте сообщения и заметки' : 'Нет сообщений';
+  }
+  if (msg.type == 'voice') return 'Голосовое сообщение';
+  if (msg.type == 'poll') {
+    final poll = msg.poll;
+    if (poll != null) return chatPollPreviewText(poll);
+    return 'Опрос';
+  }
+  if (msg.type == 'image') return 'Фото';
+  if (msg.type == 'video') return 'Видео';
+  if (msg.type == 'video_note') return 'Видеосообщение';
+  if (msg.type == 'sticker') return 'Стикер';
+  if (msg.type == 'location' ||
+      ChatLocationPayload.tryParse(msg.content) != null) {
+    return 'Геопозиция';
+  }
+  if (msg.type == 'file') {
+    final name = msg.content.trim();
+    return name.isEmpty ? 'Файл' : name;
+  }
+  final contact = ChatContactPayload.tryParse(msg.content);
+  if (contact != null) return contact.displayName;
+  final content = msg.content.trim();
+  return content.isEmpty ? 'Сообщение' : content;
+}
+
 String chatHubFormatInboxTime(DateTime dt) {
   final local = dt.toLocal();
   final now = DateTime.now();
@@ -449,6 +452,8 @@ class ChannelInboxTile extends StatefulWidget {
     required this.onTap,
     required this.onMarkedSeen,
     this.onLongPress,
+    this.muted = false,
+    this.isFavorite = false,
   });
 
   final Channel channel;
@@ -456,6 +461,8 @@ class ChannelInboxTile extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback onMarkedSeen;
   final VoidCallback? onLongPress;
+  final bool muted;
+  final bool isFavorite;
 
   @override
   State<ChannelInboxTile> createState() => _ChannelInboxTileState();
@@ -610,6 +617,22 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
                             ),
                           ),
                         ),
+                        if (widget.isFavorite) ...[
+                          Icon(
+                            Icons.star_rounded,
+                            size: 14,
+                            color: scheme.primary.withValues(alpha: 0.9),
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        if (widget.muted) ...[
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 13,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         Text(
                           chatHubFormatInboxTime(
                               _lastPostAt ?? _channel.createdAt),
@@ -641,7 +664,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
                           const SizedBox(width: 8),
                           TelegramUnreadBadge(
                             count: _newPostsCount,
-                            muted: false,
+                            muted: widget.muted,
                           ),
                         ],
                       ],

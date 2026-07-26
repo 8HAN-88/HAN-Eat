@@ -620,12 +620,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     List<ChatJoinRequestsInboxItem> joinInbox = [];
     Object? joinInboxError;
     var favoriteIds = <int>{};
+    var mutedChannelIds = <int>{};
     var archivedChannelIds = <int>{};
 
     final channelsFuture = () async {
       try {
         await ChannelSheetPrefs.syncFromServer();
         favoriteIds = (await ChannelSheetPrefs.listFavoriteIds()).toSet();
+        mutedChannelIds = await ChannelSheetPrefs.listMutedIds();
         archivedChannelIds = await ChannelSheetPrefs.listArchivedIds();
         final owned = await ChannelService.listChannels(
           limit: 50,
@@ -712,6 +714,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           (c) => ChannelInboxEntry(
             channel: c,
             isFavorite: favoriteIds.contains(c.id),
+            notificationsEnabled: !mutedChannelIds.contains(c.id),
           ),
         )
         .toList();
@@ -978,7 +981,60 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
-  void _showChannelHubActions(Channel channel) {
+  Future<void> _toggleChannelMuteFromHub(Channel channel) async {
+    try {
+      final enabled =
+          await ChannelSheetPrefs.getNotificationsEnabled(channel.id);
+      await ChannelSheetPrefs.setNotificationsEnabled(channel.id, !enabled);
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? '«${channel.name}» без звука'
+                : 'Уведомления «${channel.name}» включены',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _toggleChannelFavoriteFromHub(Channel channel) async {
+    try {
+      final isFav = await ChannelSheetPrefs.getFavorite(channel.id);
+      await ChannelSheetPrefs.setFavorite(channel.id, !isFav);
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isFav
+                ? '«${channel.name}» убран из избранного'
+                : '«${channel.name}» в избранном',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _showChannelHubActions(
+    Channel channel, {
+    bool isFavorite = false,
+    bool notificationsEnabled = true,
+  }) {
     showTelegramActionSheet<void>(
       context: context,
       title: 'Действия',
@@ -987,6 +1043,20 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           icon: Icons.folder_outlined,
           title: 'Добавить в папку',
           onTap: () => _showAddToFolderSheet(channelId: channel.id),
+        ),
+        TelegramActionSheetAction(
+          icon: isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+          title: isFavorite ? 'Убрать из избранного' : 'В избранное',
+          onTap: () => _toggleChannelFavoriteFromHub(channel),
+        ),
+        TelegramActionSheetAction(
+          icon: notificationsEnabled
+              ? Icons.notifications_off_outlined
+              : Icons.notifications_outlined,
+          title: notificationsEnabled
+              ? 'Без звука'
+              : 'Включить уведомления',
+          onTap: () => _toggleChannelMuteFromHub(channel),
         ),
         TelegramActionSheetAction(
           icon: Icons.archive_outlined,
@@ -1669,18 +1739,26 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                 return ChannelInboxSlidable(
                   key: ValueKey('channel_${channelEntry.channel.id}'),
                   channelId: channelEntry.channel.id,
+                  muted: channelEntry.muted,
                   onArchive: () => _archiveChannelFromHub(channelEntry.channel),
+                  onToggleMute: () =>
+                      _toggleChannelMuteFromHub(channelEntry.channel),
                   onLeave: () => _leaveChannelFromHub(channelEntry.channel),
                   child: ChannelInboxTile(
                     channel: channelEntry.channel,
+                    muted: channelEntry.muted,
+                    isFavorite: channelEntry.isFavorite,
                     onSortAtChanged: (dt) =>
                         _onChannelSortAtChanged(channelEntry, dt),
                     onTap: () => _openChannel(channelEntry.channel.id),
                     onMarkedSeen: () {
                       ref.read(shellChatBadgeRefreshProvider.notifier).state++;
                     },
-                    onLongPress: () =>
-                        _showChannelHubActions(channelEntry.channel),
+                    onLongPress: () => _showChannelHubActions(
+                      channelEntry.channel,
+                      isFavorite: channelEntry.isFavorite,
+                      notificationsEnabled: channelEntry.notificationsEnabled,
+                    ),
                   ),
                 );
               },

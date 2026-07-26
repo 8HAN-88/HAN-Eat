@@ -18,10 +18,14 @@ class ChannelInboxEntry extends InboxHubEntry {
   ChannelInboxEntry({
     required this.channel,
     this.isFavorite = false,
+    this.notificationsEnabled = true,
   }) : sortAt = channel.lastPostAt ?? channel.createdAt;
 
   final Channel channel;
   final bool isFavorite;
+  final bool notificationsEnabled;
+
+  bool get muted => !notificationsEnabled;
 
   @override
   DateTime sortAt;

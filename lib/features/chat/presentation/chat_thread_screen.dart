@@ -328,6 +328,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ChatMessage? _pinnedMessage;
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
+  bool _jumpFabTargetsUnread = false;
   int _newMessagesBelow = 0;
   int? _replySwipeMsgId;
   double _replySwipeDx = 0;
@@ -2830,16 +2831,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!_scroll.hasClients || _selectionMode) return;
     final nearBottom = _isNearBottom();
     if (nearBottom) {
-      if (_showJumpToBottom) {
+      if (_showJumpToBottom || _jumpFabTargetsUnread) {
         setState(() {
           _showJumpToBottom = false;
+          _jumpFabTargetsUnread = false;
           _newMessagesBelow = 0;
         });
       }
       // Telegram: mark read when the user actually reaches the bottom.
       _scheduleMarkRead();
-    } else if (!_showJumpToBottom) {
-      setState(() => _showJumpToBottom = true);
+    } else {
+      final targetsUnread = _shouldJumpToFirstUnread();
+      if (!_showJumpToBottom || _jumpFabTargetsUnread != targetsUnread) {
+        setState(() {
+          _showJumpToBottom = true;
+          _jumpFabTargetsUnread = targetsUnread;
+        });
+      }
     }
     // Auto-load older history near the top (Telegram infinite scroll).
     if (_hasMore &&
@@ -3116,10 +3124,43 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _scrollToBottom();
     setState(() {
       _showJumpToBottom = false;
+      _jumpFabTargetsUnread = false;
       _newMessagesBelow = 0;
       _suppressMarkRead = false;
+      _unreadDividerBeforeId = null;
     });
     _scheduleMarkRead();
+  }
+
+  /// True when the unread divider sits below the viewport (user scrolled up).
+  bool _shouldJumpToFirstUnread() {
+    final id = _unreadDividerBeforeId;
+    if (id == null) return false;
+    final ctx = _messageItemKeys[id]?.currentContext;
+    if (ctx != null) {
+      final box = ctx.findRenderObject();
+      if (box is RenderBox && box.hasSize && box.attached) {
+        final y = box.localToGlobal(Offset.zero).dy;
+        final screenH = MediaQuery.sizeOf(context).height;
+        return y > screenH - 120;
+      }
+    }
+    if (!_scroll.hasClients || _messages.length <= 1) return false;
+    final idx = _messages.indexWhere((m) => m.id == id);
+    if (idx < 0) return false;
+    final fraction = idx / (_messages.length - 1);
+    final unreadApprox = _scroll.position.maxScrollExtent * fraction;
+    return _scroll.offset + 160 < unreadApprox;
+  }
+
+  void _onJumpFabTap() {
+    if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
+      final id = _unreadDividerBeforeId!;
+      _scrollToMessage(id);
+      _focusMessageTemporarily(id);
+      return;
+    }
+    _jumpToBottomAndMarkRead();
   }
 
   bool _isSameChatDay(DateTime a, DateTime b) {
@@ -7613,6 +7654,163 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _restoreScheduledAfterFailedSend(
+    ScheduledChatMessage item,
+  ) async {
+    try {
+      final minAt = DateTime.now().add(const Duration(seconds: 35));
+      final sendAt = item.sendWhenOnline
+          ? minAt
+          : (item.sendAt.isAfter(minAt) ? item.sendAt : minAt);
+      final poll = item.type == 'poll'
+          ? parseChatPollFromContent(item.content)
+          : null;
+      await ChatService.scheduleMessage(
+        conversationId: widget.conversationId,
+        type: item.type,
+        content: item.content,
+        mediaUrl: item.mediaUrl,
+        sendAt: sendAt,
+        sendWhenOnline: item.sendWhenOnline,
+        replyToMessageId: item.replyToMessageId,
+        pollQuestion: poll?.question,
+        pollDescription: poll?.description,
+        pollOptions: poll?.options.map((o) => o.text).toList(),
+        pollSettings: poll?.settings.toJson(),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _sendScheduledMessageNow(ScheduledChatMessage item) async {
+    await ChatService.cancelScheduledMessage(
+      conversationId: widget.conversationId,
+      scheduledMessageId: item.id,
+    );
+    final replyId = item.replyToMessageId;
+    final media = item.mediaUrl?.trim();
+    try {
+      switch (item.type) {
+        case 'image':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendImage(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            caption: item.content,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'video':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendVideo(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            caption: item.content,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'video_note':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendVideoNote(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            durationSec: int.tryParse(item.content.trim()) ?? 1,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'voice':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendVoice(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            durationSec: int.tryParse(item.content.trim()) ?? 1,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'file':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendFile(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            fileName:
+                item.content.trim().isEmpty ? 'file' : item.content.trim(),
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'sticker':
+          if (media == null || media.isEmpty) {
+            throw Exception('Нет медиа для отправки');
+          }
+          await ChatService.sendSticker(
+            conversationId: widget.conversationId,
+            mediaUrl: media,
+            emoji: item.content,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'location':
+          await ChatService.sendLocation(
+            conversationId: widget.conversationId,
+            content: item.content,
+            replyToMessageId: replyId,
+          );
+          break;
+        case 'poll':
+          final poll = parseChatPollFromContent(item.content);
+          if (poll == null || poll.options.length < 2) {
+            throw Exception('Не удалось восстановить опрос');
+          }
+          await ChatService.sendPoll(
+            conversationId: widget.conversationId,
+            question: poll.question,
+            description: poll.description,
+            options: poll.options.map((o) => o.text).toList(),
+            settings: poll.settings.toJson(),
+            replyToMessageId: replyId,
+          );
+          break;
+        default:
+          await ChatService.sendText(
+            conversationId: widget.conversationId,
+            content: item.content,
+            replyToMessageId: replyId,
+          );
+      }
+    } catch (e) {
+      await _restoreScheduledAfterFailedSend(item);
+      rethrow;
+    }
+  }
+
+  String _scheduledPreview(ScheduledChatMessage item) {
+    if (item.type == 'poll') {
+      final poll = parseChatPollFromContent(item.content);
+      if (poll != null) return chatPollPreviewText(poll);
+      return '📊 Опрос';
+    }
+    if (item.type == 'voice') return '🎤 Голосовое';
+    if (item.type == 'image') return '📷 Фото';
+    if (item.type == 'video') return '🎬 Видео';
+    if (item.type == 'video_note') return '⭕ Видеосообщение';
+    if (item.type == 'sticker') return '🧩 Стикер';
+    if (item.type == 'file') {
+      final name = item.content.trim();
+      return name.isEmpty ? '📎 Файл' : '📎 $name';
+    }
+    if (item.type == 'location') return '📍 Геопозиция';
+    final text = item.content.trim();
+    return text.isEmpty ? item.type.toUpperCase() : text;
+  }
+
   Future<void> _openScheduledMessagesManager() async {
     try {
       final initialItems = await ChatService.listScheduledMessages(
@@ -7666,9 +7864,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (_, index) {
                             final item = pending[index];
-                            final preview = item.content.trim().isEmpty
-                                ? item.type.toUpperCase()
-                                : item.content.trim();
+                            final preview = _scheduledPreview(item);
                             return ListTile(
                               title: Text(
                                 preview,
@@ -7683,6 +7879,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.send_rounded),
+                                    tooltip: 'Отправить сейчас',
+                                    onPressed: () async {
+                                      try {
+                                        await _sendScheduledMessageNow(item);
+                                        setModalState(
+                                          () => items.removeWhere(
+                                            (e) => e.id == item.id,
+                                          ),
+                                        );
+                                        if (!mounted) return;
+                                        unawaited(_load(refresh: true));
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Отправлено'),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        try {
+                                          final refreshed =
+                                              await ChatService
+                                                  .listScheduledMessages(
+                                            conversationId:
+                                                widget.conversationId,
+                                          );
+                                          setModalState(() {
+                                            items
+                                              ..clear()
+                                              ..addAll(refreshed);
+                                          });
+                                        } catch (_) {
+                                          setModalState(
+                                            () => items.removeWhere(
+                                              (e) => e.id == item.id,
+                                            ),
+                                          );
+                                        }
+                                        if (!mounted) return;
+                                        showErrorSnackBar(
+                                          context,
+                                          e,
+                                          fallback:
+                                              'Не удалось отправить сейчас',
+                                        );
+                                      }
+                                    },
+                                  ),
                                   if (!item.sendWhenOnline)
                                     IconButton(
                                       icon: const Icon(
@@ -10037,26 +10282,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     : scheme.surface,
                                 child: InkWell(
                                   customBorder: const CircleBorder(),
-                                  onTap: _jumpToBottomAndMarkRead,
+                                  onTap: _onJumpFabTap,
                                   child: SizedBox(
                                     width: 42,
                                     height: 42,
                                     child: Icon(
-                                      Icons.keyboard_arrow_down_rounded,
+                                      _jumpFabTargetsUnread
+                                          ? Icons.keyboard_double_arrow_down_rounded
+                                          : Icons.keyboard_arrow_down_rounded,
                                       size: 28,
                                       color: scheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),
                               ),
-                              if (_newMessagesBelow > 0)
+                              if (_newMessagesBelow > 0 ||
+                                  (_jumpFabTargetsUnread &&
+                                      _conversation.unreadCount > 0))
                                 Positioned(
                                   top: -6,
                                   left: 0,
                                   right: 0,
                                   child: Center(
                                     child: TelegramUnreadBadge(
-                                      count: _newMessagesBelow,
+                                      count: _jumpFabTargetsUnread
+                                          ? math.max(
+                                              _conversation.unreadCount,
+                                              _newMessagesBelow,
+                                            )
+                                          : _newMessagesBelow,
                                     ),
                                   ),
                                 ),
