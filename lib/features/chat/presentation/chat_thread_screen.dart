@@ -72,6 +72,7 @@ import '../../../widgets/chat_sticker_tile.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
+import '../application/chat_recent_gifs_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
@@ -274,6 +275,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   List<InlineResult> _inlineResults = [];
   OverlayEntry? _inlineOverlayEntry;
   List<BotListItem> _myBots = [];
+  List<ChatBotCommand> _botCommands = [];
   OverlayEntry? _botAutocompleteOverlayEntry;
   StreamSubscription<void>? _signalSub;
   VoidCallback? _apiReachabilityListener;
@@ -403,6 +405,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_restoreDraft());
     unawaited(AuthService.getAccessTokenForApi());
     unawaited(_loadMyBots());
+    unawaited(_loadBotCommands());
     unawaited(_refreshScheduledPendingCount());
     unawaited(_syncMuteSchedule());
     _load(refresh: true);
@@ -1355,6 +1358,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
           );
+          if (_chatIsGifMediaUrl(mediaUrl)) {
+            unawaited(ChatRecentGifsStore.remember(mediaUrl));
+          }
         case _PendingMediaKind.video:
           msg = await ChatService.sendVideo(
             conversationId: widget.conversationId,
@@ -1611,8 +1617,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (_) {}
   }
 
+  bool get _hasBotCommands => _botCommands.isNotEmpty;
+
+  Future<void> _loadBotCommands() async {
+    try {
+      final cmds = await ChatService.listConversationBotCommands(
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) return;
+      setState(() => _botCommands = cmds);
+    } catch (_) {
+      if (!mounted) return;
+      if (_botCommands.isNotEmpty) setState(() => _botCommands = []);
+    }
+  }
+
   void _scheduleBotAutocomplete() {
     final text = _controller.text;
+
+    // Slash-commands for chat bots: `/start`
+    final slash = RegExp(r'(?:^|\s)/([a-zA-Z0-9_]*)$').firstMatch(text);
+    if (slash != null && _botCommands.isNotEmpty) {
+      final query = slash.group(1)!.toLowerCase();
+      final filtered = _botCommands
+          .where((c) {
+            final cmd = c.command.toLowerCase();
+            final desc = c.description.toLowerCase();
+            if (query.isEmpty) return true;
+            return cmd.startsWith(query) || desc.contains(query);
+          })
+          .take(10)
+          .map(
+            (c) => _MentionCandidate(
+              username: c.command,
+              title: '/${c.command}',
+              subtitle: c.description.isEmpty ? null : c.description,
+              avatarUrl: null,
+              isBot: true,
+              isSlashCommand: true,
+            ),
+          )
+          .toList();
+      if (filtered.isEmpty) {
+        _hideBotAutocompleteOverlay();
+        return;
+      }
+      _showBotAutocompleteOverlay(filtered);
+      return;
+    }
+
     // Ищем @word в конце строки (или после пробела)
     final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
     if (match == null) {
@@ -1717,7 +1770,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   title: Text(item.title),
                   subtitle: item.subtitle != null ? Text(item.subtitle!) : null,
                   onTap: () {
-                    _insertBotMention(item.username);
+                    if (item.isSlashCommand) {
+                      _insertBotCommand(item.username);
+                    } else {
+                      _insertBotMention(item.username);
+                    }
                     _hideBotAutocompleteOverlay();
                   },
                 );
@@ -1750,6 +1807,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       text: newText,
       selection: TextSelection.collapsed(offset: newText.length),
     );
+  }
+
+  void _insertBotCommand(String command) {
+    final clean = command.startsWith('/') ? command.substring(1) : command;
+    final text = _controller.text;
+    final match = RegExp(r'(?:^|\s)/([a-zA-Z0-9_]*)$').firstMatch(text);
+    if (match == null) {
+      final newText = '/$clean';
+      _controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+      return;
+    }
+    final start = match.start + (text[match.start] == ' ' ? 1 : 0);
+    final newText = '${text.substring(0, start)}/$clean';
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+
+  void _openBotCommandsMenu() {
+    if (_botCommands.isEmpty) {
+      unawaited(_loadBotCommands());
+    }
+    if (_controller.text.trim().isEmpty) {
+      _controller.value = const TextEditingValue(
+        text: '/',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+    } else if (!RegExp(r'(?:^|\s)/[a-zA-Z0-9_]*$').hasMatch(_controller.text)) {
+      final t = _controller.text;
+      final needsSpace = t.isNotEmpty && !t.endsWith(' ') && !t.endsWith('\n');
+      final newText = '$t${needsSpace ? ' ' : ''}/';
+      _controller.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+    }
+    _inputFocusNode.requestFocus();
+    _scheduleBotAutocomplete();
   }
 
   void _showInlineOverlay(List<InlineResult> results) {
@@ -4019,6 +4118,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       _reconcileSlowModeCooldownWithConversation();
       unawaited(_syncMuteSchedule());
+      unawaited(_loadBotCommands());
     } catch (_) {}
   }
 
@@ -4034,16 +4134,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      final picked = await showChatTargetPicker(
+      final picked = await showChatTargetPickerResult(
         context,
         title: 'Переслать в...',
         chats: targets,
+        enableAsCopy: true,
       );
       if (picked == null || !mounted) return;
-      await _sendForwardTo(picked, msg);
+      await _sendForwardTo(picked.chat, msg, asCopy: picked.asCopy);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Переслано в «${picked.displayTitle}»')),
+        SnackBar(
+          content: Text(
+            picked.asCopy
+                ? 'Скопировано в «${picked.chat.displayTitle}»'
+                : 'Переслано в «${picked.chat.displayTitle}»',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -4053,7 +4160,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _sendForwardTo(ChatConversation target, ChatMessage msg) async {
+  Future<void> _sendForwardTo(
+    ChatConversation target,
+    ChatMessage msg, {
+    bool asCopy = false,
+  }) async {
     if (msg.id <= 0) {
       throw Exception('Нельзя переслать неотправленное сообщение');
     }
@@ -4061,6 +4172,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       targetConversationId: target.id,
       sourceConversationId: widget.conversationId,
       messageId: msg.id,
+      asCopy: asCopy,
     );
   }
 
@@ -5777,27 +5889,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      final picked = await showChatTargetPicker(
+      final picked = await showChatTargetPickerResult(
         context,
         title: 'Переслать в...',
         chats: targets,
+        enableAsCopy: true,
       );
       if (picked == null || !mounted) return;
       var sent = 0;
       for (final msg in selected) {
         try {
-          await _sendForwardTo(picked, msg);
+          await _sendForwardTo(picked.chat, msg, asCopy: picked.asCopy);
           sent += 1;
         } catch (_) {}
       }
       if (!mounted) return;
       _exitSelectionMode();
+      final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             sent == selected.length
-                ? 'Переслано $sent в «${picked.displayTitle}»'
-                : 'Переслано $sent из ${selected.length} в «${picked.displayTitle}»',
+                ? '$verb $sent в «${picked.chat.displayTitle}»'
+                : '$verb $sent из ${selected.length} в «${picked.chat.displayTitle}»',
           ),
         ),
       );
@@ -8320,6 +8434,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final selection = await showChatAttachSheet(
       context,
       initialTab: ChatAttachTab.sticker,
+      conversationId: widget.conversationId,
     );
     if (!mounted || selection == null) return;
     if (selection.kind == ChatAttachResult.sticker) {
@@ -8333,7 +8448,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _showAttachMenu() async {
     if (_recording) return;
     setState(() => _stickerPanelOpen = false);
-    final selection = await showChatAttachSheet(context);
+    final selection = await showChatAttachSheet(
+      context,
+      conversationId: widget.conversationId,
+    );
     if (!mounted || selection == null) return;
     switch (selection.kind) {
       case ChatAttachResult.galleryFiles:
@@ -8383,6 +8501,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         if (stickerUrl != null && stickerUrl.trim().isNotEmpty) {
           await _sendStickerByUrl(stickerUrl, emoji: selection.stickerEmoji);
         }
+      case ChatAttachResult.gifResend:
+        final gifUrl = selection.resendFileUrl?.trim();
+        if (gifUrl != null && gifUrl.isNotEmpty) {
+          await _sendGifByUrl(gifUrl);
+        }
+    }
+  }
+
+  Future<void> _sendGifByUrl(String mediaUrl) async {
+    try {
+      final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
+      await ChatService.sendImage(
+        conversationId: widget.conversationId,
+        mediaUrl: resolved,
+        caption: '',
+        replyToMessageId: _replyTo?.id,
+      );
+      unawaited(ChatRecentGifsStore.remember(resolved));
+      if (!mounted) return;
+      setState(() => _replyTo = null);
+      unawaited(_load(refresh: true));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -10769,6 +10913,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       height: _composerButtonSide,
                                     ),
                                   ),
+                                if (!_recording && _hasBotCommands)
+                                  IconButton(
+                                    onPressed:
+                                        !canSendNow ? null : _openBotCommandsMenu,
+                                    icon: const Icon(Icons.flash_on_outlined),
+                                    tooltip: 'Команды бота',
+                                    color: scheme.onSurfaceVariant,
+                                    iconSize: _composerIconSize,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: _composerButtonSide,
+                                      height: _composerButtonSide,
+                                    ),
+                                  ),
                                 Expanded(
                                   child: _recording
                                       ? Container(
@@ -11197,6 +11355,7 @@ class _MentionCandidate {
     this.subtitle,
     this.avatarUrl,
     this.isBot = false,
+    this.isSlashCommand = false,
   });
 
   final String username;
@@ -11204,6 +11363,7 @@ class _MentionCandidate {
   final String? subtitle;
   final String? avatarUrl;
   final bool isBot;
+  final bool isSlashCommand;
 }
 
 class _CancelledPendingMediaException implements Exception {}
@@ -11940,6 +12100,9 @@ class _Bubble extends StatelessWidget {
                   query: highlightQuery,
                   style: TextStyle(color: fg, height: 1.25),
                   trailingReserveWidth: _metaReserveWidth(mine),
+                  parseMarkup: true,
+                  highlightMentions: true,
+                  onMentionTap: onMentionTap,
                 ),
               ),
             ),
@@ -11992,6 +12155,9 @@ class _Bubble extends StatelessWidget {
                   query: highlightQuery,
                   style: TextStyle(color: fg, height: 1.25),
                   trailingReserveWidth: _metaReserveWidth(mine),
+                  parseMarkup: true,
+                  highlightMentions: true,
+                  onMentionTap: onMentionTap,
                 ),
               ),
             ),
@@ -12015,6 +12181,7 @@ class _Bubble extends StatelessWidget {
         style: textStyle,
         trailingReserveWidth: hasLinkPreview ? null : _metaReserveWidth(mine),
         highlightMentions: true,
+        parseMarkup: true,
         onMentionTap: onMentionTap,
       );
       if (hasLinkPreview) {

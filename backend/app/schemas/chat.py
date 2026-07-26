@@ -11,6 +11,7 @@ class ChatUserBrief(BaseModel):
     username: Optional[str] = None
     avatar_url: Optional[str] = None
     last_seen_at: Optional[datetime] = None
+    is_bot: bool = False
     is_group_admin: bool = False
     is_group_creator: bool = False
     can_manage_members: bool = False
@@ -21,6 +22,17 @@ class ChatUserBrief(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ChatBotCommandItem(BaseModel):
+    command: str
+    description: str = ""
+
+
+class ChatBotCommandsResponse(BaseModel):
+    bot_id: int
+    bot_username: Optional[str] = None
+    items: List[ChatBotCommandItem] = []
 
 
 class MessageResponse(BaseModel):
@@ -50,6 +62,7 @@ class MessageResponse(BaseModel):
 class ForwardMessageRequest(BaseModel):
     source_conversation_id: int
     message_id: int
+    as_copy: bool = False
 
 
 class MessageReaderItem(BaseModel):

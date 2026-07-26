@@ -2066,6 +2066,7 @@ class ChatService:
         source_conversation_id: int,
         message_id: int,
         sender_id: int,
+        as_copy: bool = False,
     ) -> Message:
         if not self._is_member(target_conversation_id, sender_id):
             raise ValueError("forbidden")
@@ -2083,19 +2084,6 @@ class ChatService:
         )
         if not src:
             raise ValueError("not_found")
-
-        # Preserve original author when re-forwarding an already-forwarded msg.
-        if getattr(src, "forward_from_user_id", None):
-            forward_user_id = src.forward_from_user_id
-            forward_name = src.forward_from_name
-        else:
-            forward_user_id = src.sender_id
-            author = self.db.query(User).filter(User.id == src.sender_id).first()
-            forward_name = (
-                (author.name or author.username or "Пользователь")
-                if author
-                else "Пользователь"
-            )
 
         content = src.content or ""
         media_url = src.media_url
@@ -2133,9 +2121,26 @@ class ChatService:
             content=content,
             media_url=media_url,
         )
-        msg.forward_from_user_id = forward_user_id
-        msg.forward_from_name = (forward_name or "")[:120] or None
-        msg.forwarded_from_message_id = src.id
+        if as_copy:
+            msg.forward_from_user_id = None
+            msg.forward_from_name = None
+            msg.forwarded_from_message_id = None
+        else:
+            # Preserve original author when re-forwarding an already-forwarded msg.
+            if getattr(src, "forward_from_user_id", None):
+                forward_user_id = src.forward_from_user_id
+                forward_name = src.forward_from_name
+            else:
+                forward_user_id = src.sender_id
+                author = self.db.query(User).filter(User.id == src.sender_id).first()
+                forward_name = (
+                    (author.name or author.username or "Пользователь")
+                    if author
+                    else "Пользователь"
+                )
+            msg.forward_from_user_id = forward_user_id
+            msg.forward_from_name = (forward_name or "")[:120] or None
+            msg.forwarded_from_message_id = src.id
         self.db.flush()
         return msg
 

@@ -546,6 +546,7 @@ class ChatService {
     required int targetConversationId,
     required int sourceConversationId,
     required int messageId,
+    bool asCopy = false,
   }) async {
     final uri =
         Uri.parse('$_base/chats/$targetConversationId/messages/forward');
@@ -557,12 +558,32 @@ class ChatService {
       body: jsonEncode({
         'source_conversation_id': sourceConversationId,
         'message_id': messageId,
+        'as_copy': asCopy,
       }),
     );
     _ensureOk(response, 'Не удалось переслать сообщение');
     return ChatMessage.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  static Future<List<ChatBotCommand>> listConversationBotCommands({
+    required int conversationId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/bot-commands');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить команды бота');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final out = <ChatBotCommand>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      try {
+        final cmd = ChatBotCommand.fromJson(raw);
+        if (cmd.command.isNotEmpty) out.add(cmd);
+      } catch (_) {}
+    }
+    return out;
   }
 
   static Future<ScheduledChatMessage> scheduleText({

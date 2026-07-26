@@ -32,6 +32,7 @@ class ChatUserBrief {
     this.username,
     this.avatarUrl,
     this.lastSeenAt,
+    this.isBot = false,
     this.isGroupAdmin = false,
     this.isGroupCreator = false,
     this.canManageMembers = false,
@@ -46,6 +47,7 @@ class ChatUserBrief {
   final String? username;
   final String? avatarUrl;
   final DateTime? lastSeenAt;
+  final bool isBot;
   final bool isGroupAdmin;
   final bool isGroupCreator;
   final bool canManageMembers;
@@ -80,6 +82,7 @@ class ChatUserBrief {
       username: json['username'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       lastSeenAt: lastSeen,
+      isBot: json['is_bot'] as bool? ?? false,
       isGroupAdmin: json['is_group_admin'] as bool? ?? false,
       isGroupCreator: json['is_group_creator'] as bool? ?? false,
       canManageMembers: json['can_manage_members'] as bool? ?? false,
@@ -90,6 +93,23 @@ class ChatUserBrief {
           ? DateTime.tryParse(json['send_restricted_until'] as String)
           : null,
       sendRestrictionReason: json['send_restriction_reason'] as String?,
+    );
+  }
+}
+
+class ChatBotCommand {
+  const ChatBotCommand({
+    required this.command,
+    this.description = '',
+  });
+
+  final String command;
+  final String description;
+
+  factory ChatBotCommand.fromJson(Map<String, dynamic> json) {
+    return ChatBotCommand(
+      command: (json['command'] as String? ?? '').trim(),
+      description: (json['description'] as String? ?? '').trim(),
     );
   }
 }

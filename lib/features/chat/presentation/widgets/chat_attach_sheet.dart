@@ -23,8 +23,10 @@ import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
 import '../../application/chat_recent_files_store.dart';
+import '../../application/chat_recent_gifs_store.dart';
 import '../../application/chat_sticker_pinned_packs_store.dart';
 import '../../application/chat_recent_stickers_store.dart';
+import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
@@ -54,6 +56,7 @@ enum ChatAttachResult {
   videoNote,
   resendFile,
   sticker,
+  gifResend,
 }
 
 class ChatAttachSelection {
@@ -162,11 +165,18 @@ class ChatAttachSelection {
 
   factory ChatAttachSelection.videoNote() =>
       ChatAttachSelection._(kind: ChatAttachResult.videoNote);
+
+  factory ChatAttachSelection.gifResend(String mediaUrl) =>
+      ChatAttachSelection._(
+        kind: ChatAttachResult.gifResend,
+        resendFileUrl: mediaUrl,
+      );
 }
 
 Future<ChatAttachSelection?> showChatAttachSheet(
   BuildContext context, {
   ChatAttachTab initialTab = ChatAttachTab.gallery,
+  int? conversationId,
 }) {
   return showModalBottomSheet<ChatAttachSelection>(
     context: context,
@@ -174,14 +184,21 @@ Future<ChatAttachSelection?> showChatAttachSheet(
     useSafeArea: false,
     enableDrag: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _ChatAttachSheet(initialTab: initialTab),
+    builder: (_) => _ChatAttachSheet(
+      initialTab: initialTab,
+      conversationId: conversationId,
+    ),
   );
 }
 
 class _ChatAttachSheet extends StatefulWidget {
-  const _ChatAttachSheet({this.initialTab = ChatAttachTab.gallery});
+  const _ChatAttachSheet({
+    this.initialTab = ChatAttachTab.gallery,
+    this.conversationId,
+  });
 
   final ChatAttachTab initialTab;
+  final int? conversationId;
 
   @override
   State<_ChatAttachSheet> createState() => _ChatAttachSheetState();
@@ -1139,7 +1156,9 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.gif:
         return _GifPickPanel(
           scrollController: scrollController,
-          onPick: () => unawaited(_pickGifFiles()),
+          conversationId: widget.conversationId,
+          onPickDevice: () => unawaited(_pickGifFiles()),
+          onPickRecent: (url) => _close(ChatAttachSelection.gifResend(url)),
           isDark: isDark,
         );
       case ChatAttachTab.location:
@@ -1229,52 +1248,140 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 }
 
-class _GifPickPanel extends StatelessWidget {
+class _GifPickPanel extends StatefulWidget {
   const _GifPickPanel({
     required this.scrollController,
-    required this.onPick,
+    required this.onPickDevice,
+    required this.onPickRecent,
     required this.isDark,
+    this.conversationId,
   });
 
   final ScrollController scrollController;
-  final VoidCallback onPick;
+  final VoidCallback onPickDevice;
+  final ValueChanged<String> onPickRecent;
   final bool isDark;
+  final int? conversationId;
+
+  @override
+  State<_GifPickPanel> createState() => _GifPickPanelState();
+}
+
+class _GifPickPanelState extends State<_GifPickPanel> {
+  List<String> _recentUrls = const [];
+  bool _loading = true;
+
+  bool _isGifUrl(String url) {
+    final path = url.split('?').first.toLowerCase();
+    return path.endsWith('.gif') || path.endsWith('.webp');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final local = await ChatRecentGifsStore.load();
+    final urls = <String>[
+      for (final e in local)
+        if (_isGifUrl(e.mediaUrl)) e.mediaUrl,
+    ];
+    final cid = widget.conversationId;
+    if (cid != null) {
+      try {
+        final page = await ChatService.listChatMedia(
+          conversationId: cid,
+          kind: 'photos',
+          limit: 40,
+        );
+        for (final msg in page.items) {
+          final url = msg.mediaUrl?.trim();
+          if (url == null || url.isEmpty || !_isGifUrl(url)) continue;
+          if (!urls.contains(url)) urls.add(url);
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _recentUrls = urls.take(36).toList();
+      _loading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListView(
-      controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      controller: widget.scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        const SizedBox(height: 24),
-        Icon(
-          Icons.gif_box_outlined,
-          size: 56,
-          color: scheme.primary.withValues(alpha: 0.9),
+        FilledButton.icon(
+          onPressed: widget.onPickDevice,
+          icon: const Icon(Icons.folder_open_outlined),
+          label: const Text('Выбрать GIF с устройства'),
         ),
         const SizedBox(height: 16),
         Text(
-          'Отправьте GIF как фото',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          'Недавние GIF',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Выберите файл .gif или анимированный .webp с устройства.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-        ),
-        const SizedBox(height: 28),
-        FilledButton.icon(
-          onPressed: onPick,
-          icon: const Icon(Icons.folder_open_outlined),
-          label: const Text('Выбрать GIF'),
-        ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_recentUrls.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.gif_box_outlined,
+                  size: 48,
+                  color: scheme.primary.withValues(alpha: 0.85),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Пока нет GIF из истории чата.\nОтправьте .gif / .webp — они появятся здесь.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _recentUrls.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemBuilder: (context, index) {
+              final url = _recentUrls[index];
+              return Material(
+                color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(12),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => widget.onPickRecent(url),
+                  child: ChatStickerTile(
+                    mediaUrl: ServerConfig.resolveMediaUrl(url),
+                    animated: true,
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }

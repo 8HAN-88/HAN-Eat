@@ -23,6 +23,8 @@ from app.schemas.chat import (
     ConversationMembersResponse,
     ConversationResponse,
     ChatUserBrief,
+    ChatBotCommandItem,
+    ChatBotCommandsResponse,
     CreateGroupChatRequest,
     CreateChatFolderRequest,
     ChatFolderItemRequest,
@@ -78,6 +80,7 @@ from app.schemas.chat import (
     ChatPollVoteRequest,
     CallbackQueryRequest,
 )
+from app.models.bot_command import BotCommand
 from app.models.conversation import (
     Conversation,
     ConversationMember,
@@ -266,6 +269,7 @@ def _brief(
         username=user.username,
         avatar_url=user.avatar_url,
         last_seen_at=user.last_seen_at,
+        is_bot=bool(getattr(user, "is_bot", False)),
         is_group_admin=is_group_admin,
         is_group_creator=is_group_creator,
         can_manage_members=can_manage_members,
@@ -1584,6 +1588,7 @@ async def forward_message(
             source_conversation_id=body.source_conversation_id,
             message_id=body.message_id,
             sender_id=current_user.id,
+            as_copy=bool(body.as_copy),
         )
         db.commit()
         db.refresh(msg)
@@ -2585,6 +2590,42 @@ async def mark_delivered(
         },
     )
     return {"ok": True}
+
+
+@router.get(
+    "/chats/{conversation_id}/bot-commands",
+    response_model=ChatBotCommandsResponse,
+)
+async def list_conversation_bot_commands(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Public slash-commands for the bot in this chat (command + description)."""
+    svc = ChatService(db)
+    if not svc._is_member(conversation_id, current_user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    bot = _find_chat_bot(db, conversation_id)
+    if not bot:
+        return ChatBotCommandsResponse(bot_id=0, items=[])
+    rows = (
+        db.query(BotCommand)
+        .filter(BotCommand.bot_id == bot.id)
+        .order_by(BotCommand.command.asc())
+        .all()
+    )
+    return ChatBotCommandsResponse(
+        bot_id=bot.id,
+        bot_username=getattr(bot, "bot_username", None) or bot.username,
+        items=[
+            ChatBotCommandItem(
+                command=c.command,
+                description=c.description or "",
+            )
+            for c in rows
+            if (c.command or "").strip()
+        ],
+    )
 
 
 @router.get(

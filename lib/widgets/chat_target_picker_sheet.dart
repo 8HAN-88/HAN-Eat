@@ -3,11 +3,39 @@ import 'package:flutter/material.dart';
 import '../models/chat_models.dart';
 import 'app_avatar.dart';
 
+class ChatTargetPickResult {
+  const ChatTargetPickResult({
+    required this.chat,
+    this.asCopy = false,
+  });
+
+  final ChatConversation chat;
+  final bool asCopy;
+}
+
 Future<ChatConversation?> showChatTargetPicker(
   BuildContext context, {
   required List<ChatConversation> chats,
   required String title,
   int? excludeConversationId,
+  bool enableAsCopy = false,
+}) async {
+  final result = await showChatTargetPickerResult(
+    context,
+    chats: chats,
+    title: title,
+    excludeConversationId: excludeConversationId,
+    enableAsCopy: enableAsCopy,
+  );
+  return result?.chat;
+}
+
+Future<ChatTargetPickResult?> showChatTargetPickerResult(
+  BuildContext context, {
+  required List<ChatConversation> chats,
+  required String title,
+  int? excludeConversationId,
+  bool enableAsCopy = false,
 }) {
   final candidates = chats
       .where(
@@ -17,13 +45,14 @@ Future<ChatConversation?> showChatTargetPicker(
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
       return b.updatedAt.compareTo(a.updatedAt);
     });
-  return showModalBottomSheet<ChatConversation>(
+  return showModalBottomSheet<ChatTargetPickResult>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (ctx) => _ChatTargetPickerSheet(
       title: title,
       items: candidates,
+      enableAsCopy: enableAsCopy,
     ),
   );
 }
@@ -32,10 +61,12 @@ class _ChatTargetPickerSheet extends StatefulWidget {
   const _ChatTargetPickerSheet({
     required this.title,
     required this.items,
+    this.enableAsCopy = false,
   });
 
   final String title;
   final List<ChatConversation> items;
+  final bool enableAsCopy;
 
   @override
   State<_ChatTargetPickerSheet> createState() => _ChatTargetPickerSheetState();
@@ -43,6 +74,7 @@ class _ChatTargetPickerSheet extends StatefulWidget {
 
 class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
   final _searchCtrl = TextEditingController();
+  bool _asCopy = false;
 
   @override
   void dispose() {
@@ -95,7 +127,18 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            if (widget.enableAsCopy) ...[
+              const SizedBox(height: 4),
+              SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                secondary: const Icon(Icons.content_copy_outlined),
+                title: const Text('Переслать как копию'),
+                subtitle: const Text('Без подписи «Переслано от…»'),
+                value: _asCopy,
+                onChanged: (v) => setState(() => _asCopy = v),
+              ),
+            ],
+            const SizedBox(height: 6),
             Flexible(
               child: filtered.isEmpty
                   ? Padding(
@@ -151,7 +194,13 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                               ? Icon(Icons.push_pin_rounded,
                                   color: scheme.primary, size: 18)
                               : null,
-                          onTap: () => Navigator.pop(context, chat),
+                          onTap: () => Navigator.pop(
+                            context,
+                            ChatTargetPickResult(
+                              chat: chat,
+                              asCopy: _asCopy,
+                            ),
+                          ),
                         );
                       },
                     ),
