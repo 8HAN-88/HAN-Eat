@@ -15,6 +15,7 @@ class UserResponse(BaseModel):
     bio: Optional[str] = None
     is_private: bool
     show_last_seen: bool = True
+    show_read_receipts: bool = True
     created_at: datetime
     subscription_type: Optional[str] = "free"
     scan_credits: Optional[int] = None
@@ -92,6 +93,7 @@ class UpdateUserRequest(BaseModel):
     bio: Optional[str] = None
     is_private: Optional[bool] = None
     show_last_seen: Optional[bool] = None
+    show_read_receipts: Optional[bool] = None
     avatar_url: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     device_platform: Optional[str] = None  # android | ios | web

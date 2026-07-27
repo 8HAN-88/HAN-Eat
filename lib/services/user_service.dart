@@ -430,6 +430,7 @@ class UserService {
     String? bio,
     bool? isPrivate,
     bool? showLastSeen,
+    bool? showReadReceipts,
     String? avatarUrl,
     String? fcmToken,
   }) async {
@@ -439,6 +440,7 @@ class UserService {
       if (bio != null) 'bio': bio,
       if (isPrivate != null) 'is_private': isPrivate,
       if (showLastSeen != null) 'show_last_seen': showLastSeen,
+      if (showReadReceipts != null) 'show_read_receipts': showReadReceipts,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (fcmToken != null) 'fcm_token': fcmToken,
     };
@@ -540,6 +542,7 @@ class UserProfile {
       'bio': json['bio'],
       'is_private': json['is_private'],
       'show_last_seen': json['show_last_seen'],
+      'show_read_receipts': json['show_read_receipts'],
       'created_at': json['created_at'],
     };
 

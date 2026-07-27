@@ -2518,16 +2518,9 @@ class ChatService:
         conversation_id: int,
         scheduled_message_id: int,
         user_id: int,
-        send_at: datetime,
+        send_at: Optional[datetime] = None,
+        content: Optional[str] = None,
     ) -> ScheduledMessage:
-        if send_at.tzinfo is None:
-            send_at_naive = send_at
-        else:
-            send_at_naive = send_at.astimezone(timezone.utc).replace(tzinfo=None)
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        if send_at_naive <= now:
-            raise ValueError("invalid_send_at")
-
         item = (
             self.db.query(ScheduledMessage)
             .filter(
@@ -2541,9 +2534,29 @@ class ChatService:
             raise ValueError("not_found")
         if item.status != "pending" or item.canceled_at is not None:
             raise ValueError("already_processed")
-        if item.deliver_when_online:
-            raise ValueError("online_delivery_locked")
-        item.send_at = send_at_naive
+
+        if content is not None:
+            text = (content or "").strip()
+            if not text:
+                raise ValueError("empty_content")
+            if item.type != "text":
+                raise ValueError("content_locked")
+            item.content = text[:4000]
+
+        if send_at is not None:
+            if item.deliver_when_online:
+                raise ValueError("online_delivery_locked")
+            if send_at.tzinfo is None:
+                send_at_naive = send_at
+            else:
+                send_at_naive = send_at.astimezone(timezone.utc).replace(tzinfo=None)
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if send_at_naive <= now:
+                raise ValueError("invalid_send_at")
+            item.send_at = send_at_naive
+
+        if send_at is None and content is None:
+            raise ValueError("empty_patch")
         return item
 
     def dispatch_scheduled_messages(

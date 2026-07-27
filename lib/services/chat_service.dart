@@ -1003,18 +1003,28 @@ class ChatService {
   static Future<ScheduledChatMessage> rescheduleMessage({
     required int conversationId,
     required int scheduledMessageId,
-    required DateTime sendAt,
+    DateTime? sendAt,
+    String? content,
   }) async {
+    if (sendAt == null && content == null) {
+      throw ArgumentError('sendAt or content required');
+    }
     final uri = Uri.parse(
       '$_base/chats/$conversationId/messages/scheduled/$scheduledMessageId',
     );
     final response = await _patch(
       uri,
       body: jsonEncode({
-        'send_at': sendAt.toUtc().toIso8601String(),
+        if (sendAt != null) 'send_at': sendAt.toUtc().toIso8601String(),
+        if (content != null) 'content': content,
       }),
     );
-    _ensureOk(response, 'Не удалось перенести отложенное сообщение');
+    _ensureOk(
+      response,
+      content != null
+          ? 'Не удалось изменить отложенное сообщение'
+          : 'Не удалось перенести отложенное сообщение',
+    );
     return ScheduledChatMessage.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );

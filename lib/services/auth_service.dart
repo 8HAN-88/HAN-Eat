@@ -1136,6 +1136,7 @@ class User {
   final String? bio;
   final bool isPrivate;
   final bool showLastSeen;
+  final bool showReadReceipts;
   final bool isAdmin;
   final bool isModerator;
   final DateTime createdAt;
@@ -1160,6 +1161,7 @@ class User {
     this.bio,
     required this.isPrivate,
     this.showLastSeen = true,
+    this.showReadReceipts = true,
     this.isAdmin = false,
     this.isModerator = false,
     required this.createdAt,
@@ -1182,6 +1184,7 @@ class User {
       bio: json['bio'] as String?,
       isPrivate: json['is_private'] as bool? ?? false,
       showLastSeen: json['show_last_seen'] as bool? ?? true,
+      showReadReceipts: json['show_read_receipts'] as bool? ?? true,
       isAdmin: json['is_admin'] as bool? ?? false,
       isModerator: json['is_moderator'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -1205,6 +1208,7 @@ class User {
       'bio': bio,
       'is_private': isPrivate,
       'show_last_seen': showLastSeen,
+      'show_read_receipts': showReadReceipts,
       'is_admin': isAdmin,
       'is_moderator': isModerator,
       'created_at': createdAt.toIso8601String(),
@@ -1229,6 +1233,7 @@ class User {
     bool? phoneLinked,
     String? phone,
     bool? showLastSeen,
+    bool? showReadReceipts,
     bool clearPhone = false,
   }) {
     return User(
@@ -1240,6 +1245,7 @@ class User {
       bio: bio,
       isPrivate: isPrivate,
       showLastSeen: showLastSeen ?? this.showLastSeen,
+      showReadReceipts: showReadReceipts ?? this.showReadReceipts,
       isAdmin: isAdmin,
       isModerator: isModerator,
       createdAt: createdAt,

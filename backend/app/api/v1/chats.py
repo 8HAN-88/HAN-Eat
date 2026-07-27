@@ -348,6 +348,19 @@ def _peer_last_read_id(
     if conv.type != "direct":
         return None
     peer_id = svc.peer_user_id(conv, current_user_id)
+    users = (
+        db.query(User)
+        .filter(User.id.in_([peer_id, current_user_id]))
+        .all()
+    )
+    by_id = {u.id: u for u in users}
+    peer = by_id.get(peer_id)
+    me = by_id.get(current_user_id)
+    # Telegram-like mutual hide for read receipts.
+    if peer is not None and not bool(getattr(peer, "show_read_receipts", True)):
+        return None
+    if me is not None and not bool(getattr(me, "show_read_receipts", True)):
+        return None
     member = (
         db.query(ConversationMember)
         .filter(
@@ -1842,12 +1855,15 @@ async def reschedule_scheduled_message(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    if body.send_at is None and body.content is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
     try:
         item = svc.reschedule_message(
             conversation_id=conversation_id,
             scheduled_message_id=scheduled_message_id,
             user_id=current_user.id,
             send_at=body.send_at,
+            content=body.content,
         )
         db.commit()
         db.refresh(item)
@@ -1856,7 +1872,13 @@ async def reschedule_scheduled_message(
         code = str(e)
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Scheduled message not found")
-        if code in ("already_processed", "invalid_send_at"):
+        if code in (
+            "already_processed",
+            "invalid_send_at",
+            "empty_content",
+            "content_locked",
+            "empty_patch",
+        ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "online_delivery_locked":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
@@ -2784,14 +2806,16 @@ async def mark_read(
             "last_delivered_message_id": body.message_id,
         },
     )
-    _emit(
-        conversation_id,
-        {
-            "type": "message.read",
-            "user_id": current_user.id,
-            "last_read_message_id": body.message_id,
-        },
-    )
+    # Hide blue ticks when the reader disabled read receipts.
+    if bool(getattr(current_user, "show_read_receipts", True)):
+        _emit(
+            conversation_id,
+            {
+                "type": "message.read",
+                "user_id": current_user.id,
+                "last_read_message_id": body.message_id,
+            },
+        )
     return {"ok": True}
 
 

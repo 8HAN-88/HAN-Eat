@@ -6,11 +6,19 @@ import 'app_avatar.dart';
 class ChatTargetPickResult {
   const ChatTargetPickResult({
     required this.chat,
+    this.chats = const [],
     this.asCopy = false,
   });
 
+  /// Primary / first selected chat (kept for single-select callers).
   final ChatConversation chat;
+  final List<ChatConversation> chats;
   final bool asCopy;
+
+  List<ChatConversation> get targets {
+    if (chats.isNotEmpty) return chats;
+    return [chat];
+  }
 }
 
 Future<ChatConversation?> showChatTargetPicker(
@@ -36,6 +44,7 @@ Future<ChatTargetPickResult?> showChatTargetPickerResult(
   required String title,
   int? excludeConversationId,
   bool enableAsCopy = false,
+  bool allowMultiSelect = false,
 }) {
   final candidates = chats
       .where(
@@ -53,6 +62,7 @@ Future<ChatTargetPickResult?> showChatTargetPickerResult(
       title: title,
       items: candidates,
       enableAsCopy: enableAsCopy,
+      allowMultiSelect: allowMultiSelect,
     ),
   );
 }
@@ -62,11 +72,13 @@ class _ChatTargetPickerSheet extends StatefulWidget {
     required this.title,
     required this.items,
     this.enableAsCopy = false,
+    this.allowMultiSelect = false,
   });
 
   final String title;
   final List<ChatConversation> items;
   final bool enableAsCopy;
+  final bool allowMultiSelect;
 
   @override
   State<_ChatTargetPickerSheet> createState() => _ChatTargetPickerSheetState();
@@ -74,12 +86,38 @@ class _ChatTargetPickerSheet extends StatefulWidget {
 
 class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
   final _searchCtrl = TextEditingController();
+  final Set<int> _selectedIds = {};
   bool _asCopy = false;
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _toggle(ChatConversation chat) {
+    setState(() {
+      if (_selectedIds.contains(chat.id)) {
+        _selectedIds.remove(chat.id);
+      } else {
+        _selectedIds.add(chat.id);
+      }
+    });
+  }
+
+  void _confirmMulti() {
+    final selected = widget.items
+        .where((c) => _selectedIds.contains(c.id))
+        .toList(growable: false);
+    if (selected.isEmpty) return;
+    Navigator.pop(
+      context,
+      ChatTargetPickResult(
+        chat: selected.first,
+        chats: selected,
+        asCopy: _asCopy,
+      ),
+    );
   }
 
   @override
@@ -93,6 +131,7 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
       final username = c.peer?.username?.toLowerCase() ?? '';
       return title.contains(q) || username.contains(q);
     }).toList(growable: false);
+    final multi = widget.allowMultiSelect;
 
     return SafeArea(
       child: Padding(
@@ -110,6 +149,15 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
               style:
                   textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
+            if (multi) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Можно выбрать несколько чатов',
+                style: textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(
               controller: _searchCtrl,
@@ -156,6 +204,7 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                         final chat = filtered[i];
                         final isSaved = chat.isSaved;
                         final isGroup = chat.isGroup;
+                        final selected = _selectedIds.contains(chat.id);
                         final subtitle = isSaved
                             ? 'Личные сохраненные сообщения'
                             : isGroup
@@ -190,21 +239,48 @@ class _ChatTargetPickerSheetState extends State<_ChatTargetPickerSheet> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          trailing: chat.pinned
-                              ? Icon(Icons.push_pin_rounded,
-                                  color: scheme.primary, size: 18)
-                              : null,
-                          onTap: () => Navigator.pop(
-                            context,
-                            ChatTargetPickResult(
-                              chat: chat,
-                              asCopy: _asCopy,
-                            ),
-                          ),
+                          trailing: multi
+                              ? Checkbox(
+                                  value: selected,
+                                  onChanged: (_) => _toggle(chat),
+                                )
+                              : (chat.pinned
+                                  ? Icon(Icons.push_pin_rounded,
+                                      color: scheme.primary, size: 18)
+                                  : null),
+                          selected: multi && selected,
+                          onTap: () {
+                            if (multi) {
+                              _toggle(chat);
+                              return;
+                            }
+                            Navigator.pop(
+                              context,
+                              ChatTargetPickResult(
+                                chat: chat,
+                                asCopy: _asCopy,
+                              ),
+                            );
+                          },
                         );
                       },
                     ),
             ),
+            if (multi) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _selectedIds.isEmpty ? null : _confirmMulti,
+                  icon: const Icon(Icons.send_outlined),
+                  label: Text(
+                    _selectedIds.isEmpty
+                        ? 'Выберите чаты'
+                        : 'Переслать (${_selectedIds.length})',
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

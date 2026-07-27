@@ -62,6 +62,8 @@ class User(Base):
     last_seen_at = Column(DateTime, nullable=True)
     # When False, last_seen_at is hidden from other users in chat payloads.
     show_last_seen = Column(Boolean, default=True, nullable=False)
+    # When False, read receipts (blue ticks / message.read) are hidden mutually.
+    show_read_receipts = Column(Boolean, default=True, nullable=False)
     phone_hash = Column(String(64), nullable=True, unique=True, index=True)
     phone_e164 = Column(String(20), nullable=True)
     phone_linked_at = Column(DateTime, nullable=True)

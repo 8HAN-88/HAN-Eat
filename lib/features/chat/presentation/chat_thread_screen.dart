@@ -4350,18 +4350,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         title: 'Переслать в...',
         chats: targets,
         enableAsCopy: true,
+        allowMultiSelect: true,
       );
       if (picked == null || !mounted) return;
-      await _sendForwardTo(picked.chat, msg, asCopy: picked.asCopy);
+      final dests = picked.targets;
+      var ok = 0;
+      for (final chat in dests) {
+        try {
+          await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
+          ok += 1;
+        } catch (_) {}
+      }
       if (!mounted) return;
+      final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
+      final label = dests.length == 1
+          ? '«${dests.first.displayTitle}»'
+          : '$ok из ${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            picked.asCopy
-                ? 'Скопировано в «${picked.chat.displayTitle}»'
-                : 'Переслано в «${picked.chat.displayTitle}»',
-          ),
-        ),
+        SnackBar(content: Text('$verb в $label')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -6194,24 +6200,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         title: 'Переслать в...',
         chats: targets,
         enableAsCopy: true,
+        allowMultiSelect: true,
       );
       if (picked == null || !mounted) return;
+      final dests = picked.targets;
       var sent = 0;
-      for (final msg in selected) {
-        try {
-          await _sendForwardTo(picked.chat, msg, asCopy: picked.asCopy);
-          sent += 1;
-        } catch (_) {}
+      var total = 0;
+      for (final chat in dests) {
+        for (final msg in selected) {
+          total += 1;
+          try {
+            await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
+            sent += 1;
+          } catch (_) {}
+        }
       }
       if (!mounted) return;
       _exitSelectionMode();
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
+      final destLabel = dests.length == 1
+          ? '«${dests.first.displayTitle}»'
+          : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            sent == selected.length
-                ? '$verb $sent в «${picked.chat.displayTitle}»'
-                : '$verb $sent из ${selected.length} в «${picked.chat.displayTitle}»',
+            sent == total
+                ? '$verb ${selected.length} → $destLabel'
+                : '$verb $sent из $total → $destLabel',
           ),
         ),
       );
@@ -8536,6 +8551,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (_) {}
   }
 
+  Future<String?> _editScheduledText(ScheduledChatMessage item) async {
+    final controller = TextEditingController(text: item.content);
+    final next = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Изменить отложенное'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 6,
+          maxLength: 4000,
+          decoration: const InputDecoration(
+            hintText: 'Текст сообщения',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (next == null) return null;
+    final trimmed = next.trim();
+    if (trimmed.isEmpty || trimmed == item.content.trim()) return null;
+    return trimmed;
+  }
+
   Future<void> _sendScheduledMessageNow(ScheduledChatMessage item) async {
     await ChatService.cancelScheduledMessage(
       conversationId: widget.conversationId,
@@ -8783,6 +8832,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       }
                                     },
                                   ),
+                                  if (item.type == 'text')
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      tooltip: 'Изменить текст',
+                                      onPressed: () async {
+                                        final next =
+                                            await _editScheduledText(item);
+                                        if (next == null) return;
+                                        try {
+                                          final updated = await ChatService
+                                              .rescheduleMessage(
+                                            conversationId:
+                                                widget.conversationId,
+                                            scheduledMessageId: item.id,
+                                            content: next,
+                                          );
+                                          setModalState(() {
+                                            final idx = items.indexWhere(
+                                              (e) => e.id == item.id,
+                                            );
+                                            if (idx >= 0) items[idx] = updated;
+                                          });
+                                        } catch (e) {
+                                          if (!mounted) return;
+                                          showErrorSnackBar(
+                                            context,
+                                            e,
+                                            fallback:
+                                                'Не удалось изменить сообщение',
+                                          );
+                                        }
+                                      },
+                                    ),
                                   if (!item.sendWhenOnline)
                                     IconButton(
                                       icon: const Icon(

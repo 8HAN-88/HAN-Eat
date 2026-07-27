@@ -216,7 +216,8 @@ class ScheduledMessageListResponse(BaseModel):
 
 
 class RescheduleMessageRequest(BaseModel):
-    send_at: datetime
+    send_at: Optional[datetime] = None
+    content: Optional[str] = Field(default=None, min_length=1, max_length=4000)
 
 
 class InlineKeyboardButton(BaseModel):

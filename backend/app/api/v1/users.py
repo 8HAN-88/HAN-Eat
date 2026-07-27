@@ -330,6 +330,8 @@ async def update_user_profile(
         current_user.is_private = request.is_private
     if request.show_last_seen is not None:
         current_user.show_last_seen = bool(request.show_last_seen)
+    if request.show_read_receipts is not None:
+        current_user.show_read_receipts = bool(request.show_read_receipts)
     if request.avatar_url is not None:
         current_user.avatar_url = request.avatar_url
     if request.fcm_token is not None:

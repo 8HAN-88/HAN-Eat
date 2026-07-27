@@ -33,6 +33,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
   bool _showLastSeen = true;
+  bool _showReadReceipts = true;
   bool _privacyBusy = false;
 
   @override
@@ -108,7 +109,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final user =
           AuthService.instance.currentUser ?? await AuthService.getCurrentUser();
       if (!mounted || user == null) return;
-      setState(() => _showLastSeen = user.showLastSeen);
+      setState(() {
+        _showLastSeen = user.showLastSeen;
+        _showReadReceipts = user.showReadReceipts;
+      });
     } catch (_) {}
   }
 
@@ -130,6 +134,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _showLastSeen = !enabled;
+        _privacyBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _toggleShowReadReceipts(bool enabled) async {
+    if (_privacyBusy) return;
+    setState(() {
+      _showReadReceipts = enabled;
+      _privacyBusy = true;
+    });
+    try {
+      final updated =
+          await UserService.updateProfile(showReadReceipts: enabled);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _showReadReceipts = updated.showReadReceipts;
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _showReadReceipts = !enabled;
         _privacyBusy = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -359,14 +390,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _SettingsSectionHeader(title: 'Приватность'),
             Card(
               clipBehavior: Clip.antiAlias,
-              child: SwitchListTile(
-                secondary: const Icon(Icons.visibility_outlined),
-                title: const Text('Показывать время в сети'),
-                subtitle: const Text(
-                  'Другие не увидят ваш last seen, если выключить',
-                ),
-                value: _showLastSeen,
-                onChanged: _privacyBusy ? null : _toggleShowLastSeen,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.visibility_outlined),
+                    title: const Text('Показывать время в сети'),
+                    subtitle: const Text(
+                      'Другие не увидят ваш last seen, если выключить',
+                    ),
+                    value: _showLastSeen,
+                    onChanged: _privacyBusy ? null : _toggleShowLastSeen,
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.done_all_outlined),
+                    title: const Text('Отчёты о прочтении'),
+                    subtitle: const Text(
+                      'Синие галочки. Если выключить — взаимно скрываются',
+                    ),
+                    value: _showReadReceipts,
+                    onChanged: _privacyBusy ? null : _toggleShowReadReceipts,
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 24),
