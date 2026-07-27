@@ -148,6 +148,26 @@ async def search_users(
     return UserSearchResponse(items=items)
 
 
+@router.get("/by-username/{username}")
+async def get_user_by_username(
+    username: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Exact @username lookup for deep links."""
+    del current_user
+    svc = ChatService(db)
+    user = svc.get_user_by_username(username)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "avatar_url": user.avatar_url,
+    }
+
+
 @router.get("/{user_id}", response_model=UserProfileResponse)
 async def get_user_profile(
     user_id: int,

@@ -1,7 +1,11 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../models/sticker_models.dart';
+import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -139,10 +143,141 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _addStaticSticker() async {
+    final pack = _pack;
+    if (pack == null || _saving) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 768,
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _saving = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: picked,
+        fileType: 'image',
+      );
+      final url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      await StickerService.addStickerToPack(
+        packId: pack.id,
+        mediaUrl: url,
+        stickerType: 'static',
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _addAnimatedSticker() async {
+    final pack = _pack;
+    if (pack == null || _saving) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      allowedExtensions: const [
+        'gif',
+        'webp',
+        'webm',
+        'mp4',
+        'mov',
+        'json',
+        'lottie',
+      ],
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    final xFile = kIsWeb
+        ? (picked.bytes == null
+            ? null
+            : XFile.fromData(
+                picked.bytes!,
+                name: picked.name,
+              ))
+        : (picked.path == null ? null : XFile(picked.path!));
+    if (xFile == null) return;
+    final lower = picked.name.toLowerCase();
+    final fileType = lower.endsWith('.webm') ||
+            lower.endsWith('.mp4') ||
+            lower.endsWith('.mov')
+        ? 'video'
+        : lower.endsWith('.json') || lower.endsWith('.lottie')
+            ? 'document'
+            : 'image';
+    setState(() => _saving = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: xFile,
+        fileType: fileType,
+      );
+      final url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      await StickerService.addStickerToPack(
+        packId: pack.id,
+        mediaUrl: url,
+        stickerType: 'animated',
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showAddStickerMenu() async {
+    if (_pack == null || _saving) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image_outlined),
+              title: const Text('Статический стикер'),
+              subtitle: const Text('Из галереи'),
+              onTap: () => Navigator.pop(ctx, 'static'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.gif_box_outlined),
+              title: const Text('Анимированный стикер'),
+              subtitle: const Text('GIF, WebP, WebM, Lottie…'),
+              onTap: () => Navigator.pop(ctx, 'animated'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'static') {
+      await _addStaticSticker();
+    } else if (choice == 'animated') {
+      await _addAnimatedSticker();
     }
   }
 
@@ -200,6 +335,13 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
           ),
         ],
       ),
+      floatingActionButton: pack == null
+          ? null
+          : FloatingActionButton(
+              onPressed: _saving ? null : _showAddStickerMenu,
+              tooltip: 'Добавить стикер',
+              child: const Icon(Icons.add),
+            ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : (pack == null
@@ -226,7 +368,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                     ),
                     Expanded(
                       child: ReorderableListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
                         itemCount: pack.stickers.length,
                         onReorder: _onReorder,
                         itemBuilder: (context, index) {

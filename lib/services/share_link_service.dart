@@ -17,6 +17,11 @@ class ShareLinkService {
 
   static String profileLink(int userId) => '$webOrigin/profile?userId=$userId';
 
+  static String usernameLink(String username) {
+    final handle = username.trim().replaceFirst(RegExp(r'^@'), '');
+    return '$webOrigin/u/${Uri.encodeComponent(handle)}';
+  }
+
   static String profileShareText({
     required int userId,
     String? displayName,
@@ -28,7 +33,9 @@ class ShareLinkService {
         ? name
         : (handle.isNotEmpty ? '@$handle' : 'Профиль');
     final handleLine = handle.isNotEmpty ? '\n@$handle' : '';
-    return '$title$handleLine\n\nОткрыть в H.A.N. Eat: ${profileLink(userId)}';
+    final link =
+        handle.isNotEmpty ? usernameLink(handle) : profileLink(userId);
+    return '$title$handleLine\n\nОткрыть в H.A.N. Eat: $link';
   }
 
   /// Deep link для нативного приложения (не для шаринга наружу).

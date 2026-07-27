@@ -1177,20 +1177,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (choice.unmute) {
         await ChatService.setMuted(conversationId: chat.id, muted: false);
         await ChatThreadUiPrefs.setMuteUntil(chat.id, null);
-        snack = 'Уведомления включены';
+        snack = choice.snackLabel;
       } else {
-        final until = choice.duration == null
-            ? null
-            : DateTime.now().add(choice.duration!);
         await ChatService.setMuted(conversationId: chat.id, muted: true);
-        await ChatThreadUiPrefs.setMuteUntil(chat.id, until);
-        snack = choice.duration == null
-            ? 'Чат без звука'
-            : choice.duration!.inHours >= 48
-                ? 'Без звука на 2 дня'
-                : choice.duration!.inHours >= 8
-                    ? 'Без звука на 8 часов'
-                    : 'Без звука на 1 час';
+        await ChatThreadUiPrefs.setMuteUntil(chat.id, choice.until);
+        snack = choice.snackLabel;
       }
       if (!mounted) return;
       await _load(silent: true);

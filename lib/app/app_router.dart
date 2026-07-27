@@ -79,6 +79,7 @@ import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
+import '../features/chat/presentation/username_deep_link_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
@@ -104,6 +105,13 @@ String? parseDeepLinkToGoPath(String raw) {
           final data = uri.queryParameters['data'];
           if (data != null && data.isNotEmpty) {
             return '${ShoppingImportRoute.path}?data=${Uri.encodeComponent(data)}';
+          }
+        }
+        // https://haneat.app/@username → /u/username
+        if (path.startsWith('/@') && path.length > 2) {
+          final handle = path.substring(2).split('/').first;
+          if (handle.isNotEmpty) {
+            return UsernameDeepLinkRoute.pathFor(handle);
           }
         }
         if (path.isNotEmpty && path != '/') {
@@ -146,6 +154,9 @@ String? parseDeepLinkToGoPath(String raw) {
     }
     if (uri.host == 'chat-invite' && uri.pathSegments.isNotEmpty) {
       return '/chat-invite/${uri.pathSegments.first}';
+    }
+    if (uri.host == 'u' && uri.pathSegments.isNotEmpty) {
+      return UsernameDeepLinkRoute.pathFor(uri.pathSegments.first);
     }
     if (uri.host == 'subscription') {
       if (uri.pathSegments.contains('success')) {
@@ -716,6 +727,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final token = state.pathParameters['token'] ?? '';
           return MaterialPage(
             child: ChatInviteJoinScreen(token: token),
+          );
+        },
+      ),
+      GoRoute(
+        path: UsernameDeepLinkRoute.path,
+        name: UsernameDeepLinkRoute.name,
+        pageBuilder: (context, state) {
+          final username = state.pathParameters['username'] ?? '';
+          return MaterialPage(
+            child: UsernameDeepLinkScreen(username: username),
           );
         },
       ),
@@ -1418,6 +1439,17 @@ class ChatInviteJoinRoute {
   static const path = '/chat-invite/:token';
   static const basePath = '/chat-invite';
   static const name = 'chat_invite_join';
+}
+
+class UsernameDeepLinkRoute {
+  static const path = '/u/:username';
+  static const basePath = '/u';
+  static const name = 'username_deep_link';
+
+  static String pathFor(String username) {
+    final handle = username.trim().replaceFirst(RegExp(r'^@'), '');
+    return '$basePath/${Uri.encodeComponent(handle)}';
+  }
 }
 
 class ChatThreadOpenArgs {

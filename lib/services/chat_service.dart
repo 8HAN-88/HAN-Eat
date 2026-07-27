@@ -1630,6 +1630,20 @@ class ChatService {
     return out;
   }
 
+  /// Exact @username lookup for deep links. Returns null when not found.
+  static Future<ChatUserBrief?> resolveUsername(String username) async {
+    final handle = username.trim().replaceFirst(RegExp(r'^@'), '');
+    if (handle.length < 2) return null;
+    final uri = Uri.parse(
+      '$_base/users/by-username/${Uri.encodeComponent(handle)}',
+    );
+    final response = await _get(uri);
+    if (response.statusCode == 404) return null;
+    _ensureOk(response, 'Не удалось найти пользователя');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return ChatUserBrief.fromJson(data);
+  }
+
   /// Shared media / links for a conversation (full history, paginated).
   static Future<({List<ChatMessage> items, bool hasMore, int? nextCursor})>
       listChatMedia({

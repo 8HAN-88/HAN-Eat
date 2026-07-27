@@ -3072,6 +3072,20 @@ class ChatService:
         self.db.delete(row)
         return True
 
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        handle = (username or "").strip().lstrip("@").lower()
+        if len(handle) < 2:
+            return None
+        return (
+            self.db.query(User)
+            .filter(
+                User.deleted_at.is_(None),
+                User.banned_at.is_(None),
+                func.lower(User.username) == handle,
+            )
+            .first()
+        )
+
     def search_users(self, current_user_id: int, query: str, limit: int = 20) -> List[dict]:
         from app.services.search_normalization import (
             escaped_like_pattern,

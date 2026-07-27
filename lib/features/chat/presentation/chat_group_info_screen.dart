@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/share/system_share.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/chat_service.dart';
@@ -992,6 +993,19 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             }
           }
 
+          Future<void> share(ChatGroupInviteLink link) async {
+            final title = _conversation.title?.trim();
+            final subject = (title != null && title.isNotEmpty)
+                ? 'Приглашение в «$title»'
+                : 'Приглашение в группу HAN Eat';
+            await SystemShare.shareText(
+              context,
+              text: link.inviteLink,
+              subject: subject,
+              webSnackBarText: 'Ссылка скопирована',
+            );
+          }
+
           Future<void> rotateMain() async {
             setModalState(() => loading = true);
             try {
@@ -1216,6 +1230,12 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                   onPressed: () => copy(link),
                                   icon: const Icon(Icons.copy_outlined),
                                 ),
+                                if (!link.isRevoked)
+                                  IconButton(
+                                    tooltip: 'Поделиться',
+                                    onPressed: () => share(link),
+                                    icon: const Icon(Icons.share_outlined),
+                                  ),
                                 if (!link.isRevoked)
                                   IconButton(
                                     tooltip: 'Отозвать',

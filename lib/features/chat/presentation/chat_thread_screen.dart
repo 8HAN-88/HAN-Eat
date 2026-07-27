@@ -5251,24 +5251,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await _applyMuted(false);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Уведомления включены')),
+          SnackBar(content: Text(choice.snackLabel)),
         );
         return;
       }
-      final until = choice.duration == null
-          ? null
-          : DateTime.now().add(choice.duration!);
-      await _applyMuted(true, until: until);
+      await _applyMuted(true, until: choice.until);
       if (!mounted) return;
-      final label = choice.duration == null
-          ? 'Чат без звука'
-          : choice.duration!.inHours >= 48
-              ? 'Без звука на 2 дня'
-              : choice.duration!.inHours >= 8
-                  ? 'Без звука на 8 часов'
-                  : 'Без звука на 1 час';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(label)),
+        SnackBar(content: Text(choice.snackLabel)),
       );
     } catch (e) {
       if (!mounted) return;
