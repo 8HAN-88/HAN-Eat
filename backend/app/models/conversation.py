@@ -62,6 +62,8 @@ class ConversationMember(Base):
     last_read_message_id = Column(Integer, nullable=True)
     # Telegram-like: delivered cursor (gray ✓✓). Read implies delivered.
     last_delivered_message_id = Column(Integer, nullable=True)
+    # Per-user clear history cursor: hide messages with id <= this value.
+    history_cleared_before_id = Column(Integer, nullable=True)
     pinned = Column(Boolean, default=False, nullable=False)
     archived_at = Column(DateTime, nullable=True)
     muted_at = Column(DateTime, nullable=True)

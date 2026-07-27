@@ -2838,6 +2838,52 @@ async def delete_conversation(
     return {"ok": True}
 
 
+@router.post("/chats/{conversation_id}/clear-history")
+async def clear_chat_history(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        cleared_to = svc.clear_history(conversation_id, current_user.id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    return {"ok": True, "cleared_before_id": cleared_to}
+
+
+@router.get("/users/{peer_user_id}/common-groups")
+async def list_common_groups(
+    peer_user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        groups = svc.list_common_groups(current_user.id, peer_user_id)
+    except ValueError as e:
+        code = str(e)
+        if code == "user_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise
+    items = []
+    for conv in groups:
+        items.append(
+            {
+                "id": conv.id,
+                "type": conv.type,
+                "title": conv.title,
+                "member_count": svc._member_count(conv.id),
+            }
+        )
+    return {"items": items}
+
+
 @router.post("/chats/{conversation_id}/archive")
 async def archive_chat(
     conversation_id: int,

@@ -640,6 +640,10 @@ class ChatService:
                 Message.sender_id != user_id,
                 Message.deleted_at.is_(None),
                 or_(
+                    ConversationMember.history_cleared_before_id.is_(None),
+                    Message.id > ConversationMember.history_cleared_before_id,
+                ),
+                or_(
                     ConversationMember.last_read_message_id.is_(None),
                     Message.id > ConversationMember.last_read_message_id,
                 ),
@@ -658,6 +662,18 @@ class ChatService:
             if not archived_only and is_archived:
                 continue
             last_msg = last_messages.get(conv.id)
+            cleared_before = int(getattr(member, "history_cleared_before_id", 0) or 0)
+            if last_msg is not None and cleared_before and last_msg.id <= cleared_before:
+                last_msg = (
+                    self.db.query(Message)
+                    .filter(
+                        Message.conversation_id == conv.id,
+                        Message.deleted_at.is_(None),
+                        Message.id > cleared_before,
+                    )
+                    .order_by(Message.id.desc())
+                    .first()
+                )
             unread = unread_map.get(conv.id, 0)
 
             peer = None
@@ -718,20 +734,21 @@ class ChatService:
         )
         if not member:
             return None
-        last_msg = (
-            self.db.query(Message)
-            .filter(
-                Message.conversation_id == conv.id,
-                Message.deleted_at.is_(None),
-            )
-            .order_by(Message.id.desc())
-            .first()
+        cleared_before = int(getattr(member, "history_cleared_before_id", 0) or 0)
+        last_msg_q = self.db.query(Message).filter(
+            Message.conversation_id == conv.id,
+            Message.deleted_at.is_(None),
         )
+        if cleared_before:
+            last_msg_q = last_msg_q.filter(Message.id > cleared_before)
+        last_msg = last_msg_q.order_by(Message.id.desc()).first()
         unread_q = self.db.query(func.count(Message.id)).filter(
             Message.conversation_id == conv.id,
             Message.sender_id != user_id,
             Message.deleted_at.is_(None),
         )
+        if cleared_before:
+            unread_q = unread_q.filter(Message.id > cleared_before)
         if member.last_read_message_id:
             unread_q = unread_q.filter(Message.id > member.last_read_message_id)
         unread = unread_q.scalar() or 0
@@ -1669,6 +1686,67 @@ class ChatService:
         )
         return rows
 
+    def _history_cleared_before_id(
+        self, conversation_id: int, user_id: int
+    ) -> Optional[int]:
+        member = self._get_member_record(conversation_id, user_id)
+        if member is None:
+            return None
+        value = getattr(member, "history_cleared_before_id", None)
+        return int(value) if value else None
+
+    def clear_history(self, conversation_id: int, user_id: int) -> int:
+        """Hide all current messages for this user (Telegram clear history)."""
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        member = self._get_member_record(conversation_id, user_id)
+        if member is None:
+            raise ValueError("forbidden")
+        max_id = (
+            self.db.query(func.max(Message.id))
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .scalar()
+        )
+        cleared_to = int(max_id or 0)
+        member.history_cleared_before_id = cleared_to
+        member.last_read_message_id = cleared_to or member.last_read_message_id
+        return cleared_to
+
+    def list_common_groups(
+        self, viewer_id: int, peer_id: int, *, limit: int = 50
+    ) -> List[Conversation]:
+        if viewer_id == peer_id:
+            return []
+        self._get_user_or_404(peer_id)
+        viewer_groups = (
+            self.db.query(ConversationMember.conversation_id)
+            .join(Conversation, Conversation.id == ConversationMember.conversation_id)
+            .filter(
+                ConversationMember.user_id == viewer_id,
+                Conversation.type == "group",
+            )
+            .subquery()
+        )
+        rows = (
+            self.db.query(Conversation)
+            .join(
+                ConversationMember,
+                ConversationMember.conversation_id == Conversation.id,
+            )
+            .filter(
+                ConversationMember.user_id == peer_id,
+                Conversation.id.in_(viewer_groups),
+                Conversation.type == "group",
+            )
+            .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
+            .limit(max(1, min(int(limit), 100)))
+            .all()
+        )
+        return rows
+
     def get_messages(
         self,
         conversation_id: int,
@@ -1685,6 +1763,7 @@ class ChatService:
             .filter(MessageHide.user_id == user_id)
             .subquery()
         )
+        cleared_before = self._history_cleared_before_id(conversation_id, user_id) or 0
 
         if after_id is not None:
             rows = (
@@ -1693,6 +1772,7 @@ class ChatService:
                     Message.conversation_id == conversation_id,
                     Message.deleted_at.is_(None),
                     Message.id > after_id,
+                    Message.id > cleared_before,
                     ~Message.id.in_(hidden_ids),
                 )
                 .order_by(Message.id.asc())
@@ -1709,6 +1789,7 @@ class ChatService:
             .filter(
                 Message.conversation_id == conversation_id,
                 Message.deleted_at.is_(None),
+                Message.id > cleared_before,
                 ~Message.id.in_(hidden_ids),
             )
             .order_by(Message.id.desc())
@@ -1741,12 +1822,14 @@ class ChatService:
             .filter(MessageHide.user_id == user_id)
             .subquery()
         )
+        cleared_before = self._history_cleared_before_id(conversation_id, user_id) or 0
 
         q = (
             self.db.query(Message)
             .filter(
                 Message.conversation_id == conversation_id,
                 Message.deleted_at.is_(None),
+                Message.id > cleared_before,
                 ~Message.id.in_(hidden_ids),
             )
             .order_by(Message.id.desc())
@@ -2200,13 +2283,27 @@ class ChatService:
         if not handles:
             return set()
         members = (
-            self.db.query(ConversationMember.user_id)
+            self.db.query(ConversationMember)
             .filter(ConversationMember.conversation_id == conversation_id)
             .all()
         )
-        member_ids = [uid for (uid,) in members]
-        if not member_ids:
+        if not members:
             return set()
+        member_ids = [m.user_id for m in members]
+        out: set[int] = set()
+        if "all" in handles:
+            out.update(member_ids)
+        if "admin" in handles or "admins" in handles:
+            conv = (
+                self.db.query(Conversation)
+                .filter(Conversation.id == conversation_id)
+                .first()
+            )
+            for m in members:
+                if m.is_admin or (
+                    conv is not None and conv.created_by_user_id == m.user_id
+                ):
+                    out.add(m.user_id)
         users = (
             self.db.query(User)
             .filter(
@@ -2216,7 +2313,6 @@ class ChatService:
             )
             .all()
         )
-        out: set[int] = set()
         for u in users:
             uname = (u.username or "").lstrip("@").lower()
             if uname and uname in handles:
@@ -3093,6 +3189,7 @@ class ChatService:
         return {
             "groups": bool(filters.get("groups")),
             "channels": bool(filters.get("channels")),
+            "direct": bool(filters.get("direct") or filters.get("private")),
             "unread_only": bool(filters.get("unread_only")),
         }
 

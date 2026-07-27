@@ -1050,6 +1050,47 @@ class ChatService {
     _ensureOk(response, 'Не удалось удалить чат');
   }
 
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  static Future<int> clearHistory({required int conversationId}) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/clear-history');
+    final response = await _post(uri);
+    _ensureOk(response, 'Не удалось очистить историю');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return _asInt(data['cleared_before_id']);
+  }
+
+  static Future<List<ChatConversation>> listCommonGroups({
+    required int peerUserId,
+  }) async {
+    final uri = Uri.parse('$_base/users/$peerUserId/common-groups');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить общие группы');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final out = <ChatConversation>[];
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      try {
+        out.add(
+          ChatConversation(
+            id: _asInt(raw['id']),
+            type: raw['type'] as String? ?? 'group',
+            title: raw['title'] as String?,
+            memberCount: _asInt(raw['member_count']),
+            updatedAt: DateTime.now(),
+          ),
+        );
+      } catch (_) {}
+    }
+    return out;
+  }
+
   static Future<List<ChatContact>> listContacts() async {
     final uri = Uri.parse('$_base/contacts');
     final response = await _get(uri);

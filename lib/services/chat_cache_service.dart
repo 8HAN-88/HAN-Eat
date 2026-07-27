@@ -158,16 +158,20 @@ class ChatCacheService {
     int conversationId,
     List<ChatMessage> messages,
   ) async {
-    if (messages.isEmpty) return;
     try {
       final prefs = await SharedPreferences.getInstance();
+      final key = '$_threadPrefix$conversationId';
+      if (messages.isEmpty) {
+        await prefs.remove(key);
+        return;
+      }
       final slice = messages.length > 80
           ? messages.sublist(messages.length - 80)
           : messages;
       final encoded = jsonEncode(
         slice.map(_messageToJson).toList(growable: false),
       );
-      await prefs.setString('$_threadPrefix$conversationId', encoded);
+      await prefs.setString(key, encoded);
     } catch (_) {}
   }
 

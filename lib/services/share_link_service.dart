@@ -15,6 +15,22 @@ class ShareLinkService {
     return '$base?msg=$messageId';
   }
 
+  static String profileLink(int userId) => '$webOrigin/profile?userId=$userId';
+
+  static String profileShareText({
+    required int userId,
+    String? displayName,
+    String? username,
+  }) {
+    final name = (displayName ?? '').trim();
+    final handle = (username ?? '').trim().replaceFirst(RegExp(r'^@'), '');
+    final title = name.isNotEmpty
+        ? name
+        : (handle.isNotEmpty ? '@$handle' : 'Профиль');
+    final handleLine = handle.isNotEmpty ? '\n@$handle' : '';
+    return '$title$handleLine\n\nОткрыть в H.A.N. Eat: ${profileLink(userId)}';
+  }
+
   /// Deep link для нативного приложения (не для шаринга наружу).
   static String nativePostLink(int postId) => 'haneat://post/$postId';
   static String nativeRecipeLink(int recipeId) => 'haneat://recipe/$recipeId';

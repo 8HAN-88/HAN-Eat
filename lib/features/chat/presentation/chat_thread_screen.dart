@@ -1696,6 +1696,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     // Group members with @username (Telegram-style mentions).
     if (_conversation.isGroup) {
+      const specials = <(String, String, String)>[
+        ('all', '@all', 'Все участники'),
+        ('admin', '@admin', 'Администраторы'),
+      ];
+      for (final s in specials) {
+        if (query.isEmpty ||
+            s.$1.startsWith(query) ||
+            s.$2.toLowerCase().contains(query)) {
+          candidates.add(
+            _MentionCandidate(
+              username: s.$1,
+              title: s.$2,
+              subtitle: s.$3,
+              avatarUrl: null,
+              isBot: false,
+            ),
+          );
+        }
+      }
       for (final m in _groupMembers) {
         if (myId != null && m.id == myId) continue;
         final u = m.username?.trim();
@@ -3893,6 +3912,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             title: 'В архив',
             onTap: _archiveChat,
           ),
+          if (!isSaved)
+            TelegramActionSheetAction(
+              icon: Icons.history_outlined,
+              title: 'Очистить историю',
+              destructive: true,
+              onTap: _clearChatHistory,
+            ),
           if (!isGroup)
             TelegramActionSheetAction(
               icon: Icons.delete_outline,
@@ -4073,6 +4099,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -4107,11 +4134,137 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 _openPeerProfile();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.link_rounded),
+              title: const Text('Ссылка на профиль'),
+              subtitle: Text(ShareLinkService.profileLink(peer.id)),
+              onTap: () async {
+                final text = ShareLinkService.profileShareText(
+                  userId: peer.id,
+                  displayName: peer.displayName,
+                  username: peer.username,
+                );
+                await Clipboard.setData(ClipboardData(text: text));
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ссылка скопирована')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('Общие группы'),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(_showCommonGroups(peer));
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showCommonGroups(ChatUserBrief peer) async {
+    try {
+      final groups = await ChatService.listCommonGroups(peerUserId: peer.id);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) {
+          if (groups.isEmpty) {
+            return const SafeArea(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Нет общих групп',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          return SafeArea(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: groups.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final g = groups[index];
+                return ListTile(
+                  leading: const Icon(Icons.group_outlined),
+                  title: Text(g.displayTitle),
+                  subtitle: Text('${g.memberCount} участн.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push(ChatThreadRoute.pathForId(g.id));
+                  },
+                );
+              },
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _clearChatHistory() async {
+    if (_conversation.isSaved) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Очистить историю?'),
+        content: const Text(
+          'Сообщения исчезнут только у вас. Собеседники продолжат видеть переписку.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Очистить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ChatService.clearHistory(conversationId: widget.conversationId);
+      if (!mounted) return;
+      setState(() {
+        _messages.clear();
+        _pinnedMessage = null;
+        _selectedMessageIds.clear();
+        _selectionMode = false;
+        _hasMore = false;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+      unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      try {
+        ProviderScope.containerOf(context)
+            .read(chatsHubRefreshProvider.notifier)
+            .state++;
+      } catch (_) {}
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('История очищена')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   ChatUserBrief? _userBriefForSender(ChatMessage msg) {
