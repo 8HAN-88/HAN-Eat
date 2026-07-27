@@ -1158,6 +1158,21 @@ class ChatService {
     );
   }
 
+  static Future<ChatConversation> updateGroupAvatar({
+    required int conversationId,
+    required String avatarUrl,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'avatar_url': avatarUrl}),
+    );
+    _ensureOk(response, 'Не удалось обновить фото группы');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatConversation> setGroupOnlyAdminsCanPost({
     required int conversationId,
     required bool onlyAdminsCanPost,

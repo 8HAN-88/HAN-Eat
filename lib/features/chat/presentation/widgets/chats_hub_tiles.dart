@@ -122,7 +122,10 @@ class ChatHubTile extends StatelessWidget {
                       ),
                     )
                   : chat.isGroup
-                      ? ChatHubGroupAvatar(members: chat.membersPreview)
+                      ? ChatHubGroupAvatar(
+                          members: chat.membersPreview,
+                          avatarUrl: chat.avatarUrl,
+                        )
                       : ChatHubUserAvatar(
                           user: chat.peer ??
                               const ChatUserBrief(id: 0, name: 'Чат'),
@@ -311,19 +314,31 @@ class ChatHubRecommendedChannelChip extends StatelessWidget {
 }
 
 class ChatHubGroupAvatar extends StatelessWidget {
-  const ChatHubGroupAvatar({super.key, required this.members});
+  const ChatHubGroupAvatar({
+    super.key,
+    required this.members,
+    this.avatarUrl,
+  });
 
   final List<ChatUserBrief> members;
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final background = resolvedAvatarImage(avatarUrl, decodeWidth: 96);
+    if (background != null) {
+      return CircleAvatar(
+        radius: 28,
+        backgroundImage: background,
+      );
+    }
     if (members.isEmpty) {
-    return CircleAvatar(
-      radius: 28,
-      backgroundColor: scheme.primaryContainer,
-      child: Icon(Icons.groups_rounded, color: scheme.onPrimaryContainer),
-    );
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: scheme.primaryContainer,
+        child: Icon(Icons.groups_rounded, color: scheme.onPrimaryContainer),
+      );
     }
     return CircleAvatar(
       radius: 28,

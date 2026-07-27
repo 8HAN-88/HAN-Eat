@@ -357,6 +357,7 @@ class ChatConversation {
     required this.type,
     this.peer,
     this.title,
+    this.avatarUrl,
     this.memberCount = 0,
     this.pendingJoinRequestsCount = 0,
     this.membersPreview = const [],
@@ -385,6 +386,7 @@ class ChatConversation {
   final String type;
   final ChatUserBrief? peer;
   final String? title;
+  final String? avatarUrl;
   final int memberCount;
   final int pendingJoinRequestsCount;
   final List<ChatUserBrief> membersPreview;
@@ -453,6 +455,7 @@ class ChatConversation {
       type: convType,
       peer: peer,
       title: json['title'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
       memberCount: _parseInt(json['member_count']),
       pendingJoinRequestsCount: _parseInt(json['pending_join_requests_count']),
       membersPreview: preview,
@@ -486,6 +489,8 @@ class ChatConversation {
 
   ChatConversation copyWith({
     String? title,
+    String? avatarUrl,
+    bool clearAvatarUrl = false,
     int? memberCount,
     int? pendingJoinRequestsCount,
     List<ChatUserBrief>? membersPreview,
@@ -510,6 +515,7 @@ class ChatConversation {
       type: type,
       peer: peer,
       title: title ?? this.title,
+      avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       memberCount: memberCount ?? this.memberCount,
       pendingJoinRequestsCount:
           pendingJoinRequestsCount ?? this.pendingJoinRequestsCount,

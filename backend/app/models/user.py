@@ -60,6 +60,8 @@ class User(Base):
     device_platform = Column(String(20), nullable=True)  # android | ios | web
     country_code = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2 код страны (RU, US, etc.)
     last_seen_at = Column(DateTime, nullable=True)
+    # When False, last_seen_at is hidden from other users in chat payloads.
+    show_last_seen = Column(Boolean, default=True, nullable=False)
     phone_hash = Column(String(64), nullable=True, unique=True, index=True)
     phone_e164 = Column(String(20), nullable=True)
     phone_linked_at = Column(DateTime, nullable=True)

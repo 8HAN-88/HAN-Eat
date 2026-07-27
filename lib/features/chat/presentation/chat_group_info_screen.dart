@@ -2,14 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/share/system_share.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/media_upload_service.dart';
+import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
+import '../../../widgets/app_avatar.dart';
 import 'chat_group_moderation_log_screen.dart';
 import 'chat_media_gallery_screen.dart';
 
@@ -87,6 +91,45 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         _error = e;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _changeGroupPhoto() async {
+    if (!_canManagePostingPermissions || _busy) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 800,
+      maxHeight: 800,
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _busy = true);
+    try {
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: picked,
+        fileType: 'image',
+      );
+      var url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      url = ServerConfig.resolveMediaUrl(url);
+      final conv = await ChatService.updateGroupAvatar(
+        conversationId: _conversation.id,
+        avatarUrl: url,
+      );
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _busy = false;
+      });
+      widget.onConversationChanged?.call(conv);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -1475,12 +1518,48 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                     ListView(
                       children: [
                         const SizedBox(height: 16),
-                        CircleAvatar(
-                          radius: 40,
-                          child: Text(
-                            _conversation.displayTitle.characters.first
-                                .toUpperCase(),
-                            style: theme.textTheme.headlineMedium,
+                        Center(
+                          child: GestureDetector(
+                            onTap: (_busy || !_canManagePostingPermissions)
+                                ? null
+                                : _changeGroupPhoto,
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                CircleAvatar(
+                                  radius: 40,
+                                  backgroundImage: resolvedAvatarImage(
+                                    _conversation.avatarUrl,
+                                    decodeWidth: 160,
+                                  ),
+                                  child: resolvedAvatarImage(
+                                            _conversation.avatarUrl,
+                                            decodeWidth: 160,
+                                          ) ==
+                                          null
+                                      ? Text(
+                                          _conversation.displayTitle.characters
+                                              .first
+                                              .toUpperCase(),
+                                          style: theme.textTheme.headlineMedium,
+                                        )
+                                      : null,
+                                ),
+                                if (_canManagePostingPermissions)
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt_outlined,
+                                      size: 16,
+                                      color: theme.colorScheme.onPrimary,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 12),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -11,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
@@ -3748,6 +3750,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           title: 'Обои чата',
           onTap: () => unawaited(_showWallpaperPicker()),
         ),
+        if (!isSaved)
+          TelegramActionSheetAction(
+            icon: Icons.ios_share_outlined,
+            title: 'Экспорт чата',
+            onTap: () => unawaited(_exportChat()),
+          ),
         TelegramActionSheetAction(
           icon: _autoRetryOnLimitsEnabled
               ? Icons.autorenew_rounded
@@ -6063,6 +6071,85 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       text: text,
       webSnackBarText: 'Скопировано в буфер обмена',
     );
+  }
+
+  Future<void> _exportChat() async {
+    if (_conversation.protectContent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('В этом чате запрещён экспорт сообщений'),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final collected = <ChatMessage>[];
+      int? cursor;
+      var guard = 0;
+      while (guard < 200) {
+        guard += 1;
+        final page = await ChatService.listMessages(
+          conversationId: widget.conversationId,
+          cursor: cursor,
+          limit: 100,
+        );
+        collected.addAll(page.items);
+        if (!page.hasMore || page.nextCursor == null) break;
+        cursor = page.nextCursor;
+      }
+      collected.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      final fmt = DateFormat('yyyy-MM-dd HH:mm');
+      final buf = StringBuffer()
+        ..writeln('HAN Eat — экспорт чата')
+        ..writeln(_conversation.displayTitle)
+        ..writeln('Сообщений: ${collected.length}')
+        ..writeln('---');
+      for (final msg in collected) {
+        final who = msg.isMine
+            ? 'Вы'
+            : (msg.senderName?.trim().isNotEmpty == true
+                ? msg.senderName!.trim()
+                : 'Участник');
+        final body = _copyableText(msg).replaceAll('\n', ' ');
+        buf.writeln('${fmt.format(msg.createdAt.toLocal())} · $who: $body');
+      }
+      final text = buf.toString();
+      final filename = 'haneat_chat_${widget.conversationId}.txt';
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      if (kIsWeb) {
+        await SystemShare.shareText(
+          context,
+          text: text,
+          subject: filename,
+          webSnackBarText: 'Экспорт скопирован в буфер обмена',
+        );
+        return;
+      }
+      final file = XFile.fromData(
+        Uint8List.fromList(utf8.encode(text)),
+        mimeType: 'text/plain',
+        name: filename,
+      );
+      await Share.shareXFiles(
+        [file],
+        text: 'Экспорт чата «${_conversation.displayTitle}»',
+        subject: filename,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   void _replySelectedMessage() {

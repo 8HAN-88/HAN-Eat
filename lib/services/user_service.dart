@@ -429,23 +429,26 @@ class UserService {
     String? name,
     String? bio,
     bool? isPrivate,
+    bool? showLastSeen,
     String? avatarUrl,
     String? fcmToken,
   }) async {
     final uri = Uri.parse('$baseUrl/users/me');
+    final body = <String, dynamic>{
+      if (name != null) 'name': name,
+      if (bio != null) 'bio': bio,
+      if (isPrivate != null) 'is_private': isPrivate,
+      if (showLastSeen != null) 'show_last_seen': showLastSeen,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
+      if (fcmToken != null) 'fcm_token': fcmToken,
+    };
     try {
       var headers = await _authHeaders();
       var response = await http
           .patch(
             uri,
             headers: headers,
-            body: jsonEncode({
-              if (name != null) 'name': name,
-              if (bio != null) 'bio': bio,
-              if (isPrivate != null) 'is_private': isPrivate,
-              if (avatarUrl != null) 'avatar_url': avatarUrl,
-              if (fcmToken != null) 'fcm_token': fcmToken,
-            }),
+            body: jsonEncode(body),
           )
           .timeout(
             const Duration(seconds: 15),
@@ -463,13 +466,7 @@ class UserService {
         response = await http.patch(
           uri,
           headers: headers,
-          body: jsonEncode({
-            if (name != null) 'name': name,
-            if (bio != null) 'bio': bio,
-            if (isPrivate != null) 'is_private': isPrivate,
-            if (avatarUrl != null) 'avatar_url': avatarUrl,
-            if (fcmToken != null) 'fcm_token': fcmToken,
-          }),
+          body: jsonEncode(body),
         );
       }
 
@@ -542,6 +539,7 @@ class UserProfile {
       'avatar_url': json['avatar_url'],
       'bio': json['bio'],
       'is_private': json['is_private'],
+      'show_last_seen': json['show_last_seen'],
       'created_at': json['created_at'],
     };
 

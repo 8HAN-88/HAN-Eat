@@ -267,12 +267,15 @@ def _brief(
     send_restricted_until: Optional[datetime] = None,
     send_restriction_reason: Optional[str] = None,
 ) -> ChatUserBrief:
+    last_seen = user.last_seen_at
+    if not bool(getattr(user, "show_last_seen", True)):
+        last_seen = None
     return ChatUserBrief(
         id=user.id,
         name=user.name,
         username=user.username,
         avatar_url=user.avatar_url,
-        last_seen_at=user.last_seen_at,
+        last_seen_at=last_seen,
         is_bot=bool(getattr(user, "is_bot", False)),
         is_group_admin=is_group_admin,
         is_group_creator=is_group_creator,
@@ -616,6 +619,9 @@ def _conversation_response(
         type=conv.type,
         peer=_brief(peer) if peer else None,
         title=conv.title if conv.type in ("group", "saved") else None,
+        avatar_url=getattr(conv, "avatar_url", None)
+        if conv.type == "group"
+        else None,
         member_count=row.get("member_count", 0),
         pending_join_requests_count=pending_join_requests_count,
         members_preview=[
@@ -2952,6 +2958,7 @@ async def update_group_chat(
     try:
         if (
             body.title is None
+            and body.avatar_url is None
             and body.only_admins_can_post is None
             and body.join_by_request_enabled is None
             and body.slow_mode_seconds is None
@@ -2966,6 +2973,19 @@ async def update_group_chat(
                     conversation_id,
                     current_user.id,
                     f"🛡 { _user_label(current_user) } changed group title.",
+                )
+            )
+        if body.avatar_url is not None:
+            svc.set_group_avatar(
+                conversation_id,
+                current_user.id,
+                body.avatar_url,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    f"🛡 { _user_label(current_user) } changed group photo.",
                 )
             )
         if body.only_admins_can_post is not None:

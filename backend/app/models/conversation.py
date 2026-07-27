@@ -23,6 +23,7 @@ class Conversation(Base):
     direct_user_low_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     direct_user_high_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(120), nullable=True)
+    avatar_url = Column(Text, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     only_admins_can_post = Column(Boolean, default=False, nullable=False)
     join_by_request_enabled = Column(Boolean, default=False, nullable=False)

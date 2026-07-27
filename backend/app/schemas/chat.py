@@ -96,6 +96,7 @@ class ConversationResponse(BaseModel):
     type: str
     peer: Optional[ChatUserBrief] = None
     title: Optional[str] = None
+    avatar_url: Optional[str] = None
     member_count: int = 0
     pending_join_requests_count: int = 0
     members_preview: List[ChatUserBrief] = []
@@ -272,6 +273,7 @@ class MuteChatRequest(BaseModel):
 
 class UpdateGroupChatRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=120)
+    avatar_url: Optional[str] = Field(None, max_length=512)
     only_admins_can_post: Optional[bool] = None
     join_by_request_enabled: Optional[bool] = None
     slow_mode_seconds: Optional[int] = Field(default=None, ge=0, le=3600)

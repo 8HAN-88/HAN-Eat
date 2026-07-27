@@ -1135,6 +1135,7 @@ class User {
   final String? avatarUrl;
   final String? bio;
   final bool isPrivate;
+  final bool showLastSeen;
   final bool isAdmin;
   final bool isModerator;
   final DateTime createdAt;
@@ -1158,6 +1159,7 @@ class User {
     this.avatarUrl,
     this.bio,
     required this.isPrivate,
+    this.showLastSeen = true,
     this.isAdmin = false,
     this.isModerator = false,
     required this.createdAt,
@@ -1179,6 +1181,7 @@ class User {
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,
       isPrivate: json['is_private'] as bool? ?? false,
+      showLastSeen: json['show_last_seen'] as bool? ?? true,
       isAdmin: json['is_admin'] as bool? ?? false,
       isModerator: json['is_moderator'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -1201,6 +1204,7 @@ class User {
       'avatar_url': avatarUrl,
       'bio': bio,
       'is_private': isPrivate,
+      'show_last_seen': showLastSeen,
       'is_admin': isAdmin,
       'is_moderator': isModerator,
       'created_at': createdAt.toIso8601String(),
@@ -1224,6 +1228,7 @@ class User {
     String? legalConsentVersion,
     bool? phoneLinked,
     String? phone,
+    bool? showLastSeen,
     bool clearPhone = false,
   }) {
     return User(
@@ -1234,6 +1239,7 @@ class User {
       avatarUrl: avatarUrl,
       bio: bio,
       isPrivate: isPrivate,
+      showLastSeen: showLastSeen ?? this.showLastSeen,
       isAdmin: isAdmin,
       isModerator: isModerator,
       createdAt: createdAt,

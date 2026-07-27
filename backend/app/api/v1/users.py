@@ -328,6 +328,8 @@ async def update_user_profile(
         current_user.bio = request.bio
     if request.is_private is not None:
         current_user.is_private = request.is_private
+    if request.show_last_seen is not None:
+        current_user.show_last_seen = bool(request.show_last_seen)
     if request.avatar_url is not None:
         current_user.avatar_url = request.avatar_url
     if request.fcm_token is not None:
@@ -801,7 +803,11 @@ async def list_blocked_users(
                 name=u.name,
                 username=u.username,
                 avatar_url=getattr(u, "avatar_url", None),
-                last_seen_at=getattr(u, "last_seen_at", None),
+                last_seen_at=(
+                    getattr(u, "last_seen_at", None)
+                    if bool(getattr(u, "show_last_seen", True))
+                    else None
+                ),
                 is_bot=bool(getattr(u, "is_bot", False)),
             ).model_dump(mode="json")
             for u in users

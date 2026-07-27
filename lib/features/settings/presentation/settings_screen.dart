@@ -7,8 +7,10 @@ import '../../../app/app_router.dart';
 import '../../meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/user_service.dart';
 import '../../../services/web_app_update_service.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../app/theme_mode_controller.dart';
 import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
@@ -30,6 +32,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isAdmin = false;
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
+  bool _showLastSeen = true;
+  bool _privacyBusy = false;
 
   @override
   void initState() {
@@ -37,6 +41,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadUnreadCount();
     _checkAdminStatus();
     _loadChatUiPrefs();
+    _loadPrivacyPrefs();
   }
 
   Future<void> _loadUnreadCount() async {
@@ -95,6 +100,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _autoRetryOnLimitsEnabled = !enabled);
+    }
+  }
+
+  Future<void> _loadPrivacyPrefs() async {
+    try {
+      final user =
+          AuthService.instance.currentUser ?? await AuthService.getCurrentUser();
+      if (!mounted || user == null) return;
+      setState(() => _showLastSeen = user.showLastSeen);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleShowLastSeen(bool enabled) async {
+    if (_privacyBusy) return;
+    setState(() {
+      _showLastSeen = enabled;
+      _privacyBusy = true;
+    });
+    try {
+      final updated = await UserService.updateProfile(showLastSeen: enabled);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _showLastSeen = updated.showLastSeen;
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _showLastSeen = !enabled;
+        _privacyBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -313,6 +353,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _SettingsSectionHeader(title: 'Приватность'),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: SwitchListTile(
+                secondary: const Icon(Icons.visibility_outlined),
+                title: const Text('Показывать время в сети'),
+                subtitle: const Text(
+                  'Другие не увидят ваш last seen, если выключить',
+                ),
+                value: _showLastSeen,
+                onChanged: _privacyBusy ? null : _toggleShowLastSeen,
               ),
             ),
             const SizedBox(height: 24),

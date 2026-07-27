@@ -901,6 +901,19 @@ class ChatService:
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 
+    def set_group_avatar(
+        self, conversation_id: int, actor_id: int, avatar_url: Optional[str]
+    ) -> Conversation:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv = self._get_group_or_error(conversation_id)
+        if not self._can_manage_group_posting_permissions(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        url = (avatar_url or "").strip()
+        conv.avatar_url = url or None
+        conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        return conv
+
     def add_group_members(
         self, conversation_id: int, actor_id: int, user_ids: List[int]
     ) -> int:
