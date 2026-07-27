@@ -1464,6 +1464,7 @@ async def send_message(
             inline_keyboard_json=json.dumps(inline_keyboard_payload, ensure_ascii=False)
             if inline_keyboard_payload
             else None,
+            silent=bool(body.silent),
         )
         db.commit()
         db.refresh(msg)
@@ -2289,6 +2290,11 @@ async def delete_message(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "bad_scope":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid scope")
+        if code == "too_old":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Message is too old to delete for everyone",
+            )
         raise
     if applied == "all":
         _emit(

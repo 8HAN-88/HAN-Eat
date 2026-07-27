@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/app_router.dart';
 import '../../../core/config/legal_urls.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import 'blocked_users_screen.dart';
 
 class SupportSecurityScreen extends StatelessWidget {
   const SupportSecurityScreen({super.key});
@@ -132,6 +133,20 @@ class SupportSecurityScreen extends StatelessWidget {
                       SupportContactRoute.withSubjectMessage(
                         'Жалоба на контент',
                         'Опишите ссылку на пост/канал и суть нарушения.',
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.block_outlined),
+                  title: const Text('Чёрный список'),
+                  subtitle: const Text('Заблокированные пользователи'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (_) => const BlockedUsersScreen(),
                       ),
                     );
                   },

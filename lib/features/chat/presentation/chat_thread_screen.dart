@@ -69,6 +69,7 @@ import '../../../utils/video_player_helper.dart';
 import '../../../widgets/inline_video_player.dart';
 import '../../../widgets/chat_target_picker_sheet.dart';
 import '../../../widgets/chat_sticker_tile.dart';
+import '../../../widgets/report_content_dialog.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
@@ -385,6 +386,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _composerButtonSide = 40.0;
   static const _telegramAccent = AppColors.primary;
   static const _uploadAccent = AppColors.primary;
+  static const _deleteForEveryoneMaxAge = Duration(hours: 48);
+
+  bool _canDeleteMessageForEveryone(ChatMessage msg) {
+    if (!msg.isMine || msg.id <= 0) return false;
+    return DateTime.now().difference(msg.createdAt.toLocal()) <=
+        _deleteForEveryoneMaxAge;
+  }
 
   @override
   void initState() {
@@ -1358,6 +1366,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             caption: pending.caption,
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
           );
           if (_chatIsGifMediaUrl(mediaUrl)) {
             unawaited(ChatRecentGifsStore.remember(mediaUrl));
@@ -1369,6 +1378,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             caption: pending.caption,
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
           );
         case _PendingMediaKind.file:
           msg = await ChatService.sendFile(
@@ -1377,6 +1387,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             fileName: pending.fileName ?? 'file',
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
           );
         case _PendingMediaKind.voice:
           msg = await ChatService.sendVoice(
@@ -1385,6 +1396,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             durationSec: pending.voiceDurationSec ?? 1,
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
           );
       }
       if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
@@ -3847,7 +3859,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: 'О группе',
               onTap: _openGroupInfo,
             ),
-          if (!isGroup && !isSaved && peer != null)
+          if (!isGroup && !isSaved && peer != null) ...[
+            TelegramActionSheetAction(
+              icon: Icons.flag_outlined,
+              title: 'Пожаловаться',
+              onTap: () => unawaited(reportUserWithDialog(context, peer.id)),
+            ),
             TelegramActionSheetAction(
               icon: _conversation.peerBlockedByMe
                   ? Icons.lock_open_outlined
@@ -3858,6 +3875,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               destructive: !_conversation.peerBlockedByMe,
               onTap: _conversation.peerBlockedByMe ? _unblockPeer : _blockPeer,
             ),
+          ],
           if (isGroup)
             TelegramActionSheetAction(
               icon: Icons.logout,
@@ -5671,6 +5689,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         voiceDurationSec: durationSec,
         replyToMessageId: _replyTo?.id,
         totalBytes: totalBytes,
+        silent: mode == 'silent',
       ));
     } finally {
       _voiceSending = false;
@@ -5800,7 +5819,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final selected = _selectedMessages;
     if (selected.isEmpty) return;
 
-    final canDeleteForAll = selected.every((m) => m.isMine);
+    final canDeleteForAll =
+        selected.every(_canDeleteMessageForEveryone);
     final scope = await showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -5813,7 +5833,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
           content: Text(
             canDeleteForAll
-                ? 'Можно убрать только у себя или удалить у всех участников.'
+                ? 'Можно убрать только у себя или удалить у всех участников (до 48 часов).'
                 : 'Выбранные сообщения исчезнут только в вашем чате.',
           ),
           actions: [
@@ -6062,6 +6082,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'translate':
         unawaited(_translateMessage(msg));
         break;
+      case 'report':
+        unawaited(_reportMessage(msg));
+        break;
       case 'readers':
         unawaited(_showMessageReaders(msg));
         break;
@@ -6072,6 +6095,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _enterSelectionMode(msg);
         break;
     }
+  }
+
+  Future<void> _reportMessage(ChatMessage msg) async {
+    if (msg.id <= 0 || msg.isMine) return;
+    await reportChatMessageWithDialog(
+      context,
+      conversationId: widget.conversationId,
+      messageId: msg.id,
+    );
   }
 
   Future<void> _translateMessage(ChatMessage msg) async {
@@ -6235,6 +6267,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _confirmDeleteMessage(ChatMessage msg) async {
+    final canDeleteForAll = _canDeleteMessageForEveryone(msg);
     final scope = await showDialog<String>(
       context: context,
       builder: (ctx) {
@@ -6242,9 +6275,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         return AlertDialog(
           title: const Text('Удалить сообщение?'),
           content: Text(
-            msg.isMine
-                ? 'Можно убрать только у себя или удалить у всех участников.'
-                : 'Сообщение исчезнет только в вашем чате.',
+            canDeleteForAll
+                ? 'Можно убрать только у себя или удалить у всех участников (до 48 часов).'
+                : msg.isMine
+                    ? 'Прошло больше 48 часов — можно удалить только у себя.'
+                    : 'Сообщение исчезнет только в вашем чате.',
           ),
           actions: [
             TextButton(
@@ -6255,7 +6290,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onPressed: () => Navigator.pop(ctx, 'me'),
               child: Text('Удалить у меня', style: TextStyle(color: err)),
             ),
-            if (msg.isMine)
+            if (canDeleteForAll)
               TextButton(
                 onPressed: () => Navigator.pop(ctx, 'all'),
                 child: Text('Удалить у всех', style: TextStyle(color: err)),
@@ -7200,6 +7235,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canCopyLink: msg.id > 0,
       canForward: !protectContent,
       canTranslate: copyable,
+      canReport: !msg.isMine && msg.id > 0,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -7231,6 +7267,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               leading: const Icon(Icons.send_rounded),
               title: const Text('Отправить сейчас'),
               onTap: () => Navigator.pop(ctx, 'now'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_off_outlined),
+              title: const Text('Без звука'),
+              subtitle: const Text('Получатель не получит уведомление'),
+              onTap: () => Navigator.pop(ctx, 'silent'),
             ),
             ListTile(
               leading: const Icon(Icons.schedule_outlined),
@@ -7749,6 +7791,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             content: pending.text,
             replyToMessageId: pending.replyToMessageId,
             clientMessageId: pending.clientMessageId,
+            silent: pending.silent,
           );
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
@@ -7854,7 +7897,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _sendText() async {
+  Future<void> _sendText({bool silent = false}) async {
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
         (_editingMessage!.type == 'image' ||
@@ -8008,6 +8051,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyId,
       clientMessageId: clientMessageId,
       tempId: tempId,
+      silent: silent,
     );
     setState(() {
       _messages.add(optimistic);
@@ -8179,6 +8223,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_recording || _editingMessage != null) return;
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    final mode = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.notifications_off_outlined),
+              title: const Text('Отправить без звука'),
+              subtitle: const Text('Без push-уведомления получателю'),
+              onTap: () => Navigator.pop(ctx, 'silent'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('Отложить'),
+              onTap: () => Navigator.pop(ctx, 'schedule'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (mode == null || !mounted) return;
+    if (mode == 'silent') {
+      await _sendText(silent: true);
+      return;
+    }
 
     final delivery = await _pickScheduleDelivery();
     if (delivery == null || !mounted) return;
@@ -9002,27 +9075,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         latitude: pos.latitude,
         longitude: pos.longitude,
       );
-      final mode = await showModalBottomSheet<String>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.send_rounded),
-                title: const Text('Отправить сейчас'),
-                onTap: () => Navigator.pop(ctx, 'now'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.schedule_outlined),
-                title: const Text('Отложить'),
-                onTap: () => Navigator.pop(ctx, 'schedule'),
-              ),
-            ],
-          ),
-        ),
-      );
+      final mode = await _askSendOrSchedule();
       if (mode == null || !mounted) return;
       if (mode == 'schedule') {
         final delivery = await _pickScheduleDelivery();
@@ -9046,6 +9099,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         content: content,
         replyToMessageId: _replyTo?.id,
+        silent: mode == 'silent',
       );
       setState(() => _replyTo = null);
       AppHaptics.selection();
@@ -9157,6 +9211,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         options: draft.options,
         settings: draft.settings.toJson(),
         replyToMessageId: _replyTo?.id,
+        silent: mode == 'silent',
       );
       if (!mounted) return;
       setState(() {
@@ -9216,6 +9271,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: resolved,
         fileName: name,
         replyToMessageId: _replyTo?.id,
+        silent: mode == 'silent',
       );
       if (!mounted) return;
       setState(() {
@@ -9570,6 +9626,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       clientMessageId: clientMessageId ?? const Uuid().v4(),
       replyToMessageId: replyToId ?? _replyTo?.id,
       totalBytes: totalBytes,
+      silent: mode == 'silent',
     ));
   }
 
@@ -11657,6 +11714,7 @@ class _PendingMediaSend {
     this.totalBytes,
     this.previewBytes,
     this.payloadBytes,
+    this.silent = false,
   });
 
   final int tempId;
@@ -11671,6 +11729,7 @@ class _PendingMediaSend {
   final Uint8List? previewBytes;
   /// Full bytes for Hive outbox / reload retry (web-safe).
   Uint8List? payloadBytes;
+  final bool silent;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -11683,12 +11742,14 @@ class _PendingTextSend {
     required this.clientMessageId,
     required this.tempId,
     this.replyToMessageId,
+    this.silent = false,
   });
 
   final String text;
   final String clientMessageId;
   final int tempId;
   final int? replyToMessageId;
+  final bool silent;
   int attempts = 0;
   int? lastRetryAfterSeconds;
   DateTime? lastLimitedAt;

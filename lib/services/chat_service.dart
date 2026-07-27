@@ -550,6 +550,7 @@ class ChatService {
     required String content,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -557,6 +558,7 @@ class ChatService {
       content: content,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -565,6 +567,7 @@ class ChatService {
     required String content,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -572,6 +575,7 @@ class ChatService {
       content: content,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -674,6 +678,7 @@ class ChatService {
     required int durationSec,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -682,6 +687,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -691,6 +697,7 @@ class ChatService {
     String caption = '',
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -699,6 +706,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -708,6 +716,7 @@ class ChatService {
     required String fileName,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -716,6 +725,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -725,6 +735,7 @@ class ChatService {
     String caption = '',
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -733,6 +744,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -742,6 +754,7 @@ class ChatService {
     int durationSec = 1,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -750,6 +763,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -759,6 +773,7 @@ class ChatService {
     String emoji = '',
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -767,6 +782,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      silent: silent,
     );
   }
 
@@ -777,6 +793,7 @@ class ChatService {
     String description = '',
     Map<String, dynamic>? settings,
     int? replyToMessageId,
+    bool silent = false,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
@@ -790,6 +807,7 @@ class ChatService {
         'poll_options': options,
         if (settings != null) 'poll_settings': settings,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (silent) 'silent': true,
       }),
     );
     _ensureOk(response, 'Не удалось отправить опрос');
@@ -883,6 +901,7 @@ class ChatService {
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
+    bool silent = false,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -897,6 +916,7 @@ class ChatService {
         if (mediaUrl != null) 'media_url': mediaUrl,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         if (clientMessageId != null) 'client_message_id': clientMessageId,
+        if (silent) 'silent': true,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
@@ -1483,6 +1503,23 @@ class ChatService {
     final uri = Uri.parse('$_base/users/$userId/block');
     final response = await _delete(uri);
     _ensureOk(response, 'Не удалось разблокировать');
+  }
+
+  static Future<List<ChatUserBrief>> listBlockedUsers() async {
+    final uri = Uri.parse('$_base/users/me/blocked');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить чёрный список');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final out = <ChatUserBrief>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        try {
+          out.add(ChatUserBrief.fromJson(raw));
+        } catch (_) {}
+      }
+    }
+    return out;
   }
 
   static Future<void> sendTyping({required int conversationId}) async {

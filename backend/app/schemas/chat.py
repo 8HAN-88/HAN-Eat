@@ -172,6 +172,7 @@ class SendMessageRequest(BaseModel):
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
+    silent: bool = False
 
 
 class ScheduleMessageRequest(BaseModel):

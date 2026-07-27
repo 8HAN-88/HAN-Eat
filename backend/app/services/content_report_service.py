@@ -193,6 +193,14 @@ class ContentReportService:
 
             ch = self.db.query(Channel).filter(Channel.id == content_id).first()
             return ch.admin_user_id if ch else None
+        if content_type == "user":
+            u = self.db.query(User).filter(User.id == content_id).first()
+            return u.id if u else None
+        if content_type == "message":
+            from app.models.conversation import Message
+
+            m = self.db.query(Message).filter(Message.id == content_id).first()
+            return m.sender_id if m else None
         return None
 
     def list_recent_reports(

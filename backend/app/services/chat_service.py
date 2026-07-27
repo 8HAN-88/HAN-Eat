@@ -1655,6 +1655,20 @@ class ChatService:
             is not None
         )
 
+    def list_blocked_users(self, blocker_id: int) -> List[User]:
+        rows = (
+            self.db.query(User)
+            .join(UserBlock, UserBlock.blocked_user_id == User.id)
+            .filter(
+                UserBlock.blocker_user_id == blocker_id,
+                User.deleted_at.is_(None),
+            )
+            .order_by(UserBlock.id.desc())
+            .limit(500)
+            .all()
+        )
+        return rows
+
     def get_messages(
         self,
         conversation_id: int,
@@ -2025,6 +2039,7 @@ class ChatService:
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
         inline_keyboard_json: Optional[str] = None,
+        silent: bool = False,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2069,7 +2084,13 @@ class ChatService:
                     member.last_group_message_at = now
 
         self.db.flush()
-        self._notify_new_message(msg, sender_id=sender_id, msg_type=msg_type, content=content)
+        self._notify_new_message(
+            msg,
+            sender_id=sender_id,
+            msg_type=msg_type,
+            content=content,
+            silent=bool(silent),
+        )
         return msg, True
 
     def forward_message(
@@ -2209,7 +2230,11 @@ class ChatService:
         sender_id: int,
         msg_type: str,
         content: str,
+        silent: bool = False,
     ) -> None:
+        # Telegram «отправка без звука»: сообщение доставляется, push/inbox не шлём.
+        if silent:
+            return
         conversation_id = msg.conversation_id
         members = (
             self.db.query(ConversationMember)
@@ -2513,6 +2538,14 @@ class ChatService:
 
         if msg.sender_id != user_id:
             raise ValueError("forbidden")
+        created = msg.created_at
+        if created is not None:
+            created_aware = created
+            if created_aware.tzinfo is None:
+                created_aware = created_aware.replace(tzinfo=timezone.utc)
+            age = datetime.now(timezone.utc) - created_aware.astimezone(timezone.utc)
+            if age.total_seconds() > 48 * 3600:
+                raise ValueError("too_old")
         msg.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
         conv = (
             self.db.query(Conversation)

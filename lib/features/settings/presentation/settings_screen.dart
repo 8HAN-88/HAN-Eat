@@ -15,6 +15,7 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
+import 'blocked_users_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -172,6 +173,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         icon: Icons.verified_user_outlined,
         subtitle: 'GDPR, модерация, жалобы, правила сообщества',
         onTap: () => context.push('/support-security'),
+      ),
+      _SettingsItem(
+        title: 'Чёрный список',
+        icon: Icons.block_outlined,
+        subtitle: 'Заблокированные пользователи',
+        onTap: () {
+          Navigator.of(context).push<void>(
+            MaterialPageRoute(builder: (_) => const BlockedUsersScreen()),
+          );
+        },
       ),
       _SettingsItem(
         title: 'Резервная копия',

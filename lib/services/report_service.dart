@@ -108,4 +108,69 @@ class ReportService {
     final error = jsonDecode(response.body) as Map<String, dynamic>;
     _throwFromResponse(response.statusCode, error);
   }
+
+  /// Пожаловаться на пользователя
+  static Future<void> reportUser({
+    required int userId,
+    required String reason,
+    String? comment,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw const ApiClientException(message: 'Войдите, чтобы отправить жалобу');
+    }
+
+    final uri = Uri.parse('$baseUrl/users/$userId/report');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'reason': reason,
+        if (comment != null && comment.isNotEmpty) 'comment': comment,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return;
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>;
+    _throwFromResponse(response.statusCode, error);
+  }
+
+  /// Пожаловаться на сообщение в чате
+  static Future<void> reportMessage({
+    required int conversationId,
+    required int messageId,
+    required String reason,
+    String? comment,
+  }) async {
+    final token = await AuthService.getAccessTokenForApi();
+    if (token == null) {
+      throw const ApiClientException(message: 'Войдите, чтобы отправить жалобу');
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/chats/$conversationId/messages/$messageId/report',
+    );
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'reason': reason,
+        if (comment != null && comment.isNotEmpty) 'comment': comment,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return;
+    }
+    final error = jsonDecode(response.body) as Map<String, dynamic>;
+    _throwFromResponse(response.statusCode, error);
+  }
 }

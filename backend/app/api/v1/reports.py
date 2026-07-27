@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.post import Post
 from app.models.comment import Comment
 from app.models.community import Channel
+from app.models.conversation import Message, ConversationMember
 from app.services.analytics_service import AnalyticsService
 from app.services.content_report_service import (
     ContentReportService,
@@ -164,6 +165,105 @@ async def report_channel(
         content_id=channel_id,
         reporter_id=current_user.id,
         author_id=channel.admin_user_id,
+        reason=request.reason,
+        escalated=burst,
+    )
+    db.commit()
+    return {"reported": True, "escalated": burst}
+
+
+@router.post("/users/{user_id}/report")
+async def report_user(
+    user_id: int,
+    request: ReportRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Пожаловаться на пользователя."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot report yourself",
+        )
+    user = (
+        db.query(User)
+        .filter(User.id == user_id, User.deleted_at.is_(None))
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    svc = ContentReportService(db)
+    _, burst = svc.create_report(
+        content_type="user",
+        content_id=user_id,
+        reporter_user_id=current_user.id,
+        reason=request.reason,
+        comment=request.comment,
+    )
+    _log_content_report(
+        db,
+        content_type="user",
+        content_id=user_id,
+        reporter_id=current_user.id,
+        author_id=user_id,
+        reason=request.reason,
+        escalated=burst,
+    )
+    db.commit()
+    return {"reported": True, "escalated": burst}
+
+
+@router.post("/chats/{conversation_id}/messages/{message_id}/report")
+async def report_chat_message(
+    conversation_id: int,
+    message_id: int,
+    request: ReportRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Пожаловаться на сообщение в чате."""
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    msg = (
+        db.query(Message)
+        .filter(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+    if msg.sender_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot report your own message",
+        )
+
+    svc = ContentReportService(db)
+    _, burst = svc.create_report(
+        content_type="message",
+        content_id=message_id,
+        reporter_user_id=current_user.id,
+        reason=request.reason,
+        comment=request.comment,
+    )
+    _log_content_report(
+        db,
+        content_type="message",
+        content_id=message_id,
+        reporter_id=current_user.id,
+        author_id=msg.sender_id,
         reason=request.reason,
         escalated=burst,
     )

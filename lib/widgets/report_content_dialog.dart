@@ -247,3 +247,56 @@ Future<void> reportChannelWithDialog(BuildContext context, int channelId) async 
     await _showReportSuccess(context);
   }
 }
+
+/// Жалоба на пользователя через API.
+Future<void> reportUserWithDialog(BuildContext context, int userId) async {
+  String? submittedReason;
+  final ok = await showReportContentDialog(
+    context,
+    onSubmit: (reason, comment) async {
+      submittedReason = reason;
+      await ReportService.reportUser(
+        userId: userId,
+        reason: reason,
+        comment: comment,
+      );
+    },
+  );
+  if (ok == true) {
+    await _logReportSubmitted(
+      entityType: 'user',
+      entityId: userId,
+      reason: submittedReason ?? 'other',
+    );
+    await _showReportSuccess(context);
+  }
+}
+
+/// Жалоба на сообщение в чате через API.
+Future<void> reportChatMessageWithDialog(
+  BuildContext context, {
+  required int conversationId,
+  required int messageId,
+}) async {
+  String? submittedReason;
+  final ok = await showReportContentDialog(
+    context,
+    onSubmit: (reason, comment) async {
+      submittedReason = reason;
+      await ReportService.reportMessage(
+        conversationId: conversationId,
+        messageId: messageId,
+        reason: reason,
+        comment: comment,
+      );
+    },
+  );
+  if (ok == true) {
+    await _logReportSubmitted(
+      entityType: 'message',
+      entityId: messageId,
+      reason: submittedReason ?? 'other',
+    );
+    await _showReportSuccess(context);
+  }
+}

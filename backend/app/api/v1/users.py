@@ -765,6 +765,30 @@ async def update_notification_preferences(
     return NotificationPreferencesResponse.model_validate(prefs)
 
 
+@router.get("/me/blocked")
+async def list_blocked_users(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.schemas.chat import ChatUserBrief
+
+    svc = ChatService(db)
+    users = svc.list_blocked_users(current_user.id)
+    return {
+        "items": [
+            ChatUserBrief(
+                id=u.id,
+                name=u.name,
+                username=u.username,
+                avatar_url=getattr(u, "avatar_url", None),
+                last_seen_at=getattr(u, "last_seen_at", None),
+                is_bot=bool(getattr(u, "is_bot", False)),
+            ).model_dump(mode="json")
+            for u in users
+        ]
+    }
+
+
 @router.post("/{user_id}/block")
 async def block_user(
     user_id: int,
