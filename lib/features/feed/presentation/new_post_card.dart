@@ -34,6 +34,7 @@ import '../../../services/feed_cache_service.dart';
 import '../../../services/feed_analytics_service.dart';
 import '../../../services/paid_features_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'widgets/paid_content_paywall_card.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
@@ -1666,8 +1667,38 @@ class _NewPostCardState extends State<NewPostCard>
                     description: post.description,
                   ),
                 ],
+                if (widget.post.previewComments.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  for (final preview in widget.post.previewComments.take(2))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: GestureDetector(
+                        onTap: () => unawaited(_openComments()),
+                        child: RichText(
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              height: 1.3,
+                              color: scheme.onSurface,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: '${preview.authorName} ',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              TextSpan(text: preview.text),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
                 if (_displayCommentsCount > 0) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   GestureDetector(
                     onTap: () => unawaited(_openComments()),
                     child: Text(
@@ -1704,7 +1735,15 @@ class _NewPostCardState extends State<NewPostCard>
         source: 'post_card',
         target: 'comments',
       );
-      await widget.onCommentTap?.call();
+      if (widget.onCommentTap != null) {
+        await widget.onCommentTap!.call();
+      } else {
+        await showPostCommentsSheet(
+          context,
+          postId: widget.post.id,
+          post: widget.post,
+        );
+      }
       await _refreshCommentsCount();
     } finally {
       if (mounted) {

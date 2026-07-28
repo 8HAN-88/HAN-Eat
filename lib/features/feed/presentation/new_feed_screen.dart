@@ -17,6 +17,7 @@ import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import 'new_post_card.dart';
 import 'widgets/feed_stories_strip.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -452,8 +453,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                                 source: 'recommendations_$_feedType',
                                 target: 'comments',
                               );
-                              return context
-                                  .push(PostCommentsRoute.pathFor(post.id));
+                              return showPostCommentsSheet(
+                                context,
+                                postId: post.id,
+                                post: post,
+                              );
                             },
                             onPostDeleted: () {
                               setState(() {

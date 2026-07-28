@@ -1708,6 +1708,51 @@ class FeedService:
             Comment.deleted_at.is_(None)
         ).group_by(Comment.post_id).all()
         comments_counts_dict = {row.post_id: row.count for row in comments_counts}
+
+        # 2b. Instagram-style preview: up to 2 latest root comments per post
+        preview_comments_dict: dict[int, list[dict]] = {pid: [] for pid in post_ids}
+        if post_ids:
+            rn = func.row_number().over(
+                partition_by=Comment.post_id,
+                order_by=Comment.created_at.desc(),
+            ).label("rn")
+            preview_subq = (
+                self.db.query(
+                    Comment.id.label("id"),
+                    Comment.post_id.label("post_id"),
+                    Comment.user_id.label("user_id"),
+                    Comment.text.label("text"),
+                    rn,
+                )
+                .filter(
+                    Comment.post_id.in_(post_ids),
+                    Comment.deleted_at.is_(None),
+                    Comment.parent_id.is_(None),
+                )
+                .subquery()
+            )
+            preview_rows = (
+                self.db.query(
+                    preview_subq.c.id,
+                    preview_subq.c.post_id,
+                    preview_subq.c.user_id,
+                    preview_subq.c.text,
+                    User.name,
+                )
+                .join(User, User.id == preview_subq.c.user_id)
+                .filter(preview_subq.c.rn <= 2)
+                .order_by(preview_subq.c.post_id.asc(), preview_subq.c.rn.asc())
+                .all()
+            )
+            for comment_id, post_id, comment_user_id, text, author_name in preview_rows:
+                preview_comments_dict.setdefault(post_id, []).append(
+                    {
+                        "id": int(comment_id),
+                        "user_id": int(comment_user_id),
+                        "author_name": author_name or "Пользователь",
+                        "text": (text or "").strip()[:280],
+                    }
+                )
         
         # 3. Загружаем все счетчики репостов одним запросом
         reposts_counts = self.db.query(
@@ -1856,6 +1901,7 @@ class FeedService:
                 "tags": post.tags,
                 "likes_count": likes_counts_dict.get(post.id, 0),
                 "comments_count": comments_counts_dict.get(post.id, 0),
+                "preview_comments": preview_comments_dict.get(post.id, []),
                 "reposts_count": reposts_counts_dict.get(post.id, 0),
                 "is_liked": post.id in user_liked_post_ids,
                 "is_saved": post.id in user_saved_post_ids,

@@ -16,6 +16,7 @@ import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import 'new_post_card.dart';
 import 'widgets/feed_stories_strip.dart';
+import '../../comments/presentation/show_post_comments_sheet.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../services/auth_service.dart';
@@ -440,8 +441,11 @@ class _SubscriptionsFeedScreenState
                                 source: 'following',
                                 target: 'comments',
                               );
-                              return context
-                                  .push(PostCommentsRoute.pathFor(post.id));
+                              return showPostCommentsSheet(
+                                context,
+                                postId: post.id,
+                                post: post,
+                              );
                             },
                             onPostDeleted: () {
                               setState(() {
