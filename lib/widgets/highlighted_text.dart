@@ -18,6 +18,7 @@ class HighlightedText extends StatefulWidget {
     this.highlightMentions = false,
     this.mentionColor,
     this.onMentionTap,
+    this.mentionLabels,
     this.parseMarkup = false,
   });
 
@@ -31,6 +32,8 @@ class HighlightedText extends StatefulWidget {
   final bool highlightMentions;
   final Color? mentionColor;
   final ValueChanged<String>? onMentionTap;
+  /// Optional display labels for handles (e.g. `id42` → `Anna`).
+  final Map<String, String>? mentionLabels;
   final bool parseMarkup;
 
   @override
@@ -40,7 +43,7 @@ class HighlightedText extends StatefulWidget {
 class _HighlightedTextState extends State<HighlightedText> {
   final Set<int> _revealedSpoilers = {};
 
-  static final _mentionRe = RegExp(r'@[a-zA-Z0-9_]{2,}');
+  static final _mentionRe = RegExp(r'@id\d+|@[a-zA-Z0-9_]{2,}');
   static final _markupRe = RegExp(
     r'\|\|(.+?)\|\|'
     r'|\*(.+?)\*'
@@ -72,17 +75,21 @@ class _HighlightedTextState extends State<HighlightedText> {
       }
       final mention = m.group(0)!;
       final handle = mention.substring(1);
+      final label = widget.mentionLabels?[handle];
+      final display = (label != null && label.trim().isNotEmpty)
+          ? '@${label.trim()}'
+          : mention;
       if (widget.onMentionTap != null) {
         spans.add(
           TextSpan(
-            text: mention,
+            text: display,
             style: mentionStyle,
             recognizer: TapGestureRecognizer()
               ..onTap = () => widget.onMentionTap!(handle),
           ),
         );
       } else {
-        spans.add(TextSpan(text: mention, style: mentionStyle));
+        spans.add(TextSpan(text: display, style: mentionStyle));
       }
       start = m.end;
     }

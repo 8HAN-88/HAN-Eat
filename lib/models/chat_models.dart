@@ -373,6 +373,7 @@ class ChatConversation {
     this.slowModeSeconds = 0,
     this.antiFloodMaxMessagesPerMinute = 0,
     this.protectContent = false,
+    this.autoDeleteSeconds = 0,
     this.amIGroupAdmin = false,
     this.amICanManageMembers = false,
     this.amICanManagePostingPermissions = false,
@@ -402,6 +403,7 @@ class ChatConversation {
   final int slowModeSeconds;
   final int antiFloodMaxMessagesPerMinute;
   final bool protectContent;
+  final int autoDeleteSeconds;
   final bool amIGroupAdmin;
   final bool amICanManageMembers;
   final bool amICanManagePostingPermissions;
@@ -474,6 +476,7 @@ class ChatConversation {
       antiFloodMaxMessagesPerMinute:
           _parseInt(json['anti_flood_max_messages_per_minute']),
       protectContent: json['protect_content'] as bool? ?? false,
+      autoDeleteSeconds: _parseInt(json['auto_delete_seconds']),
       amIGroupAdmin: json['am_i_group_admin'] as bool? ?? false,
       amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
       amICanManagePostingPermissions:
@@ -502,6 +505,7 @@ class ChatConversation {
     int? slowModeSeconds,
     int? antiFloodMaxMessagesPerMinute,
     bool? protectContent,
+    int? autoDeleteSeconds,
     bool? amIGroupAdmin,
     bool? amICanManageMembers,
     bool? amICanManagePostingPermissions,
@@ -533,6 +537,7 @@ class ChatConversation {
       antiFloodMaxMessagesPerMinute:
           antiFloodMaxMessagesPerMinute ?? this.antiFloodMaxMessagesPerMinute,
       protectContent: protectContent ?? this.protectContent,
+      autoDeleteSeconds: autoDeleteSeconds ?? this.autoDeleteSeconds,
       amIGroupAdmin: amIGroupAdmin ?? this.amIGroupAdmin,
       amICanManageMembers: amICanManageMembers ?? this.amICanManageMembers,
       amICanManagePostingPermissions:
@@ -806,6 +811,9 @@ class ChatFolderFilters {
     this.channels = false,
     this.direct = false,
     this.unreadOnly = false,
+    this.excludeMuted = false,
+    this.excludeArchived = false,
+    this.excludeBots = false,
   });
 
   final bool groups;
@@ -813,22 +821,41 @@ class ChatFolderFilters {
   /// Private / direct chats (Telegram "Личные чаты").
   final bool direct;
   final bool unreadOnly;
+  final bool excludeMuted;
+  final bool excludeArchived;
+  final bool excludeBots;
 
-  bool get isEmpty => !groups && !channels && !direct && !unreadOnly;
+  bool get isEmpty =>
+      !groups &&
+      !channels &&
+      !direct &&
+      !unreadOnly &&
+      !excludeMuted &&
+      !excludeArchived &&
+      !excludeBots;
 
   bool get hasTypeFilter => groups || channels || direct;
+
+  bool get hasExcludeFilter =>
+      excludeMuted || excludeArchived || excludeBots;
 
   ChatFolderFilters copyWith({
     bool? groups,
     bool? channels,
     bool? direct,
     bool? unreadOnly,
+    bool? excludeMuted,
+    bool? excludeArchived,
+    bool? excludeBots,
   }) {
     return ChatFolderFilters(
       groups: groups ?? this.groups,
       channels: channels ?? this.channels,
       direct: direct ?? this.direct,
       unreadOnly: unreadOnly ?? this.unreadOnly,
+      excludeMuted: excludeMuted ?? this.excludeMuted,
+      excludeArchived: excludeArchived ?? this.excludeArchived,
+      excludeBots: excludeBots ?? this.excludeBots,
     );
   }
 
@@ -841,6 +868,9 @@ class ChatFolderFilters {
           json['private'] as bool? ??
           false,
       unreadOnly: json['unread_only'] as bool? ?? false,
+      excludeMuted: json['exclude_muted'] as bool? ?? false,
+      excludeArchived: json['exclude_archived'] as bool? ?? false,
+      excludeBots: json['exclude_bots'] as bool? ?? false,
     );
   }
 
@@ -849,6 +879,9 @@ class ChatFolderFilters {
         'channels': channels,
         'direct': direct,
         'unread_only': unreadOnly,
+        'exclude_muted': excludeMuted,
+        'exclude_archived': excludeArchived,
+        'exclude_bots': excludeBots,
       };
 }
 

@@ -1304,6 +1304,21 @@ class ChatService {
     );
   }
 
+  static Future<ChatConversation> setAutoDeleteSeconds({
+    required int conversationId,
+    required int seconds,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'auto_delete_seconds': seconds}),
+    );
+    _ensureOk(response, 'Не удалось обновить автоудаление');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatConversation> setGroupSlowModeSeconds({
     required int conversationId,
     required int seconds,

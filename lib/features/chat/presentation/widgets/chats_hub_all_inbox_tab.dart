@@ -259,28 +259,44 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     if (entry is ChatInboxEntry) {
       final chat = entry.chat;
       if (chat.isSaved) return false;
-      if (folder.containsConversation(chat.id)) return true;
-      if (filters.isEmpty) return false;
-      if (filters.hasTypeFilter) {
-        final typeOk = (filters.groups && chat.isGroup) ||
-            (filters.direct && !chat.isGroup);
-        if (!typeOk) return false;
-      } else if (!filters.unreadOnly) {
+      final explicit = folder.containsConversation(chat.id);
+      if (!explicit) {
+        if (filters.isEmpty) return false;
+        if (filters.hasTypeFilter) {
+          final typeOk = (filters.groups && chat.isGroup) ||
+              (filters.direct && !chat.isGroup);
+          if (!typeOk) return false;
+        } else if (!filters.unreadOnly && !filters.hasExcludeFilter) {
+          return false;
+        } else if (!filters.unreadOnly && filters.hasExcludeFilter) {
+          // Exclude-only filters still need a type or unread rule to match.
+          return false;
+        }
+        if (filters.unreadOnly && chat.unreadCount <= 0) return false;
+      }
+      if (filters.excludeMuted && chat.muted) return false;
+      if (filters.excludeArchived && chat.archived) return false;
+      if (filters.excludeBots &&
+          !chat.isGroup &&
+          (chat.peer?.isBot ?? false)) {
         return false;
       }
-      if (filters.unreadOnly && chat.unreadCount <= 0) return false;
       return true;
     }
     if (entry is ChannelInboxEntry) {
-      if (folder.containsChannel(entry.channel.id)) return true;
-      if (filters.isEmpty) return false;
-      if (filters.hasTypeFilter) {
-        if (!filters.channels) return false;
-      } else if (!filters.unreadOnly) {
-        return false;
-      }
-      if (filters.unreadOnly && entry.channel.inboxUnreadPosts <= 0) {
-        return false;
+      final explicit = folder.containsChannel(entry.channel.id);
+      if (!explicit) {
+        if (filters.isEmpty) return false;
+        if (filters.hasTypeFilter) {
+          if (!filters.channels) return false;
+        } else if (!filters.unreadOnly && !filters.hasExcludeFilter) {
+          return false;
+        } else if (!filters.unreadOnly && filters.hasExcludeFilter) {
+          return false;
+        }
+        if (filters.unreadOnly && entry.channel.inboxUnreadPosts <= 0) {
+          return false;
+        }
       }
       return true;
     }

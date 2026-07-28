@@ -112,6 +112,7 @@ class ConversationResponse(BaseModel):
     slow_mode_seconds: int = 0
     anti_flood_max_messages_per_minute: int = 0
     protect_content: bool = False
+    auto_delete_seconds: int = 0
     am_i_group_admin: bool = False
     am_i_can_manage_members: bool = False
     am_i_can_manage_posting_permissions: bool = False
@@ -299,6 +300,7 @@ class UpdateGroupChatRequest(BaseModel):
         default=None, ge=0, le=120
     )
     protect_content: Optional[bool] = None
+    auto_delete_seconds: Optional[int] = Field(default=None, ge=0, le=2592000)
 
 
 class TranslateTextRequest(BaseModel):

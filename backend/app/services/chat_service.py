@@ -903,6 +903,70 @@ class ChatService:
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 
+    def set_auto_delete_seconds(
+        self, conversation_id: int, actor_id: int, seconds: int
+    ) -> Conversation:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if not conv:
+            raise ValueError("not_found")
+        if conv.type == "group":
+            if not self._can_manage_group_posting_permissions(
+                conversation_id, actor_id
+            ):
+                raise ValueError("forbidden")
+        elif conv.type not in ("direct", "saved"):
+            raise ValueError("forbidden")
+        # Cap at 30 days; 0 disables.
+        value = max(0, min(int(seconds), 30 * 24 * 3600))
+        conv.auto_delete_seconds = value
+        conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        return conv
+
+    def purge_auto_deleted_messages(self, conversation_id: int) -> List[int]:
+        """Soft-delete messages older than conversation auto-delete TTL."""
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if not conv:
+            return []
+        ttl = int(getattr(conv, "auto_delete_seconds", 0) or 0)
+        if ttl <= 0:
+            return []
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+            seconds=ttl
+        )
+        rows = (
+            self.db.query(Message)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+                Message.created_at < cutoff,
+            )
+            .limit(200)
+            .all()
+        )
+        if not rows:
+            return []
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        ids = [m.id for m in rows]
+        for msg in rows:
+            msg.deleted_at = now
+        (
+            self.db.query(ConversationPinnedMessage)
+            .filter(ConversationPinnedMessage.message_id.in_(ids))
+            .delete(synchronize_session=False)
+        )
+        self._sync_legacy_pinned_slot(conv)
+        return ids
+
     def set_group_avatar(
         self, conversation_id: int, actor_id: int, avatar_url: Optional[str]
     ) -> Conversation:
@@ -1772,6 +1836,11 @@ class ChatService:
     ) -> Tuple[List[Message], bool]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
+        # Best-effort TTL purge before serving history.
+        try:
+            self.purge_auto_deleted_messages(conversation_id)
+        except Exception:
+            pass
 
         hidden_ids = (
             self.db.query(MessageHide.message_id)
@@ -2295,7 +2364,11 @@ class ChatService:
             m.group(1).lower()
             for m in re.finditer(r"(?<!\w)@([a-zA-Z0-9_]{2,})", content)
         }
-        if not handles:
+        id_mentions = {
+            int(m.group(1))
+            for m in re.finditer(r"(?<!\w)@id(\d+)\b", content)
+        }
+        if not handles and not id_mentions:
             return set()
         members = (
             self.db.query(ConversationMember)
@@ -2305,7 +2378,11 @@ class ChatService:
         if not members:
             return set()
         member_ids = [m.user_id for m in members]
+        member_id_set = set(member_ids)
         out: set[int] = set()
+        for uid in id_mentions:
+            if uid in member_id_set:
+                out.add(uid)
         if "all" in handles:
             out.update(member_ids)
         if "admin" in handles or "admins" in handles:
@@ -3398,6 +3475,9 @@ class ChatService:
             "channels": bool(filters.get("channels")),
             "direct": bool(filters.get("direct") or filters.get("private")),
             "unread_only": bool(filters.get("unread_only")),
+            "exclude_muted": bool(filters.get("exclude_muted")),
+            "exclude_archived": bool(filters.get("exclude_archived")),
+            "exclude_bots": bool(filters.get("exclude_bots")),
         }
 
     def list_folders(self, user_id: int) -> List[dict]:

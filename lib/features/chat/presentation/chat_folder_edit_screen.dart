@@ -400,6 +400,31 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                     () => _filters = _filters.copyWith(unreadOnly: v),
                   ),
                 ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Без чатов без звука'),
+                  value: _filters.excludeMuted,
+                  onChanged: (v) => setState(
+                    () => _filters = _filters.copyWith(excludeMuted: v),
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Без архивных'),
+                  value: _filters.excludeArchived,
+                  onChanged: (v) => setState(
+                    () => _filters = _filters.copyWith(excludeArchived: v),
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Без ботов'),
+                  subtitle: const Text('Только личные чаты с ботами'),
+                  value: _filters.excludeBots,
+                  onChanged: (v) => setState(
+                    () => _filters = _filters.copyWith(excludeBots: v),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   children: [

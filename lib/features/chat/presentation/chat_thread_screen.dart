@@ -1706,8 +1706,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
 
-    // Ищем @word в конце строки (или после пробела)
-    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
+    // Ищем @query в конце строки (ASCII username или имя/кириллица).
+    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(text);
     if (match == null) {
       _hideBotAutocompleteOverlay();
       return;
@@ -1721,7 +1721,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final myId = AuthService.instance.currentUser?.id;
     final candidates = <_MentionCandidate>[];
 
-    // Group members with @username (Telegram-style mentions).
+    // Group members: @username or @id{userId} when no username (by display name).
     if (_conversation.isGroup) {
       const specials = <(String, String, String)>[
         ('all', '@all', 'Все участники'),
@@ -1745,19 +1745,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       for (final m in _groupMembers) {
         if (myId != null && m.id == myId) continue;
         final u = m.username?.trim();
-        if (u == null || u.isEmpty) continue;
-        final handle = u.startsWith('@') ? u.substring(1) : u;
+        final handle = (u != null && u.isNotEmpty)
+            ? (u.startsWith('@') ? u.substring(1) : u)
+            : 'id${m.id}';
         if (handle.isEmpty) continue;
+        final display = m.displayName;
         if (query.isNotEmpty &&
             !handle.toLowerCase().contains(query) &&
+            !display.toLowerCase().contains(query) &&
             !(m.name?.toLowerCase().contains(query) ?? false)) {
           continue;
         }
+        final hasUsername = u != null && u.isNotEmpty;
         candidates.add(
           _MentionCandidate(
             username: handle,
-            title: '@$handle',
-            subtitle: m.displayName,
+            title: hasUsername ? '@$handle' : display,
+            subtitle: hasUsername ? display : 'Упоминание по имени',
             avatarUrl: m.avatarUrl,
             isBot: false,
           ),
@@ -1853,10 +1857,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _botAutocompleteOverlayEntry = null;
   }
 
-  /// Вставляет @username в поле ввода, заменяя текущий @query
+  /// Вставляет @username / @idN в поле ввода, заменяя текущий @query
   void _insertBotMention(String username) {
     final text = _controller.text;
-    final match = RegExp(r'(?:^|\s)@([a-zA-Z0-9_]*)$').firstMatch(text);
+    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(text);
     if (match == null) return;
 
     final start = match.start + (text[match.start] == ' ' ? 1 : 0);
@@ -3942,6 +3946,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             title: 'Экспорт чата',
             onTap: () => unawaited(_exportChat()),
           ),
+        if (!isGroup)
+          TelegramActionSheetAction(
+            icon: Icons.auto_delete_outlined,
+            title: _conversation.autoDeleteSeconds <= 0
+                ? 'Автоудаление'
+                : 'Автоудаление: ${_autoDeleteLabel(_conversation.autoDeleteSeconds)}',
+            onTap: () => unawaited(_configureAutoDelete()),
+          ),
         TelegramActionSheetAction(
           icon: _autoRetryOnLimitsEnabled
               ? Icons.autorenew_rounded
@@ -4222,6 +4234,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ? handle.substring(1).toLowerCase()
         : handle.toLowerCase();
     if (username.isEmpty) return;
+    final idMatch = RegExp(r'^id(\d+)$').firstMatch(username);
+    if (idMatch != null) {
+      final uid = int.tryParse(idMatch.group(1)!);
+      if (uid != null && uid > 0) {
+        _openUserProfile(uid);
+        return;
+      }
+    }
     for (final member in _groupMembers) {
       final u = member.username?.trim().toLowerCase();
       if (u != null && u == username) {
@@ -4234,6 +4254,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (peer != null && peerUser == username) {
       _openUserProfile(peer.id);
     }
+  }
+
+  Map<String, String> get _mentionLabels {
+    final out = <String, String>{};
+    for (final m in _groupMembers) {
+      out['id${m.id}'] = m.displayName;
+      final u = m.username?.trim();
+      if (u != null && u.isNotEmpty) {
+        final handle = u.startsWith('@') ? u.substring(1) : u;
+        if (handle.isNotEmpty) out[handle] = m.displayName;
+      }
+    }
+    final peer = _conversation.peer;
+    if (peer != null) {
+      out['id${peer.id}'] = peer.displayName;
+      final u = peer.username?.trim();
+      if (u != null && u.isNotEmpty) {
+        final handle = u.startsWith('@') ? u.substring(1) : u;
+        if (handle.isNotEmpty) out[handle] = peer.displayName;
+      }
+    }
+    return out;
   }
 
   void _playNextVoiceAfter(ChatMessage finished) {
@@ -6292,6 +6334,82 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  String _autoDeleteLabel(int value) {
+    if (value <= 0) return 'выкл';
+    if (value < 3600) return '${value ~/ 60} мин';
+    if (value < 24 * 3600) return '${value ~/ 3600} ч';
+    final days = value ~/ (24 * 3600);
+    return '$days дн.';
+  }
+
+  Future<void> _configureAutoDelete() async {
+    const presets = <int>[
+      0,
+      24 * 3600,
+      7 * 24 * 3600,
+      30 * 24 * 3600,
+    ];
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.auto_delete_outlined),
+              title: Text('Автоудаление сообщений'),
+              subtitle: Text('Старые сообщения удаляются у обоих'),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: presets
+                  .map(
+                    (seconds) => ChoiceChip(
+                      label: Text(
+                        seconds <= 0 ? 'Выкл' : _autoDeleteLabel(seconds),
+                      ),
+                      selected: _conversation.autoDeleteSeconds == seconds,
+                      onSelected: (_) => Navigator.pop(ctx, seconds),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked == null ||
+        picked == _conversation.autoDeleteSeconds ||
+        !mounted) {
+      return;
+    }
+    try {
+      final conv = await ChatService.setAutoDeleteSeconds(
+        conversationId: widget.conversationId,
+        seconds: picked,
+      );
+      if (!mounted) return;
+      setState(() => _conversation = conv);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            picked <= 0
+                ? 'Автоудаление выключено'
+                : 'Автоудаление: ${_autoDeleteLabel(picked)}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _exportChat() async {
     if (_conversation.protectContent) {
       if (!mounted) return;
@@ -6915,6 +7033,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ? (userId) => unawaited(_addHanContactFromBubble(userId))
           : null,
       onMentionTap: interactive ? _openMentionProfile : null,
+      mentionLabels: _mentionLabels,
       onForwardFromTap: interactive &&
               msg.forwardFromUserId != null &&
               msg.forwardFromUserId! > 0
@@ -12370,6 +12489,7 @@ class _Bubble extends StatelessWidget {
     this.onSaveContactToPhone,
     this.onAddHanContact,
     this.onMentionTap,
+    this.mentionLabels,
     this.onForwardFromTap,
     this.onVoiceCompleted,
     this.onEditedTap,
@@ -12410,6 +12530,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatContactPayload>? onSaveContactToPhone;
   final ValueChanged<int>? onAddHanContact;
   final ValueChanged<String>? onMentionTap;
+  final Map<String, String>? mentionLabels;
   final VoidCallback? onForwardFromTap;
   final ValueChanged<ChatMessage>? onVoiceCompleted;
   final VoidCallback? onEditedTap;
@@ -13004,6 +13125,7 @@ class _Bubble extends StatelessWidget {
                   parseMarkup: true,
                   highlightMentions: true,
                   onMentionTap: onMentionTap,
+                  mentionLabels: mentionLabels,
                 ),
               ),
             ),
@@ -13059,6 +13181,7 @@ class _Bubble extends StatelessWidget {
                   parseMarkup: true,
                   highlightMentions: true,
                   onMentionTap: onMentionTap,
+                  mentionLabels: mentionLabels,
                 ),
               ),
             ),
@@ -13084,6 +13207,7 @@ class _Bubble extends StatelessWidget {
         highlightMentions: true,
         parseMarkup: true,
         onMentionTap: onMentionTap,
+        mentionLabels: mentionLabels,
       );
       if (hasLinkPreview) {
         mainContent = _withBottomMeta(

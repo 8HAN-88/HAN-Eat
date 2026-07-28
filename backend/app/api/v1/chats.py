@@ -659,6 +659,7 @@ def _conversation_response(
             getattr(conv, "anti_flood_max_messages_per_minute", 0) or 0
         ),
         protect_content=bool(getattr(conv, "protect_content", False)),
+        auto_delete_seconds=int(getattr(conv, "auto_delete_seconds", 0) or 0),
         am_i_group_admin=am_i_group_admin,
         am_i_can_manage_members=am_i_can_manage_members,
         am_i_can_manage_posting_permissions=am_i_can_manage_posting_permissions,
@@ -3108,6 +3109,7 @@ async def update_group_chat(
             and body.slow_mode_seconds is None
             and body.anti_flood_max_messages_per_minute is None
             and body.protect_content is None
+            and body.auto_delete_seconds is None
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
         if body.title is not None:
@@ -3222,6 +3224,25 @@ async def update_group_chat(
                     ),
                 )
             )
+        if body.auto_delete_seconds is not None:
+            conv = svc.set_auto_delete_seconds(
+                conversation_id,
+                current_user.id,
+                body.auto_delete_seconds,
+            )
+            if conv.type == "group":
+                notes.append(
+                    svc.create_group_system_note(
+                        conversation_id,
+                        current_user.id,
+                        "🛡 Auto-delete: "
+                        + (
+                            "disabled."
+                            if int(body.auto_delete_seconds) <= 0
+                            else f"messages older than {int(body.auto_delete_seconds)} sec."
+                        ),
+                    )
+                )
         db.commit()
     except ValueError as e:
         db.rollback()

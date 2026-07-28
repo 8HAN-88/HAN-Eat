@@ -31,6 +31,8 @@ class Conversation(Base):
     anti_flood_max_messages_per_minute = Column(Integer, default=0, nullable=False)
     # Telegram-like: restrict forwarding / saving content from this chat.
     protect_content = Column(Boolean, default=False, nullable=False)
+    # Auto-delete messages older than this many seconds (0 = off).
+    auto_delete_seconds = Column(Integer, default=0, nullable=False)
     invite_token = Column(String(96), nullable=True, unique=True, index=True)
     invite_token_updated_at = Column(DateTime, nullable=True)
     pinned_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)

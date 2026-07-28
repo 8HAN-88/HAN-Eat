@@ -46,6 +46,12 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     600
   ];
   static const List<int> _antiFloodPresets = [0, 3, 5, 10, 15, 20, 30, 60];
+  static const List<int> _autoDeletePresets = [
+    0,
+    24 * 3600,
+    7 * 24 * 3600,
+    30 * 24 * 3600,
+  ];
 
   late ChatConversation _conversation;
   List<ChatUserBrief> _members = [];
@@ -281,6 +287,72 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     if (value < 60) return '$value сек';
     final minutes = value ~/ 60;
     return '$minutes мин';
+  }
+
+  String _autoDeleteLabel(int value) {
+    if (value <= 0) return 'Выключено';
+    if (value < 3600) return '${value ~/ 60} мин';
+    if (value < 24 * 3600) return '${value ~/ 3600} ч';
+    final days = value ~/ (24 * 3600);
+    return '$days дн.';
+  }
+
+  Future<void> _configureAutoDelete() async {
+    if (!_canManagePostingPermissions) return;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.auto_delete_outlined),
+              title: Text('Автоудаление сообщений'),
+              subtitle: Text('Старые сообщения удаляются у всех участников'),
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _autoDeletePresets
+                  .map(
+                    (seconds) => ChoiceChip(
+                      label: Text(_autoDeleteLabel(seconds)),
+                      selected: _conversation.autoDeleteSeconds == seconds,
+                      onSelected: (_) => Navigator.pop(ctx, seconds),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (picked == null ||
+        picked == _conversation.autoDeleteSeconds ||
+        !mounted) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final conv = await ChatService.setAutoDeleteSeconds(
+        conversationId: _conversation.id,
+        seconds: picked,
+      );
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _busy = false;
+      });
+      widget.onConversationChanged?.call(conv);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _configureSlowMode() async {
@@ -1642,6 +1714,19 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           onChanged: (_busy || !_canManagePostingPermissions)
                               ? null
                               : (_) => _toggleProtectContent(),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.auto_delete_outlined),
+                          title: const Text('Автоудаление'),
+                          subtitle: Text(
+                            _conversation.autoDeleteSeconds <= 0
+                                ? 'Выключено'
+                                : 'Через ${_autoDeleteLabel(_conversation.autoDeleteSeconds)}',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: (_busy || !_canManagePostingPermissions)
+                              ? null
+                              : _configureAutoDelete,
                         ),
                         ListTile(
                           leading: const Icon(Icons.timer_outlined),
