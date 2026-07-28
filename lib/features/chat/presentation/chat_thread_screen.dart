@@ -401,6 +401,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<int, Timer> _typingUserTimers = <int, Timer>{};
   /// userId → `typing` | `recording`
   final Map<int, String> _typingActivityByUser = <int, String>{};
+  /// Group: peer userId → last_read_message_id seen via SSE (for read_count).
+  final Map<int, int> _peerGroupReadCursors = <int, int>{};
   bool _selectionMode = false;
   bool _chatExitActionRunning = false;
   final _selectedMessageIds = <int>{};
@@ -2136,12 +2138,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (type == 'message.read') {
-      final readerId = event['user_id'];
+      final rawReader = event['user_id'];
+      final readerId =
+          rawReader is int ? rawReader : int.tryParse('$rawReader');
       final myId = AuthService.instance.currentUser?.id;
-      if (readerId == myId) return;
+      if (readerId != null && readerId == myId) return;
       final raw = event['last_read_message_id'];
       final readId = raw is int ? raw : int.tryParse('$raw');
-      if (readId != null) _applyReadReceipt(readId);
+      if (readId != null) {
+        _applyReadReceipt(readId, readerId: readerId);
+      }
       return;
     }
     if (type == 'message.edited') {
@@ -4372,8 +4378,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
-  void _applyReadReceipt(int readUpToId) {
+  void _applyReadReceipt(int readUpToId, {int? readerId}) {
     setState(() {
+      if (_conversation.isGroup) {
+        final prev = (readerId != null)
+            ? (_peerGroupReadCursors[readerId] ?? 0)
+            : 0;
+        if (readerId != null) {
+          final known = _peerGroupReadCursors[readerId] ?? 0;
+          if (readUpToId <= known) return;
+          _peerGroupReadCursors[readerId] = readUpToId;
+        }
+        final others = math.max(0, _conversation.memberCount - 1);
+        for (var i = 0; i < _messages.length; i++) {
+          final m = _messages[i];
+          if (!m.isMine || m.id <= 0) continue;
+          if (m.id <= prev || m.id > readUpToId) {
+            if (m.id <= readUpToId && !m.isDelivered) {
+              _messages[i] = m.copyWith(isDelivered: true);
+            }
+            continue;
+          }
+          final nextCount = m.readCount + 1;
+          final allRead = others > 0 && nextCount >= others;
+          _messages[i] = m.copyWith(
+            readCount: nextCount,
+            isDelivered: true,
+            isRead: allRead || m.isRead,
+          );
+        }
+        return;
+      }
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
         if (m.isMine && m.id <= readUpToId && (!m.isRead || !m.isDelivered)) {
@@ -7302,6 +7337,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
       onEditedTap: interactive && msg.isEdited && msg.id > 0
           ? () => unawaited(_showMessageEditHistory(msg))
+          : null,
+      onReadersTap: interactive &&
+              isGroup &&
+              msg.isMine &&
+              msg.id > 0 &&
+              msg.readCount > 0
+          ? () => unawaited(_showMessageReaders(msg))
           : null,
     );
   }
@@ -12907,6 +12949,7 @@ class _Bubble extends StatelessWidget {
     this.onForwardFromTap,
     this.onVoiceCompleted,
     this.onEditedTap,
+    this.onReadersTap,
   });
 
   final ChatMessage message;
@@ -12948,12 +12991,14 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onForwardFromTap;
   final ValueChanged<ChatMessage>? onVoiceCompleted;
   final VoidCallback? onEditedTap;
+  final VoidCallback? onReadersTap;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
     if (message.isEdited) width += 28;
     if (isConversationPinned) width += 16;
     if (mine) width += 16; // single/double check mark area
+    if (mine && message.readCount > 0) width += 22;
     return width;
   }
 
@@ -13051,6 +13096,33 @@ class _Bubble extends StatelessWidget {
             statusIcon,
             size: 12.5,
             color: statusColor,
+          ),
+        ],
+        if (mine && message.readCount > 0) ...[
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onReadersTap,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 11,
+                  color: timeColor,
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  '${message.readCount}',
+                  style: TextStyle(
+                    color: timeColor,
+                    fontSize: 10.5,
+                    height: 1.08,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ],

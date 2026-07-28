@@ -367,6 +367,7 @@ class ChatCacheService {
       'is_mine': m.isMine,
       'is_delivered': m.isDelivered,
       'is_read': m.isRead,
+      'read_count': m.readCount,
       'reactions': m.reactions
           .map(
             (r) => {

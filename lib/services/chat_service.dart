@@ -1739,6 +1739,7 @@ class ChatService {
       // Own outgoing starts as sent (single ✓), not read/delivered.
       isDelivered: mine ? false : msg.isDelivered,
       isRead: mine ? false : msg.isRead,
+      readCount: mine ? 0 : msg.readCount,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
     );

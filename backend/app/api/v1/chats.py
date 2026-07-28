@@ -474,10 +474,20 @@ def _message_response(
     db: Optional[Session] = None,
     poll_content_cache: Optional[Dict[int, str]] = None,
     peer_last_delivered_id: Optional[int] = None,
+    group_read_cursors: Optional[List] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
+    read_count = 0
     if is_mine and conv and conv.type == "group" and svc:
-        is_read = svc.group_all_read(conv.id, msg.id, current_user_id)
+        if group_read_cursors is not None:
+            cursors = group_read_cursors
+        else:
+            cursors = svc.other_member_read_cursors(conv.id, current_user_id)
+        other_count = len(cursors)
+        read_count = sum(
+            1 for c in cursors if c is not None and int(c) >= msg.id
+        )
+        is_read = other_count > 0 and read_count == other_count
     elif is_mine and conv and conv.type == "saved":
         is_read = True
     elif is_mine:
@@ -537,6 +547,7 @@ def _message_response(
         is_mine=is_mine,
         is_delivered=is_delivered,
         is_read=is_read,
+        read_count=read_count if is_mine else 0,
         reactions=reactions or [],
     )
 
@@ -1348,6 +1359,11 @@ async def list_messages(
     from app.services.chat_poll_service import enrich_messages_poll_batch
 
     poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
+    group_read_cursors = (
+        svc.other_member_read_cursors(conversation_id, current_user.id)
+        if conv is not None and conv.type == "group"
+        else None
+    )
 
     items = [
         _message_response(
@@ -1362,6 +1378,7 @@ async def list_messages(
             db=db,
             poll_content_cache=poll_cache,
             peer_last_delivered_id=peer_delivered,
+            group_read_cursors=group_read_cursors,
         )
         for m in messages
     ]
@@ -1398,6 +1415,7 @@ async def list_messages(
                     db=db,
                     poll_content_cache=poll_cache,
                     peer_last_delivered_id=peer_delivered,
+                    group_read_cursors=group_read_cursors,
                 )
             )
     pinned_resp = pinned_resps[0] if pinned_resps else None
@@ -1469,6 +1487,11 @@ async def list_chat_media(
     from app.services.chat_poll_service import enrich_messages_poll_batch
 
     poll_cache = enrich_messages_poll_batch(db, messages, current_user.id)
+    group_read_cursors = (
+        svc.other_member_read_cursors(conversation_id, current_user.id)
+        if conv is not None and conv.type == "group"
+        else None
+    )
     items = [
         _message_response(
             m,
@@ -1482,6 +1505,7 @@ async def list_chat_media(
             db=db,
             poll_content_cache=poll_cache,
             peer_last_delivered_id=peer_delivered,
+            group_read_cursors=group_read_cursors,
         )
         for m in messages
     ]

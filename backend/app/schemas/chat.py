@@ -53,6 +53,8 @@ class MessageResponse(BaseModel):
     is_mine: bool = False
     is_delivered: bool = False
     is_read: bool = False
+    # Group: how many other members have read up to this message (mine only).
+    read_count: int = 0
     reactions: List["MessageReactionSummary"] = []
 
     class Config:

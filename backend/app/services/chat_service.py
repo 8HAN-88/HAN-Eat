@@ -483,24 +483,40 @@ class ChatService:
         ordered = [by_id[uid] for uid in reader_ids if uid in by_id]
         return ordered, other_count
 
-    def group_all_read(
-        self, conversation_id: int, message_id: int, sender_id: int
-    ) -> bool:
+    def other_member_read_cursors(
+        self, conversation_id: int, exclude_user_id: int
+    ) -> list:
+        """last_read_message_id for every member except exclude_user_id."""
         others = (
-            self.db.query(ConversationMember)
+            self.db.query(ConversationMember.last_read_message_id)
             .filter(
                 ConversationMember.conversation_id == conversation_id,
-                ConversationMember.user_id != sender_id,
+                ConversationMember.user_id != exclude_user_id,
             )
             .all()
         )
-        if not others:
-            return False
-        return all(
-            m.last_read_message_id is not None
-            and m.last_read_message_id >= message_id
-            for m in others
+        return [row[0] for row in others]
+
+    def group_read_count(
+        self, conversation_id: int, message_id: int, sender_id: int
+    ) -> tuple[int, int]:
+        """(readers_among_others, other_member_count) for a group message."""
+        cursors = self.other_member_read_cursors(conversation_id, sender_id)
+        other_count = len(cursors)
+        if other_count == 0:
+            return 0, 0
+        read_count = sum(
+            1 for c in cursors if c is not None and int(c) >= message_id
         )
+        return read_count, other_count
+
+    def group_all_read(
+        self, conversation_id: int, message_id: int, sender_id: int
+    ) -> bool:
+        read_count, other_count = self.group_read_count(
+            conversation_id, message_id, sender_id
+        )
+        return other_count > 0 and read_count == other_count
 
     def group_all_delivered(
         self, conversation_id: int, message_id: int, sender_id: int

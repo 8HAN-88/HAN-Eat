@@ -199,6 +199,7 @@ class ChatMessage {
     this.isMine = false,
     this.isDelivered = false,
     this.isRead = false,
+    this.readCount = 0,
     this.reactions = const [],
     this.inlineKeyboard = const [],
   });
@@ -220,6 +221,8 @@ class ChatMessage {
   /// Peer device received the message (Telegram gray ✓✓).
   final bool isDelivered;
   final bool isRead;
+  /// Group: other members who have read up to this message (outgoing only).
+  final int readCount;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
 
@@ -288,6 +291,7 @@ class ChatMessage {
       isDelivered: json['is_delivered'] as bool? ??
           (json['is_read'] as bool? ?? false),
       isRead: json['is_read'] as bool? ?? false,
+      readCount: _parseInt(json['read_count']),
       reactions: reactions,
       inlineKeyboard: keyboard,
     );
@@ -296,6 +300,7 @@ class ChatMessage {
   ChatMessage copyWith({
     bool? isDelivered,
     bool? isRead,
+    int? readCount,
     String? content,
     DateTime? editedAt,
     List<ChatReactionSummary>? reactions,
@@ -318,6 +323,7 @@ class ChatMessage {
       isMine: isMine,
       isDelivered: isDelivered ?? this.isDelivered,
       isRead: isRead ?? this.isRead,
+      readCount: readCount ?? this.readCount,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );
