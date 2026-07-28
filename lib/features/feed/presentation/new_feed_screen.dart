@@ -16,6 +16,7 @@ import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import 'new_post_card.dart';
+import 'widgets/feed_stories_strip.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -78,6 +79,13 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       _servingFromCache &&
       (_cacheLoadError != null ||
           !ApiReachabilityService.instance.isApiReachable.value);
+
+  int _storiesRefreshToken = 0;
+
+  Future<void> _refreshAll() async {
+    setState(() => _storiesRefreshToken++);
+    await _loadFeed(refresh: true);
+  }
 
   String _cacheVariant([String? feedType, FeedSortMode? sortMode]) =>
       'rec_${AppVariant.current.name}_${feedType ?? _feedType}_${(sortMode ?? _sortMode).value}';
@@ -333,6 +341,11 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                   return CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
+                      SliverToBoxAdapter(
+                        child: FeedStoriesStrip(
+                          refreshToken: _storiesRefreshToken,
+                        ),
+                      ),
                       SliverPadding(
                         padding: EdgeInsets.only(
                           bottom: _listBottomPadding(context, chromeHidden),
@@ -348,7 +361,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                                 'Обновите ленту или смените фильтр в меню выше.',
                             action: _lastLoadError != null
                                 ? FilledButton.icon(
-                                    onPressed: () => _loadFeed(refresh: true),
+                                    onPressed: () => unawaited(_refreshAll()),
                                     icon: const Icon(Icons.refresh),
                                     label: const Text('Повторить'),
                                   )
@@ -371,12 +384,19 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                     addRepaintBoundaries: true,
                     padding: EdgeInsets.only(
                         bottom: _listBottomPadding(context, chromeHidden)),
-                    itemCount: (_showCacheBanner ? 1 : 0) +
+                    itemCount: 1 +
+                        (_showCacheBanner ? 1 : 0) +
                         _posts.length +
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return FeedStoriesStrip(
+                          refreshToken: _storiesRefreshToken,
+                        );
+                      }
                       final banner = _showCacheBanner ? 1 : 0;
-                      if (banner == 1 && index == 0) {
+                      final adj = index - 1;
+                      if (banner == 1 && adj == 0) {
                         final scheme = Theme.of(context).colorScheme;
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -416,7 +436,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           ),
                         );
                       }
-                      final postIndex = index - banner;
+                      final postIndex = adj - banner;
                       if (postIndex >= 0 && postIndex < _posts.length) {
                         final post = _posts[postIndex];
                         return FeedExposureTracker(
@@ -455,7 +475,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           ),
                         );
                       }
-                      if (_hasMore && index == banner + _posts.length) {
+                      if (_hasMore && adj == banner + _posts.length) {
                         if (!_isLoading) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && !_isLoading && _hasMore) {
@@ -481,7 +501,7 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
     final bodyContent = FeedScrollChromeListener(
       enabled: widget.hideScaffold,
       child: RefreshIndicator(
-        onRefresh: () => _loadFeed(refresh: true),
+        onRefresh: _refreshAll,
         child: emptyOrLoading,
       ),
     );

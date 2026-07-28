@@ -17,6 +17,7 @@ class InlineVideoPlayer extends StatefulWidget {
   final String? thumbnailUrl;
   final double aspectRatio;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
 
   const InlineVideoPlayer({
     super.key,
@@ -24,6 +25,7 @@ class InlineVideoPlayer extends StatefulWidget {
     this.thumbnailUrl,
     this.aspectRatio = 16 / 9,
     this.onTap,
+    this.onDoubleTap,
   });
 
   @override
@@ -190,6 +192,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer>
       onVisibilityChanged: _onVisibilityChanged,
       child: GestureDetector(
         onTap: _handleTap,
+        onDoubleTap: widget.onDoubleTap,
         behavior: HitTestBehavior.opaque,
         child: AspectRatio(
           aspectRatio: widget.aspectRatio,

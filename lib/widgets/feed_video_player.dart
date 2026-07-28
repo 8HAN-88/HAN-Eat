@@ -33,6 +33,7 @@ class FeedVideoPlayer extends StatelessWidget {
     required this.author,
     this.thumbnailUrl,
     this.onOpenFullscreen,
+    this.onDoubleTap,
   });
 
   static const double aspectRatio = 9 / 16;
@@ -41,6 +42,7 @@ class FeedVideoPlayer extends StatelessWidget {
   final String? thumbnailUrl;
   final FeedVideoAuthorInfo author;
   final VoidCallback? onOpenFullscreen;
+  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +65,7 @@ class FeedVideoPlayer extends StatelessWidget {
                 thumbnailUrl: thumbnailUrl,
                 aspectRatio: aspectRatio,
                 onTap: onOpenFullscreen,
+                onDoubleTap: onDoubleTap,
               ),
             ),
             Positioned(

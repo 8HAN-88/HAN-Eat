@@ -15,6 +15,7 @@ import '../../../services/feed_analytics_service.dart';
 import '../../../services/feed_service.dart';
 import '../../../services/user_realtime_service.dart';
 import 'new_post_card.dart';
+import 'widgets/feed_stories_strip.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/post_card_skeleton.dart';
 import '../../../services/auth_service.dart';
@@ -64,9 +65,15 @@ class _SubscriptionsFeedScreenState
 
   String _feedType = 'all';
   FeedSortMode _sortMode = FeedSortMode.recent;
+  int _storiesRefreshToken = 0;
 
   String get _cacheVariant =>
       'following_${AppVariant.current.name}_${_feedType}_${_sortMode.value}';
+
+  Future<void> _refreshAll() async {
+    setState(() => _storiesRefreshToken++);
+    await _loadFeed(refresh: true);
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -299,13 +306,18 @@ class _SubscriptionsFeedScreenState
     if (_posts.isEmpty && !_isLoading) {
       return FeedScrollChromeListener(
         child: RefreshIndicator(
-          onRefresh: () => _loadFeed(refresh: true),
+          onRefresh: _refreshAll,
           child: ValueListenableBuilder<bool>(
             valueListenable: feedScrollChromeHidden,
             builder: (context, chromeHidden, _) {
               return CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
+                  SliverToBoxAdapter(
+                    child: FeedStoriesStrip(
+                      refreshToken: _storiesRefreshToken,
+                    ),
+                  ),
                   SliverPadding(
                     padding: EdgeInsets.only(
                       bottom: _listBottomPadding(context, chromeHidden),
@@ -323,7 +335,7 @@ class _SubscriptionsFeedScreenState
                             'Подпишитесь на авторов, чтобы видеть их посты здесь.',
                         action: _lastLoadError != null
                             ? FilledButton.icon(
-                                onPressed: () => _loadFeed(refresh: true),
+                                onPressed: () => unawaited(_refreshAll()),
                                 icon: const Icon(Icons.refresh),
                                 label: const Text('Повторить'),
                               )
@@ -345,7 +357,7 @@ class _SubscriptionsFeedScreenState
 
     return FeedScrollChromeListener(
       child: RefreshIndicator(
-        onRefresh: () => _loadFeed(refresh: true),
+        onRefresh: _refreshAll,
         child: _posts.isEmpty && _isLoading
             ? const PostListSkeletonLoader(itemCount: 5)
             : ValueListenableBuilder<bool>(
@@ -360,12 +372,19 @@ class _SubscriptionsFeedScreenState
                     padding: EdgeInsets.only(
                       bottom: _listBottomPadding(context, chromeHidden),
                     ),
-                    itemCount: (_servingFromCache ? 1 : 0) +
+                    itemCount: 1 +
+                        (_servingFromCache ? 1 : 0) +
                         _posts.length +
                         (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return FeedStoriesStrip(
+                          refreshToken: _storiesRefreshToken,
+                        );
+                      }
                       final banner = _servingFromCache ? 1 : 0;
-                      if (banner == 1 && index == 0) {
+                      final adj = index - 1;
+                      if (banner == 1 && adj == 0) {
                         final scheme = Theme.of(context).colorScheme;
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -405,7 +424,7 @@ class _SubscriptionsFeedScreenState
                           ),
                         );
                       }
-                      final postIndex = index - banner;
+                      final postIndex = adj - banner;
                       if (postIndex >= 0 && postIndex < _posts.length) {
                         final post = _posts[postIndex];
                         return FeedExposureTracker(
@@ -444,7 +463,7 @@ class _SubscriptionsFeedScreenState
                           ),
                         );
                       }
-                      if (_hasMore && index == banner + _posts.length) {
+                      if (_hasMore && adj == banner + _posts.length) {
                         if (!_isLoading) {
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && !_isLoading && _hasMore) {

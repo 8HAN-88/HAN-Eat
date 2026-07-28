@@ -14,6 +14,7 @@ class TelegramPhotoGrid extends StatelessWidget {
   final BorderRadius? borderRadius;
   final VoidCallback?
       onTap; // Обработчик клика (для постов - открыть детальную страницу)
+  final VoidCallback? onDoubleTap;
   final bool
       enableFullscreen; // Включить полноэкранный просмотр при клике на фото
   final double singleAspectRatio;
@@ -25,6 +26,7 @@ class TelegramPhotoGrid extends StatelessWidget {
     this.spacing = 2,
     this.borderRadius,
     this.onTap,
+    this.onDoubleTap,
     this.enableFullscreen = true, // По умолчанию включен
     this.singleAspectRatio = 1,
   });
@@ -40,6 +42,7 @@ class TelegramPhotoGrid extends StatelessWidget {
       maxHeight: maxHeight,
       borderRadius: borderRadius ?? BorderRadius.circular(18),
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       enableFullscreen: enableFullscreen,
     );
   }
@@ -55,6 +58,7 @@ class TelegramPhotoGrid extends StatelessWidget {
 
     return GestureDetector(
       onTap: () => _handleImageTap(context, 0),
+      onDoubleTap: onDoubleTap,
       child: imageWidget,
     );
   }
@@ -416,6 +420,7 @@ class _ModernPhotoCarousel extends StatefulWidget {
     required this.borderRadius,
     required this.enableFullscreen,
     this.onTap,
+    this.onDoubleTap,
   });
 
   final List<String> imageUrls;
@@ -423,6 +428,7 @@ class _ModernPhotoCarousel extends StatefulWidget {
   final BorderRadius borderRadius;
   final bool enableFullscreen;
   final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
 
   @override
   State<_ModernPhotoCarousel> createState() => _ModernPhotoCarouselState();
@@ -465,6 +471,7 @@ class _ModernPhotoCarouselState extends State<_ModernPhotoCarousel> {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _handleTap(context, index),
+                  onDoubleTap: widget.onDoubleTap,
                   child: _buildImage(
                     context,
                     widget.imageUrls[index],

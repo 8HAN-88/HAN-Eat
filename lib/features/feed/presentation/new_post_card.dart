@@ -86,7 +86,8 @@ class NewPostCard extends StatefulWidget {
   State<NewPostCard> createState() => _NewPostCardState();
 }
 
-class _NewPostCardState extends State<NewPostCard> {
+class _NewPostCardState extends State<NewPostCard>
+    with SingleTickerProviderStateMixin {
   static int? _cachedCurrentUserId;
   static Future<int?>? _currentUserIdLoad;
 
@@ -104,6 +105,11 @@ class _NewPostCardState extends State<NewPostCard> {
   bool _isReposting = false;
   bool _isSendingDonation = false;
   int? _currentUserId;
+  bool _showLikeAnimation = false;
+  bool _captionExpanded = false;
+  late final AnimationController _likeAnimationController;
+  late final Animation<double> _likeScaleAnimation;
+  late final Animation<double> _likeOpacityAnimation;
 
   int? _feedChannelRepostOrigIdCache;
   Future<PostModel?>? _feedChannelRepostOrigFuture;
@@ -124,6 +130,22 @@ class _NewPostCardState extends State<NewPostCard> {
   @override
   void initState() {
     super.initState();
+    _likeAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _likeScaleAnimation = Tween<double>(begin: 0.0, end: 1.5).animate(
+      CurvedAnimation(
+        parent: _likeAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
+    _likeOpacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _likeAnimationController,
+        curve: const Interval(0.5, 1.0),
+      ),
+    );
     _displayPost = widget.post;
     _isLiked = widget.post.isLiked;
     _likesCount = widget.post.likesCount;
@@ -140,6 +162,57 @@ class _NewPostCardState extends State<NewPostCard> {
       _hydrateSpoonacularCommentsCount();
     }
     _syncFeedChannelRepostFuture();
+  }
+
+  @override
+  void dispose() {
+    _likeAnimationController.dispose();
+    super.dispose();
+  }
+
+  void _handleDoubleTapLike() {
+    if (_isSpoonacularRecipePost) return;
+    if (!_isLiked && !_isLiking) {
+      unawaited(_toggleLike());
+    }
+    setState(() => _showLikeAnimation = true);
+    _likeAnimationController.forward(from: 0).then((_) {
+      if (!mounted) return;
+      setState(() => _showLikeAnimation = false);
+      _likeAnimationController.reset();
+    });
+  }
+
+  Widget _withDoubleTapLikeOverlay(Widget media) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        media,
+        if (_showLikeAnimation)
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _likeAnimationController,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _likeOpacityAnimation.value,
+                  child: Transform.scale(
+                    scale: _likeScaleAnimation.value,
+                    child: child,
+                  ),
+                );
+              },
+              child: const Icon(
+                Icons.favorite,
+                color: Colors.white,
+                size: 100,
+                shadows: [
+                  Shadow(blurRadius: 14, color: Colors.black54),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -945,7 +1018,7 @@ class _NewPostCardState extends State<NewPostCard> {
                 ),
               )
             else if (orig != null) ...[
-              _buildMedia(orig),
+              _withDoubleTapLikeOverlay(_buildMedia(orig)),
               if (orig.type == 'recipe' || _isMeaningfulPostTitle(orig.title))
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -1398,43 +1471,27 @@ class _NewPostCardState extends State<NewPostCard> {
           else if (post.isPaid && !post.purchased)
             _buildPaidContentPaywall(post)
           else ...[
-            _buildMedia(
-              post,
-              feedVideoAuthor: hasFeedVideo
-                  ? FeedVideoAuthorInfo(
-                      name: displayName,
-                      avatarUrl: displayAvatar,
-                      metaText: _formatDate(post.publishedAt ?? post.createdAt),
-                      viewsText: _formatCount(post.viewsCount),
-                      subtitle: isFromChannel && !isRepost
-                          ? (channel?.description ?? 'Канал')
-                          : (author?.username != null
-                              ? '@${author!.username}'
-                              : null),
-                      isChannel: isFromChannel && !isRepost,
-                      onTap: widget.onAuthorTap,
-                    )
-                  : null,
+            _withDoubleTapLikeOverlay(
+              _buildMedia(
+                post,
+                feedVideoAuthor: hasFeedVideo
+                    ? FeedVideoAuthorInfo(
+                        name: displayName,
+                        avatarUrl: displayAvatar,
+                        metaText:
+                            _formatDate(post.publishedAt ?? post.createdAt),
+                        viewsText: _formatCount(post.viewsCount),
+                        subtitle: isFromChannel && !isRepost
+                            ? (channel?.description ?? 'Канал')
+                            : (author?.username != null
+                                ? '@${author!.username}'
+                                : null),
+                        isChannel: isFromChannel && !isRepost,
+                        onTap: widget.onAuthorTap,
+                      )
+                    : null,
+              ),
             ),
-            if (post.type == 'recipe' || _isMeaningfulPostTitle(post.title))
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: Text(
-                  post.type == 'recipe' ? _recipeTitle(post) : post.title!,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            if (post.description != null && post.description!.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-                child: Text(
-                  post.description!,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
             if (post.linkUrl != null && post.linkUrl!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -1525,7 +1582,7 @@ class _NewPostCardState extends State<NewPostCard> {
                 onPollUpdated: _onPollUpdated,
               ),
           ],
-          // Действия (Instagram-стиль: кнопки снизу)
+          // Действия (Instagram-стиль: кнопки → лайки → подпись → комментарии)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Column(
@@ -1549,27 +1606,7 @@ class _NewPostCardState extends State<NewPostCard> {
                       busy: _isOpeningComments,
                       onTap: () {
                         if (_isOpeningComments) return;
-                        unawaited(() async {
-                          if (!mounted) return;
-                          setState(() => _isOpeningComments = true);
-                          try {
-                            if (_isSpoonacularRecipePost) {
-                              await _openRecipeFromPost();
-                              return;
-                            }
-                            FeedAnalyticsService.openDetail(
-                              widget.post,
-                              source: 'post_card',
-                              target: 'comments',
-                            );
-                            await widget.onCommentTap?.call();
-                            await _refreshCommentsCount();
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isOpeningComments = false);
-                            }
-                          }
-                        }());
+                        unawaited(_openComments());
                       },
                     ),
                     const SizedBox(width: 12),
@@ -1601,9 +1638,130 @@ class _NewPostCardState extends State<NewPostCard> {
                     ),
                   ],
                 ),
+                if (_likesCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _likesCount == 1
+                        ? '1 отметка «Нравится»'
+                        : '${_formatCount(_likesCount)} отметок «Нравится»',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13.5,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                ],
+                if (post.type == 'recipe' ||
+                    _isMeaningfulPostTitle(post.title) ||
+                    (post.description != null &&
+                        post.description!.trim().isNotEmpty)) ...[
+                  const SizedBox(height: 6),
+                  _buildInstagramCaption(
+                    authorName: displayName,
+                    title: post.type == 'recipe'
+                        ? _recipeTitle(post)
+                        : (_isMeaningfulPostTitle(post.title)
+                            ? post.title
+                            : null),
+                    description: post.description,
+                  ),
+                ],
+                if (_displayCommentsCount > 0) ...[
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () => unawaited(_openComments()),
+                    child: Text(
+                      _displayCommentsCount == 1
+                          ? 'Смотреть комментарий'
+                          : 'Смотреть все комментарии ($_displayCommentsCount)',
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openComments() async {
+    if (_isOpeningComments) return;
+    if (!mounted) return;
+    setState(() => _isOpeningComments = true);
+    try {
+      if (_isSpoonacularRecipePost) {
+        await _openRecipeFromPost();
+        return;
+      }
+      FeedAnalyticsService.openDetail(
+        widget.post,
+        source: 'post_card',
+        target: 'comments',
+      );
+      await widget.onCommentTap?.call();
+      await _refreshCommentsCount();
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningComments = false);
+      }
+    }
+  }
+
+  Widget _buildInstagramCaption({
+    required String authorName,
+    String? title,
+    String? description,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final parts = <String>[
+      if (title != null && title.trim().isNotEmpty) title.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        description.trim(),
+    ];
+    final full = parts.join('\n');
+    if (full.isEmpty) return const SizedBox.shrink();
+
+    const previewLimit = 120;
+    final needsMore = full.length > previewLimit;
+    final shown = !_captionExpanded && needsMore
+        ? '${full.substring(0, previewLimit).trimRight()}…'
+        : full;
+
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.35,
+          color: scheme.onSurface,
+        ),
+        children: [
+          TextSpan(
+            text: '$authorName ',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          TextSpan(text: shown),
+          if (needsMore && !_captionExpanded)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+              child: GestureDetector(
+                onTap: () => setState(() => _captionExpanded = true),
+                child: Text(
+                  ' ещё',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1664,6 +1822,7 @@ class _NewPostCardState extends State<NewPostCard> {
           videoUrl: post.videoUrl!,
           thumbnailUrl: post.videoThumbnail,
           author: feedVideoAuthor,
+          onDoubleTap: _handleDoubleTapLike,
           onOpenFullscreen: () {
             FeedAnalyticsService.openDetail(
               post,
@@ -1829,6 +1988,7 @@ class _NewPostCardState extends State<NewPostCard> {
           singleAspectRatio: 9 / 16,
           borderRadius: BorderRadius.circular(18),
           onTap: isRecipe ? onRecipeTap : null,
+          onDoubleTap: _handleDoubleTapLike,
           enableFullscreen: !isRecipe,
         );
       }
@@ -1849,6 +2009,7 @@ class _NewPostCardState extends State<NewPostCard> {
           videoUrl: videoUrl,
           thumbnailUrl: thumbnailUrl,
           author: feedVideoAuthor,
+          onDoubleTap: _handleDoubleTapLike,
           onOpenFullscreen: () {
             FeedAnalyticsService.openDetail(
               post,
@@ -1867,6 +2028,7 @@ class _NewPostCardState extends State<NewPostCard> {
           metaText: _formatDate(post.publishedAt ?? post.createdAt),
           viewsText: _formatCount(post.viewsCount),
         ),
+        onDoubleTap: _handleDoubleTapLike,
         onOpenFullscreen: () {
           FeedAnalyticsService.openDetail(
             post,
