@@ -57,6 +57,7 @@ from app.schemas.chat import (
     MessageSearchResponse,
     MuteChatRequest,
     PinChatRequest,
+    WallpaperStyleRequest,
     UpdateGroupChatRequest,
     GroupMemberAdminRequest,
     GroupMemberPermissionsRequest,
@@ -651,6 +652,7 @@ def _conversation_response(
         archived=row.get("archived", False),
         muted=row.get("muted", False),
         muted_until=row.get("muted_until"),
+        wallpaper_style=row.get("wallpaper_style"),
         created_by_user_id=conv.created_by_user_id
         if conv.type in ("group", "saved")
         else None,
@@ -3142,6 +3144,33 @@ async def mute_chat(
         "muted": body.muted,
         "muted_until": until.isoformat() if until is not None else None,
     }
+
+
+@router.post("/chats/{conversation_id}/wallpaper")
+async def set_chat_wallpaper(
+    conversation_id: int,
+    body: WallpaperStyleRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        style = svc.set_wallpaper_style(
+            conversation_id,
+            current_user.id,
+            body.style,
+            apply_to_all=bool(body.apply_to_all),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "bad_wallpaper_style":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "bad_wallpaper_style"
+            )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return {"ok": True, "wallpaper_style": style, "apply_to_all": body.apply_to_all}
 
 
 @router.patch("/chats/{conversation_id}", response_model=ConversationResponse)

@@ -108,6 +108,7 @@ class ConversationResponse(BaseModel):
     archived: bool = False
     muted: bool = False
     muted_until: Optional[datetime] = None
+    wallpaper_style: Optional[str] = None
     created_by_user_id: Optional[int] = None
     only_admins_can_post: bool = False
     join_by_request_enabled: bool = False
@@ -291,6 +292,11 @@ class PinChatRequest(BaseModel):
 class MuteChatRequest(BaseModel):
     muted: bool = True
     muted_until: Optional[datetime] = None
+
+
+class WallpaperStyleRequest(BaseModel):
+    style: Optional[str] = Field(default=None, max_length=32)
+    apply_to_all: bool = False
 
 
 class UpdateGroupChatRequest(BaseModel):

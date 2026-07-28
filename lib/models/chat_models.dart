@@ -369,6 +369,7 @@ class ChatConversation {
     this.archived = false,
     this.muted = false,
     this.mutedUntil,
+    this.wallpaperStyle,
     this.createdByUserId,
     this.onlyAdminsCanPost = false,
     this.joinByRequestEnabled = false,
@@ -401,6 +402,7 @@ class ChatConversation {
   final bool archived;
   final bool muted;
   final DateTime? mutedUntil;
+  final String? wallpaperStyle;
   final int? createdByUserId;
   final bool onlyAdminsCanPost;
   final bool joinByRequestEnabled;
@@ -475,6 +477,7 @@ class ChatConversation {
       mutedUntil: json['muted_until'] is String
           ? DateTime.tryParse(json['muted_until'] as String)
           : null,
+      wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])
           : null,
@@ -510,6 +513,8 @@ class ChatConversation {
     bool? muted,
     DateTime? mutedUntil,
     bool clearMutedUntil = false,
+    String? wallpaperStyle,
+    bool clearWallpaperStyle = false,
     bool? pinned,
     bool? onlyAdminsCanPost,
     bool? joinByRequestEnabled,
@@ -545,6 +550,9 @@ class ChatConversation {
       mutedUntil: clearMutedUntil
           ? null
           : (mutedUntil ?? this.mutedUntil),
+      wallpaperStyle: clearWallpaperStyle
+          ? null
+          : (wallpaperStyle ?? this.wallpaperStyle),
       createdByUserId: createdByUserId,
       onlyAdminsCanPost: onlyAdminsCanPost ?? this.onlyAdminsCanPost,
       joinByRequestEnabled: joinByRequestEnabled ?? this.joinByRequestEnabled,

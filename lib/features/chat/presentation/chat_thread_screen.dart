@@ -578,12 +578,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await ChatThreadUiPrefs.isSlowModeCountdownHapticsEnabled();
       final autoRetryEnabled =
           await ChatThreadUiPrefs.isAutoRetryOnLimitsEnabled();
-      final wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
-        widget.conversationId,
-      );
       final customPath = await ChatThreadUiPrefs.getCustomWallpaperPath(
         widget.conversationId,
       );
+      // Prefer device custom photo; else cloud style; else local prefs.
+      final cloudStyleId = _conversation.wallpaperStyle?.trim();
+      final ChatWallpaperStyle wallpaper;
+      if (customPath != null && customPath.isNotEmpty) {
+        wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
+          widget.conversationId,
+        );
+      } else if (cloudStyleId != null && cloudStyleId.isNotEmpty) {
+        wallpaper = ChatWallpaperStyle.fromId(cloudStyleId);
+        unawaited(
+          ChatThreadUiPrefs.setWallpaperStyle(
+            widget.conversationId,
+            wallpaper,
+          ),
+        );
+      } else {
+        wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
+          widget.conversationId,
+        );
+      }
       ImageProvider? customImage;
       if (customPath != null && !kIsWeb) {
         final file = File(customPath);
@@ -616,6 +633,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _wallpaperStyle = style;
       _wallpaperCustomPath = null;
       _wallpaperImage = null;
+      _conversation = _conversation.copyWith(wallpaperStyle: style.id);
     });
     try {
       if (applyToAll) {
@@ -626,6 +644,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           style,
         );
       }
+      await ChatService.setWallpaperStyle(
+        conversationId: widget.conversationId,
+        style: style.id,
+        applyToAll: applyToAll,
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -3775,21 +3798,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.black.withValues(alpha: 0.28)
-              : Colors.black.withValues(alpha: 0.08),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
           borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          _chatDateSeparatorLabel(date),
-          style: TextStyle(
-            color: isDark ? Colors.white.withValues(alpha: 0.92) : scheme.onSurface,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+          onTap: () => unawaited(_pickAndJumpToDate()),
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.28)
+                  : Colors.black.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              _chatDateSeparatorLabel(date),
+              style: TextStyle(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.92)
+                    : scheme.onSurface,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
       ),
@@ -4671,8 +4703,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
       _reconcileSlowModeCooldownWithConversation();
       unawaited(_syncMuteSchedule());
+      unawaited(_hydrateWallpaperFromConversation());
       unawaited(_loadBotCommands());
     } catch (_) {}
+  }
+
+  Future<void> _hydrateWallpaperFromConversation() async {
+    final cloudId = _conversation.wallpaperStyle?.trim();
+    if (cloudId == null || cloudId.isEmpty) return;
+    final custom = await ChatThreadUiPrefs.getCustomWallpaperPath(
+      widget.conversationId,
+    );
+    if (custom != null && custom.isNotEmpty) return;
+    final style = ChatWallpaperStyle.fromId(cloudId);
+    if (!mounted || style == _wallpaperStyle) return;
+    setState(() {
+      _wallpaperStyle = style;
+      _wallpaperCustomPath = null;
+      _wallpaperImage = null;
+    });
+    unawaited(
+      ChatThreadUiPrefs.setWallpaperStyle(widget.conversationId, style),
+    );
   }
 
   Future<void> _forwardMessage(ChatMessage msg) async {
@@ -11742,33 +11794,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         top: 8,
                         left: 0,
                         right: 0,
-                        child: IgnorePointer(
-                          child: AnimatedOpacity(
-                            opacity: _floatingDateVisible ? 1 : 0,
-                            duration: const Duration(milliseconds: 180),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).brightness ==
-                                          Brightness.dark
-                                      ? Colors.black.withValues(alpha: 0.4)
-                                      : Colors.black.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  _floatingDateLabel!,
-                                  style: TextStyle(
+                        child: AnimatedOpacity(
+                          opacity: _floatingDateVisible ? 1 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: Center(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(999),
+                                onTap: () =>
+                                    unawaited(_pickAndJumpToDate()),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
                                     color: Theme.of(context).brightness ==
                                             Brightness.dark
-                                        ? Colors.white
-                                            .withValues(alpha: 0.92)
-                                        : scheme.onSurface,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+                                        ? Colors.black.withValues(alpha: 0.4)
+                                        : Colors.black.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    _floatingDateLabel!,
+                                    style: TextStyle(
+                                      color: Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white
+                                              .withValues(alpha: 0.92)
+                                          : scheme.onSurface,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),

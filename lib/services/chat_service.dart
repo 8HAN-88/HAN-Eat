@@ -1242,6 +1242,22 @@ class ChatService {
     _ensureOk(response, 'Не удалось изменить уведомления');
   }
 
+  static Future<void> setWallpaperStyle({
+    required int conversationId,
+    required String? style,
+    bool applyToAll = false,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/wallpaper');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'style': style,
+        'apply_to_all': applyToAll,
+      }),
+    );
+    _ensureOk(response, 'Не удалось сохранить обои');
+  }
+
   static Future<ChatConversation> updateGroupTitle({
     required int conversationId,
     required String title,

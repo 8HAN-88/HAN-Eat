@@ -765,6 +765,10 @@ class ChatService:
                     "muted_until": getattr(member, "muted_until", None)
                     if is_muted
                     else None,
+                    "wallpaper_style": (
+                        (getattr(member, "wallpaper_style", None) or "").strip()
+                        or None
+                    ),
                     "member_count": member_count,
                     "members_preview": members_preview,
                 }
@@ -876,9 +880,54 @@ class ChatService:
             "muted_until": getattr(member, "muted_until", None)
             if is_muted
             else None,
+            "wallpaper_style": (
+                (getattr(member, "wallpaper_style", None) or "").strip() or None
+            ),
             "member_count": member_count,
             "members_preview": members_preview,
         }
+
+    _WALLPAPER_STYLES = frozenset(
+        {"pattern", "solid", "dusk", "forest", "sand", "night"}
+    )
+
+    def set_wallpaper_style(
+        self,
+        conversation_id: int,
+        user_id: int,
+        style: Optional[str],
+        *,
+        apply_to_all: bool = False,
+    ) -> Optional[str]:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        value: Optional[str] = None
+        if style is not None:
+            cleaned = (style or "").strip().lower()
+            if cleaned and cleaned not in self._WALLPAPER_STYLES:
+                raise ValueError("bad_wallpaper_style")
+            value = cleaned or None
+        if apply_to_all:
+            members = (
+                self.db.query(ConversationMember)
+                .filter(ConversationMember.user_id == user_id)
+                .all()
+            )
+            for m in members:
+                m.wallpaper_style = value
+            return value
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if not member:
+            raise ValueError("forbidden")
+        member.wallpaper_style = value
+        return value
 
     def set_pinned(self, conversation_id: int, user_id: int, pinned: bool) -> None:
         if not self._is_member(conversation_id, user_id):

@@ -72,6 +72,8 @@ class ConversationMember(Base):
     muted_at = Column(DateTime, nullable=True)
     # Timed mute end (UTC naive). Null = muted forever while muted_at set.
     muted_until = Column(DateTime, nullable=True)
+    # Built-in wallpaper style id (pattern/dusk/…); custom images stay device-local.
+    wallpaper_style = Column(String(32), nullable=True)
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

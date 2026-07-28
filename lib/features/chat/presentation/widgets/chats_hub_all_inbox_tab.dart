@@ -28,6 +28,7 @@ import '../../../navigation/application/shell_tab_visibility.dart';
 import '../../application/chat_realtime_signals.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../widgets/inbox_slidable_tile.dart';
+import '../chat_archived_screen.dart';
 import '../chat_folder_edit_screen.dart';
 import '../chat_folders_manage_sheet.dart';
 import 'chat_mute_duration_sheet.dart';
@@ -322,9 +323,17 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
   ChatConversation? _savedChat;
   bool _openingSaved = false;
+  int _archivedCount = 0;
+  int _archivedUnread = 0;
+  String? _archivedPreview;
 
   bool get _showSavedPinned =>
       widget.searchQuery.trim().isEmpty && _selectedFolderId == null;
+
+  bool get _showArchiveRow =>
+      widget.searchQuery.trim().isEmpty &&
+      _selectedFolderId == null &&
+      _archivedCount > 0;
 
   ChatConversation get _savedChatTile =>
       _savedChat ??
@@ -690,6 +699,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       }
     }();
 
+    List<ChatConversation> archivedChats = const [];
     try {
       chats = await ChatService.listConversations();
       final expired = await _expireTimedMutes(chats);
@@ -699,6 +709,11 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     } catch (e) {
       chatsError = e;
       if (kDebugMode) debugPrint('Chats load failed: $e');
+    }
+    try {
+      archivedChats = await ChatService.listConversations(archived: true);
+    } catch (e) {
+      if (kDebugMode) debugPrint('Archived chats load failed: $e');
     }
     try {
       joinInbox = await ChatService.listJoinRequestsInbox(limit: 50);
@@ -782,11 +797,31 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return b.sortAt.compareTo(a.sortAt);
       });
 
+    final archivedPreview = archivedChats.isEmpty
+        ? null
+        : () {
+            final last = archivedChats.first;
+            final title = last.displayTitle;
+            final body = chatHubBodyPreview(
+              last.lastMessage,
+              isSaved: last.isSaved,
+            );
+            if (body.isEmpty) return title;
+            return '$title — $body';
+          }();
+    final archivedUnread = archivedChats.fold<int>(
+      0,
+      (sum, c) => sum + c.unreadCount,
+    );
+
     setState(() {
       if (resolvedSaved != null) _savedChat = resolvedSaved;
       _entries
         ..clear()
         ..addAll(entries);
+      _archivedCount = archivedChats.length;
+      _archivedUnread = archivedUnread;
+      _archivedPreview = archivedPreview;
       _error = null;
       _chatsPartialError =
           chatsError != null && channels.isNotEmpty ? chatsError : null;
@@ -841,6 +876,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     final folder = _activeFolder;
     if (folder == null) return _entries;
     return _entries.where((e) => _entryMatchesFolder(e, folder)).toList();
+  }
+
+  Future<void> _openArchivedFromHub() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const ChatArchivedScreen()),
+    );
+    if (mounted) unawaited(_load(silent: true));
   }
 
   Future<void> _openSavedChat() async {
@@ -1742,6 +1784,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                     onLongPress: () => _showChatHubActions(_savedChatTile),
                   ),
                 ],
+              ),
+            ),
+          if (_showArchiveRow)
+            SliverToBoxAdapter(
+              child: ChatHubArchiveRow(
+                count: _archivedCount,
+                unread: _archivedUnread,
+                preview: _archivedPreview,
+                onTap: () => unawaited(_openArchivedFromHub()),
               ),
             ),
           SliverList(

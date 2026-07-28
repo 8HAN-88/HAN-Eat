@@ -272,6 +272,89 @@ class ChatHubTile extends StatelessWidget {
   }
 }
 
+/// Telegram-style sticky «Архив» row above the inbox list.
+class ChatHubArchiveRow extends StatelessWidget {
+  const ChatHubArchiveRow({
+    super.key,
+    required this.count,
+    required this.unread,
+    this.preview,
+    required this.onTap,
+  });
+
+  final int count;
+  final int unread;
+  final String? preview;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final subtitle = preview?.trim().isNotEmpty == true
+        ? preview!.trim()
+        : (count == 1 ? '1 чат' : '$count чатов');
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: scheme.primaryContainer,
+                child: Icon(
+                  Icons.archive_outlined,
+                  color: scheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Архив',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight:
+                            unread > 0 ? FontWeight.w700 : FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: unread > 0
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (unread > 0) ...[
+                const SizedBox(width: 8),
+                TelegramUnreadBadge(count: unread),
+              ] else
+                Icon(
+                  Icons.chevron_right,
+                  color: scheme.onSurfaceVariant,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ChatHubRecommendedChannelChip extends StatelessWidget {
   const ChatHubRecommendedChannelChip({
     super.key,
