@@ -1228,11 +1228,16 @@ class ChatService {
   static Future<void> setMuted({
     required int conversationId,
     required bool muted,
+    DateTime? mutedUntil,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/mute');
     final response = await _post(
       uri,
-      body: jsonEncode({'muted': muted}),
+      body: jsonEncode({
+        'muted': muted,
+        if (muted && mutedUntil != null)
+          'muted_until': mutedUntil.toUtc().toIso8601String(),
+      }),
     );
     _ensureOk(response, 'Не удалось изменить уведомления');
   }

@@ -368,6 +368,7 @@ class ChatConversation {
     this.pinned = false,
     this.archived = false,
     this.muted = false,
+    this.mutedUntil,
     this.createdByUserId,
     this.onlyAdminsCanPost = false,
     this.joinByRequestEnabled = false,
@@ -399,6 +400,7 @@ class ChatConversation {
   final bool pinned;
   final bool archived;
   final bool muted;
+  final DateTime? mutedUntil;
   final int? createdByUserId;
   final bool onlyAdminsCanPost;
   final bool joinByRequestEnabled;
@@ -470,6 +472,9 @@ class ChatConversation {
       pinned: json['pinned'] as bool? ?? false,
       archived: json['archived'] as bool? ?? false,
       muted: json['muted'] as bool? ?? false,
+      mutedUntil: json['muted_until'] is String
+          ? DateTime.tryParse(json['muted_until'] as String)
+          : null,
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])
           : null,
@@ -503,6 +508,8 @@ class ChatConversation {
     int? unreadCount,
     int? unreadMentionsCount,
     bool? muted,
+    DateTime? mutedUntil,
+    bool clearMutedUntil = false,
     bool? pinned,
     bool? onlyAdminsCanPost,
     bool? joinByRequestEnabled,
@@ -535,6 +542,9 @@ class ChatConversation {
       pinned: pinned ?? this.pinned,
       archived: archived,
       muted: muted ?? this.muted,
+      mutedUntil: clearMutedUntil
+          ? null
+          : (mutedUntil ?? this.mutedUntil),
       createdByUserId: createdByUserId,
       onlyAdminsCanPost: onlyAdminsCanPost ?? this.onlyAdminsCanPost,
       joinByRequestEnabled: joinByRequestEnabled ?? this.joinByRequestEnabled,

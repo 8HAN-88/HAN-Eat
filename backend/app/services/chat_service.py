@@ -737,6 +737,7 @@ class ChatService:
                     .first()
                 )
             unread = unread_map.get(conv.id, 0)
+            is_muted = self._expire_mute_if_needed(member)
 
             peer = None
             member_count = 0
@@ -760,7 +761,10 @@ class ChatService:
                     "unread_mentions_count": mention_map.get(conv.id, 0),
                     "pinned": member.pinned,
                     "archived": is_archived,
-                    "muted": member.muted_at is not None,
+                    "muted": is_muted,
+                    "muted_until": getattr(member, "muted_until", None)
+                    if is_muted
+                    else None,
                     "member_count": member_count,
                     "members_preview": members_preview,
                 }
@@ -859,6 +863,7 @@ class ChatService:
             peer_id = self.peer_user_id(conv, user_id)
             peer = self.db.query(User).filter(User.id == peer_id).first()
             member_count = 2 if peer else 0
+        is_muted = self._expire_mute_if_needed(member)
         return {
             "conversation": conv,
             "peer": peer,
@@ -867,7 +872,10 @@ class ChatService:
             "unread_mentions_count": unread_mentions,
             "pinned": member.pinned,
             "archived": member.archived_at is not None,
-            "muted": member.muted_at is not None,
+            "muted": is_muted,
+            "muted_until": getattr(member, "muted_until", None)
+            if is_muted
+            else None,
             "member_count": member_count,
             "members_preview": members_preview,
         }
@@ -887,7 +895,32 @@ class ChatService:
             raise ValueError("forbidden")
         member.pinned = pinned
 
-    def set_muted(self, conversation_id: int, user_id: int, muted: bool) -> None:
+    def _expire_mute_if_needed(self, member: ConversationMember) -> bool:
+        """Clear timed mute when muted_until has passed. Returns True if muted."""
+        if member.muted_at is None:
+            if getattr(member, "muted_until", None) is not None:
+                member.muted_until = None
+            return False
+        until = getattr(member, "muted_until", None)
+        if until is None:
+            return True
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        until_naive = until if until.tzinfo is None else until.astimezone(
+            timezone.utc
+        ).replace(tzinfo=None)
+        if until_naive <= now:
+            member.muted_at = None
+            member.muted_until = None
+            return False
+        return True
+
+    def set_muted(
+        self,
+        conversation_id: int,
+        user_id: int,
+        muted: bool,
+        muted_until: Optional[datetime] = None,
+    ) -> Optional[datetime]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         member = (
@@ -900,9 +933,25 @@ class ChatService:
         )
         if not member:
             raise ValueError("forbidden")
-        member.muted_at = (
-            datetime.now(timezone.utc).replace(tzinfo=None) if muted else None
-        )
+        if not muted:
+            member.muted_at = None
+            member.muted_until = None
+            return None
+        member.muted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if muted_until is None:
+            member.muted_until = None
+            return None
+        if muted_until.tzinfo is None:
+            until_naive = muted_until
+        else:
+            until_naive = muted_until.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if until_naive <= now:
+            raise ValueError("invalid_muted_until")
+        member.muted_until = until_naive
+        return until_naive
 
     def _get_group_or_error(self, conversation_id: int) -> Conversation:
         conv = (
@@ -2744,11 +2793,15 @@ class ChatService:
 
         if content is not None:
             text = (content or "").strip()
-            if not text:
-                raise ValueError("empty_content")
-            if item.type != "text":
+            if item.type == "text":
+                if not text:
+                    raise ValueError("empty_content")
+                item.content = text[:4000]
+            elif item.type in ("image", "video", "video_note", "file"):
+                # Caption edit for media scheduled messages.
+                item.content = text[:4000]
+            else:
                 raise ValueError("content_locked")
-            item.content = text[:4000]
 
         if send_at is not None:
             if item.deliver_when_online:

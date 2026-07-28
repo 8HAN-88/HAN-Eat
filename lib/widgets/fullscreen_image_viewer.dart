@@ -1,23 +1,25 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 
-import '../services/server_config.dart';
 import '../utils/file_helper.dart';
 import '../utils/image_url_helper.dart';
+import '../utils/media_download_helper.dart';
 
 /// Полноэкранный просмотрщик изображений с возможностью листания (как в Telegram)
 class FullscreenImageViewer extends StatefulWidget {
   final List<String> imageUrls;
   final int initialIndex;
   final String? heroTag;
+  /// When false (protect content), hide save/share actions.
+  final bool allowSaveShare;
 
   const FullscreenImageViewer({
     super.key,
     required this.imageUrls,
     this.initialIndex = 0,
     this.heroTag,
+    this.allowSaveShare = true,
   });
 
   @override
@@ -48,22 +50,20 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
     });
   }
 
+  String _currentRawUrl() => widget.imageUrls[_currentIndex].trim();
+
   Future<void> _shareCurrent() async {
-    final raw = widget.imageUrls[_currentIndex].trim();
+    if (!widget.allowSaveShare) return;
+    final raw = _currentRawUrl();
     if (raw.isEmpty) return;
-    final candidates = getFullscreenImageUrlCandidates(raw);
-    final url = candidates.isNotEmpty
-        ? candidates.first
-        : ServerConfig.resolveMediaUrl(raw);
-    if (url.trim().isEmpty) return;
-    try {
-      await Share.share(url);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось поделиться')),
-      );
-    }
+    await MediaDownloadHelper.shareMedia(context, rawUrl: raw);
+  }
+
+  Future<void> _saveCurrent() async {
+    if (!widget.allowSaveShare) return;
+    final raw = _currentRawUrl();
+    if (raw.isEmpty) return;
+    await MediaDownloadHelper.saveMedia(context, rawUrl: raw);
   }
 
   @override
@@ -111,11 +111,24 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
                         : null,
                     centerTitle: true,
                     actions: [
-                      IconButton(
-                        tooltip: 'Поделиться',
-                        icon: const Icon(Icons.share_outlined, color: Colors.white),
-                        onPressed: _shareCurrent,
-                      ),
+                      if (widget.allowSaveShare) ...[
+                        IconButton(
+                          tooltip: 'Сохранить',
+                          icon: const Icon(
+                            Icons.download_outlined,
+                            color: Colors.white,
+                          ),
+                          onPressed: _saveCurrent,
+                        ),
+                        IconButton(
+                          tooltip: 'Поделиться',
+                          icon: const Icon(
+                            Icons.share_outlined,
+                            color: Colors.white,
+                          ),
+                          onPressed: _shareCurrent,
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -337,6 +350,7 @@ void showFullscreenImageViewer(
   required List<String> imageUrls,
   int initialIndex = 0,
   String? heroTag,
+  bool allowSaveShare = true,
 }) {
   Navigator.of(context, rootNavigator: true).push(
     MaterialPageRoute(
@@ -344,6 +358,7 @@ void showFullscreenImageViewer(
         imageUrls: imageUrls,
         initialIndex: initialIndex,
         heroTag: heroTag,
+        allowSaveShare: allowSaveShare,
       ),
       fullscreenDialog: true,
     ),

@@ -650,6 +650,7 @@ def _conversation_response(
         pinned=row.get("pinned", False),
         archived=row.get("archived", False),
         muted=row.get("muted", False),
+        muted_until=row.get("muted_until"),
         created_by_user_id=conv.created_by_user_id
         if conv.type in ("group", "saved")
         else None,
@@ -3121,12 +3122,26 @@ async def mute_chat(
 ):
     svc = ChatService(db)
     try:
-        svc.set_muted(conversation_id, current_user.id, body.muted)
+        until = svc.set_muted(
+            conversation_id,
+            current_user.id,
+            body.muted,
+            muted_until=body.muted_until if body.muted else None,
+        )
         db.commit()
-    except ValueError:
+    except ValueError as e:
         db.rollback()
+        code = str(e)
+        if code == "invalid_muted_until":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "invalid_muted_until"
+            )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-    return {"ok": True, "muted": body.muted}
+    return {
+        "ok": True,
+        "muted": body.muted,
+        "muted_until": until.isoformat() if until is not None else None,
+    }
 
 
 @router.patch("/chats/{conversation_id}", response_model=ConversationResponse)

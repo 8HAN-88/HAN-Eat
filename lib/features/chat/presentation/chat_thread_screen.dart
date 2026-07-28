@@ -51,6 +51,7 @@ import '../../../services/phone_contacts_service.dart';
 import '../../../services/share_link_service.dart';
 import '../../../utils/chat_time_format.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../utils/media_download_helper.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -4948,6 +4949,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         builder: (_) => ChatMediaGalleryScreen(
           conversationId: widget.conversationId,
           seedMessages: _messages,
+          protectContent: _conversation.protectContent,
         ),
       ),
     );
@@ -5578,7 +5580,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await ChatThreadUiPrefs.setMuteUntil(widget.conversationId, null);
       return;
     }
-    final until = await ChatThreadUiPrefs.getMuteUntil(widget.conversationId);
+    // Prefer cloud muted_until; fall back to local cache.
+    var until = _conversation.mutedUntil?.toLocal();
+    until ??= await ChatThreadUiPrefs.getMuteUntil(widget.conversationId);
+    if (until != null) {
+      await ChatThreadUiPrefs.setMuteUntil(widget.conversationId, until);
+    }
     if (until == null) return; // forever
     final remaining = until.difference(DateTime.now());
     if (remaining <= Duration.zero) {
@@ -5594,6 +5601,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await ChatService.setMuted(
       conversationId: widget.conversationId,
       muted: muted,
+      mutedUntil: muted ? until : null,
     );
     await ChatThreadUiPrefs.setMuteUntil(
       widget.conversationId,
@@ -5602,7 +5610,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     setState(() {
       _muted = muted;
-      _conversation = _conversation.copyWith(muted: muted);
+      _conversation = _conversation.copyWith(
+        muted: muted,
+        mutedUntil: until,
+        clearMutedUntil: !muted || until == null,
+      );
     });
     await _syncMuteSchedule();
   }
@@ -8993,19 +9005,103 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (_) {}
   }
 
+  bool _canEditScheduledContent(ScheduledChatMessage item) {
+    return item.type == 'text' ||
+        item.type == 'image' ||
+        item.type == 'video' ||
+        item.type == 'video_note' ||
+        item.type == 'file';
+  }
+
+  Widget? _scheduledLeading(ScheduledChatMessage item) {
+    final url = item.mediaUrl?.trim();
+    if (url != null &&
+        url.isNotEmpty &&
+        (item.type == 'image' ||
+            item.type == 'sticker' ||
+            item.type == 'video' ||
+            item.type == 'video_note')) {
+      final resolved = ServerConfig.resolveMediaUrl(url);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: item.type == 'video' || item.type == 'video_note'
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      child: const Icon(Icons.videocam_outlined, size: 22),
+                    ),
+                    const Align(
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.play_circle_fill,
+                        color: Colors.white70,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                )
+              : CachedNetworkImage(
+                  imageUrl: resolved,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, __, ___) => ColoredBox(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    child: Icon(
+                      item.type == 'sticker'
+                          ? Icons.emoji_emotions_outlined
+                          : Icons.photo_outlined,
+                      size: 22,
+                    ),
+                  ),
+                ),
+        ),
+      );
+    }
+    IconData icon;
+    switch (item.type) {
+      case 'voice':
+        icon = Icons.mic_none_rounded;
+        break;
+      case 'file':
+        icon = Icons.insert_drive_file_outlined;
+        break;
+      case 'poll':
+        icon = Icons.poll_outlined;
+        break;
+      case 'location':
+        icon = Icons.location_on_outlined;
+        break;
+      default:
+        icon = Icons.schedule_outlined;
+    }
+    return CircleAvatar(
+      radius: 22,
+      child: Icon(icon, size: 20),
+    );
+  }
+
   Future<String?> _editScheduledText(ScheduledChatMessage item) async {
+    final isCaption = item.type != 'text';
     final controller = TextEditingController(text: item.content);
     final next = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Изменить отложенное'),
+        title: Text(isCaption ? 'Подпись' : 'Изменить отложенное'),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLines: 6,
           maxLength: 4000,
-          decoration: const InputDecoration(
-            hintText: 'Текст сообщения',
+          decoration: InputDecoration(
+            hintText: isCaption ? 'Подпись к медиа' : 'Текст сообщения',
           ),
         ),
         actions: [
@@ -9023,7 +9119,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     controller.dispose();
     if (next == null) return null;
     final trimmed = next.trim();
-    if (trimmed.isEmpty || trimmed == item.content.trim()) return null;
+    if (trimmed == item.content.trim()) return null;
+    if (!isCaption && trimmed.isEmpty) return null;
     return trimmed;
   }
 
@@ -9211,17 +9308,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           itemBuilder: (_, index) {
                             final item = pending[index];
                             final preview = _scheduledPreview(item);
+                            final caption = item.type != 'text'
+                                ? item.content.trim()
+                                : '';
                             return ListTile(
+                              leading: _scheduledLeading(item),
                               title: Text(
                                 preview,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                item.sendWhenOnline
-                                    ? 'Отправка: когда пользователь онлайн'
-                                    : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                                [
+                                  if (caption.isNotEmpty) caption,
+                                  item.sendWhenOnline
+                                      ? 'Отправка: когда пользователь онлайн'
+                                      : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                                ].join('\n'),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
                               ),
+                              isThreeLine: caption.isNotEmpty,
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -9274,10 +9381,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       }
                                     },
                                   ),
-                                  if (item.type == 'text')
+                                  if (_canEditScheduledContent(item))
                                     IconButton(
                                       icon: const Icon(Icons.edit_outlined),
-                                      tooltip: 'Изменить текст',
+                                      tooltip: item.type == 'text'
+                                          ? 'Изменить текст'
+                                          : 'Изменить подпись',
                                       onPressed: () async {
                                         final next =
                                             await _editScheduledText(item);
@@ -9436,6 +9545,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         builder: (_) => FullscreenImageViewer(
           imageUrls: urls.isEmpty ? [url] : urls,
           initialIndex: index >= 0 ? index : 0,
+          allowSaveShare: !_conversation.protectContent,
         ),
       ),
     );
@@ -9460,7 +9570,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _openVideo(String url) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => _ChatVideoPlayerPage(videoUrl: url),
+        builder: (_) => _ChatVideoPlayerPage(
+          videoUrl: url,
+          allowSaveShare: !_conversation.protectContent,
+        ),
       ),
     );
   }
@@ -13484,9 +13597,13 @@ class _Bubble extends StatelessWidget {
 }
 
 class _ChatVideoPlayerPage extends StatefulWidget {
-  const _ChatVideoPlayerPage({required this.videoUrl});
+  const _ChatVideoPlayerPage({
+    required this.videoUrl,
+    this.allowSaveShare = true,
+  });
 
   final String videoUrl;
+  final bool allowSaveShare;
 
   @override
   State<_ChatVideoPlayerPage> createState() => _ChatVideoPlayerPageState();
@@ -13550,6 +13667,30 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         title: const Text('Видео'),
+        actions: [
+          if (widget.allowSaveShare) ...[
+            IconButton(
+              tooltip: 'Сохранить',
+              icon: const Icon(Icons.download_outlined),
+              onPressed: () => unawaited(
+                MediaDownloadHelper.saveMedia(
+                  context,
+                  rawUrl: widget.videoUrl,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Поделиться',
+              icon: const Icon(Icons.share_outlined),
+              onPressed: () => unawaited(
+                MediaDownloadHelper.shareMedia(
+                  context,
+                  rawUrl: widget.videoUrl,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
       body: Center(
         child: _hasError

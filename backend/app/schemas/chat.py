@@ -107,6 +107,7 @@ class ConversationResponse(BaseModel):
     pinned: bool = False
     archived: bool = False
     muted: bool = False
+    muted_until: Optional[datetime] = None
     created_by_user_id: Optional[int] = None
     only_admins_can_post: bool = False
     join_by_request_enabled: bool = False
@@ -289,6 +290,7 @@ class PinChatRequest(BaseModel):
 
 class MuteChatRequest(BaseModel):
     muted: bool = True
+    muted_until: Optional[datetime] = None
 
 
 class UpdateGroupChatRequest(BaseModel):

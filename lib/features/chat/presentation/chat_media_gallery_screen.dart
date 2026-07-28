@@ -9,6 +9,7 @@ import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/chat_time_format.dart';
+import '../../../utils/media_download_helper.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/inline_video_player.dart';
@@ -21,10 +22,12 @@ class ChatMediaGalleryScreen extends StatefulWidget {
     super.key,
     required this.conversationId,
     this.seedMessages = const [],
+    this.protectContent = false,
   });
 
   final int conversationId;
   final List<ChatMessage> seedMessages;
+  final bool protectContent;
 
   @override
   State<ChatMediaGalleryScreen> createState() => _ChatMediaGalleryScreenState();
@@ -234,9 +237,12 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
     unawaited(_reload());
   }
 
-  Future<void> _offerShowInChat(ChatMessage msg) async {
+  bool get _allowSaveShare => !widget.protectContent;
+
+  Future<void> _offerMediaActions(ChatMessage msg) async {
     if (msg.id <= 0) return;
-    final go = await showModalBottomSheet<bool>(
+    final url = msg.mediaUrl?.trim();
+    final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -246,15 +252,35 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
             ListTile(
               leading: const Icon(Icons.chat_bubble_outline),
               title: const Text('Показать в чате'),
-              onTap: () => Navigator.pop(ctx, true),
+              onTap: () => Navigator.pop(ctx, 'show'),
             ),
+            if (_allowSaveShare && url != null && url.isNotEmpty) ...[
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('Сохранить'),
+                onTap: () => Navigator.pop(ctx, 'save'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('Поделиться'),
+                onTap: () => Navigator.pop(ctx, 'share'),
+              ),
+            ],
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    if (go == true && mounted) {
+    if (!mounted || action == null) return;
+    if (action == 'show') {
       Navigator.pop(context, msg.id);
+      return;
+    }
+    if (url == null || url.isEmpty) return;
+    if (action == 'save') {
+      await MediaDownloadHelper.saveMedia(context, rawUrl: url);
+    } else if (action == 'share') {
+      await MediaDownloadHelper.shareMedia(context, rawUrl: url);
     }
   }
 
@@ -352,7 +378,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                   ),
                                   onTap: () => _openExternal(item.url),
                                   onLongPress: () =>
-                                      unawaited(_offerShowInChat(item.message)),
+                                      unawaited(_offerMediaActions(item.message)),
                                 );
                               },
                             )
@@ -411,7 +437,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                         );
                                       },
                                       onLongPress: () =>
-                                          unawaited(_offerShowInChat(msg)),
+                                          unawaited(_offerMediaActions(msg)),
                                     );
                                   },
                                 )
@@ -437,7 +463,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                         msg.type == 'video_note') {
                                       return GestureDetector(
                                         onLongPress: () =>
-                                            unawaited(_offerShowInChat(msg)),
+                                            unawaited(_offerMediaActions(msg)),
                                         child: Stack(
                                           fit: StackFit.expand,
                                           children: [
@@ -481,12 +507,13 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                                 FullscreenImageViewer(
                                               imageUrls: imageUrls,
                                               initialIndex: imageIndex,
+                                              allowSaveShare: _allowSaveShare,
                                             ),
                                           ),
                                         );
                                       },
                                       onLongPress: () =>
-                                          unawaited(_offerShowInChat(msg)),
+                                          unawaited(_offerMediaActions(msg)),
                                       child: Hero(
                                         tag: 'chat_media_${msg.id}_$url',
                                         child: CachedNetworkImage(

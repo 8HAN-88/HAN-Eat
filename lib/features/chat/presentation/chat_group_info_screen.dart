@@ -1683,6 +1683,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                     MaterialPageRoute(
                                       builder: (_) => ChatMediaGalleryScreen(
                                         conversationId: _conversation.id,
+                                        protectContent:
+                                            _conversation.protectContent,
                                       ),
                                     ),
                                   );

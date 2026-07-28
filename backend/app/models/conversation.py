@@ -70,6 +70,8 @@ class ConversationMember(Base):
     pinned = Column(Boolean, default=False, nullable=False)
     archived_at = Column(DateTime, nullable=True)
     muted_at = Column(DateTime, nullable=True)
+    # Timed mute end (UTC naive). Null = muted forever while muted_at set.
+    muted_until = Column(DateTime, nullable=True)
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
