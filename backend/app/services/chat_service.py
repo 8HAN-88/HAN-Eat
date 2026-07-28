@@ -714,6 +714,36 @@ class ChatService:
                             mention_map.get(msg.conversation_id, 0) + 1
                         )
 
+        reaction_rows = (
+            self.db.query(
+                Message.conversation_id,
+                func.count(MessageReaction.id).label("cnt"),
+            )
+            .join(Message, Message.id == MessageReaction.message_id)
+            .join(
+                ConversationMember,
+                and_(
+                    ConversationMember.conversation_id == Message.conversation_id,
+                    ConversationMember.user_id == user_id,
+                ),
+            )
+            .filter(
+                Message.conversation_id.in_(conv_ids),
+                Message.sender_id == user_id,
+                Message.deleted_at.is_(None),
+                MessageReaction.user_id != user_id,
+                ~Message.id.in_(hidden_subq),
+                or_(
+                    ConversationMember.reactions_seen_at.is_(None),
+                    MessageReaction.created_at
+                    > ConversationMember.reactions_seen_at,
+                ),
+            )
+            .group_by(Message.conversation_id)
+            .all()
+        )
+        reaction_map = {row.conversation_id: int(row.cnt) for row in reaction_rows}
+
         results = []
         for conv in convs:
             member = member_map[conv.id]
@@ -759,6 +789,7 @@ class ChatService:
                     "last_message": last_msg,
                     "unread_count": unread,
                     "unread_mentions_count": mention_map.get(conv.id, 0),
+                    "unread_reactions_count": reaction_map.get(conv.id, 0),
                     "pinned": member.pinned,
                     "archived": is_archived,
                     "muted": is_muted,
@@ -854,6 +885,21 @@ class ChatService:
                         msg.content or "", me, is_admin=is_admin
                     ):
                         unread_mentions += 1
+        reaction_q = (
+            self.db.query(func.count(MessageReaction.id))
+            .join(Message, Message.id == MessageReaction.message_id)
+            .filter(
+                Message.conversation_id == conv.id,
+                Message.sender_id == user_id,
+                Message.deleted_at.is_(None),
+                MessageReaction.user_id != user_id,
+                ~Message.id.in_(hidden_subq),
+            )
+        )
+        seen_at = getattr(member, "reactions_seen_at", None)
+        if seen_at is not None:
+            reaction_q = reaction_q.filter(MessageReaction.created_at > seen_at)
+        unread_reactions = int(reaction_q.scalar() or 0)
         peer = None
         member_count = 0
         members_preview: List[User] = []
@@ -874,6 +920,7 @@ class ChatService:
             "last_message": last_msg,
             "unread_count": unread,
             "unread_mentions_count": unread_mentions,
+            "unread_reactions_count": unread_reactions,
             "pinned": member.pinned,
             "archived": member.archived_at is not None,
             "muted": is_muted,
@@ -3440,6 +3487,8 @@ class ChatService:
             or message_id > member.last_delivered_message_id
         ):
             member.last_delivered_message_id = message_id
+        # Opening/reading a chat clears unread reaction badges.
+        member.reactions_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def mark_unread(self, conversation_id: int, user_id: int) -> Optional[int]:
         if not self._is_member(conversation_id, user_id):

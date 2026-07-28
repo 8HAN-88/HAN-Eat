@@ -103,6 +103,7 @@ class ConversationResponse(BaseModel):
     last_message: Optional[MessageResponse] = None
     unread_count: int = 0
     unread_mentions_count: int = 0
+    unread_reactions_count: int = 0
     updated_at: datetime
     pinned: bool = False
     archived: bool = False

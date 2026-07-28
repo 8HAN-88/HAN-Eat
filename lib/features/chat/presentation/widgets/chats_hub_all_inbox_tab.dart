@@ -417,6 +417,25 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return;
       }
 
+      if (event.event == 'user.presence') {
+        final uid = event.userId;
+        final seen = event.lastSeenAt;
+        if (uid == null || seen == null) return;
+        var changed = false;
+        for (var i = 0; i < _entries.length; i++) {
+          final entry = _entries[i];
+          if (entry is! ChatInboxEntry) continue;
+          final peer = entry.chat.peer;
+          if (peer == null || peer.id != uid) continue;
+          _entries[i] = ChatInboxEntry(
+            entry.chat.copyWith(peer: peer.copyWith(lastSeenAt: seen)),
+          );
+          changed = true;
+        }
+        if (changed && mounted) setState(() {});
+        return;
+      }
+
       if (!ShellTabVisibility.chatsActive || _loading) return;
       if (event.event == 'chat.inbox' ||
           event.event == 'chat.message_hidden' ||

@@ -47,6 +47,7 @@ import '../../../services/paid_features_service.dart';
 import '../../../services/product_analytics.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/chat_stream_service.dart';
+import '../../../services/user_realtime_service.dart';
 import '../../../services/phone_contacts_service.dart';
 import '../../../services/share_link_service.dart';
 import '../../../utils/chat_time_format.dart';
@@ -287,6 +288,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   List<ChatBotCommand> _botCommands = [];
   OverlayEntry? _botAutocompleteOverlayEntry;
   StreamSubscription<void>? _signalSub;
+  StreamSubscription<UserRealtimeEvent>? _presenceSub;
   VoidCallback? _apiReachabilityListener;
   VoidCallback? _apiConnectingListener;
   VoidCallback? _deviceOnlineListener;
@@ -470,8 +472,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_syncMuteSchedule());
     _load(refresh: true);
     _startPolling();
-    _presenceTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+    // Fallback poll; primary presence updates come via user.presence SSE.
+    _presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (!_appPaused) _refreshConversation();
+    });
+    _presenceSub = UserRealtimeService.instance.events.listen((event) {
+      if (!mounted || event.event != 'user.presence') return;
+      final peer = _conversation.peer;
+      final uid = event.userId;
+      final seen = event.lastSeenAt;
+      if (peer == null || uid == null || seen == null || peer.id != uid) {
+        return;
+      }
+      setState(() {
+        _conversation = _conversation.copyWith(
+          peer: peer.copyWith(lastSeenAt: seen),
+        );
+      });
     });
     _signalSub = ChatRealtimeSignals.instance.threadPoll.listen((_) {
       if (!_appPaused) _pollNew();
@@ -3583,6 +3600,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return null;
   }
 
+  int? _firstUnreadReactionMessageId() {
+    if (_conversation.unreadReactionsCount <= 0 || _messages.isEmpty) {
+      return null;
+    }
+    for (final msg in _messages) {
+      if (msg.isMine && msg.reactions.isNotEmpty) return msg.id;
+    }
+    return null;
+  }
+
   void _scrollAfterInitialLoad() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
@@ -3593,19 +3620,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
         final mentionId = _firstUnreadMentionMessageId();
+        final reactionId =
+            mentionId == null ? _firstUnreadReactionMessageId() : null;
         setState(() => _unreadDividerBeforeId = firstUnread);
-        _scrollToMessage(mentionId ?? firstUnread);
+        _scrollToMessage(mentionId ?? reactionId ?? firstUnread);
         final idx = _messages.indexWhere((m) => m.id == firstUnread);
         final below = idx >= 0 ? _messages.length - idx - 1 : 0;
         if (below > 0) {
           setState(() {
             _newMessagesBelow = below;
             _showJumpToBottom = true;
+            _jumpFabTargetsUnread = true;
           });
         }
       } else {
-        _scrollToBottom();
-        _scheduleMarkRead();
+        final reactionId = _firstUnreadReactionMessageId();
+        if (reactionId != null) {
+          _scrollToMessage(reactionId);
+          _focusMessageTemporarily(reactionId);
+          setState(() {
+            _showJumpToBottom = true;
+            _jumpFabTargetsUnread = false;
+          });
+        } else {
+          _scrollToBottom();
+          _scheduleMarkRead();
+        }
       }
     });
   }
@@ -3692,10 +3732,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _onJumpFabTap() {
     if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
       final mentionId = _firstUnreadMentionMessageId();
-      final id = mentionId ?? _unreadDividerBeforeId!;
+      final reactionId =
+          mentionId == null ? _firstUnreadReactionMessageId() : null;
+      final id = mentionId ?? reactionId ?? _unreadDividerBeforeId!;
       _scrollToMessage(id);
       _focusMessageTemporarily(id);
       return;
+    }
+    if (_conversation.unreadReactionsCount > 0) {
+      final reactionId = _firstUnreadReactionMessageId();
+      if (reactionId != null) {
+        _scrollToMessage(reactionId);
+        _focusMessageTemporarily(reactionId);
+        return;
+      }
     }
     _jumpToBottomAndMarkRead();
   }
@@ -4312,6 +4362,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _markDeliveredDebounce?.cancel();
     _draftSaveDebounce?.cancel();
     _signalSub?.cancel();
+    _presenceSub?.cancel();
     if (_apiReachabilityListener != null) {
       ApiReachabilityService.instance.isApiReachable
           .removeListener(_apiReachabilityListener!);
@@ -8479,11 +8530,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!mounted) return;
     // Keep the unread divider for this open session (Telegram-like);
     // only clear the badge/count once we've marked read on the server.
-    if (_conversation.unreadCount > 0) {
+    if (_conversation.unreadCount > 0 ||
+        _conversation.unreadMentionsCount > 0 ||
+        _conversation.unreadReactionsCount > 0) {
       setState(() {
         _conversation = _conversation.copyWith(
           unreadCount: 0,
           unreadMentionsCount: 0,
+          unreadReactionsCount: 0,
         );
       });
     }
@@ -11870,11 +11924,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               _conversation.unreadMentionsCount >
                                                   0
                                           ? Icons.alternate_email_rounded
-                                          : (_jumpFabTargetsUnread
-                                              ? Icons
-                                                  .keyboard_double_arrow_down_rounded
-                                              : Icons
-                                                  .keyboard_arrow_down_rounded),
+                                          : ((_jumpFabTargetsUnread ||
+                                                      _conversation
+                                                              .unreadReactionsCount >
+                                                          0) &&
+                                                  _conversation
+                                                          .unreadMentionsCount <=
+                                                      0 &&
+                                                  _conversation
+                                                          .unreadReactionsCount >
+                                                      0
+                                              ? Icons.favorite_rounded
+                                              : (_jumpFabTargetsUnread
+                                                  ? Icons
+                                                      .keyboard_double_arrow_down_rounded
+                                                  : Icons
+                                                      .keyboard_arrow_down_rounded)),
                                       size: 28,
                                       color: scheme.onSurfaceVariant,
                                     ),
@@ -11883,7 +11948,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ),
                               if (_newMessagesBelow > 0 ||
                                   (_jumpFabTargetsUnread &&
-                                      _conversation.unreadCount > 0))
+                                      _conversation.unreadCount > 0) ||
+                                  _conversation.unreadReactionsCount > 0)
                                 Positioned(
                                   top: -6,
                                   left: 0,
@@ -11898,6 +11964,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           : _newMessagesBelow,
                                       hasMention: _jumpFabTargetsUnread &&
                                           _conversation.unreadMentionsCount >
+                                              0,
+                                      hasReaction:
+                                          _conversation.unreadMentionsCount <=
+                                              0 &&
+                                          _conversation.unreadReactionsCount >
                                               0,
                                     ),
                                   ),

@@ -95,6 +95,30 @@ class ChatUserBrief {
       sendRestrictionReason: json['send_restriction_reason'] as String?,
     );
   }
+
+  ChatUserBrief copyWith({
+    String? name,
+    String? username,
+    String? avatarUrl,
+    DateTime? lastSeenAt,
+    bool clearLastSeenAt = false,
+  }) {
+    return ChatUserBrief(
+      id: id,
+      name: name ?? this.name,
+      username: username ?? this.username,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      lastSeenAt: clearLastSeenAt ? null : (lastSeenAt ?? this.lastSeenAt),
+      isBot: isBot,
+      isGroupAdmin: isGroupAdmin,
+      isGroupCreator: isGroupCreator,
+      canManageMembers: canManageMembers,
+      canManagePostingPermissions: canManagePostingPermissions,
+      sendRestricted: sendRestricted,
+      sendRestrictedUntil: sendRestrictedUntil,
+      sendRestrictionReason: sendRestrictionReason,
+    );
+  }
 }
 
 class ChatBotCommand {
@@ -364,6 +388,7 @@ class ChatConversation {
     this.lastMessage,
     this.unreadCount = 0,
     this.unreadMentionsCount = 0,
+    this.unreadReactionsCount = 0,
     required this.updatedAt,
     this.pinned = false,
     this.archived = false,
@@ -397,6 +422,7 @@ class ChatConversation {
   final ChatMessage? lastMessage;
   final int unreadCount;
   final int unreadMentionsCount;
+  final int unreadReactionsCount;
   final DateTime updatedAt;
   final bool pinned;
   final bool archived;
@@ -470,6 +496,7 @@ class ChatConversation {
       lastMessage: lastMessage,
       unreadCount: _parseInt(json['unread_count']),
       unreadMentionsCount: _parseInt(json['unread_mentions_count']),
+      unreadReactionsCount: _parseInt(json['unread_reactions_count']),
       updatedAt: _parseDate(json['updated_at']),
       pinned: json['pinned'] as bool? ?? false,
       archived: json['archived'] as bool? ?? false,
@@ -508,8 +535,10 @@ class ChatConversation {
     int? memberCount,
     int? pendingJoinRequestsCount,
     List<ChatUserBrief>? membersPreview,
+    ChatUserBrief? peer,
     int? unreadCount,
     int? unreadMentionsCount,
+    int? unreadReactionsCount,
     bool? muted,
     DateTime? mutedUntil,
     bool clearMutedUntil = false,
@@ -533,7 +562,7 @@ class ChatConversation {
     return ChatConversation(
       id: id,
       type: type,
-      peer: peer,
+      peer: peer ?? this.peer,
       title: title ?? this.title,
       avatarUrl: clearAvatarUrl ? null : (avatarUrl ?? this.avatarUrl),
       memberCount: memberCount ?? this.memberCount,
@@ -543,6 +572,8 @@ class ChatConversation {
       lastMessage: lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
       unreadMentionsCount: unreadMentionsCount ?? this.unreadMentionsCount,
+      unreadReactionsCount:
+          unreadReactionsCount ?? this.unreadReactionsCount,
       updatedAt: updatedAt,
       pinned: pinned ?? this.pinned,
       archived: archived,

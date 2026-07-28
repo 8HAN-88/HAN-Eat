@@ -74,6 +74,8 @@ class ConversationMember(Base):
     muted_until = Column(DateTime, nullable=True)
     # Built-in wallpaper style id (pattern/dusk/…); custom images stay device-local.
     wallpaper_style = Column(String(32), nullable=True)
+    # Cursor for unread reactions on my messages (Telegram ❤ badge).
+    reactions_seen_at = Column(DateTime, nullable=True)
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

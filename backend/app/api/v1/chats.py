@@ -647,6 +647,7 @@ def _conversation_response(
         last_message=last_resp,
         unread_count=row.get("unread_count", 0),
         unread_mentions_count=int(row.get("unread_mentions_count", 0) or 0),
+        unread_reactions_count=int(row.get("unread_reactions_count", 0) or 0),
         updated_at=conv.updated_at or conv.created_at,
         pinned=row.get("pinned", False),
         archived=row.get("archived", False),
@@ -2601,6 +2602,21 @@ async def add_message_reaction(
             "reactions": [r.model_dump() for r in reactions],
         },
     )
+    # Notify message owner so hub shows unread ❤ badge.
+    msg = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.conversation_id == conversation_id)
+        .first()
+    )
+    if msg is not None and msg.sender_id != current_user.id:
+        publish_user_event(
+            msg.sender_id,
+            {
+                "event": "chat.inbox",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            },
+        )
     return {
         "ok": True,
         "message_id": message_id,
@@ -2640,6 +2656,20 @@ async def remove_message_reaction(
             "reactions": [r.model_dump() for r in reactions],
         },
     )
+    msg = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.conversation_id == conversation_id)
+        .first()
+    )
+    if msg is not None and msg.sender_id != current_user.id:
+        publish_user_event(
+            msg.sender_id,
+            {
+                "event": "chat.inbox",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+            },
+        )
     return {
         "ok": True,
         "message_id": message_id,

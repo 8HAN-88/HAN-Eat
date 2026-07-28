@@ -22,6 +22,8 @@ class UserRealtimeEvent {
     this.conversationId,
     this.userId,
     this.messageId,
+    this.lastSeenAt,
+    this.online,
   });
 
   final String event;
@@ -30,6 +32,8 @@ class UserRealtimeEvent {
   final int? conversationId;
   final int? userId;
   final int? messageId;
+  final DateTime? lastSeenAt;
+  final bool? online;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -45,6 +49,10 @@ class UserRealtimeEvent {
       if (v is String) return int.tryParse(v);
       return null;
     }
+    DateTime? asDate(dynamic v) {
+      if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
+      return null;
+    }
 
     return UserRealtimeEvent(
       event: '${json['event'] ?? json['type'] ?? ''}',
@@ -53,6 +61,8 @@ class UserRealtimeEvent {
       conversationId: asInt(json['conversation_id']),
       userId: asInt(json['user_id']),
       messageId: asInt(json['message_id']),
+      lastSeenAt: asDate(json['last_seen_at']),
+      online: json['online'] is bool ? json['online'] as bool : null,
     );
   }
 }

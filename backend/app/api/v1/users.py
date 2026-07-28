@@ -119,9 +119,49 @@ async def ping_presence(
     db: Session = Depends(get_db),
 ):
     """Heartbeat для «был(а) в сети» в чатах."""
+    from app.models.conversation import Conversation, ConversationMember
+    from app.services.user_event_bus import publish_user_event
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     current_user.last_seen_at = now
     db.commit()
+
+    # Fan out presence to peers of direct chats (respect last-seen privacy).
+    show_seen = bool(getattr(current_user, "show_last_seen", True))
+    if show_seen:
+        my_direct_ids = [
+            cid
+            for (cid,) in db.query(ConversationMember.conversation_id)
+            .join(
+                Conversation,
+                Conversation.id == ConversationMember.conversation_id,
+            )
+            .filter(
+                ConversationMember.user_id == current_user.id,
+                Conversation.type == "direct",
+            )
+            .all()
+        ]
+        if my_direct_ids:
+            peer_ids = [
+                uid
+                for (uid,) in db.query(ConversationMember.user_id)
+                .filter(
+                    ConversationMember.conversation_id.in_(my_direct_ids),
+                    ConversationMember.user_id != current_user.id,
+                )
+                .distinct()
+                .all()
+            ]
+            payload = {
+                "event": "user.presence",
+                "user_id": current_user.id,
+                "last_seen_at": now.isoformat(),
+                "online": True,
+            }
+            for peer_id in peer_ids:
+                publish_user_event(peer_id, payload)
+
     return {"ok": True, "last_seen_at": now.isoformat()}
 
 

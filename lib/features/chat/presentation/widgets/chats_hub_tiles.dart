@@ -76,8 +76,9 @@ class ChatHubTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final last = chat.lastMessage;
-    final hasUnread =
-        chat.unreadCount > 0 || chat.unreadMentionsCount > 0;
+    final hasUnread = chat.unreadCount > 0 ||
+        chat.unreadMentionsCount > 0 ||
+        chat.unreadReactionsCount > 0;
     final hasStateIcons = chat.pinned || chat.muted;
     final draft = draftText?.trim();
     final typing = typingLabel?.trim();
@@ -251,12 +252,18 @@ class ChatHubTile extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (hasUnread || chat.unreadMentionsCount > 0) ...[
+                        if (hasUnread) ...[
                           const SizedBox(width: 8),
                           TelegramUnreadBadge(
-                            count: chat.unreadCount,
+                            count: chat.unreadCount > 0
+                                ? chat.unreadCount
+                                : (chat.unreadMentionsCount > 0
+                                    ? chat.unreadMentionsCount
+                                    : chat.unreadReactionsCount),
                             muted: chat.muted,
                             hasMention: chat.unreadMentionsCount > 0,
+                            hasReaction: chat.unreadMentionsCount <= 0 &&
+                                chat.unreadReactionsCount > 0,
                           ),
                         ],
                       ],
