@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../services/api_service.dart';
 import '../../bots/data/bot_models.dart';
-import '../../integrations/presentation/integrations_screen.dart';
 import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
 import 'miniapp_webview_screen.dart';
@@ -95,7 +94,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Мини-приложения'),
@@ -115,7 +114,6 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen> {
             tabs: [
               Tab(text: 'Каталог'),
               Tab(text: 'Мои'),
-              Tab(text: 'Интеграции'),
             ],
           ),
         ),
@@ -139,7 +137,6 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen> {
               onToggleInstall: _toggleInstall,
               onRefresh: _reload,
             ),
-            const IntegrationsScreen(),
           ],
         ),
       ),
