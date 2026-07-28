@@ -72,15 +72,21 @@ class TelegramUnreadBadge extends StatelessWidget {
     super.key,
     required this.count,
     this.muted = false,
+    this.hasMention = false,
   });
 
   final int count;
   final bool muted;
+  /// Telegram-style `@` badge when there are unread @mentions.
+  final bool hasMention;
 
   @override
   Widget build(BuildContext context) {
-    if (count <= 0) return const SizedBox.shrink();
+    if (count <= 0 && !hasMention) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
+    final label = hasMention
+        ? '@'
+        : (count > 99 ? '99+' : '$count');
     return Container(
       constraints: const BoxConstraints(
         minWidth: AppSizes.telegramUnreadBadge,
@@ -93,10 +99,10 @@ class TelegramUnreadBadge extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(
-        count > 99 ? '99+' : '$count',
+        label,
         style: TextStyle(
           color: muted ? scheme.surface : scheme.onPrimary,
-          fontSize: 11,
+          fontSize: hasMention ? 13 : 11,
           fontWeight: FontWeight.w800,
           height: 1,
         ),

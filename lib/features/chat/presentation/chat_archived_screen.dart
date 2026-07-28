@@ -416,7 +416,8 @@ class _ArchivedChatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final last = chat.lastMessage;
-    final hasUnread = chat.unreadCount > 0;
+    final hasUnread =
+        chat.unreadCount > 0 || chat.unreadMentionsCount > 0;
     final preview = chatHubBodyPreview(last, isSaved: chat.isSaved);
     final prefix = last == null
         ? null
@@ -476,8 +477,11 @@ class _ArchivedChatTile extends StatelessWidget {
                 if (hasUnread) ...[
                   const SizedBox(height: 4),
                   TelegramUnreadBadge(
-                    count: chat.unreadCount,
+                    count: chat.unreadCount > 0
+                        ? chat.unreadCount
+                        : chat.unreadMentionsCount,
                     muted: chat.muted,
+                    hasMention: chat.unreadMentionsCount > 0,
                   ),
                 ],
               ],

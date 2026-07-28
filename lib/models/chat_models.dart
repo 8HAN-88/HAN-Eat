@@ -363,6 +363,7 @@ class ChatConversation {
     this.membersPreview = const [],
     this.lastMessage,
     this.unreadCount = 0,
+    this.unreadMentionsCount = 0,
     required this.updatedAt,
     this.pinned = false,
     this.archived = false,
@@ -393,6 +394,7 @@ class ChatConversation {
   final List<ChatUserBrief> membersPreview;
   final ChatMessage? lastMessage;
   final int unreadCount;
+  final int unreadMentionsCount;
   final DateTime updatedAt;
   final bool pinned;
   final bool archived;
@@ -463,6 +465,7 @@ class ChatConversation {
       membersPreview: preview,
       lastMessage: lastMessage,
       unreadCount: _parseInt(json['unread_count']),
+      unreadMentionsCount: _parseInt(json['unread_mentions_count']),
       updatedAt: _parseDate(json['updated_at']),
       pinned: json['pinned'] as bool? ?? false,
       archived: json['archived'] as bool? ?? false,
@@ -498,6 +501,7 @@ class ChatConversation {
     int? pendingJoinRequestsCount,
     List<ChatUserBrief>? membersPreview,
     int? unreadCount,
+    int? unreadMentionsCount,
     bool? muted,
     bool? pinned,
     bool? onlyAdminsCanPost,
@@ -526,6 +530,7 @@ class ChatConversation {
       membersPreview: membersPreview ?? this.membersPreview,
       lastMessage: lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
+      unreadMentionsCount: unreadMentionsCount ?? this.unreadMentionsCount,
       updatedAt: updatedAt,
       pinned: pinned ?? this.pinned,
       archived: archived,

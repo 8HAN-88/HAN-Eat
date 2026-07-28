@@ -599,6 +599,11 @@ class ChatService:
                     preview_users[i] for i in ids[:4] if i in preview_users
                 ]
 
+        hidden_subq = (
+            self.db.query(MessageHide.message_id)
+            .filter(MessageHide.user_id == user_id)
+            .subquery()
+        )
         last_msg_subq = (
             self.db.query(
                 Message.conversation_id.label("conversation_id"),
@@ -607,6 +612,7 @@ class ChatService:
             .filter(
                 Message.conversation_id.in_(conv_ids),
                 Message.deleted_at.is_(None),
+                ~Message.id.in_(hidden_subq),
             )
             .group_by(Message.conversation_id)
             .subquery()
@@ -641,6 +647,7 @@ class ChatService:
                 Message.conversation_id.in_(conv_ids),
                 Message.sender_id != user_id,
                 Message.deleted_at.is_(None),
+                ~Message.id.in_(hidden_subq),
                 or_(
                     ConversationMember.history_cleared_before_id.is_(None),
                     Message.id > ConversationMember.history_cleared_before_id,
@@ -654,6 +661,58 @@ class ChatService:
             .all()
         )
         unread_map = {row.conversation_id: row.cnt for row in unread_rows}
+
+        me = self.db.query(User).filter(User.id == user_id).first()
+        mention_map: Dict[int, int] = {}
+        if me is not None and group_ids:
+            unread_group_ids = [
+                gid for gid in group_ids if unread_map.get(gid, 0) > 0
+            ]
+            if unread_group_ids:
+                admin_map = {
+                    c.id: bool(
+                        member_map[c.id].is_admin
+                        or c.created_by_user_id == user_id
+                    )
+                    for c in convs
+                    if c.type == "group" and c.id in member_map
+                }
+                unread_msgs = (
+                    self.db.query(Message)
+                    .join(
+                        ConversationMember,
+                        and_(
+                            ConversationMember.conversation_id
+                            == Message.conversation_id,
+                            ConversationMember.user_id == user_id,
+                        ),
+                    )
+                    .filter(
+                        Message.conversation_id.in_(unread_group_ids),
+                        Message.sender_id != user_id,
+                        Message.deleted_at.is_(None),
+                        ~Message.id.in_(hidden_subq),
+                        or_(
+                            ConversationMember.history_cleared_before_id.is_(None),
+                            Message.id
+                            > ConversationMember.history_cleared_before_id,
+                        ),
+                        or_(
+                            ConversationMember.last_read_message_id.is_(None),
+                            Message.id > ConversationMember.last_read_message_id,
+                        ),
+                    )
+                    .all()
+                )
+                for msg in unread_msgs:
+                    if self._content_mentions_user(
+                        msg.content or "",
+                        me,
+                        is_admin=admin_map.get(msg.conversation_id, False),
+                    ):
+                        mention_map[msg.conversation_id] = (
+                            mention_map.get(msg.conversation_id, 0) + 1
+                        )
 
         results = []
         for conv in convs:
@@ -671,6 +730,7 @@ class ChatService:
                     .filter(
                         Message.conversation_id == conv.id,
                         Message.deleted_at.is_(None),
+                        ~Message.id.in_(hidden_subq),
                         Message.id > cleared_before,
                     )
                     .order_by(Message.id.desc())
@@ -697,6 +757,7 @@ class ChatService:
                     "peer": peer,
                     "last_message": last_msg,
                     "unread_count": unread,
+                    "unread_mentions_count": mention_map.get(conv.id, 0),
                     "pinned": member.pinned,
                     "archived": is_archived,
                     "muted": member.muted_at is not None,
@@ -737,9 +798,15 @@ class ChatService:
         if not member:
             return None
         cleared_before = int(getattr(member, "history_cleared_before_id", 0) or 0)
+        hidden_subq = (
+            self.db.query(MessageHide.message_id)
+            .filter(MessageHide.user_id == user_id)
+            .subquery()
+        )
         last_msg_q = self.db.query(Message).filter(
             Message.conversation_id == conv.id,
             Message.deleted_at.is_(None),
+            ~Message.id.in_(hidden_subq),
         )
         if cleared_before:
             last_msg_q = last_msg_q.filter(Message.id > cleared_before)
@@ -748,12 +815,37 @@ class ChatService:
             Message.conversation_id == conv.id,
             Message.sender_id != user_id,
             Message.deleted_at.is_(None),
+            ~Message.id.in_(hidden_subq),
         )
         if cleared_before:
             unread_q = unread_q.filter(Message.id > cleared_before)
         if member.last_read_message_id:
             unread_q = unread_q.filter(Message.id > member.last_read_message_id)
         unread = unread_q.scalar() or 0
+        unread_mentions = 0
+        if conv.type == "group" and unread > 0:
+            me = self.db.query(User).filter(User.id == user_id).first()
+            if me is not None:
+                is_admin = bool(
+                    member.is_admin or conv.created_by_user_id == user_id
+                )
+                mention_q = self.db.query(Message).filter(
+                    Message.conversation_id == conv.id,
+                    Message.sender_id != user_id,
+                    Message.deleted_at.is_(None),
+                    ~Message.id.in_(hidden_subq),
+                )
+                if cleared_before:
+                    mention_q = mention_q.filter(Message.id > cleared_before)
+                if member.last_read_message_id:
+                    mention_q = mention_q.filter(
+                        Message.id > member.last_read_message_id
+                    )
+                for msg in mention_q.all():
+                    if self._content_mentions_user(
+                        msg.content or "", me, is_admin=is_admin
+                    ):
+                        unread_mentions += 1
         peer = None
         member_count = 0
         members_preview: List[User] = []
@@ -772,6 +864,7 @@ class ChatService:
             "peer": peer,
             "last_message": last_msg,
             "unread_count": unread,
+            "unread_mentions_count": unread_mentions,
             "pinned": member.pinned,
             "archived": member.archived_at is not None,
             "muted": member.muted_at is not None,
@@ -1985,11 +2078,17 @@ class ChatService:
         else:
             conv_ids = member_conv_ids
 
+        hidden_subq = (
+            self.db.query(MessageHide.message_id)
+            .filter(MessageHide.user_id == user_id)
+            .subquery()
+        )
         q = (
             self.db.query(Message)
             .filter(
                 Message.deleted_at.is_(None),
                 Message.conversation_id.in_(conv_ids),
+                ~Message.id.in_(hidden_subq),
                 or_(
                     Message.content.ilike(f"%{term}%"),
                     Message.media_url.ilike(f"%{term}%"),
@@ -2354,6 +2453,35 @@ class ChatService:
             msg.forwarded_from_message_id = src.id
         self.db.flush()
         return msg
+
+    @staticmethod
+    def _content_mentions_user(
+        content: str,
+        user: User,
+        *,
+        is_admin: bool = False,
+    ) -> bool:
+        """True when content @-mentions this user (@username, @idN, @all, @admin)."""
+        if not content:
+            return False
+        import re
+
+        handles = {
+            m.group(1).lower()
+            for m in re.finditer(r"(?<!\w)@([a-zA-Z0-9_]{2,})", content)
+        }
+        id_mentions = {
+            int(m.group(1))
+            for m in re.finditer(r"(?<!\w)@id(\d+)\b", content)
+        }
+        if user.id in id_mentions:
+            return True
+        if "all" in handles:
+            return True
+        if is_admin and ("admin" in handles or "admins" in handles):
+            return True
+        uname = (user.username or "").lstrip("@").lower()
+        return bool(uname and uname in handles)
 
     def _mentioned_member_ids(self, conversation_id: int, content: str) -> set[int]:
         if not content:

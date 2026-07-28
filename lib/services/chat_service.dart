@@ -605,6 +605,14 @@ class ChatService {
         response, pinned ? 'Не удалось закрепить' : 'Не удалось открепить');
   }
 
+  static Future<void> clearPinnedMessages({
+    required int conversationId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/pins/clear');
+    final response = await _post(uri);
+    _ensureOk(response, 'Не удалось открепить все сообщения');
+  }
+
   static List<ChatReactionSummary> parseReactions(dynamic raw) =>
       _parseReactions(raw);
 

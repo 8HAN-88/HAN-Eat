@@ -410,6 +410,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
       if (!ShellTabVisibility.chatsActive || _loading) return;
       if (event.event == 'chat.inbox' ||
+          event.event == 'chat.message_hidden' ||
           event.event == 'chat.join_request.new' ||
           event.event == 'sync' ||
           (event.event == 'notification.new' &&

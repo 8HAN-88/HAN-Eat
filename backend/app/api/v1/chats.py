@@ -645,6 +645,7 @@ def _conversation_response(
         ],
         last_message=last_resp,
         unread_count=row.get("unread_count", 0),
+        unread_mentions_count=int(row.get("unread_mentions_count", 0) or 0),
         updated_at=conv.updated_at or conv.created_at,
         pinned=row.get("pinned", False),
         archived=row.get("archived", False),
@@ -2426,6 +2427,8 @@ async def delete_message(
             conversation_id,
             {"type": "message.deleted", "message_id": message_id},
         )
+        # Refresh hub previews for every member (stale last_message otherwise).
+        _notify_chat_inbox(db, conversation_id, sender_id=-1)
     else:
         # Only the requester should drop the bubble locally; no room fanout.
         publish_user_event(
@@ -2706,6 +2709,41 @@ async def pin_message(
         "message_id": message_id,
         "pinned_count": len(pinned_msgs),
     }
+
+
+@router.post("/chats/{conversation_id}/pins/clear")
+async def clear_pinned_messages(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.set_pinned_message(
+            conversation_id,
+            current_user.id,
+            None,
+            False,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise
+    _emit(
+        conversation_id,
+        {
+            "type": "message.unpinned",
+            "conversation_id": conversation_id,
+            "message_id": None,
+            "pinned_messages": [],
+        },
+    )
+    return {"ok": True, "pinned_count": 0}
 
 
 @router.post("/chats/{conversation_id}/typing")

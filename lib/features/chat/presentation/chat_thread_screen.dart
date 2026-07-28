@@ -338,25 +338,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _searchBackfillSeq = 0;
   bool _jumpingToDate = false;
   final List<ChatMessage> _pinnedMessages = [];
-  ChatMessage? get _pinnedMessage =>
-      _pinnedMessages.isEmpty ? null : _pinnedMessages.first;
+  int _pinnedBannerIndex = 0;
+  ChatMessage? get _pinnedMessage {
+    if (_pinnedMessages.isEmpty) return null;
+    final idx = _pinnedBannerIndex % _pinnedMessages.length;
+    return _pinnedMessages[idx];
+  }
   bool _isMessagePinned(int messageId) =>
       _pinnedMessages.any((m) => m.id == messageId);
   void _setPinnedMessages(Iterable<ChatMessage> items) {
     _pinnedMessages
       ..clear()
       ..addAll(items);
+    _pinnedBannerIndex = 0;
   }
   void _upsertPinnedMessage(ChatMessage msg) {
     _pinnedMessages.removeWhere((m) => m.id == msg.id);
     _pinnedMessages.insert(0, msg);
+    _pinnedBannerIndex = 0;
   }
   void _removePinnedMessageId(int messageId) {
     _pinnedMessages.removeWhere((m) => m.id == messageId);
+    if (_pinnedMessages.isEmpty) {
+      _pinnedBannerIndex = 0;
+    } else {
+      _pinnedBannerIndex %= _pinnedMessages.length;
+    }
   }
   void _replacePinnedMessage(ChatMessage msg) {
     final idx = _pinnedMessages.indexWhere((m) => m.id == msg.id);
     if (idx >= 0) _pinnedMessages[idx] = msg;
+  }
+  void _cyclePinnedBanner() {
+    final current = _pinnedMessage;
+    if (current == null) return;
+    _scrollToMessage(current.id);
+    _focusMessageTemporarily(current.id);
+    if (_pinnedMessages.length > 1) {
+      setState(() {
+        _pinnedBannerIndex =
+            (_pinnedBannerIndex + 1) % _pinnedMessages.length;
+      });
+    }
   }
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
@@ -3494,6 +3517,48 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return _messages.first.id;
   }
 
+  bool _messageMentionsMe(ChatMessage msg) {
+    if (msg.isMine) return false;
+    final content = msg.content;
+    if (content.isEmpty) return false;
+    final me = AuthService.instance.currentUser;
+    if (me == null) return false;
+    if (RegExp(r'(?<!\w)@id' + RegExp.escape('${me.id}') + r'\b')
+        .hasMatch(content)) {
+      return true;
+    }
+    if (RegExp(r'(?<!\w)@all\b', caseSensitive: false).hasMatch(content)) {
+      return true;
+    }
+    final uname = me.username?.trim().toLowerCase();
+    if (uname != null && uname.isNotEmpty) {
+      final handle = uname.startsWith('@') ? uname.substring(1) : uname;
+      if (handle.isNotEmpty &&
+          RegExp(
+            r'(?<!\w)@' + RegExp.escape(handle) + r'\b',
+            caseSensitive: false,
+          ).hasMatch(content)) {
+        return true;
+      }
+    }
+    if (_conversation.amIGroupAdmin &&
+        RegExp(r'(?<!\w)@admins?\b', caseSensitive: false).hasMatch(content)) {
+      return true;
+    }
+    return false;
+  }
+
+  int? _firstUnreadMentionMessageId() {
+    final firstUnread = _firstUnreadMessageId();
+    if (firstUnread == null || _messages.isEmpty) return null;
+    final start = _messages.indexWhere((m) => m.id == firstUnread);
+    if (start < 0) return null;
+    for (var i = start; i < _messages.length; i++) {
+      if (_messageMentionsMe(_messages[i])) return _messages[i].id;
+    }
+    return null;
+  }
+
   void _scrollAfterInitialLoad() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
@@ -3503,8 +3568,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
+        final mentionId = _firstUnreadMentionMessageId();
         setState(() => _unreadDividerBeforeId = firstUnread);
-        _scrollToMessage(firstUnread);
+        _scrollToMessage(mentionId ?? firstUnread);
         final idx = _messages.indexWhere((m) => m.id == firstUnread);
         final below = idx >= 0 ? _messages.length - idx - 1 : 0;
         if (below > 0) {
@@ -3601,7 +3667,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _onJumpFabTap() {
     if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
-      final id = _unreadDividerBeforeId!;
+      final mentionId = _firstUnreadMentionMessageId();
+      final id = mentionId ?? _unreadDividerBeforeId!;
       _scrollToMessage(id);
       _focusMessageTemporarily(id);
       return;
@@ -3800,6 +3867,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _unpinAllMessages() async {
+    if (_pinnedMessages.isEmpty) return;
+    try {
+      await ChatService.clearPinnedMessages(
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) return;
+      if (!mounted) return;
+      setState(() => _setPinnedMessages(const []));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _showPinnedMessagesSheet() async {
     if (_pinnedMessages.isEmpty) return;
     await showModalBottomSheet<void>(
@@ -3813,9 +3897,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Закреплённые (${items.length})',
-                  style: Theme.of(ctx).textTheme.titleMedium,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Закреплённые (${items.length})',
+                        style: Theme.of(ctx).textTheme.titleMedium,
+                      ),
+                    ),
+                    if (items.length > 1)
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          unawaited(_unpinAllMessages());
+                        },
+                        child: const Text('Открепить все'),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Flexible(
@@ -8319,7 +8417,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     // only clear the badge/count once we've marked read on the server.
     if (_conversation.unreadCount > 0) {
       setState(() {
-        _conversation = _conversation.copyWith(unreadCount: 0);
+        _conversation = _conversation.copyWith(
+          unreadCount: 0,
+          unreadMentionsCount: 0,
+        );
       });
     }
   }
@@ -10943,13 +11044,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ? const Color(0xFF18222D)
                             : scheme.surface,
                         child: InkWell(
-                          onTap: () {
-                            if (_pinnedMessages.length > 1) {
-                              unawaited(_showPinnedMessagesSheet());
-                            } else {
-                              _scrollToMessage(_pinnedMessage!.id);
-                            }
-                          },
+                          onTap: _cyclePinnedBanner,
                           onLongPress: () =>
                               unawaited(_showPinnedMessagesSheet()),
                           child: Padding(
@@ -11600,9 +11695,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     width: 42,
                                     height: 42,
                                     child: Icon(
-                                      _jumpFabTargetsUnread
-                                          ? Icons.keyboard_double_arrow_down_rounded
-                                          : Icons.keyboard_arrow_down_rounded,
+                                      _jumpFabTargetsUnread &&
+                                              _conversation.unreadMentionsCount >
+                                                  0
+                                          ? Icons.alternate_email_rounded
+                                          : (_jumpFabTargetsUnread
+                                              ? Icons
+                                                  .keyboard_double_arrow_down_rounded
+                                              : Icons
+                                                  .keyboard_arrow_down_rounded),
                                       size: 28,
                                       color: scheme.onSurfaceVariant,
                                     ),
@@ -11624,6 +11725,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               _newMessagesBelow,
                                             )
                                           : _newMessagesBelow,
+                                      hasMention: _jumpFabTargetsUnread &&
+                                          _conversation.unreadMentionsCount >
+                                              0,
                                     ),
                                   ),
                                 ),
