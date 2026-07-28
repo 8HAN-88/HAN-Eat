@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -2783,7 +2783,7 @@ async def clear_pinned_messages(
 @router.post("/chats/{conversation_id}/typing")
 async def send_typing(
     conversation_id: int,
-    body: Optional[TypingActivityRequest] = None,
+    body: Optional[TypingActivityRequest] = Body(default=None),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
