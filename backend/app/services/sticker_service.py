@@ -5,7 +5,13 @@ from typing import List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.sticker import Sticker, StickerPack, StickerPackInstall
+from app.models.sticker import (
+    Sticker,
+    StickerFavorite,
+    StickerPack,
+    StickerPackInstall,
+    StickerPackPin,
+)
 
 
 class StickerService:
@@ -198,10 +204,20 @@ class StickerService:
             )
             .first()
         )
-        if not row:
-            return
-        self.db.delete(row)
-        self.db.flush()
+        if row:
+            self.db.delete(row)
+        pin = (
+            self.db.query(StickerPackPin)
+            .filter(
+                StickerPackPin.user_id == user_id,
+                StickerPackPin.pack_id == pack_id,
+            )
+            .first()
+        )
+        if pin:
+            self.db.delete(pin)
+        if row or pin:
+            self.db.flush()
 
     def get_pack_for_user(self, user_id: int, pack_id: int) -> Optional[StickerPack]:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
@@ -238,7 +254,7 @@ class StickerService:
             .filter(StickerPackInstall.user_id == user_id)
             .subquery()
         )
-        return (
+        packs = (
             self.db.query(StickerPack)
             .filter(
                 (StickerPack.owner_user_id == user_id)
@@ -250,6 +266,21 @@ class StickerService:
                 StickerPack.created_at.desc(),
             )
             .all()
+        )
+        pin_order = {
+            pack_id: idx
+            for idx, pack_id in enumerate(self.list_pinned_pack_ids(user_id))
+        }
+        if not pin_order:
+            return packs
+        return sorted(
+            packs,
+            key=lambda p: (
+                0 if p.id in pin_order else 1,
+                pin_order.get(p.id, 10_000),
+                0 if p.owner_user_id == user_id else 1,
+                -(p.updated_at.timestamp() if p.updated_at else 0),
+            ),
         )
 
     def list_catalog_packs(
@@ -297,3 +328,208 @@ class StickerService:
             .all()
         )
         return {int(pack_id): int(count) for pack_id, count in rows}
+
+    def _resolve_sticker(
+        self,
+        *,
+        sticker_id: Optional[int] = None,
+        media_url: Optional[str] = None,
+    ) -> Optional[Sticker]:
+        if sticker_id is not None and int(sticker_id) > 0:
+            return (
+                self.db.query(Sticker)
+                .filter(Sticker.id == int(sticker_id))
+                .first()
+            )
+        clean_url = (media_url or "").strip()
+        if not clean_url:
+            return None
+        return (
+            self.db.query(Sticker)
+            .filter(Sticker.media_url == clean_url[:512])
+            .order_by(Sticker.id.asc())
+            .first()
+        )
+
+    def list_favorites(self, user_id: int) -> List[Sticker]:
+        rows = (
+            self.db.query(Sticker, StickerFavorite.created_at)
+            .join(StickerFavorite, StickerFavorite.sticker_id == Sticker.id)
+            .filter(StickerFavorite.user_id == user_id)
+            .order_by(
+                StickerFavorite.created_at.desc(),
+                StickerFavorite.id.desc(),
+            )
+            .all()
+        )
+        return [sticker for sticker, _created in rows]
+
+    def add_favorite(
+        self,
+        *,
+        user_id: int,
+        sticker_id: Optional[int] = None,
+        media_url: Optional[str] = None,
+    ) -> Sticker:
+        sticker = self._resolve_sticker(sticker_id=sticker_id, media_url=media_url)
+        if not sticker:
+            raise ValueError("sticker_not_found")
+        exists = (
+            self.db.query(StickerFavorite.id)
+            .filter(
+                StickerFavorite.user_id == user_id,
+                StickerFavorite.sticker_id == sticker.id,
+            )
+            .first()
+        )
+        if not exists:
+            self.db.add(
+                StickerFavorite(user_id=user_id, sticker_id=sticker.id)
+            )
+            self.db.flush()
+        return sticker
+
+    def remove_favorite(
+        self,
+        *,
+        user_id: int,
+        sticker_id: Optional[int] = None,
+        media_url: Optional[str] = None,
+    ) -> None:
+        sticker = self._resolve_sticker(sticker_id=sticker_id, media_url=media_url)
+        if not sticker:
+            raise ValueError("sticker_not_found")
+        row = (
+            self.db.query(StickerFavorite)
+            .filter(
+                StickerFavorite.user_id == user_id,
+                StickerFavorite.sticker_id == sticker.id,
+            )
+            .first()
+        )
+        if row:
+            self.db.delete(row)
+            self.db.flush()
+
+    def toggle_favorite(
+        self,
+        *,
+        user_id: int,
+        sticker_id: Optional[int] = None,
+        media_url: Optional[str] = None,
+    ) -> tuple[Sticker, bool]:
+        sticker = self._resolve_sticker(sticker_id=sticker_id, media_url=media_url)
+        if not sticker:
+            raise ValueError("sticker_not_found")
+        row = (
+            self.db.query(StickerFavorite)
+            .filter(
+                StickerFavorite.user_id == user_id,
+                StickerFavorite.sticker_id == sticker.id,
+            )
+            .first()
+        )
+        if row:
+            self.db.delete(row)
+            self.db.flush()
+            return sticker, False
+        self.db.add(StickerFavorite(user_id=user_id, sticker_id=sticker.id))
+        self.db.flush()
+        return sticker, True
+
+    def replace_favorites(
+        self,
+        *,
+        user_id: int,
+        sticker_ids: Optional[List[int]] = None,
+        media_urls: Optional[List[str]] = None,
+    ) -> List[Sticker]:
+        resolved: List[Sticker] = []
+        seen: set[int] = set()
+        for sid in sticker_ids or []:
+            sticker = self._resolve_sticker(sticker_id=sid)
+            if sticker and sticker.id not in seen:
+                resolved.append(sticker)
+                seen.add(sticker.id)
+        for url in media_urls or []:
+            sticker = self._resolve_sticker(media_url=url)
+            if sticker and sticker.id not in seen:
+                resolved.append(sticker)
+                seen.add(sticker.id)
+
+        (
+            self.db.query(StickerFavorite)
+            .filter(StickerFavorite.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        # Newest-first UI: first item gets latest created_at.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for idx, sticker in enumerate(resolved):
+            self.db.add(
+                StickerFavorite(
+                    user_id=user_id,
+                    sticker_id=sticker.id,
+                    created_at=now.replace(microsecond=max(0, 999999 - idx)),
+                )
+            )
+        self.db.flush()
+        return resolved
+
+    def list_pinned_pack_ids(self, user_id: int) -> List[int]:
+        rows = (
+            self.db.query(StickerPackPin.pack_id)
+            .filter(StickerPackPin.user_id == user_id)
+            .order_by(
+                StickerPackPin.pin_order.asc(),
+                StickerPackPin.id.asc(),
+            )
+            .all()
+        )
+        return [int(pid) for (pid,) in rows]
+
+    def replace_pinned_packs(
+        self, *, user_id: int, pack_ids: List[int]
+    ) -> List[int]:
+        unique: List[int] = []
+        seen: set[int] = set()
+        for raw in pack_ids or []:
+            try:
+                pid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if pid <= 0 or pid in seen:
+                continue
+            pack = self.db.query(StickerPack.id).filter(StickerPack.id == pid).first()
+            if not pack:
+                continue
+            unique.append(pid)
+            seen.add(pid)
+
+        (
+            self.db.query(StickerPackPin)
+            .filter(StickerPackPin.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        for idx, pack_id in enumerate(unique):
+            self.db.add(
+                StickerPackPin(
+                    user_id=user_id,
+                    pack_id=pack_id,
+                    pin_order=idx,
+                )
+            )
+        self.db.flush()
+        return unique
+
+    def toggle_pinned_pack(self, *, user_id: int, pack_id: int) -> tuple[List[int], bool]:
+        pack = self.db.query(StickerPack.id).filter(StickerPack.id == pack_id).first()
+        if not pack:
+            raise ValueError("pack_not_found")
+        current = self.list_pinned_pack_ids(user_id)
+        if pack_id in current:
+            next_ids = [pid for pid in current if pid != pack_id]
+            pinned = False
+        else:
+            next_ids = [pack_id, *current]
+            pinned = True
+        return self.replace_pinned_packs(user_id=user_id, pack_ids=next_ids), pinned

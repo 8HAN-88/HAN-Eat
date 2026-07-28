@@ -49,3 +49,36 @@ class UpdateStickerPackRequest(BaseModel):
 
 class ReorderStickersRequest(BaseModel):
     sticker_ids: List[int] = Field(default_factory=list)
+
+
+class StickerFavoriteResponse(BaseModel):
+    id: int
+    media_url: str
+    emoji: Optional[str] = None
+    sticker_type: str = "static"
+    pack_id: int
+    created_at: Optional[datetime] = None
+
+
+class StickerFavoriteListResponse(BaseModel):
+    items: List[StickerFavoriteResponse]
+
+
+class ToggleStickerFavoriteRequest(BaseModel):
+    sticker_id: Optional[int] = None
+    media_url: Optional[str] = Field(default=None, max_length=512)
+
+
+class ReplaceStickerFavoritesRequest(BaseModel):
+    """Full replace for multi-device sync / local→cloud migration."""
+
+    sticker_ids: List[int] = Field(default_factory=list)
+    media_urls: List[str] = Field(default_factory=list)
+
+
+class StickerPinnedPacksResponse(BaseModel):
+    pack_ids: List[int] = Field(default_factory=list)
+
+
+class ReplaceStickerPinnedPacksRequest(BaseModel):
+    pack_ids: List[int] = Field(default_factory=list)

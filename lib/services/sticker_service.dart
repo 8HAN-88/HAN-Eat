@@ -231,4 +231,141 @@ class StickerService {
       _throwError(response, 'Не удалось импортировать стикерпак');
     }
   }
+
+  static Future<List<StickerFavoriteItem>> listFavorites() async {
+    final uri = Uri.parse('$_base/stickers/favorites');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось загрузить избранные стикеры');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final rawItems = body['items'] as List<dynamic>? ?? const [];
+    return rawItems
+        .whereType<Map<String, dynamic>>()
+        .map(StickerFavoriteItem.fromJson)
+        .where((e) => e.mediaUrl.trim().isNotEmpty)
+        .toList();
+  }
+
+  /// Returns whether the sticker is favorited after the toggle.
+  static Future<bool> toggleFavorite({
+    int? stickerId,
+    String? mediaUrl,
+  }) async {
+    final uri = Uri.parse('$_base/stickers/favorites/toggle');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          if (stickerId != null && stickerId > 0) 'sticker_id': stickerId,
+          if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+            'media_url': mediaUrl.trim(),
+        }),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось обновить избранные стикеры');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['favorited'] as bool? ?? false;
+  }
+
+  static Future<List<StickerFavoriteItem>> replaceFavorites({
+    List<int> stickerIds = const [],
+    List<String> mediaUrls = const [],
+  }) async {
+    final uri = Uri.parse('$_base/stickers/favorites');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.put(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          'sticker_ids': stickerIds.where((e) => e > 0).toList(),
+          'media_urls': mediaUrls
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(),
+        }),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось сохранить избранные стикеры');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final rawItems = body['items'] as List<dynamic>? ?? const [];
+    return rawItems
+        .whereType<Map<String, dynamic>>()
+        .map(StickerFavoriteItem.fromJson)
+        .where((e) => e.mediaUrl.trim().isNotEmpty)
+        .toList();
+  }
+
+  static Future<List<int>> listPinnedPacks() async {
+    final uri = Uri.parse('$_base/stickers/pinned-packs');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось загрузить закреплённые паки');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = body['pack_ids'] as List<dynamic>? ?? const [];
+    return raw
+        .map((e) => e is num ? e.toInt() : -1)
+        .where((e) => e > 0)
+        .toList();
+  }
+
+  static Future<List<int>> replacePinnedPacks(List<int> packIds) async {
+    final uri = Uri.parse('$_base/stickers/pinned-packs');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.put(
+        uri,
+        headers: headers,
+        body: jsonEncode({
+          'pack_ids': packIds.where((e) => e > 0).toList(),
+        }),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось сохранить закреплённые паки');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = body['pack_ids'] as List<dynamic>? ?? const [];
+    return raw
+        .map((e) => e is num ? e.toInt() : -1)
+        .where((e) => e > 0)
+        .toList();
+  }
+
+  /// Returns whether the pack is pinned after the toggle.
+  static Future<({bool pinned, List<int> packIds})> togglePinnedPack(
+    int packId,
+  ) async {
+    final uri = Uri.parse('$_base/stickers/pinned-packs/$packId/toggle');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось закрепить стикерпак');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = body['pack_ids'] as List<dynamic>? ?? const [];
+    return (
+      pinned: body['pinned'] as bool? ?? false,
+      packIds: raw
+          .map((e) => e is num ? e.toInt() : -1)
+          .where((e) => e > 0)
+          .toList(),
+    );
+  }
 }

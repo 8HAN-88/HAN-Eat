@@ -67,3 +67,52 @@ class StickerPackInstall(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "pack_id", name="uq_sticker_pack_install"),
     )
+
+
+class StickerFavorite(Base):
+    __tablename__ = "sticker_favorites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sticker_id = Column(
+        Integer,
+        ForeignKey("stickers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "sticker_id", name="uq_sticker_favorite_user_sticker"
+        ),
+    )
+
+
+class StickerPackPin(Base):
+    __tablename__ = "sticker_pack_pins"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pack_id = Column(
+        Integer,
+        ForeignKey("sticker_packs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pin_order = Column(Integer, nullable=False, default=0, index=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "pack_id", name="uq_sticker_pack_pin_user_pack"),
+    )

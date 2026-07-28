@@ -83,13 +83,23 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
         return [
           for (final e in _recent)
             if (e.mediaUrl.trim().isNotEmpty)
-              _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
+              _StickerThumb(
+                mediaUrl: e.mediaUrl,
+                emoji: e.emoji,
+                stickerId: e.stickerId,
+                stickerType: e.stickerType,
+              ),
         ];
       case _InlineStickerTab.favorites:
         return [
           for (final e in _favorites)
             if (e.mediaUrl.trim().isNotEmpty)
-              _StickerThumb(mediaUrl: e.mediaUrl, emoji: e.emoji),
+              _StickerThumb(
+                mediaUrl: e.mediaUrl,
+                emoji: e.emoji,
+                stickerId: e.stickerId,
+                stickerType: e.stickerType,
+              ),
         ];
       case _InlineStickerTab.pack:
         for (final pack in _packs) {
@@ -97,7 +107,12 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
           return [
             for (final s in pack.stickers)
               if (s.mediaUrl.trim().isNotEmpty)
-                _StickerThumb(mediaUrl: s.mediaUrl, emoji: s.emoji),
+                _StickerThumb(
+                  mediaUrl: s.mediaUrl,
+                  emoji: s.emoji,
+                  stickerId: s.id,
+                  stickerType: s.stickerType,
+                ),
           ];
         }
         return const [];
@@ -109,6 +124,8 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
       ChatRecentStickersStore.remember(
         mediaUrl: item.mediaUrl,
         emoji: item.emoji,
+        stickerType: item.stickerType,
+        stickerId: item.stickerId,
       ),
     );
     widget.onPick(item.mediaUrl, emoji: item.emoji);
@@ -118,6 +135,8 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
     final added = await ChatRecentStickersStore.toggleFavorite(
       mediaUrl: item.mediaUrl,
       emoji: item.emoji,
+      stickerType: item.stickerType,
+      stickerId: item.stickerId,
     );
     final favorites = await ChatRecentStickersStore.loadFavorites();
     if (!mounted) return;
@@ -298,9 +317,17 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
 }
 
 class _StickerThumb {
-  const _StickerThumb({required this.mediaUrl, this.emoji});
+  const _StickerThumb({
+    required this.mediaUrl,
+    this.emoji,
+    this.stickerId,
+    this.stickerType,
+  });
+
   final String mediaUrl;
   final String? emoji;
+  final int? stickerId;
+  final String? stickerType;
 }
 
 class _PackChip extends StatelessWidget {

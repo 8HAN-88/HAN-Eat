@@ -42,7 +42,13 @@ from app.models.paid_features import (
 )
 from app.models.story import Story
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
-from app.models.sticker import StickerPack, Sticker, StickerPackInstall
+from app.models.sticker import (
+    StickerPack,
+    Sticker,
+    StickerPackInstall,
+    StickerFavorite,
+    StickerPackPin,
+)
 
 # Для обратной совместимости
 Community = Channel
@@ -59,6 +65,6 @@ __all__ = [
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
-    "StickerPackInstall",
+    "StickerPackInstall", "StickerFavorite", "StickerPackPin",
 ]
 

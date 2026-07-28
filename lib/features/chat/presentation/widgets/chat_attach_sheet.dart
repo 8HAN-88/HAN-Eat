@@ -307,9 +307,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     _tab = widget.initialTab;
     _loadContacts();
     _loadRecentFiles();
-    _loadStickerPacks();
     _loadStickerHistory();
-    _loadPinnedPacks();
+    unawaited(() async {
+      await _loadPinnedPacks();
+      if (!mounted) return;
+      await _loadStickerPacks();
+    }());
     _currentUserId = AuthService.instance.currentUser?.id;
     _reconnectedListener = () {
       if (!mounted) return;
@@ -468,7 +471,22 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   Future<void> _loadPinnedPacks() async {
     final ids = await ChatStickerPinnedPacksStore.load();
     if (!mounted) return;
-    setState(() => _pinnedPackIds = ids);
+    setState(() {
+      _pinnedPackIds = ids;
+      if (_stickerPacks.isEmpty) return;
+      final sorted = [..._stickerPacks];
+      sorted.sort((a, b) {
+        final ai = ids.indexOf(a.id);
+        final bi = ids.indexOf(b.id);
+        final aPinned = ai >= 0;
+        final bPinned = bi >= 0;
+        if (aPinned && bPinned) return ai.compareTo(bi);
+        if (aPinned) return -1;
+        if (bPinned) return 1;
+        return 0;
+      });
+      _stickerPacks = sorted;
+    });
   }
 
   void _close([ChatAttachSelection? result]) => Navigator.pop(context, result);
@@ -848,6 +866,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       mediaUrl: mediaUrl,
       emoji: sticker.emoji,
       stickerType: sticker.stickerType,
+      stickerId: sticker.id > 0 ? sticker.id : null,
     );
     if (mounted) {
       await _loadStickerHistory();
@@ -864,11 +883,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     String mediaUrl, {
     String? emoji,
     String? stickerType,
+    int? stickerId,
   }) async {
     await ChatRecentStickersStore.toggleFavorite(
       mediaUrl: mediaUrl,
       emoji: emoji,
       stickerType: stickerType,
+      stickerId: stickerId,
     );
     if (!mounted) return;
     await _loadStickerHistory();
@@ -2180,6 +2201,7 @@ class _StickerPanel extends StatelessWidget {
     String mediaUrl, {
     String? emoji,
     String? stickerType,
+    int? stickerId,
   }) onToggleFavorite;
   final bool isDark;
 
@@ -2306,7 +2328,7 @@ class _StickerPanel extends StatelessWidget {
                   favoriteUrls: favoriteUrls,
                   onTap: (entry) => onPickSticker(
                     StickerItem(
-                      id: 0,
+                      id: entry.stickerId ?? 0,
                       mediaUrl: entry.mediaUrl,
                       emoji: entry.emoji,
                       stickerType: entry.stickerType ?? 'static',
@@ -2316,6 +2338,7 @@ class _StickerPanel extends StatelessWidget {
                     entry.mediaUrl,
                     emoji: entry.emoji,
                     stickerType: entry.stickerType,
+                    stickerId: entry.stickerId,
                   ),
                 ),
               ],
@@ -2329,7 +2352,7 @@ class _StickerPanel extends StatelessWidget {
                   favoriteUrls: favoriteUrls,
                   onTap: (entry) => onPickSticker(
                     StickerItem(
-                      id: 0,
+                      id: entry.stickerId ?? 0,
                       mediaUrl: entry.mediaUrl,
                       emoji: entry.emoji,
                       stickerType: entry.stickerType ?? 'static',
@@ -2339,6 +2362,7 @@ class _StickerPanel extends StatelessWidget {
                     entry.mediaUrl,
                     emoji: entry.emoji,
                     stickerType: entry.stickerType,
+                    stickerId: entry.stickerId,
                   ),
                 ),
               ],
@@ -2441,6 +2465,7 @@ class _StickerPacksContent extends StatelessWidget {
     String mediaUrl, {
     String? emoji,
     String? stickerType,
+    int? stickerId,
   }) onToggleFavorite;
 
   @override
@@ -2499,6 +2524,7 @@ class _StickerPacksContent extends StatelessWidget {
                     mediaUrl: s.mediaUrl,
                     emoji: s.emoji,
                     stickerType: s.stickerType,
+                    stickerId: s.id,
                   ),
               ],
               groupBg: groupBg,
@@ -2506,7 +2532,7 @@ class _StickerPacksContent extends StatelessWidget {
               favoriteUrls: favoriteUrls,
               onTap: (entry) => onPickSticker(
                 StickerItem(
-                  id: 0,
+                  id: entry.stickerId ?? 0,
                   mediaUrl: entry.mediaUrl,
                   emoji: entry.emoji,
                   stickerType: entry.stickerType ?? 'static',
@@ -2516,6 +2542,7 @@ class _StickerPacksContent extends StatelessWidget {
                 entry.mediaUrl,
                 emoji: entry.emoji,
                 stickerType: entry.stickerType,
+                stickerId: entry.stickerId,
               ),
             ),
           if (pack.stickers.isEmpty)

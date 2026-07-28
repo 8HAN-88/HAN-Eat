@@ -9,9 +9,15 @@ from app.schemas.sticker import (
     AddStickerRequest,
     CreateStickerPackRequest,
     ReorderStickersRequest,
+    ReplaceStickerFavoritesRequest,
+    ReplaceStickerPinnedPacksRequest,
+    StickerFavoriteListResponse,
+    StickerFavoriteResponse,
     StickerItemResponse,
     StickerPackListResponse,
     StickerPackResponse,
+    StickerPinnedPacksResponse,
+    ToggleStickerFavoriteRequest,
     UpdateStickerPackRequest,
 )
 from app.services.sticker_service import StickerService
@@ -359,3 +365,121 @@ async def uninstall_sticker_pack(
     svc.uninstall_pack(current_user.id, pack_id)
     db.commit()
     return {"ok": True}
+
+
+def _favorite_response(sticker) -> StickerFavoriteResponse:
+    return StickerFavoriteResponse(
+        id=sticker.id,
+        media_url=sticker.media_url,
+        emoji=sticker.emoji,
+        sticker_type=sticker.sticker_type,
+        pack_id=sticker.pack_id,
+        created_at=getattr(sticker, "created_at", None),
+    )
+
+
+@router.get("/stickers/favorites", response_model=StickerFavoriteListResponse)
+async def list_sticker_favorites(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    items = svc.list_favorites(current_user.id)
+    return StickerFavoriteListResponse(
+        items=[_favorite_response(s) for s in items]
+    )
+
+
+@router.post("/stickers/favorites/toggle")
+async def toggle_sticker_favorite(
+    body: ToggleStickerFavoriteRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if body.sticker_id is None and not (body.media_url or "").strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "missing_sticker")
+    svc = StickerService(db)
+    try:
+        sticker, favorited = svc.toggle_favorite(
+            user_id=current_user.id,
+            sticker_id=body.sticker_id,
+            media_url=body.media_url,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "sticker_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        raise
+    return {
+        "ok": True,
+        "favorited": favorited,
+        "sticker": _favorite_response(sticker),
+    }
+
+
+@router.put("/stickers/favorites", response_model=StickerFavoriteListResponse)
+async def replace_sticker_favorites(
+    body: ReplaceStickerFavoritesRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    items = svc.replace_favorites(
+        user_id=current_user.id,
+        sticker_ids=body.sticker_ids,
+        media_urls=body.media_urls,
+    )
+    db.commit()
+    return StickerFavoriteListResponse(
+        items=[_favorite_response(s) for s in items]
+    )
+
+
+@router.get("/stickers/pinned-packs", response_model=StickerPinnedPacksResponse)
+async def list_pinned_sticker_packs(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    return StickerPinnedPacksResponse(
+        pack_ids=svc.list_pinned_pack_ids(current_user.id)
+    )
+
+
+@router.put("/stickers/pinned-packs", response_model=StickerPinnedPacksResponse)
+async def replace_pinned_sticker_packs(
+    body: ReplaceStickerPinnedPacksRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    pack_ids = svc.replace_pinned_packs(
+        user_id=current_user.id,
+        pack_ids=body.pack_ids,
+    )
+    db.commit()
+    return StickerPinnedPacksResponse(pack_ids=pack_ids)
+
+
+@router.post("/stickers/pinned-packs/{pack_id}/toggle")
+async def toggle_pinned_sticker_pack(
+    pack_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    try:
+        pack_ids, pinned = svc.toggle_pinned_pack(
+            user_id=current_user.id,
+            pack_id=pack_id,
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        raise
+    return {"ok": True, "pinned": pinned, "pack_ids": pack_ids}

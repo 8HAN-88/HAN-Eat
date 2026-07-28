@@ -65,3 +65,29 @@ class StickerPack {
     );
   }
 }
+
+class StickerFavoriteItem {
+  const StickerFavoriteItem({
+    required this.id,
+    required this.mediaUrl,
+    this.emoji,
+    this.stickerType = 'static',
+    this.packId = 0,
+  });
+
+  final int id;
+  final String mediaUrl;
+  final String? emoji;
+  final String stickerType;
+  final int packId;
+
+  factory StickerFavoriteItem.fromJson(Map<String, dynamic> json) {
+    return StickerFavoriteItem(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      mediaUrl: json['media_url'] as String? ?? '',
+      emoji: json['emoji'] as String?,
+      stickerType: json['sticker_type'] as String? ?? 'static',
+      packId: (json['pack_id'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
