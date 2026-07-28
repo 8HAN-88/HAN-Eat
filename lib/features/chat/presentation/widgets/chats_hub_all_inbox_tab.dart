@@ -78,6 +78,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   Map<int, ChatDraft> _drafts = {};
   /// conversationId → (userId → typing expires at, local clock).
   final Map<int, Map<int, DateTime>> _typingUntilByUser = {};
+  /// conversationId → (userId → typing|recording).
+  final Map<int, Map<int, String>> _typingActivityByUser = {};
   Timer? _typingTicker;
 
   void _selectFolder(int? folderId) {
@@ -409,9 +411,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         final cid = event.conversationId;
         if (cid == null) return;
         final uid = event.userId ?? 0;
+        final activity =
+            event.activity == 'recording' ? 'recording' : 'typing';
         setState(() {
           final byUser = _typingUntilByUser.putIfAbsent(cid, () => {});
           byUser[uid] = DateTime.now().add(const Duration(seconds: 5));
+          final byActivity = _typingActivityByUser.putIfAbsent(cid, () => {});
+          byActivity[uid] = activity;
         });
         _ensureTypingTicker();
         return;
@@ -521,11 +527,26 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       setState(() {
         final emptyConvs = <int>[];
         for (final entry in _typingUntilByUser.entries) {
-          entry.value.removeWhere((_, until) => !until.isAfter(now));
+          final expired = <int>[];
+          entry.value.removeWhere((uid, until) {
+            final gone = !until.isAfter(now);
+            if (gone) expired.add(uid);
+            return gone;
+          });
+          final activities = _typingActivityByUser[entry.key];
+          if (activities != null) {
+            for (final uid in expired) {
+              activities.remove(uid);
+            }
+            if (activities.isEmpty) {
+              _typingActivityByUser.remove(entry.key);
+            }
+          }
           if (entry.value.isEmpty) emptyConvs.add(entry.key);
         }
         for (final id in emptyConvs) {
           _typingUntilByUser.remove(id);
+          _typingActivityByUser.remove(id);
         }
       });
       if (_typingUntilByUser.isEmpty) {
@@ -559,6 +580,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         byUser.entries.where((e) => e.value.isAfter(now)).map((e) => e.key);
     final active = activeIds.toList();
     if (active.isEmpty) return null;
+    final activities = _typingActivityByUser[conversationId] ?? const {};
+    final recording = active.any((id) => activities[id] == 'recording');
 
     ChatConversation? chat;
     for (final e in _entries) {
@@ -567,13 +590,24 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         break;
       }
     }
-    if (chat == null || !chat.isGroup) return 'печатает…';
+    if (chat == null || !chat.isGroup) {
+      return recording ? 'записывает голосовое…' : 'печатает…';
+    }
 
     final names = <String>[];
     for (final id in active) {
       final name = _displayNameForTyping(chat, id);
       if (name == null || name.isEmpty) continue;
       names.add(name.split(' ').first);
+    }
+    if (recording) {
+      if (names.isEmpty) {
+        return active.length > 1
+            ? 'записывают голосовое…'
+            : 'записывает голосовое…';
+      }
+      if (names.length == 1) return '${names.first} записывает голосовое…';
+      return '${names.length} записывают голосовое…';
     }
     if (names.isEmpty) {
       return active.length > 1 ? 'печатают…' : 'печатает…';

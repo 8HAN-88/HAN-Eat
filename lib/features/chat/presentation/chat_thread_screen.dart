@@ -281,6 +281,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _pollInFlight = false;
   Timer? _presenceTimer;
   Timer? _typingDebounce;
+  Timer? _recordingPresenceTimer;
   Timer? _inlineDebounce;
   List<InlineResult> _inlineResults = [];
   OverlayEntry? _inlineOverlayEntry;
@@ -398,6 +399,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? _unreadDividerBeforeId;
   final Set<int> _typingUserIds = <int>{};
   final Map<int, Timer> _typingUserTimers = <int, Timer>{};
+  /// userId → `typing` | `recording`
+  final Map<int, String> _typingActivityByUser = <int, String>{};
   bool _selectionMode = false;
   bool _chatExitActionRunning = false;
   final _selectedMessageIds = <int>{};
@@ -2119,7 +2122,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (type == 'typing') {
       final rawUid = event['user_id'];
       final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
-      _onPeerTyping(uid);
+      final activity = event['activity'] == 'recording' ? 'recording' : 'typing';
+      _onPeerTyping(uid, activity: activity);
       return;
     }
     if (type == 'message.delivered') {
@@ -3411,15 +3415,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     _typingUserTimers.clear();
     _typingUserIds.clear();
+    _typingActivityByUser.clear();
     _peerTyping = false;
   }
 
-  void _onPeerTyping(int? userId) {
+  void _onPeerTyping(int? userId, {String activity = 'typing'}) {
     final myId = AuthService.instance.currentUser?.id;
     if (userId != null && userId == myId) return;
     final key = userId ?? 0;
+    final kind = activity == 'recording' ? 'recording' : 'typing';
     setState(() {
       _typingUserIds.add(key);
+      _typingActivityByUser[key] = kind;
       _peerTyping = true;
     });
     _typingUserTimers[key]?.cancel();
@@ -3427,10 +3434,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() {
         _typingUserIds.remove(key);
+        _typingActivityByUser.remove(key);
         _peerTyping = _typingUserIds.isNotEmpty;
       });
       _typingUserTimers.remove(key);
     });
+  }
+
+  void _startRecordingPresence() {
+    _recordingPresenceTimer?.cancel();
+    unawaited(
+      ChatService.sendTyping(
+        conversationId: widget.conversationId,
+        activity: 'recording',
+      ),
+    );
+    _recordingPresenceTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(
+        ChatService.sendTyping(
+          conversationId: widget.conversationId,
+          activity: 'recording',
+        ),
+      );
+    });
+  }
+
+  void _stopRecordingPresence() {
+    _recordingPresenceTimer?.cancel();
+    _recordingPresenceTimer = null;
   }
 
   String? _displayNameForUserId(int id) {
@@ -3451,9 +3483,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return null;
   }
 
+  bool get _anyPeerRecording =>
+      _typingActivityByUser.values.any((a) => a == 'recording');
+
   String _typingSubtitleLabel({required bool isGroup}) {
     if (!_peerTyping) return '';
-    if (!isGroup) return 'печатает…';
+    final recording = _anyPeerRecording;
+    if (!isGroup) {
+      return recording ? 'записывает голосовое' : 'печатает';
+    }
     final names = <String>[];
     for (final id in _typingUserIds) {
       if (id == 0) continue;
@@ -3461,12 +3499,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (name == null || name.isEmpty) continue;
       names.add(name.split(' ').first);
     }
-    if (names.isEmpty) return 'печатает…';
-    if (names.length == 1) return '${names.first} печатает…';
-    if (names.length == 2) {
-      return '${names[0]} и ${names[1]} печатают…';
+    if (recording) {
+      if (names.isEmpty) return 'записывает голосовое';
+      if (names.length == 1) return '${names.first} записывает голосовое';
+      return '${names.length} записывают голосовое';
     }
-    return '${names.length} печатают…';
+    if (names.isEmpty) return 'печатает';
+    if (names.length == 1) return '${names.first} печатает';
+    if (names.length == 2) {
+      return '${names[0]} и ${names[1]} печатают';
+    }
+    return '${names.length} печатают';
   }
 
   Widget _unreadMessagesSeparator() {
@@ -4350,6 +4393,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollTimer?.cancel();
     _presenceTimer?.cancel();
     _typingDebounce?.cancel();
+    _stopRecordingPresence();
     for (final t in _typingUserTimers.values) {
       t.cancel();
     }
@@ -6221,6 +6265,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _recordCancelled = false;
       _recordDuration = Duration.zero;
     });
+    _startRecordingPresence();
     _recordTimer?.cancel();
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -6232,6 +6277,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _cancelRecording() async {
+    _stopRecordingPresence();
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
@@ -6253,6 +6299,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _voiceSending = true;
     _recording = false;
     _voiceLocked = false;
+    _stopRecordingPresence();
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _amplitudeSub = null;
@@ -10890,12 +10937,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ),
                             ),
                             if (subtitle.isNotEmpty)
-                              Text(
-                                subtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: subtitleStyle?.copyWith(fontSize: 12),
-                              ),
+                              _peerTyping
+                                  ? Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            subtitle,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: subtitleStyle?.copyWith(
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        TelegramTypingDots(
+                                          color: scheme.primary,
+                                          size: 3.2,
+                                        ),
+                                      ],
+                                    )
+                                  : Text(
+                                      subtitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          subtitleStyle?.copyWith(fontSize: 12),
+                                    ),
                           ],
                         ),
                       ),

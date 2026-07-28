@@ -177,6 +177,12 @@ class MessageReactionRequest(BaseModel):
     emoji: str = Field(..., min_length=1, max_length=16)
 
 
+class TypingActivityRequest(BaseModel):
+    """Telegram-like activity: typing or recording a voice message."""
+
+    activity: str = Field(default="typing", pattern="^(typing|recording)$")
+
+
 class PinMessageRequest(BaseModel):
     pinned: bool = True
 

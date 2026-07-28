@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'dart:ui';
+
+import 'package:flutter/material.dart';
 
 import '../core/theme/app_tokens.dart';
 
@@ -63,6 +65,75 @@ class TelegramGroupedSurface extends StatelessWidget {
         border: Border.all(color: scheme.outlineVariant, width: 0.5),
       ),
       child: child,
+    );
+  }
+}
+
+/// Animated «…» for typing / recording subtitles (Telegram-style).
+class TelegramTypingDots extends StatefulWidget {
+  const TelegramTypingDots({
+    super.key,
+    this.color,
+    this.size = 3.5,
+  });
+
+  final Color? color;
+  final double size;
+
+  @override
+  State<TelegramTypingDots> createState() => _TelegramTypingDotsState();
+}
+
+class _TelegramTypingDotsState extends State<TelegramTypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final t = (_controller.value + i * 0.18) % 1.0;
+            final bounce = math.sin(t * math.pi).clamp(0.0, 1.0);
+            return Padding(
+              padding: EdgeInsets.only(left: i == 0 ? 0 : 2.5),
+              child: Transform.translate(
+                offset: Offset(0, -2.2 * bounce),
+                child: Opacity(
+                  opacity: 0.35 + 0.65 * bounce,
+                  child: Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

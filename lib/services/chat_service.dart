@@ -1708,10 +1708,14 @@ class ChatService {
     return out;
   }
 
-  static Future<void> sendTyping({required int conversationId}) async {
+  static Future<void> sendTyping({
+    required int conversationId,
+    String activity = 'typing',
+  }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/typing');
+    final kind = activity == 'recording' ? 'recording' : 'typing';
     try {
-      await _post(uri);
+      await _post(uri, body: jsonEncode({'activity': kind}));
     } catch (_) {}
   }
 

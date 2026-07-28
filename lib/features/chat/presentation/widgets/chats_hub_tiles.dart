@@ -230,24 +230,41 @@ class ChatHubTile extends StatelessWidget {
                                 const SizedBox(width: 3),
                               ],
                               Expanded(
-                                child: Text(
-                                  body,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: hasTyping
-                                        ? scheme.primary
-                                        : (hasDraft
-                                            ? scheme.error
-                                            : (hasUnread
-                                                ? scheme.onSurface
-                                                : scheme.onSurfaceVariant)),
-                                    fontSize: 14,
-                                    fontStyle: hasTyping
-                                        ? FontStyle.italic
-                                        : FontStyle.normal,
-                                  ),
-                                ),
+                                child: hasTyping
+                                    ? Row(
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              body,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: scheme.primary,
+                                                fontSize: 14,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          TelegramTypingDots(
+                                            color: scheme.primary,
+                                            size: 3.0,
+                                          ),
+                                        ],
+                                      )
+                                    : Text(
+                                        body,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: hasDraft
+                                              ? scheme.error
+                                              : (hasUnread
+                                                  ? scheme.onSurface
+                                                  : scheme.onSurfaceVariant),
+                                          fontSize: 14,
+                                        ),
+                                      ),
                               ),
                             ],
                           ),

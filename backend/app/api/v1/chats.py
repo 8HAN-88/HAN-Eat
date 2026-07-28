@@ -87,6 +87,7 @@ from app.schemas.chat import (
     ChatPollAddOptionRequest,
     ChatPollVoteRequest,
     CallbackQueryRequest,
+    TypingActivityRequest,
 )
 from app.models.bot_command import BotCommand
 from app.models.conversation import (
@@ -2782,21 +2783,26 @@ async def clear_pinned_messages(
 @router.post("/chats/{conversation_id}/typing")
 async def send_typing(
     conversation_id: int,
+    body: Optional[TypingActivityRequest] = None,
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
     if not svc._is_member(conversation_id, current_user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    activity = (body.activity if body is not None else "typing") or "typing"
+    if activity not in ("typing", "recording"):
+        activity = "typing"
     _emit(
         conversation_id,
         {
             "type": "typing",
             "user_id": current_user.id,
             "conversation_id": conversation_id,
+            "activity": activity,
         },
     )
-    # Fan-out to hub list (Telegram «печатает…» in chat preview).
+    # Fan-out to hub list (Telegram «печатает…» / «записывает…»).
     member_ids = (
         db.query(ConversationMember.user_id)
         .filter(ConversationMember.conversation_id == conversation_id)
@@ -2811,9 +2817,10 @@ async def send_typing(
                 "event": "chat.typing",
                 "conversation_id": conversation_id,
                 "user_id": current_user.id,
+                "activity": activity,
             },
         )
-    return {"ok": True}
+    return {"ok": True, "activity": activity}
 
 
 @router.get("/chats/{conversation_id}/stream")

@@ -24,6 +24,7 @@ class UserRealtimeEvent {
     this.messageId,
     this.lastSeenAt,
     this.online,
+    this.activity,
   });
 
   final String event;
@@ -34,6 +35,8 @@ class UserRealtimeEvent {
   final int? messageId;
   final DateTime? lastSeenAt;
   final bool? online;
+  /// For `chat.typing`: `typing` | `recording`.
+  final String? activity;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -53,6 +56,8 @@ class UserRealtimeEvent {
       if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
       return null;
     }
+    final rawActivity = json['activity'] as String?;
+    final activity = rawActivity == 'recording' ? 'recording' : rawActivity;
 
     return UserRealtimeEvent(
       event: '${json['event'] ?? json['type'] ?? ''}',
@@ -63,6 +68,7 @@ class UserRealtimeEvent {
       messageId: asInt(json['message_id']),
       lastSeenAt: asDate(json['last_seen_at']),
       online: json['online'] is bool ? json['online'] as bool : null,
+      activity: activity,
     );
   }
 }

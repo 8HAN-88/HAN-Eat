@@ -204,22 +204,69 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     return url;
   }
 
+  Widget _shell({required Widget child, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        color: widget.backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: () => _showLinkActions(
+            (_preview?.url.trim().isNotEmpty ?? false)
+                ? _preview!.url.trim()
+                : widget.url.trim(),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: widget.accentColor),
+                Expanded(child: child),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final openUrl = (_preview?.url.trim().isNotEmpty ?? false)
+        ? _preview!.url.trim()
+        : widget.url.trim();
+
     if (_loading) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: SizedBox(
-          height: 48,
-          child: Center(
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: widget.foregroundColor.withValues(alpha: 0.5),
+      return _shell(
+        onTap: () => _openUrl(openUrl),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.8,
+                  color: widget.foregroundColor.withValues(alpha: 0.45),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _hostLabel(openUrl),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: widget.accentColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -229,45 +276,33 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
     final hasRich = preview != null &&
         ((preview.title?.trim().isNotEmpty ?? false) ||
             (preview.description?.trim().isNotEmpty ?? false));
-    final openUrl = (preview?.url.trim().isNotEmpty ?? false)
-        ? preview!.url.trim()
-        : widget.url.trim();
 
     if (!hasRich) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Material(
-          color: widget.backgroundColor,
-          borderRadius: BorderRadius.circular(10),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => _openUrl(openUrl),
-            onLongPress: () => _showLinkActions(openUrl),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.link_rounded,
-                    size: 18,
-                    color: widget.accentColor,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _hostLabel(openUrl),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: widget.accentColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+      return _shell(
+        onTap: () => _openUrl(openUrl),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          child: Row(
+            children: [
+              Icon(
+                Icons.link_rounded,
+                size: 18,
+                color: widget.accentColor,
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _hostLabel(openUrl),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: widget.accentColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -278,72 +313,71 @@ class _ChatLinkPreviewState extends State<ChatLinkPreview> {
         ? ServerConfig.resolveMediaUrl(imageUrl)
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Material(
-        color: widget.backgroundColor,
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _openUrl(openUrl),
-          onLongPress: () => _showLinkActions(openUrl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (resolvedImage != null)
-                CachedNetworkImage(
+    return _shell(
+      onTap: () => _openUrl(openUrl),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (preview.siteName?.trim().isNotEmpty ?? false)
+                        ? preview.siteName!.trim()
+                        : _hostLabel(openUrl),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: widget.accentColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (preview.title?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      preview.title!.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.foregroundColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                  if (preview.description?.trim().isNotEmpty ?? false) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      preview.description!.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: widget.foregroundColor.withValues(alpha: 0.8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (resolvedImage != null) ...[
+              const SizedBox(width: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: CachedNetworkImage(
                   imageUrl: resolvedImage,
-                  height: 120,
+                  width: 52,
+                  height: 52,
                   fit: BoxFit.cover,
                   errorWidget: (_, __, ___) => const SizedBox.shrink(),
                 ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (preview.siteName?.trim().isNotEmpty ?? false)
-                      Text(
-                        preview.siteName!.trim(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: widget.accentColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    if (preview.title?.trim().isNotEmpty ?? false) ...[
-                      if (preview.siteName?.trim().isNotEmpty ?? false)
-                        const SizedBox(height: 2),
-                      Text(
-                        preview.title!.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: widget.foregroundColor,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                    if (preview.description?.trim().isNotEmpty ?? false) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        preview.description!.trim(),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: widget.foregroundColor.withValues(alpha: 0.8),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
