@@ -714,6 +714,8 @@ class ChatService {
     required String content,
     required DateTime sendAt,
     bool sendWhenOnline = false,
+    bool silent = false,
+    bool disableWebpagePreview = false,
     int? replyToMessageId,
     String? clientMessageId,
   }) async {
@@ -723,6 +725,8 @@ class ChatService {
       content: content,
       sendAt: sendAt,
       sendWhenOnline: sendWhenOnline,
+      silent: silent,
+      disableWebpagePreview: disableWebpagePreview,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
     );
@@ -734,6 +738,8 @@ class ChatService {
     required String content,
     required DateTime sendAt,
     bool sendWhenOnline = false,
+    bool silent = false,
+    bool disableWebpagePreview = false,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -748,6 +754,8 @@ class ChatService {
       content: content,
       sendAt: sendAt,
       sendWhenOnline: sendWhenOnline,
+      silent: silent,
+      disableWebpagePreview: disableWebpagePreview,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
@@ -1019,6 +1027,8 @@ class ChatService {
     required String content,
     required DateTime sendAt,
     bool sendWhenOnline = false,
+    bool silent = false,
+    bool disableWebpagePreview = false,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -1044,6 +1054,8 @@ class ChatService {
         if (pollSettings != null) 'poll_settings': pollSettings,
         'send_at': sendAt.toUtc().toIso8601String(),
         'send_when_online': sendWhenOnline,
+        if (silent) 'silent': true,
+        if (disableWebpagePreview) 'disable_webpage_preview': true,
       }),
     );
     _ensureOk(response, 'Не удалось запланировать сообщение');

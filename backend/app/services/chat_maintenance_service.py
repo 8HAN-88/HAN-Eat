@@ -71,9 +71,12 @@ def _notify_chat_inbox(
 
 def run_chat_maintenance(db: Session) -> Dict[str, int]:
     """Dispatch due scheduled messages and purge TTL-expired ones with SSE fanout."""
+    from app.services.chat_poll_service import close_expired_polls, enrich_poll_content
+
     svc = ChatService(db)
     dispatched = svc.dispatch_due_scheduled_messages(limit=40)
     purged = svc.purge_due_auto_deleted_messages(limit_conversations=80)
+    closed_polls = close_expired_polls(db, limit=40)
 
     for msg in dispatched:
         publish_chat_event(
@@ -90,16 +93,34 @@ def run_chat_maintenance(db: Session) -> Dict[str, int]:
             )
         _notify_chat_inbox(db, conversation_id, sender_id=None)
 
+    for msg in closed_polls:
+        payload = _message_payload(msg)
+        try:
+            payload["content"] = enrich_poll_content(
+                db, msg.id, msg.content, None
+            )
+        except Exception:
+            pass
+        publish_chat_event(
+            msg.conversation_id,
+            {"type": "message.edited", "message": payload},
+        )
+
     stats = {
         "scheduled_sent": len(dispatched),
         "ttl_purged": sum(len(ids) for ids in purged.values()),
         "ttl_conversations": len(purged),
+        "polls_closed": len(closed_polls),
     }
-    if stats["scheduled_sent"] or stats["ttl_purged"]:
+    if (
+        stats["scheduled_sent"]
+        or stats["ttl_purged"]
+        or stats["polls_closed"]
+    ):
         logger.info(
-            "Chat maintenance: scheduled_sent=%s ttl_purged=%s ttl_conversations=%s",
+            "Chat maintenance: scheduled_sent=%s ttl_purged=%s polls_closed=%s",
             stats["scheduled_sent"],
             stats["ttl_purged"],
-            stats["ttl_conversations"],
+            stats["polls_closed"],
         )
     return stats

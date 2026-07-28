@@ -3,11 +3,16 @@ import json
 
 import pytest
 
+from datetime import datetime, timedelta, timezone
+
 from app.services.chat_poll_service import (
+    apply_poll_expiry_to_message,
     build_poll_content,
     close_message_poll,
     parse_poll_content,
     poll_preview_text,
+    rebase_poll_closes_at,
+    vote_on_message_poll,
 )
 
 
@@ -123,3 +128,55 @@ def test_close_message_poll_already_closed():
 
     with pytest.raises(ValueError, match="poll_already_closed"):
         close_message_poll(_Db(msg), 5, 7)
+
+
+def test_apply_poll_expiry_to_message_closes_past_deadline():
+    class _Msg:
+        type = "poll"
+        id = 9
+        content = build_poll_content(
+            "Q?",
+            ["A", "B"],
+            settings={"time_limit_enabled": True, "duration_hours": 1},
+        )
+
+    msg = _Msg()
+    data = json.loads(msg.content)
+    past = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)).isoformat()
+    data["poll"]["closes_at"] = past
+    msg.content = json.dumps(data)
+    assert apply_poll_expiry_to_message(msg) is True
+    assert json.loads(msg.content)["poll"]["is_closed"] is True
+
+
+def test_vote_on_expired_poll_raises_closed():
+    class _Msg:
+        type = "poll"
+        id = 11
+        content = build_poll_content(
+            "Q?",
+            ["A", "B"],
+            settings={"time_limit_enabled": True, "duration_hours": 1},
+        )
+
+    msg = _Msg()
+    data = json.loads(msg.content)
+    past = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=5)).isoformat()
+    data["poll"]["closes_at"] = past
+    msg.content = json.dumps(data)
+    with pytest.raises(ValueError, match="poll_closed"):
+        vote_on_message_poll(_Db(msg), 11, 3, 0)
+    assert json.loads(msg.content)["poll"]["is_closed"] is True
+
+
+def test_rebase_poll_closes_at_from_send_time():
+    raw = build_poll_content(
+        "Q?",
+        ["A", "B"],
+        settings={"time_limit_enabled": True, "duration_hours": 8},
+    )
+    send_at = datetime(2030, 1, 1, 12, 0, 0)
+    rebased = rebase_poll_closes_at(raw, from_time=send_at)
+    data = json.loads(rebased)
+    closes = datetime.fromisoformat(data["poll"]["closes_at"])
+    assert closes == send_at + timedelta(hours=8)

@@ -27,6 +27,85 @@ def _default_settings() -> Dict[str, Any]:
     }
 
 
+def parse_closes_at(raw: Any) -> Optional[datetime]:
+    if raw is None or raw == "":
+        return None
+    try:
+        deadline = datetime.fromisoformat(str(raw))
+    except Exception:
+        return None
+    if deadline.tzinfo is not None:
+        deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+    return deadline
+
+
+def poll_deadline_passed(closes_at: Any) -> bool:
+    deadline = parse_closes_at(closes_at)
+    if deadline is None:
+        return False
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now >= deadline
+
+
+def apply_poll_expiry_to_message(msg: Any) -> bool:
+    """Persist is_closed when closes_at has passed. Returns True if content changed."""
+    data = parse_poll_content(getattr(msg, "content", "") or "")
+    if not data:
+        return False
+    poll = data["poll"]
+    if poll.get("is_closed"):
+        return False
+    if not poll_deadline_passed(poll.get("closes_at")):
+        return False
+    poll["is_closed"] = True
+    data["poll"] = poll
+    msg.content = json.dumps(data, ensure_ascii=False)
+    return True
+
+
+def rebase_poll_closes_at(
+    content: str, *, from_time: Optional[datetime] = None
+) -> str:
+    """Recompute closes_at from settings so scheduled polls start their timer at send."""
+    data = parse_poll_content(content)
+    if not data:
+        return content
+    poll = data["poll"]
+    settings = poll.get("settings") or {}
+    if not bool(settings.get("time_limit_enabled")):
+        poll["closes_at"] = None
+    else:
+        hours = int(settings.get("duration_hours") or 24)
+        base = from_time or datetime.now(timezone.utc).replace(tzinfo=None)
+        if base.tzinfo is not None:
+            base = base.astimezone(timezone.utc).replace(tzinfo=None)
+        poll["closes_at"] = (base + timedelta(hours=hours)).isoformat()
+    data["poll"] = poll
+    return json.dumps(data, ensure_ascii=False)
+
+
+def close_expired_polls(db: Session, limit: int = 40) -> List[Any]:
+    """Best-effort sweep: close timed-out polls among recent poll messages."""
+    from app.models.conversation import Message
+
+    rows = (
+        db.query(Message)
+        .filter(Message.type == "poll", Message.deleted_at.is_(None))
+        .order_by(Message.id.desc())
+        .limit(max(limit * 5, 100))
+        .all()
+    )
+    closed: List[Any] = []
+    for msg in rows:
+        if len(closed) >= limit:
+            break
+        if apply_poll_expiry_to_message(msg):
+            closed.append(msg)
+    if closed:
+        db.flush()
+    return closed
+
+
 def build_poll_content(
     question: str,
     option_texts: List[str],
@@ -185,6 +264,7 @@ def enrich_messages_poll_batch(
     for m in messages:
         if m.id not in poll_ids:
             continue
+        apply_poll_expiry_to_message(m)
         out[m.id] = enrich_poll_content(
             db,
             m.id,
@@ -213,20 +293,13 @@ def vote_on_message_poll(
         raise ValueError("invalid_poll")
 
     poll = data["poll"]
+    if apply_poll_expiry_to_message(msg):
+        raise ValueError("poll_closed")
+    # Re-parse after possible expiry persist.
+    data = parse_poll_content(msg.content) or data
+    poll = data["poll"]
     if poll.get("is_closed"):
         raise ValueError("poll_closed")
-
-    closes_at = poll.get("closes_at")
-    if closes_at:
-        try:
-            deadline = datetime.fromisoformat(str(closes_at))
-            if datetime.now(timezone.utc).replace(tzinfo=None) >= deadline:
-                poll["is_closed"] = True
-                data["poll"] = poll
-                msg.content = json.dumps(data, ensure_ascii=False)
-                raise ValueError("poll_closed")
-        except ValueError:
-            pass
 
     stored_opts = poll.get("options") or []
     valid_indices = {
@@ -342,23 +415,12 @@ def add_option_to_message_poll(
         raise ValueError("invalid_poll")
 
     poll = data["poll"]
+    if apply_poll_expiry_to_message(msg):
+        raise ValueError("poll_closed")
+    data = parse_poll_content(msg.content) or data
+    poll = data["poll"]
     if poll.get("is_closed"):
         raise ValueError("poll_closed")
-
-    closes_at = poll.get("closes_at")
-    if closes_at:
-        try:
-            deadline = datetime.fromisoformat(str(closes_at))
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
-            if deadline.tzinfo is not None:
-                deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
-            if deadline <= now:
-                raise ValueError("poll_closed")
-        except ValueError as e:
-            if str(e) == "poll_closed":
-                raise
-        except Exception:
-            pass
 
     settings = poll.get("settings") or {}
     if not bool(settings.get("allow_add_options")):

@@ -236,6 +236,8 @@ class ScheduledMessage(Base):
     inline_keyboard_json = Column(String(4000), nullable=True)
     send_at = Column(DateTime, nullable=False, index=True)
     deliver_when_online = Column(Boolean, nullable=False, default=False)
+    silent = Column(Boolean, nullable=False, default=False)
+    disable_webpage_preview = Column(Boolean, nullable=False, default=False)
     target_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(16), nullable=False, default="pending", index=True)
     sent_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)

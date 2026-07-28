@@ -227,6 +227,8 @@ class ScheduleMessageRequest(BaseModel):
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     send_at: Optional[datetime] = None
     send_when_online: bool = False
+    silent: bool = False
+    disable_webpage_preview: bool = False
 
 
 class ScheduledMessageResponse(BaseModel):
@@ -239,6 +241,8 @@ class ScheduledMessageResponse(BaseModel):
     reply_to_message_id: Optional[int] = None
     send_at: datetime
     send_when_online: bool = False
+    silent: bool = False
+    disable_webpage_preview: bool = False
     status: str
     created_at: datetime
 

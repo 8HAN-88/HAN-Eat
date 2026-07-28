@@ -2848,6 +2848,8 @@ class ChatService:
         content: str,
         send_at: Optional[datetime] = None,
         send_when_online: bool = False,
+        silent: bool = False,
+        disable_webpage_preview: bool = False,
         media_url: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
@@ -2895,6 +2897,8 @@ class ChatService:
             inline_keyboard_json=inline_keyboard_json,
             send_at=send_at_naive,
             deliver_when_online=send_when_online,
+            silent=bool(silent),
+            disable_webpage_preview=bool(disable_webpage_preview),
             target_user_id=target_user_id,
             status="pending",
         )
@@ -3055,15 +3059,24 @@ class ChatService:
             elif item.send_at > now:
                 continue
             try:
+                content = item.content
+                if item.type == "poll":
+                    from app.services.chat_poll_service import rebase_poll_closes_at
+
+                    content = rebase_poll_closes_at(content)
                 msg, _ = self.send_message(
                     conversation_id=item.conversation_id,
                     sender_id=item.sender_id,
                     msg_type=item.type,
-                    content=item.content,
+                    content=content,
                     media_url=item.media_url,
                     reply_to_message_id=item.reply_to_message_id,
                     client_message_id=item.client_message_id,
                     inline_keyboard_json=item.inline_keyboard_json,
+                    silent=bool(getattr(item, "silent", False)),
+                    disable_webpage_preview=bool(
+                        getattr(item, "disable_webpage_preview", False)
+                    ),
                 )
                 item.status = "sent"
                 item.sent_message_id = msg.id

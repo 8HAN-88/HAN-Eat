@@ -179,6 +179,10 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
         reply_to_message_id=item.reply_to_message_id,
         send_at=item.send_at,
         send_when_online=getattr(item, "deliver_when_online", False),
+        silent=bool(getattr(item, "silent", False)),
+        disable_webpage_preview=bool(
+            getattr(item, "disable_webpage_preview", False)
+        ),
         status=item.status,
         created_at=item.created_at,
     )
@@ -1965,6 +1969,8 @@ async def schedule_message(
             msg_type=body.type,
             content=content,
             send_when_online=body.send_when_online,
+            silent=body.silent,
+            disable_webpage_preview=body.disable_webpage_preview,
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
             client_message_id=body.client_message_id,

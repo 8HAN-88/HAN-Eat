@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_poll.dart';
 
 /// Пузырь опроса в чате (стиль Telegram).
-class ChatPollBubble extends StatelessWidget {
+class ChatPollBubble extends StatefulWidget {
   const ChatPollBubble({
     super.key,
     required this.poll,
@@ -33,23 +35,73 @@ class ChatPollBubble extends StatelessWidget {
   final VoidCallback? onShowVoters;
   final VoidCallback? onAddOption;
 
+  @override
+  State<ChatPollBubble> createState() => _ChatPollBubbleState();
+}
+
+class _ChatPollBubbleState extends State<ChatPollBubble> {
+  Timer? _ticker;
+
+  ChatPollMessage get poll => widget.poll;
+
   bool get _quiz => poll.settings.quizMode;
 
   bool _isCorrect(int index) =>
       poll.settings.correctOptionIndices.contains(index);
 
   @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatPollBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.poll.closesAt != poll.closesAt ||
+        oldWidget.poll.isClosed != poll.isClosed) {
+      _syncTicker();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  void _syncTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    final closesAt = poll.closesAt;
+    if (poll.isClosed || closesAt == null) return;
+    if (!closesAt.toUtc().isAfter(DateTime.now().toUtc())) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+      if (poll.isEffectivelyClosed) {
+        _ticker?.cancel();
+        _ticker = null;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final options = poll.options;
+    final closed = poll.isEffectivelyClosed;
     final showResults = poll.showResults;
+    final remaining = (!closed && poll.closesAt != null)
+        ? formatPollTimeRemaining(poll.closesAt!)
+        : null;
     final canOpenVoters = showResults &&
         poll.settings.showVoterNames &&
         poll.totalVotes > 0 &&
-        onShowVoters != null;
-    final canAddOption = !poll.isClosed &&
+        widget.onShowVoters != null;
+    final canAddOption = !closed &&
         poll.settings.allowAddOptions &&
         poll.options.length < 12 &&
-        onAddOption != null;
+        widget.onAddOption != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,22 +111,31 @@ class ChatPollBubble extends StatelessWidget {
             Icon(
               _quiz ? Icons.quiz_outlined : Icons.poll_outlined,
               size: 18,
-              color: accentColor,
+              color: widget.accentColor,
             ),
             const SizedBox(width: 6),
             Text(
               _quiz ? 'Викторина' : 'Опрос',
               style: TextStyle(
-                color: accentColor,
+                color: widget.accentColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
             ),
-            if (poll.isClosed) ...[
+            if (closed) ...[
               const SizedBox(width: 8),
               Text(
                 'завершён',
-                style: TextStyle(color: mutedColor, fontSize: 12),
+                style: TextStyle(color: widget.mutedColor, fontSize: 12),
+              ),
+            ] else if (remaining != null) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  remaining,
+                  style: TextStyle(color: widget.mutedColor, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ],
@@ -83,7 +144,7 @@ class ChatPollBubble extends StatelessWidget {
         Text(
           poll.question,
           style: TextStyle(
-            color: foregroundColor,
+            color: widget.foregroundColor,
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),
@@ -92,7 +153,7 @@ class ChatPollBubble extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             poll.description,
-            style: TextStyle(color: mutedColor, fontSize: 13),
+            style: TextStyle(color: widget.mutedColor, fontSize: 13),
           ),
         ],
         if (poll.settings.multipleChoice)
@@ -100,7 +161,7 @@ class ChatPollBubble extends StatelessWidget {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               'Можно выбрать несколько вариантов',
-              style: TextStyle(color: mutedColor, fontSize: 12),
+              style: TextStyle(color: widget.mutedColor, fontSize: 12),
             ),
           ),
         const SizedBox(height: 10),
@@ -115,19 +176,19 @@ class ChatPollBubble extends StatelessWidget {
               : wrongPick
                   ? const Color(0xFFD3544D)
                   : selected
-                      ? accentColor
-                      : accentColor.withValues(alpha: 0.55);
+                      ? widget.accentColor
+                      : widget.accentColor.withValues(alpha: 0.55);
 
           if (!showResults) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Material(
-                color: optionBackground,
+                color: widget.optionBackground,
                 borderRadius: BorderRadius.circular(10),
                 child: InkWell(
-                  onTap: (voting || poll.isClosed || onVote == null)
+                  onTap: (widget.voting || closed || widget.onVote == null)
                       ? null
-                      : () => onVote!(option.index),
+                      : () => widget.onVote!(option.index),
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
                     width: double.infinity,
@@ -137,7 +198,10 @@ class ChatPollBubble extends StatelessWidget {
                     ),
                     child: Text(
                       option.text,
-                      style: TextStyle(color: foregroundColor, fontSize: 14),
+                      style: TextStyle(
+                        color: widget.foregroundColor,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -148,12 +212,12 @@ class ChatPollBubble extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: InkWell(
-              onTap: (voting ||
-                      poll.isClosed ||
-                      onVote == null ||
+              onTap: (widget.voting ||
+                      closed ||
+                      widget.onVote == null ||
                       !poll.settings.allowChangeVote)
                   ? null
-                  : () => onVote!(option.index),
+                  : () => widget.onVote!(option.index),
               borderRadius: BorderRadius.circular(8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,14 +238,14 @@ class ChatPollBubble extends StatelessWidget {
                                 ? const Color(0xFF3D9B5F)
                                 : wrongPick
                                     ? const Color(0xFFD3544D)
-                                    : accentColor,
+                                    : widget.accentColor,
                           ),
                         ),
                       Expanded(
                         child: Text(
                           option.text,
                           style: TextStyle(
-                            color: foregroundColor,
+                            color: widget.foregroundColor,
                             fontWeight: (selected || correct)
                                 ? FontWeight.w600
                                 : FontWeight.normal,
@@ -192,7 +256,7 @@ class ChatPollBubble extends StatelessWidget {
                       Text(
                         '${option.percentage.toStringAsFixed(0)}%',
                         style: TextStyle(
-                          color: foregroundColor,
+                          color: widget.foregroundColor,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -205,7 +269,7 @@ class ChatPollBubble extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: fraction,
                       minHeight: 5,
-                      backgroundColor: optionBackground,
+                      backgroundColor: widget.optionBackground,
                       color: barColor,
                     ),
                   ),
@@ -214,7 +278,10 @@ class ChatPollBubble extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 3),
                       child: Text(
                         '${option.votes} ${_votesLabel(option.votes)}',
-                        style: TextStyle(color: mutedColor, fontSize: 11),
+                        style: TextStyle(
+                          color: widget.mutedColor,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                 ],
@@ -225,12 +292,13 @@ class ChatPollBubble extends StatelessWidget {
         if (poll.totalVotes > 0)
           Text(
             '${poll.totalVotes} ${_votesLabel(poll.totalVotes)}',
-            style: TextStyle(color: mutedColor, fontSize: 12),
+            style: TextStyle(color: widget.mutedColor, fontSize: 12),
           ),
         if (canAddOption) ...[
           const SizedBox(height: 6),
           TextButton(
-            onPressed: (voting || closing) ? null : onAddOption,
+            onPressed:
+                (widget.voting || widget.closing) ? null : widget.onAddOption,
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
@@ -239,7 +307,7 @@ class ChatPollBubble extends StatelessWidget {
             child: Text(
               'Добавить вариант',
               style: TextStyle(
-                color: accentColor,
+                color: widget.accentColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
@@ -249,7 +317,7 @@ class ChatPollBubble extends StatelessWidget {
         if (canOpenVoters) ...[
           const SizedBox(height: 6),
           TextButton(
-            onPressed: onShowVoters,
+            onPressed: widget.onShowVoters,
             style: TextButton.styleFrom(
               padding: EdgeInsets.zero,
               minimumSize: Size.zero,
@@ -258,38 +326,39 @@ class ChatPollBubble extends StatelessWidget {
             child: Text(
               'Кто голосовал',
               style: TextStyle(
-                color: accentColor,
+                color: widget.accentColor,
                 fontWeight: FontWeight.w600,
                 fontSize: 13,
               ),
             ),
           ),
         ],
-        if (canClose && !poll.isClosed && onClose != null) ...[
+        if (widget.canClose && !closed && widget.onClose != null) ...[
           const SizedBox(height: 8),
           GestureDetector(
             onLongPress: () {},
             behavior: HitTestBehavior.opaque,
             child: TextButton(
-              onPressed: (closing || voting) ? null : onClose,
+              onPressed:
+                  (widget.closing || widget.voting) ? null : widget.onClose,
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: closing
+              child: widget.closing
                   ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: accentColor,
+                        color: widget.accentColor,
                       ),
                     )
                   : Text(
                       'Закрыть опрос',
                       style: TextStyle(
-                        color: accentColor,
+                        color: widget.accentColor,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -297,7 +366,7 @@ class ChatPollBubble extends StatelessWidget {
             ),
           ),
         ],
-        if (voting)
+        if (widget.voting)
           const Padding(
             padding: EdgeInsets.only(top: 6),
             child: LinearProgressIndicator(minHeight: 2),

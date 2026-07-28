@@ -6708,11 +6708,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       final mode = await _askSendOrSchedule();
       if (mode == null || !mounted) return;
-      if (mode == 'schedule') {
+      if (_isScheduleMode(mode)) {
         await _scheduleVoiceFile(
           file,
           durationSec: durationSec,
           clientMessageId: clientMessageId,
+          silent: _scheduleSilent(mode),
         );
         return;
       }
@@ -6741,6 +6742,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     XFile file, {
     required int durationSec,
     required String clientMessageId,
+    bool silent = false,
   }) async {
     final delivery = await _pickScheduleDelivery();
     if (delivery == null || !mounted) return;
@@ -6769,6 +6771,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: ServerConfig.resolveMediaUrl(url),
         sendAt: delivery.sendAt,
         sendWhenOnline: delivery.sendWhenOnline,
+        silent: silent,
         replyToMessageId: _replyTo?.id,
         clientMessageId: clientMessageId,
       );
@@ -8521,6 +8524,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  bool _isScheduleMode(String? mode) =>
+      mode == 'schedule' || mode == 'schedule_silent';
+
+  bool _scheduleSilent(String? mode) => mode == 'schedule_silent';
+
   Future<String?> _askSendOrSchedule() {
     return showModalBottomSheet<String>(
       context: context,
@@ -8544,6 +8552,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               leading: const Icon(Icons.schedule_outlined),
               title: const Text('Отложить'),
               onTap: () => Navigator.pop(ctx, 'schedule'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_send_outlined),
+              title: const Text('Отложить без звука'),
+              subtitle: const Text('Отправка позже, без push-уведомления'),
+              onTap: () => Navigator.pop(ctx, 'schedule_silent'),
             ),
             const SizedBox(height: 8),
           ],
@@ -9497,13 +9511,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _showScheduledSnack(ScheduledChatMessage item) {
     final when = DateFormat('dd.MM HH:mm').format(item.sendAt);
+    final base = item.sendWhenOnline
+        ? 'Сообщение будет отправлено, когда собеседник онлайн'
+        : 'Сообщение запланировано на $when';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          item.sendWhenOnline
-              ? 'Сообщение будет отправлено, когда собеседник онлайн'
-              : 'Сообщение запланировано на $when',
-        ),
+        content: Text(item.silent ? '$base (без звука)' : base),
       ),
     );
   }
@@ -9531,6 +9544,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: const Text('Отложить'),
               onTap: () => Navigator.pop(ctx, 'schedule'),
             ),
+            ListTile(
+              leading: const Icon(Icons.schedule_send_outlined),
+              title: const Text('Отложить без звука'),
+              onTap: () => Navigator.pop(ctx, 'schedule_silent'),
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -9544,6 +9562,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
     final delivery = await _pickScheduleDelivery();
     if (delivery == null || !mounted) return;
+    final firstUrl = extractFirstHttpUrl(text);
+    final disablePreview = firstUrl != null &&
+        firstUrl == _composerLinkPreviewDismissedUrl;
 
     try {
       final item = await ChatService.scheduleText(
@@ -9551,6 +9572,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: text,
         sendAt: delivery.sendAt,
         sendWhenOnline: delivery.sendWhenOnline,
+        silent: _scheduleSilent(mode),
+        disableWebpagePreview: disablePreview,
         replyToMessageId: _replyTo?.id,
         clientMessageId: const Uuid().v4(),
       );
@@ -9586,6 +9609,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: item.mediaUrl,
         sendAt: sendAt,
         sendWhenOnline: item.sendWhenOnline,
+        silent: item.silent,
+        disableWebpagePreview: item.disableWebpagePreview,
         replyToMessageId: item.replyToMessageId,
         pollQuestion: poll?.question,
         pollDescription: poll?.description,
@@ -9914,8 +9939,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   item.sendWhenOnline
                                       ? 'Отправка: когда пользователь онлайн'
                                       : 'Отправка: ${DateFormat('dd.MM.yyyy HH:mm').format(item.sendAt)}',
+                                  if (item.silent) 'Без звука',
                                 ].join('\n'),
-                                maxLines: 3,
+                                maxLines: 4,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               isThreeLine: caption.isNotEmpty,
@@ -10534,7 +10560,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       final mode = await _askSendOrSchedule();
       if (mode == null || !mounted) return;
-      if (mode == 'schedule') {
+      if (_isScheduleMode(mode)) {
         final delivery = await _pickScheduleDelivery();
         if (delivery == null || !mounted) return;
         final item = await ChatService.scheduleMessage(
@@ -10543,6 +10569,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           content: content,
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
+          silent: _scheduleSilent(mode),
           replyToMessageId: _replyTo?.id,
           clientMessageId: const Uuid().v4(),
         );
@@ -10628,7 +10655,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_sending || _recording) return;
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
-    if (mode == 'schedule') {
+    if (_isScheduleMode(mode)) {
       final delivery = await _pickScheduleDelivery();
       if (delivery == null || !mounted) return;
       try {
@@ -10638,6 +10665,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           content: draft.question,
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
+          silent: _scheduleSilent(mode),
           replyToMessageId: _replyTo?.id,
           clientMessageId: const Uuid().v4(),
           pollQuestion: draft.question,
@@ -10693,7 +10721,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
     final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
-    if (mode == 'schedule') {
+    if (_isScheduleMode(mode)) {
       final delivery = await _pickScheduleDelivery();
       if (delivery == null || !mounted) return;
       try {
@@ -10704,6 +10732,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mediaUrl: resolved,
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
+          silent: _scheduleSilent(mode),
           replyToMessageId: _replyTo?.id,
           clientMessageId: const Uuid().v4(),
         );
@@ -11065,8 +11094,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }) async {
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
-    if (mode == 'schedule') {
-      await _schedulePickedFile(file, fileName: fileName, replyToId: replyToId);
+    if (_isScheduleMode(mode)) {
+      await _schedulePickedFile(
+        file,
+        fileName: fileName,
+        replyToId: replyToId,
+        silent: _scheduleSilent(mode),
+      );
       return;
     }
     int? totalBytes;
@@ -11091,6 +11125,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     XFile file, {
     required String fileName,
     int? replyToId,
+    bool silent = false,
   }) async {
     final delivery = await _pickScheduleDelivery();
     if (delivery == null || !mounted) return;
@@ -11119,6 +11154,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: ServerConfig.resolveMediaUrl(url),
         sendAt: delivery.sendAt,
         sendWhenOnline: delivery.sendWhenOnline,
+        silent: silent,
         replyToMessageId: replyToId ?? _replyTo?.id,
         clientMessageId: const Uuid().v4(),
       );
@@ -12229,7 +12265,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                         msg.poll !=
                                                                             null &&
                                                                         !msg.poll!
-                                                                            .isClosed)
+                                                                            .isEffectivelyClosed)
                                                                     ? () =>
                                                                         _closePoll(
                                                                             msg)
@@ -12267,7 +12303,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                         msg.poll !=
                                                                             null &&
                                                                         !msg.poll!
-                                                                            .isClosed &&
+                                                                            .isEffectivelyClosed &&
                                                                         msg.poll!
                                                                             .settings
                                                                             .allowAddOptions &&

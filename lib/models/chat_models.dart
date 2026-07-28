@@ -1130,6 +1130,8 @@ class ScheduledChatMessage {
     this.replyToMessageId,
     required this.sendAt,
     this.sendWhenOnline = false,
+    this.silent = false,
+    this.disableWebpagePreview = false,
     required this.status,
     required this.createdAt,
   });
@@ -1143,6 +1145,8 @@ class ScheduledChatMessage {
   final int? replyToMessageId;
   final DateTime sendAt;
   final bool sendWhenOnline;
+  final bool silent;
+  final bool disableWebpagePreview;
   final String status;
   final DateTime createdAt;
 
@@ -1158,6 +1162,9 @@ class ScheduledChatMessage {
       replyToMessageId: replyRaw == null ? null : _parseInt(replyRaw),
       sendAt: _parseDate(json['send_at']),
       sendWhenOnline: json['send_when_online'] as bool? ?? false,
+      silent: json['silent'] as bool? ?? false,
+      disableWebpagePreview:
+          json['disable_webpage_preview'] as bool? ?? false,
       status: json['status'] as String? ?? 'pending',
       createdAt: _parseDate(json['created_at']),
     );

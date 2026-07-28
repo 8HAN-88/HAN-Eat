@@ -117,6 +117,7 @@ class ChatPollMessage {
     required this.options,
     this.settings = const ChatPollSettings(),
     this.isClosed = false,
+    this.closesAt,
     this.votedOptionIndices = const [],
     this.totalVotes = 0,
   });
@@ -126,16 +127,25 @@ class ChatPollMessage {
   final List<ChatPollOption> options;
   final ChatPollSettings settings;
   final bool isClosed;
+  final DateTime? closesAt;
   final List<int> votedOptionIndices;
   final int totalVotes;
 
   bool get hasVoted => votedOptionIndices.isNotEmpty;
 
+  /// Closed by owner/server, or past `closes_at` deadline.
+  bool get isEffectivelyClosed {
+    if (isClosed) return true;
+    final at = closesAt;
+    if (at == null) return false;
+    return !at.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
   bool get hideResults =>
-      settings.hideResultsUntilClosed && !isClosed && !hasVoted;
+      settings.hideResultsUntilClosed && !isEffectivelyClosed && !hasVoted;
 
   bool get showResults =>
-      isClosed || hasVoted || (totalVotes > 0 && !hideResults);
+      isEffectivelyClosed || hasVoted || (totalVotes > 0 && !hideResults);
 
   factory ChatPollMessage.fromJson(Map<String, dynamic> json) {
     final options = (json['options'] as List<dynamic>?)
@@ -150,6 +160,11 @@ class ChatPollMessage {
     } else if (json['voted_option_index'] != null) {
       voted.add((json['voted_option_index'] as num).toInt());
     }
+    DateTime? closesAt;
+    final rawCloses = json['closes_at'];
+    if (rawCloses is String && rawCloses.isNotEmpty) {
+      closesAt = DateTime.tryParse(rawCloses)?.toUtc();
+    }
     return ChatPollMessage(
       question: json['question'] as String? ?? '',
       description: json['description'] as String? ?? '',
@@ -158,10 +173,38 @@ class ChatPollMessage {
         json['settings'] as Map<String, dynamic>?,
       ),
       isClosed: json['is_closed'] as bool? ?? false,
+      closesAt: closesAt,
       votedOptionIndices: voted,
       totalVotes: (json['total_votes'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// Human-readable remaining time for an open timed poll.
+String? formatPollTimeRemaining(DateTime closesAt, {DateTime? now}) {
+  final left = closesAt.toUtc().difference((now ?? DateTime.now()).toUtc());
+  if (left.inSeconds <= 0) return null;
+  if (left.inDays >= 1) {
+    final d = left.inDays;
+    return 'осталось $d ${_ruDays(d)}';
+  }
+  if (left.inHours >= 1) {
+    final h = left.inHours;
+    final m = left.inMinutes % 60;
+    return m > 0 ? 'осталось $h ч $m мин' : 'осталось $h ч';
+  }
+  if (left.inMinutes >= 1) {
+    return 'осталось ${left.inMinutes} мин';
+  }
+  return 'осталось ${left.inSeconds} сек';
+}
+
+String _ruDays(int n) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'д';
+  if (mod10 == 1) return 'д';
+  return 'д';
 }
 
 ChatPollMessage? parseChatPollFromContent(String content) {
