@@ -351,6 +351,7 @@ class MessageEditHistoryItem(BaseModel):
 class MessageEditHistoryResponse(BaseModel):
     items: List[MessageEditHistoryItem] = []
     current_content: str = ""
+    message_type: str = "text"
 
 
 class AddGroupMembersRequest(BaseModel):

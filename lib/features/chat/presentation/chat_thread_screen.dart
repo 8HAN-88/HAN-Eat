@@ -543,7 +543,62 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!_appPaused) _refreshConversation();
     });
     _presenceSub = UserRealtimeService.instance.events.listen((event) {
-      if (!mounted || event.event != 'user.presence') return;
+      if (!mounted) return;
+      if (event.event == 'chat.draft' &&
+          event.conversationId == widget.conversationId) {
+        // Avoid fighting the local composer while the user is typing.
+        if (_inputFocusNode.hasFocus) return;
+        final cleared = event.draftCleared == true;
+        final text = event.draftText ?? '';
+        final replyId = event.draftReplyToMessageId;
+        final empty = text.trim().isEmpty &&
+            (replyId == null || replyId <= 0);
+        if (cleared || empty) {
+          if (_controller.text.isNotEmpty || _replyTo != null) {
+            _controller.clear();
+            setState(() {
+              _replyTo = null;
+              _pendingDraftReplyId = null;
+            });
+          }
+          unawaited(ChatCacheService.clearDraft(widget.conversationId));
+          return;
+        }
+        if (_controller.text != text) {
+          _controller.value = TextEditingValue(
+            text: text,
+            selection: TextSelection.collapsed(offset: text.length),
+          );
+        }
+        unawaited(
+          ChatCacheService.saveDraft(
+            widget.conversationId,
+            text,
+            replyToMessageId: replyId,
+            updatedAt: DateTime.now(),
+          ),
+        );
+        if (replyId != null && replyId > 0) {
+          ChatMessage? target;
+          for (final m in _messages) {
+            if (m.id == replyId) {
+              target = m;
+              break;
+            }
+          }
+          if (target != null) {
+            if (_replyTo?.id != replyId) {
+              setState(() => _replyTo = target);
+            }
+          } else {
+            _pendingDraftReplyId = replyId;
+          }
+        } else if (_replyTo != null) {
+          setState(() => _replyTo = null);
+        }
+        return;
+      }
+      if (event.event != 'user.presence') return;
       final peer = _conversation.peer;
       final uid = event.userId;
       final seen = event.lastSeenAt;
@@ -5533,6 +5588,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _runServerThreadSearch(String query) async {
     final q = query.trim();
     final filter = _threadSearchFilter;
+    final senderId = _threadSearchSenderId;
     final seq = ++_serverSearchSeq;
 
     // Filter-only media/files/links: full history via media API.
@@ -5561,6 +5617,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final page = await ChatService.listChatMedia(
             conversationId: widget.conversationId,
             kind: kind,
+            senderId: senderId,
             limit: 60,
           );
           if (!mounted || seq != _serverSearchSeq) return;
@@ -5588,6 +5645,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         query: q,
         conversationId: widget.conversationId,
         type: _searchTypeForFilter(filter),
+        senderId: senderId,
         limit: 60,
       );
       if (!mounted || seq != _serverSearchSeq) return;
@@ -5603,6 +5661,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           final page = await ChatService.listChatMedia(
             conversationId: widget.conversationId,
             kind: kind,
+            senderId: senderId,
             limit: 60,
           );
           if (!mounted || seq != _serverSearchSeq) return;
@@ -7299,6 +7358,47 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  String _editHistoryBody(String content, String messageType) {
+    final text = content.trim();
+    switch (messageType) {
+      case 'image':
+        return text.isEmpty ? '📷 Фото' : '📷 Подпись: $text';
+      case 'video':
+        return text.isEmpty ? '🎬 Видео' : '🎬 Подпись: $text';
+      case 'video_note':
+        return text.isEmpty ? '⭕ Видеосообщение' : '⭕ Подпись: $text';
+      case 'file':
+        return text.isEmpty ? '📎 Файл' : '📎 $text';
+      case 'voice':
+        return '🎤 Голосовое';
+      case 'sticker':
+        return '🧩 Стикер';
+      case 'poll':
+        return text.isEmpty ? '📊 Опрос' : '📊 $text';
+      case 'location':
+        return '📍 Геопозиция';
+      default:
+        return text.isEmpty ? '—' : text;
+    }
+  }
+
+  String _editHistorySubtitle({
+    required DateTime? at,
+    int? editorId,
+    String? fallbackLabel,
+  }) {
+    final parts = <String>[];
+    if (fallbackLabel != null && fallbackLabel.isNotEmpty) {
+      parts.add(fallbackLabel);
+    }
+    if (editorId != null && editorId > 0) {
+      final name = _displayNameForUserId(editorId);
+      if (name != null && name.isNotEmpty) parts.add(name);
+    }
+    if (at != null) parts.add(formatChatMessageTime(at));
+    return parts.isEmpty ? '—' : parts.join(' · ');
+  }
+
   Future<void> _showMessageEditHistory(ChatMessage msg) async {
     if (msg.id <= 0 || !msg.isEdited) return;
     try {
@@ -7307,6 +7407,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         messageId: msg.id,
       );
       if (!mounted) return;
+      final msgType = history.messageType.isNotEmpty
+          ? history.messageType
+          : msg.type;
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
@@ -7343,12 +7446,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(
-                            history.currentContent.isEmpty
-                                ? '—'
-                                : history.currentContent,
+                            _editHistoryBody(
+                              history.currentContent,
+                              msgType,
+                            ),
                           ),
                           subtitle: Text(
-                            'Текущая версия',
+                            _editHistorySubtitle(
+                              at: msg.editedAt,
+                              editorId: msg.senderId,
+                              fallbackLabel: 'Текущая версия',
+                            ),
                             style: TextStyle(color: scheme.primary),
                           ),
                         ),
@@ -7362,10 +7470,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             (item) => ListTile(
                               contentPadding: EdgeInsets.zero,
                               title: Text(
-                                item.content.isEmpty ? '—' : item.content,
+                                _editHistoryBody(item.content, msgType),
                               ),
                               subtitle: Text(
-                                formatChatMessageTime(item.editedAt),
+                                _editHistorySubtitle(
+                                  at: item.editedAt,
+                                  editorId: item.editorId,
+                                ),
                               ),
                             ),
                           ),

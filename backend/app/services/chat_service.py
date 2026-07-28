@@ -2201,6 +2201,7 @@ class ChatService:
         kind: str = "all",
         cursor: Optional[int] = None,
         limit: int = 60,
+        sender_id: Optional[int] = None,
     ) -> Tuple[List[Message], bool]:
         """Shared media / links for a chat (Telegram-style gallery source)."""
         if not self._is_member(conversation_id, user_id):
@@ -2225,6 +2226,8 @@ class ChatService:
         )
         if cursor:
             q = q.filter(Message.id < cursor)
+        if sender_id is not None:
+            q = q.filter(Message.sender_id == int(sender_id))
 
         kind_norm = (kind or "all").strip().lower()
         if kind_norm == "photos":
@@ -2268,6 +2271,7 @@ class ChatService:
         *,
         conversation_id: Optional[int] = None,
         msg_type: Optional[str] = None,
+        sender_id: Optional[int] = None,
         limit: int = 40,
     ) -> List[dict]:
         term = (query or "").strip()
@@ -2310,6 +2314,8 @@ class ChatService:
         )
         if msg_type:
             q = q.filter(Message.type == msg_type)
+        if sender_id is not None:
+            q = q.filter(Message.sender_id == int(sender_id))
 
         rows = q.limit(limit).all()
         if not rows:

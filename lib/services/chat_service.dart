@@ -1825,12 +1825,14 @@ class ChatService {
     required int conversationId,
     String kind = 'all',
     int? cursor,
+    int? senderId,
     int limit = 60,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/media').replace(
       queryParameters: {
         'kind': kind,
         if (cursor != null) 'cursor': '$cursor',
+        if (senderId != null) 'sender_id': '$senderId',
         'limit': '$limit',
       },
     );
@@ -1851,6 +1853,7 @@ class ChatService {
     required String query,
     int? conversationId,
     String? type,
+    int? senderId,
     int limit = 40,
   }) async {
     final q = query.trim();
@@ -1860,6 +1863,7 @@ class ChatService {
             queryParameters: {
               'q': q,
               if (type != null && type.isNotEmpty) 'type': type,
+              if (senderId != null) 'sender_id': '$senderId',
               'limit': '$limit',
             },
           )
@@ -1867,6 +1871,7 @@ class ChatService {
             queryParameters: {
               'q': q,
               if (type != null && type.isNotEmpty) 'type': type,
+              if (senderId != null) 'sender_id': '$senderId',
               'limit': '$limit',
             },
           );

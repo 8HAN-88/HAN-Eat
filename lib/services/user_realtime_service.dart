@@ -25,6 +25,9 @@ class UserRealtimeEvent {
     this.lastSeenAt,
     this.online,
     this.activity,
+    this.draftText,
+    this.draftCleared,
+    this.draftReplyToMessageId,
   });
 
   final String event;
@@ -37,6 +40,10 @@ class UserRealtimeEvent {
   final bool? online;
   /// For `chat.typing`: `typing` | `recording`.
   final String? activity;
+  /// For `chat.draft`.
+  final String? draftText;
+  final bool? draftCleared;
+  final int? draftReplyToMessageId;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -69,6 +76,9 @@ class UserRealtimeEvent {
       lastSeenAt: asDate(json['last_seen_at']),
       online: json['online'] is bool ? json['online'] as bool : null,
       activity: activity,
+      draftText: json['text'] as String?,
+      draftCleared: json['cleared'] is bool ? json['cleared'] as bool : null,
+      draftReplyToMessageId: asInt(json['reply_to_message_id']),
     );
   }
 }

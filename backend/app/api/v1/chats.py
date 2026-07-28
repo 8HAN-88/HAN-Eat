@@ -825,6 +825,14 @@ async def upsert_chat_draft(
         try:
             svc.delete_draft(conversation_id, current_user.id)
             db.commit()
+            publish_user_event(
+                current_user.id,
+                {
+                    "event": "chat.draft",
+                    "conversation_id": conversation_id,
+                    "cleared": True,
+                },
+            )
         except Exception:
             db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_draft")
@@ -843,6 +851,17 @@ async def upsert_chat_draft(
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.draft",
+            "conversation_id": row.conversation_id,
+            "text": row.text or "",
+            "reply_to_message_id": row.reply_to_message_id,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "cleared": False,
+        },
+    )
     return ConversationDraftResponse(
         conversation_id=row.conversation_id,
         text=row.text or "",
@@ -864,6 +883,14 @@ async def delete_chat_draft(
     except Exception:
         db.rollback()
         raise
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.draft",
+            "conversation_id": conversation_id,
+            "cleared": True,
+        },
+    )
     return {"ok": True}
 
 
@@ -1481,6 +1508,7 @@ async def list_chat_media(
         pattern="^(all|photos|videos|files|links|voices|stickers)$",
     ),
     cursor: Optional[int] = Query(None),
+    sender_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(60, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1494,6 +1522,7 @@ async def list_chat_media(
             kind=kind,
             cursor=cursor,
             limit=limit,
+            sender_id=sender_id,
         )
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
@@ -1578,6 +1607,7 @@ async def search_messages_global(
         None,
         pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
+    sender_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1588,6 +1618,7 @@ async def search_messages_global(
             current_user.id,
             q,
             msg_type=type,
+            sender_id=sender_id,
             limit=limit,
         )
     except ValueError:
@@ -1606,6 +1637,7 @@ async def search_messages_in_chat(
         None,
         pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
+    sender_id: Optional[int] = Query(None, ge=1),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1617,6 +1649,7 @@ async def search_messages_in_chat(
             q,
             conversation_id=conversation_id,
             msg_type=type,
+            sender_id=sender_id,
             limit=limit,
         )
     except ValueError:
@@ -2615,6 +2648,7 @@ async def list_message_edits(
         raise
     return MessageEditHistoryResponse(
         current_content=msg.content or "",
+        message_type=msg.type or "text",
         items=[
             MessageEditHistoryItem(
                 content=row.previous_content or "",

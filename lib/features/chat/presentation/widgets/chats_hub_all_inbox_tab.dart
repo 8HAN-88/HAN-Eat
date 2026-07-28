@@ -442,6 +442,39 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         return;
       }
 
+      if (event.event == 'chat.draft' && event.conversationId != null) {
+        final cid = event.conversationId!;
+        final cleared = event.draftCleared == true;
+        final text = event.draftText ?? '';
+        final replyId = event.draftReplyToMessageId;
+        final empty = text.trim().isEmpty &&
+            (replyId == null || replyId <= 0);
+        setState(() {
+          if (cleared || empty) {
+            _drafts.remove(cid);
+          } else {
+            _drafts[cid] = ChatDraft(
+              text: text,
+              replyToMessageId: replyId,
+              updatedAt: DateTime.now(),
+            );
+          }
+        });
+        if (cleared || empty) {
+          unawaited(ChatCacheService.clearDraft(cid));
+        } else {
+          unawaited(
+            ChatCacheService.saveDraft(
+              cid,
+              text,
+              replyToMessageId: replyId,
+              updatedAt: DateTime.now(),
+            ),
+          );
+        }
+        return;
+      }
+
       if (!ShellTabVisibility.chatsActive || _loading) return;
       if (event.event == 'chat.inbox' ||
           event.event == 'chat.message_hidden' ||

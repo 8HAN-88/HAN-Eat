@@ -1069,10 +1069,12 @@ class ChatMessageEditHistory {
   const ChatMessageEditHistory({
     required this.items,
     this.currentContent = '',
+    this.messageType = 'text',
   });
 
   final List<ChatMessageEditHistoryItem> items;
   final String currentContent;
+  final String messageType;
 
   factory ChatMessageEditHistory.fromJson(Map<String, dynamic> json) {
     final raw = json['items'] as List<dynamic>? ?? const [];
@@ -1085,6 +1087,7 @@ class ChatMessageEditHistory {
     return ChatMessageEditHistory(
       items: items,
       currentContent: json['current_content'] as String? ?? '',
+      messageType: json['message_type'] as String? ?? 'text',
     );
   }
 }
