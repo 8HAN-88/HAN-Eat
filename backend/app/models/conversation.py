@@ -74,6 +74,8 @@ class ConversationMember(Base):
     muted_until = Column(DateTime, nullable=True)
     # Built-in wallpaper style id (pattern/dusk/…); custom images stay device-local.
     wallpaper_style = Column(String(32), nullable=True)
+    # Outgoing bubble accent style id (mint/sky/…); null = default Telegram green.
+    bubble_accent = Column(String(32), nullable=True)
     # Cursor for unread reactions on my messages (Telegram ❤ badge).
     reactions_seen_at = Column(DateTime, nullable=True)
     joined_at = Column(DateTime, server_default=func.now())
@@ -214,6 +216,8 @@ class Message(Base):
     created_at = Column(DateTime, server_default=func.now(), index=True)
     edited_at = Column(DateTime, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
+    # When true, clients should not render a webpage preview for URLs in content.
+    disable_webpage_preview = Column(Boolean, default=False, nullable=False)
 
 
 class ScheduledMessage(Base):

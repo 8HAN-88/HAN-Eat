@@ -55,6 +55,7 @@ class MessageResponse(BaseModel):
     is_read: bool = False
     # Group: how many other members have read up to this message (mine only).
     read_count: int = 0
+    disable_webpage_preview: bool = False
     reactions: List["MessageReactionSummary"] = []
 
     class Config:
@@ -112,6 +113,7 @@ class ConversationResponse(BaseModel):
     muted: bool = False
     muted_until: Optional[datetime] = None
     wallpaper_style: Optional[str] = None
+    bubble_accent: Optional[str] = None
     created_by_user_id: Optional[int] = None
     only_admins_can_post: bool = False
     join_by_request_enabled: bool = False
@@ -204,6 +206,7 @@ class SendMessageRequest(BaseModel):
     poll_settings: Optional[dict] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     silent: bool = False
+    disable_webpage_preview: bool = False
 
 
 class ScheduleMessageRequest(BaseModel):
@@ -305,6 +308,11 @@ class MuteChatRequest(BaseModel):
 
 class WallpaperStyleRequest(BaseModel):
     style: Optional[str] = Field(default=None, max_length=32)
+    apply_to_all: bool = False
+
+
+class BubbleAccentRequest(BaseModel):
+    accent: Optional[str] = Field(default=None, max_length=32)
     apply_to_all: bool = False
 
 

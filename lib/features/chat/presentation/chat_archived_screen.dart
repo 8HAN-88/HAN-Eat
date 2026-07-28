@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +8,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -26,6 +29,10 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   bool _selectionMode = false;
   final Set<String> _selectedKeys = {};
   bool _bulkBusy = false;
+  StreamSubscription<UserRealtimeEvent>? _realtimeSub;
+  Timer? _typingTicker;
+  final Map<int, Map<int, DateTime>> _typingUntilByUser = {};
+  final Map<int, Map<int, String>> _typingActivityByUser = {};
 
   static String _chatKey(int id) => 'chat_$id';
   static String _channelKey(int id) => 'channel_$id';
@@ -33,7 +40,156 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   @override
   void initState() {
     super.initState();
+    _realtimeSub = UserRealtimeService.instance.events.listen(_onRealtime);
     _load();
+  }
+
+  void _onRealtime(UserRealtimeEvent event) {
+    if (!mounted) return;
+    if (event.event == 'chat.typing') {
+      final cid = event.conversationId;
+      if (cid == null) return;
+      if (!_chats.any((c) => c.id == cid)) return;
+      final uid = event.userId ?? 0;
+      final activity =
+          event.activity == 'recording' ? 'recording' : 'typing';
+      setState(() {
+        final byUser = _typingUntilByUser.putIfAbsent(cid, () => {});
+        byUser[uid] = DateTime.now().add(const Duration(seconds: 5));
+        final byActivity = _typingActivityByUser.putIfAbsent(cid, () => {});
+        byActivity[uid] = activity;
+      });
+      _ensureTypingTicker();
+      return;
+    }
+    if (event.event == 'user.presence') {
+      final uid = event.userId;
+      final seen = event.lastSeenAt;
+      if (uid == null || seen == null) return;
+      var changed = false;
+      for (var i = 0; i < _chats.length; i++) {
+        final peer = _chats[i].peer;
+        if (peer == null || peer.id != uid) continue;
+        _chats[i] = _chats[i].copyWith(
+          peer: peer.copyWith(lastSeenAt: seen),
+        );
+        changed = true;
+      }
+      if (changed) setState(() {});
+    }
+  }
+
+  void _ensureTypingTicker() {
+    if (_typingTicker != null) return;
+    _typingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final now = DateTime.now();
+      final hasAny = _typingUntilByUser.isNotEmpty;
+      var needsUpdate = false;
+      for (final byUser in _typingUntilByUser.values) {
+        if (byUser.values.any((until) => !until.isAfter(now))) {
+          needsUpdate = true;
+          break;
+        }
+      }
+      if (!needsUpdate) {
+        if (!hasAny) {
+          _typingTicker?.cancel();
+          _typingTicker = null;
+        }
+        return;
+      }
+      setState(() {
+        final emptyConvs = <int>[];
+        for (final entry in _typingUntilByUser.entries) {
+          final expired = <int>[];
+          entry.value.removeWhere((uid, until) {
+            final gone = !until.isAfter(now);
+            if (gone) expired.add(uid);
+            return gone;
+          });
+          final activities = _typingActivityByUser[entry.key];
+          if (activities != null) {
+            for (final uid in expired) {
+              activities.remove(uid);
+            }
+            if (activities.isEmpty) {
+              _typingActivityByUser.remove(entry.key);
+            }
+          }
+          if (entry.value.isEmpty) emptyConvs.add(entry.key);
+        }
+        for (final id in emptyConvs) {
+          _typingUntilByUser.remove(id);
+          _typingActivityByUser.remove(id);
+        }
+      });
+      if (_typingUntilByUser.isEmpty) {
+        _typingTicker?.cancel();
+        _typingTicker = null;
+      }
+    });
+  }
+
+  String? _typingLabelFor(int conversationId) {
+    final byUser = _typingUntilByUser[conversationId];
+    if (byUser == null || byUser.isEmpty) return null;
+    final now = DateTime.now();
+    final active = byUser.entries
+        .where((e) => e.value.isAfter(now))
+        .map((e) => e.key)
+        .toList();
+    if (active.isEmpty) return null;
+    final activities = _typingActivityByUser[conversationId] ?? const {};
+    final recording = active.any((id) => activities[id] == 'recording');
+    ChatConversation? chat;
+    for (final c in _chats) {
+      if (c.id == conversationId) {
+        chat = c;
+        break;
+      }
+    }
+    if (chat == null || !chat.isGroup) {
+      return recording ? 'записывает голосовое…' : 'печатает…';
+    }
+    final names = <String>[];
+    for (final id in active) {
+      final peer = chat.peer;
+      if (peer != null && peer.id == id) {
+        names.add(peer.displayName.split(' ').first);
+        continue;
+      }
+      for (final m in chat.membersPreview) {
+        if (m.id == id) {
+          names.add(m.displayName.split(' ').first);
+          break;
+        }
+      }
+    }
+    if (recording) {
+      if (names.isEmpty) {
+        return active.length > 1
+            ? 'записывают голосовое…'
+            : 'записывает голосовое…';
+      }
+      if (names.length == 1) return '${names.first} записывает голосовое…';
+      return '${names.length} записывают голосовое…';
+    }
+    if (names.isEmpty) {
+      return active.length > 1 ? 'печатают…' : 'печатает…';
+    }
+    if (names.length == 1) return '${names.first} печатает…';
+    if (names.length == 2) {
+      return '${names[0]} и ${names[1]} печатают…';
+    }
+    return '${names.length} печатают…';
+  }
+
+  @override
+  void dispose() {
+    _realtimeSub?.cancel();
+    _typingTicker?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -331,6 +487,7 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
                                 final key = _chatKey(chat.id);
                                 return _ArchivedChatTile(
                                   chat: chat,
+                                  typingLabel: _typingLabelFor(chat.id),
                                   selectionMode: _selectionMode,
                                   selected: _selectedKeys.contains(key),
                                   onUnarchive: () => _unarchiveChat(chat),
@@ -403,6 +560,7 @@ class _ArchivedChatTile extends StatelessWidget {
     required this.selected,
     required this.onToggleSelect,
     required this.onLongPress,
+    this.typingLabel,
   });
 
   final ChatConversation chat;
@@ -411,6 +569,7 @@ class _ArchivedChatTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onToggleSelect;
   final VoidCallback onLongPress;
+  final String? typingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -419,14 +578,20 @@ class _ArchivedChatTile extends StatelessWidget {
     final hasUnread = chat.unreadCount > 0 ||
         chat.unreadMentionsCount > 0 ||
         chat.unreadReactionsCount > 0;
-    final preview = chatHubBodyPreview(last, isSaved: chat.isSaved);
-    final prefix = last == null
+    final hasTyping = (typingLabel?.trim().isNotEmpty ?? false);
+    final preview = hasTyping
+        ? typingLabel!.trim()
+        : chatHubBodyPreview(last, isSaved: chat.isSaved);
+    final prefix = hasTyping
         ? null
-        : (last.isMine
-            ? 'Вы: '
-            : (chat.isGroup && (last.senderName?.isNotEmpty ?? false)
-                ? '${last.senderName}: '
-                : null));
+        : (last == null
+            ? null
+            : (last.isMine
+                ? 'Вы: '
+                : (chat.isGroup && (last.senderName?.isNotEmpty ?? false)
+                    ? '${last.senderName}: '
+                    : null)));
+    final peer = chat.peer;
 
     final tile = Material(
       color: hasUnread
@@ -440,13 +605,15 @@ class _ArchivedChatTile extends StatelessWidget {
                     value: selected,
                     onChanged: (_) => onToggleSelect(),
                   )
-                : Icon(
-                    chat.isSaved
-                        ? Icons.bookmark_rounded
-                        : chat.isGroup
-                            ? Icons.groups_rounded
-                            : Icons.person_rounded,
-                  ),
+                : (peer != null && !chat.isGroup && !chat.isSaved
+                    ? ChatHubUserAvatar(user: peer)
+                    : Icon(
+                        chat.isSaved
+                            ? Icons.bookmark_rounded
+                            : chat.isGroup
+                                ? Icons.groups_rounded
+                                : Icons.person_rounded,
+                      )),
             title: Text(
               chat.displayTitle,
               maxLines: 1,
@@ -455,14 +622,37 @@ class _ArchivedChatTile extends StatelessWidget {
                 fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w600,
               ),
             ),
-            subtitle: Text(
-              prefix == null ? preview : '$prefix$preview',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: hasUnread ? scheme.onSurface : scheme.onSurfaceVariant,
-              ),
-            ),
+            subtitle: hasTyping
+                ? Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: scheme.primary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      TelegramTypingDots(
+                        color: scheme.primary,
+                        size: 3.0,
+                      ),
+                    ],
+                  )
+                : Text(
+                    prefix == null ? preview : '$prefix$preview',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hasUnread
+                          ? scheme.onSurface
+                          : scheme.onSurfaceVariant,
+                    ),
+                  ),
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,

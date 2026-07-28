@@ -200,6 +200,7 @@ class ChatMessage {
     this.isDelivered = false,
     this.isRead = false,
     this.readCount = 0,
+    this.disableWebpagePreview = false,
     this.reactions = const [],
     this.inlineKeyboard = const [],
   });
@@ -223,6 +224,7 @@ class ChatMessage {
   final bool isRead;
   /// Group: other members who have read up to this message (outgoing only).
   final int readCount;
+  final bool disableWebpagePreview;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
 
@@ -292,6 +294,8 @@ class ChatMessage {
           (json['is_read'] as bool? ?? false),
       isRead: json['is_read'] as bool? ?? false,
       readCount: _parseInt(json['read_count']),
+      disableWebpagePreview:
+          json['disable_webpage_preview'] as bool? ?? false,
       reactions: reactions,
       inlineKeyboard: keyboard,
     );
@@ -301,6 +305,7 @@ class ChatMessage {
     bool? isDelivered,
     bool? isRead,
     int? readCount,
+    bool? disableWebpagePreview,
     String? content,
     DateTime? editedAt,
     List<ChatReactionSummary>? reactions,
@@ -324,6 +329,8 @@ class ChatMessage {
       isDelivered: isDelivered ?? this.isDelivered,
       isRead: isRead ?? this.isRead,
       readCount: readCount ?? this.readCount,
+      disableWebpagePreview:
+          disableWebpagePreview ?? this.disableWebpagePreview,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );
@@ -401,6 +408,7 @@ class ChatConversation {
     this.muted = false,
     this.mutedUntil,
     this.wallpaperStyle,
+    this.bubbleAccent,
     this.createdByUserId,
     this.onlyAdminsCanPost = false,
     this.joinByRequestEnabled = false,
@@ -435,6 +443,7 @@ class ChatConversation {
   final bool muted;
   final DateTime? mutedUntil;
   final String? wallpaperStyle;
+  final String? bubbleAccent;
   final int? createdByUserId;
   final bool onlyAdminsCanPost;
   final bool joinByRequestEnabled;
@@ -511,6 +520,7 @@ class ChatConversation {
           ? DateTime.tryParse(json['muted_until'] as String)
           : null,
       wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
+      bubbleAccent: (json['bubble_accent'] as String?)?.trim(),
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])
           : null,
@@ -550,6 +560,8 @@ class ChatConversation {
     bool clearMutedUntil = false,
     String? wallpaperStyle,
     bool clearWallpaperStyle = false,
+    String? bubbleAccent,
+    bool clearBubbleAccent = false,
     bool? pinned,
     bool? onlyAdminsCanPost,
     bool? joinByRequestEnabled,
@@ -590,6 +602,9 @@ class ChatConversation {
       wallpaperStyle: clearWallpaperStyle
           ? null
           : (wallpaperStyle ?? this.wallpaperStyle),
+      bubbleAccent: clearBubbleAccent
+          ? null
+          : (bubbleAccent ?? this.bubbleAccent),
       createdByUserId: createdByUserId,
       onlyAdminsCanPost: onlyAdminsCanPost ?? this.onlyAdminsCanPost,
       joinByRequestEnabled: joinByRequestEnabled ?? this.joinByRequestEnabled,

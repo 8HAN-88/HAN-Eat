@@ -368,6 +368,7 @@ class ChatCacheService {
       'is_delivered': m.isDelivered,
       'is_read': m.isRead,
       'read_count': m.readCount,
+      'disable_webpage_preview': m.disableWebpagePreview,
       'reactions': m.reactions
           .map(
             (r) => {

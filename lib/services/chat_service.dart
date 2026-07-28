@@ -635,6 +635,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    bool disableWebpagePreview = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -643,6 +644,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      disableWebpagePreview: disableWebpagePreview,
     );
   }
 
@@ -986,6 +988,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    bool disableWebpagePreview = false,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1001,6 +1004,7 @@ class ChatService {
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         if (clientMessageId != null) 'client_message_id': clientMessageId,
         if (silent) 'silent': true,
+        if (disableWebpagePreview) 'disable_webpage_preview': true,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
@@ -1256,6 +1260,22 @@ class ChatService {
       }),
     );
     _ensureOk(response, 'Не удалось сохранить обои');
+  }
+
+  static Future<void> setBubbleAccent({
+    required int conversationId,
+    required String? accent,
+    bool applyToAll = false,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/bubble-accent');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'accent': accent,
+        'apply_to_all': applyToAll,
+      }),
+    );
+    _ensureOk(response, 'Не удалось сохранить цвет пузырей');
   }
 
   static Future<ChatConversation> updateGroupTitle({
@@ -1740,6 +1760,7 @@ class ChatService {
       isDelivered: mine ? false : msg.isDelivered,
       isRead: mine ? false : msg.isRead,
       readCount: mine ? 0 : msg.readCount,
+      disableWebpagePreview: msg.disableWebpagePreview,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
     );

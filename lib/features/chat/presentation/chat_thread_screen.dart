@@ -59,6 +59,7 @@ import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../widgets/chat_bubble_accent.dart';
 import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
@@ -432,6 +433,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _autoRetryOnLimitsEnabled = true;
   bool _showFormatBar = false;
   ChatWallpaperStyle _wallpaperStyle = ChatWallpaperStyle.defaultStyle;
+  ChatBubbleAccent _bubbleAccent = ChatBubbleAccent.defaultStyle;
   String? _wallpaperCustomPath;
   ImageProvider? _wallpaperImage;
   String? _pendingMediaAutoRetryClientMessageId;
@@ -630,6 +632,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           customImage = FileImage(file);
         }
       }
+      final cloudAccent = _conversation.bubbleAccent?.trim();
+      final bubbleAccent = ChatBubbleAccent.fromId(cloudAccent);
       if (!mounted) return;
       setState(() {
         _slowModeCountdownHapticsEnabled = hapticsEnabled;
@@ -637,11 +641,94 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _wallpaperStyle = wallpaper;
         _wallpaperCustomPath = customPath;
         _wallpaperImage = customImage;
+        _bubbleAccent = bubbleAccent;
       });
       if (!autoRetryEnabled) {
         _clearAllAutoRetrySchedules();
       }
     } catch (_) {}
+  }
+
+  Future<void> _applyBubbleAccent(
+    ChatBubbleAccent accent, {
+    bool applyToAll = false,
+  }) async {
+    final previous = _bubbleAccent;
+    setState(() {
+      _bubbleAccent = accent;
+      _conversation = accent == ChatBubbleAccent.defaultStyle
+          ? _conversation.copyWith(clearBubbleAccent: true)
+          : _conversation.copyWith(bubbleAccent: accent.id);
+    });
+    try {
+      await ChatService.setBubbleAccent(
+        conversationId: widget.conversationId,
+        accent:
+            accent == ChatBubbleAccent.defaultStyle ? null : accent.id,
+        applyToAll: applyToAll,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bubbleAccent = previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _showBubbleAccentPicker() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                'Цвет пузырей',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            for (final accent in ChatBubbleAccent.values)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: accent.swatchColor(isDark: isDark),
+                  radius: 16,
+                ),
+                title: Text(accent.label),
+                trailing: _bubbleAccent == accent
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(ctx, accent.id),
+                onLongPress: () => Navigator.pop(ctx, 'all:${accent.id}'),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                'Долгое нажатие — применить ко всем чатам',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    if (action.startsWith('all:')) {
+      final id = action.substring(4);
+      await _applyBubbleAccent(ChatBubbleAccent.fromId(id), applyToAll: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Цвет пузырей применён ко всем чатам')),
+      );
+      return;
+    }
+    await _applyBubbleAccent(ChatBubbleAccent.fromId(action));
   }
 
   Future<void> _applyWallpaperStyle(
@@ -4170,6 +4257,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           title: 'Обои чата',
           onTap: () => unawaited(_showWallpaperPicker()),
         ),
+        TelegramActionSheetAction(
+          icon: Icons.chat_bubble_outline_rounded,
+          title: 'Цвет пузырей',
+          onTap: () => unawaited(_showBubbleAccentPicker()),
+        ),
         if (!isSaved)
           TelegramActionSheetAction(
             icon: Icons.ios_share_outlined,
@@ -4379,17 +4471,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _applyReadReceipt(int readUpToId, {int? readerId}) {
-    setState(() {
-      if (_conversation.isGroup) {
-        final prev = (readerId != null)
-            ? (_peerGroupReadCursors[readerId] ?? 0)
-            : 0;
-        if (readerId != null) {
-          final known = _peerGroupReadCursors[readerId] ?? 0;
-          if (readUpToId <= known) return;
-          _peerGroupReadCursors[readerId] = readUpToId;
-        }
-        final others = math.max(0, _conversation.memberCount - 1);
+    if (_conversation.isGroup) {
+      final prev =
+          (readerId != null) ? (_peerGroupReadCursors[readerId] ?? 0) : 0;
+      if (readerId != null) {
+        final known = _peerGroupReadCursors[readerId] ?? 0;
+        if (readUpToId <= known) return;
+        _peerGroupReadCursors[readerId] = readUpToId;
+      }
+      final others = math.max(0, _conversation.memberCount - 1);
+      setState(() {
         for (var i = 0; i < _messages.length; i++) {
           final m = _messages[i];
           if (!m.isMine || m.id <= 0) continue;
@@ -4407,8 +4498,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             isRead: allRead || m.isRead,
           );
         }
-        return;
-      }
+      });
+      return;
+    }
+    setState(() {
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
         if (m.isMine && m.id <= readUpToId && (!m.isRead || !m.isDelivered)) {
@@ -4830,6 +4923,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _muted = conv.muted;
         _senderNames = names;
         _groupMembers = members;
+        _bubbleAccent = ChatBubbleAccent.fromId(conv.bubbleAccent);
       });
       _reconcileSlowModeCooldownWithConversation();
       unawaited(_syncMuteSchedule());
@@ -7345,6 +7439,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               msg.readCount > 0
           ? () => unawaited(_showMessageReaders(msg))
           : null,
+      outgoingBubbleColor: msg.isMine
+          ? _bubbleAccent.outgoingColor(
+              isDark: Theme.of(context).brightness == Brightness.dark,
+            )
+          : null,
     );
   }
 
@@ -7701,9 +7800,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             : (isQueued ? 'В очереди…' : _mediaStatusLabel(pending));
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bubbleBg = isDark
-        ? AppColors.telegramOutgoingDark
-        : AppColors.telegramOutgoingLight;
+    final bubbleBg = _bubbleAccent.outgoingColor(isDark: isDark);
     final width = switch (pending.kind) {
       _PendingMediaKind.image => 210.0,
       _PendingMediaKind.video => 210.0,
@@ -8681,6 +8778,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: pending.replyToMessageId,
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
+            disableWebpagePreview: pending.disableWebpagePreview,
           );
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
@@ -8928,6 +9026,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final replyId = _replyTo?.id;
     final uid = AuthService.instance.currentUser?.id ?? 0;
     final clientMessageId = const Uuid().v4();
+    final firstUrl = extractFirstHttpUrl(text);
+    final disablePreview = firstUrl != null &&
+        firstUrl == _composerLinkPreviewDismissedUrl;
     _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final optimistic = ChatMessage(
@@ -8939,6 +9040,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       createdAt: DateTime.now(),
       isMine: true,
       replyToMessageId: replyId,
+      disableWebpagePreview: disablePreview,
     );
     final pending = _PendingTextSend(
       text: text,
@@ -8946,10 +9048,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       clientMessageId: clientMessageId,
       tempId: tempId,
       silent: silent,
+      disableWebpagePreview: disablePreview,
     );
     setState(() {
       _messages.add(optimistic);
       _replyTo = null;
+      _composerLinkPreviewUrl = null;
+      _composerLinkPreviewDismissedUrl = null;
       _textOutboundQueue.add(pending);
     });
     _scrollToBottom();
@@ -12872,6 +12977,7 @@ class _PendingTextSend {
     required this.tempId,
     this.replyToMessageId,
     this.silent = false,
+    this.disableWebpagePreview = false,
   });
 
   final String text;
@@ -12879,6 +12985,7 @@ class _PendingTextSend {
   final int tempId;
   final int? replyToMessageId;
   final bool silent;
+  final bool disableWebpagePreview;
   int attempts = 0;
   int? lastRetryAfterSeconds;
   DateTime? lastLimitedAt;
@@ -12950,10 +13057,12 @@ class _Bubble extends StatelessWidget {
     this.onVoiceCompleted,
     this.onEditedTap,
     this.onReadersTap,
+    this.outgoingBubbleColor,
   });
 
   final ChatMessage message;
   final ColorScheme scheme;
+  final Color? outgoingBubbleColor;
   /// Still sending to server (Telegram clock icon).
   final bool isPending;
   /// Send failed (tap to retry).
@@ -13384,9 +13493,10 @@ class _Bubble extends StatelessWidget {
     final mine = message.isMine;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = mine
-        ? (isDark
-            ? AppColors.telegramOutgoingDark
-            : AppColors.telegramOutgoingLight)
+        ? (outgoingBubbleColor ??
+            (isDark
+                ? AppColors.telegramOutgoingDark
+                : AppColors.telegramOutgoingLight))
         : (isDark ? scheme.surfaceContainerLow : scheme.surfaceContainerLowest);
     final fg = mine && isDark ? Colors.white : scheme.onSurface;
     final quoteBg = mine
@@ -13682,8 +13792,10 @@ class _Bubble extends StatelessWidget {
         );
       }
     } else if (message.content.isNotEmpty && message.type != 'voice') {
-      final hasLinkPreview =
-          extractFirstHttpUrl(message.content) != null;
+      final previewUrl = message.disableWebpagePreview
+          ? null
+          : extractFirstHttpUrl(message.content);
+      final hasLinkPreview = previewUrl != null;
       final textStyle = TextStyle(color: fg, height: 1.22, fontSize: 15.5);
       final textChild = HighlightedText(
         text: message.content,
@@ -13704,16 +13816,15 @@ class _Bubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               textChild,
-              if (extractFirstHttpUrl(message.content) case final url?)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: ChatLinkPreview(
-                    url: url,
-                    foregroundColor: fg,
-                    accentColor: scheme.primary,
-                    backgroundColor: quoteBg,
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ChatLinkPreview(
+                  url: previewUrl,
+                  foregroundColor: fg,
+                  accentColor: scheme.primary,
+                  backgroundColor: quoteBg,
                 ),
+              ),
             ],
           ),
         );

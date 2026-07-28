@@ -816,6 +816,10 @@ class ChatService:
                         (getattr(member, "wallpaper_style", None) or "").strip()
                         or None
                     ),
+                    "bubble_accent": (
+                        (getattr(member, "bubble_accent", None) or "").strip()
+                        or None
+                    ),
                     "member_count": member_count,
                     "members_preview": members_preview,
                 }
@@ -946,12 +950,18 @@ class ChatService:
             "wallpaper_style": (
                 (getattr(member, "wallpaper_style", None) or "").strip() or None
             ),
+            "bubble_accent": (
+                (getattr(member, "bubble_accent", None) or "").strip() or None
+            ),
             "member_count": member_count,
             "members_preview": members_preview,
         }
 
     _WALLPAPER_STYLES = frozenset(
         {"pattern", "solid", "dusk", "forest", "sand", "night"}
+    )
+    _BUBBLE_ACCENTS = frozenset(
+        {"default", "mint", "sky", "rose", "amber", "slate", "grape"}
     )
 
     def set_wallpaper_style(
@@ -990,6 +1000,47 @@ class ChatService:
         if not member:
             raise ValueError("forbidden")
         member.wallpaper_style = value
+        return value
+
+    def set_bubble_accent(
+        self,
+        conversation_id: int,
+        user_id: int,
+        accent: Optional[str],
+        *,
+        apply_to_all: bool = False,
+    ) -> Optional[str]:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        value: Optional[str] = None
+        if accent is not None:
+            cleaned = (accent or "").strip().lower()
+            if cleaned in ("", "default"):
+                value = None
+            elif cleaned not in self._BUBBLE_ACCENTS:
+                raise ValueError("bad_bubble_accent")
+            else:
+                value = cleaned
+        if apply_to_all:
+            members = (
+                self.db.query(ConversationMember)
+                .filter(ConversationMember.user_id == user_id)
+                .all()
+            )
+            for m in members:
+                m.bubble_accent = value
+            return value
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if not member:
+            raise ValueError("forbidden")
+        member.bubble_accent = value
         return value
 
     def set_pinned(self, conversation_id: int, user_id: int, pinned: bool) -> None:
@@ -2467,6 +2518,7 @@ class ChatService:
         client_message_id: Optional[str] = None,
         inline_keyboard_json: Optional[str] = None,
         silent: bool = False,
+        disable_webpage_preview: bool = False,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2499,6 +2551,7 @@ class ChatService:
             reply_to_message_id=reply_to_message_id,
             client_message_id=client_message_id,
             inline_keyboard_json=inline_keyboard_json,
+            disable_webpage_preview=bool(disable_webpage_preview),
         )
         self.db.add(msg)
 

@@ -58,6 +58,7 @@ from app.schemas.chat import (
     MuteChatRequest,
     PinChatRequest,
     WallpaperStyleRequest,
+    BubbleAccentRequest,
     UpdateGroupChatRequest,
     GroupMemberAdminRequest,
     GroupMemberPermissionsRequest,
@@ -159,6 +160,9 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "inline_keyboard": inline_keyboard,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
+        "disable_webpage_preview": bool(
+            getattr(msg, "disable_webpage_preview", False)
+        ),
         "reactions": reactions or [],
     }
 
@@ -548,6 +552,9 @@ def _message_response(
         is_delivered=is_delivered,
         is_read=is_read,
         read_count=read_count if is_mine else 0,
+        disable_webpage_preview=bool(
+            getattr(msg, "disable_webpage_preview", False)
+        ),
         reactions=reactions or [],
     )
 
@@ -666,6 +673,7 @@ def _conversation_response(
         muted=row.get("muted", False),
         muted_until=row.get("muted_until"),
         wallpaper_style=row.get("wallpaper_style"),
+        bubble_accent=row.get("bubble_accent"),
         created_by_user_id=conv.created_by_user_id
         if conv.type in ("group", "saved")
         else None,
@@ -1611,6 +1619,7 @@ async def send_message(
             if inline_keyboard_payload
             else None,
             silent=bool(body.silent),
+            disable_webpage_preview=bool(body.disable_webpage_preview),
         )
         db.commit()
         db.refresh(msg)
@@ -3232,6 +3241,37 @@ async def set_chat_wallpaper(
             )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return {"ok": True, "wallpaper_style": style, "apply_to_all": body.apply_to_all}
+
+
+@router.post("/chats/{conversation_id}/bubble-accent")
+async def set_chat_bubble_accent(
+    conversation_id: int,
+    body: BubbleAccentRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        accent = svc.set_bubble_accent(
+            conversation_id,
+            current_user.id,
+            body.accent,
+            apply_to_all=bool(body.apply_to_all),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "bad_bubble_accent":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "bad_bubble_accent"
+            )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    return {
+        "ok": True,
+        "bubble_accent": accent,
+        "apply_to_all": body.apply_to_all,
+    }
 
 
 @router.patch("/chats/{conversation_id}", response_model=ConversationResponse)
