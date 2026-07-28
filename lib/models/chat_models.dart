@@ -570,6 +570,7 @@ class ChatConversation {
     String? bubbleAccent,
     bool clearBubbleAccent = false,
     bool? pinned,
+    bool? archived,
     bool? onlyAdminsCanPost,
     bool? joinByRequestEnabled,
     int? slowModeSeconds,
@@ -601,7 +602,7 @@ class ChatConversation {
           unreadReactionsCount ?? this.unreadReactionsCount,
       updatedAt: updatedAt,
       pinned: pinned ?? this.pinned,
-      archived: archived,
+      archived: archived ?? this.archived,
       muted: muted ?? this.muted,
       mutedUntil: clearMutedUntil
           ? null

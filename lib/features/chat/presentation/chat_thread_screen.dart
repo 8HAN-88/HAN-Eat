@@ -544,6 +544,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
     _presenceSub = UserRealtimeService.instance.events.listen((event) {
       if (!mounted) return;
+      if ((event.event == 'chat.mute' ||
+              event.event == 'chat.pin' ||
+              event.event == 'chat.archive') &&
+          event.conversationId == widget.conversationId) {
+        setState(() {
+          _conversation = _conversation.copyWith(
+            muted: event.muted ?? _conversation.muted,
+            mutedUntil: event.mutedUntil,
+            clearMutedUntil:
+                event.event == 'chat.mute' &&
+                (event.muted != true || event.mutedUntil == null),
+            pinned: event.pinned ?? _conversation.pinned,
+            archived: event.archived ?? _conversation.archived,
+          );
+        });
+        return;
+      }
       if (event.event == 'chat.draft' &&
           event.conversationId == widget.conversationId) {
         // Avoid fighting the local composer while the user is typing.

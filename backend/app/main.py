@@ -170,10 +170,11 @@ async def startup_event():
 
 
 async def _background_maintenance_loop() -> None:
-    """Публикация отложенных постов и обслуживание подписок."""
+    """Публикация отложенных постов/чатов и обслуживание подписок."""
     from app.core.database import SessionLocal
     from app.core.maintenance_lock import try_acquire_maintenance_lock
     from app.core.redis_client import get_redis
+    from app.services.chat_maintenance_service import run_chat_maintenance
     from app.services.post_publish_service import publish_due_scheduled_posts
     from app.services.paid_features_service import expire_due_post_boosts
     from app.services.subscription_maintenance_service import SubscriptionMaintenanceService
@@ -187,11 +188,14 @@ async def _background_maintenance_loop() -> None:
             published = publish_due_scheduled_posts(db)
             expired_boosts = expire_due_post_boosts(db)
             SubscriptionMaintenanceService(db).run()
+            chat_stats = run_chat_maintenance(db)
             db.commit()
             if published:
                 logger.info("Published %s scheduled posts", published)
             if expired_boosts:
                 logger.info("Expired %s post boosts", expired_boosts)
+            if chat_stats.get("scheduled_sent") or chat_stats.get("ttl_purged"):
+                logger.info("Chat maintenance stats: %s", chat_stats)
         except Exception:
             db.rollback()
             logger.exception("Background maintenance loop error")

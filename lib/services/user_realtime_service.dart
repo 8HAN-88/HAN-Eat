@@ -28,6 +28,10 @@ class UserRealtimeEvent {
     this.draftText,
     this.draftCleared,
     this.draftReplyToMessageId,
+    this.archived,
+    this.pinned,
+    this.muted,
+    this.mutedUntil,
   });
 
   final String event;
@@ -44,6 +48,11 @@ class UserRealtimeEvent {
   final String? draftText;
   final bool? draftCleared;
   final int? draftReplyToMessageId;
+  /// Personal chat state sync (`chat.archive` / `chat.pin` / `chat.mute`).
+  final bool? archived;
+  final bool? pinned;
+  final bool? muted;
+  final DateTime? mutedUntil;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -79,6 +88,10 @@ class UserRealtimeEvent {
       draftText: json['text'] as String?,
       draftCleared: json['cleared'] is bool ? json['cleared'] as bool : null,
       draftReplyToMessageId: asInt(json['reply_to_message_id']),
+      archived: json['archived'] is bool ? json['archived'] as bool : null,
+      pinned: json['pinned'] is bool ? json['pinned'] as bool : null,
+      muted: json['muted'] is bool ? json['muted'] as bool : null,
+      mutedUntil: asDate(json['muted_until']),
     );
   }
 }

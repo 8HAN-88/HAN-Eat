@@ -3006,6 +3006,35 @@ class ChatService:
             .limit(fetch_limit)
             .all()
         )
+        return self._dispatch_scheduled_items(due, now=now, limit=limit)
+
+    def dispatch_due_scheduled_messages(self, limit: int = 40) -> List[Message]:
+        """Global dispatcher for due/online scheduled messages (background loop)."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        fetch_limit = max(limit * 4, limit)
+        due = (
+            self.db.query(ScheduledMessage)
+            .filter(
+                ScheduledMessage.status == "pending",
+                ScheduledMessage.canceled_at.is_(None),
+                or_(
+                    ScheduledMessage.deliver_when_online.is_(True),
+                    ScheduledMessage.send_at <= now,
+                ),
+            )
+            .order_by(ScheduledMessage.send_at.asc(), ScheduledMessage.id.asc())
+            .limit(fetch_limit)
+            .all()
+        )
+        return self._dispatch_scheduled_items(due, now=now, limit=limit)
+
+    def _dispatch_scheduled_items(
+        self,
+        due: List[ScheduledMessage],
+        *,
+        now: datetime,
+        limit: int,
+    ) -> List[Message]:
         sent_messages: List[Message] = []
         for item in due:
             if len(sent_messages) >= limit:
@@ -3045,6 +3074,24 @@ class ChatService:
                 item.status = "failed"
                 item.error_text = str(e)[:120]
         return sent_messages
+
+    def purge_due_auto_deleted_messages(
+        self, limit_conversations: int = 80
+    ) -> Dict[int, List[int]]:
+        """Purge TTL-expired messages across chats that have auto-delete enabled."""
+        conv_ids = (
+            self.db.query(Conversation.id)
+            .filter(Conversation.auto_delete_seconds > 0)
+            .order_by(Conversation.id.asc())
+            .limit(max(1, int(limit_conversations)))
+            .all()
+        )
+        purged: Dict[int, List[int]] = {}
+        for (cid,) in conv_ids:
+            ids = self.purge_auto_deleted_messages(cid)
+            if ids:
+                purged[cid] = ids
+        return purged
 
     def delete_message(
         self,

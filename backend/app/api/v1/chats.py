@@ -1353,6 +1353,11 @@ async def list_messages(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    purged_ids: List[int] = []
+    try:
+        purged_ids = svc.purge_auto_deleted_messages(conversation_id)
+    except Exception:
+        purged_ids = []
     try:
         messages, has_more = svc.get_messages(
             conversation_id,
@@ -1363,6 +1368,15 @@ async def list_messages(
         )
     except ValueError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    if purged_ids:
+        db.commit()
+        for mid in purged_ids:
+            _emit(
+                conversation_id,
+                {"type": "message.deleted", "message_id": mid},
+            )
+        _notify_chat_inbox(db, conversation_id, sender_id=-1)
 
     dispatched = svc.dispatch_scheduled_messages(conversation_id)
     if dispatched:
@@ -3151,6 +3165,16 @@ async def mark_unread(
             "last_read_message_id": last_read,
         },
     )
+    # Multi-device: refresh hub unread badge on other sessions of the same user.
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.unread",
+            "conversation_id": conversation_id,
+            "last_read_message_id": last_read,
+            "unread_count": 1,
+        },
+    )
     return {"ok": True, "last_read_message_id": last_read}
 
 
@@ -3244,6 +3268,14 @@ async def archive_chat(
                 status.HTTP_400_BAD_REQUEST, "Cannot archive saved messages chat"
             )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.archive",
+            "conversation_id": conversation_id,
+            "archived": body.archived,
+        },
+    )
     return {"ok": True, "archived": body.archived}
 
 
@@ -3261,6 +3293,14 @@ async def pin_chat(
     except ValueError:
         db.rollback()
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.pin",
+            "conversation_id": conversation_id,
+            "pinned": body.pinned,
+        },
+    )
     return {"ok": True, "pinned": body.pinned}
 
 
@@ -3288,6 +3328,15 @@ async def mute_chat(
                 status.HTTP_400_BAD_REQUEST, "invalid_muted_until"
             )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.mute",
+            "conversation_id": conversation_id,
+            "muted": body.muted,
+            "muted_until": until.isoformat() if until is not None else None,
+        },
+    )
     return {
         "ok": True,
         "muted": body.muted,

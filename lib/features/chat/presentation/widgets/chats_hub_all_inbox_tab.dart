@@ -359,6 +359,66 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     unawaited(_refreshDrafts());
   }
 
+  void _applyPersonalChatStateEvent(UserRealtimeEvent event) {
+    final cid = event.conversationId;
+    if (cid == null) return;
+    void patch(ChatConversation chat) {
+      switch (event.event) {
+        case 'chat.archive':
+          if (event.archived != null) {
+            chat = chat.copyWith(archived: event.archived);
+          }
+          break;
+        case 'chat.pin':
+          if (event.pinned != null) {
+            chat = chat.copyWith(pinned: event.pinned);
+          }
+          break;
+        case 'chat.mute':
+          if (event.muted != null) {
+            chat = chat.copyWith(
+              muted: event.muted,
+              mutedUntil: event.mutedUntil,
+              clearMutedUntil: event.muted != true || event.mutedUntil == null,
+            );
+          }
+          break;
+        case 'chat.unread':
+          final n = event.notifications;
+          chat = chat.copyWith(
+            unreadCount: (n != null && n > 0) ? n : 1,
+          );
+          break;
+      }
+      if (event.event == 'chat.archive' && event.archived == true) {
+        _entries.removeWhere(
+          (e) => e is ChatInboxEntry && e.chat.id == cid,
+        );
+        return;
+      }
+      for (var i = 0; i < _entries.length; i++) {
+        final entry = _entries[i];
+        if (entry is! ChatInboxEntry || entry.chat.id != cid) continue;
+        _entries[i] = ChatInboxEntry(chat);
+        return;
+      }
+      if (_savedChat?.id == cid) {
+        _savedChat = chat;
+      }
+    }
+
+    ChatConversation? current;
+    for (final entry in _entries) {
+      if (entry is ChatInboxEntry && entry.chat.id == cid) {
+        current = entry.chat;
+        break;
+      }
+    }
+    current ??= _savedChat?.id == cid ? _savedChat : null;
+    if (current == null) return;
+    setState(() => patch(current!));
+  }
+
   Future<void> _refreshDrafts() async {
     final ids = <int>[
       for (final entry in _entries)
@@ -471,6 +531,23 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               updatedAt: DateTime.now(),
             ),
           );
+        }
+        return;
+      }
+
+      // Multi-device personal chat state (mute/pin/archive/unread).
+      if (event.event == 'chat.archive' ||
+          event.event == 'chat.pin' ||
+          event.event == 'chat.mute' ||
+          event.event == 'chat.unread') {
+        final cid = event.conversationId;
+        if (cid == null) return;
+        _applyPersonalChatStateEvent(event);
+        if (!_loading) {
+          unawaited(_load(silent: true));
+        }
+        if (event.event == 'chat.unread') {
+          ref.read(shellChatBadgeRefreshProvider.notifier).state++;
         }
         return;
       }
