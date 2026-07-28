@@ -377,14 +377,73 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _cyclePinnedBanner() {
     final current = _pinnedMessage;
     if (current == null) return;
-    _scrollToMessage(current.id);
-    _focusMessageTemporarily(current.id);
+    unawaited(_jumpToPinnedMessage(current));
     if (_pinnedMessages.length > 1) {
       setState(() {
         _pinnedBannerIndex =
             (_pinnedBannerIndex + 1) % _pinnedMessages.length;
       });
     }
+  }
+
+  Future<void> _jumpToPinnedMessage(ChatMessage msg) async {
+    await _scrollToReplyMessage(msg.id);
+    if (!mounted) return;
+    _focusMessageTemporarily(msg.id);
+  }
+
+  Widget? _pinnedMediaLeading(ChatMessage msg) {
+    final url = msg.mediaUrl?.trim();
+    if (url == null || url.isEmpty) return null;
+    if (msg.type != 'image' &&
+        msg.type != 'sticker' &&
+        msg.type != 'video' &&
+        msg.type != 'video_note') {
+      return null;
+    }
+    final resolved = ServerConfig.resolveMediaUrl(url);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: msg.type == 'video' || msg.type == 'video_note'
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
+                    child: const Icon(Icons.videocam_outlined, size: 20),
+                  ),
+                  const Align(
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.play_circle_fill,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              )
+            : CachedNetworkImage(
+                imageUrl: resolved,
+                fit: BoxFit.cover,
+                errorWidget: (_, __, ___) => ColoredBox(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest,
+                  child: Icon(
+                    msg.type == 'sticker'
+                        ? Icons.emoji_emotions_outlined
+                        : Icons.photo_outlined,
+                    size: 20,
+                  ),
+                ),
+              ),
+      ),
+    );
   }
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
@@ -4143,6 +4202,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     itemBuilder: (_, i) {
                       final msg = items[i];
                       return ListTile(
+                        leading: _pinnedMediaLeading(msg) ??
+                            Icon(
+                              msg.type == 'voice'
+                                  ? Icons.mic_rounded
+                                  : msg.type == 'file'
+                                      ? Icons.insert_drive_file_outlined
+                                      : Icons.push_pin_outlined,
+                            ),
                         title: Text(
                           _pinnedPreview(msg),
                           maxLines: 2,
@@ -4158,7 +4225,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         ),
                         onTap: () {
                           Navigator.pop(ctx);
-                          _scrollToMessage(msg.id);
+                          unawaited(_jumpToPinnedMessage(msg));
                         },
                       );
                     },
@@ -4702,6 +4769,102 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _openPeerProfile() {
     final peer = _conversation.peer;
     if (peer != null) _openUserProfile(peer.id);
+  }
+
+  Future<void> _onForwardAttributionTap(ChatMessage msg) async {
+    final srcConvId = msg.forwardedFromConversationId;
+    final srcMsgId = msg.forwardedFromMessageId;
+    final canOpenOriginal = srcConvId != null &&
+        srcConvId > 0 &&
+        srcMsgId != null &&
+        srcMsgId > 0;
+    final canOpenProfile =
+        msg.forwardFromUserId != null && msg.forwardFromUserId! > 0;
+    if (!canOpenOriginal && !canOpenProfile) return;
+
+    if (canOpenOriginal && !canOpenProfile) {
+      await _openForwardedOriginal(
+        conversationId: srcConvId,
+        messageId: srcMsgId,
+      );
+      return;
+    }
+    if (!canOpenOriginal && canOpenProfile) {
+      _openUserProfile(msg.forwardFromUserId!);
+      return;
+    }
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (canOpenOriginal)
+              ListTile(
+                leading: const Icon(Icons.reply_rounded),
+                title: const Text('К оригиналу'),
+                onTap: () => Navigator.pop(ctx, 'original'),
+              ),
+            if (canOpenProfile)
+              ListTile(
+                leading: const Icon(Icons.person_outline_rounded),
+                title: Text(
+                  msg.forwardFromName?.trim().isNotEmpty == true
+                      ? msg.forwardFromName!.trim()
+                      : 'Профиль',
+                ),
+                onTap: () => Navigator.pop(ctx, 'profile'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'original' && canOpenOriginal) {
+      await _openForwardedOriginal(
+        conversationId: srcConvId,
+        messageId: srcMsgId,
+      );
+    } else if (action == 'profile' && canOpenProfile) {
+      _openUserProfile(msg.forwardFromUserId!);
+    }
+  }
+
+  Future<void> _openForwardedOriginal({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    if (conversationId == widget.conversationId) {
+      await _scrollToReplyMessage(messageId);
+      if (mounted) _focusMessageTemporarily(messageId);
+      return;
+    }
+    try {
+      final conv = await ChatService.getConversation(conversationId);
+      if (!mounted) return;
+      await context.push(
+        ChatThreadRoute.pathFor(conv),
+        extra: ChatThreadOpenArgs(
+          conversation: conv,
+          jumpToMessageId: messageId,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e).contains('403') ||
+                    userVisibleError(e).toLowerCase().contains('access')
+                ? 'Нет доступа к исходному чату'
+                : userVisibleError(e),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openDirectChatInfo() async {
@@ -5899,6 +6062,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final choice = await showChatMuteDurationSheet(
       context,
       currentlyMuted: _muted,
+      mutedUntil: _conversation.mutedUntil,
     );
     if (choice == null || !mounted) return;
     try {
@@ -7423,10 +7587,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : null,
       onMentionTap: interactive ? _openMentionProfile : null,
       mentionLabels: _mentionLabels,
-      onForwardFromTap: interactive &&
-              msg.forwardFromUserId != null &&
-              msg.forwardFromUserId! > 0
-          ? () => _openUserProfile(msg.forwardFromUserId!)
+      onForwardFromTap: interactive && msg.isForwarded
+          ? () => unawaited(_onForwardAttributionTap(msg))
           : null,
       onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
       onEditedTap: interactive && msg.isEdited && msg.id > 0
@@ -10899,9 +11061,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         !subtitle.startsWith('соединение') &&
         !subtitle.startsWith('обновление') &&
         !subtitle.startsWith('Ожидание')) {
-      subtitle = '$subtitle · без звука';
+      subtitle =
+          '$subtitle · ${formatChatMuteUntilLabel(_conversation.mutedUntil)}';
     } else if (_muted && subtitle.isEmpty) {
-      subtitle = 'без звука';
+      subtitle = formatChatMuteUntilLabel(_conversation.mutedUntil);
     }
     final connectingHeader = subtitle == 'соединение…' ||
         subtitle == 'обновление…' ||
@@ -11494,6 +11657,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 10),
+                                if (_pinnedMediaLeading(_pinnedMessage!)
+                                    case final thumb?) ...[
+                                  thumb,
+                                  const SizedBox(width: 8),
+                                ],
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:

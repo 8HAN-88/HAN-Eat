@@ -157,6 +157,7 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "forward_from_user_id": getattr(msg, "forward_from_user_id", None),
         "forward_from_name": getattr(msg, "forward_from_name", None),
         "forwarded_from_message_id": getattr(msg, "forwarded_from_message_id", None),
+        "forwarded_from_conversation_id": None,
         "inline_keyboard": inline_keyboard,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "edited_at": msg.edited_at.isoformat() if getattr(msg, "edited_at", None) else None,
@@ -479,6 +480,7 @@ def _message_response(
     poll_content_cache: Optional[Dict[int, str]] = None,
     peer_last_delivered_id: Optional[int] = None,
     group_read_cursors: Optional[List] = None,
+    forward_source_conv_map: Optional[Dict[int, int]] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
     read_count = 0
@@ -533,6 +535,19 @@ def _message_response(
     if db is not None and getattr(msg, "type", None) == "poll":
         content = _enriched_content(db, msg, current_user_id, poll_content_cache)
     inline_keyboard = _normalize_inline_keyboard(getattr(msg, "inline_keyboard_json", None))
+    fwd_src_id = getattr(msg, "forwarded_from_message_id", None)
+    fwd_src_conv_id = None
+    if fwd_src_id is not None:
+        if forward_source_conv_map is not None:
+            fwd_src_conv_id = forward_source_conv_map.get(int(fwd_src_id))
+        elif db is not None:
+            src_row = (
+                db.query(Message.conversation_id)
+                .filter(Message.id == int(fwd_src_id))
+                .first()
+            )
+            if src_row is not None:
+                fwd_src_conv_id = int(src_row[0])
     return MessageResponse(
         id=msg.id,
         conversation_id=msg.conversation_id,
@@ -544,7 +559,8 @@ def _message_response(
         reply_to_message_id=msg.reply_to_message_id,
         forward_from_user_id=getattr(msg, "forward_from_user_id", None),
         forward_from_name=getattr(msg, "forward_from_name", None),
-        forwarded_from_message_id=getattr(msg, "forwarded_from_message_id", None),
+        forwarded_from_message_id=fwd_src_id,
+        forwarded_from_conversation_id=fwd_src_conv_id,
         inline_keyboard=inline_keyboard,
         created_at=msg.created_at,
         edited_at=getattr(msg, "edited_at", None),
@@ -1372,6 +1388,19 @@ async def list_messages(
         if conv is not None and conv.type == "group"
         else None
     )
+    fwd_ids = [
+        int(m.forwarded_from_message_id)
+        for m in messages
+        if getattr(m, "forwarded_from_message_id", None)
+    ]
+    forward_source_conv_map: Dict[int, int] = {}
+    if fwd_ids:
+        for src_id, src_cid in (
+            db.query(Message.id, Message.conversation_id)
+            .filter(Message.id.in_(fwd_ids))
+            .all()
+        ):
+            forward_source_conv_map[int(src_id)] = int(src_cid)
 
     items = [
         _message_response(
@@ -1387,6 +1416,7 @@ async def list_messages(
             poll_content_cache=poll_cache,
             peer_last_delivered_id=peer_delivered,
             group_read_cursors=group_read_cursors,
+            forward_source_conv_map=forward_source_conv_map,
         )
         for m in messages
     ]
@@ -1424,6 +1454,7 @@ async def list_messages(
                     poll_content_cache=poll_cache,
                     peer_last_delivered_id=peer_delivered,
                     group_read_cursors=group_read_cursors,
+                    forward_source_conv_map=forward_source_conv_map,
                 )
             )
     pinned_resp = pinned_resps[0] if pinned_resps else None
@@ -1500,6 +1531,19 @@ async def list_chat_media(
         if conv is not None and conv.type == "group"
         else None
     )
+    fwd_ids = [
+        int(m.forwarded_from_message_id)
+        for m in messages
+        if getattr(m, "forwarded_from_message_id", None)
+    ]
+    forward_source_conv_map: Dict[int, int] = {}
+    if fwd_ids:
+        for src_id, src_cid in (
+            db.query(Message.id, Message.conversation_id)
+            .filter(Message.id.in_(fwd_ids))
+            .all()
+        ):
+            forward_source_conv_map[int(src_id)] = int(src_cid)
     items = [
         _message_response(
             m,
@@ -1514,6 +1558,7 @@ async def list_chat_media(
             poll_content_cache=poll_cache,
             peer_last_delivered_id=peer_delivered,
             group_read_cursors=group_read_cursors,
+            forward_source_conv_map=forward_source_conv_map,
         )
         for m in messages
     ]

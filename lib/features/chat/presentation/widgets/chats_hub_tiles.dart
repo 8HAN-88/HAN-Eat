@@ -7,6 +7,7 @@ import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
 import 'chat_contact_bubble.dart';
 import 'chat_location_bubble.dart';
+import 'chat_mute_duration_sheet.dart';
 
 class ChatHubTile extends StatelessWidget {
   const ChatHubTile({
@@ -175,10 +176,13 @@ class ChatHubTile extends StatelessWidget {
                             const SizedBox(width: 3),
                           ],
                           if (chat.muted) ...[
-                            Icon(
-                              Icons.notifications_off_outlined,
-                              size: 13,
-                              color: scheme.onSurfaceVariant,
+                            Tooltip(
+                              message: formatChatMuteUntilLabel(chat.mutedUntil),
+                              child: Icon(
+                                Icons.notifications_off_outlined,
+                                size: 13,
+                                color: scheme.onSurfaceVariant,
+                              ),
                             ),
                             const SizedBox(width: 4),
                           ],

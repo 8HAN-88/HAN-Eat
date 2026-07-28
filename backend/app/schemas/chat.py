@@ -47,6 +47,8 @@ class MessageResponse(BaseModel):
     forward_from_user_id: Optional[int] = None
     forward_from_name: Optional[str] = None
     forwarded_from_message_id: Optional[int] = None
+    # Source conversation of the original message (for «go to original»).
+    forwarded_from_conversation_id: Optional[int] = None
     created_at: datetime
     edited_at: Optional[datetime] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None

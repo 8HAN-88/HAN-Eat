@@ -8,6 +8,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
@@ -203,8 +204,12 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
         ChatService.listConversations(archived: true),
         ChannelSheetPrefs.listArchivedIds(),
       ]);
-      final chatItems = results[0] as List<ChatConversation>;
+      var chatItems = results[0] as List<ChatConversation>;
       final archivedIds = results[1] as Set<int>;
+      final expired = await _expireTimedMutes(chatItems);
+      if (expired > 0) {
+        chatItems = await ChatService.listConversations(archived: true);
+      }
       final channels = <Channel>[];
       for (final id in archivedIds) {
         try {
@@ -271,6 +276,28 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
         ..addAll(_chats.map((c) => _chatKey(c.id)))
         ..addAll(_channels.map((c) => _channelKey(c.id)));
     });
+  }
+
+  Future<int> _expireTimedMutes(List<ChatConversation> chats) async {
+    var changed = 0;
+    final now = DateTime.now();
+    for (final chat in chats) {
+      if (!chat.muted) continue;
+      final until = chat.mutedUntil?.toLocal() ??
+          await ChatThreadUiPrefs.getMuteUntil(chat.id);
+      if (until == null || until.isAfter(now)) {
+        if (until != null) {
+          await ChatThreadUiPrefs.setMuteUntil(chat.id, until);
+        }
+        continue;
+      }
+      try {
+        await ChatService.setMuted(conversationId: chat.id, muted: false);
+        await ChatThreadUiPrefs.setMuteUntil(chat.id, null);
+        changed++;
+      } catch (_) {}
+    }
+    return changed;
   }
 
   Future<void> _unarchiveChat(ChatConversation chat) async {

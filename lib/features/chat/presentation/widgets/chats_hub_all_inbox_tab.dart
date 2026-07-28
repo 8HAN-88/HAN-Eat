@@ -1310,6 +1310,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     final choice = await showChatMuteDurationSheet(
       context,
       currentlyMuted: chat.muted,
+      mutedUntil: chat.mutedUntil,
     );
     if (choice == null || !mounted) return;
     setState(() => _hubActionChatId = chat.id);

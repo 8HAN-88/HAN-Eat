@@ -194,6 +194,7 @@ class ChatMessage {
     this.forwardFromUserId,
     this.forwardFromName,
     this.forwardedFromMessageId,
+    this.forwardedFromConversationId,
     required this.createdAt,
     this.editedAt,
     this.isMine = false,
@@ -216,6 +217,7 @@ class ChatMessage {
   final int? forwardFromUserId;
   final String? forwardFromName;
   final int? forwardedFromMessageId;
+  final int? forwardedFromConversationId;
   final DateTime createdAt;
   final DateTime? editedAt;
   final bool isMine;
@@ -287,6 +289,10 @@ class ChatMessage {
       forwardedFromMessageId: json['forwarded_from_message_id'] != null
           ? _parseInt(json['forwarded_from_message_id'])
           : null,
+      forwardedFromConversationId:
+          json['forwarded_from_conversation_id'] != null
+              ? _parseInt(json['forwarded_from_conversation_id'])
+              : null,
       createdAt: _parseDate(json['created_at']),
       editedAt: editedAt,
       isMine: json['is_mine'] as bool? ?? false,
@@ -323,6 +329,7 @@ class ChatMessage {
       forwardFromUserId: forwardFromUserId,
       forwardFromName: forwardFromName,
       forwardedFromMessageId: forwardedFromMessageId,
+      forwardedFromConversationId: forwardedFromConversationId,
       createdAt: createdAt,
       editedAt: editedAt ?? this.editedAt,
       isMine: isMine,
