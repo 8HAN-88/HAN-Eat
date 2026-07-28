@@ -53,7 +53,7 @@ def upgrade() -> None:
                 name="uq_conversation_pinned_message",
             ),
         )
-        # Backfill from legacy single pin slot.
+        # Backfill from legacy single pin slot (only live messages).
         op.execute(
             """
             INSERT INTO conversation_pinned_messages
@@ -64,6 +64,9 @@ def upgrade() -> None:
                 c.pinned_by_user_id,
                 COALESCE(c.pinned_at, CURRENT_TIMESTAMP)
             FROM conversations c
+            JOIN messages m
+              ON m.id = c.pinned_message_id
+             AND m.deleted_at IS NULL
             WHERE c.pinned_message_id IS NOT NULL
             ON CONFLICT (conversation_id, message_id) DO NOTHING
             """

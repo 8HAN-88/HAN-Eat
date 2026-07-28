@@ -8267,9 +8267,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ChatCacheService.saveThread(widget.conversationId, _messages),
           );
           unawaited(ChatCacheService.clearDraft(widget.conversationId));
-      unawaited(
-        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
-      );
+          unawaited(
+            ChatService.deleteCloudDraft(
+              conversationId: widget.conversationId,
+            ),
+          );
         } catch (e) {
           if (!mounted) return;
           final err = e.toString().toLowerCase();
