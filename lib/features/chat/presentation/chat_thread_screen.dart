@@ -103,12 +103,14 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
     this.initialConversation,
     this.initialPeer,
     this.initialJumpMessageId,
+    this.initialDraftText,
   });
 
   final int conversationId;
   final ChatConversation? initialConversation;
   final ChatUserBrief? initialPeer;
   final int? initialJumpMessageId;
+  final String? initialDraftText;
 
   @override
   ConsumerState<ChatThreadLoaderScreen> createState() =>
@@ -192,6 +194,7 @@ class _ChatThreadLoaderScreenState
       child: ChatThreadScreen(
         conversation: _conversation!,
         initialJumpMessageId: widget.initialJumpMessageId,
+        initialDraftText: widget.initialDraftText,
       ),
     );
   }
@@ -202,10 +205,12 @@ class ChatThreadScreen extends StatefulWidget {
     super.key,
     required this.conversation,
     this.initialJumpMessageId,
+    this.initialDraftText,
   });
 
   final ChatConversation conversation;
   final int? initialJumpMessageId;
+  final String? initialDraftText;
 
   int get conversationId => conversation.id;
 
@@ -332,7 +337,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _searchBackfillLoads = 0;
   int _searchBackfillSeq = 0;
   bool _jumpingToDate = false;
-  ChatMessage? _pinnedMessage;
+  final List<ChatMessage> _pinnedMessages = [];
+  ChatMessage? get _pinnedMessage =>
+      _pinnedMessages.isEmpty ? null : _pinnedMessages.first;
+  bool _isMessagePinned(int messageId) =>
+      _pinnedMessages.any((m) => m.id == messageId);
+  void _setPinnedMessages(Iterable<ChatMessage> items) {
+    _pinnedMessages
+      ..clear()
+      ..addAll(items);
+  }
+  void _upsertPinnedMessage(ChatMessage msg) {
+    _pinnedMessages.removeWhere((m) => m.id == msg.id);
+    _pinnedMessages.insert(0, msg);
+  }
+  void _removePinnedMessageId(int messageId) {
+    _pinnedMessages.removeWhere((m) => m.id == messageId);
+  }
+  void _replacePinnedMessage(ChatMessage msg) {
+    final idx = _pinnedMessages.indexWhere((m) => m.id == msg.id);
+    if (idx >= 0) _pinnedMessages[idx] = msg;
+  }
   ChatMessage? _editingMessage;
   bool _showJumpToBottom = false;
   bool _jumpFabTargetsUnread = false;
@@ -2019,7 +2044,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (messageId == null) return;
       setState(() {
         _messages.removeWhere((m) => m.id == messageId);
-        if (_pinnedMessage?.id == messageId) _pinnedMessage = null;
+        _removePinnedMessageId(messageId);
       });
       return;
     }
@@ -2065,19 +2090,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           messageId, ChatService.parseReactions(event['reactions']));
       return;
     }
-    if (type == 'message.pinned') {
-      final raw = event['message'];
-      if (raw is Map<String, dynamic>) {
-        try {
-          setState(() {
-            _pinnedMessage = ChatService.messageFromStreamPayload(raw);
-          });
-        } catch (_) {}
+    if (type == 'message.pinned' || type == 'message.unpinned') {
+      final listRaw = event['pinned_messages'];
+      if (listRaw is List) {
+        final parsed = <ChatMessage>[];
+        for (final raw in listRaw) {
+          if (raw is! Map<String, dynamic>) continue;
+          try {
+            parsed.add(ChatService.messageFromStreamPayload(raw));
+          } catch (_) {}
+        }
+        setState(() => _setPinnedMessages(parsed));
+        return;
+      }
+      if (type == 'message.pinned') {
+        final raw = event['message'];
+        if (raw is Map<String, dynamic>) {
+          try {
+            final msg = ChatService.messageFromStreamPayload(raw);
+            setState(() => _upsertPinnedMessage(msg));
+          } catch (_) {}
+        }
+      } else {
+        final id = event['message_id'];
+        final messageId = id is int ? id : int.tryParse('$id');
+        setState(() {
+          if (messageId != null) {
+            _removePinnedMessageId(messageId);
+          } else {
+            _setPinnedMessages(const []);
+          }
+        });
       }
       return;
-    }
-    if (type == 'message.unpinned') {
-      setState(() => _pinnedMessage = null);
     }
   }
 
@@ -2090,10 +2135,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           updated,
         );
       }
-      if (_pinnedMessage?.id == updated.id) {
-        _pinnedMessage = applyIncomingChatMessagePreservingLocalPoll(
-          _pinnedMessage!,
-          updated,
+      if (_isMessagePinned(updated.id)) {
+        _replacePinnedMessage(
+          applyIncomingChatMessagePreservingLocalPoll(
+            _pinnedMessages.firstWhere((m) => m.id == updated.id),
+            updated,
+          ),
         );
       }
     });
@@ -2105,8 +2152,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (idx >= 0) {
         _messages[idx] = _messages[idx].copyWith(reactions: reactions);
       }
-      if (_pinnedMessage?.id == messageId) {
-        _pinnedMessage = _pinnedMessage!.copyWith(reactions: reactions);
+      if (_isMessagePinned(messageId)) {
+        final cur = _pinnedMessages.firstWhere((m) => m.id == messageId);
+        _replacePinnedMessage(cur.copyWith(reactions: reactions));
       }
     });
   }
@@ -3079,7 +3127,49 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _restoreDraft() async {
-    final draft = await ChatCacheService.loadDraft(widget.conversationId);
+    // Prefer seed from reply-privately / deep open.
+    final seed = widget.initialDraftText?.trim();
+    if (seed != null && seed.isNotEmpty && _controller.text.trim().isEmpty) {
+      _controller.text = seed;
+      _controller.selection = TextSelection.collapsed(offset: seed.length);
+      unawaited(_persistDraftLocalAndCloud());
+      return;
+    }
+
+    ChatDraft? local = await ChatCacheService.loadDraft(widget.conversationId);
+    ChatDraft? cloud;
+    try {
+      final map = await ChatService.listCloudDraftsByConversation();
+      cloud = map[widget.conversationId];
+    } catch (_) {}
+
+    ChatDraft? draft = local;
+    if (cloud != null && !cloud.isEmpty) {
+      final localAt = local?.updatedAt;
+      final cloudAt = cloud.updatedAt;
+      if (local == null ||
+          local.isEmpty ||
+          (cloudAt != null &&
+              (localAt == null || cloudAt.isAfter(localAt)))) {
+        draft = cloud;
+        await ChatCacheService.saveDraft(
+          widget.conversationId,
+          cloud.text,
+          replyToMessageId: cloud.replyToMessageId,
+          updatedAt: cloud.updatedAt,
+        );
+      } else if (local != null && !local.isEmpty) {
+        // Push newer local to cloud.
+        unawaited(
+          ChatService.upsertCloudDraft(
+            conversationId: widget.conversationId,
+            text: local.text,
+            replyToMessageId: local.replyToMessageId,
+          ),
+        );
+      }
+    }
+
     if (!mounted || draft == null || draft.isEmpty) return;
     if (_controller.text.trim().isEmpty && draft.text.isNotEmpty) {
       _controller.text = draft.text;
@@ -3121,14 +3211,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _scheduleDraftSave() {
     _draftSaveDebounce?.cancel();
     _draftSaveDebounce = Timer(const Duration(milliseconds: 400), () {
-      unawaited(
-        ChatCacheService.saveDraft(
-          widget.conversationId,
-          _controller.text,
-          replyToMessageId: _replyTo?.id,
-        ),
-      );
+      unawaited(_persistDraftLocalAndCloud());
     });
+  }
+
+  Future<void> _persistDraftLocalAndCloud() async {
+    final text = _controller.text;
+    final replyId = _replyTo?.id;
+    await ChatCacheService.saveDraft(
+      widget.conversationId,
+      text,
+      replyToMessageId: replyId,
+    );
+    try {
+      final trimmed = text.trim();
+      if (trimmed.isEmpty && (replyId == null || replyId <= 0)) {
+        await ChatService.deleteCloudDraft(
+          conversationId: widget.conversationId,
+        );
+      } else {
+        final cloud = await ChatService.upsertCloudDraft(
+          conversationId: widget.conversationId,
+          text: trimmed,
+          replyToMessageId: replyId,
+        );
+        if (cloud != null) {
+          await ChatCacheService.saveDraft(
+            widget.conversationId,
+            cloud.text,
+            replyToMessageId: cloud.replyToMessageId,
+            updatedAt: cloud.updatedAt,
+          );
+        }
+      }
+    } catch (_) {
+      // Local draft remains; cloud sync is best-effort.
+    }
   }
 
   void _onComposerFocusChanged() {
@@ -3648,7 +3766,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _togglePinMessage(ChatMessage msg) async {
-    final isPinned = _pinnedMessage?.id == msg.id;
+    final isPinned = _isMessagePinned(msg.id);
     try {
       await ChatService.pinMessage(
         conversationId: widget.conversationId,
@@ -3656,13 +3774,81 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pinned: !isPinned,
       );
       if (!mounted) return;
-      setState(() => _pinnedMessage = isPinned ? null : msg);
+      setState(() {
+        if (isPinned) {
+          _removePinnedMessageId(msg.id);
+        } else {
+          _upsertPinnedMessage(msg);
+        }
+      });
     } catch (e) {
       if (!mounted) return;
+      final err = userVisibleError(e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+        SnackBar(
+          content: Text(
+            err.contains('pin_limit')
+                ? 'Можно закрепить не больше 5 сообщений'
+                : err,
+          ),
+        ),
       );
     }
+  }
+
+  Future<void> _showPinnedMessagesSheet() async {
+    if (_pinnedMessages.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final items = List<ChatMessage>.from(_pinnedMessages);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Закреплённые (${items.length})',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final msg = items[i];
+                      return ListTile(
+                        title: Text(
+                          _pinnedPreview(msg),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Открепить',
+                          icon: const Icon(Icons.push_pin_outlined),
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _togglePinMessage(msg);
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _scrollToMessage(msg.id);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showReactionPicker(ChatMessage msg) {
@@ -4065,7 +4251,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _messageContactUser(int userId) async {
+  Future<void> _messageContactUser(
+    int userId, {
+    ChatMessage? quoteFrom,
+  }) async {
     if (userId <= 0) return;
     final peer = _conversation.peer;
     if (!_conversation.isGroup && peer?.id == userId) {
@@ -4083,7 +4272,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      await context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+      String? draft;
+      if (quoteFrom != null) {
+        final who = (quoteFrom.senderName?.trim().isNotEmpty == true)
+            ? quoteFrom.senderName!.trim()
+            : 'Участник';
+        final body = _copyableText(quoteFrom).trim();
+        if (body.isNotEmpty) {
+          final clipped =
+              body.length > 180 ? '${body.substring(0, 180)}…' : body;
+          draft = '«$who: $clipped»\n\n';
+        }
+      }
+      await context.push(
+        ChatThreadRoute.pathFor(conv),
+        extra: ChatThreadOpenArgs(
+          conversation: conv,
+          initialDraftText: draft,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -4252,13 +4459,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() {
         _messages.clear();
-        _pinnedMessage = null;
+        _setPinnedMessages(const []);
         _selectedMessageIds.clear();
         _selectionMode = false;
         _hasMore = false;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
       unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      unawaited(
+        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+      );
       try {
         ProviderScope.containerOf(context)
             .read(chatsHubRefreshProvider.notifier)
@@ -4465,6 +4675,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await ChatService.deleteConversation(
           conversationId: widget.conversationId);
       unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      unawaited(
+        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+      );
       try {
         ProviderScope.containerOf(context)
             .read(chatsHubRefreshProvider.notifier)
@@ -6290,7 +6503,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _scheduleDraftSave();
         break;
       case 'reply_privately':
-        unawaited(_messageContactUser(msg.senderId));
+        unawaited(_messageContactUser(msg.senderId, quoteFrom: msg));
         break;
       case 'copy':
         if (_conversation.protectContent && !msg.isMine) {
@@ -6663,7 +6876,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       senderLabel: msg.senderName ?? _senderNames[msg.senderId],
       onSenderTap:
           isGroup && !msg.isMine ? () => _openUserProfile(msg.senderId) : null,
-      isConversationPinned: _pinnedMessage?.id == msg.id,
+      isConversationPinned: _isMessagePinned(msg.id),
       cluster: cluster,
       wrapWithAlign: wrapWithAlign,
       onPollVote: onPollVote,
@@ -7429,7 +7642,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         bubbleBox.localToGlobal(bubbleBox.size.bottomRight(Offset.zero)),
       );
     }
-    final isPinned = _pinnedMessage?.id == msg.id;
+    final isPinned = _isMessagePinned(msg.id);
     final scheme = Theme.of(context).colorScheme;
     final searching = _threadSearchQuery.trim().isNotEmpty;
     final replyTarget = _replyTargetFor(msg);
@@ -7780,7 +7993,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       setState(() {
         _messages.removeWhere((m) => m.id == msg.id);
-        if (_pinnedMessage?.id == msg.id) _pinnedMessage = null;
+        _removePinnedMessageId(msg.id);
       });
     } catch (e) {
       if (!mounted) return;
@@ -7836,7 +8049,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 );
               }),
             );
-          _pinnedMessage = result.pinnedMessage;
+          _setPinnedMessages(
+            result.pinnedMessages.isNotEmpty
+                ? result.pinnedMessages
+                : (result.pinnedMessage != null ? [result.pinnedMessage!] : const []),
+          );
         } else {
           _messages.insertAll(0, result.items);
         }
@@ -8050,6 +8267,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ChatCacheService.saveThread(widget.conversationId, _messages),
           );
           unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      unawaited(
+        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+      );
         } catch (e) {
           if (!mounted) return;
           final err = e.toString().toLowerCase();
@@ -8262,7 +8482,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         setState(() {
           final idx = _messages.indexWhere((m) => m.id == msg.id);
           if (idx >= 0) _messages[idx] = msg;
-          if (_pinnedMessage?.id == msg.id) _pinnedMessage = msg;
+          if (_isMessagePinned(msg.id)) _replacePinnedMessage(msg);
           _editingMessage = null;
           _sending = false;
         });
@@ -9656,7 +9876,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         final i = _messages.indexWhere((m) => m.id == msg.id);
         if (i >= 0) _messages[i] = updated;
-        if (_pinnedMessage?.id == msg.id) _pinnedMessage = updated;
+        if (_isMessagePinned(updated.id)) _replacePinnedMessage(updated);
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
@@ -9712,7 +9932,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() {
         final i = _messages.indexWhere((m) => m.id == msg.id);
         if (i >= 0) _messages[i] = updated;
-        if (_pinnedMessage?.id == msg.id) _pinnedMessage = updated;
+        if (_isMessagePinned(updated.id)) _replacePinnedMessage(updated);
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
@@ -10602,9 +10822,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             ? const Color(0xFF18222D)
                             : scheme.surface,
                         child: InkWell(
-                          onTap: () => _scrollToMessage(_pinnedMessage!.id),
+                          onTap: () {
+                            if (_pinnedMessages.length > 1) {
+                              unawaited(_showPinnedMessagesSheet());
+                            } else {
+                              _scrollToMessage(_pinnedMessage!.id);
+                            }
+                          },
                           onLongPress: () =>
-                              _togglePinMessage(_pinnedMessage!),
+                              unawaited(_showPinnedMessagesSheet()),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
                             child: Row(
@@ -10624,7 +10850,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Закреплено',
+                                        _pinnedMessages.length > 1
+                                            ? 'Закреплено (${_pinnedMessages.length})'
+                                            : 'Закреплено',
                                         style: TextStyle(
                                           color: scheme.primary,
                                           fontSize: 12.5,
@@ -10645,6 +10873,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     ],
                                   ),
                                 ),
+                                if (_pinnedMessages.length > 1)
+                                  IconButton(
+                                    tooltip: 'Все закреплённые',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      Icons.list_alt_outlined,
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                    onPressed: () =>
+                                        unawaited(_showPinnedMessagesSheet()),
+                                  ),
                                 IconButton(
                                   tooltip: 'Открепить',
                                   visualDensity: VisualDensity.compact,

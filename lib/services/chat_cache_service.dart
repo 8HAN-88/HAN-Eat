@@ -9,10 +9,12 @@ class ChatDraft {
   const ChatDraft({
     this.text = '',
     this.replyToMessageId,
+    this.updatedAt,
   });
 
   final String text;
   final int? replyToMessageId;
+  final DateTime? updatedAt;
 
   bool get isEmpty =>
       text.trim().isEmpty &&
@@ -39,9 +41,15 @@ class ChatDraft {
     } else if (replyRaw is String) {
       replyId = int.tryParse(replyRaw);
     }
+    DateTime? updatedAt;
+    final updatedRaw = json['updated_at'];
+    if (updatedRaw is String) {
+      updatedAt = DateTime.tryParse(updatedRaw);
+    }
     return ChatDraft(
       text: json['text'] as String? ?? '',
       replyToMessageId: replyId != null && replyId > 0 ? replyId : null,
+      updatedAt: updatedAt,
     );
   }
 
@@ -49,7 +57,22 @@ class ChatDraft {
         'text': text,
         if (replyToMessageId != null && replyToMessageId! > 0)
           'reply_to_message_id': replyToMessageId,
+        if (updatedAt != null) 'updated_at': updatedAt!.toUtc().toIso8601String(),
       };
+
+  ChatDraft copyWith({
+    String? text,
+    int? replyToMessageId,
+    DateTime? updatedAt,
+    bool clearReply = false,
+  }) {
+    return ChatDraft(
+      text: text ?? this.text,
+      replyToMessageId:
+          clearReply ? null : (replyToMessageId ?? this.replyToMessageId),
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }
 
 /// Локальный кэш чатов для мгновенного отображения при открытии.
@@ -267,12 +290,14 @@ class ChatCacheService {
     int conversationId,
     String text, {
     int? replyToMessageId,
+    DateTime? updatedAt,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final draft = ChatDraft(
         text: text,
         replyToMessageId: replyToMessageId,
+        updatedAt: updatedAt ?? DateTime.now().toUtc(),
       );
       final v1Key = '$_draftPrefix$conversationId';
       final v2Key = '$_draftV2Prefix$conversationId';

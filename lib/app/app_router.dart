@@ -1221,6 +1221,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialPeer: initialPeer,
               initialJumpMessageId:
                   openArgs?.jumpToMessageId ?? jumpFromQuery,
+              initialDraftText: openArgs?.initialDraftText,
             ),
           );
         },
@@ -1457,11 +1458,13 @@ class ChatThreadOpenArgs {
     this.conversation,
     this.peer,
     this.jumpToMessageId,
+    this.initialDraftText,
   });
 
   final ChatConversation? conversation;
   final ChatUserBrief? peer;
   final int? jumpToMessageId;
+  final String? initialDraftText;
 }
 
 /// Вкладка «Профиль» в нижней навигации (хаб, не путать с [ProfileRoute] ленты профиля).

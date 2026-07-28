@@ -19,6 +19,9 @@ from app.schemas.chat import (
     ArchiveChatRequest,
     ContactListResponse,
     ContactResponse,
+    ConversationDraftListResponse,
+    ConversationDraftRequest,
+    ConversationDraftResponse,
     ConversationListResponse,
     ConversationMembersResponse,
     ConversationResponse,
@@ -742,6 +745,86 @@ async def chats_unread_count(
     return {"count": ChatService(db).total_unread(current_user.id)}
 
 
+@router.get("/chats/drafts", response_model=ConversationDraftListResponse)
+async def list_chat_drafts(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    rows = svc.list_drafts(current_user.id)
+    return ConversationDraftListResponse(
+        items=[
+            ConversationDraftResponse(
+                conversation_id=r.conversation_id,
+                text=r.text or "",
+                reply_to_message_id=r.reply_to_message_id,
+                updated_at=r.updated_at,
+            )
+            for r in rows
+            if (r.text or "").strip() or r.reply_to_message_id
+        ]
+    )
+
+
+@router.put(
+    "/chats/{conversation_id}/draft",
+    response_model=ConversationDraftResponse,
+)
+async def upsert_chat_draft(
+    conversation_id: int,
+    body: ConversationDraftRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    text = (body.text or "").strip()
+    reply_id = body.reply_to_message_id
+    if not text and not reply_id:
+        try:
+            svc.delete_draft(conversation_id, current_user.id)
+            db.commit()
+        except Exception:
+            db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_draft")
+    try:
+        row = svc.upsert_draft(
+            conversation_id,
+            current_user.id,
+            text,
+            reply_to_message_id=reply_id,
+        )
+        db.commit()
+        db.refresh(row)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+    return ConversationDraftResponse(
+        conversation_id=row.conversation_id,
+        text=row.text or "",
+        reply_to_message_id=row.reply_to_message_id,
+        updated_at=row.updated_at,
+    )
+
+
+@router.delete("/chats/{conversation_id}/draft")
+async def delete_chat_draft(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        svc.delete_draft(conversation_id, current_user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"ok": True}
+
+
 @router.get("/chats/saved", response_model=ConversationResponse)
 async def get_saved_chat(
     current_user: User = Depends(get_current_user_required),
@@ -1275,30 +1358,42 @@ async def list_messages(
         )
         for m in messages
     ]
-    pinned_resp = None
-    pinned_msg = svc.get_pinned_message(conversation_id, current_user.id)
-    if pinned_msg:
-        pinned_reactions = _reaction_summaries(
-            svc, [pinned_msg.id], current_user.id
-        ).get(pinned_msg.id, [])
-        pinned_sender = senders.get(pinned_msg.sender_id)
-        if pinned_sender is None:
-            pinned_sender = (
-                db.query(User).filter(User.id == pinned_msg.sender_id).first()
+    pinned_resps: List[MessageResponse] = []
+    if after_id is None:
+        try:
+            pinned_msgs = svc.list_pinned_messages(
+                conversation_id, current_user.id
             )
-        pinned_resp = _message_response(
-            pinned_msg,
-            current_user.id,
-            last_read,
-            peer_read,
-            conv,
-            svc,
-            pinned_sender,
-            reactions=pinned_reactions,
-            db=db,
-            poll_content_cache=poll_cache,
-            peer_last_delivered_id=peer_delivered,
+        except ValueError:
+            pinned_msgs = []
+        pinned_ids = [m.id for m in pinned_msgs]
+        pinned_reactions_map = (
+            _reaction_summaries(svc, pinned_ids, current_user.id)
+            if pinned_ids
+            else {}
         )
+        for pinned_msg in pinned_msgs:
+            pinned_sender = senders.get(pinned_msg.sender_id)
+            if pinned_sender is None:
+                pinned_sender = (
+                    db.query(User).filter(User.id == pinned_msg.sender_id).first()
+                )
+            pinned_resps.append(
+                _message_response(
+                    pinned_msg,
+                    current_user.id,
+                    last_read,
+                    peer_read,
+                    conv,
+                    svc,
+                    pinned_sender,
+                    reactions=pinned_reactions_map.get(pinned_msg.id, []),
+                    db=db,
+                    poll_content_cache=poll_cache,
+                    peer_last_delivered_id=peer_delivered,
+                )
+            )
+    pinned_resp = pinned_resps[0] if pinned_resps else None
     next_cursor = None
     if after_id is None:
         next_cursor = messages[0].id if has_more and messages else None
@@ -1307,6 +1402,7 @@ async def list_messages(
         has_more=has_more,
         next_cursor=next_cursor,
         pinned_message=pinned_resp if after_id is None else None,
+        pinned_messages=pinned_resps if after_id is None else [],
     )
 
 
@@ -2557,7 +2653,7 @@ async def pin_message(
         svc.set_pinned_message(
             conversation_id,
             current_user.id,
-            message_id if body.pinned else None,
+            message_id if body.pinned else message_id,
             body.pinned,
         )
         db.commit()
@@ -2568,23 +2664,47 @@ async def pin_message(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "pin_limit":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "pin_limit",
+            )
         raise
+    pinned_msgs = []
+    try:
+        pinned_msgs = svc.list_pinned_messages(conversation_id, current_user.id)
+    except ValueError:
+        pinned_msgs = []
+    pinned_payloads = [
+        _message_payload(m) for m in pinned_msgs if m is not None
+    ]
     if body.pinned:
-        pinned = svc.get_pinned_message(conversation_id, current_user.id)
+        pinned = next((m for m in pinned_msgs if m.id == message_id), None)
         _emit(
             conversation_id,
             {
                 "type": "message.pinned",
                 "message_id": message_id,
                 "message": _message_payload(pinned) if pinned else None,
+                "pinned_messages": pinned_payloads,
             },
         )
     else:
         _emit(
             conversation_id,
-            {"type": "message.unpinned", "conversation_id": conversation_id},
+            {
+                "type": "message.unpinned",
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "pinned_messages": pinned_payloads,
+            },
         )
-    return {"ok": True, "pinned": body.pinned, "message_id": message_id}
+    return {
+        "ok": True,
+        "pinned": body.pinned,
+        "message_id": message_id,
+        "pinned_count": len(pinned_msgs),
+    }
 
 
 @router.post("/chats/{conversation_id}/typing")

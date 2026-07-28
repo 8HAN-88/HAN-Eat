@@ -339,6 +339,29 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (_savedChat != null) _savedChat!.id,
     ];
     final drafts = await ChatCacheService.loadDrafts(ids);
+    try {
+      final cloud = await ChatService.listCloudDraftsByConversation();
+      for (final entry in cloud.entries) {
+        final local = drafts[entry.key];
+        final remote = entry.value;
+        final localAt = local?.updatedAt;
+        final remoteAt = remote.updatedAt;
+        if (local == null ||
+            local.isEmpty ||
+            (remoteAt != null &&
+                (localAt == null || remoteAt.isAfter(localAt)))) {
+          drafts[entry.key] = remote;
+          unawaited(
+            ChatCacheService.saveDraft(
+              entry.key,
+              remote.text,
+              replyToMessageId: remote.replyToMessageId,
+              updatedAt: remote.updatedAt,
+            ),
+          );
+        }
+      }
+    } catch (_) {}
     if (!mounted) return;
     setState(() => _drafts = drafts);
   }

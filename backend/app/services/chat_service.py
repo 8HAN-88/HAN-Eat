@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.conversation import (
     Contact,
     Conversation,
+    ConversationDraft,
     ConversationMember,
+    ConversationPinnedMessage,
     GroupInviteLink,
     GroupMemberBan,
     GroupJoinRequest,
@@ -2669,15 +2671,18 @@ class ChatService:
             if age.total_seconds() > 48 * 3600:
                 raise ValueError("too_old")
         msg.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        (
+            self.db.query(ConversationPinnedMessage)
+            .filter(ConversationPinnedMessage.message_id == message_id)
+            .delete(synchronize_session=False)
+        )
         conv = (
             self.db.query(Conversation)
             .filter(Conversation.id == conversation_id)
             .first()
         )
-        if conv and conv.pinned_message_id == message_id:
-            conv.pinned_message_id = None
-            conv.pinned_at = None
-            conv.pinned_by_user_id = None
+        if conv:
+            self._sync_legacy_pinned_slot(conv)
         return "all"
 
     def _get_active_message(
@@ -2867,6 +2872,24 @@ class ChatService:
         self.db.delete(row)
         return True
 
+    PIN_LIMIT = 5
+
+    def _sync_legacy_pinned_slot(self, conv: Conversation) -> None:
+        top = (
+            self.db.query(ConversationPinnedMessage)
+            .filter(ConversationPinnedMessage.conversation_id == conv.id)
+            .order_by(ConversationPinnedMessage.pinned_at.desc())
+            .first()
+        )
+        if top is None:
+            conv.pinned_message_id = None
+            conv.pinned_at = None
+            conv.pinned_by_user_id = None
+            return
+        conv.pinned_message_id = top.message_id
+        conv.pinned_at = top.pinned_at
+        conv.pinned_by_user_id = top.pinned_by_user_id
+
     def set_pinned_message(
         self,
         conversation_id: int,
@@ -2884,45 +2907,189 @@ class ChatService:
         if not conv:
             raise ValueError("not_found")
         if not pinned:
-            conv.pinned_message_id = None
-            conv.pinned_at = None
-            conv.pinned_by_user_id = None
+            if message_id is None:
+                # Clear all pins (legacy unpin without id).
+                (
+                    self.db.query(ConversationPinnedMessage)
+                    .filter(
+                        ConversationPinnedMessage.conversation_id
+                        == conversation_id
+                    )
+                    .delete(synchronize_session=False)
+                )
+                self._sync_legacy_pinned_slot(conv)
+                return None
+            (
+                self.db.query(ConversationPinnedMessage)
+                .filter(
+                    ConversationPinnedMessage.conversation_id == conversation_id,
+                    ConversationPinnedMessage.message_id == message_id,
+                )
+                .delete(synchronize_session=False)
+            )
+            self._sync_legacy_pinned_slot(conv)
             return None
         if message_id is None:
             raise ValueError("missing_message")
         self._get_active_message(conversation_id, message_id, user_id)
-        conv.pinned_message_id = message_id
-        conv.pinned_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        conv.pinned_by_user_id = user_id
+        existing = (
+            self.db.query(ConversationPinnedMessage)
+            .filter(
+                ConversationPinnedMessage.conversation_id == conversation_id,
+                ConversationPinnedMessage.message_id == message_id,
+            )
+            .first()
+        )
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if existing:
+            existing.pinned_at = now
+            existing.pinned_by_user_id = user_id
+        else:
+            count = (
+                self.db.query(func.count(ConversationPinnedMessage.id))
+                .filter(
+                    ConversationPinnedMessage.conversation_id == conversation_id
+                )
+                .scalar()
+                or 0
+            )
+            if int(count) >= self.PIN_LIMIT:
+                raise ValueError("pin_limit")
+            self.db.add(
+                ConversationPinnedMessage(
+                    conversation_id=conversation_id,
+                    message_id=message_id,
+                    pinned_by_user_id=user_id,
+                    pinned_at=now,
+                )
+            )
+        self.db.flush()
+        self._sync_legacy_pinned_slot(conv)
         return message_id
 
     def get_pinned_message(
         self, conversation_id: int, user_id: int
     ) -> Optional[Message]:
+        msgs = self.list_pinned_messages(conversation_id, user_id)
+        return msgs[0] if msgs else None
+
+    def list_pinned_messages(
+        self, conversation_id: int, user_id: int
+    ) -> List[Message]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
-        conv = (
-            self.db.query(Conversation)
-            .filter(Conversation.id == conversation_id)
-            .first()
-        )
-        if not conv or not conv.pinned_message_id:
-            return None
-        msg = (
-            self.db.query(Message)
+        rows = (
+            self.db.query(ConversationPinnedMessage, Message)
+            .join(
+                Message,
+                Message.id == ConversationPinnedMessage.message_id,
+            )
             .filter(
-                Message.id == conv.pinned_message_id,
+                ConversationPinnedMessage.conversation_id == conversation_id,
                 Message.conversation_id == conversation_id,
                 Message.deleted_at.is_(None),
             )
+            .order_by(ConversationPinnedMessage.pinned_at.desc())
+            .all()
+        )
+        # Drop orphan pin rows if any slipped through.
+        out: List[Message] = []
+        for pin_row, msg in rows:
+            out.append(msg)
+        if not out:
+            conv = (
+                self.db.query(Conversation)
+                .filter(Conversation.id == conversation_id)
+                .first()
+            )
+            if conv:
+                self._sync_legacy_pinned_slot(conv)
+        return out
+
+    def upsert_draft(
+        self,
+        conversation_id: int,
+        user_id: int,
+        text: str,
+        reply_to_message_id: Optional[int] = None,
+    ) -> ConversationDraft:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        body = (text or "").strip()
+        if not body and not reply_to_message_id:
+            raise ValueError("empty_draft")
+        reply_id = reply_to_message_id if reply_to_message_id and reply_to_message_id > 0 else None
+        if reply_id is not None:
+            exists = (
+                self.db.query(Message.id)
+                .filter(
+                    Message.id == reply_id,
+                    Message.conversation_id == conversation_id,
+                    Message.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if not exists:
+                reply_id = None
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        row = (
+            self.db.query(ConversationDraft)
+            .filter(
+                ConversationDraft.user_id == user_id,
+                ConversationDraft.conversation_id == conversation_id,
+            )
             .first()
         )
-        if not msg:
-            conv.pinned_message_id = None
-            conv.pinned_at = None
-            conv.pinned_by_user_id = None
-            return None
-        return msg
+        if row is None:
+            row = ConversationDraft(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                text=body[:4000],
+                reply_to_message_id=reply_id,
+                updated_at=now,
+            )
+            self.db.add(row)
+        else:
+            row.text = body[:4000]
+            row.reply_to_message_id = reply_id
+            row.updated_at = now
+        return row
+
+    def delete_draft(self, conversation_id: int, user_id: int) -> bool:
+        row = (
+            self.db.query(ConversationDraft)
+            .filter(
+                ConversationDraft.user_id == user_id,
+                ConversationDraft.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if not row:
+            return False
+        self.db.delete(row)
+        return True
+
+    def get_draft(
+        self, conversation_id: int, user_id: int
+    ) -> Optional[ConversationDraft]:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        return (
+            self.db.query(ConversationDraft)
+            .filter(
+                ConversationDraft.user_id == user_id,
+                ConversationDraft.conversation_id == conversation_id,
+            )
+            .first()
+        )
+
+    def list_drafts(self, user_id: int) -> List[ConversationDraft]:
+        return (
+            self.db.query(ConversationDraft)
+            .filter(ConversationDraft.user_id == user_id)
+            .order_by(ConversationDraft.updated_at.desc())
+            .all()
+        )
 
     def mark_delivered(
         self, conversation_id: int, user_id: int, message_id: int

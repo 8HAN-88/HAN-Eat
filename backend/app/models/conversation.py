@@ -139,6 +139,48 @@ class GroupInviteLink(Base):
     )
 
 
+class ConversationPinnedMessage(Base):
+    """Multi-pin slots per conversation (Telegram-like, cap enforced in service)."""
+
+    __tablename__ = "conversation_pinned_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    pinned_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    pinned_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id", "message_id", name="uq_conversation_pinned_message"
+        ),
+    )
+
+
+class ConversationDraft(Base):
+    """Per-user cloud composer draft for a conversation."""
+
+    __tablename__ = "conversation_drafts"
+
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    text = Column(String(4000), nullable=False, default="")
+    reply_to_message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
 class Message(Base):
     __tablename__ = "messages"
 

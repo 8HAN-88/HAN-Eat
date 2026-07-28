@@ -134,6 +134,23 @@ class MessageListResponse(BaseModel):
     has_more: bool = False
     next_cursor: Optional[int] = None
     pinned_message: Optional[MessageResponse] = None
+    pinned_messages: List[MessageResponse] = []
+
+
+class ConversationDraftRequest(BaseModel):
+    text: str = Field(default="", max_length=4000)
+    reply_to_message_id: Optional[int] = None
+
+
+class ConversationDraftResponse(BaseModel):
+    conversation_id: int
+    text: str = ""
+    reply_to_message_id: Optional[int] = None
+    updated_at: datetime
+
+
+class ConversationDraftListResponse(BaseModel):
+    items: List[ConversationDraftResponse]
 
 
 class MessageSearchItem(BaseModel):

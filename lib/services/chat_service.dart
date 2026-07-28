@@ -178,6 +178,10 @@ class ChatService {
         (client, headers) => client.patch(uri, headers: headers, body: body),
       );
 
+  static Future<http.Response> _put(Uri uri, {Object? body}) => _request(
+        (client, headers) => client.put(uri, headers: headers, body: body),
+      );
+
   static Future<List<ChatConversation>> listConversations({
     bool archived = false,
   }) async {
@@ -298,7 +302,8 @@ class ChatService {
         List<ChatMessage> items,
         bool hasMore,
         int? nextCursor,
-        ChatMessage? pinnedMessage
+        ChatMessage? pinnedMessage,
+        List<ChatMessage> pinnedMessages,
       })> listMessages({
     required int conversationId,
     int? cursor,
@@ -316,19 +321,90 @@ class ChatService {
     final items = (data['items'] as List<dynamic>? ?? [])
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
+    final pinnedMessages = <ChatMessage>[];
+    final pinnedListRaw = data['pinned_messages'];
+    if (pinnedListRaw is List) {
+      for (final raw in pinnedListRaw) {
+        if (raw is Map<String, dynamic>) {
+          try {
+            pinnedMessages.add(ChatMessage.fromJson(raw));
+          } catch (_) {}
+        }
+      }
+    }
     ChatMessage? pinnedMessage;
-    final pinnedRaw = data['pinned_message'];
-    if (pinnedRaw is Map<String, dynamic>) {
-      try {
-        pinnedMessage = ChatMessage.fromJson(pinnedRaw);
-      } catch (_) {}
+    if (pinnedMessages.isNotEmpty) {
+      pinnedMessage = pinnedMessages.first;
+    } else {
+      final pinnedRaw = data['pinned_message'];
+      if (pinnedRaw is Map<String, dynamic>) {
+        try {
+          pinnedMessage = ChatMessage.fromJson(pinnedRaw);
+          if (pinnedMessage != null) pinnedMessages.add(pinnedMessage);
+        } catch (_) {}
+      }
     }
     return (
       items: items,
       hasMore: data['has_more'] as bool? ?? false,
       nextCursor: data['next_cursor'] as int?,
       pinnedMessage: pinnedMessage,
+      pinnedMessages: pinnedMessages,
     );
+  }
+
+  /// Returns conversationId → draft from cloud.
+  static Future<Map<int, ChatDraft>> listCloudDraftsByConversation() async {
+    final uri = Uri.parse('$_base/chats/drafts');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить черновики');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final out = <int, ChatDraft>{};
+    for (final raw in items) {
+      if (raw is! Map<String, dynamic>) continue;
+      final cid = raw['conversation_id'];
+      final id = cid is int ? cid : int.tryParse('$cid');
+      if (id == null) continue;
+      try {
+        final draft = ChatDraft.fromJson(raw);
+        if (!draft.isEmpty) out[id] = draft;
+      } catch (_) {}
+    }
+    return out;
+  }
+
+  static Future<ChatDraft?> upsertCloudDraft({
+    required int conversationId,
+    required String text,
+    int? replyToMessageId,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty && (replyToMessageId == null || replyToMessageId <= 0)) {
+      await deleteCloudDraft(conversationId: conversationId);
+      return null;
+    }
+    final uri = Uri.parse('$_base/chats/$conversationId/draft');
+    final response = await _put(
+      uri,
+      body: jsonEncode({
+        'text': trimmed,
+        if (replyToMessageId != null && replyToMessageId > 0)
+          'reply_to_message_id': replyToMessageId,
+      }),
+    );
+    if (response.statusCode == 400) return null;
+    _ensureOk(response, 'Не удалось сохранить черновик');
+    return ChatDraft.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<void> deleteCloudDraft({required int conversationId}) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/draft');
+    final response = await _delete(uri);
+    if (response.statusCode == 404) return;
+    _ensureOk(response, 'Не удалось удалить черновик');
   }
 
   /// Только новые сообщения после [afterId] — лёгкий poll вместо полной страницы.
