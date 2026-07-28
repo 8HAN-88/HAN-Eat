@@ -369,6 +369,8 @@ class ChatCacheService {
       'is_read': m.isRead,
       'read_count': m.readCount,
       'disable_webpage_preview': m.disableWebpagePreview,
+      if (m.mediaGroupId != null && m.mediaGroupId!.isNotEmpty)
+        'media_group_id': m.mediaGroupId,
       'reactions': m.reactions
           .map(
             (r) => {

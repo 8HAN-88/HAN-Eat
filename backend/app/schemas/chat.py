@@ -58,6 +58,7 @@ class MessageResponse(BaseModel):
     # Group: how many other members have read up to this message (mine only).
     read_count: int = 0
     disable_webpage_preview: bool = False
+    media_group_id: Optional[str] = None
     reactions: List["MessageReactionSummary"] = []
 
     class Config:
@@ -209,6 +210,7 @@ class SendMessageRequest(BaseModel):
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     silent: bool = False
     disable_webpage_preview: bool = False
+    media_group_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ScheduleMessageRequest(BaseModel):
@@ -229,6 +231,7 @@ class ScheduleMessageRequest(BaseModel):
     send_when_online: bool = False
     silent: bool = False
     disable_webpage_preview: bool = False
+    media_group_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ScheduledMessageResponse(BaseModel):
@@ -243,6 +246,7 @@ class ScheduledMessageResponse(BaseModel):
     send_when_online: bool = False
     silent: bool = False
     disable_webpage_preview: bool = False
+    media_group_id: Optional[str] = None
     status: str
     created_at: datetime
 

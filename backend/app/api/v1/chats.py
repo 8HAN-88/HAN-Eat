@@ -164,6 +164,7 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         "disable_webpage_preview": bool(
             getattr(msg, "disable_webpage_preview", False)
         ),
+        "media_group_id": getattr(msg, "media_group_id", None),
         "reactions": reactions or [],
     }
 
@@ -183,6 +184,7 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
         disable_webpage_preview=bool(
             getattr(item, "disable_webpage_preview", False)
         ),
+        media_group_id=getattr(item, "media_group_id", None),
         status=item.status,
         created_at=item.created_at,
     )
@@ -575,6 +577,7 @@ def _message_response(
         disable_webpage_preview=bool(
             getattr(msg, "disable_webpage_preview", False)
         ),
+        media_group_id=getattr(msg, "media_group_id", None),
         reactions=reactions or [],
     )
 
@@ -1716,6 +1719,7 @@ async def send_message(
             else None,
             silent=bool(body.silent),
             disable_webpage_preview=bool(body.disable_webpage_preview),
+            media_group_id=body.media_group_id,
         )
         db.commit()
         db.refresh(msg)
@@ -1971,6 +1975,7 @@ async def schedule_message(
             send_when_online=body.send_when_online,
             silent=body.silent,
             disable_webpage_preview=body.disable_webpage_preview,
+            media_group_id=body.media_group_id,
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
             client_message_id=body.client_message_id,

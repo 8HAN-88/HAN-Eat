@@ -740,6 +740,7 @@ class ChatService {
     bool sendWhenOnline = false,
     bool silent = false,
     bool disableWebpagePreview = false,
+    String? mediaGroupId,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -756,6 +757,7 @@ class ChatService {
       sendWhenOnline: sendWhenOnline,
       silent: silent,
       disableWebpagePreview: disableWebpagePreview,
+      mediaGroupId: mediaGroupId,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
@@ -792,6 +794,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    String? mediaGroupId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -801,6 +804,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      mediaGroupId: mediaGroupId,
     );
   }
 
@@ -830,6 +834,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    String? mediaGroupId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -839,6 +844,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      mediaGroupId: mediaGroupId,
     );
   }
 
@@ -997,6 +1003,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     bool disableWebpagePreview = false,
+    String? mediaGroupId,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1013,6 +1020,8 @@ class ChatService {
         if (clientMessageId != null) 'client_message_id': clientMessageId,
         if (silent) 'silent': true,
         if (disableWebpagePreview) 'disable_webpage_preview': true,
+        if (mediaGroupId != null && mediaGroupId.isNotEmpty)
+          'media_group_id': mediaGroupId,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
@@ -1029,6 +1038,7 @@ class ChatService {
     bool sendWhenOnline = false,
     bool silent = false,
     bool disableWebpagePreview = false,
+    String? mediaGroupId,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -1056,6 +1066,8 @@ class ChatService {
         'send_when_online': sendWhenOnline,
         if (silent) 'silent': true,
         if (disableWebpagePreview) 'disable_webpage_preview': true,
+        if (mediaGroupId != null && mediaGroupId.isNotEmpty)
+          'media_group_id': mediaGroupId,
       }),
     );
     _ensureOk(response, 'Не удалось запланировать сообщение');
@@ -1777,6 +1789,7 @@ class ChatService {
       isRead: mine ? false : msg.isRead,
       readCount: mine ? 0 : msg.readCount,
       disableWebpagePreview: msg.disableWebpagePreview,
+      mediaGroupId: msg.mediaGroupId,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
     );

@@ -1460,12 +1460,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       content: switch (pending.kind) {
         _PendingMediaKind.file => pending.fileName ?? 'Файл',
         _PendingMediaKind.voice => '${pending.voiceDurationSec ?? 1}',
-        _ => '',
+        _ => pending.caption,
       },
       createdAt: DateTime.now(),
       isMine: true,
       isRead: false,
       replyToMessageId: pending.replyToMessageId,
+      mediaGroupId: pending.mediaGroupId,
     );
     setState(() {
       _pendingMediaByTempId[pending.tempId] = pending;
@@ -1681,6 +1682,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
+            mediaGroupId: pending.mediaGroupId,
           );
           if (_chatIsGifMediaUrl(mediaUrl)) {
             unawaited(ChatRecentGifsStore.remember(mediaUrl));
@@ -1693,6 +1695,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
+            mediaGroupId: pending.mediaGroupId,
           );
         case _PendingMediaKind.file:
           msg = await ChatService.sendFile(
@@ -7624,19 +7627,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         }
         if (_isPhotoAlbumEligible(msg)) {
           final album = <ChatMessage>[msg];
+          final grouped = (msg.mediaGroupId?.trim() ?? '').isNotEmpty;
           var captionSeen = msg.content.trim().isNotEmpty;
           var i = currentIndex + 1;
           while (i < visible.length &&
               _canMergePhotoAlbum(album.last, visible[i])) {
             final next = visible[i];
             final nextHasCaption = next.content.trim().isNotEmpty;
-            if (nextHasCaption && captionSeen) break;
+            if (!grouped && nextHasCaption && captionSeen) break;
             album.add(next);
-            if (nextHasCaption) {
+            if (!grouped && nextHasCaption) {
               captionSeen = true;
               break;
             }
-            if (album.length >= 8) break;
+            if (album.length >= 10) break;
             i++;
           }
           if (album.length >= 2) {
@@ -7741,21 +7745,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _isPhotoAlbumEligible(ChatMessage msg) {
+    if (msg.type != 'image' && msg.type != 'video') return false;
+    if (msg.replyToMessageId != null) return false;
+    final groupId = msg.mediaGroupId?.trim();
+    final hasGroup = groupId != null && groupId.isNotEmpty;
+    final media = msg.mediaUrl?.trim();
+    final hasMedia = media != null && media.isNotEmpty;
+    // Server albums: allow temp ids once grouped; need media for grid.
+    if (hasGroup) return hasMedia || msg.id < 0;
+    // Legacy heuristic: confirmed image messages only.
     if (msg.id <= 0) return false;
     if (msg.type != 'image') return false;
-    if (msg.replyToMessageId != null) return false;
-    final media = msg.mediaUrl?.trim();
-    return media != null && media.isNotEmpty;
+    return hasMedia;
   }
 
   bool _canMergePhotoAlbum(ChatMessage left, ChatMessage right) {
     if (!_isPhotoAlbumEligible(left) || !_isPhotoAlbumEligible(right)) {
       return false;
     }
-    if (left.content.trim().isNotEmpty) return false;
     if (left.senderId != right.senderId || left.isMine != right.isMine) {
       return false;
     }
+    final lg = left.mediaGroupId?.trim();
+    final rg = right.mediaGroupId?.trim();
+    if (lg != null && lg.isNotEmpty && rg != null && rg.isNotEmpty) {
+      return lg == rg;
+    }
+    // Heuristic fallback for older messages without media_group_id.
+    if (left.type != 'image' || right.type != 'image') return false;
+    if (left.content.trim().isNotEmpty) return false;
+    if (left.id <= 0 || right.id <= 0) return false;
     final diff = right.createdAt.difference(left.createdAt).inSeconds.abs();
     return diff <= 90;
   }
@@ -7769,11 +7788,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final mine = anchor.isMine;
     final caption = anchor.content.trim();
     final hasCaption = caption.isNotEmpty;
-    final urls = messages
-        .map((m) => m.mediaUrl?.trim() ?? '')
-        .where((u) => u.isNotEmpty)
+    final albumItems = messages
+        .where((m) => (m.mediaUrl?.trim() ?? '').isNotEmpty)
         .toList(growable: false);
-    if (urls.length < 2) return const SizedBox.shrink();
+    if (albumItems.length < 2) return const SizedBox.shrink();
     final fg = mine && Theme.of(context).brightness == Brightness.dark
         ? Colors.white
         : scheme.onSurface;
@@ -7801,7 +7819,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           _chatAlbumGrid(
-            imageUrls: urls,
+            items: albumItems,
             borderRadius: BorderRadius.circular(12),
             // No-caption albums: meta only on the grid (Telegram-style).
             footerOverlay: hasCaption
@@ -7860,22 +7878,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Widget _chatAlbumGrid({
-    required List<String> imageUrls,
+    required List<ChatMessage> items,
     required BorderRadius borderRadius,
     Widget? footerOverlay,
   }) {
     final spacing = 1.0;
-    final displayUrls = imageUrls.take(9).toList(growable: false);
-    final count = displayUrls.length;
+    final displayItems = items.take(9).toList(growable: false);
+    final count = displayItems.length;
     if (count < 2) return const SizedBox.shrink();
 
-    Widget tile(String url, {required int index, int? remaining}) {
+    Widget tile(ChatMessage msg, {required int index, int? remaining}) {
+      final url = msg.mediaUrl!.trim();
+      final isVideo = msg.type == 'video';
       return GestureDetector(
-        onTap: () => _openImage(url),
+        onTap: () {
+          if (isVideo) {
+            _openVideo(url);
+          } else {
+            _openImage(url);
+          }
+        },
         child: Stack(
           fit: StackFit.expand,
           children: [
             _chatAlbumImage(url),
+            if (isVideo && (remaining == null || remaining <= 0))
+              const Align(
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.play_circle_fill,
+                  color: Colors.white70,
+                  size: 34,
+                ),
+              ),
             if (remaining != null && remaining > 0)
               ColoredBox(
                 color: Colors.black.withValues(alpha: 0.42),
@@ -7901,9 +7936,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         height: 214,
         child: Row(
           children: [
-            Expanded(child: tile(displayUrls[0], index: 0)),
+            Expanded(child: tile(displayItems[0], index: 0)),
             SizedBox(width: spacing),
-            Expanded(child: tile(displayUrls[1], index: 1)),
+            Expanded(child: tile(displayItems[1], index: 1)),
           ],
         ),
       );
@@ -7914,15 +7949,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           children: [
             Expanded(
               flex: 2,
-              child: tile(displayUrls[0], index: 0),
+              child: tile(displayItems[0], index: 0),
             ),
             SizedBox(width: spacing),
             Expanded(
               child: Column(
                 children: [
-                  Expanded(child: tile(displayUrls[1], index: 1)),
+                  Expanded(child: tile(displayItems[1], index: 1)),
                   SizedBox(height: spacing),
-                  Expanded(child: tile(displayUrls[2], index: 2)),
+                  Expanded(child: tile(displayItems[2], index: 2)),
                 ],
               ),
             ),
@@ -7930,7 +7965,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ),
       );
     } else {
-      final remaining = imageUrls.length - 4;
+      final remaining = items.length - 4;
       body = SizedBox(
         height: 244,
         child: Column(
@@ -7938,9 +7973,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Expanded(
               child: Row(
                 children: [
-                  Expanded(child: tile(displayUrls[0], index: 0)),
+                  Expanded(child: tile(displayItems[0], index: 0)),
                   SizedBox(width: spacing),
-                  Expanded(child: tile(displayUrls[1], index: 1)),
+                  Expanded(child: tile(displayItems[1], index: 1)),
                 ],
               ),
             ),
@@ -7948,11 +7983,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             Expanded(
               child: Row(
                 children: [
-                  Expanded(child: tile(displayUrls[2], index: 2)),
+                  Expanded(child: tile(displayItems[2], index: 2)),
                   SizedBox(width: spacing),
                   Expanded(
                     child: tile(
-                      displayUrls[3],
+                      displayItems[3],
                       index: 3,
                       remaining: remaining > 0 ? remaining : null,
                     ),
@@ -10359,6 +10394,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
     try {
       ScheduledChatMessage? lastItem;
+      final mediaGroupId =
+          files.length >= 2 ? const Uuid().v4() : null;
       for (var i = 0; i < files.length; i++) {
         final file = files[i];
         if (!mounted) return;
@@ -10391,6 +10428,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mediaUrl: ServerConfig.resolveMediaUrl(url),
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
+          mediaGroupId: mediaGroupId,
           replyToMessageId: i == 0 ? _replyTo?.id : null,
           clientMessageId: const Uuid().v4(),
         );
@@ -10419,6 +10457,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }) async {
     if (files.isEmpty) return;
     final trimmedCaption = caption.trim();
+    final mediaGroupId =
+        files.length >= 2 ? const Uuid().v4() : null;
     for (var i = 0; i < files.length; i++) {
       final file = files[i];
       if (!mounted) return;
@@ -10444,9 +10484,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await _sendPickedVideo(
           await _normalizeVideoFileForUpload(file),
           caption: itemCaption,
+          mediaGroupId: mediaGroupId,
         );
       } else {
-        await _sendPickedImage(file, caption: itemCaption);
+        await _sendPickedImage(
+          file,
+          caption: itemCaption,
+          mediaGroupId: mediaGroupId,
+        );
       }
     }
   }
@@ -10990,6 +11035,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
     String caption = '',
+    String? mediaGroupId,
   }) async {
     int? totalBytes;
     Uint8List? previewBytes;
@@ -11015,6 +11061,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       totalBytes: totalBytes,
       previewBytes: previewBytes,
       payloadBytes: previewBytes,
+      mediaGroupId: mediaGroupId,
     ));
   }
 
@@ -11023,6 +11070,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int? replyToId,
     String? clientMessageId,
     String caption = '',
+    String? mediaGroupId,
   }) async {
     int? totalBytes;
     try {
@@ -11038,6 +11086,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyToId ?? _replyTo?.id,
       caption: caption,
       totalBytes: totalBytes,
+      mediaGroupId: mediaGroupId,
     ));
   }
 
@@ -13281,6 +13330,7 @@ class _PendingMediaSend {
     this.previewBytes,
     this.payloadBytes,
     this.silent = false,
+    this.mediaGroupId,
   });
 
   final int tempId;
@@ -13296,6 +13346,7 @@ class _PendingMediaSend {
   /// Full bytes for Hive outbox / reload retry (web-safe).
   Uint8List? payloadBytes;
   final bool silent;
+  final String? mediaGroupId;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;

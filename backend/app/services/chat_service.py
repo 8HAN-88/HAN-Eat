@@ -2513,6 +2513,17 @@ class ChatService:
         remaining = int(60 - elapsed + 0.999)
         return max(0, remaining)
 
+    @staticmethod
+    def _normalize_media_group_id(
+        media_group_id: Optional[str], msg_type: str
+    ) -> Optional[str]:
+        if not media_group_id:
+            return None
+        if msg_type not in ("image", "video"):
+            return None
+        gid = str(media_group_id).strip()[:64]
+        return gid or None
+
     def send_message(
         self,
         conversation_id: int,
@@ -2525,6 +2536,7 @@ class ChatService:
         inline_keyboard_json: Optional[str] = None,
         silent: bool = False,
         disable_webpage_preview: bool = False,
+        media_group_id: Optional[str] = None,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2547,6 +2559,7 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
+        group_id = self._normalize_media_group_id(media_group_id, msg_type)
 
         msg = Message(
             conversation_id=conversation_id,
@@ -2558,6 +2571,7 @@ class ChatService:
             client_message_id=client_message_id,
             inline_keyboard_json=inline_keyboard_json,
             disable_webpage_preview=bool(disable_webpage_preview),
+            media_group_id=group_id,
         )
         self.db.add(msg)
 
@@ -2850,6 +2864,7 @@ class ChatService:
         send_when_online: bool = False,
         silent: bool = False,
         disable_webpage_preview: bool = False,
+        media_group_id: Optional[str] = None,
         media_url: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
@@ -2899,6 +2914,9 @@ class ChatService:
             deliver_when_online=send_when_online,
             silent=bool(silent),
             disable_webpage_preview=bool(disable_webpage_preview),
+            media_group_id=self._normalize_media_group_id(
+                media_group_id, msg_type
+            ),
             target_user_id=target_user_id,
             status="pending",
         )
@@ -3077,6 +3095,7 @@ class ChatService:
                     disable_webpage_preview=bool(
                         getattr(item, "disable_webpage_preview", False)
                     ),
+                    media_group_id=getattr(item, "media_group_id", None),
                 )
                 item.status = "sent"
                 item.sent_message_id = msg.id

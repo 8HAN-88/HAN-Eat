@@ -45,6 +45,7 @@ def _message_payload(msg) -> Dict[str, Any]:
         "disable_webpage_preview": bool(
             getattr(msg, "disable_webpage_preview", False)
         ),
+        "media_group_id": getattr(msg, "media_group_id", None),
         "reactions": [],
     }
 

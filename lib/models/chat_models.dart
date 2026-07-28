@@ -202,6 +202,7 @@ class ChatMessage {
     this.isRead = false,
     this.readCount = 0,
     this.disableWebpagePreview = false,
+    this.mediaGroupId,
     this.reactions = const [],
     this.inlineKeyboard = const [],
   });
@@ -227,6 +228,8 @@ class ChatMessage {
   /// Group: other members who have read up to this message (outgoing only).
   final int readCount;
   final bool disableWebpagePreview;
+  /// Shared id for multi-photo/video albums.
+  final String? mediaGroupId;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
 
@@ -302,6 +305,9 @@ class ChatMessage {
       readCount: _parseInt(json['read_count']),
       disableWebpagePreview:
           json['disable_webpage_preview'] as bool? ?? false,
+      mediaGroupId: (json['media_group_id'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['media_group_id'] as String?)?.trim(),
       reactions: reactions,
       inlineKeyboard: keyboard,
     );
@@ -312,6 +318,7 @@ class ChatMessage {
     bool? isRead,
     int? readCount,
     bool? disableWebpagePreview,
+    String? mediaGroupId,
     String? content,
     DateTime? editedAt,
     List<ChatReactionSummary>? reactions,
@@ -338,6 +345,7 @@ class ChatMessage {
       readCount: readCount ?? this.readCount,
       disableWebpagePreview:
           disableWebpagePreview ?? this.disableWebpagePreview,
+      mediaGroupId: mediaGroupId ?? this.mediaGroupId,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );
@@ -1132,6 +1140,7 @@ class ScheduledChatMessage {
     this.sendWhenOnline = false,
     this.silent = false,
     this.disableWebpagePreview = false,
+    this.mediaGroupId,
     required this.status,
     required this.createdAt,
   });
@@ -1147,11 +1156,13 @@ class ScheduledChatMessage {
   final bool sendWhenOnline;
   final bool silent;
   final bool disableWebpagePreview;
+  final String? mediaGroupId;
   final String status;
   final DateTime createdAt;
 
   factory ScheduledChatMessage.fromJson(Map<String, dynamic> json) {
     final replyRaw = json['reply_to_message_id'];
+    final groupRaw = json['media_group_id'] as String?;
     return ScheduledChatMessage(
       id: _parseInt(json['id']),
       conversationId: _parseInt(json['conversation_id']),
@@ -1165,6 +1176,8 @@ class ScheduledChatMessage {
       silent: json['silent'] as bool? ?? false,
       disableWebpagePreview:
           json['disable_webpage_preview'] as bool? ?? false,
+      mediaGroupId:
+          (groupRaw == null || groupRaw.trim().isEmpty) ? null : groupRaw.trim(),
       status: json['status'] as String? ?? 'pending',
       createdAt: _parseDate(json['created_at']),
     );
