@@ -2,8 +2,7 @@
 Alembic environment configuration
 """
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, inspect, pool, text
 from alembic import context
 import os
 import sys
@@ -49,6 +48,30 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _ensure_wide_alembic_version(connection) -> None:
+    """Revision ids in this repo exceed Alembic's default VARCHAR(32)."""
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    if "alembic_version" not in tables:
+        connection.execute(
+            text(
+                "CREATE TABLE alembic_version ("
+                "version_num VARCHAR(128) NOT NULL"
+                ")"
+            )
+        )
+        return
+    if connection.dialect.name != "postgresql":
+        return
+    # Widen when still on Alembic's default 32-char column.
+    connection.execute(
+        text(
+            "ALTER TABLE alembic_version "
+            "ALTER COLUMN version_num TYPE VARCHAR(128)"
+        )
+    )
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -72,6 +95,8 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        _ensure_wide_alembic_version(connection)
+        connection.commit()
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
