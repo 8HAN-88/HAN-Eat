@@ -555,9 +555,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clearMutedUntil:
                 event.event == 'chat.mute' &&
                 (event.muted != true || event.mutedUntil == null),
+            notifyMode: event.notifyMode ?? _conversation.notifyMode,
             pinned: event.pinned ?? _conversation.pinned,
             archived: event.archived ?? _conversation.archived,
           );
+          if (event.event == 'chat.mute') {
+            _muted = event.muted ?? _muted;
+          }
         });
         return;
       }
@@ -6115,11 +6119,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
-  Future<void> _applyMuted(bool muted, {DateTime? until}) async {
+  Future<void> _applyMuted(
+    bool muted, {
+    DateTime? until,
+    String notifyMode = 'mentions',
+  }) async {
+    final mode = muted ? notifyMode : 'all';
     await ChatService.setMuted(
       conversationId: widget.conversationId,
       muted: muted,
       mutedUntil: muted ? until : null,
+      notifyMode: mode,
     );
     await ChatThreadUiPrefs.setMuteUntil(
       widget.conversationId,
@@ -6132,6 +6142,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         muted: muted,
         mutedUntil: until,
         clearMutedUntil: !muted || until == null,
+        notifyMode: mode,
       );
     });
     await _syncMuteSchedule();
@@ -6142,6 +6153,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       context,
       currentlyMuted: _muted,
       mutedUntil: _conversation.mutedUntil,
+      currentNotifyMode: _conversation.notifyMode,
     );
     if (choice == null || !mounted) return;
     try {
@@ -6153,7 +6165,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      await _applyMuted(true, until: choice.until);
+      await _applyMuted(
+        true,
+        until: choice.until,
+        notifyMode: choice.notifyMode,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(choice.snackLabel)),

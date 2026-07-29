@@ -32,6 +32,7 @@ class UserRealtimeEvent {
     this.pinned,
     this.muted,
     this.mutedUntil,
+    this.notifyMode,
   });
 
   final String event;
@@ -53,6 +54,7 @@ class UserRealtimeEvent {
   final bool? pinned;
   final bool? muted;
   final DateTime? mutedUntil;
+  final String? notifyMode;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -92,6 +94,7 @@ class UserRealtimeEvent {
       pinned: json['pinned'] is bool ? json['pinned'] as bool : null,
       muted: json['muted'] is bool ? json['muted'] as bool : null,
       mutedUntil: asDate(json['muted_until']),
+      notifyMode: (json['notify_mode'] as String?)?.trim(),
     );
   }
 }

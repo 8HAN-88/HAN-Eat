@@ -422,6 +422,7 @@ class ChatConversation {
     this.archived = false,
     this.muted = false,
     this.mutedUntil,
+    this.notifyMode = 'all',
     this.wallpaperStyle,
     this.bubbleAccent,
     this.createdByUserId,
@@ -457,6 +458,8 @@ class ChatConversation {
   final bool archived;
   final bool muted;
   final DateTime? mutedUntil;
+  /// all | mentions | none
+  final String notifyMode;
   final String? wallpaperStyle;
   final String? bubbleAccent;
   final int? createdByUserId;
@@ -534,6 +537,11 @@ class ChatConversation {
       mutedUntil: json['muted_until'] is String
           ? DateTime.tryParse(json['muted_until'] as String)
           : null,
+      notifyMode: () {
+        final raw = (json['notify_mode'] as String?)?.trim().toLowerCase();
+        if (raw == 'mentions' || raw == 'none' || raw == 'all') return raw!;
+        return (json['muted'] as bool? ?? false) ? 'mentions' : 'all';
+      }(),
       wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
       bubbleAccent: (json['bubble_accent'] as String?)?.trim(),
       createdByUserId: json['created_by_user_id'] != null
@@ -573,6 +581,7 @@ class ChatConversation {
     bool? muted,
     DateTime? mutedUntil,
     bool clearMutedUntil = false,
+    String? notifyMode,
     String? wallpaperStyle,
     bool clearWallpaperStyle = false,
     String? bubbleAccent,
@@ -615,6 +624,7 @@ class ChatConversation {
       mutedUntil: clearMutedUntil
           ? null
           : (mutedUntil ?? this.mutedUntil),
+      notifyMode: notifyMode ?? this.notifyMode,
       wallpaperStyle: clearWallpaperStyle
           ? null
           : (wallpaperStyle ?? this.wallpaperStyle),

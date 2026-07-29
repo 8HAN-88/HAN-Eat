@@ -72,6 +72,8 @@ class ConversationMember(Base):
     muted_at = Column(DateTime, nullable=True)
     # Timed mute end (UTC naive). Null = muted forever while muted_at set.
     muted_until = Column(DateTime, nullable=True)
+    # all | mentions | none — push fanout mode (Telegram mute variants).
+    notify_mode = Column(String(16), nullable=False, default="all")
     # Built-in wallpaper style id (pattern/dusk/…); custom images stay device-local.
     wallpaper_style = Column(String(32), nullable=True)
     # Outgoing bubble accent style id (mint/sky/…); null = default Telegram green.

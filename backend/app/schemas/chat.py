@@ -115,6 +115,7 @@ class ConversationResponse(BaseModel):
     archived: bool = False
     muted: bool = False
     muted_until: Optional[datetime] = None
+    notify_mode: str = "all"
     wallpaper_style: Optional[str] = None
     bubble_accent: Optional[str] = None
     created_by_user_id: Optional[int] = None
@@ -314,6 +315,8 @@ class PinChatRequest(BaseModel):
 class MuteChatRequest(BaseModel):
     muted: bool = True
     muted_until: Optional[datetime] = None
+    # all | mentions | none. When muted=true defaults to mentions.
+    notify_mode: Optional[str] = Field(default=None, max_length=16)
 
 
 class WallpaperStyleRequest(BaseModel):

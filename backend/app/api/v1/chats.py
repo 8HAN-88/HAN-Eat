@@ -695,6 +695,7 @@ def _conversation_response(
         archived=row.get("archived", False),
         muted=row.get("muted", False),
         muted_until=row.get("muted_until"),
+        notify_mode=row.get("notify_mode") or "all",
         wallpaper_style=row.get("wallpaper_style"),
         bubble_accent=row.get("bubble_accent"),
         created_by_user_id=conv.created_by_user_id
@@ -3324,11 +3325,12 @@ async def mute_chat(
 ):
     svc = ChatService(db)
     try:
-        until = svc.set_muted(
+        until, notify_mode = svc.set_muted(
             conversation_id,
             current_user.id,
             body.muted,
             muted_until=body.muted_until if body.muted else None,
+            notify_mode=body.notify_mode,
         )
         db.commit()
     except ValueError as e:
@@ -3346,12 +3348,14 @@ async def mute_chat(
             "conversation_id": conversation_id,
             "muted": body.muted,
             "muted_until": until.isoformat() if until is not None else None,
+            "notify_mode": notify_mode,
         },
     )
     return {
         "ok": True,
         "muted": body.muted,
         "muted_until": until.isoformat() if until is not None else None,
+        "notify_mode": notify_mode,
     }
 
 

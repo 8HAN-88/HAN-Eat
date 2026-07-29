@@ -1257,6 +1257,7 @@ class ChatService {
     required int conversationId,
     required bool muted,
     DateTime? mutedUntil,
+    String? notifyMode,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/mute');
     final response = await _post(
@@ -1265,6 +1266,8 @@ class ChatService {
         'muted': muted,
         if (muted && mutedUntil != null)
           'muted_until': mutedUntil.toUtc().toIso8601String(),
+        if (notifyMode != null && notifyMode.trim().isNotEmpty)
+          'notify_mode': notifyMode.trim(),
       }),
     );
     _ensureOk(response, 'Не удалось изменить уведомления');

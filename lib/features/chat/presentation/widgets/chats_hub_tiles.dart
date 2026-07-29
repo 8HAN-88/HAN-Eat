@@ -177,9 +177,14 @@ class ChatHubTile extends StatelessWidget {
                           ],
                           if (chat.muted) ...[
                             Tooltip(
-                              message: formatChatMuteUntilLabel(chat.mutedUntil),
+                              message: formatChatMuteUntilLabel(
+                                chat.mutedUntil,
+                                notifyMode: chat.notifyMode,
+                              ),
                               child: Icon(
-                                Icons.notifications_off_outlined,
+                                chat.notifyMode == 'none'
+                                    ? Icons.notifications_off
+                                    : Icons.notifications_off_outlined,
                                 size: 13,
                                 color: scheme.onSurfaceVariant,
                               ),

@@ -1421,13 +1421,18 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       context,
       currentlyMuted: chat.muted,
       mutedUntil: chat.mutedUntil,
+      currentNotifyMode: chat.notifyMode,
     );
     if (choice == null || !mounted) return;
     setState(() => _hubActionChatId = chat.id);
     try {
       late final String snack;
       if (choice.unmute) {
-        await ChatService.setMuted(conversationId: chat.id, muted: false);
+        await ChatService.setMuted(
+          conversationId: chat.id,
+          muted: false,
+          notifyMode: 'all',
+        );
         await ChatThreadUiPrefs.setMuteUntil(chat.id, null);
         snack = choice.snackLabel;
       } else {
@@ -1435,6 +1440,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           conversationId: chat.id,
           muted: true,
           mutedUntil: choice.until,
+          notifyMode: choice.notifyMode,
         );
         await ChatThreadUiPrefs.setMuteUntil(chat.id, choice.until);
         snack = choice.snackLabel;

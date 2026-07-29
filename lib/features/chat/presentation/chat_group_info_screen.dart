@@ -187,20 +187,38 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _toggleMute() async {
-    final next = !_conversation.muted;
+    final choice = await showChatMuteDurationSheet(
+      context,
+      currentlyMuted: _conversation.muted,
+      mutedUntil: _conversation.mutedUntil,
+      currentNotifyMode: _conversation.notifyMode,
+    );
+    if (choice == null || !mounted) return;
     setState(() => _busy = true);
     try {
+      final muted = !choice.unmute;
       await ChatService.setMuted(
         conversationId: _conversation.id,
-        muted: next,
+        muted: muted,
+        mutedUntil: muted ? choice.until : null,
+        notifyMode: choice.notifyMode,
       );
       if (!mounted) return;
-      final updated = _conversation.copyWith(muted: next);
+      final updated = _conversation.copyWith(
+        muted: muted,
+        mutedUntil: choice.until,
+        clearMutedUntil: !muted || choice.until == null,
+        notifyMode: choice.notifyMode,
+      );
       setState(() {
         _conversation = updated;
         _busy = false;
       });
       widget.onConversationChanged?.call(updated);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(choice.snackLabel)),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);

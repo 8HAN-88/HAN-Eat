@@ -812,6 +812,10 @@ class ChatService:
                     "muted_until": getattr(member, "muted_until", None)
                     if is_muted
                     else None,
+                    "notify_mode": (
+                        getattr(member, "notify_mode", None)
+                        or ("mentions" if is_muted else "all")
+                    ),
                     "wallpaper_style": (
                         (getattr(member, "wallpaper_style", None) or "").strip()
                         or None
@@ -947,6 +951,10 @@ class ChatService:
             "muted_until": getattr(member, "muted_until", None)
             if is_muted
             else None,
+            "notify_mode": (
+                getattr(member, "notify_mode", None)
+                or ("mentions" if is_muted else "all")
+            ),
             "wallpaper_style": (
                 (getattr(member, "wallpaper_style", None) or "").strip() or None
             ),
@@ -1058,11 +1066,27 @@ class ChatService:
             raise ValueError("forbidden")
         member.pinned = pinned
 
+    _NOTIFY_MODES = frozenset({"all", "mentions", "none"})
+
+    @classmethod
+    def _normalize_notify_mode(cls, value: Optional[str], *, muted: bool) -> str:
+        mode = (value or "").strip().lower()
+        if mode not in cls._NOTIFY_MODES:
+            mode = "mentions" if muted else "all"
+        if muted and mode == "all":
+            # Mute always suppresses normal messages.
+            mode = "mentions"
+        if not muted:
+            mode = "all"
+        return mode
+
     def _expire_mute_if_needed(self, member: ConversationMember) -> bool:
         """Clear timed mute when muted_until has passed. Returns True if muted."""
         if member.muted_at is None:
             if getattr(member, "muted_until", None) is not None:
                 member.muted_until = None
+            if getattr(member, "notify_mode", "all") != "all":
+                member.notify_mode = "all"
             return False
         until = getattr(member, "muted_until", None)
         if until is None:
@@ -1074,6 +1098,7 @@ class ChatService:
         if until_naive <= now:
             member.muted_at = None
             member.muted_until = None
+            member.notify_mode = "all"
             return False
         return True
 
@@ -1083,7 +1108,8 @@ class ChatService:
         user_id: int,
         muted: bool,
         muted_until: Optional[datetime] = None,
-    ) -> Optional[datetime]:
+        notify_mode: Optional[str] = None,
+    ) -> tuple[Optional[datetime], str]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         member = (
@@ -1096,14 +1122,17 @@ class ChatService:
         )
         if not member:
             raise ValueError("forbidden")
+        mode = self._normalize_notify_mode(notify_mode, muted=muted)
         if not muted:
             member.muted_at = None
             member.muted_until = None
-            return None
+            member.notify_mode = "all"
+            return None, "all"
         member.muted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        member.notify_mode = mode
         if muted_until is None:
             member.muted_until = None
-            return None
+            return None, mode
         if muted_until.tzinfo is None:
             until_naive = muted_until
         else:
@@ -1114,7 +1143,7 @@ class ChatService:
         if until_naive <= now:
             raise ValueError("invalid_muted_until")
         member.muted_until = until_naive
-        return until_naive
+        return until_naive, mode
 
     def _get_group_or_error(self, conversation_id: int) -> Conversation:
         conv = (
@@ -2825,7 +2854,14 @@ class ChatService:
         for m in members:
             if m.user_id == sender_id:
                 continue
-            # Mentions still notify even when the chat is muted (Telegram-like).
+            is_muted = self._expire_mute_if_needed(m)
+            mode = self._normalize_notify_mode(
+                getattr(m, "notify_mode", None),
+                muted=is_muted,
+            )
+            # Fully silent: no messages and no @mentions.
+            if mode == "none":
+                continue
             if m.user_id in mentioned_ids:
                 notif.notify_chat_mention(
                     mentioned_user_id=m.user_id,
@@ -2836,7 +2872,8 @@ class ChatService:
                     preview=preview,
                 )
                 continue
-            if m.muted_at is not None:
+            # Mentions-only mute (Telegram default): skip regular messages.
+            if mode == "mentions" or is_muted:
                 continue
             notif.create_notification(
                 user_id=m.user_id,
