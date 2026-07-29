@@ -151,6 +151,8 @@ jobs:
           curl -sfI https://haneat.app/app/flutter_bootstrap.js | grep -i cache-control
           # Assets are versioned under /app/ and may be cached for phone cold-start.
           curl -sfI https://haneat.app/app/assets/AssetManifest.bin.json | grep -i cache-control
+          # Deferred parts are unversioned — must revalidate (stale parts → white screen).
+          curl -sfI https://haneat.app/app/main.dart.js_1.part.js | tr -d '\r' | grep -i '^cache-control:' | grep -qiE 'no-cache|no-store|must-revalidate'
           curl -sf https://haneat.app/ | grep -qiE 'auth-gate|continue-loading|Открываем'
           curl -sfI https://haneat.app/ | grep -qi 'text/html'
           curl -sfI https://haneat.app/fresh | grep -qi 'Clear-Site-Data\|location:.*/'

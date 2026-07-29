@@ -121,9 +121,19 @@ managed = """
         try_files $uri =404;
     }
 
-    # main.dart.js is requested as main.dart.js?v=BUILD — safe to cache by URL.
+    # Deferred parts keep the SAME filename across deploys (no ?v=).
+    # Never long-cache them — stale part.js + new main.dart.js = black→white boot.
+    # Must be a regex location: ^~ /app/main.dart.js would also swallow *.part.js.
+    location ~* ^/app/main\\.dart\\.js_.+\\.part\\.js$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    # Entrypoint only (query string stripped for matching). Cache-busted via ?v=BUILD.
     # no-store forced every phone to re-download ~3MB and often died mid-transfer.
-    location ^~ /app/main.dart.js {
+    location ~* ^/app/main\\.dart\\.js$ {
         add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;
     }
@@ -285,6 +295,11 @@ for host in haneat.app www.haneat.app; do
   echo "  OK https://${host}/health"
 done
 echo "✓ haneat.app API same-origin proxy active"
-echo "Verifying Flutter assets revalidate..."
-curl -sfI "https://haneat.app/assets/AssetManifest.bin.json" | grep -i "cache-control" | grep -qi "no-cache"
-echo "✓ haneat.app Flutter asset cache policy active"
+echo "Verifying Flutter deferred parts revalidate..."
+part_cc="$(curl -sfI "https://haneat.app/app/main.dart.js_1.part.js" | tr -d '\r' | grep -i '^cache-control:' || true)"
+echo "  part.js Cache-Control: ${part_cc:-<missing>}"
+if ! echo "$part_cc" | grep -qiE 'no-cache|no-store|must-revalidate'; then
+  echo "FAIL: deferred part.js must not be long-cached (stale parts → white screen)"
+  exit 1
+fi
+echo "✓ haneat.app deferred part.js revalidate policy active"

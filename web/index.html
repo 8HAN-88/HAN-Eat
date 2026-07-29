@@ -235,7 +235,7 @@
       <div id="continue-error" class="error" role="alert"></div>
       <button class="primary" id="continue-btn" type="button">Попробовать снова</button>
       <button class="linkish" id="continue-logout" type="button">Выйти из аккаунта</button>
-      <p class="hint" style="margin-top:10px">Если снова не выйдет — выключите VPN и зайдите по Wi‑Fi.</p>
+      <p class="hint" style="margin-top:10px">Если снова не выйдет — выключите VPN, зайдите по Wi‑Fi или откройте <a href="/fresh" style="color:var(--accent)">haneat.app/fresh</a>.</p>
     </div>
   </div>
 
@@ -547,6 +547,19 @@
           }, 400);
         }
 
+        function wipeStaleFlutterCaches() {
+          try {
+            if (!('caches' in window)) return Promise.resolve();
+            return caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) {
+                try { return caches.delete(k); } catch (err) { return null; }
+              }));
+            }).catch(function () {});
+          } catch (e) {
+            return Promise.resolve();
+          }
+        }
+
         function failBoot(reason) {
           if (settled || firstFrame) return;
           settled = true;
@@ -554,6 +567,7 @@
           try { if (scriptEl) scriptEl.remove(); } catch (e) {}
 
           // One in-place retry on /app/ — never location.replace (Safari white-screen).
+          // Wipe Cache API first: stale main.dart.js_*.part.js after deploy → white screen.
           if (!bootRetry && hasSession() && isAppPath()) {
             sub.textContent = 'Повторная загрузка…';
             bootRetry = true;
@@ -568,16 +582,21 @@
               history.replaceState(null, '', u.pathname + u.search + u.hash);
               params = u.searchParams;
             } catch (e) {}
-            setTimeout(function () {
-              if (!firstFrame) startFlutter();
-            }, 350);
+            wipeStaleFlutterCaches().finally(function () {
+              setTimeout(function () {
+                if (!firstFrame) startFlutter();
+              }, 350);
+            });
             return;
           }
 
           var vpnHint = (reason === 'health' || reason === 'timeout')
             ? ' Если включён VPN — выключите его.'
             : '';
-          showRecovery('Не получилось открыть.' + vpnHint + ' Нажмите «Попробовать снова».');
+          showRecovery(
+            'Не получилось открыть.' + vpnHint +
+            ' Нажмите «Попробовать снова».'
+          );
         }
 
         window.addEventListener('flutter-first-frame', function () {
@@ -661,14 +680,28 @@
           btn.disabled = true;
           btn.textContent = 'Открываем…';
         }
-        // User gesture: in-place start if already under /app/.
-        if (isAppPath()) {
-          markGoQueryInPlace();
-          flutterStarted = false;
-          startFlutter();
-          return;
+        function go() {
+          // User gesture: in-place start if already under /app/.
+          if (isAppPath()) {
+            markGoQueryInPlace();
+            flutterStarted = false;
+            startFlutter();
+            return;
+          }
+          softGoApp();
         }
-        softGoApp();
+        // Drop stale deferred chunks before retry (common after a web deploy).
+        try {
+          if ('caches' in window) {
+            caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) {
+                try { return caches.delete(k); } catch (err) { return null; }
+              }));
+            }).catch(function () {}).finally(go);
+            return;
+          }
+        } catch (e) {}
+        go();
       });
 
       document.getElementById('continue-logout').addEventListener('click', function () {

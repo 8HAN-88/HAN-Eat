@@ -545,7 +545,14 @@ class ChatConversation {
         return (json['muted'] as bool? ?? false) ? 'mentions' : 'all';
       }(),
       wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
-      wallpaperUrl: (json['wallpaper_url'] as String?)?.trim(),
+      wallpaperUrl: () {
+        final raw = json['wallpaper_url'];
+        if (raw is String) {
+          final t = raw.trim();
+          return t.isEmpty ? null : t;
+        }
+        return null;
+      }(),
       bubbleAccent: (json['bubble_accent'] as String?)?.trim(),
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])

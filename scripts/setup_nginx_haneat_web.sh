@@ -102,8 +102,16 @@ server {
         try_files $uri =404;
     }
 
-    # ^~ чтобы main.dart.js?v=… не попадал под immutable-regex ниже.
-    location ^~ /main.dart.js {
+    # Deferred parts: unversioned filenames — always revalidate.
+    location ~* ^/main\.dart\.js_.+\.part\.js$ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        try_files $uri =404;
+    }
+
+    # Entrypoint only (not *.part.js). Prefer regex over ^~ so parts aren't swallowed.
+    location ~* ^/main\.dart\.js$ {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
