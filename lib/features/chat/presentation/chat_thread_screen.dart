@@ -11291,9 +11291,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         !subtitle.startsWith('обновление') &&
         !subtitle.startsWith('Ожидание')) {
       subtitle =
-          '$subtitle · ${formatChatMuteUntilLabel(_conversation.mutedUntil)}';
+          '$subtitle · ${formatChatMuteUntilLabel(
+            _conversation.mutedUntil,
+            notifyMode: _conversation.notifyMode,
+          )}';
     } else if (_muted && subtitle.isEmpty) {
-      subtitle = formatChatMuteUntilLabel(_conversation.mutedUntil);
+      subtitle = formatChatMuteUntilLabel(
+        _conversation.mutedUntil,
+        notifyMode: _conversation.notifyMode,
+      );
     }
     final connectingHeader = subtitle == 'соединение…' ||
         subtitle == 'обновление…' ||
