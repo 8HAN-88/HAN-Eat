@@ -967,11 +967,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         file: picked,
         fileType: 'image',
       );
-      var url = uploaded.url?.trim();
-      if (url == null || url.isEmpty) {
+      final uploadedUrl = uploaded.url?.trim();
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
         throw StateError('upload_missing_url');
       }
-      url = ServerConfig.resolveMediaUrl(url);
+      final url = ServerConfig.resolveMediaUrl(uploadedUrl);
 
       await ChatService.setWallpaperStyle(
         conversationId: widget.conversationId,
