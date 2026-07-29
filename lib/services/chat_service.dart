@@ -1275,16 +1275,25 @@ class ChatService {
 
   static Future<void> setWallpaperStyle({
     required int conversationId,
-    required String? style,
+    String? style,
+    String? wallpaperUrl,
+    bool setStyle = true,
+    bool setUrl = false,
     bool applyToAll = false,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/wallpaper');
+    final body = <String, dynamic>{
+      'apply_to_all': applyToAll,
+    };
+    if (setStyle) {
+      body['style'] = style;
+    }
+    if (setUrl) {
+      body['wallpaper_url'] = wallpaperUrl;
+    }
     final response = await _post(
       uri,
-      body: jsonEncode({
-        'style': style,
-        'apply_to_all': applyToAll,
-      }),
+      body: jsonEncode(body),
     );
     _ensureOk(response, 'Не удалось сохранить обои');
   }

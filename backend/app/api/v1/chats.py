@@ -697,6 +697,7 @@ def _conversation_response(
         muted_until=row.get("muted_until"),
         notify_mode=row.get("notify_mode") or "all",
         wallpaper_style=row.get("wallpaper_style"),
+        wallpaper_url=row.get("wallpaper_url"),
         bubble_accent=row.get("bubble_accent"),
         created_by_user_id=conv.created_by_user_id
         if conv.type in ("group", "saved")
@@ -3367,11 +3368,15 @@ async def set_chat_wallpaper(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    fields = body.model_fields_set
     try:
-        style = svc.set_wallpaper_style(
+        style, wallpaper_url = svc.set_wallpaper_style(
             conversation_id,
             current_user.id,
-            body.style,
+            body.style if "style" in fields else None,
+            wallpaper_url=body.wallpaper_url if "wallpaper_url" in fields else None,
+            set_style="style" in fields,
+            set_url="wallpaper_url" in fields,
             apply_to_all=bool(body.apply_to_all),
         )
         db.commit()
@@ -3382,8 +3387,17 @@ async def set_chat_wallpaper(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "bad_wallpaper_style"
             )
+        if code == "bad_wallpaper_url":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "bad_wallpaper_url"
+            )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
-    return {"ok": True, "wallpaper_style": style, "apply_to_all": body.apply_to_all}
+    return {
+        "ok": True,
+        "wallpaper_style": style,
+        "wallpaper_url": wallpaper_url,
+        "apply_to_all": body.apply_to_all,
+    }
 
 
 @router.post("/chats/{conversation_id}/bubble-accent")

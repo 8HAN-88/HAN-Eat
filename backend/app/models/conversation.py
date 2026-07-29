@@ -74,8 +74,10 @@ class ConversationMember(Base):
     muted_until = Column(DateTime, nullable=True)
     # all | mentions | none — push fanout mode (Telegram mute variants).
     notify_mode = Column(String(16), nullable=False, default="all")
-    # Built-in wallpaper style id (pattern/dusk/…); custom images stay device-local.
+    # Built-in wallpaper style id (pattern/dusk/…).
     wallpaper_style = Column(String(32), nullable=True)
+    # Custom wallpaper media URL (uploads); takes precedence over style when set.
+    wallpaper_url = Column(String(512), nullable=True)
     # Outgoing bubble accent style id (mint/sky/…); null = default Telegram green.
     bubble_accent = Column(String(32), nullable=True)
     # Cursor for unread reactions on my messages (Telegram ❤ badge).

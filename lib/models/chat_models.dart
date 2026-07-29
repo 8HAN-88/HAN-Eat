@@ -424,6 +424,7 @@ class ChatConversation {
     this.mutedUntil,
     this.notifyMode = 'all',
     this.wallpaperStyle,
+    this.wallpaperUrl,
     this.bubbleAccent,
     this.createdByUserId,
     this.onlyAdminsCanPost = false,
@@ -461,6 +462,7 @@ class ChatConversation {
   /// all | mentions | none
   final String notifyMode;
   final String? wallpaperStyle;
+  final String? wallpaperUrl;
   final String? bubbleAccent;
   final int? createdByUserId;
   final bool onlyAdminsCanPost;
@@ -543,6 +545,7 @@ class ChatConversation {
         return (json['muted'] as bool? ?? false) ? 'mentions' : 'all';
       }(),
       wallpaperStyle: (json['wallpaper_style'] as String?)?.trim(),
+      wallpaperUrl: (json['wallpaper_url'] as String?)?.trim(),
       bubbleAccent: (json['bubble_accent'] as String?)?.trim(),
       createdByUserId: json['created_by_user_id'] != null
           ? _parseInt(json['created_by_user_id'])
@@ -584,6 +587,8 @@ class ChatConversation {
     String? notifyMode,
     String? wallpaperStyle,
     bool clearWallpaperStyle = false,
+    String? wallpaperUrl,
+    bool clearWallpaperUrl = false,
     String? bubbleAccent,
     bool clearBubbleAccent = false,
     bool? pinned,
@@ -628,6 +633,9 @@ class ChatConversation {
       wallpaperStyle: clearWallpaperStyle
           ? null
           : (wallpaperStyle ?? this.wallpaperStyle),
+      wallpaperUrl: clearWallpaperUrl
+          ? null
+          : (wallpaperUrl ?? this.wallpaperUrl),
       bubbleAccent: clearBubbleAccent
           ? null
           : (bubbleAccent ?? this.bubbleAccent),

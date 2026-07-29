@@ -740,15 +740,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final customPath = await ChatThreadUiPrefs.getCustomWallpaperPath(
         widget.conversationId,
       );
-      // Prefer device custom photo; else cloud style; else local prefs.
+      final cloudUrl = _conversation.wallpaperUrl?.trim();
       final cloudStyleId = _conversation.wallpaperStyle?.trim();
+      // Cloud custom URL > local file cache > cloud style > local prefs.
       final ChatWallpaperStyle wallpaper;
-      if (customPath != null && customPath.isNotEmpty) {
+      ImageProvider? customImage;
+      String? resolvedCustomPath = customPath;
+
+      if (cloudUrl != null && cloudUrl.isNotEmpty) {
+        wallpaper = cloudStyleId != null && cloudStyleId.isNotEmpty
+            ? ChatWallpaperStyle.fromId(cloudStyleId)
+            : await ChatThreadUiPrefs.getWallpaperStyle(
+                widget.conversationId,
+              );
+        final resolved = ServerConfig.resolveMediaUrl(cloudUrl);
+        if (!kIsWeb &&
+            customPath != null &&
+            customPath.isNotEmpty &&
+            await File(customPath).exists()) {
+          customImage = FileImage(File(customPath));
+        } else {
+          customImage = CachedNetworkImageProvider(resolved);
+          resolvedCustomPath = null;
+        }
+      } else if (customPath != null &&
+          customPath.isNotEmpty &&
+          !kIsWeb &&
+          await File(customPath).exists()) {
         wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
           widget.conversationId,
         );
+        customImage = FileImage(File(customPath));
       } else if (cloudStyleId != null && cloudStyleId.isNotEmpty) {
         wallpaper = ChatWallpaperStyle.fromId(cloudStyleId);
+        resolvedCustomPath = null;
         unawaited(
           ChatThreadUiPrefs.setWallpaperStyle(
             widget.conversationId,
@@ -759,13 +784,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         wallpaper = await ChatThreadUiPrefs.getWallpaperStyle(
           widget.conversationId,
         );
-      }
-      ImageProvider? customImage;
-      if (customPath != null && !kIsWeb) {
-        final file = File(customPath);
-        if (await file.exists()) {
-          customImage = FileImage(file);
-        }
+        resolvedCustomPath = null;
       }
       final cloudAccent = _conversation.bubbleAccent?.trim();
       final bubbleAccent = ChatBubbleAccent.fromId(cloudAccent);
@@ -774,7 +793,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _slowModeCountdownHapticsEnabled = hapticsEnabled;
         _autoRetryOnLimitsEnabled = autoRetryEnabled;
         _wallpaperStyle = wallpaper;
-        _wallpaperCustomPath = customPath;
+        _wallpaperCustomPath = resolvedCustomPath;
         _wallpaperImage = customImage;
         _bubbleAccent = bubbleAccent;
       });
@@ -873,11 +892,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final previousStyle = _wallpaperStyle;
     final previousPath = _wallpaperCustomPath;
     final previousImage = _wallpaperImage;
+    final previousConversation = _conversation;
     setState(() {
       _wallpaperStyle = style;
       _wallpaperCustomPath = null;
       _wallpaperImage = null;
-      _conversation = _conversation.copyWith(wallpaperStyle: style.id);
+      _conversation = _conversation.copyWith(
+        wallpaperStyle: style.id,
+        clearWallpaperUrl: true,
+      );
     });
     try {
       if (applyToAll) {
@@ -891,6 +914,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await ChatService.setWallpaperStyle(
         conversationId: widget.conversationId,
         style: style.id,
+        setStyle: true,
+        setUrl: false,
         applyToAll: applyToAll,
       );
     } catch (_) {
@@ -899,19 +924,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _wallpaperStyle = previousStyle;
         _wallpaperCustomPath = previousPath;
         _wallpaperImage = previousImage;
+        _conversation = previousConversation;
       });
     }
   }
 
   Future<void> _pickCustomWallpaper({bool applyToAll = false}) async {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Своё фото для обоев доступно в приложении'),
-        ),
-      );
-      return;
-    }
+    final previousPath = _wallpaperCustomPath;
+    final previousImage = _wallpaperImage;
+    final previousConversation = _conversation;
     try {
       final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -919,33 +940,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         maxWidth: 1920,
       );
       if (picked == null || !mounted) return;
-      final bytes = await picked.readAsBytes();
-      if (bytes.isEmpty) return;
-      final dir = await getApplicationDocumentsDirectory();
-      final wallDir = Directory('${dir.path}/chat_wallpapers');
-      if (!await wallDir.exists()) {
-        await wallDir.create(recursive: true);
+
+      String? targetPath;
+      ImageProvider? previewImage;
+      if (!kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        if (bytes.isEmpty) return;
+        final dir = await getApplicationDocumentsDirectory();
+        final wallDir = Directory('${dir.path}/chat_wallpapers');
+        if (!await wallDir.exists()) {
+          await wallDir.create(recursive: true);
+        }
+        targetPath = applyToAll
+            ? '${wallDir.path}/default.jpg'
+            : '${wallDir.path}/c_${widget.conversationId}.jpg';
+        final out = File(targetPath);
+        await out.writeAsBytes(bytes, flush: true);
+        previewImage = FileImage(out);
+        setState(() {
+          _wallpaperCustomPath = targetPath;
+          _wallpaperImage = previewImage;
+        });
       }
-      final targetPath = applyToAll
-          ? '${wallDir.path}/default.jpg'
-          : '${wallDir.path}/c_${widget.conversationId}.jpg';
-      final out = File(targetPath);
-      await out.writeAsBytes(bytes, flush: true);
-      final image = FileImage(out);
+
+      final uploaded = await MediaUploadService.uploadMediaFile(
+        file: picked,
+        fileType: 'image',
+      );
+      var url = uploaded.url?.trim();
+      if (url == null || url.isEmpty) {
+        throw StateError('upload_missing_url');
+      }
+      url = ServerConfig.resolveMediaUrl(url);
+
+      await ChatService.setWallpaperStyle(
+        conversationId: widget.conversationId,
+        wallpaperUrl: url,
+        setStyle: false,
+        setUrl: true,
+        applyToAll: applyToAll,
+      );
+
+      if (!mounted) return;
       setState(() {
         _wallpaperCustomPath = targetPath;
-        _wallpaperImage = image;
+        _wallpaperImage =
+            previewImage ?? CachedNetworkImageProvider(url);
+        _conversation = _conversation.copyWith(wallpaperUrl: url);
       });
-      if (applyToAll) {
-        await ChatThreadUiPrefs.applyWallpaperToAll(customPath: targetPath);
-      } else {
-        await ChatThreadUiPrefs.setCustomWallpaperPath(
-          widget.conversationId,
-          targetPath,
-        );
+      if (!kIsWeb && targetPath != null) {
+        if (applyToAll) {
+          await ChatThreadUiPrefs.applyWallpaperToAll(customPath: targetPath);
+        } else {
+          await ChatThreadUiPrefs.setCustomWallpaperPath(
+            widget.conversationId,
+            targetPath,
+          );
+        }
       }
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _wallpaperCustomPath = previousPath;
+        _wallpaperImage = previousImage;
+        _conversation = previousConversation;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -1040,7 +1099,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (action == 'apply_current_all') {
-      if (_wallpaperCustomPath != null) {
+      final cloudUrl = _conversation.wallpaperUrl?.trim();
+      if (_wallpaperImage != null &&
+          cloudUrl != null &&
+          cloudUrl.isNotEmpty) {
+        try {
+          if (_wallpaperCustomPath != null) {
+            await ChatThreadUiPrefs.applyWallpaperToAll(
+              customPath: _wallpaperCustomPath,
+            );
+          }
+          await ChatService.setWallpaperStyle(
+            conversationId: widget.conversationId,
+            wallpaperUrl: cloudUrl,
+            setStyle: false,
+            setUrl: true,
+            applyToAll: true,
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userVisibleError(e))),
+          );
+          return;
+        }
+      } else if (_wallpaperCustomPath != null) {
         await ChatThreadUiPrefs.applyWallpaperToAll(
           customPath: _wallpaperCustomPath,
         );
@@ -5175,14 +5258,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _hydrateWallpaperFromConversation() async {
+    final cloudUrl = _conversation.wallpaperUrl?.trim();
+    if (cloudUrl != null && cloudUrl.isNotEmpty) {
+      final resolved = ServerConfig.resolveMediaUrl(cloudUrl);
+      final local = await ChatThreadUiPrefs.getCustomWallpaperPath(
+        widget.conversationId,
+      );
+      ImageProvider image;
+      String? path;
+      if (!kIsWeb &&
+          local != null &&
+          local.isNotEmpty &&
+          await File(local).exists()) {
+        image = FileImage(File(local));
+        path = local;
+      } else {
+        image = CachedNetworkImageProvider(resolved);
+      }
+      if (!mounted) return;
+      if (_wallpaperImage == image && _wallpaperCustomPath == path) return;
+      setState(() {
+        _wallpaperCustomPath = path;
+        _wallpaperImage = image;
+      });
+      return;
+    }
+
     final cloudId = _conversation.wallpaperStyle?.trim();
     if (cloudId == null || cloudId.isEmpty) return;
-    final custom = await ChatThreadUiPrefs.getCustomWallpaperPath(
-      widget.conversationId,
-    );
-    if (custom != null && custom.isNotEmpty) return;
+    // Cloud style without custom URL wins over stale local custom cache.
     final style = ChatWallpaperStyle.fromId(cloudId);
-    if (!mounted || style == _wallpaperStyle) return;
+    if (!mounted) return;
+    if (style == _wallpaperStyle &&
+        _wallpaperImage == null &&
+        _wallpaperCustomPath == null) {
+      return;
+    }
     setState(() {
       _wallpaperStyle = style;
       _wallpaperCustomPath = null;

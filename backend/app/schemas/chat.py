@@ -117,6 +117,7 @@ class ConversationResponse(BaseModel):
     muted_until: Optional[datetime] = None
     notify_mode: str = "all"
     wallpaper_style: Optional[str] = None
+    wallpaper_url: Optional[str] = None
     bubble_accent: Optional[str] = None
     created_by_user_id: Optional[int] = None
     only_admins_can_post: bool = False
@@ -321,6 +322,8 @@ class MuteChatRequest(BaseModel):
 
 class WallpaperStyleRequest(BaseModel):
     style: Optional[str] = Field(default=None, max_length=32)
+    # Custom photo URL from /uploads. Empty string clears custom wallpaper.
+    wallpaper_url: Optional[str] = Field(default=None, max_length=512)
     apply_to_all: bool = False
 
 

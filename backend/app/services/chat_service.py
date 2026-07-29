@@ -820,6 +820,10 @@ class ChatService:
                         (getattr(member, "wallpaper_style", None) or "").strip()
                         or None
                     ),
+                    "wallpaper_url": (
+                        (getattr(member, "wallpaper_url", None) or "").strip()
+                        or None
+                    ),
                     "bubble_accent": (
                         (getattr(member, "bubble_accent", None) or "").strip()
                         or None
@@ -958,6 +962,9 @@ class ChatService:
             "wallpaper_style": (
                 (getattr(member, "wallpaper_style", None) or "").strip() or None
             ),
+            "wallpaper_url": (
+                (getattr(member, "wallpaper_url", None) or "").strip() or None
+            ),
             "bubble_accent": (
                 (getattr(member, "bubble_accent", None) or "").strip() or None
             ),
@@ -976,18 +983,59 @@ class ChatService:
         self,
         conversation_id: int,
         user_id: int,
-        style: Optional[str],
+        style: Optional[str] = None,
         *,
+        wallpaper_url: Optional[str] = None,
+        set_style: bool = True,
+        set_url: bool = False,
         apply_to_all: bool = False,
-    ) -> Optional[str]:
+    ):
+        """Set built-in style and/or custom wallpaper URL for the member.
+
+        Setting a style clears custom URL. Setting a URL keeps style as soft
+        fallback. Returns (style, wallpaper_url) after update.
+        """
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
-        value: Optional[str] = None
-        if style is not None:
+        if not set_style and not set_url:
+            raise ValueError("bad_wallpaper_style")
+
+        style_value: Optional[str] = None
+        if set_style:
             cleaned = (style or "").strip().lower()
             if cleaned and cleaned not in self._WALLPAPER_STYLES:
                 raise ValueError("bad_wallpaper_style")
-            value = cleaned or None
+            style_value = cleaned or None
+
+        url_value: Optional[str] = None
+        if set_url:
+            cleaned_url = (wallpaper_url or "").strip()
+            if cleaned_url:
+                if len(cleaned_url) > 512:
+                    raise ValueError("bad_wallpaper_url")
+                lower = cleaned_url.lower()
+                if not (
+                    lower.startswith("http://")
+                    or lower.startswith("https://")
+                    or lower.startswith("/")
+                ):
+                    raise ValueError("bad_wallpaper_url")
+                url_value = cleaned_url
+            else:
+                url_value = None
+
+        def _apply(member: ConversationMember) -> None:
+            if set_url and not set_style:
+                member.wallpaper_url = url_value
+            elif set_style and not set_url:
+                member.wallpaper_style = style_value
+                member.wallpaper_url = None
+            else:
+                # Both provided: custom URL wins; style kept as soft fallback.
+                if set_style:
+                    member.wallpaper_style = style_value
+                member.wallpaper_url = url_value
+
         if apply_to_all:
             members = (
                 self.db.query(ConversationMember)
@@ -995,8 +1043,18 @@ class ChatService:
                 .all()
             )
             for m in members:
-                m.wallpaper_style = value
-            return value
+                _apply(m)
+            # Return representative values after apply.
+            if set_url and not set_style:
+                style_out = None
+                if members:
+                    style_out = (
+                        (getattr(members[0], "wallpaper_style", None) or "").strip()
+                        or None
+                    )
+                return style_out, url_value
+            return style_value, (url_value if set_url else None)
+
         member = (
             self.db.query(ConversationMember)
             .filter(
@@ -1007,8 +1065,11 @@ class ChatService:
         )
         if not member:
             raise ValueError("forbidden")
-        member.wallpaper_style = value
-        return value
+        _apply(member)
+        return (
+            (getattr(member, "wallpaper_style", None) or "").strip() or None,
+            (getattr(member, "wallpaper_url", None) or "").strip() or None,
+        )
 
     def set_bubble_accent(
         self,
