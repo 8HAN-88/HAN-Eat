@@ -289,6 +289,11 @@
 
       function markBootOk() {
         try { localStorage.setItem(BOOT_OK_KEY, '1'); } catch (e) {}
+        // Successful paint → allow future auto-update reloads for this build.
+        try {
+          sessionStorage.removeItem('haneat_shell_update_' + BUILD);
+          sessionStorage.removeItem('haneat_web_update_reload_' + BUILD);
+        } catch (e) {}
       }
 
       function prefGet(key) {
@@ -435,8 +440,9 @@
         } catch (e) {}
       }
 
-      function goUrl(extraQuery) {
-        var url = '/app/?v=' + encodeURIComponent(BUILD) + '&go=1&_cb=' + Date.now();
+      function goUrl(buildId, extraQuery) {
+        var v = buildId || BUILD;
+        var url = '/app/?v=' + encodeURIComponent(v) + '&go=1&_cb=' + Date.now();
         if (extraQuery) url += '&' + extraQuery;
         return url;
       }
@@ -448,13 +454,74 @@
 
       // Safari iOS: location.replace during boot → white screen +
       // "server stopped responding". Prefer in-place start or assign.
-      function softGoApp(extraQuery) {
-        var url = goUrl(extraQuery);
+      function softGoApp(extraQuery, buildId) {
+        var url = goUrl(buildId, extraQuery);
         try {
           location.assign(url);
         } catch (e) {
           location.href = url;
         }
+      }
+
+      function fetchRemoteBuild(timeoutMs) {
+        return new Promise(function (resolve) {
+          var done = false;
+          var timer = setTimeout(function () {
+            if (done) return;
+            done = true;
+            resolve(null);
+          }, timeoutMs || 2500);
+          fetch('/version.json?nocache=' + Date.now(), {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          })
+            .then(function (res) {
+              if (!res || !res.ok) throw new Error('version');
+              return res.json();
+            })
+            .then(function (data) {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              var remote = data && data.build_number != null
+                ? String(data.build_number)
+                : '';
+              resolve(remote || null);
+            })
+            .catch(function () {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              resolve(null);
+            });
+        });
+      }
+
+      // If HTML shell is stale after a deploy, hard-navigate so no-store
+      // index.html + fresh bootstrap load without visiting /fresh.
+      function ensureLatestShellThen(next) {
+        fetchRemoteBuild(2500).then(function (remote) {
+          if (!remote || remote === BUILD) {
+            next();
+            return;
+          }
+          var guardKey = 'haneat_shell_update_' + remote;
+          try {
+            var prev = parseInt(sessionStorage.getItem(guardKey) || '', 10);
+            var now = Date.now();
+            // Avoid reload loops; allow retry after 45s if boot never settled.
+            if (prev && now - prev < 45000) {
+              next();
+              return;
+            }
+            sessionStorage.setItem(guardKey, String(now));
+          } catch (e) {}
+          ping(
+            'shell_update=1&from=' + encodeURIComponent(BUILD) +
+            '&to=' + encodeURIComponent(remote)
+          );
+          softGoApp(null, remote);
+        });
       }
 
       function markGoQueryInPlace() {
@@ -651,17 +718,19 @@
         clearError();
         ping(hasBootOk() ? 'continue=1&auto=1' : 'continue=1&first=1');
 
-        // Already on /app/ → start Flutter in place (no document reload).
-        if (isAppPath()) {
-          markGoQueryInPlace();
-          setTimeout(function () { startFlutter(); }, hasBootOk() ? 40 : 100);
-          return;
-        }
+        ensureLatestShellThen(function () {
+          // Already on /app/ → start Flutter in place (no document reload).
+          if (isAppPath()) {
+            markGoQueryInPlace();
+            setTimeout(function () { startFlutter(); }, hasBootOk() ? 40 : 100);
+            return;
+          }
 
-        // From site root → soft assign (not replace).
-        setTimeout(function () {
-          softGoApp();
-        }, hasBootOk() ? 80 : 160);
+          // From site root → soft assign (not replace).
+          setTimeout(function () {
+            softGoApp();
+          }, hasBootOk() ? 80 : 160);
+        });
       }
 
       document.getElementById('switch-mode').addEventListener('click', function (e) {
@@ -768,6 +837,23 @@
       var path = location.pathname || '';
       var atRoot = path === '/' || path === '/index.html' || path === '/login.html';
 
+      function bootAppShell() {
+        if (forceFlutter || goFlutter) {
+          if (!hasSession() && !forceFlutter) {
+            showOnly('auth-gate');
+            ping('auth=1');
+          } else {
+            ensureLatestShellThen(function () { startFlutter(); });
+          }
+        } else if (hasSession()) {
+          markGoQueryInPlace();
+          ensureLatestShellThen(function () { startFlutter(); });
+        } else {
+          showOnly('auth-gate');
+          ping('auth=1');
+        }
+      }
+
       if (atRoot) {
         if (hasSession()) {
           openContinueOrAuto();
@@ -776,27 +862,16 @@
           showOnly('auth-gate');
           ping('auth=1&root=1');
         }
-        return;
+      } else {
+        // Under /app/: never document-reload to add go=1 — start Flutter in place.
+        bootAppShell();
       }
 
-      // Under /app/: never document-reload to add go=1 — start Flutter in place.
-      // 1) Explicit go=1 / flutter=1 → load Flutter
-      // 2) Session → load Flutter (iOS included)
-      // 3) No session → HTML auth
-      if (forceFlutter || goFlutter) {
-        if (!hasSession() && !forceFlutter) {
-          showOnly('auth-gate');
-          ping('auth=1');
-        } else {
-          startFlutter();
-        }
-      } else if (hasSession()) {
-        markGoQueryInPlace();
-        startFlutter();
-      } else {
-        showOnly('auth-gate');
-        ping('auth=1');
-      }
+      // bfcache / return-to-tab: re-check deploy without requiring /fresh.
+      window.addEventListener('pageshow', function (ev) {
+        if (!ev || !ev.persisted) return;
+        ensureLatestShellThen(function () {});
+      });
     })();
   </script>
 </body>

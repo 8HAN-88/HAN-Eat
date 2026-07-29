@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/platform/web_page_visibility.dart';
 import 'web_app_update_service_stub.dart'
     if (dart.library.html) 'web_app_update_service_web.dart' as reload;
 
@@ -21,6 +22,7 @@ class WebAppUpdateService {
   static Timer? _initialTimer;
   static bool _checking = false;
   static bool _reloadScheduled = false;
+  static bool _visibilityHooked = false;
   static final ValueNotifier<String?> availableUpdateBuild =
       ValueNotifier<String?>(null);
 
@@ -29,15 +31,22 @@ class WebAppUpdateService {
     _pollTimer?.cancel();
     _initialTimer?.cancel();
 
-    // Даём приложению стабильно открыться, затем проверяем обновление.
-    _initialTimer = Timer(const Duration(seconds: 12), () {
+    // Быстрая проверка после первого кадра — пользователь всегда на свежем билде.
+    _initialTimer = Timer(const Duration(seconds: 2), () {
       unawaited(checkForUpdate(autoReload: true));
     });
 
     _pollTimer = Timer.periodic(
-      const Duration(minutes: 2),
+      const Duration(seconds: 60),
       (_) => unawaited(checkForUpdate(autoReload: true)),
     );
+
+    if (!_visibilityHooked) {
+      _visibilityHooked = true;
+      registerWebPageVisibilityListener(() {
+        unawaited(checkForUpdate(autoReload: true));
+      });
+    }
   }
 
   static void stop() {
@@ -58,7 +67,10 @@ class WebAppUpdateService {
       );
       final response = await http.get(
         uri,
-        headers: const {'Cache-Control': 'no-cache'},
+        headers: const {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
       ).timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return;
 
