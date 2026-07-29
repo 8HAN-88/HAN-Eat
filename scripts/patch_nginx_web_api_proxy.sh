@@ -296,8 +296,13 @@ for host in haneat.app www.haneat.app; do
 done
 echo "✓ haneat.app API same-origin proxy active"
 echo "Verifying Flutter deferred parts revalidate..."
-part_cc="$(curl -sfI "https://haneat.app/app/main.dart.js_1.part.js" | tr -d '\r' | grep -i '^cache-control:' || true)"
-echo "  part.js Cache-Control: ${part_cc:-<missing>}"
+PART="$(curl -sf https://haneat.app/app/main.dart.js | grep -oE 'main\.dart\.js_1\.part[^"]+\.js' | head -1 || true)"
+if [[ -z "${PART}" ]]; then
+  echo "FAIL: could not resolve deferred part name from main.dart.js"
+  exit 1
+fi
+part_cc="$(curl -sfI "https://haneat.app/app/${PART}" | tr -d '\r' | grep -i '^cache-control:' || true)"
+echo "  ${PART} Cache-Control: ${part_cc:-<missing>}"
 if ! echo "$part_cc" | grep -qiE 'no-cache|no-store|must-revalidate'; then
   echo "FAIL: deferred part.js must not be long-cached (stale parts → white screen)"
   exit 1
