@@ -1755,58 +1755,58 @@ class _NewPostCardState extends State<NewPostCard>
   }
 
   Widget _buildLikedByLine(ColorScheme scheme) {
-    final likers = widget.post.previewLikers;
     final names = [
-      for (final l in likers)
+      for (final l in widget.post.previewLikers)
         if (l.name.trim().isNotEmpty) l.name.trim(),
-    ];
-    final others = _likesCount - (_isLiked ? 1 : 0) - names.length;
+    ].take(2).toList();
+    final others =
+        (_likesCount - (_isLiked ? 1 : 0) - names.length).clamp(0, 1 << 30);
 
-    TextStyle base() => TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 13.5,
-          color: scheme.onSurface,
-          height: 1.25,
-        );
+    final style = TextStyle(
+      fontWeight: FontWeight.w700,
+      fontSize: 13.5,
+      color: scheme.onSurface,
+      height: 1.25,
+    );
 
+    String line;
     if (names.isEmpty) {
-      return Text(
-        _likesCount == 1
-            ? (_isLiked
-                ? 'Нравится вам'
-                : '1 отметка «Нравится»')
-            : (_isLiked
-                ? 'Нравится вам и ещё ${_formatCount(_likesCount - 1)}'
-                : '${_formatCount(_likesCount)} отметок «Нравится»'),
-        style: base(),
-      );
-    }
-
-    final first = names.first;
-    final second = names.length > 1 ? names[1] : null;
-    final buffer = StringBuffer('Нравится ');
-    if (_isLiked) {
-      buffer.write('вам');
-      if (second != null) {
-        buffer.write(', $first и $second');
+      if (_isLiked) {
+        line = _likesCount <= 1
+            ? 'Нравится вам'
+            : 'Нравится вам и ещё ${_formatCount(_likesCount - 1)}';
       } else {
-        buffer.write(' и $first');
+        line = _likesCount == 1
+            ? '1 отметка «Нравится»'
+            : '${_formatCount(_likesCount)} отметок «Нравится»';
       }
-      if (others > 0) {
-        buffer.write(' и ещё ${_formatCount(others)}');
+    } else if (_isLiked) {
+      final first = names.first;
+      final second = names.length > 1 ? names[1] : null;
+      if (second != null) {
+        line = others > 0
+            ? 'Нравится вам, $first, $second и ещё ${_formatCount(others)}'
+            : 'Нравится вам, $first и $second';
+      } else {
+        line = others > 0
+            ? 'Нравится вам, $first и ещё ${_formatCount(others)}'
+            : 'Нравится вам и $first';
       }
-    } else if (second != null) {
-      buffer.write('$first и $second');
-      if (others > 0) {
-        buffer.write(' и ещё ${_formatCount(others)}');
-      }
-    } else if (others > 0) {
-      buffer.write('$first и ещё ${_formatCount(others)}');
     } else {
-      buffer.write(first);
+      final first = names.first;
+      final second = names.length > 1 ? names[1] : null;
+      if (second != null) {
+        line = others > 0
+            ? 'Нравится $first, $second и ещё ${_formatCount(others)}'
+            : 'Нравится $first и $second';
+      } else {
+        line = others > 0
+            ? 'Нравится $first и ещё ${_formatCount(others)}'
+            : 'Нравится $first';
+      }
     }
 
-    return Text(buffer.toString(), style: base());
+    return Text(line, style: style);
   }
 
   Widget _buildInstagramCaption({
