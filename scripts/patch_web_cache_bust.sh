@@ -49,20 +49,17 @@ if main_js.exists():
     part_pat = re.compile(
         r'(deferredPartUris:\[)((?:"main\.dart\.js_\d+\.part(?:\.[^"]+)?\.js",?)*)(\])'
     )
-    renamed = 0
+    renamed_count = [0]
 
     def _bust_parts(match):
-        nonlocal renamed
         inner = match.group(2)
 
         def _one(m):
-            nonlocal renamed
             num = m.group(1)
             old_name = f"main.dart.js_{num}.part.js"
             # Accept already-renamed files from a prior pass.
             old_path = web_dir / old_name
             if not old_path.exists():
-                # Idempotent re-run: find existing part.<anything>.js
                 candidates = sorted(web_dir.glob(f"main.dart.js_{num}.part*.js"))
                 if not candidates:
                     raise SystemExit(
@@ -73,7 +70,7 @@ if main_js.exists():
             new_path = web_dir / new_name
             if old_path.resolve() != new_path.resolve():
                 old_path.replace(new_path)
-            renamed += 1
+            renamed_count[0] += 1
             return f'"{new_name}"'
 
         inner2, pn = re.subn(
@@ -91,7 +88,7 @@ if main_js.exists():
             f"patch_web_cache_bust: deferredPartUris not found/patched ({part_n})"
         )
     main_js.write_text(main_text2, encoding="utf-8")
-    print(f"✓ deferred parts renamed ({renamed}) build={build_id}")
+    print(f"✓ deferred parts renamed ({renamed_count[0]}) build={build_id}")
 
 index_html = pathlib.Path("${INDEX_HTML}")
 if index_html.exists():
