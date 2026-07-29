@@ -35,7 +35,7 @@ def main() -> None:
     main_js = main_js_path.read_text(encoding="utf-8", errors="ignore")
     # Deferred loading may place some strings in *.part.js — search all JS chunks.
     js_blobs = [main_js]
-    for part in sorted(root.glob("main.dart.js_*.part.js")):
+    for part in sorted(root.glob("main.dart.js_*.part*.js")):
         js_blobs.append(part.read_text(encoding="utf-8", errors="ignore"))
     all_js = "\n".join(js_blobs)
     if build_number not in all_js:

@@ -55,7 +55,7 @@ if main_js.exists():
         nonlocal renamed
         inner = match.group(2)
 
-        def _one(m: re.Match) -> str:
+        def _one(m):
             nonlocal renamed
             num = m.group(1)
             old_name = f"main.dart.js_{num}.part.js"
