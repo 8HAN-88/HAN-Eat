@@ -36,6 +36,7 @@ import '../../../services/paid_features_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'widgets/paid_content_paywall_card.dart';
+import 'widgets/show_post_likers_sheet.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -1641,15 +1642,16 @@ class _NewPostCardState extends State<NewPostCard>
                 ),
                 if (_likesCount > 0) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    _likesCount == 1
-                        ? '1 отметка «Нравится»'
-                        : '${_formatCount(_likesCount)} отметок «Нравится»',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13.5,
-                      color: scheme.onSurface,
-                    ),
+                  GestureDetector(
+                    onTap: _isSpoonacularRecipePost
+                        ? null
+                        : () => unawaited(
+                              showPostLikersSheet(
+                                context,
+                                postId: widget.post.id,
+                              ),
+                            ),
+                    child: _buildLikedByLine(scheme),
                   ),
                 ],
                 if (post.type == 'recipe' ||
@@ -1750,6 +1752,61 @@ class _NewPostCardState extends State<NewPostCard>
         setState(() => _isOpeningComments = false);
       }
     }
+  }
+
+  Widget _buildLikedByLine(ColorScheme scheme) {
+    final likers = widget.post.previewLikers;
+    final names = [
+      for (final l in likers)
+        if (l.name.trim().isNotEmpty) l.name.trim(),
+    ];
+    final others = _likesCount - (_isLiked ? 1 : 0) - names.length;
+
+    TextStyle base() => TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 13.5,
+          color: scheme.onSurface,
+          height: 1.25,
+        );
+
+    if (names.isEmpty) {
+      return Text(
+        _likesCount == 1
+            ? (_isLiked
+                ? 'Нравится вам'
+                : '1 отметка «Нравится»')
+            : (_isLiked
+                ? 'Нравится вам и ещё ${_formatCount(_likesCount - 1)}'
+                : '${_formatCount(_likesCount)} отметок «Нравится»'),
+        style: base(),
+      );
+    }
+
+    final first = names.first;
+    final second = names.length > 1 ? names[1] : null;
+    final buffer = StringBuffer('Нравится ');
+    if (_isLiked) {
+      buffer.write('вам');
+      if (second != null) {
+        buffer.write(', $first и $second');
+      } else {
+        buffer.write(' и $first');
+      }
+      if (others > 0) {
+        buffer.write(' и ещё ${_formatCount(others)}');
+      }
+    } else if (second != null) {
+      buffer.write('$first и $second');
+      if (others > 0) {
+        buffer.write(' и ещё ${_formatCount(others)}');
+      }
+    } else if (others > 0) {
+      buffer.write('$first и ещё ${_formatCount(others)}');
+    } else {
+      buffer.write(first);
+    }
+
+    return Text(buffer.toString(), style: base());
   }
 
   Widget _buildInstagramCaption({

@@ -1,7 +1,9 @@
 """
 API endpoints для лайков
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
@@ -153,5 +155,52 @@ async def get_like_status(
     return {
         "liked": like is not None,
         "likes_count": likes_count
+    }
+
+
+@router.get("/posts/{post_id}/likes")
+async def list_post_likes(
+    post_id: int,
+    limit: int = Query(40, ge=1, le=100),
+    cursor: Optional[int] = Query(None, description="Like id cursor (exclusive)"),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Список пользователей, которым понравился пост."""
+    post = (
+        db.query(Post.id)
+        .filter(Post.id == post_id, Post.deleted_at.is_(None))
+        .first()
+    )
+    if not post:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    total = (
+        db.query(func.count(Like.id)).filter(Like.post_id == post_id).scalar()
+        or 0
+    )
+    q = (
+        db.query(Like, User)
+        .join(User, User.id == Like.user_id)
+        .filter(Like.post_id == post_id)
+    )
+    if cursor is not None and int(cursor) > 0:
+        q = q.filter(Like.id < int(cursor))
+    rows = q.order_by(Like.id.desc()).limit(limit).all()
+    items = [
+        {
+            "like_id": int(like.id),
+            "id": int(user.id),
+            "name": user.name or "Пользователь",
+            "username": user.username,
+            "avatar_url": user.avatar_url,
+        }
+        for like, user in rows
+    ]
+    next_cursor = items[-1]["like_id"] if len(items) >= limit else None
+    return {
+        "items": items,
+        "total": int(total),
+        "next_cursor": next_cursor,
     }
 

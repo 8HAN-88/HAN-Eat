@@ -152,6 +152,28 @@ class LikeService {
     }
     _throwLikeError(response, 'Не удалось получить статус лайка');
   }
+
+  /// Список пользователей, которым понравился пост.
+  static Future<PostLikersPage> listLikers(
+    int postId, {
+    int limit = 40,
+    int? cursor,
+  }) async {
+    final params = <String, String>{
+      'limit': '$limit',
+      if (cursor != null && cursor > 0) 'cursor': '$cursor',
+    };
+    final uri = Uri.parse('$baseUrl/posts/$postId/likes').replace(
+      queryParameters: params,
+    );
+    final response = await _getWithAuthRetry(uri);
+    if (response.statusCode == 200) {
+      return PostLikersPage.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwLikeError(response, 'Не удалось загрузить отметки «Нравится»');
+  }
 }
 
 class LikeResponse {
@@ -167,6 +189,57 @@ class LikeResponse {
     return LikeResponse(
       liked: json['liked'] as bool,
       likesCount: json['likes_count'] as int,
+    );
+  }
+}
+
+class PostLiker {
+  const PostLiker({
+    required this.id,
+    required this.name,
+    this.username,
+    this.avatarUrl,
+    this.likeId,
+  });
+
+  final int id;
+  final String name;
+  final String? username;
+  final String? avatarUrl;
+  final int? likeId;
+
+  factory PostLiker.fromJson(Map<String, dynamic> json) {
+    return PostLiker(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? 'Пользователь',
+      username: json['username'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+      likeId: (json['like_id'] as num?)?.toInt(),
+    );
+  }
+}
+
+class PostLikersPage {
+  const PostLikersPage({
+    required this.items,
+    required this.total,
+    this.nextCursor,
+  });
+
+  final List<PostLiker> items;
+  final int total;
+  final int? nextCursor;
+
+  factory PostLikersPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'] as List<dynamic>? ?? const [];
+    return PostLikersPage(
+      items: raw
+          .whereType<Map>()
+          .map((e) => PostLiker.fromJson(Map<String, dynamic>.from(e)))
+          .where((e) => e.id > 0)
+          .toList(),
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      nextCursor: (json['next_cursor'] as num?)?.toInt(),
     );
   }
 }

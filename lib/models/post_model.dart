@@ -34,6 +34,36 @@ class PostCommentPreview {
       };
 }
 
+class PostLikerPreview {
+  const PostLikerPreview({
+    required this.id,
+    required this.name,
+    this.username,
+    this.avatarUrl,
+  });
+
+  final int id;
+  final String name;
+  final String? username;
+  final String? avatarUrl;
+
+  factory PostLikerPreview.fromJson(Map<String, dynamic> json) {
+    return PostLikerPreview(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? 'Пользователь',
+      username: json['username'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (username != null) 'username': username,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      };
+}
+
 class PostModel {
   final int id;
   final String type; // text | photo | recipe | reel
@@ -54,6 +84,7 @@ class PostModel {
   final int likesCount;
   final int commentsCount;
   final List<PostCommentPreview> previewComments;
+  final List<PostLikerPreview> previewLikers;
   final int repostsCount;
   final int viewsCount;  // Счетчик просмотров
   final bool isPromoted;
@@ -141,6 +172,7 @@ class PostModel {
     required this.likesCount,
     required this.commentsCount,
     this.previewComments = const [],
+    this.previewLikers = const [],
     required this.repostsCount,
     required this.viewsCount,
     this.isPromoted = false,
@@ -176,6 +208,7 @@ class PostModel {
       likesCount: p.likesCount,
       commentsCount: p.commentsCount,
       previewComments: const [],
+      previewLikers: const [],
       repostsCount: p.repostsCount ?? 0,
       viewsCount: p.reactions.views,
       isPromoted: p.isPromoted,
@@ -260,6 +293,11 @@ class PostModel {
           .map((e) => PostCommentPreview.fromJson(Map<String, dynamic>.from(e)))
           .where((e) => e.text.isNotEmpty)
           .toList(),
+      previewLikers: (json['preview_likers'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((e) => PostLikerPreview.fromJson(Map<String, dynamic>.from(e)))
+          .where((e) => e.id > 0 && e.name.trim().isNotEmpty)
+          .toList(),
       repostsCount: json['reposts_count'] as int? ?? 0,
       viewsCount: json['views_count'] as int? ?? 0,
       isPromoted: json['is_promoted'] as bool? ??
@@ -301,6 +339,7 @@ class PostModel {
       'likes_count': likesCount,
       'comments_count': commentsCount,
       'preview_comments': previewComments.map((e) => e.toJson()).toList(),
+      'preview_likers': previewLikers.map((e) => e.toJson()).toList(),
       'reposts_count': repostsCount,
       'views_count': viewsCount,
       'is_promoted': isPromoted,
@@ -326,6 +365,7 @@ class PostModel {
     int? likesCount,
     int? commentsCount,
     List<PostCommentPreview>? previewComments,
+    List<PostLikerPreview>? previewLikers,
     int? repostsCount,
     bool? isLiked,
     bool? isSaved,
@@ -347,6 +387,7 @@ class PostModel {
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       previewComments: previewComments ?? this.previewComments,
+      previewLikers: previewLikers ?? this.previewLikers,
       repostsCount: repostsCount ?? this.repostsCount,
       viewsCount: viewsCount,
       isPromoted: isPromoted,

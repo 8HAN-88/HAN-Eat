@@ -1797,7 +1797,67 @@ class FeedService:
         following_ids = [f.followee_id for f in self.db.query(Follower).filter(
             Follower.follower_id == user_id
         ).all()]
+        following_set = set(following_ids)
         check_user_ids = following_ids + [user_id]
+
+        # 8b. Instagram-style liker previews (prefer followed users)
+        preview_likers_dict: dict[int, list[dict]] = {pid: [] for pid in post_ids}
+        if post_ids:
+            like_rn = func.row_number().over(
+                partition_by=Like.post_id,
+                order_by=Like.created_at.desc(),
+            ).label("rn")
+            likers_subq = (
+                self.db.query(
+                    Like.id.label("like_id"),
+                    Like.post_id.label("post_id"),
+                    Like.user_id.label("user_id"),
+                    like_rn,
+                )
+                .filter(Like.post_id.in_(post_ids))
+                .subquery()
+            )
+            liker_rows = (
+                self.db.query(
+                    likers_subq.c.post_id,
+                    likers_subq.c.user_id,
+                    likers_subq.c.rn,
+                    User.name,
+                    User.username,
+                    User.avatar_url,
+                )
+                .join(User, User.id == likers_subq.c.user_id)
+                .filter(likers_subq.c.rn <= 8)
+                .order_by(likers_subq.c.post_id.asc(), likers_subq.c.rn.asc())
+                .all()
+            )
+            by_post_likers: dict[int, list[dict]] = {}
+            for post_id, liker_id, _rn, name, username, avatar_url in liker_rows:
+                if int(liker_id) == int(user_id):
+                    continue
+                by_post_likers.setdefault(int(post_id), []).append(
+                    {
+                        "id": int(liker_id),
+                        "name": name or "Пользователь",
+                        "username": username,
+                        "avatar_url": avatar_url,
+                        "_followed": int(liker_id) in following_set,
+                    }
+                )
+            for post_id, candidates in by_post_likers.items():
+                ranked = sorted(
+                    candidates,
+                    key=lambda c: (0 if c["_followed"] else 1),
+                )[:2]
+                preview_likers_dict[post_id] = [
+                    {
+                        "id": c["id"],
+                        "name": c["name"],
+                        "username": c["username"],
+                        "avatar_url": c["avatar_url"],
+                    }
+                    for c in ranked
+                ]
         
         # 9. Репост от подписок / себя: кто последний репостнул и текст комментария к репосту
         reposted_by_dict = {}
@@ -1902,6 +1962,7 @@ class FeedService:
                 "likes_count": likes_counts_dict.get(post.id, 0),
                 "comments_count": comments_counts_dict.get(post.id, 0),
                 "preview_comments": preview_comments_dict.get(post.id, []),
+                "preview_likers": preview_likers_dict.get(post.id, []),
                 "reposts_count": reposts_counts_dict.get(post.id, 0),
                 "is_liked": post.id in user_liked_post_ids,
                 "is_saved": post.id in user_saved_post_ids,
