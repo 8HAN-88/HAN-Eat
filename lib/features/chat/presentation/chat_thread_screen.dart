@@ -3546,11 +3546,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
       } else {
         // Local draft is newer — push it to cloud.
+        final newerLocal = local!;
         unawaited(
           ChatService.upsertCloudDraft(
             conversationId: widget.conversationId,
-            text: local!.text,
-            replyToMessageId: local.replyToMessageId,
+            text: newerLocal.text,
+            replyToMessageId: newerLocal.replyToMessageId,
           ),
         );
       }
