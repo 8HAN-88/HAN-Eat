@@ -8,12 +8,20 @@ import 'miniapp_models.dart';
 class MiniAppsService {
   static Future<List<MiniAppItem>> fetchCatalog({
     String? query,
+    String? category,
     bool onlyInstalled = false,
+    String sort = 'default',
   }) async {
     final params = <String, String>{};
     final q = query?.trim() ?? '';
     if (q.isNotEmpty) params['q'] = q;
+    final cat = category?.trim() ?? '';
+    if (cat.isNotEmpty) params['category'] = cat;
     if (onlyInstalled) params['only_installed'] = 'true';
+    final sortValue = sort.trim();
+    if (sortValue.isNotEmpty && sortValue != 'default') {
+      params['sort'] = sortValue;
+    }
     final response = await http.get(
       ApiService.uri('/miniapps/catalog', params.isEmpty ? null : params),
       headers: await ApiService.authHeaders(),

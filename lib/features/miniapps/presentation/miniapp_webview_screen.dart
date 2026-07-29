@@ -51,18 +51,111 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     };
   }
 
+  Future<void> _reload() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    final controller = _controller;
+    if (controller == null) return;
+    if (widget.url != null) {
+      await controller.loadUrl(urlRequest: URLRequest(url: WebUri(widget.url!)));
+      return;
+    }
+    if (widget.htmlContent != null) {
+      await controller.loadData(
+        data: widget.htmlContent!,
+        mimeType: 'text/html',
+        encoding: 'utf-8',
+      );
+    }
+  }
+
+  Future<void> _openInBrowser() async {
+    final raw = widget.url?.trim();
+    if (raw == null || raw.isEmpty) return;
+    await _openExternal(raw);
+  }
+
+  void _showMoreMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.refresh_rounded),
+                title: const Text('Обновить'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _reload();
+                },
+              ),
+              if ((widget.url ?? '').trim().isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.open_in_browser_rounded),
+                  title: const Text('Открыть в браузере'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openInBrowser();
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.close_rounded),
+                title: const Text('Закрыть'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final subtitle = widget.subtitle.trim();
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text(widget.title),
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.close),
+            tooltip: 'Ещё',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onPressed: _showMoreMenu,
+          ),
+          IconButton(
+            tooltip: 'Закрыть',
+            icon: const Icon(Icons.close_rounded),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -72,9 +165,15 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
           if (widget.htmlContent != null || widget.url != null)
             InAppWebView(
               initialData: widget.htmlContent != null
-                  ? InAppWebViewInitialData(data: widget.htmlContent!, mimeType: 'text/html', encoding: 'utf-8')
+                  ? InAppWebViewInitialData(
+                      data: widget.htmlContent!,
+                      mimeType: 'text/html',
+                      encoding: 'utf-8',
+                    )
                   : null,
-              initialUrlRequest: widget.url != null ? URLRequest(url: WebUri(widget.url!)) : null,
+              initialUrlRequest: widget.url != null
+                  ? URLRequest(url: WebUri(widget.url!))
+                  : null,
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 mediaPlaybackRequiresUserGesture: false,
@@ -88,12 +187,17 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                 _registerHandlers(controller);
               },
               onLoadStart: (controller, url) {
-                setState(() => _isLoading = true);
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
               },
               onLoadStop: (controller, url) async {
                 setState(() => _isLoading = false);
-                // Сообщаем мини-приложению, что WebApp готов
-                await controller.evaluateJavascript(source: 'window.HanWe && window.HanWe.WebApp && window.HanWe.WebApp._ready();');
+                await controller.evaluateJavascript(
+                  source:
+                      'window.HanWe && window.HanWe.WebApp && window.HanWe.WebApp._ready();',
+                );
               },
               onReceivedError: (controller, request, error) {
                 setState(() {
@@ -112,42 +216,62 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
                 return NavigationActionPolicy.CANCEL;
               },
               onConsoleMessage: (controller, consoleMessage) {
-                debugPrint('[MiniApp WebView] ${consoleMessage.messageLevel}: ${consoleMessage.message}');
+                debugPrint(
+                  '[MiniApp WebView] ${consoleMessage.messageLevel}: ${consoleMessage.message}',
+                );
               },
             )
           else
             const Center(child: Text('Нет контента для отображения')),
-
           if (_isLoading)
-            Container(
-              color: colorScheme.surface.withOpacity(0.8),
+            ColoredBox(
+              color: colorScheme.surface.withValues(alpha: 0.72),
               child: const Center(child: CircularProgressIndicator()),
             ),
-
           if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.error_outline, size: 48, color: colorScheme.error),
-                    const SizedBox(height: 16),
-                    Text('Ошибка загрузки', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(_error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Закрыть'),
-                    ),
-                  ],
+            ColoredBox(
+              color: colorScheme.surface,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: colorScheme.error,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Ошибка загрузки',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          OutlinedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Закрыть'),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: _reload,
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
         ],
       ),
-      bottomNavigationBar: _buildBottomBar(context),
+      bottomNavigationBar: _mainButtonVisible ? _buildBottomBar(context) : null,
     );
   }
 
@@ -166,7 +290,7 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
         debugPrint('[MiniApp] sendData received: $data');
         // TODO: Здесь можно отправить данные на бэкенд или обработать в приложении
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('MiniApp sent data: $data')),
+          SnackBar(content: Text('Приложение отправило данные')),
         );
       },
     );
@@ -327,51 +451,37 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
 
   Widget _buildBottomBar(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _mainButtonLoading
+                ? null
+                : () async {
+                    await _controller?.evaluateJavascript(
+                      source: '''
+                        if (window.HanWe && window.HanWe.WebApp) {
+                          window.HanWe.WebApp._emit('mainButtonClicked');
+                        }
+                      ''',
+                    );
+                  },
+            child: _mainButtonLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(_mainButtonText),
           ),
-          const Spacer(),
-          if (_mainButtonVisible)
-            FilledButton(
-              onPressed: _mainButtonLoading
-                  ? null
-                  : () async {
-                      await _controller?.evaluateJavascript(
-                        source: '''
-                          if (window.HanWe && window.HanWe.WebApp) {
-                            window.HanWe.WebApp._emit('mainButtonClicked');
-                          }
-                        ''',
-                      );
-                    },
-              child: _mainButtonLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_mainButtonText),
-            ),
-          if (_mainButtonVisible) const SizedBox(width: 12),
-          Text(
-            'HanWe Mini App',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.outline),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {},
-          ),
-        ],
+        ),
       ),
     );
   }

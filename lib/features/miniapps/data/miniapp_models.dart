@@ -7,6 +7,7 @@ class MiniAppItem {
     required this.name,
     required this.shortName,
     this.description,
+    this.category,
     required this.url,
     this.iconUrl,
     this.isBuiltin = false,
@@ -23,6 +24,7 @@ class MiniAppItem {
     this.iconUrlRiskReasons = const [],
     this.isInstalled = false,
     this.isOwner = false,
+    this.lastLaunchedAt,
   });
 
   final int id;
@@ -32,6 +34,7 @@ class MiniAppItem {
   final String name;
   final String shortName;
   final String? description;
+  final String? category;
   final String url;
   final String? iconUrl;
   final bool isBuiltin;
@@ -48,9 +51,29 @@ class MiniAppItem {
   final List<String> iconUrlRiskReasons;
   final bool isInstalled;
   final bool isOwner;
+  final DateTime? lastLaunchedAt;
 
   bool get isApproved => moderationStatus == 'approved';
   bool get isRejected => moderationStatus == 'rejected';
+
+  String get categoryLabel {
+    switch ((category ?? '').trim().toLowerCase()) {
+      case 'recipes':
+        return 'Рецепты';
+      case 'calories':
+        return 'Калории';
+      case 'planning':
+        return 'План';
+      case 'shopping':
+        return 'Покупки';
+      case 'games':
+        return 'Игры';
+      case 'utils':
+        return 'Утилиты';
+      default:
+        return 'Другое';
+    }
+  }
 
   factory MiniAppItem.fromJson(Map<String, dynamic> json) {
     return MiniAppItem(
@@ -61,6 +84,7 @@ class MiniAppItem {
       name: json['name'] as String? ?? '',
       shortName: json['short_name'] as String? ?? '',
       description: json['description'] as String?,
+      category: (json['category'] as String?)?.trim(),
       url: json['url'] as String? ?? '',
       iconUrl: json['icon_url'] as String?,
       isBuiltin: json['is_builtin'] as bool? ?? false,
@@ -81,6 +105,9 @@ class MiniAppItem {
           .toList(growable: false),
       isInstalled: json['is_installed'] as bool? ?? false,
       isOwner: json['is_owner'] as bool? ?? false,
+      lastLaunchedAt: json['last_launched_at'] is String
+          ? DateTime.tryParse(json['last_launched_at'] as String)
+          : null,
     );
   }
 }
@@ -92,6 +119,7 @@ class MiniAppCreateRequest {
     required this.shortName,
     required this.url,
     this.description,
+    this.category,
     this.iconUrl,
   });
 
@@ -100,6 +128,7 @@ class MiniAppCreateRequest {
   final String shortName;
   final String url;
   final String? description;
+  final String? category;
   final String? iconUrl;
 
   Map<String, dynamic> toJson() => {
@@ -109,6 +138,7 @@ class MiniAppCreateRequest {
         'url': url,
         if (description != null && description!.isNotEmpty)
           'description': description,
+        if (category != null && category!.isNotEmpty) 'category': category,
         if (iconUrl != null && iconUrl!.isNotEmpty) 'icon_url': iconUrl,
       };
 }
@@ -117,6 +147,7 @@ class MiniAppUpdateRequest {
   const MiniAppUpdateRequest({
     this.name,
     this.description,
+    this.category,
     this.url,
     this.iconUrl,
     this.isActive,
@@ -124,6 +155,7 @@ class MiniAppUpdateRequest {
 
   final String? name;
   final String? description;
+  final String? category;
   final String? url;
   final String? iconUrl;
   final bool? isActive;
@@ -131,6 +163,7 @@ class MiniAppUpdateRequest {
   Map<String, dynamic> toJson() => {
         if (name != null) 'name': name,
         if (description != null) 'description': description,
+        if (category != null) 'category': category,
         if (url != null) 'url': url,
         if (iconUrl != null) 'icon_url': iconUrl,
         if (isActive != null) 'is_active': isActive,
@@ -159,4 +192,25 @@ class MiniAppLaunchContext {
           (json['init_data_unsafe'] as Map<String, dynamic>?) ?? const {},
     );
   }
+}
+
+class MiniAppCategory {
+  const MiniAppCategory({
+    required this.id,
+    required this.label,
+  });
+
+  final String id;
+  final String label;
+
+  static const all = MiniAppCategory(id: '', label: 'Все');
+
+  static const known = <MiniAppCategory>[
+    MiniAppCategory(id: 'recipes', label: 'Рецепты'),
+    MiniAppCategory(id: 'calories', label: 'Калории'),
+    MiniAppCategory(id: 'planning', label: 'План'),
+    MiniAppCategory(id: 'shopping', label: 'Покупки'),
+    MiniAppCategory(id: 'games', label: 'Игры'),
+    MiniAppCategory(id: 'utils', label: 'Утилиты'),
+  ];
 }

@@ -6,10 +6,12 @@ import hashlib
 import hmac
 import json
 import time
+from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,11 @@ from app.core.database import get_db
 from app.core.redis_client import REDIS_IS_STUB, get_redis
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.user import User
+from app.services.miniapp_builtins import (
+    MINIAPP_CATEGORIES,
+    builtin_html,
+    ensure_official_miniapps,
+)
 
 router = APIRouter(prefix="/miniapps", tags=["Mini Apps"])
 
@@ -165,12 +172,22 @@ def _enforce_user_rate_limit(user_id: int, action: str, per_minute: int) -> None
         return
 
 
+def _normalize_category(raw: Optional[str]) -> Optional[str]:
+    value = (raw or "").strip().lower()
+    if not value:
+        return None
+    if value not in MINIAPP_CATEGORIES:
+        raise HTTPException(status_code=400, detail="bad_miniapp_category")
+    return value
+
+
 def _app_response(
     app: BotMiniApp,
     *,
     bot: User,
     installed: bool,
     is_owner: bool,
+    last_launched_at=None,
 ) -> dict:
     url_risk = _url_risk_summary(app.url or "")
     icon_risk = _url_risk_summary(app.icon_url or "") if app.icon_url else None
@@ -182,6 +199,7 @@ def _app_response(
         "name": app.name,
         "short_name": app.short_name,
         "description": app.description,
+        "category": (getattr(app, "category", None) or None),
         "url": app.url,
         "icon_url": app.icon_url,
         "is_builtin": bool(app.is_builtin),
@@ -198,6 +216,7 @@ def _app_response(
         "icon_url_risk_reasons": icon_risk["risk_reasons"] if icon_risk else [],
         "is_installed": installed,
         "is_owner": is_owner,
+        "last_launched_at": last_launched_at,
         "created_at": app.created_at,
         "updated_at": app.updated_at,
     }
@@ -208,6 +227,7 @@ class MiniAppCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=64)
     short_name: str = Field(..., min_length=2, max_length=32)
     description: Optional[str] = Field(None, max_length=512)
+    category: Optional[str] = Field(None, max_length=32)
     url: str = Field(..., min_length=8, max_length=2000)
     icon_url: Optional[str] = Field(None, max_length=2000)
 
@@ -215,6 +235,7 @@ class MiniAppCreateRequest(BaseModel):
 class MiniAppUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=64)
     description: Optional[str] = Field(None, max_length=512)
+    category: Optional[str] = Field(None, max_length=32)
     url: Optional[str] = Field(None, min_length=8, max_length=2000)
     icon_url: Optional[str] = Field(None, max_length=2000)
     is_active: Optional[bool] = None
@@ -276,14 +297,30 @@ async def miniapps_moderation_queue(
     return {"items": items}
 
 
+@router.get("/builtin/{slug}", response_class=HTMLResponse)
+async def miniapp_builtin_page(slug: str):
+    html = builtin_html(slug)
+    if not html:
+        raise HTTPException(status_code=404, detail="Builtin mini app not found")
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache"})
+
+
 @router.get("/catalog")
 async def miniapps_catalog(
     query: str = Query("", alias="q"),
     bot_username: Optional[str] = None,
+    category: Optional[str] = None,
     only_installed: bool = False,
+    sort: str = Query("default", pattern="^(default|recent|name)$"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    try:
+        ensure_official_miniapps(db)
+    except Exception:
+        db.rollback()
+
+    category_value = _normalize_category(category) if category else None
     apps_q = db.query(BotMiniApp).filter(BotMiniApp.is_active == True)
     if query.strip():
         q = f"%{query.strip()}%"
@@ -292,25 +329,31 @@ async def miniapps_catalog(
             | (BotMiniApp.short_name.ilike(q))
             | (BotMiniApp.description.ilike(q))
         )
+    if category_value:
+        apps_q = apps_q.filter(BotMiniApp.category == category_value)
     if bot_username:
         bot = db.query(User).filter(User.bot_username == bot_username, User.is_bot == True).first()
         if not bot:
-            return {"items": []}
+            return {"items": [], "categories": list(MINIAPP_CATEGORIES)}
         apps_q = apps_q.filter(BotMiniApp.bot_id == bot.id)
 
     apps = apps_q.order_by(BotMiniApp.is_official.desc(), BotMiniApp.created_at.desc()).all()
     app_ids = [a.id for a in apps]
     installed_ids = set()
+    launched_at_by_id = {}
     if app_ids:
         installs = (
-            db.query(MiniAppInstall.miniapp_id)
+            db.query(MiniAppInstall)
             .filter(
                 MiniAppInstall.user_id == current_user.id,
                 MiniAppInstall.miniapp_id.in_(app_ids),
             )
             .all()
         )
-        installed_ids = {row[0] for row in installs}
+        installed_ids = {row.miniapp_id for row in installs}
+        launched_at_by_id = {
+            row.miniapp_id: row.last_launched_at for row in installs if row.last_launched_at
+        }
 
     bots = {
         b.id: b
@@ -327,9 +370,29 @@ async def miniapps_catalog(
         is_installed = app.id in installed_ids
         if only_installed and not is_installed:
             continue
-        items.append(_app_response(app, bot=bot, installed=is_installed, is_owner=is_owner))
+        items.append(
+            _app_response(
+                app,
+                bot=bot,
+                installed=is_installed,
+                is_owner=is_owner,
+                last_launched_at=launched_at_by_id.get(app.id),
+            )
+        )
 
-    return {"items": items}
+    if sort == "recent":
+        items.sort(
+            key=lambda row: (
+                row.get("last_launched_at") is None,
+                -(row.get("last_launched_at").timestamp() if row.get("last_launched_at") else 0),
+                not row.get("is_official", False),
+                row.get("name") or "",
+            )
+        )
+    elif sort == "name":
+        items.sort(key=lambda row: (row.get("name") or "").lower())
+
+    return {"items": items, "categories": list(MINIAPP_CATEGORIES)}
 
 
 @router.get("/my")
@@ -427,6 +490,7 @@ async def create_miniapp(
         name=payload.name.strip(),
         short_name=short_name,
         description=(payload.description or "").strip() or None,
+        category=_normalize_category(payload.category),
         url=_ensure_url(payload.url),
         icon_url=_ensure_url(payload.icon_url) if (payload.icon_url or "").strip() else None,
         moderation_status="approved" if current_user.is_admin else "pending",
@@ -458,6 +522,8 @@ async def update_miniapp(
     if payload.description is not None:
         app.description = payload.description.strip() or None
         requires_re_moderation = True
+    if payload.category is not None:
+        app.category = _normalize_category(payload.category)
     if payload.url is not None:
         app.url = _ensure_url(payload.url)
         requires_re_moderation = True
@@ -590,7 +656,15 @@ async def launch_miniapp_init_data(
         .first()
     )
     if install:
-        install.last_launched_at = func.now()
+        install.last_launched_at = datetime.utcnow()
+    else:
+        # Opening an approved app counts as install (Telegram-like soft add).
+        install = MiniAppInstall(
+            miniapp_id=miniapp_id,
+            user_id=current_user.id,
+            last_launched_at=datetime.utcnow(),
+        )
+        db.add(install)
     db.add(
         MiniAppLaunch(
             miniapp_id=miniapp_id,
