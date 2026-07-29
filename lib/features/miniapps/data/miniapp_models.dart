@@ -58,18 +58,16 @@ class MiniAppItem {
 
   String get categoryLabel {
     switch ((category ?? '').trim().toLowerCase()) {
-      case 'recipes':
-        return 'Рецепты';
-      case 'calories':
-        return 'Калории';
-      case 'planning':
-        return 'План';
-      case 'shopping':
-        return 'Покупки';
+      case 'tools':
+        return 'Инструменты';
       case 'games':
         return 'Игры';
-      case 'utils':
-        return 'Утилиты';
+      case 'entertainment':
+        return 'Развлечения';
+      case 'shopping':
+        return 'Покупки';
+      case 'other':
+        return 'Другое';
       default:
         return 'Другое';
     }
@@ -206,11 +204,10 @@ class MiniAppCategory {
   static const all = MiniAppCategory(id: '', label: 'Все');
 
   static const known = <MiniAppCategory>[
-    MiniAppCategory(id: 'recipes', label: 'Рецепты'),
-    MiniAppCategory(id: 'calories', label: 'Калории'),
-    MiniAppCategory(id: 'planning', label: 'План'),
-    MiniAppCategory(id: 'shopping', label: 'Покупки'),
+    MiniAppCategory(id: 'tools', label: 'Инструменты'),
     MiniAppCategory(id: 'games', label: 'Игры'),
-    MiniAppCategory(id: 'utils', label: 'Утилиты'),
+    MiniAppCategory(id: 'entertainment', label: 'Развлечения'),
+    MiniAppCategory(id: 'shopping', label: 'Покупки'),
+    MiniAppCategory(id: 'other', label: 'Другое'),
   ];
 }

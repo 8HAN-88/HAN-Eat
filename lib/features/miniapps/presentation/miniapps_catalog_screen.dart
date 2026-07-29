@@ -12,7 +12,7 @@ import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
 import 'miniapp_webview_screen.dart';
 
-/// Раздел мини-приложений: каталог, установленные и свои — в одном хабе.
+/// Раздел мини-приложений как в Telegram: каталог + публикация своих.
 class MiniAppsCatalogScreen extends StatefulWidget {
   const MiniAppsCatalogScreen({super.key});
 
@@ -28,7 +28,6 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
 
   int _lastTabIndex = 0;
   String _searchQuery = '';
-  String _category = '';
   bool _loading = true;
   String? _error;
   List<MiniAppItem> _catalog = const [];
@@ -37,7 +36,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 2, vsync: this);
     _tabs.addListener(_onTabChanged);
     _reload();
   }
@@ -67,7 +66,6 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     try {
       final catalog = await MiniAppsService.fetchCatalog(
         query: _searchQuery,
-        category: _category.isEmpty ? null : _category,
         sort: 'default',
       );
       final myApps = await MiniAppsService.fetchMyMiniApps();
@@ -89,22 +87,13 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   void _onSearchChanged(String value) {
     setState(() => _searchQuery = value);
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 320), () {
-      _reload();
-    });
+    _searchDebounce = Timer(const Duration(milliseconds: 320), _reload);
   }
 
   void _clearSearch() {
     _searchDebounce?.cancel();
     _searchController.clear();
     setState(() => _searchQuery = '');
-    _reload();
-  }
-
-  void _selectCategory(String id) {
-    if (_category == id) return;
-    AppHaptics.selection();
-    setState(() => _category = id);
     _reload();
   }
 
@@ -122,32 +111,24 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       return hay.contains(q);
     }
 
-    switch (_tabs.index) {
-      case 1:
-        return _catalog.where((a) => a.isInstalled && matches(a)).toList();
-      case 2:
-        return _myApps.where(matches).toList();
-      default:
-        // «Для вас»: официальные и одобренные сверху; фильтр категории уже с API.
-        final items = _catalog.where(matches).toList();
-        items.sort((a, b) {
-          if (a.isOfficial != b.isOfficial) {
-            return a.isOfficial ? -1 : 1;
-          }
-          if (a.isInstalled != b.isInstalled) {
-            return a.isInstalled ? -1 : 1;
-          }
-          final aLaunch = a.lastLaunchedAt;
-          final bLaunch = b.lastLaunchedAt;
-          if (aLaunch != null || bLaunch != null) {
-            if (aLaunch == null) return 1;
-            if (bLaunch == null) return -1;
-            return bLaunch.compareTo(aLaunch);
-          }
-          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        });
-        return items;
+    if (_tabs.index == 1) {
+      return _myApps.where(matches).toList(growable: false);
     }
+    final items = _catalog.where(matches).toList();
+    items.sort((a, b) {
+      if (a.isInstalled != b.isInstalled) {
+        return a.isInstalled ? -1 : 1;
+      }
+      final aLaunch = a.lastLaunchedAt;
+      final bLaunch = b.lastLaunchedAt;
+      if (aLaunch != null || bLaunch != null) {
+        if (aLaunch == null) return 1;
+        if (bLaunch == null) return -1;
+        return bLaunch.compareTo(aLaunch);
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return items;
   }
 
   Future<void> _publishMiniApp() async {
@@ -160,9 +141,11 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       await MiniAppsService.createMiniApp(result);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Мини-приложение отправлено на публикацию')),
+        const SnackBar(
+          content: Text('Мини-приложение отправлено на модерацию'),
+        ),
       );
-      _tabs.animateTo(2);
+      _tabs.animateTo(1);
       await _reload();
     } catch (e) {
       if (!mounted) return;
@@ -180,7 +163,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
         MaterialPageRoute(
           builder: (_) => MiniAppWebViewScreen(
             title: app.name,
-            subtitle: app.description ?? '@${app.botUsername}',
+            subtitle: '@${app.botUsername}',
             url: launch.url,
             initData: launch.initData,
             initDataUnsafe: launch.initDataUnsafe,
@@ -221,35 +204,15 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
         TelegramActionSheetAction(
           icon: Icons.open_in_new_rounded,
           title: 'Открыть',
-          subtitle: app.categoryLabel,
+          subtitle: '@${app.botUsername}',
           onTap: () => _openMiniApp(app),
         ),
         TelegramActionSheetAction(
           icon: app.isInstalled
               ? Icons.remove_circle_outline_rounded
               : Icons.download_rounded,
-          title: app.isInstalled ? 'Убрать из установленных' : 'Установить',
+          title: app.isInstalled ? 'Удалить из установленных' : 'Установить',
           onTap: () => _toggleInstall(app),
-        ),
-      ],
-    );
-  }
-
-  void _showMoreMenu() {
-    showTelegramActionSheet<void>(
-      context: context,
-      title: 'Мини-приложения',
-      actions: [
-        TelegramActionSheetAction(
-          icon: Icons.refresh_rounded,
-          title: 'Обновить',
-          onTap: _reload,
-        ),
-        TelegramActionSheetAction(
-          icon: Icons.publish_outlined,
-          title: 'Опубликовать своё',
-          subtitle: 'Для бота, которым вы управляете',
-          onTap: _publishMiniApp,
         ),
       ],
     );
@@ -269,10 +232,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
               onSearchChanged: _onSearchChanged,
               onClearSearch: _clearSearch,
               onCreate: _publishMiniApp,
-              onMore: _showMoreMenu,
-              category: _category,
-              onCategorySelected: _selectCategory,
-              showCategories: _tabs.index != 2,
+              onRefresh: _reload,
             ),
             Expanded(child: _buildBody()),
           ],
@@ -307,28 +267,23 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.55,
               child: AppEmptyState(
-                icon: _emptyIcon,
+                icon: _tabs.index == 1
+                    ? Icons.publish_outlined
+                    : Icons.apps_outlined,
                 title: _emptyTitle,
                 subtitle: _emptySubtitle,
-                action: _tabs.index == 2
+                action: _tabs.index == 1
                     ? FilledButton.icon(
                         onPressed: _publishMiniApp,
                         icon: const Icon(Icons.add_rounded),
                         label: const Text('Опубликовать'),
                       )
-                    : (_searchQuery.isNotEmpty || _category.isNotEmpty)
+                    : (_searchQuery.isNotEmpty
                         ? TextButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {
-                                _searchQuery = '';
-                                _category = '';
-                              });
-                              _reload();
-                            },
-                            child: const Text('Сбросить фильтры'),
+                            onPressed: _clearSearch,
+                            child: const Text('Очистить поиск'),
                           )
-                        : null,
+                        : null),
               ),
             ),
           ],
@@ -347,7 +302,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
           final app = apps[index];
           return _MiniAppRow(
             app: app,
-            showOwnerStatus: _tabs.index == 2 || app.isOwner,
+            showOwnerStatus: _tabs.index == 1 || app.isOwner,
             onOpen: () => _openMiniApp(app),
             onMore: () => _showAppActions(app),
           );
@@ -356,43 +311,20 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     );
   }
 
-  IconData get _emptyIcon {
-    switch (_tabs.index) {
-      case 1:
-        return Icons.download_done_outlined;
-      case 2:
-        return Icons.construction_outlined;
-      default:
-        return Icons.apps_outlined;
-    }
-  }
-
   String get _emptyTitle {
-    if (_searchQuery.trim().isNotEmpty || _category.isNotEmpty) {
-      return 'Ничего не найдено';
-    }
-    switch (_tabs.index) {
-      case 1:
-        return 'Пока нет установленных';
-      case 2:
-        return 'Своих приложений нет';
-      default:
-        return 'Каталог пока пуст';
-    }
+    if (_searchQuery.trim().isNotEmpty) return 'Ничего не найдено';
+    if (_tabs.index == 1) return 'Своих приложений нет';
+    return 'Каталог пока пуст';
   }
 
   String get _emptySubtitle {
-    if (_searchQuery.trim().isNotEmpty || _category.isNotEmpty) {
-      return 'Попробуйте другой запрос или категорию.';
+    if (_searchQuery.trim().isNotEmpty) {
+      return 'Попробуйте другой запрос.';
     }
-    switch (_tabs.index) {
-      case 1:
-        return 'Откройте приложение из раздела «Для вас» — оно появится здесь.';
-      case 2:
-        return 'Опубликуйте mini app для своего бота: оно пройдёт проверку и появится в каталоге.';
-      default:
-        return 'Здесь появятся кухонные инструменты HAN и приложения сообщества.';
+    if (_tabs.index == 1) {
+      return 'Опубликуйте mini app для своего бота — после проверки оно появится в каталоге.';
     }
+    return 'Здесь будут мини-приложения ботов. Нажмите +, чтобы выложить своё.';
   }
 }
 
@@ -404,10 +336,7 @@ class _MiniAppsNeoHeader extends StatelessWidget {
     required this.onSearchChanged,
     required this.onClearSearch,
     required this.onCreate,
-    required this.onMore,
-    required this.category,
-    required this.onCategorySelected,
-    required this.showCategories,
+    required this.onRefresh,
   });
 
   final TabController controller;
@@ -416,10 +345,7 @@ class _MiniAppsNeoHeader extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onClearSearch;
   final VoidCallback onCreate;
-  final VoidCallback onMore;
-  final String category;
-  final ValueChanged<String> onCategorySelected;
-  final bool showCategories;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -444,14 +370,14 @@ class _MiniAppsNeoHeader extends StatelessWidget {
                 ),
                 NeoCircleAction(
                   icon: Icons.add_rounded,
-                  tooltip: 'Опубликовать',
+                  tooltip: 'Опубликовать своё',
                   onPressed: onCreate,
                 ),
                 const SizedBox(width: 8),
                 NeoCircleAction(
-                  icon: Icons.more_horiz_rounded,
-                  tooltip: 'Ещё',
-                  onPressed: onMore,
+                  icon: Icons.refresh_rounded,
+                  tooltip: 'Обновить',
+                  onPressed: onRefresh,
                 ),
               ],
             ),
@@ -460,8 +386,7 @@ class _MiniAppsNeoHeader extends StatelessWidget {
               controller: controller,
               padding: EdgeInsets.zero,
               tabs: const [
-                Tab(text: 'Для вас'),
-                Tab(text: 'Установленные'),
+                Tab(text: 'Каталог'),
                 Tab(text: 'Мои'),
               ],
             ),
@@ -471,7 +396,7 @@ class _MiniAppsNeoHeader extends StatelessWidget {
               onChanged: onSearchChanged,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Поиск приложений',
+                hintText: 'Поиск в каталоге',
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: searchQuery.isEmpty
                     ? null
@@ -498,28 +423,6 @@ class _MiniAppsNeoHeader extends StatelessWidget {
                 ),
               ),
             ),
-            if (showCategories) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 42,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    for (final cat in [
-                      MiniAppCategory.all,
-                      ...MiniAppCategory.known,
-                    ]) ...[
-                      NeoFilterChip(
-                        label: cat.label,
-                        selected: category == cat.id,
-                        onTap: () => onCategorySelected(cat.id),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -539,25 +442,6 @@ class _MiniAppRow extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onMore;
   final bool showOwnerStatus;
-
-  IconData get _icon {
-    switch ((app.category ?? '').toLowerCase()) {
-      case 'recipes':
-        return Icons.restaurant_menu_rounded;
-      case 'calories':
-        return Icons.local_fire_department_rounded;
-      case 'planning':
-        return Icons.calendar_month_rounded;
-      case 'shopping':
-        return Icons.shopping_basket_rounded;
-      case 'games':
-        return Icons.sports_esports_rounded;
-      case 'utils':
-        return Icons.handyman_rounded;
-      default:
-        return app.isOfficial ? Icons.verified_rounded : Icons.apps_rounded;
-    }
-  }
 
   String? get _statusLabel {
     if (!showOwnerStatus || app.isApproved) return null;
@@ -598,39 +482,25 @@ class _MiniAppRow extends StatelessWidget {
                         app.iconUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Icon(
-                          _icon,
+                          Icons.apps_rounded,
                           color: scheme.primary,
                         ),
                       )
-                    : Icon(_icon, color: scheme.primary),
+                    : Icon(Icons.apps_rounded, color: scheme.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            app.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        if (app.isOfficial) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            Icons.verified_rounded,
-                            size: 16,
-                            color: scheme.primary,
-                          ),
-                        ],
-                      ],
+                    Text(
+                      app.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -692,7 +562,7 @@ class _PublishMiniAppDialogState extends State<_PublishMiniAppDialog> {
   final _urlController = TextEditingController(text: 'https://');
   final _descController = TextEditingController();
   int? _selectedBotId;
-  String _category = 'utils';
+  String _category = 'tools';
   late Future<List<BotListItem>> _botsFuture;
 
   @override
@@ -713,13 +583,21 @@ class _PublishMiniAppDialogState extends State<_PublishMiniAppDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Публикация мини-приложения'),
+      title: const Text('Опубликовать мини-приложение'),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text(
+                'Как в Telegram: привяжите web-приложение к своему боту. После проверки оно появится в каталоге.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 14),
               FutureBuilder<List<BotListItem>>(
                 future: _botsFuture,
                 builder: (context, snapshot) {
@@ -751,7 +629,7 @@ class _PublishMiniAppDialogState extends State<_PublishMiniAppDialog> {
                 controller: _shortController,
                 decoration: const InputDecoration(
                   labelText: 'Короткое имя',
-                  hintText: 'например: calorie_calc',
+                  hintText: 'например: my_shop',
                 ),
               ),
               const SizedBox(height: 10),
@@ -783,9 +661,7 @@ class _PublishMiniAppDialogState extends State<_PublishMiniAppDialog> {
               TextField(
                 controller: _descController,
                 maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Описание',
-                ),
+                decoration: const InputDecoration(labelText: 'Описание'),
               ),
             ],
           ),

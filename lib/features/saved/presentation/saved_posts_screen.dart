@@ -43,7 +43,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _currentPostType = null; // Начинаем с "Общее"
     _loadCurrentUserId();
@@ -71,9 +71,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
             _currentPostType = null; // все
             break;
           case 1:
-            _currentPostType = 'recipe'; // рецепты
-            break;
-          case 2:
             _currentPostType = 'reel'; // рилсы
             break;
         }
@@ -331,7 +328,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           controller: _tabController,
           tabs: const [
             Tab(text: 'Общее'),
-            Tab(text: 'Рецепты'),
             Tab(text: 'Рилсы'),
           ],
         ),
@@ -339,7 +335,6 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildPostsList(),
               _buildPostsList(),
               _buildPostsList(),
             ],

@@ -11,7 +11,6 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -23,13 +22,17 @@ from app.core.database import get_db
 from app.core.redis_client import REDIS_IS_STUB, get_redis
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.user import User
-from app.services.miniapp_builtins import (
-    MINIAPP_CATEGORIES,
-    builtin_html,
-    ensure_official_miniapps,
-)
 
 router = APIRouter(prefix="/miniapps", tags=["Mini Apps"])
+
+# Telegram-like catalog categories (no kitchen/recipes product surface).
+MINIAPP_CATEGORIES = (
+    "tools",
+    "games",
+    "entertainment",
+    "shopping",
+    "other",
+)
 
 
 def _is_private_or_local_host(host: str) -> bool:
@@ -297,14 +300,6 @@ async def miniapps_moderation_queue(
     return {"items": items}
 
 
-@router.get("/builtin/{slug}", response_class=HTMLResponse)
-async def miniapp_builtin_page(slug: str):
-    html = builtin_html(slug)
-    if not html:
-        raise HTTPException(status_code=404, detail="Builtin mini app not found")
-    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache"})
-
-
 @router.get("/catalog")
 async def miniapps_catalog(
     query: str = Query("", alias="q"),
@@ -315,13 +310,12 @@ async def miniapps_catalog(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        ensure_official_miniapps(db)
-    except Exception:
-        db.rollback()
-
     category_value = _normalize_category(category) if category else None
-    apps_q = db.query(BotMiniApp).filter(BotMiniApp.is_active == True)
+    # Community / publisher catalog only — archived kitchen builtins stay out.
+    apps_q = db.query(BotMiniApp).filter(
+        BotMiniApp.is_active == True,
+        BotMiniApp.is_builtin == False,
+    )
     if query.strip():
         q = f"%{query.strip()}%"
         apps_q = apps_q.filter(

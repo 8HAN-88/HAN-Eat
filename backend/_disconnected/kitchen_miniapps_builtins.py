@@ -1,17 +1,14 @@
-"""Official HAN Eat kitchen mini-apps: seed + lightweight HTML tools."""
+"""DISCONNECTED ARCHIVE — not imported by the running application.
+
+Former official kitchen HTML mini-apps (calorie / pantry-recipes / shopping).
+Kept for reference only. Do not import from app.api, app.services, or Flutter.
+"""
+
 from __future__ import annotations
 
-import secrets
 from typing import Optional
 
-from sqlalchemy.orm import Session
-
-from app.core.config import settings
-from app.models.miniapp import BotMiniApp
-from app.models.user import User
-
-HAN_KITCHEN_BOT_USERNAME = "han_kitchen"
-
+# Historical category ids used by the archived kitchen tools.
 MINIAPP_CATEGORIES = (
     "recipes",
     "calories",
@@ -41,106 +38,6 @@ _OFFICIAL_APPS = (
         "category": "shopping",
     },
 )
-
-
-def _public_api_base() -> str:
-    raw = (getattr(settings, "API_PUBLIC_BASE_URL", None) or "").strip().rstrip("/")
-    if raw:
-        return raw
-    front = (getattr(settings, "FRONTEND_URL", None) or "").strip().rstrip("/")
-    if front:
-        return front
-    return "https://haneat.app"
-
-
-def builtin_url(short_name: str) -> str:
-    return f"{_public_api_base()}/api/v1/miniapps/builtin/{short_name}"
-
-
-def ensure_han_kitchen_bot(db: Session) -> User:
-    bot = (
-        db.query(User)
-        .filter(User.is_bot == True, User.bot_username == HAN_KITCHEN_BOT_USERNAME)
-        .first()
-    )
-    if bot:
-        if not bot.bot_token:
-            bot.bot_token = secrets.token_urlsafe(32)
-            db.add(bot)
-        return bot
-
-    bot = User(
-        email="bot+han_kitchen@haneat.internal",
-        password_hash="!",
-        name="HAN Кухня",
-        username=HAN_KITCHEN_BOT_USERNAME,
-        is_bot=True,
-        bot_token=secrets.token_urlsafe(32),
-        bot_username=HAN_KITCHEN_BOT_USERNAME,
-        bot_description="Официальные кухонные мини-приложения HAN Eat",
-        bot_short_description="Инструменты для готовки",
-        created_by_user_id=None,
-    )
-    db.add(bot)
-    db.flush()
-    return bot
-
-
-def ensure_official_miniapps(db: Session) -> None:
-    """Idempotent seed of first-party kitchen tools."""
-    bot = ensure_han_kitchen_bot(db)
-    changed = False
-    for spec in _OFFICIAL_APPS:
-        existing = (
-            db.query(BotMiniApp)
-            .filter(
-                BotMiniApp.bot_id == bot.id,
-                BotMiniApp.short_name == spec["short_name"],
-            )
-            .first()
-        )
-        url = builtin_url(spec["short_name"])
-        if existing is None:
-            db.add(
-                BotMiniApp(
-                    bot_id=bot.id,
-                    name=spec["name"],
-                    short_name=spec["short_name"],
-                    description=spec["description"],
-                    category=spec["category"],
-                    url=url,
-                    is_builtin=True,
-                    is_official=True,
-                    is_active=True,
-                    moderation_status="approved",
-                )
-            )
-            changed = True
-            continue
-        # Keep official rows aligned with product copy / URL.
-        dirty = False
-        for field, value in (
-            ("name", spec["name"]),
-            ("description", spec["description"]),
-            ("category", spec["category"]),
-            ("url", url),
-        ):
-            if getattr(existing, field) != value:
-                setattr(existing, field, value)
-                dirty = True
-        if not existing.is_builtin or not existing.is_official or not existing.is_active:
-            existing.is_builtin = True
-            existing.is_official = True
-            existing.is_active = True
-            dirty = True
-        if existing.moderation_status != "approved":
-            existing.moderation_status = "approved"
-            dirty = True
-        if dirty:
-            db.add(existing)
-            changed = True
-    if changed:
-        db.commit()
 
 
 def builtin_html(slug: str) -> Optional[str]:
