@@ -102,16 +102,16 @@ server {
         try_files $uri =404;
     }
 
-    # Deferred parts: unversioned filenames — always revalidate.
-    location ~* ^/main\.dart\.js_.+\.part\.js$ {
+    # Deferred parts before entrypoint prefix (longer ^~ wins).
+    location ^~ /main.dart.js_ {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
         try_files $uri =404;
     }
 
-    # Entrypoint only (not *.part.js). Prefer regex over ^~ so parts aren't swallowed.
-    location ~* ^/main\.dart\.js$ {
+    # Entrypoint (not *.part.js).
+    location ^~ /main.dart.js {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";

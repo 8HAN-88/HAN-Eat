@@ -121,19 +121,19 @@ managed = """
         try_files $uri =404;
     }
 
-    # Deferred parts keep the SAME filename across deploys (no ?v=).
-    # Never long-cache them — stale part.js + new main.dart.js = black→white boot.
-    # Must be a regex location: ^~ /app/main.dart.js would also swallow *.part.js.
-    location ~* ^/app/main\\.dart\\.js_.+\\.part\\.js$ {
+    # Deferred parts: main.dart.js_*.part.js — SAME unversioned URL across deploys.
+    # Longer ^~ prefix than /app/main.dart.js so parts are not long-cached with the
+    # entrypoint (stale part.js + new main = black→white Safari boot).
+    location ^~ /app/main.dart.js_ {
         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0";
         add_header Pragma "no-cache";
         add_header Expires "0";
         try_files $uri =404;
     }
 
-    # Entrypoint only (query string stripped for matching). Cache-busted via ?v=BUILD.
+    # Entrypoint main.dart.js?v=BUILD — safe to cache by URL.
     # no-store forced every phone to re-download ~3MB and often died mid-transfer.
-    location ~* ^/app/main\\.dart\\.js$ {
+    location ^~ /app/main.dart.js {
         add_header Cache-Control "public, max-age=604800";
         try_files $uri =404;
     }

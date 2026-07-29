@@ -39,6 +39,35 @@ if n != 1:
     raise SystemExit(f"patch_web_cache_bust: mainJsPath not patched ({n})")
 bootstrap.write_text(text, encoding="utf-8")
 
+# Deferred chunks keep stable filenames across deploys. Append ?v=BUILD so Safari
+# does not reuse a week-old HTTP-cached part.js with a new main.dart.js
+# (black splash → white screen).
+main_js = pathlib.Path("${WEB_DIR}/main.dart.js")
+if main_js.exists():
+    main_text = main_js.read_text(encoding="utf-8")
+    part_pat = re.compile(
+        r'(deferredPartUris:\[)((?:"main\.dart\.js_\d+\.part\.js(?:\?v=[^"]*)?",?)*)(\])'
+    )
+
+    def _bust_parts(match):
+        inner = match.group(2)
+        inner2, pn = re.subn(
+            r'"main\.dart\.js_(\d+)\.part\.js(?:\?v=[^"]*)?"',
+            rf'"main.dart.js_\1.part.js?v={build_id}"',
+            inner,
+        )
+        if pn < 1:
+            raise SystemExit("patch_web_cache_bust: deferredPartUris entries not patched")
+        return match.group(1) + inner2 + match.group(3)
+
+    main_text2, part_n = part_pat.subn(_bust_parts, main_text, count=1)
+    if part_n != 1:
+        raise SystemExit(
+            f"patch_web_cache_bust: deferredPartUris not found/patched ({part_n})"
+        )
+    main_js.write_text(main_text2, encoding="utf-8")
+    print(f"✓ deferredPartUris cache-bust v={build_id}")
+
 index_html = pathlib.Path("${INDEX_HTML}")
 if index_html.exists():
     html = index_html.read_text(encoding="utf-8")
