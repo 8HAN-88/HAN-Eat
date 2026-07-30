@@ -419,7 +419,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
 
   String get _emptyTitle {
     if (_searchQuery.trim().isNotEmpty) return 'Ничего не найдено';
-    if (_tabs.index == 1) return 'Своих приложений нет';
+    if (_tabs.index == 1) return 'Пока нет своих приложений';
     return 'Каталог пока пуст';
   }
 
