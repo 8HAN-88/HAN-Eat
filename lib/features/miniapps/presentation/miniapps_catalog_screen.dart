@@ -5,11 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
-import '../../../services/api_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
-import '../../bots/data/bot_models.dart';
 import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
 import 'miniapp_webview_screen.dart';
@@ -139,57 +137,29 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   }
 
   Future<void> _publishMiniApp() async {
-    List<BotListItem> bots = const [];
-    try {
-      bots = await ApiService.getMyBots();
-    } catch (_) {}
-    if (!mounted) return;
-    if (bots.isEmpty) {
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Сначала нужен бот'),
-          content: const Text(
-            'Как в Telegram: мини-приложение публикуется от бота. '
-            'Создайте бота, затем вернитесь и выложите приложение.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Позже'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Мои боты'),
-            ),
-          ],
-        ),
-      );
-      if (go == true && mounted) await _openMyBots();
-      return;
-    }
-
-    final result = await showDialog<MiniAppCreateRequest>(
+    // Как /newapp в BotFather: сначала бот, потом web app на нём.
+    final goBots = await showDialog<bool>(
       context: context,
-      builder: (_) => _PublishMiniAppDialog(bots: bots),
-    );
-    if (result == null) return;
-    try {
-      await MiniAppsService.createMiniApp(result);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Мини-приложение отправлено на модерацию'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Mini App'),
+        content: const Text(
+          'В Telegram мини-приложение создаётся через бота '
+          '(BotFather → Mini Apps → New App).\n\n'
+          'Откройте «Мои боты», выберите бота и раздел Mini Apps.',
         ),
-      );
-      _tabs.animateTo(1);
-      await _reload();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось опубликовать: $e')),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Мои боты'),
+          ),
+        ],
+      ),
+    );
+    if (goBots == true && mounted) await _openMyBots();
   }
 
   Future<void> _editMiniApp(MiniAppItem app) async {
@@ -358,7 +328,8 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                     ),
                     TelegramActionSheetAction(
                       icon: Icons.publish_outlined,
-                      title: 'Опубликовать приложение',
+                      title: 'New Mini App',
+                      subtitle: 'Через бота, как в BotFather',
                       onTap: _publishMiniApp,
                     ),
                   ],
@@ -404,20 +375,10 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                 title: _emptyTitle,
                 subtitle: _emptySubtitle,
                 action: _tabs.index == 1
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: _publishMiniApp,
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('Опубликовать'),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: _openMyBots,
-                            child: const Text('Мои боты'),
-                          ),
-                        ],
+                    ? FilledButton.icon(
+                        onPressed: _openMyBots,
+                        icon: const Icon(Icons.smart_toy_outlined),
+                        label: const Text('Мои боты'),
                       )
                     : (_searchQuery.isNotEmpty
                         ? TextButton(
@@ -427,7 +388,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
                         : TextButton.icon(
                             onPressed: _publishMiniApp,
                             icon: const Icon(Icons.add_rounded),
-                            label: const Text('Выложить своё'),
+                            label: const Text('New Mini App'),
                           )),
               ),
             ),
@@ -467,9 +428,9 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       return 'Попробуйте другой запрос.';
     }
     if (_tabs.index == 1) {
-      return 'Опубликуйте mini app для своего бота — после проверки оно появится в каталоге.';
+      return 'Создайте приложение в «Мои боты» → Mini Apps → New App. После проверки оно появится здесь и в каталоге.';
     }
-    return 'Здесь будут мини-приложения ботов. Нажмите +, чтобы выложить своё.';
+    return 'Каталог приложений ботов. Чтобы выложить своё — как в Telegram через бота (BotFather).';
   }
 }
 
@@ -690,159 +651,6 @@ class _MiniAppRow extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _PublishMiniAppDialog extends StatefulWidget {
-  const _PublishMiniAppDialog({required this.bots});
-
-  final List<BotListItem> bots;
-
-  @override
-  State<_PublishMiniAppDialog> createState() => _PublishMiniAppDialogState();
-}
-
-class _PublishMiniAppDialogState extends State<_PublishMiniAppDialog> {
-  final _nameController = TextEditingController();
-  final _shortController = TextEditingController();
-  final _urlController = TextEditingController(text: 'https://');
-  final _descController = TextEditingController();
-  int? _selectedBotId;
-  String _category = 'tools';
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.bots.isNotEmpty) {
-      _selectedBotId = widget.bots.first.id;
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _shortController.dispose();
-    _urlController.dispose();
-    _descController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Опубликовать мини-приложение'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Как в Telegram: привяжите web-приложение к своему боту. После проверки оно появится в каталоге.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<int>(
-                value: _selectedBotId,
-                decoration: const InputDecoration(labelText: 'Бот'),
-                items: widget.bots
-                    .map(
-                      (b) => DropdownMenuItem<int>(
-                        value: b.id,
-                        child: Text('${b.name} (@${b.username})'),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: widget.bots.isNotEmpty
-                    ? (value) => setState(() => _selectedBotId = value)
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Название'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _shortController,
-                decoration: const InputDecoration(
-                  labelText: 'Короткое имя',
-                  hintText: 'например: my_shop',
-                ),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Категория'),
-                items: MiniAppCategory.known
-                    .map(
-                      (c) => DropdownMenuItem<String>(
-                        value: c.id,
-                        child: Text(c.label),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _category = value);
-                },
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _urlController,
-                decoration: const InputDecoration(
-                  labelText: 'URL',
-                  hintText: 'https://miniapp.example.com',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Описание'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final botId = _selectedBotId;
-            final name = _nameController.text.trim();
-            final shortName = _shortController.text.trim();
-            final url = _urlController.text.trim();
-            if (botId == null ||
-                name.isEmpty ||
-                shortName.isEmpty ||
-                url.isEmpty) {
-              return;
-            }
-            Navigator.pop(
-              context,
-              MiniAppCreateRequest(
-                botId: botId,
-                name: name,
-                shortName: shortName,
-                url: url,
-                category: _category,
-                description: _descController.text.trim().isEmpty
-                    ? null
-                    : _descController.text.trim(),
-              ),
-            );
-          },
-          child: const Text('Опубликовать'),
-        ),
-      ],
     );
   }
 }

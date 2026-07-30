@@ -1,41 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
 import '../../miniapps/data/miniapps_service.dart';
 import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../data/bot_models.dart';
 import '../data/bot_token_storage.dart';
 
-String _twoDigits(int value) => value.toString().padLeft(2, '0');
-
-String _formatWebhookDateTime(DateTime? value) {
-  if (value == null) return '-';
-  final local = value.toLocal();
-  return '${_twoDigits(local.day)}.${_twoDigits(local.month)} '
-      '${_twoDigits(local.hour)}:${_twoDigits(local.minute)}';
+String _moderationLabel(MiniAppItem app) {
+  if (app.isApproved) return 'Одобрено';
+  if (app.isRejected) return 'Отклонено';
+  return 'На проверке';
 }
 
-String _shortWebhookId(String? value) {
-  final id = (value ?? '').trim();
-  if (id.isEmpty) return '';
-  if (id.length <= 12) return id;
-  return '${id.substring(0, 12)}...';
-}
-
-/// Экран управления ботом (BotFather detail)
+/// Управление ботом — как меню @BotFather.
 class BotDetailScreen extends StatefulWidget {
   const BotDetailScreen({
     super.key,
     required this.botId,
     required this.botUsername,
     this.initialToken,
+    this.showTokenOnOpen = false,
   });
 
   final int botId;
   final String botUsername;
   final String? initialToken;
+  final bool showTokenOnOpen;
 
   @override
   State<BotDetailScreen> createState() => _BotDetailScreenState();
@@ -45,16 +40,22 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   BotResponse? _bot;
   String? _token;
   bool _isLoading = true;
-  bool _analyticsLoading = false;
-  bool _webhookTesting = false;
-  bool _webhookAttemptsLoading = false;
   List<BotCommandCreate> _commands = [];
   List<MiniAppItem> _miniApps = [];
   bool _miniAppsLoading = false;
-  BotAnalyticsResponse? _analytics;
-  List<BotWebhookAttempt> _webhookAttempts = [];
   final _webhookController = TextEditingController();
   final _webhookSecretController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _token = widget.initialToken;
+    _loadBot().then((_) {
+      if (widget.showTokenOnOpen && mounted) {
+        _showTokenSheet(forceReveal: true);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -63,18 +64,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _token = widget.initialToken;
-    _loadBot();
-  }
-
   Future<void> _ensureTokenLoaded() async {
     if (_token != null && _token!.isNotEmpty) return;
     final saved = await BotTokenStorage.getToken(widget.botId);
-    if (saved != null && saved.isNotEmpty) {
-      if (mounted) setState(() => _token = saved);
+    if (saved != null && saved.isNotEmpty && mounted) {
+      setState(() => _token = saved);
     }
   }
 
@@ -82,48 +76,24 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     setState(() => _isLoading = true);
     try {
       final bot = await ApiService.getBot(widget.botId);
+      if (!mounted) return;
       setState(() {
         _bot = bot;
         _webhookController.text = bot.webhookUrl ?? '';
+        if ((_token == null || _token!.isEmpty) && bot.botToken.isNotEmpty) {
+          _token = bot.botToken;
+        }
       });
-      await _loadCommands();
-      await _loadMiniApps();
-      await _loadBotAnalytics();
-      await _loadWebhookAttempts();
+      await Future.wait([_loadCommands(), _loadMiniApps()]);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
       await _ensureTokenLoaded();
-    }
-  }
-
-  Future<void> _loadBotAnalytics() async {
-    setState(() => _analyticsLoading = true);
-    try {
-      final data = await ApiService.getBotAnalytics(botId: widget.botId, days: 30);
-      if (mounted) setState(() => _analytics = data);
-    } catch (_) {
-      if (mounted) setState(() => _analytics = null);
-    } finally {
-      if (mounted) setState(() => _analyticsLoading = false);
-    }
-  }
-
-  Future<void> _loadWebhookAttempts() async {
-    setState(() => _webhookAttemptsLoading = true);
-    try {
-      final items = await ApiService.getBotWebhookAttempts(
-        botId: widget.botId,
-        limit: 20,
-      );
-      if (mounted) setState(() => _webhookAttempts = items);
-    } catch (_) {
-      if (mounted) setState(() => _webhookAttempts = []);
-    } finally {
-      if (mounted) setState(() => _webhookAttemptsLoading = false);
     }
   }
 
@@ -147,86 +117,274 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     }
   }
 
-  Future<void> _deleteCommand(String command) async {
-    try {
-      await ApiService.deleteBotCommand(widget.botId, command);
-      await _loadCommands();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
-    }
-  }
-
-  Future<void> _showAddCommandDialog() async {
-    final result = await showDialog<_CommandResult>(
-      context: context,
-      builder: (_) => const _AddCommandDialog(),
-    );
-    if (result == null) return;
-    try {
-      await ApiService.addBotCommand(
-        widget.botId,
-        BotCommandCreate(
-          command: result.command,
-          description: result.description,
-          responseText: result.responseText,
-          inlineButtonRows: result.inlineButtonRows,
+  Future<void> _showTokenSheet({bool forceReveal = false}) async {
+    await _ensureTokenLoaded();
+    final token = _token ?? _bot?.botToken ?? '';
+    if (!mounted) return;
+    if (token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Токен недоступен. Если вы его потеряли — сделайте Revoke Token.',
+          ),
         ),
       );
-      await _loadCommands();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
-    }
-  }
-
-  Future<void> _showEditCommandDialog(BotCommandCreate command) async {
-    final result = await showDialog<_CommandResult>(
-      context: context,
-      builder: (_) => _AddCommandDialog(
-        initial: command,
-        isEdit: true,
-      ),
-    );
-    if (result == null) return;
-    try {
-      await ApiService.updateBotCommand(
-        botId: widget.botId,
-        command: command.command,
-        cmd: BotCommandCreate(
-          command: command.command,
-          description: result.description,
-          responseText: result.responseText,
-          inlineButtonRows: result.inlineButtonRows,
-        ),
-      );
-      await _loadCommands();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
-    }
-  }
-
-  Future<void> _copyToken() async {
-    final tokenToCopy = _token ?? _bot?.botToken;
-    if (tokenToCopy == null || tokenToCopy.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Токен недоступен. Скопируйте его сразу после создания.')),
-        );
-      }
       return;
     }
-    await Clipboard.setData(ClipboardData(text: tokenToCopy));
-    if (mounted) {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  forceReveal ? 'Done! Congratulations on your new bot.' : 'API Token',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  forceReveal
+                      ? 'Сохраните токен сейчас — как в Telegram, он нужен для API.'
+                      : 'Используйте этот токен для HTTP API вашего бота.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                SelectableText(
+                  token,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: token));
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Токен скопирован')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('Скопировать токен'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editBotProfile() async {
+    final bot = _bot;
+    if (bot == null) return;
+    final result = await showDialog<_BotProfileEdit>(
+      context: context,
+      builder: (_) => _EditBotProfileDialog(bot: bot),
+    );
+    if (result == null) return;
+    try {
+      final updated = await ApiService.updateBot(
+        widget.botId,
+        BotUpdateRequest(
+          name: result.name,
+          description: result.description,
+          shortDescription: result.shortDescription,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _bot = updated);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Токен скопирован в буфер обмена')),
+        const SnackBar(content: Text('Профиль бота обновлён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить: $e')),
       );
     }
+  }
+
+  Future<void> _revokeToken() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Revoke token?'),
+        content: const Text(
+          'Как /revoke в BotFather: старый токен перестанет работать, '
+          'будет выдан новый.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Revoke'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final updated = await ApiService.revokeBotToken(widget.botId);
+      await BotTokenStorage.saveToken(widget.botId, updated.botToken);
+      if (!mounted) return;
+      setState(() {
+        _bot = updated;
+        _token = updated.botToken;
+      });
+      await _showTokenSheet(forceReveal: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось обновить токен: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteBot() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить бота?'),
+        content: Text(
+          'Бот @${widget.botUsername}, его команды и мини-приложения '
+          'будут удалены без восстановления.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ApiService.deleteBot(widget.botId);
+      await BotTokenStorage.removeToken(widget.botId);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось удалить: $e')),
+      );
+    }
+  }
+
+  Future<void> _manageCommands() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _BotCommandsScreen(
+          botId: widget.botId,
+          botUsername: widget.botUsername,
+          initialCommands: _commands,
+          onChanged: _loadCommands,
+        ),
+      ),
+    );
+    await _loadCommands();
+  }
+
+  Future<void> _manageMiniApps() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _BotMiniAppsScreen(
+          botId: widget.botId,
+          botUsername: widget.botUsername,
+        ),
+      ),
+    );
+    await _loadMiniApps();
+  }
+
+  Future<void> _manageWebhook() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 8,
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Webhook',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _bot?.webhookEnabled == true
+                    ? 'Webhook включён'
+                    : 'Webhook выключен',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _webhookController,
+                decoration: const InputDecoration(
+                  labelText: 'URL',
+                  hintText: 'https://your-server.com/webhook',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _webhookSecretController,
+                decoration: const InputDecoration(
+                  labelText: 'Secret token (опционально)',
+                ),
+              ),
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _saveWebhook();
+                },
+                child: const Text('Сохранить'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  _webhookController.clear();
+                  await _saveWebhook();
+                },
+                child: const Text('Удалить webhook'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveWebhook() async {
@@ -244,347 +402,18 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
         );
       }
       await _loadBot();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(url.isEmpty ? 'Webhook удалён' : 'Webhook сохранён')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(url.isEmpty ? 'Webhook удалён' : 'Webhook сохранён'),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
     }
-  }
-
-  Future<void> _testWebhook() async {
-    if (_webhookTesting) return;
-    setState(() => _webhookTesting = true);
-    try {
-      final delivered = await ApiService.testBotWebhook(widget.botId);
-      await _loadBot();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              delivered
-                  ? 'Тест webhook успешно доставлен'
-                  : 'Тест webhook не доставлен (смотри last error)',
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка теста webhook: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _webhookTesting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('@${widget.botUsername}')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _bot == null
-              ? const Center(child: Text('Бот не найден'))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _SectionTitle('Токен'),
-                    Card(
-                      child: ListTile(
-                        title: const Text('Токен бота'),
-                        subtitle: const Text('Нажмите, чтобы скопировать'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.copy),
-                          onPressed: _copyToken,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    _SectionTitle('Информация'),
-                    TextField(
-                      decoration: const InputDecoration(labelText: 'Имя'),
-                      controller: TextEditingController(text: _bot!.name),
-                      readOnly: true,
-                    ),
-                    TextField(
-                      decoration: const InputDecoration(labelText: 'Описание'),
-                      controller: TextEditingController(text: _bot!.description ?? ''),
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 24),
-
-                    _SectionTitle('Webhook (опционально)'),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        Chip(
-                          avatar: Icon(
-                            _bot!.webhookEnabled
-                                ? Icons.check_circle_outline
-                                : Icons.pause_circle_outline,
-                            size: 16,
-                          ),
-                          label: Text(
-                            _bot!.webhookEnabled
-                                ? 'Webhook включен'
-                                : 'Webhook выключен',
-                          ),
-                        ),
-                        if ((_bot!.webhookLastError ?? '')
-                            .toLowerCase()
-                            .contains('auto-disabled'))
-                          const Chip(
-                            avatar: Icon(Icons.shield_outlined, size: 16),
-                            label: Text('Автовыключение защиты'),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _webhookController,
-                      decoration: const InputDecoration(
-                        labelText: 'https://your-server.com/webhook',
-                        hintText: 'URL для получения обновлений',
-                      ),
-                    ),
-                    TextField(
-                      controller: _webhookSecretController,
-                      decoration: const InputDecoration(
-                        labelText: 'Secret token (опционально)',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: _saveWebhook,
-                      child: const Text('Сохранить webhook'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _webhookTesting ? null : _testWebhook,
-                      icon: _webhookTesting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.bolt_outlined),
-                      label: const Text('Тест webhook'),
-                    ),
-                    if ((_bot?.webhookLastError ?? '').trim().isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Webhook error: ${_bot!.webhookLastError}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    if (_bot?.webhookLastOkAt != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          'Последняя успешная доставка: ${_formatWebhookDateTime(_bot!.webhookLastOkAt)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Последние webhook попытки',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 6),
-                    if (_webhookAttemptsLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: LinearProgressIndicator(minHeight: 2),
-                      )
-                    else if (_webhookAttempts.isEmpty)
-                      Text(
-                        'Пока нет попыток доставки',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      )
-                    else
-                      ..._webhookAttempts.take(8).map(
-                        (item) => ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            item.status == 'ok'
-                                ? Icons.check_circle_outline
-                                : item.status == 'auto_disabled'
-                                    ? Icons.shield_outlined
-                                    : Icons.error_outline,
-                            color: item.status == 'ok'
-                                ? Colors.green
-                                : item.status == 'auto_disabled'
-                                    ? Colors.orange
-                                    : Theme.of(context).colorScheme.error,
-                          ),
-                          title: Text(
-                            '${item.updateType ?? item.eventType} · ${item.status}',
-                          ),
-                          subtitle: Text(
-                            [
-                              if ((item.deliveryId ?? '').isNotEmpty)
-                                'id ${_shortWebhookId(item.deliveryId)}',
-                              if (item.attemptsUsed > 0)
-                                'attempts ${item.attemptsUsed}',
-                              if ((item.error ?? '').isNotEmpty) item.error!,
-                              if (item.createdAt != null)
-                                _formatWebhookDateTime(item.createdAt),
-                            ].join(' · '),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-
-                    _SectionTitle('Аналитика бота'),
-                    if (_analyticsLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_analytics == null)
-                      const Text('Пока нет данных по аналитике'),
-                    if (_analytics != null)
-                      _BotAnalyticsCard(analytics: _analytics!),
-                    const SizedBox(height: 24),
-
-                    _SectionTitle('Мини-приложения'),
-                    if (_miniAppsLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_miniApps.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('Мини-приложений пока нет'),
-                      )
-                    else
-                      ..._miniApps.map(
-                        (app) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            app.isOfficial
-                                ? Icons.verified_rounded
-                                : Icons.apps_rounded,
-                          ),
-                          title: Text(app.name),
-                          subtitle: Text(
-                            '@${app.botUsername} · ${app.shortName}'
-                            ' · ${app.moderationStatus}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Switch(
-                                value: app.isActive,
-                                onChanged: (_) => _toggleMiniAppActive(app),
-                              ),
-                              PopupMenuButton<String>(
-                                onSelected: (value) async {
-                                  if (value == 'open') {
-                                    await _openMiniApp(app);
-                                  } else if (value == 'delete') {
-                                    await _deleteMiniApp(app);
-                                  }
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'open',
-                                    child: Text('Открыть'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Удалить'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _showAddMiniAppDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Добавить мини-приложение'),
-                    ),
-                    const SizedBox(height: 24),
-
-                    _SectionTitle('Команды'),
-                    if (_commands.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('Нет команд. Добавьте первую команду ниже.'),
-                      )
-                    else
-                      ..._commands.map((c) => ListTile(
-                            leading: const Icon(Icons.code),
-                            title: Text('/${c.command}'),
-                            subtitle: Text(
-                              [
-                                c.description,
-                                if (c.responseText != null &&
-                                    c.responseText!.trim().isNotEmpty)
-                                  'Ответ: ${c.responseText}',
-                                if (c.inlineButtonRows.isNotEmpty)
-                                  'Рядов: ${c.inlineButtonRows.length}, кнопок: ${c.inlineButtons.length}',
-                              ].join('\n'),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () => _showEditCommandDialog(c),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () => _deleteCommand(c.command),
-                                ),
-                              ],
-                            ),
-                          )),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: _showAddCommandDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Добавить команду'),
-                    ),
-                    const SizedBox(height: 32),
-
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        // TODO: Удалить бота
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Удалить бота'),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: _showAddToChatSheet,
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: const Text('Добавить в чат / канал'),
-                    ),
-                  ],
-                ),
-    );
   }
 
   Future<void> _showAddToChatSheet() async {
@@ -593,28 +422,445 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
       builder: (_) => const _SelectChatDialog(),
     );
     if (convId == null) return;
-
     try {
       await ApiService.addBotToChat(
         botId: widget.botId,
         conversationId: convId,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Бот добавлен в чат')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Бот добавлен в чат')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
     }
   }
 
-  Future<void> _showAddMiniAppDialog() async {
-    final result = await showDialog<_MiniAppCreateResult>(
+  void _showMoreMenu() {
+    showTelegramActionSheet<void>(
       context: context,
-      builder: (_) => const _AddMiniAppDialog(),
+      title: '@${widget.botUsername}',
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.refresh_rounded,
+          title: 'Обновить',
+          onTap: _loadBot,
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.key_off_outlined,
+          title: 'Revoke token',
+          subtitle: 'Выдать новый API-токен',
+          onTap: _revokeToken,
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.delete_outline_rounded,
+          title: 'Удалить бота',
+          destructive: true,
+          onTap: _deleteBot,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bot = _bot;
+    final scheme = Theme.of(context).colorScheme;
+
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 18, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    Expanded(
+                      child: Text(
+                        '@${widget.botUsername}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    NeoCircleAction(
+                      icon: Icons.more_horiz_rounded,
+                      tooltip: 'Ещё',
+                      onPressed: _showMoreMenu,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: _isLoading && bot == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : bot == null
+                      ? const Center(child: Text('Бот не найден'))
+                      : RefreshIndicator(
+                          onRefresh: _loadBot,
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                            children: [
+                              Center(
+                                child: Container(
+                                  width: 84,
+                                  height: 84,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primaryContainer
+                                        .withValues(alpha: 0.55),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.smart_toy_rounded,
+                                    size: 40,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                bot.name,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                (bot.shortDescription ?? bot.description ?? '')
+                                        .trim()
+                                        .isEmpty
+                                    ? 'Настройте бота как в @BotFather'
+                                    : (bot.shortDescription ??
+                                        bot.description)!,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                              ),
+                              const SizedBox(height: 22),
+                              _BotFatherGroup(
+                                children: [
+                                  _BotFatherTile(
+                                    icon: Icons.key_rounded,
+                                    title: 'API Token',
+                                    subtitle: 'Показать / скопировать токен',
+                                    onTap: () => _showTokenSheet(),
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.edit_outlined,
+                                    title: 'Edit Bot',
+                                    subtitle: 'Имя, About, Description',
+                                    onTap: _editBotProfile,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.code_rounded,
+                                    title: 'Edit Commands',
+                                    subtitle: _commands.isEmpty
+                                        ? 'Команд пока нет'
+                                        : '${_commands.length} команд(ы)',
+                                    onTap: _manageCommands,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.apps_rounded,
+                                    title: 'Mini Apps',
+                                    subtitle: _miniAppsLoading
+                                        ? 'Загрузка…'
+                                        : _miniApps.isEmpty
+                                            ? 'New App · Edit App · Delete App'
+                                            : '${_miniApps.length} · ${_miniApps.where((a) => a.isApproved).length} в каталоге',
+                                    onTap: _manageMiniApps,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              _BotFatherGroup(
+                                children: [
+                                  _BotFatherTile(
+                                    icon: Icons.webhook_outlined,
+                                    title: 'Webhook',
+                                    subtitle: bot.webhookEnabled
+                                        ? 'Включён'
+                                        : 'Не задан',
+                                    onTap: _manageWebhook,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.chat_bubble_outline_rounded,
+                                    title: 'Add to Chat',
+                                    subtitle: 'Добавить бота в чат или группу',
+                                    onTap: _showAddToChatSheet,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              _BotFatherGroup(
+                                children: [
+                                  _BotFatherTile(
+                                    icon: Icons.key_off_outlined,
+                                    title: 'Revoke Token',
+                                    subtitle: 'Старый токен перестанет работать',
+                                    onTap: _revokeToken,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.delete_outline_rounded,
+                                    title: 'Delete Bot',
+                                    subtitle: 'Удалить бота навсегда',
+                                    destructive: true,
+                                    onTap: _deleteBot,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BotFatherGroup extends StatelessWidget {
+  const _BotFatherGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: dark
+            ? Colors.white.withValues(alpha: 0.04)
+            : scheme.surfaceContainer.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.4),
+          width: 0.7,
+        ),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i != children.length - 1)
+              Divider(
+                height: 1,
+                indent: 56,
+                color: scheme.outlineVariant.withValues(alpha: 0.45),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BotFatherTile extends StatelessWidget {
+  const _BotFatherTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = destructive ? scheme.error : scheme.onSurface;
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: fg),
+      title: Text(
+        title,
+        style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: TextStyle(
+                color: destructive
+                    ? scheme.error.withValues(alpha: 0.8)
+                    : scheme.onSurfaceVariant,
+              ),
+            ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: scheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+class _EditBotProfileDialog extends StatefulWidget {
+  const _EditBotProfileDialog({required this.bot});
+
+  final BotResponse bot;
+
+  @override
+  State<_EditBotProfileDialog> createState() => _EditBotProfileDialogState();
+}
+
+class _EditBotProfileDialogState extends State<_EditBotProfileDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _about;
+  late final TextEditingController _desc;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.bot.name);
+    _about = TextEditingController(text: widget.bot.shortDescription ?? '');
+    _desc = TextEditingController(text: widget.bot.description ?? '');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _about.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Bot'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _about,
+              maxLength: 120,
+              decoration: const InputDecoration(
+                labelText: 'About',
+                helperText: 'Короткое описание в профиле бота',
+              ),
+            ),
+            TextField(
+              controller: _desc,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                helperText: 'Что умеет бот',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _name.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(
+              context,
+              _BotProfileEdit(
+                name: name,
+                shortDescription: _about.text.trim(),
+                description: _desc.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
+  }
+}
+
+class _BotProfileEdit {
+  const _BotProfileEdit({
+    required this.name,
+    required this.shortDescription,
+    required this.description,
+  });
+
+  final String name;
+  final String shortDescription;
+  final String description;
+}
+
+// ---------------------------------------------------------------------------
+// Mini Apps (BotFather: /newapp /editapp /deleteapp)
+// ---------------------------------------------------------------------------
+
+class _BotMiniAppsScreen extends StatefulWidget {
+  const _BotMiniAppsScreen({
+    required this.botId,
+    required this.botUsername,
+  });
+
+  final int botId;
+  final String botUsername;
+
+  @override
+  State<_BotMiniAppsScreen> createState() => _BotMiniAppsScreenState();
+}
+
+class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
+  bool _loading = true;
+  List<MiniAppItem> _apps = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    try {
+      final apps = await MiniAppsService.fetchByBot(widget.botId);
+      if (!mounted) return;
+      setState(() => _apps = apps);
+    } catch (_) {
+      if (mounted) setState(() => _apps = []);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _newApp() async {
+    final result = await showDialog<_MiniAppFormResult>(
+      context: context,
+      builder: (_) => const _MiniAppFormDialog(title: 'New Mini App'),
     );
     if (result == null) return;
     try {
@@ -625,13 +871,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
           shortName: result.shortName,
           url: result.url,
           description: result.description,
+          category: result.category,
+          iconUrl: result.iconUrl,
         ),
       );
-      await _loadMiniApps();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Мини-приложение добавлено')),
+        const SnackBar(
+          content: Text('Мини-приложение создано и отправлено на проверку'),
+        ),
       );
+      await _reload();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -640,27 +890,61 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     }
   }
 
-  Future<void> _toggleMiniAppActive(MiniAppItem app) async {
+  Future<void> _editApp(MiniAppItem app) async {
+    final result = await showDialog<_MiniAppFormResult>(
+      context: context,
+      builder: (_) => _MiniAppFormDialog(
+        title: 'Edit Mini App',
+        initial: app,
+        shortNameReadOnly: true,
+      ),
+    );
+    if (result == null) return;
+    try {
+      await MiniAppsService.updateMiniApp(
+        app.id,
+        MiniAppUpdateRequest(
+          name: result.name,
+          url: result.url,
+          description: result.description,
+          category: result.category,
+          iconUrl: result.iconUrl ?? '',
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Изменения сохранены')),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  Future<void> _toggleActive(MiniAppItem app) async {
     try {
       await MiniAppsService.updateMiniApp(
         app.id,
         MiniAppUpdateRequest(isActive: !app.isActive),
       );
-      await _loadMiniApps();
+      await _reload();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось изменить статус: $e')),
+        SnackBar(content: Text('Ошибка: $e')),
       );
     }
   }
 
-  Future<void> _deleteMiniApp(MiniAppItem app) async {
-    final confirm = await showDialog<bool>(
+  Future<void> _deleteApp(MiniAppItem app) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Удалить мини-приложение?'),
-        content: Text('«${app.name}» будет удалено.'),
+        title: const Text('Delete Mini App?'),
+        content: Text('«${app.name}» будет удалено из каталога.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -673,19 +957,19 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
         ],
       ),
     );
-    if (confirm != true) return;
+    if (ok != true) return;
     try {
       await MiniAppsService.deleteMiniApp(app.id);
-      await _loadMiniApps();
+      await _reload();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: $e')),
+        SnackBar(content: Text('Ошибка: $e')),
       );
     }
   }
 
-  Future<void> _openMiniApp(MiniAppItem app) async {
+  Future<void> _openApp(MiniAppItem app) async {
     try {
       final launch = await MiniAppsService.getLaunchContext(app.id);
       if (!mounted) return;
@@ -693,7 +977,7 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
         MaterialPageRoute(
           builder: (_) => MiniAppWebViewScreen(
             title: app.name,
-            subtitle: app.description ?? 'Мини-приложение',
+            subtitle: '@${widget.botUsername}',
             url: launch.url,
             initData: launch.initData,
             initDataUnsafe: launch.initDataUnsafe,
@@ -703,9 +987,491 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось открыть mini app: $e')),
+        SnackBar(content: Text('Не удалось открыть: $e')),
       );
     }
+  }
+
+  void _showAppActions(MiniAppItem app) {
+    showTelegramActionSheet<void>(
+      context: context,
+      title: app.name,
+      actions: [
+        TelegramActionSheetAction(
+          icon: Icons.open_in_new_rounded,
+          title: 'Open App',
+          onTap: () => _openApp(app),
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.edit_outlined,
+          title: 'Edit App',
+          subtitle: 'Название, URL, описание, иконка',
+          onTap: () => _editApp(app),
+        ),
+        TelegramActionSheetAction(
+          icon: app.isActive
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          title: app.isActive ? 'Deactivate' : 'Activate',
+          onTap: () => _toggleActive(app),
+        ),
+        TelegramActionSheetAction(
+          icon: Icons.delete_outline_rounded,
+          title: 'Delete App',
+          destructive: true,
+          onTap: () => _deleteApp(app),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 18, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Mini Apps',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    NeoCircleAction(
+                      icon: Icons.add_rounded,
+                      tooltip: 'New App',
+                      onPressed: _newApp,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+              child: Text(
+                'Как /newapp в BotFather: short name уникален для бота, '
+                'после проверки приложение появится в каталоге.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _apps.isEmpty
+                      ? Center(
+                          child: FilledButton.icon(
+                            onPressed: _newApp,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('New Mini App'),
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _reload,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+                            itemCount: _apps.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 4),
+                            itemBuilder: (context, index) {
+                              final app = _apps[index];
+                              return ListTile(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                leading: CircleAvatar(
+                                  child: Icon(
+                                    app.isActive
+                                        ? Icons.apps_rounded
+                                        : Icons.apps_outage_outlined,
+                                  ),
+                                ),
+                                title: Text(
+                                  app.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  [
+                                    app.shortName,
+                                    _moderationLabel(app),
+                                    if (!app.isActive) 'выкл.',
+                                  ].join(' · '),
+                                ),
+                                trailing: const Icon(Icons.more_horiz_rounded),
+                                onTap: () => _showAppActions(app),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniAppFormResult {
+  const _MiniAppFormResult({
+    required this.name,
+    required this.shortName,
+    required this.url,
+    this.description,
+    this.category,
+    this.iconUrl,
+  });
+
+  final String name;
+  final String shortName;
+  final String url;
+  final String? description;
+  final String? category;
+  final String? iconUrl;
+}
+
+class _MiniAppFormDialog extends StatefulWidget {
+  const _MiniAppFormDialog({
+    required this.title,
+    this.initial,
+    this.shortNameReadOnly = false,
+  });
+
+  final String title;
+  final MiniAppItem? initial;
+  final bool shortNameReadOnly;
+
+  @override
+  State<_MiniAppFormDialog> createState() => _MiniAppFormDialogState();
+}
+
+class _MiniAppFormDialogState extends State<_MiniAppFormDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _short;
+  late final TextEditingController _url;
+  late final TextEditingController _desc;
+  late final TextEditingController _icon;
+  late String _category;
+  static final _shortRe = RegExp(r'^[a-z0-9_]{3,30}$');
+
+  @override
+  void initState() {
+    super.initState();
+    final app = widget.initial;
+    _name = TextEditingController(text: app?.name ?? '');
+    _short = TextEditingController(text: app?.shortName ?? '');
+    _url = TextEditingController(text: app?.url ?? 'https://');
+    _desc = TextEditingController(text: app?.description ?? '');
+    _icon = TextEditingController(text: app?.iconUrl ?? '');
+    final existing = (app?.category ?? 'tools').toLowerCase();
+    _category = MiniAppCategory.known.any((c) => c.id == existing)
+        ? existing
+        : 'tools';
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _short.dispose();
+    _url.dispose();
+    _desc.dispose();
+    _icon.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _short,
+              readOnly: widget.shortNameReadOnly,
+              decoration: const InputDecoration(
+                labelText: 'Short name',
+                helperText: '3–30: a-z, 0-9, _ · уникален для бота',
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9_]')),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _url,
+              decoration: const InputDecoration(
+                labelText: 'Web App URL',
+                hintText: 'https://…',
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _desc,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: MiniAppCategory.known
+                  .map(
+                    (c) => DropdownMenuItem(value: c.id, child: Text(c.label)),
+                  )
+                  .toList(growable: false),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _category = v);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _icon,
+              decoration: const InputDecoration(
+                labelText: 'Photo URL (опционально)',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final name = _name.text.trim();
+            final shortName = _short.text.trim().toLowerCase();
+            final url = _url.text.trim();
+            if (name.isEmpty || shortName.isEmpty || url.isEmpty) return;
+            if (!_shortRe.hasMatch(shortName)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Short name: 3–30 символов, a-z 0-9 _'),
+                ),
+              );
+              return;
+            }
+            Navigator.pop(
+              context,
+              _MiniAppFormResult(
+                name: name,
+                shortName: shortName,
+                url: url,
+                description:
+                    _desc.text.trim().isEmpty ? null : _desc.text.trim(),
+                category: _category,
+                iconUrl:
+                    _icon.text.trim().isEmpty ? null : _icon.text.trim(),
+              ),
+            );
+          },
+          child: Text(widget.initial == null ? 'Создать' : 'Сохранить'),
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+class _BotCommandsScreen extends StatefulWidget {
+  const _BotCommandsScreen({
+    required this.botId,
+    required this.botUsername,
+    required this.initialCommands,
+    required this.onChanged,
+  });
+
+  final int botId;
+  final String botUsername;
+  final List<BotCommandCreate> initialCommands;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_BotCommandsScreen> createState() => _BotCommandsScreenState();
+}
+
+class _BotCommandsScreenState extends State<_BotCommandsScreen> {
+  late List<BotCommandCreate> _commands;
+
+  @override
+  void initState() {
+    super.initState();
+    _commands = List.of(widget.initialCommands);
+  }
+
+  Future<void> _reload() async {
+    final cmds = await ApiService.getBotCommands(widget.botId);
+    if (!mounted) return;
+    setState(() => _commands = cmds);
+    await widget.onChanged();
+  }
+
+  Future<void> _add() async {
+    final result = await showDialog<_CommandResult>(
+      context: context,
+      builder: (_) => const _AddCommandDialog(),
+    );
+    if (result == null) return;
+    try {
+      await ApiService.addBotCommand(
+        widget.botId,
+        BotCommandCreate(
+          command: result.command,
+          description: result.description,
+          responseText: result.responseText,
+          inlineButtonRows: result.inlineButtonRows,
+        ),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  Future<void> _edit(BotCommandCreate command) async {
+    final result = await showDialog<_CommandResult>(
+      context: context,
+      builder: (_) => _AddCommandDialog(initial: command, isEdit: true),
+    );
+    if (result == null) return;
+    try {
+      await ApiService.updateBotCommand(
+        botId: widget.botId,
+        command: command.command,
+        cmd: BotCommandCreate(
+          command: command.command,
+          description: result.description,
+          responseText: result.responseText,
+          inlineButtonRows: result.inlineButtonRows,
+        ),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  Future<void> _delete(String command) async {
+    try {
+      await ApiService.deleteBotCommand(widget.botId, command);
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppGradientBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 18, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Commands',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    NeoCircleAction(
+                      icon: Icons.add_rounded,
+                      onPressed: _add,
+                      tooltip: 'Добавить команду',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: _commands.isEmpty
+                  ? Center(
+                      child: FilledButton.icon(
+                        onPressed: _add,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Добавить /start'),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+                      itemCount: _commands.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
+                      itemBuilder: (context, index) {
+                        final c = _commands[index];
+                        return ListTile(
+                          leading: const Icon(Icons.code_rounded),
+                          title: Text('/${c.command}'),
+                          subtitle: Text(c.description),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () => _edit(c),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _delete(c.command),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -785,7 +1551,10 @@ class _SelectChatDialogState extends State<_SelectChatDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: _selectedConversationId == null
               ? null
@@ -807,96 +1576,6 @@ class _DialogConversation {
   final int id;
   final String title;
   final String subtitle;
-}
-
-class _BotAnalyticsCard extends StatelessWidget {
-  const _BotAnalyticsCard({required this.analytics});
-
-  final BotAnalyticsResponse analytics;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: 16,
-              runSpacing: 10,
-              children: [
-                _metric('Команды', '${analytics.commandUses}'),
-                _metric('Клики', '${analytics.callbackClicks}'),
-                _metric('Пользователи', '${analytics.uniqueUsers}'),
-                _metric('CTR', '${analytics.callbackCtrPercent.toStringAsFixed(1)}%'),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Webhook delivery',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 16,
-              runSpacing: 10,
-              children: [
-                _metric('Sent', '${analytics.webhookDelivery.sent}'),
-                _metric('Failed', '${analytics.webhookDelivery.failed}'),
-                _metric('Success rate',
-                    '${analytics.webhookDelivery.successRatePercent.toStringAsFixed(1)}%'),
-              ],
-            ),
-            if (analytics.webhookDelivery.lastOkAt != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  'Последний webhook OK: ${_formatWebhookDateTime(analytics.webhookDelivery.lastOkAt)}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            if ((analytics.webhookDelivery.lastError ?? '').trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'Последняя ошибка: ${analytics.webhookDelivery.lastError}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                ),
-              ),
-            const SizedBox(height: 10),
-            if (analytics.topCommands.isNotEmpty)
-              Text(
-                'Топ команд: ${analytics.topCommands.take(3).map((e) => '${e.key} (${e.count})').join(', ')}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (analytics.topCallbacks.isNotEmpty)
-              Text(
-                'Топ callback: ${analytics.topCallbacks.take(3).map((e) => '${e.key} (${e.count})').join(', ')}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            if (analytics.webhookDelivery.topErrors.isNotEmpty)
-              Text(
-                'Топ webhook ошибок: ${analytics.webhookDelivery.topErrors.take(2).map((e) => '${e.error} (${e.count})').join(', ')}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _metric(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        Text(label),
-      ],
-    );
-  }
 }
 
 class _AddCommandDialog extends StatefulWidget {
@@ -947,7 +1626,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final parsedButtons = _parseInlineButtonRowsWithDiagnostics(_buttonsController.text);
+    final parsedButtons =
+        _parseInlineButtonRowsWithDiagnostics(_buttonsController.text);
     return AlertDialog(
       title: Text(widget.isEdit ? 'Редактировать команду' : 'Добавить команду'),
       content: SingleChildScrollView(
@@ -991,33 +1671,14 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
                   ),
                 ),
               ),
-            if (parsedButtons.rows.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Предпросмотр клавиатуры',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: parsedButtons.rows
-                      .expand((row) => row)
-                      .map((b) => Chip(label: Text(b.text)))
-                      .toList(growable: false),
-                ),
-              ),
-            ],
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: () {
             final command = _cmdController.text.trim();
@@ -1072,7 +1733,9 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
       }
       final parts = line.split('|');
       if (parts.length < 2) {
-        errors.add('Строка ${i + 1}: формат Текст|cb_data или Текст|url:https://...');
+        errors.add(
+          'Строка ${i + 1}: формат Текст|cb_data или Текст|url:https://...',
+        );
         continue;
       }
       final text = parts[0].trim();
@@ -1095,7 +1758,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
           continue;
         }
         btn = BotInlineButton(text: text, url: url);
-      } else if (action.startsWith('http://') || action.startsWith('https://')) {
+      } else if (action.startsWith('http://') ||
+          action.startsWith('https://')) {
         if (!_isValidButtonUrl(action)) {
           errors.add('Строка ${i + 1}: некорректный URL кнопки');
           continue;
@@ -1172,92 +1836,6 @@ class _ButtonsParseResult {
   const _ButtonsParseResult({required this.rows, required this.errors});
 }
 
-class _AddMiniAppDialog extends StatefulWidget {
-  const _AddMiniAppDialog();
-
-  @override
-  State<_AddMiniAppDialog> createState() => _AddMiniAppDialogState();
-}
-
-class _AddMiniAppDialogState extends State<_AddMiniAppDialog> {
-  final _nameController = TextEditingController();
-  final _shortNameController = TextEditingController();
-  final _urlController = TextEditingController(text: 'https://');
-  final _descriptionController = TextEditingController();
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _shortNameController.dispose();
-    _urlController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Добавить мини-приложение'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Название'),
-            ),
-            TextField(
-              controller: _shortNameController,
-              decoration: const InputDecoration(
-                labelText: 'Short name',
-                hintText: 'например, calorie_calc',
-              ),
-            ),
-            TextField(
-              controller: _urlController,
-              decoration: const InputDecoration(
-                labelText: 'URL',
-                hintText: 'https://miniapp.example.com',
-              ),
-            ),
-            TextField(
-              controller: _descriptionController,
-              maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Описание'),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final name = _nameController.text.trim();
-            final shortName = _shortNameController.text.trim();
-            final url = _urlController.text.trim();
-            if (name.isEmpty || shortName.isEmpty || url.isEmpty) return;
-            Navigator.pop(
-              context,
-              _MiniAppCreateResult(
-                name: name,
-                shortName: shortName,
-                url: url,
-                description: _descriptionController.text.trim().isEmpty
-                    ? null
-                    : _descriptionController.text.trim(),
-              ),
-            );
-          },
-          child: const Text('Добавить'),
-        ),
-      ],
-    );
-  }
-}
-
 class _CommandResult {
   final String command;
   final String description;
@@ -1269,30 +1847,4 @@ class _CommandResult {
     this.responseText,
     this.inlineButtonRows = const [],
   });
-}
-
-class _MiniAppCreateResult {
-  final String name;
-  final String shortName;
-  final String url;
-  final String? description;
-  _MiniAppCreateResult({
-    required this.name,
-    required this.shortName,
-    required this.url,
-    this.description,
-  });
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-    );
-  }
 }

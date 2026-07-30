@@ -1091,6 +1091,44 @@ class ApiService {
     );
   }
 
+  static Future<BotResponse> updateBot(
+    int botId,
+    BotUpdateRequest request,
+  ) async {
+    final headers = await authHeaders();
+    final response = await _patch(
+      _uri('/bots/$botId'),
+      headers: headers,
+      body: jsonEncode(request.toJson()),
+    );
+    _ensureSuccess(response);
+    return BotResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<BotResponse> revokeBotToken(int botId) async {
+    final headers = await authHeaders();
+    final response = await _post(
+      _uri('/bots/$botId/token/revoke'),
+      headers: headers,
+      body: '{}',
+    );
+    _ensureSuccess(response);
+    return BotResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<void> deleteBot(int botId) async {
+    final headers = await authHeaders();
+    final response = await _delete(
+      _uri('/bots/$botId'),
+      headers: headers,
+    );
+    _ensureSuccess(response);
+  }
+
   static Future<List<BotCommandCreate>> getBotCommands(int botId) async {
     final headers = await authHeaders();
     final response = await _get(
