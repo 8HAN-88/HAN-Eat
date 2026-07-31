@@ -3487,7 +3487,7 @@ class ChatService:
         message_id: int,
         viewer_id: int,
         emoji: Optional[str] = None,
-    ) -> list[tuple[str, User]]:
+    ) -> list[tuple[str, User, int]]:
         """Per-user reactions for a message (Telegram «кто поставил»)."""
         if not self._is_member(conversation_id, viewer_id):
             raise ValueError("forbidden")
@@ -3515,7 +3515,10 @@ class ChatService:
         if clean:
             query = query.filter(MessageReaction.emoji == clean)
         rows = query.all()
-        return [(row.emoji, user) for row, user in rows]
+        return [
+            (row.emoji, user, int(getattr(row, "stars_amount", 0) or 0))
+            for row, user in rows
+        ]
 
     def set_message_reaction(
         self,

@@ -1,4 +1,6 @@
 """Telegram-like paid features API."""
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -7,13 +9,16 @@ from app.core.database import get_db
 from app.models.paid_features import StarTransaction
 from app.models.user import User
 from app.schemas.paid_features import (
+    AddPaidMessageExceptionRequest,
     BoostPostRequest,
     BoostPostResponse,
+    ChannelSubscriptionInfo,
     DonateStarsRequest,
     DonateStarsResponse,
     CreatorPayoutRequestCreate,
     CreatorPayoutResponse,
     CreatorPayoutReviewRequest,
+    PaidMessageExceptionItem,
     PurchaseMessageRequest,
     PurchaseMessageResponse,
     PurchasePostRequest,
@@ -28,7 +33,9 @@ from app.schemas.paid_features import (
     StarsBalanceResponse,
     SubscribeChannelRequest,
     SubscribeChannelResponse,
+    UpdateChannelSubscriptionRequest,
 )
+from app.models.community import Channel
 from app.services.paid_features_service import PaidFeaturesService
 
 router = APIRouter()
@@ -150,6 +157,146 @@ async def subscribe_paid_channel(
         auto_renew=subscription.auto_renew,
         balance=service.star_balance(current_user.id),
     )
+
+
+def _channel_subscription_info(
+    service: PaidFeaturesService, user_id: int, channel_id: int
+) -> ChannelSubscriptionInfo:
+    channel = (
+        service.db.query(Channel).filter(Channel.id == channel_id).first()
+    )
+    if not channel:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+    monthly = int(getattr(channel, "monthly_price_stars", 0) or 0)
+    sub = service.get_channel_subscription(user_id, channel_id)
+    now = datetime.utcnow()
+    if sub is None:
+        return ChannelSubscriptionInfo(
+            channel_id=channel_id,
+            status="none",
+            monthly_price_stars=monthly,
+        )
+    is_active = (
+        sub.status == "active"
+        and sub.expires_at is not None
+        and sub.expires_at > now
+    )
+    status_out = (
+        "active"
+        if is_active
+        else ("expired" if sub.status == "active" else (sub.status or "expired"))
+    )
+    return ChannelSubscriptionInfo(
+        channel_id=channel_id,
+        status=status_out,
+        amount_stars=sub.amount_stars,
+        expires_at=sub.expires_at,
+        auto_renew=bool(sub.auto_renew) if is_active else False,
+        is_active=is_active,
+        monthly_price_stars=monthly,
+    )
+
+
+@router.get(
+    "/channels/{channel_id}/subscription",
+    response_model=ChannelSubscriptionInfo,
+)
+async def get_channel_subscription(
+    channel_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    return _channel_subscription_info(service, current_user.id, channel_id)
+
+
+@router.patch(
+    "/channels/{channel_id}/subscription",
+    response_model=ChannelSubscriptionInfo,
+)
+async def update_channel_subscription(
+    channel_id: int,
+    request: UpdateChannelSubscriptionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    service.update_channel_subscription_auto_renew(
+        current_user.id, channel_id, auto_renew=request.auto_renew
+    )
+    db.commit()
+    return _channel_subscription_info(service, current_user.id, channel_id)
+
+
+@router.post(
+    "/channels/{channel_id}/subscription/cancel",
+    response_model=ChannelSubscriptionInfo,
+)
+async def cancel_channel_subscription(
+    channel_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    service.cancel_channel_subscription(current_user.id, channel_id)
+    db.commit()
+    return _channel_subscription_info(service, current_user.id, channel_id)
+
+
+@router.get(
+    "/message-exceptions",
+    response_model=list[PaidMessageExceptionItem],
+)
+async def list_paid_message_exceptions(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    users = service.list_paid_message_exceptions(current_user.id)
+    return [
+        PaidMessageExceptionItem(
+            id=u.id,
+            name=u.name,
+            username=u.username,
+            avatar_url=u.avatar_url,
+        )
+        for u in users
+    ]
+
+
+@router.post(
+    "/message-exceptions",
+    response_model=PaidMessageExceptionItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_paid_message_exception(
+    request: AddPaidMessageExceptionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    user = service.add_paid_message_exception(current_user.id, request.user_id)
+    db.commit()
+    return PaidMessageExceptionItem(
+        id=user.id,
+        name=user.name,
+        username=user.username,
+        avatar_url=user.avatar_url,
+    )
+
+
+@router.delete(
+    "/message-exceptions/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_paid_message_exception(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    service.remove_paid_message_exception(current_user.id, user_id)
+    db.commit()
 
 
 @router.post("/posts/{post_id}/boost", response_model=BoostPostResponse)

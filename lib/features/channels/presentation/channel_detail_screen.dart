@@ -154,18 +154,19 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   Future<void> _subscribePaidChannelFromAppBar() async {
     final channel = _channel;
     if (channel == null || channel.paidAccess || _subscribingPaid) return;
-    final ok = await confirmStarsSpend(
+    final choice = await showChannelSubscribeSheet(
       context,
-      title: 'Подписка на канал',
-      body:
-          'Доступ к «${channel.name}» на 1 месяц. Звёзды спишутся с кошелька.',
-      amountStars: channel.monthlyPriceStars,
-      confirmLabel: 'Подписаться',
+      channelName: channel.name,
+      monthlyPriceStars: channel.monthlyPriceStars,
     );
-    if (!ok || !mounted) return;
+    if (choice == null || !mounted) return;
     setState(() => _subscribingPaid = true);
     try {
-      await PaidFeaturesService.subscribeChannel(channel.id);
+      await PaidFeaturesService.subscribeChannel(
+        channel.id,
+        months: choice.months,
+        autoRenew: choice.autoRenew,
+      );
       if (!mounted) return;
       await ChannelCacheService.invalidateChannelCache(widget.channelId);
       ref.read(channelsMainListRefreshProvider.notifier).state++;
@@ -180,6 +181,21 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     } finally {
       if (mounted) setState(() => _subscribingPaid = false);
     }
+  }
+
+  Future<void> _managePaidChannelSubscription() async {
+    final channel = _channel;
+    if (channel == null) return;
+    final changed = await showChannelManageSubscriptionSheet(
+      context,
+      channelId: channel.id,
+      channelName: channel.name,
+      monthlyPriceStars: channel.monthlyPriceStars,
+    );
+    if (!changed || !mounted) return;
+    await ChannelCacheService.invalidateChannelCache(widget.channelId);
+    ref.read(channelsMainListRefreshProvider.notifier).state++;
+    await _loadChannel(forceRefresh: true);
   }
 
   Future<void> _handleChannelGone() async {
@@ -366,14 +382,14 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
             ),
           if (_channel != null &&
               _channel!.isPaid == true &&
-              !_channel!.isOwner &&
-              !_channel!.paidAccess)
+              !_channel!.isOwner)
             ChannelSubscriptionButton(
               channelId: _channel!.id,
               channelName: _channel!.name,
               monthlyPriceStars: _channel!.monthlyPriceStars,
               isSubscribed: _channel!.paidAccess,
               onSubscribe: () => unawaited(_subscribePaidChannelFromAppBar()),
+              onManage: () => unawaited(_managePaidChannelSubscription()),
             ),
           IconButton(
             tooltip: 'Поиск',
@@ -543,18 +559,19 @@ class _PrivateChannelPostsLockedState
 
   Future<void> _subscribe() async {
     if (_loading) return;
-    final ok = await confirmStarsSpend(
+    final choice = await showChannelSubscribeSheet(
       context,
-      title: 'Подписка на канал',
-      body:
-          'Доступ к «${widget.channel.name}» на 1 месяц. Звёзды спишутся с кошелька.',
-      amountStars: widget.channel.monthlyPriceStars,
-      confirmLabel: 'Подписаться',
+      channelName: widget.channel.name,
+      monthlyPriceStars: widget.channel.monthlyPriceStars,
     );
-    if (!ok || !mounted) return;
+    if (choice == null || !mounted) return;
     setState(() => _loading = true);
     try {
-      await PaidFeaturesService.subscribeChannel(widget.channel.id);
+      await PaidFeaturesService.subscribeChannel(
+        widget.channel.id,
+        months: choice.months,
+        autoRenew: choice.autoRenew,
+      );
       if (!mounted) return;
       await ChannelCacheService.invalidateChannelCache(widget.channel.id);
       ScaffoldMessenger.of(context).showSnackBar(

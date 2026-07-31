@@ -90,6 +90,8 @@ class MessageReadersResponse(BaseModel):
 class MessageReactionUserItem(BaseModel):
     emoji: str
     user: ChatUserBrief
+    # Stars paid with this reaction (Telegram paid reactions).
+    stars_amount: int = 0
 
 
 class MessageReactionsDetailResponse(BaseModel):

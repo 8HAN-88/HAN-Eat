@@ -138,3 +138,23 @@ class StarGift(Base):
     sort_order = Column(Integer, nullable=False, default=0, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
+
+class PaidMessageException(Base):
+    """Users allowed to DM the owner without paying Stars (Telegram exceptions)."""
+
+    __tablename__ = "paid_message_exceptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id", "allowed_user_id", name="uq_paid_message_exception_pair"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    allowed_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+

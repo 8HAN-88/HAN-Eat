@@ -19,6 +19,7 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'blocked_users_screen.dart';
+import 'paid_message_exceptions_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -456,6 +457,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: _privacyBusy ? null : _editPaidMessageStars,
                   ),
+                  if (_paidMessageStars > 0) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.person_off_outlined),
+                      title: const Text('Кто пишет бесплатно'),
+                      subtitle: const Text(
+                        'Исключения — как в Telegram Paid Messages',
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                const PaidMessageExceptionsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),

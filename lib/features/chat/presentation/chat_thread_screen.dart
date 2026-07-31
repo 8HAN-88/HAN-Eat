@@ -4311,36 +4311,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _sendPaidReaction(ChatMessage msg) async {
     if (msg.isMine || msg.id <= 0 || _sendingPaidReaction) return;
-    final amountController = TextEditingController(text: '1');
-    final amount = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Платная реакция'),
-        content: TextField(
-          controller: amountController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Звёзды',
-            prefixIcon: Icon(Icons.stars_rounded),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final n = int.tryParse(amountController.text.trim()) ?? 0;
-              if (n <= 0) return;
-              Navigator.pop(ctx, n);
-            },
-            child: const Text('Отправить ★'),
-          ),
-        ],
-      ),
-    );
-    amountController.dispose();
+    final amount = await pickPaidReactionStars(context);
     if (amount == null || !mounted) return;
     final ok = await confirmStarsSpend(
       context,

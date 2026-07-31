@@ -3244,8 +3244,12 @@ async def list_message_reactions(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return MessageReactionsDetailResponse(
         items=[
-            MessageReactionUserItem(emoji=reaction_emoji, user=_brief(user))
-            for reaction_emoji, user in rows
+            MessageReactionUserItem(
+                emoji=reaction_emoji,
+                user=_brief(user),
+                stars_amount=stars_amount,
+            )
+            for reaction_emoji, user, stars_amount in rows
         ],
         reaction_count=len(rows),
     )

@@ -56,6 +56,34 @@ class SubscribeChannelResponse(BaseModel):
     balance: int
 
 
+class ChannelSubscriptionInfo(BaseModel):
+    channel_id: int
+    status: str
+    amount_stars: int = 0
+    expires_at: Optional[datetime] = None
+    auto_renew: bool = False
+    is_active: bool = False
+    monthly_price_stars: int = 0
+
+
+class UpdateChannelSubscriptionRequest(BaseModel):
+    auto_renew: bool
+
+
+class PaidMessageExceptionItem(BaseModel):
+    id: int
+    name: Optional[str] = None
+    username: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AddPaidMessageExceptionRequest(BaseModel):
+    user_id: int = Field(gt=0)
+
+
 class BoostPostRequest(BaseModel):
     amount_stars: int = Field(gt=0, le=100000)
     duration_days: int = Field(default=7, ge=1, le=30)

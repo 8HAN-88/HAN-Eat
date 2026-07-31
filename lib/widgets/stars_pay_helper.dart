@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../app/app_router.dart';
+import '../services/paid_features_service.dart';
 import '../utils/api_error_parser.dart' show ApiClientException, userVisibleError;
 
 /// Shared Stars UX: confirm spend + recover from insufficient balance.
@@ -170,4 +172,409 @@ Future<int?> pickPaidMessageStars(
       );
     },
   );
+}
+
+/// Telegram-like paid reaction amount picker (1 / 5 / 10 / 50 / 100 ★).
+Future<int?> pickPaidReactionStars(BuildContext context) async {
+  const presets = <int>[1, 5, 10, 50, 100];
+  return showModalBottomSheet<int>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) {
+      final scheme = Theme.of(ctx).colorScheme;
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Платная реакция',
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Выберите, сколько звёзд отправить автору сообщения.',
+                style: TextStyle(color: scheme.onSurfaceVariant, height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final n in presets)
+                    ActionChip(
+                      avatar: const Icon(Icons.star_rounded, size: 18),
+                      label: Text('$n ★'),
+                      onPressed: () => Navigator.pop(ctx, n),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class ChannelSubscribeChoice {
+  const ChannelSubscribeChoice({
+    required this.months,
+    required this.autoRenew,
+  });
+
+  final int months;
+  final bool autoRenew;
+}
+
+/// Telegram-like channel Stars subscribe sheet (months + auto-renew).
+Future<ChannelSubscribeChoice?> showChannelSubscribeSheet(
+  BuildContext context, {
+  required String channelName,
+  required int monthlyPriceStars,
+}) async {
+  var months = 1;
+  var autoRenew = true;
+  return showModalBottomSheet<ChannelSubscribeChoice>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) {
+      final scheme = Theme.of(ctx).colorScheme;
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final total = monthlyPriceStars * months;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Подписка на канал',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '«$channelName» · $monthlyPriceStars ★/мес',
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Срок',
+                    style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final m in const [1, 3, 6, 12])
+                        ChoiceChip(
+                          selected: months == m,
+                          label: Text(m == 1 ? '1 мес' : '$m мес'),
+                          onSelected: (_) => setLocal(() => months = m),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Автопродление'),
+                    subtitle: const Text(
+                      'Как в Telegram: списывать звёзды каждый месяц',
+                    ),
+                    value: autoRenew,
+                    onChanged: (v) => setLocal(() => autoRenew = v),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.secondaryContainer.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '$total ★',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: scheme.secondary,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Отмена'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(
+                            ctx,
+                            ChannelSubscribeChoice(
+                              months: months,
+                              autoRenew: autoRenew,
+                            ),
+                          ),
+                          child: const Text('Подписаться'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+/// Manage active channel Stars subscription (auto-renew / cancel / extend).
+Future<bool> showChannelManageSubscriptionSheet(
+  BuildContext context, {
+  required int channelId,
+  required String channelName,
+  required int monthlyPriceStars,
+}) async {
+  ChannelSubscriptionInfo? info;
+  Object? loadError;
+  var busy = false;
+  var changed = false;
+
+  Future<void> reload(void Function(void Function()) setLocal) async {
+    try {
+      final next = await PaidFeaturesService.getChannelSubscription(channelId);
+      setLocal(() {
+        info = next;
+        loadError = null;
+      });
+    } catch (e) {
+      setLocal(() => loadError = e);
+    }
+  }
+
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setLocal) {
+          if (info == null && loadError == null) {
+            reload(setLocal);
+          }
+          final scheme = Theme.of(ctx).colorScheme;
+          final sub = info;
+          final expires = sub?.expiresAt;
+          final expiresLabel = expires == null
+              ? '—'
+              : DateFormat('d MMM yyyy, HH:mm', 'ru').format(expires.toLocal());
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Управление подпиской',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '«$channelName»',
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (loadError != null)
+                    Text(userVisibleError(loadError!))
+                  else if (sub == null)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  else ...[
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        sub.isActive
+                            ? Icons.check_circle_rounded
+                            : Icons.schedule_rounded,
+                        color: sub.isActive
+                            ? scheme.primary
+                            : scheme.onSurfaceVariant,
+                      ),
+                      title: Text(
+                        sub.isActive ? 'Активна до $expiresLabel' : 'Не активна',
+                      ),
+                      subtitle: Text(
+                        sub.autoRenew
+                            ? 'Автопродление включено · $monthlyPriceStars ★/мес'
+                            : 'Автопродление выключено',
+                      ),
+                    ),
+                    if (sub.isActive) ...[
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Автопродление'),
+                        value: sub.autoRenew,
+                        onChanged: busy
+                            ? null
+                            : (v) async {
+                                setLocal(() => busy = true);
+                                try {
+                                  final next = await PaidFeaturesService
+                                      .updateChannelSubscription(
+                                    channelId,
+                                    autoRenew: v,
+                                  );
+                                  changed = true;
+                                  setLocal(() {
+                                    info = next;
+                                    busy = false;
+                                  });
+                                } catch (e) {
+                                  setLocal(() => busy = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text(userVisibleError(e)),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonal(
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final choice =
+                                      await showChannelSubscribeSheet(
+                                    ctx,
+                                    channelName: channelName,
+                                    monthlyPriceStars: monthlyPriceStars,
+                                  );
+                                  if (choice == null || !ctx.mounted) return;
+                                  setLocal(() => busy = true);
+                                  try {
+                                    await PaidFeaturesService.subscribeChannel(
+                                      channelId,
+                                      months: choice.months,
+                                      autoRenew: choice.autoRenew,
+                                    );
+                                    changed = true;
+                                    await reload(setLocal);
+                                  } catch (e) {
+                                    if (ctx.mounted) {
+                                      await showStarsRequiredSnack(ctx, e);
+                                    }
+                                  } finally {
+                                    if (ctx.mounted) {
+                                      setLocal(() => busy = false);
+                                    }
+                                  }
+                                },
+                          child: const Text('Продлить'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: busy || !sub.autoRenew
+                              ? null
+                              : () async {
+                                  final ok = await showDialog<bool>(
+                                    context: ctx,
+                                    builder: (dCtx) => AlertDialog(
+                                      title: const Text('Отменить автопродление?'),
+                                      content: Text(
+                                        'Доступ сохранится до $expiresLabel. '
+                                        'После этой даты подписка не продлится.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(dCtx, false),
+                                          child: const Text('Назад'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () =>
+                                              Navigator.pop(dCtx, true),
+                                          child: const Text('Отменить'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok != true || !ctx.mounted) return;
+                                  setLocal(() => busy = true);
+                                  try {
+                                    final next = await PaidFeaturesService
+                                        .cancelChannelSubscription(channelId);
+                                    changed = true;
+                                    setLocal(() {
+                                      info = next;
+                                      busy = false;
+                                    });
+                                  } catch (e) {
+                                    setLocal(() => busy = false);
+                                    if (ctx.mounted) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(
+                                          content: Text(userVisibleError(e)),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          child: const Text('Отменить автопродление'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+  return changed;
 }

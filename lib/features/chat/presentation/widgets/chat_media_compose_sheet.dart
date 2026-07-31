@@ -236,8 +236,10 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   secondary: Icon(Icons.lock_rounded, color: scheme.secondary),
                   title: const Text('Платное медиа'),
-                  subtitle: const Text(
-                    'Открыть можно только за звёзды. С отложенной отправкой недоступно.',
+                  subtitle: Text(
+                    _files.length > 1
+                        ? 'Одна цена за весь альбом. Открыть можно только за звёзды.'
+                        : 'Открыть можно только за звёзды. С отложенной отправкой недоступно.',
                   ),
                   value: _isPaid,
                   onChanged: (v) => setState(() => _isPaid = v),
@@ -245,20 +247,45 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                 if (_isPaid)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                    child: TextField(
-                      controller: _price,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Цена в звёздах',
-                        prefixIcon: const Icon(Icons.stars_rounded),
-                        filled: true,
-                        fillColor: scheme.surfaceContainerHighest
-                            .withValues(alpha: 0.55),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final n in const [10, 25, 50, 100, 250])
+                              ChoiceChip(
+                                selected:
+                                    (int.tryParse(_price.text.trim()) ?? 0) ==
+                                        n,
+                                label: Text('$n ★'),
+                                onSelected: (_) {
+                                  setState(() => _price.text = '$n');
+                                },
+                              ),
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _price,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: _files.length > 1
+                                ? 'Цена альбома в звёздах'
+                                : 'Цена в звёздах',
+                            prefixIcon: const Icon(Icons.stars_rounded),
+                            filled: true,
+                            fillColor: scheme.surfaceContainerHighest
+                                .withValues(alpha: 0.55),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ],
                     ),
                   ),
                 Padding(

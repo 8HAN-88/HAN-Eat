@@ -15,6 +15,7 @@ from app.models.paid_features import (
     CreatorBalance,
     PaidChannelSubscription,
     PaidContentPurchase,
+    PaidMessageException,
     PaidMessageUnlock,
     PostBoost,
     StarGift,
@@ -403,6 +404,123 @@ class PaidFeaturesService:
         self.db.flush()
         return sub
 
+    def get_channel_subscription(
+        self, user_id: int, channel_id: int
+    ) -> Optional[PaidChannelSubscription]:
+        return (
+            self.db.query(PaidChannelSubscription)
+            .filter(
+                PaidChannelSubscription.user_id == user_id,
+                PaidChannelSubscription.channel_id == channel_id,
+            )
+            .first()
+        )
+
+    def update_channel_subscription_auto_renew(
+        self, user_id: int, channel_id: int, *, auto_renew: bool
+    ) -> PaidChannelSubscription:
+        sub = self.get_channel_subscription(user_id, channel_id)
+        if sub is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
+            )
+        now = datetime.utcnow()
+        if sub.status != "active" or not sub.expires_at or sub.expires_at <= now:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subscription is not active",
+            )
+        sub.auto_renew = bool(auto_renew)
+        self.db.flush()
+        return sub
+
+    def cancel_channel_subscription(
+        self, user_id: int, channel_id: int
+    ) -> PaidChannelSubscription:
+        """Cancel auto-renew; access remains until expires_at (Telegram-like)."""
+        sub = self.get_channel_subscription(user_id, channel_id)
+        if sub is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found"
+            )
+        now = datetime.utcnow()
+        if sub.status != "active" or not sub.expires_at or sub.expires_at <= now:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subscription is not active",
+            )
+        sub.auto_renew = False
+        self.db.flush()
+        return sub
+
+    def list_paid_message_exceptions(self, owner_id: int) -> list[User]:
+        rows = (
+            self.db.query(User)
+            .join(
+                PaidMessageException,
+                PaidMessageException.allowed_user_id == User.id,
+            )
+            .filter(
+                PaidMessageException.owner_id == owner_id,
+                User.deleted_at.is_(None),
+            )
+            .order_by(PaidMessageException.created_at.desc(), User.id.asc())
+            .all()
+        )
+        return rows
+
+    def add_paid_message_exception(
+        self, owner_id: int, allowed_user_id: int
+    ) -> User:
+        if owner_id == allowed_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot add yourself as exception",
+            )
+        allowed = (
+            self.db.query(User)
+            .filter(User.id == allowed_user_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        existing = (
+            self.db.query(PaidMessageException)
+            .filter(
+                PaidMessageException.owner_id == owner_id,
+                PaidMessageException.allowed_user_id == allowed_user_id,
+            )
+            .first()
+        )
+        if existing is None:
+            self.db.add(
+                PaidMessageException(
+                    owner_id=owner_id, allowed_user_id=allowed_user_id
+                )
+            )
+            self.db.flush()
+        return allowed
+
+    def remove_paid_message_exception(
+        self, owner_id: int, allowed_user_id: int
+    ) -> None:
+        row = (
+            self.db.query(PaidMessageException)
+            .filter(
+                PaidMessageException.owner_id == owner_id,
+                PaidMessageException.allowed_user_id == allowed_user_id,
+            )
+            .first()
+        )
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found"
+            )
+        self.db.delete(row)
+        self.db.flush()
+
     def has_paid_channel_access(self, user_id: Optional[int], channel: Channel) -> bool:
         if not getattr(channel, "is_paid", False):
             return True
@@ -735,6 +853,17 @@ class PaidFeaturesService:
             return None
         amount = int(getattr(recipient, "paid_message_stars", 0) or 0)
         if amount <= 0:
+            return None
+        # Telegram-like exceptions: allowlisted senders skip the fee.
+        exempt = (
+            self.db.query(PaidMessageException.id)
+            .filter(
+                PaidMessageException.owner_id == recipient_id,
+                PaidMessageException.allowed_user_id == sender_id,
+            )
+            .first()
+        )
+        if exempt is not None:
             return None
         group_id = (media_group_id or "").strip() or None
         ref_type = "media_group" if group_id else "message"

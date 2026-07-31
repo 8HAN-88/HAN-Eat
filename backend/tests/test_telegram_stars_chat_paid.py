@@ -16,6 +16,7 @@ from app.models.notification import Notification
 from app.models.paid_features import (
     CreatorBalance,
     CreatorPayoutRequest,
+    PaidMessageException,
     PaidMessageUnlock,
     StarGift,
     StarTransaction,
@@ -39,6 +40,7 @@ def db_session():
         StarTransaction.__table__,
         CreatorBalance.__table__,
         PaidMessageUnlock.__table__,
+        PaidMessageException.__table__,
         StarGift.__table__,
         Notification.__table__,
         CreatorPayoutRequest.__table__,
@@ -120,6 +122,31 @@ def test_charge_paid_message_fee(db_session):
     assert tx is not None
     assert svc.star_balance(2) == 35
     assert svc.creator_balance(1).available_stars == 15
+
+
+def test_paid_message_exception_skips_fee(db_session):
+    _user(db_session, 1, paid_message_stars=20)
+    _user(db_session, 2)
+    _credit(db_session, 2, 50)
+    db_session.commit()
+    svc = PaidFeaturesService(db_session)
+    svc.add_paid_message_exception(1, 2)
+    db_session.commit()
+
+    tx = svc.charge_paid_message_fee(2, 1, conversation_id=7, message_id=101)
+    db_session.commit()
+    assert tx is None
+    assert svc.star_balance(2) == 50
+
+    listed = svc.list_paid_message_exceptions(1)
+    assert [u.id for u in listed] == [2]
+
+    svc.remove_paid_message_exception(1, 2)
+    db_session.commit()
+    tx2 = svc.charge_paid_message_fee(2, 1, conversation_id=7, message_id=102)
+    db_session.commit()
+    assert tx2 is not None
+    assert svc.star_balance(2) == 30
 
 
 def test_spend_topup_does_not_wipe_creator_available(db_session):
