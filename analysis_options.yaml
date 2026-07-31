@@ -18,11 +18,13 @@ analyzer:
     unused_local_variable: ignore
     deprecated_member_use: ignore
   exclude:
+    - lib/app/web_plugins_heavy.dart
     - lib/core/platform/pwa_install_web.dart
     - lib/core/platform/web_page_visibility_web.dart
     - lib/services/phone_contacts_picker_web.dart
     - lib/services/phone_contacts_store_web.dart
     - lib/services/web_app_update_service_web.dart
+    - disconnected/**
 
 linter:
   # The lint rules applied to this project can be customized in the

@@ -3544,8 +3544,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           replyToMessageId: cloud.replyToMessageId,
           updatedAt: cloud.updatedAt,
         );
-      } else if (local != null && !local.isEmpty) {
-        // Push newer local to cloud.
+      } else {
+        // Local draft is newer — push it to cloud.
         unawaited(
           ChatService.upsertCloudDraft(
             conversationId: widget.conversationId,

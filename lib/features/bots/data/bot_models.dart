@@ -24,6 +24,42 @@ class BotCreateRequest {
       };
 }
 
+class BotUpdateRequest {
+  const BotUpdateRequest({
+    this.name,
+    this.description,
+    this.shortDescription,
+  });
+
+  final String? name;
+  final String? description;
+  final String? shortDescription;
+
+  Map<String, dynamic> toJson() => {
+        if (name != null) 'name': name,
+        if (description != null) 'description': description,
+        if (shortDescription != null) 'short_description': shortDescription,
+      };
+}
+
+/// Telegram-like bot username: 5–32 chars, starts with letter, ends with `bot`.
+String? validateBotUsername(String raw) {
+  final value = raw.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+  if (value.length < 5 || value.length > 32) {
+    return 'Username: 5–32 символа';
+  }
+  if (!value.endsWith('bot')) {
+    return 'Username должен заканчиваться на bot';
+  }
+  if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(value)) {
+    return 'Только a-z, 0-9, _; начинаться с буквы';
+  }
+  return null;
+}
+
+String normalizeBotUsername(String raw) =>
+    raw.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+
 class BotCommandCreate {
   final String command;
   final String description;

@@ -2,6 +2,7 @@
 API для управления ботами (BotFather)
 """
 import json
+import re
 import secrets
 from datetime import datetime
 from typing import List, Optional
@@ -13,10 +14,48 @@ from app.core.database import get_db
 from app.api.dependencies import get_current_user_required as get_current_user
 from app.models.user import User
 from app.models.bot_command import BotCommand
+from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.services.analytics_service import AnalyticsService
 from app.services.bot_webhook_service import deliver_webhook_update
 
 router = APIRouter(prefix="/bots", tags=["bots"])
+
+
+def _normalize_bot_username(raw: str) -> str:
+    """Telegram BotFather rules: 5–32 chars, a-z/0-9/_, starts with letter, ends with bot."""
+    value = (raw or "").strip().lstrip("@").lower()
+    if not (5 <= len(value) <= 32):
+        raise HTTPException(
+            status_code=400,
+            detail="Username must be 5–32 characters",
+        )
+    if not value.endswith("bot"):
+        raise HTTPException(
+            status_code=400,
+            detail="Username must end with 'bot' (like Telegram)",
+        )
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", value):
+        raise HTTPException(
+            status_code=400,
+            detail="Username: start with a letter; only a-z, 0-9, underscore",
+        )
+    return value
+
+
+def _bot_response(bot: User, *, token: Optional[str] = None) -> "BotResponse":
+    return BotResponse(
+        id=bot.id,
+        name=bot.name,
+        username=bot.bot_username or bot.username or "",
+        bot_token=token if token is not None else (bot.bot_token or ""),
+        description=bot.bot_description,
+        short_description=bot.bot_short_description,
+        avatar_url=bot.avatar_url,
+        webhook_url=bot.bot_webhook_url,
+        webhook_enabled=bool(bot.bot_webhook_enabled),
+        webhook_last_error=bot.bot_webhook_last_error,
+        webhook_last_ok_at=bot.bot_webhook_last_ok_at,
+    )
 
 
 # === Schemas ===
@@ -143,8 +182,8 @@ async def create_bot(
     Создание нового бота (аналог @BotFather).
     Пользователь получает токен один раз — его нужно сохранить сразу.
     """
-    # Проверка уникальности username бота
-    existing = db.query(User).filter(User.bot_username == payload.username).first()
+    username = _normalize_bot_username(payload.username)
+    existing = db.query(User).filter(User.bot_username == username).first()
     if existing:
         raise HTTPException(status_code=400, detail="Бот с таким username уже существует")
 
@@ -153,13 +192,13 @@ async def create_bot(
 
     # Создаём запись бота
     bot_user = User(
-        email=f"bot+{payload.username}@haneat.internal",  # внутренний email
+        email=f"bot+{username}@haneat.internal",  # внутренний email
         password_hash="!",  # боты не логинятся по паролю
-        name=payload.name,
-        username=payload.username,
+        name=payload.name.strip(),
+        username=username,
         is_bot=True,
         bot_token=bot_token,
-        bot_username=payload.username,
+        bot_username=username,
         bot_description=payload.description,
         bot_short_description=payload.short_description,
         created_by_user_id=current_user.id,
@@ -167,15 +206,41 @@ async def create_bot(
     db.add(bot_user)
     db.flush()  # получаем id
 
-    # Сохраняем команды
-    for cmd in payload.commands:
+    # Как у Telegram-ботов: /start и /help есть с рождения, если клиент не передал свои.
+    provided = {
+        (c.command or "").strip().lstrip("/").lower()
+        for c in payload.commands
+        if (c.command or "").strip()
+    }
+    seed_commands: List[BotCommandCreate] = []
+    if "start" not in provided:
+        seed_commands.append(
+            BotCommandCreate(
+                command="start",
+                description="Start the bot",
+                response_text=f"Hi! I'm {bot_user.name}. Use /help to see commands.",
+            )
+        )
+    if "help" not in provided:
+        seed_commands.append(
+            BotCommandCreate(
+                command="help",
+                description="Show help",
+                response_text=f"Commands for @{username}: /start, /help",
+            )
+        )
+
+    for cmd in list(seed_commands) + list(payload.commands):
         inline_buttons = _normalize_inline_buttons(
             cmd.inline_buttons,
             cmd.inline_button_rows,
         )
+        command_name = (cmd.command or "").strip().lstrip("/").lower()
+        if not command_name:
+            continue
         db.add(BotCommand(
             bot_id=bot_user.id,
-            command=cmd.command,
+            command=command_name,
             description=cmd.description,
             response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
@@ -184,19 +249,7 @@ async def create_bot(
     db.commit()
     db.refresh(bot_user)
 
-    return BotResponse(
-        id=bot_user.id,
-        name=bot_user.name,
-        username=bot_user.bot_username,
-        bot_token=bot_token,
-        description=bot_user.bot_description,
-        short_description=bot_user.bot_short_description,
-        avatar_url=bot_user.avatar_url,
-        webhook_url=bot_user.bot_webhook_url,
-        webhook_enabled=bool(bot_user.bot_webhook_enabled),
-        webhook_last_error=bot_user.bot_webhook_last_error,
-        webhook_last_ok_at=bot_user.bot_webhook_last_ok_at,
-    )
+    return _bot_response(bot_user, token=bot_token)
 
 
 @router.get("/my", response_model=List[BotListItem])
@@ -235,19 +288,7 @@ async def get_bot(
     db: Session = Depends(get_db),
 ):
     bot = _bot_or_404(db, bot_id, current_user.id)
-    return BotResponse(
-        id=bot.id,
-        name=bot.name,
-        username=bot.bot_username,
-        bot_token=bot.bot_token,
-        description=bot.bot_description,
-        short_description=bot.bot_short_description,
-        avatar_url=bot.avatar_url,
-        webhook_url=bot.bot_webhook_url,
-        webhook_enabled=bool(bot.bot_webhook_enabled),
-        webhook_last_error=bot.bot_webhook_last_error,
-        webhook_last_ok_at=bot.bot_webhook_last_ok_at,
-    )
+    return _bot_response(bot)
 
 
 @router.patch("/{bot_id}", response_model=BotResponse)
@@ -260,27 +301,60 @@ async def update_bot(
     bot = _bot_or_404(db, bot_id, current_user.id)
 
     if payload.name is not None:
-        bot.name = payload.name
+        bot.name = payload.name.strip() or bot.name
     if payload.description is not None:
-        bot.bot_description = payload.description
+        bot.bot_description = payload.description.strip() or None
     if payload.short_description is not None:
-        bot.bot_short_description = payload.short_description
+        bot.bot_short_description = payload.short_description.strip() or None
 
     db.commit()
     db.refresh(bot)
-    return BotResponse(
-        id=bot.id,
-        name=bot.name,
-        username=bot.bot_username,
-        bot_token=bot.bot_token,
-        description=bot.bot_description,
-        short_description=bot.bot_short_description,
-        avatar_url=bot.avatar_url,
-        webhook_url=bot.bot_webhook_url,
-        webhook_enabled=bool(bot.bot_webhook_enabled),
-        webhook_last_error=bot.bot_webhook_last_error,
-        webhook_last_ok_at=bot.bot_webhook_last_ok_at,
+    return _bot_response(bot)
+
+
+@router.post("/{bot_id}/token/revoke", response_model=BotResponse)
+async def revoke_bot_token(
+    bot_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Как /revoke в @BotFather — выдаёт новый токен, старый перестаёт работать."""
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    new_token = secrets.token_urlsafe(32)
+    bot.bot_token = new_token
+    db.commit()
+    db.refresh(bot)
+    return _bot_response(bot, token=new_token)
+
+
+@router.delete("/{bot_id}", status_code=status.HTTP_200_OK)
+async def delete_bot(
+    bot_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Удаление бота вместе с командами и мини-приложениями (как /deletebot)."""
+    bot = _bot_or_404(db, bot_id, current_user.id)
+    app_ids = [
+        row.id
+        for row in db.query(BotMiniApp.id).filter(BotMiniApp.bot_id == bot.id).all()
+    ]
+    if app_ids:
+        db.query(MiniAppInstall).filter(MiniAppInstall.miniapp_id.in_(app_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(MiniAppLaunch).filter(MiniAppLaunch.miniapp_id.in_(app_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(BotMiniApp).filter(BotMiniApp.bot_id == bot.id).delete(
+            synchronize_session=False
+        )
+    db.query(BotCommand).filter(BotCommand.bot_id == bot.id).delete(
+        synchronize_session=False
     )
+    db.delete(bot)
+    db.commit()
+    return {"status": "ok"}
 
 
 class WebhookSetRequest(BaseModel):

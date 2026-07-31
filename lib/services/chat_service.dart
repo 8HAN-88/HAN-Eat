@@ -340,7 +340,7 @@ class ChatService {
       if (pinnedRaw is Map<String, dynamic>) {
         try {
           pinnedMessage = ChatMessage.fromJson(pinnedRaw);
-          if (pinnedMessage != null) pinnedMessages.add(pinnedMessage);
+          pinnedMessages.add(pinnedMessage);
         } catch (_) {}
       }
     }

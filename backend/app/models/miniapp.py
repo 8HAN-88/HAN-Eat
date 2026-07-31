@@ -24,6 +24,8 @@ class BotMiniApp(Base):
     name = Column(String(64), nullable=False)
     short_name = Column(String(32), nullable=False)
     description = Column(String(512), nullable=True)
+    # tools | games | entertainment | shopping | other
+    category = Column(String(32), nullable=True)
     url = Column(Text, nullable=False)
     icon_url = Column(Text, nullable=True)
     is_builtin = Column(Boolean, default=False, nullable=False)
