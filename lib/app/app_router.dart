@@ -80,6 +80,7 @@ import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/username_deep_link_screen.dart';
+import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
@@ -679,6 +680,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: MyBotsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: MyBotsScreen()),
+      ),
+      GoRoute(
+        path: BotDetailRoute.path,
+        name: BotDetailRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['botId'] ?? '') ?? 0;
+          final username = state.uri.queryParameters['u'] ?? 'bot';
+          final sectionRaw =
+              (state.uri.queryParameters['section'] ?? '').toLowerCase();
+          final section = switch (sectionRaw) {
+            'miniapps' || 'mini_apps' || 'apps' =>
+              BotDetailOpenSection.miniApps,
+            'commands' => BotDetailOpenSection.commands,
+            'token' => BotDetailOpenSection.token,
+            _ => BotDetailOpenSection.none,
+          };
+          return MaterialPage(
+            child: BotDetailScreen(
+              botId: id,
+              botUsername: username,
+              openSection: section,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: SubscriptionSuccessRoute.path,
@@ -1589,6 +1614,37 @@ class CreatorRevenueRoute {
 class MyBotsRoute {
   static const path = '/bots/my';
   static const name = 'my_bots';
+}
+
+class BotDetailRoute {
+  static const path = '/bots/:botId';
+  static const name = 'bot_detail';
+
+  static String pathFor(
+    int botId, {
+    String? username,
+    BotDetailOpenSection section = BotDetailOpenSection.none,
+  }) {
+    final params = <String, String>{};
+    if (username != null && username.trim().isNotEmpty) {
+      params['u'] = username.trim();
+    }
+    switch (section) {
+      case BotDetailOpenSection.miniApps:
+        params['section'] = 'miniapps';
+      case BotDetailOpenSection.commands:
+        params['section'] = 'commands';
+      case BotDetailOpenSection.token:
+        params['section'] = 'token';
+      case BotDetailOpenSection.none:
+        break;
+    }
+    final uri = Uri(
+      path: '/bots/$botId',
+      queryParameters: params.isEmpty ? null : params,
+    );
+    return uri.toString();
+  }
 }
 
 class SubscriptionSuccessRoute {

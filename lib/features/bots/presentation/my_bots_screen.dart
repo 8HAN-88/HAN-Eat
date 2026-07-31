@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -50,16 +52,22 @@ class _MyBotsScreenState extends State<MyBotsScreen> {
     String? initialToken,
     bool showTokenSheet = false,
   }) async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => BotDetailScreen(
-          botId: bot.id,
-          botUsername: bot.username,
-          initialToken: initialToken,
-          showTokenOnOpen: showTokenSheet,
+    if (initialToken != null || showTokenSheet) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => BotDetailScreen(
+            botId: bot.id,
+            botUsername: bot.username,
+            initialToken: initialToken,
+            showTokenOnOpen: showTokenSheet,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      await context.push(
+        BotDetailRoute.pathFor(bot.id, username: bot.username),
+      );
+    }
     if (mounted) _loadBots();
   }
 

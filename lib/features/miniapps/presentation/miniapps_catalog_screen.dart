@@ -8,6 +8,7 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../../bots/presentation/bot_detail_screen.dart';
 import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
 import 'miniapp_webview_screen.dart';
@@ -133,6 +134,17 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
 
   Future<void> _openMyBots() async {
     await context.push(MyBotsRoute.path);
+    if (mounted) _reload();
+  }
+
+  Future<void> _openBotMiniApps(MiniAppItem app) async {
+    await context.push(
+      BotDetailRoute.pathFor(
+        app.botId,
+        username: app.botUsername,
+        section: BotDetailOpenSection.miniApps,
+      ),
+    );
     if (mounted) _reload();
   }
 
@@ -276,6 +288,12 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     ];
     if (app.isOwner) {
       actions.addAll([
+        TelegramActionSheetAction(
+          icon: Icons.smart_toy_outlined,
+          title: 'Manage in Bot',
+          subtitle: 'Как Edit App в @BotFather',
+          onTap: () => _openBotMiniApps(app),
+        ),
         TelegramActionSheetAction(
           icon: Icons.edit_outlined,
           title: 'Редактировать',

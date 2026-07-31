@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,6 +19,14 @@ String _moderationLabel(MiniAppItem app) {
   return 'На проверке';
 }
 
+/// Which BotFather section to open immediately after load.
+enum BotDetailOpenSection {
+  none,
+  token,
+  miniApps,
+  commands,
+}
+
 /// Управление ботом — как меню @BotFather.
 class BotDetailScreen extends StatefulWidget {
   const BotDetailScreen({
@@ -25,12 +35,14 @@ class BotDetailScreen extends StatefulWidget {
     required this.botUsername,
     this.initialToken,
     this.showTokenOnOpen = false,
+    this.openSection = BotDetailOpenSection.none,
   });
 
   final int botId;
   final String botUsername;
   final String? initialToken;
   final bool showTokenOnOpen;
+  final BotDetailOpenSection openSection;
 
   @override
   State<BotDetailScreen> createState() => _BotDetailScreenState();
@@ -46,13 +58,26 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   final _webhookController = TextEditingController();
   final _webhookSecretController = TextEditingController();
 
+  bool _openedInitialSection = false;
+
   @override
   void initState() {
     super.initState();
     _token = widget.initialToken;
     _loadBot().then((_) {
-      if (widget.showTokenOnOpen && mounted) {
-        _showTokenSheet(forceReveal: true);
+      if (!mounted || _openedInitialSection) return;
+      _openedInitialSection = true;
+      if (widget.showTokenOnOpen ||
+          widget.openSection == BotDetailOpenSection.token) {
+        _showTokenSheet(forceReveal: widget.showTokenOnOpen);
+        return;
+      }
+      if (widget.openSection == BotDetailOpenSection.miniApps) {
+        unawaited(_manageMiniApps());
+        return;
+      }
+      if (widget.openSection == BotDetailOpenSection.commands) {
+        unawaited(_manageCommands());
       }
     });
   }

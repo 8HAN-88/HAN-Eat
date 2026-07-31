@@ -206,15 +206,41 @@ async def create_bot(
     db.add(bot_user)
     db.flush()  # получаем id
 
-    # Сохраняем команды
-    for cmd in payload.commands:
+    # Как у Telegram-ботов: /start и /help есть с рождения, если клиент не передал свои.
+    provided = {
+        (c.command or "").strip().lstrip("/").lower()
+        for c in payload.commands
+        if (c.command or "").strip()
+    }
+    seed_commands: List[BotCommandCreate] = []
+    if "start" not in provided:
+        seed_commands.append(
+            BotCommandCreate(
+                command="start",
+                description="Start the bot",
+                response_text=f"Hi! I'm {bot_user.name}. Use /help to see commands.",
+            )
+        )
+    if "help" not in provided:
+        seed_commands.append(
+            BotCommandCreate(
+                command="help",
+                description="Show help",
+                response_text="Available commands: /start, /help",
+            )
+        )
+
+    for cmd in list(seed_commands) + list(payload.commands):
         inline_buttons = _normalize_inline_buttons(
             cmd.inline_buttons,
             cmd.inline_button_rows,
         )
+        command_name = (cmd.command or "").strip().lstrip("/").lower()
+        if not command_name:
+            continue
         db.add(BotCommand(
             bot_id=bot_user.id,
-            command=cmd.command,
+            command=command_name,
             description=cmd.description,
             response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
