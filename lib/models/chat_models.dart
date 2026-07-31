@@ -40,6 +40,7 @@ class ChatUserBrief {
     this.sendRestricted = false,
     this.sendRestrictedUntil,
     this.sendRestrictionReason,
+    this.paidMessageStars = 0,
   });
 
   final int id;
@@ -55,6 +56,7 @@ class ChatUserBrief {
   final bool sendRestricted;
   final DateTime? sendRestrictedUntil;
   final String? sendRestrictionReason;
+  final int paidMessageStars;
 
   bool get isOnline {
     final seen = lastSeenAt;
@@ -93,6 +95,7 @@ class ChatUserBrief {
           ? DateTime.tryParse(json['send_restricted_until'] as String)
           : null,
       sendRestrictionReason: json['send_restriction_reason'] as String?,
+      paidMessageStars: _parseInt(json['paid_message_stars']),
     );
   }
 
@@ -102,6 +105,7 @@ class ChatUserBrief {
     String? avatarUrl,
     DateTime? lastSeenAt,
     bool clearLastSeenAt = false,
+    int? paidMessageStars,
   }) {
     return ChatUserBrief(
       id: id,
@@ -117,6 +121,7 @@ class ChatUserBrief {
       sendRestricted: sendRestricted,
       sendRestrictedUntil: sendRestrictedUntil,
       sendRestrictionReason: sendRestrictionReason,
+      paidMessageStars: paidMessageStars ?? this.paidMessageStars,
     );
   }
 }
@@ -143,17 +148,20 @@ class ChatReactionSummary {
     required this.emoji,
     required this.count,
     this.reactedByMe = false,
+    this.starsTotal = 0,
   });
 
   final String emoji;
   final int count;
   final bool reactedByMe;
+  final int starsTotal;
 
   factory ChatReactionSummary.fromJson(Map<String, dynamic> json) {
     return ChatReactionSummary(
       emoji: json['emoji'] as String? ?? '',
       count: _parseInt(json['count']),
       reactedByMe: json['reacted_by_me'] as bool? ?? false,
+      starsTotal: _parseInt(json['stars_total']),
     );
   }
 }
@@ -203,6 +211,9 @@ class ChatMessage {
     this.readCount = 0,
     this.disableWebpagePreview = false,
     this.mediaGroupId,
+    this.isPaid = false,
+    this.priceStars = 0,
+    this.purchased = true,
     this.reactions = const [],
     this.inlineKeyboard = const [],
   });
@@ -230,8 +241,14 @@ class ChatMessage {
   final bool disableWebpagePreview;
   /// Shared id for multi-photo/video albums.
   final String? mediaGroupId;
+  final bool isPaid;
+  final int priceStars;
+  final bool purchased;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
+
+  bool get isLockedPaidMedia =>
+      isPaid && !purchased && !isMine && priceStars > 0;
 
   bool get isForwarded =>
       forwardFromUserId != null ||
@@ -308,6 +325,10 @@ class ChatMessage {
       mediaGroupId: (json['media_group_id'] as String?)?.trim().isEmpty == true
           ? null
           : (json['media_group_id'] as String?)?.trim(),
+      isPaid: json['is_paid'] as bool? ?? false,
+      priceStars: _parseInt(json['price_stars']),
+      purchased: json['purchased'] as bool? ??
+          !(json['is_paid'] as bool? ?? false),
       reactions: reactions,
       inlineKeyboard: keyboard,
     );
@@ -320,7 +341,11 @@ class ChatMessage {
     bool? disableWebpagePreview,
     String? mediaGroupId,
     String? content,
+    String? mediaUrl,
     DateTime? editedAt,
+    bool? isPaid,
+    int? priceStars,
+    bool? purchased,
     List<ChatReactionSummary>? reactions,
     List<List<ChatInlineKeyboardButton>>? inlineKeyboard,
   }) {
@@ -331,7 +356,7 @@ class ChatMessage {
       senderName: senderName,
       type: type,
       content: content ?? this.content,
-      mediaUrl: mediaUrl,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
       replyToMessageId: replyToMessageId,
       forwardFromUserId: forwardFromUserId,
       forwardFromName: forwardFromName,
@@ -346,6 +371,9 @@ class ChatMessage {
       disableWebpagePreview:
           disableWebpagePreview ?? this.disableWebpagePreview,
       mediaGroupId: mediaGroupId ?? this.mediaGroupId,
+      isPaid: isPaid ?? this.isPaid,
+      priceStars: priceStars ?? this.priceStars,
+      purchased: purchased ?? this.purchased,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
     );

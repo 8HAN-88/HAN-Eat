@@ -431,6 +431,7 @@ class UserService {
     bool? isPrivate,
     bool? showLastSeen,
     bool? showReadReceipts,
+    int? paidMessageStars,
     String? avatarUrl,
     String? fcmToken,
   }) async {
@@ -441,6 +442,7 @@ class UserService {
       if (isPrivate != null) 'is_private': isPrivate,
       if (showLastSeen != null) 'show_last_seen': showLastSeen,
       if (showReadReceipts != null) 'show_read_receipts': showReadReceipts,
+      if (paidMessageStars != null) 'paid_message_stars': paidMessageStars,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (fcmToken != null) 'fcm_token': fcmToken,
     };

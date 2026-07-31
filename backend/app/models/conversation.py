@@ -224,6 +224,9 @@ class Message(Base):
     disable_webpage_preview = Column(Boolean, default=False, nullable=False)
     # Shared client/server id for multi-media albums (Telegram media_group).
     media_group_id = Column(String(64), nullable=True, index=True)
+    # Telegram Stars paid media: locked until unlock purchase.
+    is_paid = Column(Boolean, default=False, nullable=False, index=True)
+    price_stars = Column(Integer, default=0, nullable=False)
 
 
 class ScheduledMessage(Base):
@@ -265,6 +268,8 @@ class MessageReaction(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     emoji = Column(String(16), nullable=False)
+    # Telegram paid reactions: Stars spent on this reaction (0 = free).
+    stars_amount = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

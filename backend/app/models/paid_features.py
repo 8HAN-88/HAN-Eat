@@ -106,3 +106,35 @@ class CreatorPayoutRequest(Base):
     paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
+
+class PaidMessageUnlock(Base):
+    """Unlock of a paid chat media message (Telegram paid media)."""
+
+    __tablename__ = "paid_message_unlocks"
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_paid_message_unlock_user_msg"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    amount_stars = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default="completed", index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+
+class StarGift(Base):
+    """Catalog of Telegram-like star gifts."""
+
+    __tablename__ = "star_gifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(64), nullable=False, unique=True)
+    title = Column(String(120), nullable=False)
+    emoji = Column(String(16), nullable=False, default="🎁")
+    stars = Column(Integer, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
+    sort_order = Column(Integer, nullable=False, default=0, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+

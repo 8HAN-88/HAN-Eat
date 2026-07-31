@@ -19,6 +19,8 @@ class ChatUserBrief(BaseModel):
     send_restricted: bool = False
     send_restricted_until: Optional[datetime] = None
     send_restriction_reason: Optional[str] = None
+    # Telegram-like: Stars charged to message this user (direct chats).
+    paid_message_stars: int = 0
 
     class Config:
         from_attributes = True
@@ -59,6 +61,10 @@ class MessageResponse(BaseModel):
     read_count: int = 0
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = None
+    # Telegram Stars paid media
+    is_paid: bool = False
+    price_stars: int = 0
+    purchased: bool = True
     reactions: List["MessageReactionSummary"] = []
 
     class Config:
@@ -95,6 +101,8 @@ class MessageReactionSummary(BaseModel):
     emoji: str
     count: int
     reacted_by_me: bool = False
+    # Total Stars paid on this emoji for the message (Telegram paid reactions).
+    stars_total: int = 0
 
 
 class ConversationResponse(BaseModel):
@@ -184,6 +192,8 @@ class EditMessageRequest(BaseModel):
 
 class MessageReactionRequest(BaseModel):
     emoji: str = Field(..., min_length=1, max_length=16)
+    # Optional Stars to attach (Telegram paid reaction).
+    stars: int = Field(default=0, ge=0, le=100000)
 
 
 class TypingActivityRequest(BaseModel):
@@ -199,7 +209,7 @@ class PinMessageRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|gift)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
@@ -213,6 +223,9 @@ class SendMessageRequest(BaseModel):
     silent: bool = False
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = Field(default=None, max_length=64)
+    # Telegram Stars paid media (image/video/file).
+    is_paid: bool = False
+    price_stars: int = Field(default=0, ge=0, le=100000)
 
 
 class ScheduleMessageRequest(BaseModel):

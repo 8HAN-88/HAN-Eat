@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     is_private: bool
     show_last_seen: bool = True
     show_read_receipts: bool = True
+    paid_message_stars: int = 0
     created_at: datetime
     subscription_type: Optional[str] = "free"
     scan_credits: Optional[int] = None
@@ -94,6 +95,7 @@ class UpdateUserRequest(BaseModel):
     is_private: Optional[bool] = None
     show_last_seen: Optional[bool] = None
     show_read_receipts: Optional[bool] = None
+    paid_message_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     avatar_url: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     device_platform: Optional[str] = None  # android | ios | web

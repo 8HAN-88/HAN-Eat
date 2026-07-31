@@ -37,7 +37,9 @@ from app.models.paid_features import (
     CreatorBalance,
     PaidChannelSubscription,
     PaidContentPurchase,
+    PaidMessageUnlock,
     PostBoost,
+    StarGift,
     StarTransaction,
 )
 from app.models.story import Story
@@ -61,7 +63,8 @@ __all__ = [
     "Subscription", "SupportTicket", "NotificationPreferences",
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
-    "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest", "Story",
+    "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest",
+    "PaidMessageUnlock", "StarGift", "Story",
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",

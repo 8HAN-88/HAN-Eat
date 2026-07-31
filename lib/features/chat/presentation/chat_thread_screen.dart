@@ -91,6 +91,8 @@ import 'widgets/chat_media_compose_sheet.dart';
 import 'widgets/chat_poll_bubble.dart';
 import 'widgets/chat_poll_voters_sheet.dart';
 import 'widgets/create_chat_poll_sheet.dart';
+import 'widgets/paid_media_lock_bubble.dart';
+import 'widgets/star_gift_picker_sheet.dart';
 import '../widgets/chat_voice_mic_button.dart';
 import '../widgets/chat_voice_waveform.dart';
 import 'chat_group_info_screen.dart';
@@ -275,6 +277,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<String, int> _pendingMediaTempIdByClientId = {};
   final Map<String, double> _pendingMediaProgressByClientId = {};
   final Set<String> _cancelledPendingMediaClientIds = {};
+  final Set<int> _unlockingMessageIds = {};
   bool _voiceSending = false;
   bool _hasMore = false;
   int? _nextCursor;
@@ -1770,6 +1773,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             mediaGroupId: pending.mediaGroupId,
+            isPaid: pending.isPaid,
+            priceStars: pending.priceStars,
           );
           if (_chatIsGifMediaUrl(mediaUrl)) {
             unawaited(ChatRecentGifsStore.remember(mediaUrl));
@@ -1783,6 +1788,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             mediaGroupId: pending.mediaGroupId,
+            isPaid: pending.isPaid,
+            priceStars: pending.priceStars,
           );
         case _PendingMediaKind.file:
           msg = await ChatService.sendFile(
@@ -1792,6 +1799,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
+            isPaid: pending.isPaid,
+            priceStars: pending.priceStars,
           );
         case _PendingMediaKind.voice:
           msg = await ChatService.sendVoice(
@@ -4276,6 +4285,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _sendPaidReaction(ChatMessage msg) async {
+    if (msg.isMine || msg.id <= 0) return;
+    final amountController = TextEditingController(text: '1');
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Платная реакция'),
+        content: TextField(
+          controller: amountController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Звёзды',
+            prefixIcon: Icon(Icons.stars_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final n = int.tryParse(amountController.text.trim()) ?? 0;
+              if (n <= 0) return;
+              Navigator.pop(ctx, n);
+            },
+            child: const Text('Отправить ★'),
+          ),
+        ],
+      ),
+    );
+    amountController.dispose();
+    if (amount == null || !mounted) return;
+    try {
+      final reactions = await ChatService.setReaction(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        emoji: '⭐',
+        stars: amount,
+      );
+      if (!mounted) return;
+      _applyReactions(msg.id, reactions);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _togglePinMessage(ChatMessage msg) async {
     final isPinned = _isMessagePinned(msg.id);
     try {
@@ -4604,6 +4663,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             icon: Icons.stars_rounded,
             title: 'Отправить звёзды',
             onTap: _tipPeerWithStars,
+          ),
+          TelegramActionSheetAction(
+            icon: Icons.card_giftcard_rounded,
+            title: 'Отправить подарок',
+            onTap: _sendStarGift,
           ),
           TelegramActionSheetAction(
             icon: Icons.videocam_outlined,
@@ -6352,6 +6416,75 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _sendStarGift() async {
+    final peer = _conversation.peer;
+    if (peer == null) return;
+    final gift = await showStarGiftPickerSheet(context);
+    if (gift == null || !mounted) return;
+    final noteController = TextEditingController();
+    final note = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${gift.emoji} ${gift.title}'),
+        content: TextField(
+          controller: noteController,
+          maxLines: 2,
+          decoration: const InputDecoration(
+            labelText: 'Сообщение (опционально)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, noteController.text.trim()),
+            child: Text('Отправить · ${gift.stars} ★'),
+          ),
+        ],
+      ),
+    );
+    noteController.dispose();
+    if (note == null || !mounted) return;
+    try {
+      await PaidFeaturesService.sendGift(
+        giftId: gift.id,
+        conversationId: widget.conversationId,
+        message: note.isEmpty ? null : note,
+      );
+      if (!mounted) return;
+      await _pollNew();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Подарок ${gift.emoji} отправлен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _unlockPaidMedia(ChatMessage msg) async {
+    if (!msg.isLockedPaidMedia) return;
+    setState(() => _unlockingMessageIds.add(msg.id));
+    try {
+      await PaidFeaturesService.purchaseMessage(msg.id);
+      if (!mounted) return;
+      await _load(refresh: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _unlockingMessageIds.remove(msg.id));
+      }
+    }
+  }
+
   Future<void> _tipPeerWithStars() async {
     final peer = _conversation.peer;
     if (peer == null) return;
@@ -7833,6 +7966,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onReactionLongPress: interactive && msg.id > 0
           ? (emoji) => unawaited(_showMessageReactors(msg, emoji: emoji))
           : null,
+      onUnlockPaidMedia: interactive && msg.isLockedPaidMedia
+          ? () => unawaited(_unlockPaidMedia(msg))
+          : null,
+      unlockingPaidMedia: _unlockingMessageIds.contains(msg.id),
+      onPaidReaction: interactive && !msg.isMine && msg.id > 0
+          ? () => unawaited(_sendPaidReaction(msg))
+          : null,
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
@@ -8786,7 +8926,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Widget _compactComposerStrip({
     required IconData icon,
     required String label,
-    required String actionLabel,
+    String? actionLabel,
     VoidCallback? onAction,
     String? secondaryActionLabel,
     VoidCallback? onSecondaryAction,
@@ -8820,6 +8960,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
                 child: Text(secondaryActionLabel),
               ),
+            if (actionLabel != null)
             TextButton(
               onPressed: onAction,
               style: TextButton.styleFrom(
@@ -10503,6 +10644,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await _sendGallerySelection(
       composed.files,
       caption: composed.caption,
+      isPaid: composed.isPaid,
+      priceStars: composed.priceStars,
     );
   }
 
@@ -10581,6 +10724,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendGallerySelection(
     List<XFile> files, {
     String caption = '',
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     if (files.isEmpty) return;
     final trimmedCaption = caption.trim();
@@ -10612,12 +10757,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await _normalizeVideoFileForUpload(file),
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
+          isPaid: isPaid,
+          priceStars: priceStars,
         );
       } else {
         await _sendPickedImage(
           file,
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
+          isPaid: isPaid,
+          priceStars: priceStars,
         );
       }
     }
@@ -11163,6 +11312,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String? clientMessageId,
     String caption = '',
     String? mediaGroupId,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     int? totalBytes;
     Uint8List? previewBytes;
@@ -11189,6 +11340,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       previewBytes: previewBytes,
       payloadBytes: previewBytes,
       mediaGroupId: mediaGroupId,
+      isPaid: isPaid,
+      priceStars: priceStars,
     ));
   }
 
@@ -11198,6 +11351,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String? clientMessageId,
     String caption = '',
     String? mediaGroupId,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     int? totalBytes;
     try {
@@ -11214,6 +11369,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       caption: caption,
       totalBytes: totalBytes,
       mediaGroupId: mediaGroupId,
+      isPaid: isPaid,
+      priceStars: priceStars,
     ));
   }
 
@@ -12732,6 +12889,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if ((_conversation.peer?.paidMessageStars ?? 0) > 0 &&
+                            !_conversation.isGroup &&
+                            !_conversation.isSaved)
+                          _compactComposerStrip(
+                            icon: Icons.stars_rounded,
+                            label:
+                                'Сообщения стоят ${_conversation.peer!.paidMessageStars} ★',
+                          ),
                         if (_isAutoRetryActive && !_sending)
                           _compactComposerStrip(
                             icon: _autoRetryReasonIcon,
@@ -13464,6 +13629,8 @@ class _PendingMediaSend {
     this.payloadBytes,
     this.silent = false,
     this.mediaGroupId,
+    this.isPaid = false,
+    this.priceStars = 0,
   });
 
   final int tempId;
@@ -13480,6 +13647,8 @@ class _PendingMediaSend {
   Uint8List? payloadBytes;
   final bool silent;
   final String? mediaGroupId;
+  final bool isPaid;
+  final int priceStars;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -13574,11 +13743,17 @@ class _Bubble extends StatelessWidget {
     this.onEditedTap,
     this.onReadersTap,
     this.outgoingBubbleColor,
+    this.onUnlockPaidMedia,
+    this.unlockingPaidMedia = false,
+    this.onPaidReaction,
   });
 
   final ChatMessage message;
   final ColorScheme scheme;
   final Color? outgoingBubbleColor;
+  final VoidCallback? onUnlockPaidMedia;
+  final bool unlockingPaidMedia;
+  final VoidCallback? onPaidReaction;
   /// Still sending to server (Telegram clock icon).
   final bool isPending;
   /// Send failed (tap to retry).
@@ -13840,49 +14015,71 @@ class _Bubble extends StatelessWidget {
   }
 
   Widget _buildReactions(Color fg, Color quoteBg) {
-    if (message.reactions.isEmpty) return const SizedBox.shrink();
+    final chips = message.reactions
+        .where((r) => r.emoji.isNotEmpty && r.count > 0)
+        .toList();
+    if (chips.isEmpty && onPaidReaction == null) {
+      return const SizedBox.shrink();
+    }
     final isDark = scheme.brightness == Brightness.dark;
 
     return Wrap(
       spacing: 3,
       runSpacing: 3,
-      children: message.reactions
-          .where((r) => r.emoji.isNotEmpty && r.count > 0)
-          .map(
-            (r) => Material(
-              elevation: 0.5,
-              color: r.reactedByMe
-                  ? scheme.primary.withValues(alpha: isDark ? 0.28 : 0.16)
-                  : (isDark
-                      ? const Color(0xFF2B3A4A)
-                      : scheme.surface.withValues(alpha: 0.95)),
+      children: [
+        for (final r in chips)
+          Material(
+            elevation: 0.5,
+            color: r.reactedByMe
+                ? scheme.primary.withValues(alpha: isDark ? 0.28 : 0.16)
+                : (isDark
+                    ? const Color(0xFF2B3A4A)
+                    : scheme.surface.withValues(alpha: 0.95)),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: onReactionTap == null
-                    ? null
-                    : () => onReactionTap!(r.emoji),
-                onLongPress: onReactionLongPress == null
-                    ? null
-                    : () => onReactionLongPress!(r.emoji),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  child: Text(
-                    r.count > 1 ? '${r.emoji} ${r.count}' : r.emoji,
-                    style: TextStyle(
-                      color: fg.withValues(alpha: 0.92),
-                      fontSize: 13,
-                      height: 1.1,
-                    ),
+              onTap: onReactionTap == null ? null : () => onReactionTap!(r.emoji),
+              onLongPress: onReactionLongPress == null
+                  ? null
+                  : () => onReactionLongPress!(r.emoji),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: Text(
+                  r.starsTotal > 0
+                      ? '${r.emoji} ${r.starsTotal}★'
+                      : (r.count > 1 ? '${r.emoji} ${r.count}' : r.emoji),
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.92),
+                    fontSize: 13,
+                    height: 1.1,
                   ),
                 ),
               ),
             ),
-          )
-          .toList(),
+          ),
+        if (onPaidReaction != null)
+          Material(
+            elevation: 0.5,
+            color: scheme.secondary.withValues(alpha: isDark ? 0.28 : 0.14),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: onPaidReaction,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: Text(
+                  '★+',
+                  style: TextStyle(
+                    color: scheme.secondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -14019,8 +14216,11 @@ class _Bubble extends StatelessWidget {
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
 
-    final isImage = message.type == 'image' && message.mediaUrl != null;
-    final isVideo = message.type == 'video' && message.mediaUrl != null;
+    final isLockedPaid = message.isLockedPaidMedia;
+    final isImage =
+        !isLockedPaid && message.type == 'image' && message.mediaUrl != null;
+    final isVideo =
+        !isLockedPaid && message.type == 'video' && message.mediaUrl != null;
     final isSticker = message.type == 'sticker' && message.mediaUrl != null;
     final isVideoNote = message.type == 'video_note' && message.mediaUrl != null;
     final isMedia = isImage || isVideo || isSticker;
@@ -14045,7 +14245,64 @@ class _Bubble extends StatelessWidget {
     final activeShadowColor = scheme.primary.withValues(alpha: 0.28);
 
     Widget mainContent;
-    if (message.type == 'voice' && message.mediaUrl != null) {
+    if (isLockedPaid) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: PaidMediaLockBubble(
+          priceStars: message.priceStars,
+          loading: unlockingPaidMedia,
+          onUnlock: onUnlockPaidMedia ?? () {},
+        ),
+      );
+    } else if (message.type == 'gift') {
+      Map<String, dynamic>? gift;
+      try {
+        final decoded = jsonDecode(message.content);
+        if (decoded is Map<String, dynamic>) gift = decoded;
+      } catch (_) {}
+      final emoji = gift?['emoji'] as String? ?? '🎁';
+      final title = gift?['title'] as String? ?? 'Подарок';
+      final stars = gift?['stars'] as int? ?? 0;
+      final note = gift?['message'] as String?;
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: Container(
+          width: 210,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: quoteBg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 40)),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                style: TextStyle(color: fg, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '$stars ★',
+                style: TextStyle(
+                  color: scheme.secondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (note != null && note.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  note.trim(),
+                  style: TextStyle(color: fg.withValues(alpha: 0.8)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    } else if (message.type == 'voice' && message.mediaUrl != null) {
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
