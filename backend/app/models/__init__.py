@@ -42,6 +42,7 @@ from app.models.paid_features import (
     PostBoost,
     StarGift,
     StarTransaction,
+    UserStarGift,
 )
 from app.models.story import Story
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
@@ -65,7 +66,7 @@ __all__ = [
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
     "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest",
-    "PaidMessageUnlock", "PaidMessageException", "StarGift", "Story",
+    "PaidMessageUnlock", "PaidMessageException", "StarGift", "UserStarGift", "Story",
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",

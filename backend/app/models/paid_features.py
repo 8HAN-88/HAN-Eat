@@ -158,3 +158,33 @@ class PaidMessageException(Base):
     )
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
+
+class UserStarGift(Base):
+    """Received Star gift inventory (Telegram: hold / convert / show on profile)."""
+
+    __tablename__ = "user_star_gifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sender_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    gift_id = Column(
+        Integer, ForeignKey("star_gifts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    message_id = Column(
+        Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    stars = Column(Integer, nullable=False)
+    slug = Column(String(64), nullable=False, default="gift")
+    title = Column(String(120), nullable=False, default="Подарок")
+    emoji = Column(String(16), nullable=False, default="🎁")
+    note = Column(String(500), nullable=True)
+    # held = waiting for convert/keep; converted = Stars claimed; kept = saved on profile
+    status = Column(String(24), nullable=False, default="held", index=True)
+    is_displayed = Column(Boolean, nullable=False, default=True, index=True)
+    converted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+

@@ -305,6 +305,8 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         return 'Платная реакция';
       case 'gift_received':
         return 'Подарок';
+      case 'gift_converted':
+        return 'Подарок → ★';
       default:
         return type;
     }
@@ -1023,12 +1025,14 @@ enum CreatorRevenueSource {
             type == 'paid_media_sale' ||
             type == 'paid_message_received' ||
             type == 'paid_reaction_received' ||
-            type == 'gift_received';
+            type == 'gift_received' ||
+            type == 'gift_converted';
       case CreatorRevenueSource.content:
         return type == 'content_sale' || type == 'paid_media_sale';
       case CreatorRevenueSource.donations:
         return type == 'donation_received' ||
             type == 'gift_received' ||
+            type == 'gift_converted' ||
             type == 'paid_reaction_received' ||
             type == 'paid_message_received';
       case CreatorRevenueSource.subscriptions:

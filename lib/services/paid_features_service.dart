@@ -319,6 +319,83 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось отправить подарок');
   }
 
+  static Future<List<UserStarGift>> listMyGifts({
+    bool includeConverted = false,
+  }) async {
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/paid/gifts/inventory?include_converted=$includeConverted',
+      ),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final gifts = data['gifts'] as List<dynamic>? ?? const [];
+      return gifts
+          .map((e) => UserStarGift.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить подарки');
+  }
+
+  static Future<List<UserStarGift>> listUserGifts(int userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/users/$userId/gifts'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final gifts = data['gifts'] as List<dynamic>? ?? const [];
+      return gifts
+          .map((e) => UserStarGift.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить подарки профиля');
+  }
+
+  static Future<ConvertGiftResult> convertGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/convert'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return ConvertGiftResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось конвертировать подарок');
+  }
+
+  static Future<UserStarGift> keepGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/keep'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось сохранить подарок');
+  }
+
+  static Future<UserStarGift> setGiftDisplayed(
+    int userGiftId, {
+    required bool displayed,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/display'),
+      headers: await _headers(),
+      body: jsonEncode({'displayed': displayed}),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось обновить отображение подарка');
+  }
+
   static Never _throwForResponse(http.Response response, String fallback) {
     throw apiExceptionFromHttpResponse(
       response.statusCode,
@@ -507,6 +584,7 @@ class SendGiftResult {
     required this.giftId,
     required this.stars,
     required this.balance,
+    this.userGiftId,
   });
 
   final int messageId;
@@ -514,12 +592,85 @@ class SendGiftResult {
   final int giftId;
   final int stars;
   final int balance;
+  final int? userGiftId;
 
   factory SendGiftResult.fromJson(Map<String, dynamic> json) => SendGiftResult(
         messageId: json['message_id'] as int? ?? 0,
         conversationId: json['conversation_id'] as int? ?? 0,
         giftId: json['gift_id'] as int? ?? 0,
         stars: json['stars'] as int? ?? 0,
+        balance: json['balance'] as int? ?? 0,
+        userGiftId: json['user_gift_id'] as int?,
+      );
+}
+
+class UserStarGift {
+  const UserStarGift({
+    required this.id,
+    required this.ownerId,
+    required this.stars,
+    required this.slug,
+    required this.title,
+    required this.emoji,
+    required this.status,
+    this.senderId,
+    this.giftId,
+    this.messageId,
+    this.note,
+    this.isDisplayed = true,
+    this.convertedAt,
+    this.createdAt,
+  });
+
+  final int id;
+  final int ownerId;
+  final int? senderId;
+  final int? giftId;
+  final int? messageId;
+  final int stars;
+  final String slug;
+  final String title;
+  final String emoji;
+  final String? note;
+  final String status;
+  final bool isDisplayed;
+  final DateTime? convertedAt;
+  final DateTime? createdAt;
+
+  bool get canConvert => status == 'held' || status == 'kept';
+
+  factory UserStarGift.fromJson(Map<String, dynamic> json) => UserStarGift(
+        id: json['id'] as int? ?? 0,
+        ownerId: json['owner_id'] as int? ?? 0,
+        senderId: json['sender_id'] as int?,
+        giftId: json['gift_id'] as int?,
+        messageId: json['message_id'] as int?,
+        stars: json['stars'] as int? ?? 0,
+        slug: json['slug'] as String? ?? 'gift',
+        title: json['title'] as String? ?? 'Подарок',
+        emoji: json['emoji'] as String? ?? '🎁',
+        note: json['note'] as String?,
+        status: json['status'] as String? ?? 'held',
+        isDisplayed: json['is_displayed'] as bool? ?? true,
+        convertedAt: DateTime.tryParse(json['converted_at'] as String? ?? ''),
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+      );
+}
+
+class ConvertGiftResult {
+  const ConvertGiftResult({
+    required this.gift,
+    required this.balance,
+  });
+
+  final UserStarGift gift;
+  final int balance;
+
+  factory ConvertGiftResult.fromJson(Map<String, dynamic> json) =>
+      ConvertGiftResult(
+        gift: UserStarGift.fromJson(
+          json['gift'] as Map<String, dynamic>? ?? const {},
+        ),
         balance: json['balance'] as int? ?? 0,
       );
 }

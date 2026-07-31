@@ -175,4 +175,38 @@ class SendStarGiftResponse(BaseModel):
     gift_id: int
     stars: int
     balance: int
+    user_gift_id: Optional[int] = None
+
+
+class UserStarGiftItem(BaseModel):
+    id: int
+    owner_id: int
+    sender_id: Optional[int] = None
+    gift_id: Optional[int] = None
+    message_id: Optional[int] = None
+    stars: int
+    slug: str
+    title: str
+    emoji: str
+    note: Optional[str] = None
+    status: str
+    is_displayed: bool = True
+    converted_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserStarGiftsResponse(BaseModel):
+    gifts: List[UserStarGiftItem]
+
+
+class SetUserStarGiftDisplayRequest(BaseModel):
+    displayed: bool
+
+
+class ConvertUserStarGiftResponse(BaseModel):
+    gift: UserStarGiftItem
+    balance: int
 

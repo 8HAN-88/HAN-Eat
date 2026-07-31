@@ -149,6 +149,17 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                       trailing: const Icon(Icons.chevron_right_rounded),
                     ),
                   ),
+                  const SizedBox(height: 10),
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: TelegramActionRow(
+                      icon: Icons.card_giftcard_rounded,
+                      title: 'Мои подарки',
+                      subtitle: 'Оставить в профиле или конвертировать в ★',
+                      onTap: () => context.push(StarGiftsInventoryRoute.path),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ),
                   const SizedBox(height: 18),
                   const TelegramSectionHeader(
                     title: 'Купить звёзды',
@@ -257,6 +268,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Подарок отправлен';
       case 'gift_received':
         return 'Подарок получен';
+      case 'gift_converted':
+        return 'Подарок → ★';
       case 'paid_media_purchase':
         return 'Платное медиа';
       case 'paid_media_sale':
