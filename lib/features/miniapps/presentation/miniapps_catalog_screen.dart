@@ -183,26 +183,24 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
     }
 
     BotListItem? selected = bots.length == 1 ? bots.first : null;
-    if (selected == null) {
-      selected = await showDialog<BotListItem>(
-        context: context,
-        builder: (ctx) => SimpleDialog(
-          title: const Text('Выберите бота'),
-          children: [
-            for (final bot in bots)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, bot),
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.smart_toy_outlined),
-                  title: Text(bot.name),
-                  subtitle: Text('@${bot.username}'),
-                ),
+    selected ??= await showDialog<BotListItem>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Выберите бота'),
+        children: [
+          for (final bot in bots)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, bot),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.smart_toy_outlined),
+                title: Text(bot.name),
+                subtitle: Text('@${bot.username}'),
               ),
-          ],
-        ),
-      );
-    }
+            ),
+        ],
+      ),
+    );
     if (selected == null || !mounted) return;
 
     await context.push(
