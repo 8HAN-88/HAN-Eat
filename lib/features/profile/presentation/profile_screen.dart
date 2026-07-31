@@ -9,6 +9,7 @@ import '../../../../services/user_service.dart' as user_service;
 import '../../../../services/user_posts_service.dart';
 import '../../../../services/profile_cache_service.dart';
 import '../../../../services/user_posts_cache_service.dart';
+import '../../../../services/paid_features_service.dart';
 import '../../../../models/post_model.dart';
 import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
@@ -77,6 +78,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   int? _postsListEpoch;
   int _postsRefreshGeneration = 0;
   bool _profileDataStarted = false;
+  List<UserStarGift> _profileGifts = const [];
 
   void _onTabIndexChanged() {
     if (_tabController.indexIsChanging) return;
@@ -278,7 +280,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (mounted) {
         _syncTabController(profileUserId: _profile?.user.id);
         setState(() => _isLoading = false);
+        unawaited(_loadProfileGifts());
       }
+    }
+  }
+
+  Future<void> _loadProfileGifts() async {
+    final userId = widget.userId ?? _profile?.user.id;
+    if (userId == null) return;
+    try {
+      final gifts = await PaidFeaturesService.listUserGifts(userId);
+      if (!mounted) return;
+      setState(() => _profileGifts = gifts);
+    } catch (_) {
+      // Gifts are optional chrome — keep profile usable offline/errors.
     }
   }
 
@@ -290,6 +305,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         setState(() {
           _profile = apiProfile;
         });
+        unawaited(_loadProfileGifts());
       }
     } catch (e) {
       debugPrint('Не удалось обновить профиль из API: $e');
@@ -590,6 +606,59 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   style: textTheme.bodyMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                     height: 1.35,
+                  ),
+                ),
+              ],
+              if (_profileGifts.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                InkWell(
+                  onTap: isOwnProfile
+                      ? () => context.push(StarGiftsInventoryRoute.path)
+                      : null,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.secondaryContainer.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          isOwnProfile ? 'Подарки' : 'Подарки профиля',
+                          style: textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            for (final g in _profileGifts.take(12))
+                              Tooltip(
+                                message: '${g.title} · ${g.stars} ★',
+                                child: Text(
+                                  g.emoji,
+                                  style: const TextStyle(fontSize: 22),
+                                ),
+                              ),
+                            if (_profileGifts.length > 12)
+                              Text(
+                                '+${_profileGifts.length - 12}',
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],

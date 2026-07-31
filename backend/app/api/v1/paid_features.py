@@ -23,8 +23,10 @@ from app.schemas.paid_features import (
     PurchaseMessageResponse,
     PurchasePostRequest,
     PurchasePostResponse,
+    ConvertUserStarGiftResponse,
     SendStarGiftRequest,
     SendStarGiftResponse,
+    SetUserStarGiftDisplayRequest,
     StarGiftItem,
     StarGiftsResponse,
     StarPackage,
@@ -34,6 +36,8 @@ from app.schemas.paid_features import (
     SubscribeChannelRequest,
     SubscribeChannelResponse,
     UpdateChannelSubscriptionRequest,
+    UserStarGiftItem,
+    UserStarGiftsResponse,
 )
 from app.models.community import Channel
 from app.services.paid_features_service import PaidFeaturesService
@@ -473,11 +477,103 @@ async def send_star_gift(
             user_id,
             {"event": "chat.inbox", "conversation_id": request.conversation_id},
         )
+    user_gift_id = None
+    try:
+        import json as _json
+
+        payload = _json.loads(msg.content or "{}")
+        if isinstance(payload, dict):
+            user_gift_id = payload.get("user_gift_id")
+    except Exception:
+        user_gift_id = None
     return SendStarGiftResponse(
         message_id=msg.id,
         conversation_id=request.conversation_id,
         gift_id=gift_id,
         stars=stars,
         balance=service.star_balance(current_user.id),
+        user_gift_id=int(user_gift_id) if user_gift_id else None,
     )
+
+
+@router.get("/gifts/inventory", response_model=UserStarGiftsResponse)
+async def list_my_star_gifts(
+    include_converted: bool = False,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gifts = service.list_user_star_gifts(
+        current_user.id, include_converted=include_converted
+    )
+    return UserStarGiftsResponse(
+        gifts=[UserStarGiftItem.model_validate(g) for g in gifts]
+    )
+
+
+@router.get("/users/{user_id}/gifts", response_model=UserStarGiftsResponse)
+async def list_user_displayed_gifts(
+    user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gifts = service.list_user_star_gifts(user_id, displayed_only=True, limit=40)
+    return UserStarGiftsResponse(
+        gifts=[UserStarGiftItem.model_validate(g) for g in gifts]
+    )
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/convert",
+    response_model=ConvertUserStarGiftResponse,
+)
+async def convert_my_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.convert_user_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    return ConvertUserStarGiftResponse(
+        gift=UserStarGiftItem.model_validate(gift),
+        balance=service.star_balance(current_user.id),
+    )
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/keep",
+    response_model=UserStarGiftItem,
+)
+async def keep_my_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.keep_user_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    return UserStarGiftItem.model_validate(gift)
+
+
+@router.patch(
+    "/gifts/inventory/{user_gift_id}/display",
+    response_model=UserStarGiftItem,
+)
+async def set_my_star_gift_display(
+    user_gift_id: int,
+    request: SetUserStarGiftDisplayRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.set_user_star_gift_displayed(
+        current_user.id, user_gift_id, displayed=request.displayed
+    )
+    db.commit()
+    db.refresh(gift)
+    return UserStarGiftItem.model_validate(gift)
 

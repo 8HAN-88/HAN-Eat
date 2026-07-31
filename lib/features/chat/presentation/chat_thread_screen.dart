@@ -316,6 +316,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _paidDmFeeConfirmed = false;
   bool _sendingStarGift = false;
   bool _sendingPaidReaction = false;
+  final Set<int> _giftActionMessageIds = {};
   bool _holdActive = false;
   bool _recordCancelled = false;
   bool _voiceLocked = false;
@@ -6488,6 +6489,104 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  int? _userGiftIdFromMessage(ChatMessage msg) {
+    try {
+      final decoded = jsonDecode(msg.content);
+      if (decoded is Map<String, dynamic>) {
+        final raw = decoded['user_gift_id'];
+        if (raw is int) return raw;
+        if (raw is num) return raw.toInt();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _patchLocalGiftStatus(ChatMessage msg, String status) {
+    try {
+      final decoded = jsonDecode(msg.content);
+      if (decoded is! Map<String, dynamic>) return;
+      decoded['status'] = status;
+      final next = msg.copyWith(content: jsonEncode(decoded));
+      final idx = _messages.indexWhere((m) => m.id == msg.id);
+      if (idx >= 0) {
+        setState(() => _messages[idx] = next);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _convertReceivedGift(ChatMessage msg) async {
+    final giftId = _userGiftIdFromMessage(msg);
+    if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
+    final stars = () {
+      try {
+        final decoded = jsonDecode(msg.content);
+        if (decoded is Map<String, dynamic>) {
+          return (decoded['stars'] as num?)?.toInt() ?? 0;
+        }
+      } catch (_) {}
+      return 0;
+    }();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Конвертировать подарок'),
+        content: Text('Получить $stars ★ на баланс? Подарок исчезнет из профиля.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Получить $stars ★'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _giftActionMessageIds.add(msg.id));
+    try {
+      await PaidFeaturesService.convertGift(giftId);
+      if (!mounted) return;
+      _patchLocalGiftStatus(msg, 'converted');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('+$stars ★ на балансе')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _giftActionMessageIds.remove(msg.id));
+      }
+    }
+  }
+
+  Future<void> _keepReceivedGift(ChatMessage msg) async {
+    final giftId = _userGiftIdFromMessage(msg);
+    if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
+    setState(() => _giftActionMessageIds.add(msg.id));
+    try {
+      await PaidFeaturesService.keepGift(giftId);
+      if (!mounted) return;
+      _patchLocalGiftStatus(msg, 'kept');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подарок сохранён в профиле')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _giftActionMessageIds.remove(msg.id));
+      }
+    }
+  }
+
   Future<void> _unlockPaidMedia(ChatMessage msg) async {
     if (!msg.isLockedPaidMedia) return;
     final ok = await confirmStarsSpend(
@@ -8022,6 +8121,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onPaidReaction: interactive && !msg.isMine && msg.id > 0
           ? () => unawaited(_sendPaidReaction(msg))
           : null,
+      onConvertGift: interactive &&
+              !msg.isMine &&
+              msg.type == 'gift' &&
+              _userGiftIdFromMessage(msg) != null
+          ? () => unawaited(_convertReceivedGift(msg))
+          : null,
+      onKeepGift: interactive &&
+              !msg.isMine &&
+              msg.type == 'gift' &&
+              _userGiftIdFromMessage(msg) != null
+          ? () => unawaited(_keepReceivedGift(msg))
+          : null,
+      giftActionBusy: _giftActionMessageIds.contains(msg.id),
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
@@ -13842,6 +13954,9 @@ class _Bubble extends StatelessWidget {
     this.onUnlockPaidMedia,
     this.unlockingPaidMedia = false,
     this.onPaidReaction,
+    this.onConvertGift,
+    this.onKeepGift,
+    this.giftActionBusy = false,
   });
 
   final ChatMessage message;
@@ -13850,6 +13965,9 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onUnlockPaidMedia;
   final bool unlockingPaidMedia;
   final VoidCallback? onPaidReaction;
+  final VoidCallback? onConvertGift;
+  final VoidCallback? onKeepGift;
+  final bool giftActionBusy;
   /// Still sending to server (Telegram clock icon).
   final bool isPending;
   /// Send failed (tap to retry).
@@ -14361,11 +14479,15 @@ class _Bubble extends StatelessWidget {
       final title = gift?['title'] as String? ?? 'Подарок';
       final stars = gift?['stars'] as int? ?? 0;
       final note = gift?['message'] as String?;
+      final status = gift?['status'] as String? ?? 'held';
+      final canAct = !mine &&
+          (status == 'held' || status == 'kept') &&
+          (onConvertGift != null || onKeepGift != null);
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
         child: Container(
-          width: 210,
+          width: 220,
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
@@ -14381,7 +14503,11 @@ class _Bubble extends StatelessWidget {
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
               Text(
-                '$stars ★',
+                status == 'converted'
+                    ? 'Конвертирован · $stars ★'
+                    : status == 'kept'
+                        ? 'В профиле · $stars ★'
+                        : '$stars ★',
                 style: TextStyle(
                   color: scheme.secondary,
                   fontWeight: FontWeight.w700,
@@ -14393,6 +14519,32 @@ class _Bubble extends StatelessWidget {
                   note.trim(),
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
+              ],
+              if (canAct) ...[
+                const SizedBox(height: 10),
+                if (giftActionBusy)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      if (status == 'held' && onKeepGift != null)
+                        FilledButton.tonal(
+                          onPressed: onKeepGift,
+                          child: const Text('Оставить'),
+                        ),
+                      if (onConvertGift != null)
+                        FilledButton(
+                          onPressed: onConvertGift,
+                          child: Text('В ★ · $stars'),
+                        ),
+                    ],
+                  ),
               ],
             ],
           ),

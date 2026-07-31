@@ -19,6 +19,7 @@ import '../features/settings/presentation/allergies_screen.dart';
 import '../features/settings/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
+import '../features/settings/presentation/star_gifts_inventory_screen.dart';
 import '../features/settings/presentation/creator_revenue_screen.dart';
 import '../features/settings/presentation/stars_checkout_result_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
@@ -680,6 +681,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: StarsWalletRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: StarsWalletScreen()),
+      ),
+      GoRoute(
+        path: StarGiftsInventoryRoute.path,
+        name: StarGiftsInventoryRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StarGiftsInventoryScreen()),
       ),
       GoRoute(
         path: StarsCheckoutSuccessRoute.path,
@@ -1629,6 +1636,11 @@ class SubscriptionRoute {
 class StarsWalletRoute {
   static const path = '/paid/wallet';
   static const name = 'stars_wallet';
+}
+
+class StarGiftsInventoryRoute {
+  static const path = '/paid/gifts';
+  static const name = 'star_gifts_inventory';
 }
 
 class StarsCheckoutSuccessRoute {

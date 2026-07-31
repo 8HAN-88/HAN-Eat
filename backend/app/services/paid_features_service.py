@@ -20,6 +20,7 @@ from app.models.paid_features import (
     PostBoost,
     StarGift,
     StarTransaction,
+    UserStarGift,
 )
 from app.models.post import Post
 from app.models.user import User
@@ -987,22 +988,12 @@ class PaidFeaturesService:
         import json as _json
 
         note = (message or "").strip()
-        content = _json.dumps(
-            {
-                "gift_id": gift.id,
-                "slug": gift.slug,
-                "title": gift.title,
-                "emoji": gift.emoji,
-                "stars": gift.stars,
-                "message": note or None,
-            },
-            ensure_ascii=False,
-        )
+        # Create message first so we can bind inventory + spend idempotently.
         msg = Message(
             conversation_id=conversation_id,
             sender_id=sender_id,
             type="gift",
-            content=content,
+            content="{}",
             media_url=None,
         )
         self.db.add(msg)
@@ -1018,18 +1009,158 @@ class PaidFeaturesService:
             idempotency_key=idem or f"gift:msg:{msg.id}",
             meta={"gift_id": gift.id, "slug": gift.slug},
         )
-        self._credit_creator(
-            recipient_id,
-            int(gift.stars),
-            tx_type="gift_received",
-            reference_type="message",
-            reference_id=msg.id,
-            counterparty_user_id=sender_id,
-            meta={"gift_id": gift.id, "slug": gift.slug},
+        # Telegram-like: Stars sit in the gift until the recipient converts.
+        owned = UserStarGift(
+            owner_id=recipient_id,
+            sender_id=sender_id,
+            gift_id=gift.id,
+            message_id=msg.id,
+            stars=int(gift.stars),
+            slug=gift.slug,
+            title=gift.title,
+            emoji=gift.emoji,
+            note=note or None,
+            status="held",
+            is_displayed=True,
+        )
+        self.db.add(owned)
+        self.db.flush()
+        msg.content = _json.dumps(
+            {
+                "gift_id": gift.id,
+                "user_gift_id": owned.id,
+                "slug": gift.slug,
+                "title": gift.title,
+                "emoji": gift.emoji,
+                "stars": gift.stars,
+                "message": note or None,
+                "status": "held",
+            },
+            ensure_ascii=False,
         )
         conv.updated_at = datetime.utcnow()
         self.db.flush()
         return msg
+
+    def list_user_star_gifts(
+        self,
+        owner_id: int,
+        *,
+        displayed_only: bool = False,
+        include_converted: bool = False,
+        limit: int = 50,
+    ) -> list[UserStarGift]:
+        limit = max(1, min(int(limit or 50), 100))
+        q = self.db.query(UserStarGift).filter(UserStarGift.owner_id == owner_id)
+        if displayed_only:
+            q = q.filter(
+                UserStarGift.is_displayed.is_(True),
+                UserStarGift.status.in_(("held", "kept")),
+            )
+        elif not include_converted:
+            q = q.filter(UserStarGift.status.in_(("held", "kept")))
+        return (
+            q.order_by(UserStarGift.created_at.desc(), UserStarGift.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def convert_user_star_gift(self, owner_id: int, user_gift_id: int) -> UserStarGift:
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.status == "converted":
+            return gift
+        if gift.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be converted"
+            )
+        amount = int(gift.stars)
+        self.add_stars(
+            owner_id,
+            amount,
+            tx_type="gift_converted",
+            idempotency_key=f"gift_convert:{gift.id}",
+            meta={
+                "user_gift_id": gift.id,
+                "gift_id": gift.gift_id,
+                "slug": gift.slug,
+                "from_sender_id": gift.sender_id,
+            },
+        )
+        # Creator earnings ledger tracks converted gift value too.
+        balance = self.creator_balance(owner_id)
+        balance.available_stars = int(balance.available_stars or 0) + amount
+        gift.status = "converted"
+        gift.is_displayed = False
+        gift.converted_at = datetime.utcnow()
+        self._patch_gift_message_status(gift, status="converted")
+        self.db.flush()
+        return gift
+
+    def keep_user_star_gift(self, owner_id: int, user_gift_id: int) -> UserStarGift:
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.status == "converted":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift already converted"
+            )
+        gift.status = "kept"
+        gift.is_displayed = True
+        self._patch_gift_message_status(gift, status="kept")
+        self.db.flush()
+        return gift
+
+    def set_user_star_gift_displayed(
+        self, owner_id: int, user_gift_id: int, *, displayed: bool
+    ) -> UserStarGift:
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.status == "converted":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Converted gifts cannot be displayed",
+            )
+        gift.is_displayed = bool(displayed)
+        if displayed and gift.status == "held":
+            gift.status = "kept"
+        self.db.flush()
+        return gift
+
+    def _patch_gift_message_status(self, gift: UserStarGift, *, status: str) -> None:
+        if not gift.message_id:
+            return
+        import json as _json
+
+        msg = self.db.query(Message).filter(Message.id == gift.message_id).first()
+        if not msg or msg.type != "gift":
+            return
+        try:
+            payload = _json.loads(msg.content or "{}")
+            if not isinstance(payload, dict):
+                payload = {}
+        except Exception:
+            payload = {}
+        payload["status"] = status
+        payload["user_gift_id"] = gift.id
+        msg.content = _json.dumps(payload, ensure_ascii=False)
 
     def pay_for_reaction(
         self,

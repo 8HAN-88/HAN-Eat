@@ -20,6 +20,7 @@ from app.models.paid_features import (
     PaidMessageUnlock,
     StarGift,
     StarTransaction,
+    UserStarGift,
 )
 from app.models.user import User
 from app.services.paid_features_service import PaidFeaturesService
@@ -42,6 +43,7 @@ def db_session():
         PaidMessageUnlock.__table__,
         PaidMessageException.__table__,
         StarGift.__table__,
+        UserStarGift.__table__,
         Notification.__table__,
         CreatorPayoutRequest.__table__,
     ]
@@ -277,7 +279,55 @@ def test_send_star_gift_direct(db_session):
     assert again.id == msg.id
     assert "🌹" in msg.content
     assert svc.star_balance(1) == 175
+    # Stars sit in inventory until convert (Telegram-like).
+    assert svc.creator_balance(2).available_stars == 0
+    held = svc.list_user_star_gifts(2)
+    assert len(held) == 1
+    assert held[0].status == "held"
+    assert held[0].stars == 25
+
+    converted = svc.convert_user_star_gift(2, held[0].id)
+    db_session.commit()
+    assert converted.status == "converted"
+    assert svc.star_balance(2) == 25
     assert svc.creator_balance(2).available_stars == 25
+    assert svc.list_user_star_gifts(2) == []
+    assert svc.list_user_star_gifts(2, include_converted=True)[0].status == "converted"
+
+
+def test_keep_star_gift_shows_on_profile(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)
+    db_session.add(
+        StarGift(
+            slug="star",
+            title="Звезда",
+            emoji="⭐",
+            stars=15,
+            is_active=True,
+            sort_order=1,
+        )
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    gift = svc.list_star_gifts()[0]
+    svc.send_star_gift(1, gift_id=gift.id, conversation_id=conv.id)
+    owned = svc.list_user_star_gifts(2)[0]
+    kept = svc.keep_user_star_gift(2, owned.id)
+    db_session.commit()
+    assert kept.status == "kept"
+    displayed = svc.list_user_star_gifts(2, displayed_only=True)
+    assert len(displayed) == 1
+    assert displayed[0].emoji == "⭐"
+    # Keep does not credit Stars.
+    assert svc.star_balance(2) == 0
 
 
 def test_pay_for_reaction_idempotent(db_session):
