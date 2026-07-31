@@ -13,7 +13,13 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 from app.core.database import Base
 from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.notification import Notification
-from app.models.paid_features import CreatorBalance, PaidMessageUnlock, StarGift, StarTransaction
+from app.models.paid_features import (
+    CreatorBalance,
+    CreatorPayoutRequest,
+    PaidMessageUnlock,
+    StarGift,
+    StarTransaction,
+)
 from app.models.user import User
 from app.services.paid_features_service import PaidFeaturesService
 
@@ -35,6 +41,7 @@ def db_session():
         PaidMessageUnlock.__table__,
         StarGift.__table__,
         Notification.__table__,
+        CreatorPayoutRequest.__table__,
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
     Session = sessionmaker(bind=engine)
@@ -113,6 +120,69 @@ def test_charge_paid_message_fee(db_session):
     assert tx is not None
     assert svc.star_balance(2) == 35
     assert svc.creator_balance(1).available_stars == 15
+
+
+def test_payout_escrows_spendable_stars(db_session):
+    _user(db_session, 1)
+    _credit(db_session, 1, 200)
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 80
+    db_session.commit()
+
+    payout = svc.request_creator_payout(1, 50)
+    db_session.commit()
+    assert payout.status == "pending"
+    assert svc.star_balance(1) == 150
+    assert svc.creator_balance(1).available_stars == 30
+    assert svc.creator_balance(1).pending_stars == 50
+
+    # Cannot spend escrowed amount while pending.
+    assert svc.star_balance(1) == 150
+
+    rejected = svc.review_payout(payout.id, reviewer_user_id=1, approve=False)
+    db_session.commit()
+    assert rejected.status == "rejected"
+    assert svc.star_balance(1) == 200
+    assert svc.creator_balance(1).available_stars == 80
+    assert svc.creator_balance(1).pending_stars == 0
+
+    payout2 = svc.request_creator_payout(1, 40)
+    db_session.commit()
+    approved = svc.review_payout(payout2.id, reviewer_user_id=1, approve=True)
+    db_session.commit()
+    assert approved.status == "paid"
+    assert svc.star_balance(1) == 160
+    assert svc.creator_balance(1).available_stars == 40
+    assert svc.creator_balance(1).paid_out_stars == 40
+
+
+def test_charge_paid_message_fee_once_per_album(db_session):
+    _user(db_session, 1, paid_message_stars=10)
+    _user(db_session, 2)
+    _credit(db_session, 2, 100)
+    db_session.commit()
+    svc = PaidFeaturesService(db_session)
+    first = svc.charge_paid_message_fee(
+        2,
+        1,
+        conversation_id=7,
+        message_id=1,
+        media_group_id="album-abc",
+    )
+    second = svc.charge_paid_message_fee(
+        2,
+        1,
+        conversation_id=7,
+        message_id=2,
+        media_group_id="album-abc",
+    )
+    db_session.commit()
+    assert first is not None
+    assert second is not None
+    assert first.id == second.id
+    assert svc.star_balance(2) == 90
+    assert svc.creator_balance(1).available_stars == 10
 
 
 def test_send_star_gift_direct(db_session):
@@ -217,3 +287,4 @@ def test_forward_paid_media_requires_unlock(db_session):
     assert forwarded.is_paid is True
     assert int(forwarded.price_stars or 0) == 20
     assert forwarded.media_url == "https://example.com/paid.jpg"
+    assert forwarded.media_group_id == msg.media_group_id

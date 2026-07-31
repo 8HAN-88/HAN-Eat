@@ -189,6 +189,24 @@ def db_session():
         )
         conn.exec_driver_sql(
             """
+            CREATE TABLE channel_members (
+                id INTEGER PRIMARY KEY,
+                channel_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role VARCHAR(20) DEFAULT 'member',
+                status VARCHAR(20) DEFAULT 'active' NOT NULL,
+                is_favorite BOOLEAN DEFAULT 0 NOT NULL,
+                inbox_archived BOOLEAN DEFAULT 0 NOT NULL,
+                show_in_feed BOOLEAN DEFAULT 1 NOT NULL,
+                notifications_enabled BOOLEAN DEFAULT 1 NOT NULL,
+                last_seen_posts_count INTEGER DEFAULT 0 NOT NULL,
+                joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(channel_id, user_id)
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
             CREATE TABLE post_boosts (
                 id INTEGER PRIMARY KEY,
                 post_id INTEGER NOT NULL,

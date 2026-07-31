@@ -368,36 +368,35 @@ class PaidFeaturesService:
             counterparty_user_id=user_id,
         )
         # Paying for a private channel grants active membership (Telegram-like).
-        try:
-            from app.models.community import ChannelMember
-            from app.services.channel_membership_service import (
-                MEMBER_STATUS_ACTIVE,
-                sync_channel_members_count,
-            )
+        # Fail the whole subscribe if membership cannot be granted — otherwise
+        # Stars are spent but posts stay locked.
+        from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import (
+            MEMBER_STATUS_ACTIVE,
+            sync_channel_members_count,
+        )
 
-            member = (
-                self.db.query(ChannelMember)
-                .filter(
-                    ChannelMember.channel_id == channel_id,
-                    ChannelMember.user_id == user_id,
-                )
-                .first()
+        member = (
+            self.db.query(ChannelMember)
+            .filter(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.user_id == user_id,
             )
-            if member is None:
-                self.db.add(
-                    ChannelMember(
-                        channel_id=channel_id,
-                        user_id=user_id,
-                        role="member",
-                        status=MEMBER_STATUS_ACTIVE,
-                    )
+            .first()
+        )
+        if member is None:
+            self.db.add(
+                ChannelMember(
+                    channel_id=channel_id,
+                    user_id=user_id,
+                    role="member",
+                    status=MEMBER_STATUS_ACTIVE,
                 )
-                sync_channel_members_count(self.db, channel_id)
-            elif member.status != MEMBER_STATUS_ACTIVE:
-                member.status = MEMBER_STATUS_ACTIVE
-                sync_channel_members_count(self.db, channel_id)
-        except Exception:
-            pass
+            )
+            sync_channel_members_count(self.db, channel_id)
+        elif member.status != MEMBER_STATUS_ACTIVE:
+            member.status = MEMBER_STATUS_ACTIVE
+            sync_channel_members_count(self.db, channel_id)
         _invalidate_user_feed_cache(self.db, user_id)
         self.db.flush()
         return sub
@@ -470,6 +469,13 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not enough creator balance",
             )
+        # Escrow spendable Stars immediately so cashout can't be spent twice
+        # while the request is pending.
+        if self.star_balance(user_id) < amount_stars:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Not enough spendable stars to cash out",
+            )
         amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
         payout = CreatorPayoutRequest(
             creator_user_id=user_id,
@@ -478,9 +484,17 @@ class PaidFeaturesService:
             status="pending",
             note=(note or "").strip() or None,
         )
+        self.db.add(payout)
+        self.db.flush()
+        self._spend_stars(
+            user_id,
+            amount_stars,
+            tx_type="payout_hold",
+            reference_type="payout",
+            reference_id=payout.id,
+        )
         balance.available_stars = available - amount_stars
         balance.pending_stars = int(balance.pending_stars or 0) + amount_stars
-        self.db.add(payout)
         self.db.flush()
         return payout
 
@@ -522,6 +536,17 @@ class PaidFeaturesService:
                 0, int(creator_balance.pending_stars or 0) - amount
             )
             creator_balance.available_stars = int(creator_balance.available_stars or 0) + amount
+            # Release escrowed spendable Stars.
+            self.db.add(
+                StarTransaction(
+                    user_id=payout.creator_user_id,
+                    amount=amount,
+                    type="payout_refund",
+                    reference_type="payout",
+                    reference_id=payout.id,
+                    status="completed",
+                )
+            )
         else:
             creator_balance.pending_stars = max(
                 0, int(creator_balance.pending_stars or 0) - amount
@@ -529,18 +554,7 @@ class PaidFeaturesService:
             creator_balance.paid_out_stars = int(creator_balance.paid_out_stars or 0) + amount
             payout.status = "paid"
             payout.paid_at = datetime.utcnow()
-            # Burn payout amount from spendable Stars so cashout can't be spent twice.
-            if self.star_balance(payout.creator_user_id) >= amount:
-                self.db.add(
-                    StarTransaction(
-                        user_id=payout.creator_user_id,
-                        amount=-amount,
-                        type="payout",
-                        reference_type="payout",
-                        reference_id=payout.id,
-                        status="completed",
-                    )
-                )
+            # Spendable Stars were already escrowed on request (payout_hold).
         self.db.flush()
         return payout
 
@@ -702,8 +716,12 @@ class PaidFeaturesService:
         *,
         conversation_id: int,
         message_id: int,
+        media_group_id: Optional[str] = None,
     ) -> Optional[StarTransaction]:
-        """Charge Stars to send a DM when recipient has paid_message_stars > 0."""
+        """Charge Stars to send a DM when recipient has paid_message_stars > 0.
+
+        Album sends share one media_group_id — charge once for the whole album.
+        """
         if sender_id == recipient_id:
             return None
         recipient = (
@@ -716,23 +734,47 @@ class PaidFeaturesService:
         amount = int(getattr(recipient, "paid_message_stars", 0) or 0)
         if amount <= 0:
             return None
+        group_id = (media_group_id or "").strip() or None
+        ref_type = "media_group" if group_id else "message"
+        ref_id = conversation_id if group_id else message_id
+        idem = (
+            f"paid_dm:album:{conversation_id}:{group_id}:{sender_id}"
+            if group_id
+            else f"paid_dm:msg:{message_id}:{sender_id}"
+        )
+        existing = (
+            self.db.query(StarTransaction)
+            .filter(StarTransaction.idempotency_key == idem)
+            .first()
+        )
+        if existing is not None:
+            return existing
         tx = self._spend_stars(
             sender_id,
             amount,
             tx_type="paid_message",
-            reference_type="message",
-            reference_id=message_id,
+            reference_type=ref_type,
+            reference_id=ref_id,
             counterparty_user_id=recipient_id,
-            meta={"conversation_id": conversation_id},
+            idempotency_key=idem,
+            meta={
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "media_group_id": group_id,
+            },
         )
         self._credit_creator(
             recipient_id,
             amount,
             tx_type="paid_message_received",
-            reference_type="message",
-            reference_id=message_id,
+            reference_type=ref_type,
+            reference_id=ref_id,
             counterparty_user_id=sender_id,
-            meta={"conversation_id": conversation_id},
+            meta={
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "media_group_id": group_id,
+            },
         )
         return tx
 

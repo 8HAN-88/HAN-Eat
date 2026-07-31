@@ -1825,6 +1825,10 @@ class ChatService {
       readCount: mine ? 0 : msg.readCount,
       disableWebpagePreview: msg.disableWebpagePreview,
       mediaGroupId: msg.mediaGroupId,
+      isPaid: msg.isPaid,
+      priceStars: msg.priceStars,
+      // Own paid media is always unlocked for the sender.
+      purchased: mine ? true : msg.purchased,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
     );

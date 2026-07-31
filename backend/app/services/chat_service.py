@@ -2775,6 +2775,7 @@ class ChatService:
             media_url=media_url,
             is_paid=src_paid,
             price_stars=src_price,
+            media_group_id=getattr(src, "media_group_id", None),
         )
         if as_copy:
             msg.forward_from_user_id = None

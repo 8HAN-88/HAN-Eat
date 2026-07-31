@@ -165,6 +165,8 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     try {
       await PaidFeaturesService.subscribeChannel(channel.id);
       if (!mounted) return;
+      await ChannelCacheService.invalidateChannelCache(widget.channelId);
+      ref.read(channelsMainListRefreshProvider.notifier).state++;
       await _loadChannel(forceRefresh: true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -550,6 +552,7 @@ class _PrivateChannelPostsLockedState
     try {
       await PaidFeaturesService.subscribeChannel(widget.channel.id);
       if (!mounted) return;
+      await ChannelCacheService.invalidateChannelCache(widget.channel.id);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Подписка оформлена')),
       );
