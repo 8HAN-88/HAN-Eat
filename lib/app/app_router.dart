@@ -692,6 +692,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final section = switch (sectionRaw) {
             'miniapps' || 'mini_apps' || 'apps' =>
               BotDetailOpenSection.miniApps,
+            'newapp' || 'new_app' => BotDetailOpenSection.newApp,
             'commands' => BotDetailOpenSection.commands,
             'token' => BotDetailOpenSection.token,
             _ => BotDetailOpenSection.none,
@@ -1632,6 +1633,8 @@ class BotDetailRoute {
     switch (section) {
       case BotDetailOpenSection.miniApps:
         params['section'] = 'miniapps';
+      case BotDetailOpenSection.newApp:
+        params['section'] = 'newapp';
       case BotDetailOpenSection.commands:
         params['section'] = 'commands';
       case BotDetailOpenSection.token:

@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
+import '../../../services/api_service.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../../bots/data/bot_models.dart';
 import '../../bots/presentation/bot_detail_screen.dart';
 import '../data/miniapp_models.dart';
 import '../data/miniapps_service.dart';
@@ -149,83 +151,70 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
   }
 
   Future<void> _publishMiniApp() async {
-    // Как /newapp в BotFather: сначала бот, потом web app на нём.
-    final goBots = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New Mini App'),
-        content: const Text(
-          'В Telegram мини-приложение создаётся через бота '
-          '(BotFather → Mini Apps → New App).\n\n'
-          'Откройте «Мои боты», выберите бота и раздел Mini Apps.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Мои боты'),
-          ),
-        ],
-      ),
-    );
-    if (goBots == true && mounted) await _openMyBots();
-  }
-
-  Future<void> _editMiniApp(MiniAppItem app) async {
-    final result = await showDialog<MiniAppUpdateRequest>(
-      context: context,
-      builder: (_) => _EditMiniAppDialog(app: app),
-    );
-    if (result == null) return;
+    // Как /newapp в BotFather: выбрать бота → сразу New Mini App.
+    List<BotListItem> bots = const [];
     try {
-      await MiniAppsService.updateMiniApp(app.id, result);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Изменения сохранены')),
+      bots = await ApiService.getMyBots();
+    } catch (_) {}
+    if (!mounted) return;
+
+    if (bots.isEmpty) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Сначала нужен бот'),
+          content: const Text(
+            'Как в Telegram: создайте бота в BotFather, затем New Mini App.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Мои боты'),
+            ),
+          ],
+        ),
       );
-      await _reload();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось сохранить: $e')),
+      if (go == true && mounted) await _openMyBots();
+      return;
+    }
+
+    BotListItem? selected = bots.length == 1 ? bots.first : null;
+    if (selected == null) {
+      selected = await showDialog<BotListItem>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Выберите бота'),
+          children: [
+            for (final bot in bots)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, bot),
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: Text(bot.name),
+                  subtitle: Text('@${bot.username}'),
+                ),
+              ),
+          ],
+        ),
       );
     }
-  }
+    if (selected == null || !mounted) return;
 
-  Future<void> _deleteMiniApp(MiniAppItem app) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить мини-приложение?'),
-        content: Text('«${app.name}» будет удалено из каталога без восстановления.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
+    await context.push(
+      BotDetailRoute.pathFor(
+        selected.id,
+        username: selected.username,
+        section: BotDetailOpenSection.newApp,
       ),
     );
-    if (confirmed != true) return;
-    try {
-      await MiniAppsService.deleteMiniApp(app.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Мини-приложение удалено')),
-      );
+    if (mounted) {
+      _tabs.animateTo(1);
       await _reload();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: $e')),
-      );
     }
   }
 
@@ -287,25 +276,14 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
       ),
     ];
     if (app.isOwner) {
-      actions.addAll([
+      actions.add(
         TelegramActionSheetAction(
           icon: Icons.smart_toy_outlined,
           title: 'Manage in Bot',
-          subtitle: 'Как Edit App в @BotFather',
+          subtitle: 'Edit / Delete App в BotFather',
           onTap: () => _openBotMiniApps(app),
         ),
-        TelegramActionSheetAction(
-          icon: Icons.edit_outlined,
-          title: 'Редактировать',
-          onTap: () => _editMiniApp(app),
-        ),
-        TelegramActionSheetAction(
-          icon: Icons.delete_outline_rounded,
-          title: 'Удалить приложение',
-          destructive: true,
-          onTap: () => _deleteMiniApp(app),
-        ),
-      ]);
+      );
     }
     showTelegramActionSheet<void>(
       context: context,
@@ -669,114 +647,6 @@ class _MiniAppRow extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _EditMiniAppDialog extends StatefulWidget {
-  const _EditMiniAppDialog({required this.app});
-
-  final MiniAppItem app;
-
-  @override
-  State<_EditMiniAppDialog> createState() => _EditMiniAppDialogState();
-}
-
-class _EditMiniAppDialogState extends State<_EditMiniAppDialog> {
-  late final TextEditingController _nameController;
-  late final TextEditingController _urlController;
-  late final TextEditingController _descController;
-  late String _category;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.app.name);
-    _urlController = TextEditingController(text: widget.app.url);
-    _descController = TextEditingController(text: widget.app.description ?? '');
-    final existing = (widget.app.category ?? '').trim().toLowerCase();
-    _category = MiniAppCategory.known.any((c) => c.id == existing)
-        ? existing
-        : 'other';
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _urlController.dispose();
-    _descController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Редактировать'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Название'),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Категория'),
-                items: MiniAppCategory.known
-                    .map(
-                      (c) => DropdownMenuItem<String>(
-                        value: c.id,
-                        child: Text(c.label),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _category = value);
-                },
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _urlController,
-                decoration: const InputDecoration(labelText: 'URL'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Описание'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final name = _nameController.text.trim();
-            final url = _urlController.text.trim();
-            if (name.isEmpty || url.isEmpty) return;
-            Navigator.pop(
-              context,
-              MiniAppUpdateRequest(
-                name: name,
-                url: url,
-                category: _category,
-                description: _descController.text.trim(),
-              ),
-            );
-          },
-          child: const Text('Сохранить'),
-        ),
-      ],
     );
   }
 }

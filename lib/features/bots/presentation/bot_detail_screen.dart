@@ -24,6 +24,8 @@ enum BotDetailOpenSection {
   none,
   token,
   miniApps,
+  /// Mini Apps list + immediately show New Mini App dialog.
+  newApp,
   commands,
 }
 
@@ -64,22 +66,33 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
   void initState() {
     super.initState();
     _token = widget.initialToken;
-    _loadBot().then((_) {
-      if (!mounted || _openedInitialSection) return;
+    _loadBot().then((ok) {
+      if (!ok || !mounted || _openedInitialSection) return;
       _openedInitialSection = true;
-      if (widget.showTokenOnOpen ||
-          widget.openSection == BotDetailOpenSection.token) {
-        _showTokenSheet(forceReveal: widget.showTokenOnOpen);
-        return;
-      }
-      if (widget.openSection == BotDetailOpenSection.miniApps) {
-        unawaited(_manageMiniApps());
-        return;
-      }
-      if (widget.openSection == BotDetailOpenSection.commands) {
-        unawaited(_manageCommands());
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openInitialSection();
+      });
     });
+  }
+
+  void _openInitialSection() {
+    if (widget.showTokenOnOpen ||
+        widget.openSection == BotDetailOpenSection.token) {
+      unawaited(_showTokenSheet(forceReveal: widget.showTokenOnOpen));
+      return;
+    }
+    if (widget.openSection == BotDetailOpenSection.miniApps) {
+      unawaited(_manageMiniApps(autoNewApp: false));
+      return;
+    }
+    if (widget.openSection == BotDetailOpenSection.newApp) {
+      unawaited(_manageMiniApps(autoNewApp: true));
+      return;
+    }
+    if (widget.openSection == BotDetailOpenSection.commands) {
+      unawaited(_manageCommands());
+    }
   }
 
   @override
@@ -97,11 +110,11 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     }
   }
 
-  Future<void> _loadBot() async {
+  Future<bool> _loadBot() async {
     setState(() => _isLoading = true);
     try {
       final bot = await ApiService.getBot(widget.botId);
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _bot = bot;
         _webhookController.text = bot.webhookUrl ?? '';
@@ -110,15 +123,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
         }
       });
       await Future.wait([_loadCommands(), _loadMiniApps()]);
+      await _ensureTokenLoaded();
+      return true;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка: $e')),
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _isLoading = false);
-      await _ensureTokenLoaded();
     }
   }
 
@@ -332,12 +347,13 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     await _loadCommands();
   }
 
-  Future<void> _manageMiniApps() async {
+  Future<void> _manageMiniApps({bool autoNewApp = false}) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _BotMiniAppsScreen(
           botId: widget.botId,
           botUsername: widget.botUsername,
+          autoNewApp: autoNewApp,
         ),
       ),
     );
@@ -850,10 +866,12 @@ class _BotMiniAppsScreen extends StatefulWidget {
   const _BotMiniAppsScreen({
     required this.botId,
     required this.botUsername,
+    this.autoNewApp = false,
   });
 
   final int botId;
   final String botUsername;
+  final bool autoNewApp;
 
   @override
   State<_BotMiniAppsScreen> createState() => _BotMiniAppsScreenState();
@@ -862,11 +880,18 @@ class _BotMiniAppsScreen extends StatefulWidget {
 class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
   bool _loading = true;
   List<MiniAppItem> _apps = const [];
+  bool _didAutoNewApp = false;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    _reload().then((_) {
+      if (!mounted || _didAutoNewApp || !widget.autoNewApp) return;
+      _didAutoNewApp = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_newApp());
+      });
+    });
   }
 
   Future<void> _reload() async {

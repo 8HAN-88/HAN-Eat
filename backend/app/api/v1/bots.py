@@ -226,7 +226,7 @@ async def create_bot(
             BotCommandCreate(
                 command="help",
                 description="Show help",
-                response_text="Available commands: /start, /help",
+                response_text=f"Commands for @{username}: /start, /help",
             )
         )
 
