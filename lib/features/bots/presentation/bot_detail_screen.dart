@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/api_service.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/paid_features_service.dart';
+import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../miniapps/data/miniapp_models.dart';
@@ -428,6 +432,99 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     );
   }
 
+  Future<void> _createStarsInvoice() async {
+    final titleController = TextEditingController(text: 'Оплата');
+    final amountController = TextEditingController(text: '50');
+    final descController = TextEditingController();
+    final payloadController = TextEditingController();
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Stars Invoice'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Название'),
+              ),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Сумма ★'),
+              ),
+              TextField(
+                controller: descController,
+                decoration: const InputDecoration(labelText: 'Описание'),
+              ),
+              TextField(
+                controller: payloadController,
+                decoration: const InputDecoration(
+                  labelText: 'Payload (для webhook)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    final title = titleController.text.trim();
+    final amount = int.tryParse(amountController.text.trim()) ?? 0;
+    final desc = descController.text.trim();
+    final payload = payloadController.text.trim();
+    titleController.dispose();
+    amountController.dispose();
+    descController.dispose();
+    payloadController.dispose();
+    if (created != true || !mounted) return;
+    if (title.isEmpty || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите название и сумму')),
+      );
+      return;
+    }
+    try {
+      final invoice = await PaidFeaturesService.createBotInvoice(
+        widget.botId,
+        title: title,
+        amountStars: amount,
+        description: desc.isEmpty ? null : desc,
+        payload: payload.isEmpty ? null : payload,
+      );
+      if (!mounted) return;
+      final link = StarInvoicePayRoute.pathFor(invoice.id);
+      await Clipboard.setData(ClipboardData(text: 'https://haneat.app$link'));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Счёт #${invoice.id} создан, ссылка скопирована'),
+          action: SnackBarAction(
+            label: 'Открыть',
+            onPressed: () {
+              if (mounted) context.push(link);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _saveWebhook() async {
     final url = _webhookController.text.trim();
     try {
@@ -640,6 +737,12 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                         ? 'Включён'
                                         : 'Не задан',
                                     onTap: _manageWebhook,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.stars_rounded,
+                                    title: 'Stars Invoice',
+                                    subtitle: 'Счёт на оплату звёздами',
+                                    onTap: _createStarsInvoice,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.chat_bubble_outline_rounded,

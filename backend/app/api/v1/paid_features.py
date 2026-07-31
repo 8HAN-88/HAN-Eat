@@ -13,12 +13,15 @@ from app.schemas.paid_features import (
     BoostPostRequest,
     BoostPostResponse,
     ChannelSubscriptionInfo,
+    CreateStarGiveawayRequest,
+    CreateStarInvoiceRequest,
     DonateStarsRequest,
     DonateStarsResponse,
     CreatorPayoutRequestCreate,
     CreatorPayoutResponse,
     CreatorPayoutReviewRequest,
     PaidMessageExceptionItem,
+    PayStarInvoiceResponse,
     PurchaseMessageRequest,
     PurchaseMessageResponse,
     PurchasePostRequest,
@@ -29,6 +32,9 @@ from app.schemas.paid_features import (
     SetUserStarGiftDisplayRequest,
     StarGiftItem,
     StarGiftsResponse,
+    StarGiveawayItem,
+    StarGiveawaysResponse,
+    StarInvoiceItem,
     StarPackage,
     StarPackagesResponse,
     StarTransactionResponse,
@@ -576,4 +582,203 @@ async def set_my_star_gift_display(
     db.commit()
     db.refresh(gift)
     return UserStarGiftItem.model_validate(gift)
+
+
+def _giveaway_item(
+    service: PaidFeaturesService, giveaway, viewer_id: int
+) -> StarGiveawayItem:
+    from app.models.paid_features import StarGiveawayParticipant
+
+    joined = (
+        service.db.query(StarGiveawayParticipant)
+        .filter(
+            StarGiveawayParticipant.giveaway_id == giveaway.id,
+            StarGiveawayParticipant.user_id == viewer_id,
+        )
+        .first()
+    )
+    item = StarGiveawayItem.model_validate(giveaway)
+    item.joined_by_me = joined is not None
+    item.is_winner = bool(joined.is_winner) if joined is not None else False
+    return item
+
+
+@router.post(
+    "/channels/{channel_id}/giveaways",
+    response_model=StarGiveawayItem,
+)
+async def create_channel_giveaway(
+    channel_id: int,
+    request: CreateStarGiveawayRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    giveaway = service.create_star_giveaway(
+        current_user.id,
+        channel_id,
+        prize_stars=request.prize_stars,
+        winners_count=request.winners_count,
+        duration_hours=request.duration_hours,
+        title=request.title,
+    )
+    db.commit()
+    db.refresh(giveaway)
+    return _giveaway_item(service, giveaway, current_user.id)
+
+
+@router.get(
+    "/channels/{channel_id}/giveaways",
+    response_model=StarGiveawaysResponse,
+)
+async def list_channel_giveaways(
+    channel_id: int,
+    active_only: bool = False,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    rows = service.list_channel_giveaways(channel_id, active_only=active_only)
+    return StarGiveawaysResponse(
+        giveaways=[_giveaway_item(service, g, current_user.id) for g in rows]
+    )
+
+
+@router.get("/giveaways/{giveaway_id}", response_model=StarGiveawayItem)
+async def get_giveaway(
+    giveaway_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    giveaway = service.get_giveaway(giveaway_id)
+    return _giveaway_item(service, giveaway, current_user.id)
+
+
+@router.post("/giveaways/{giveaway_id}/join", response_model=StarGiveawayItem)
+async def join_giveaway(
+    giveaway_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    service.join_star_giveaway(current_user.id, giveaway_id)
+    db.commit()
+    giveaway = service.get_giveaway(giveaway_id)
+    return _giveaway_item(service, giveaway, current_user.id)
+
+
+@router.post("/giveaways/{giveaway_id}/cancel", response_model=StarGiveawayItem)
+async def cancel_giveaway(
+    giveaway_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    giveaway = service.cancel_star_giveaway(current_user.id, giveaway_id)
+    db.commit()
+    db.refresh(giveaway)
+    return _giveaway_item(service, giveaway, current_user.id)
+
+
+@router.post("/giveaways/{giveaway_id}/finalize", response_model=StarGiveawayItem)
+async def finalize_giveaway_now(
+    giveaway_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Admin can finalize early (or after ends_at) without waiting for the cron."""
+    service = PaidFeaturesService(db)
+    giveaway = service.get_giveaway(giveaway_id)
+    service._channel_manage_access(current_user.id, giveaway.channel_id)
+    giveaway = service.finalize_star_giveaway(giveaway_id)
+    db.commit()
+    db.refresh(giveaway)
+    return _giveaway_item(service, giveaway, current_user.id)
+
+
+def _invoice_item(db: Session, invoice) -> StarInvoiceItem:
+    bot = db.query(User).filter(User.id == invoice.bot_id).first()
+    item = StarInvoiceItem.model_validate(invoice)
+    if bot is not None:
+        item.bot_username = bot.bot_username or bot.username
+        item.bot_name = bot.name
+    return item
+
+
+@router.post(
+    "/bots/{bot_id}/invoices",
+    response_model=StarInvoiceItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_bot_star_invoice(
+    bot_id: int,
+    request: CreateStarInvoiceRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    invoice = service.create_star_invoice(
+        current_user.id,
+        bot_id,
+        title=request.title,
+        amount_stars=request.amount_stars,
+        description=request.description,
+        payload=request.payload,
+        expires_in_hours=request.expires_in_hours,
+    )
+    db.commit()
+    db.refresh(invoice)
+    return _invoice_item(db, invoice)
+
+
+@router.get("/invoices/{invoice_id}", response_model=StarInvoiceItem)
+async def get_star_invoice(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    invoice = service.get_star_invoice(invoice_id)
+    return _invoice_item(db, invoice)
+
+
+@router.post(
+    "/invoices/{invoice_id}/pay",
+    response_model=PayStarInvoiceResponse,
+)
+async def pay_star_invoice(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    import secrets
+
+    from app.services.bot_webhook_service import deliver_webhook_update
+
+    service = PaidFeaturesService(db)
+    invoice = service.pay_star_invoice(current_user.id, invoice_id)
+    bot = db.query(User).filter(User.id == invoice.bot_id).first()
+    if bot is not None:
+        deliver_webhook_update(
+            db,
+            bot_user=bot,
+            update_type="stars_invoice.paid",
+            delivery_id=secrets.token_hex(12),
+            payload={
+                "invoice_id": invoice.id,
+                "bot_id": invoice.bot_id,
+                "payer_user_id": current_user.id,
+                "amount_stars": invoice.amount_stars,
+                "payload": invoice.payload,
+                "title": invoice.title,
+                "paid_at": invoice.paid_at.isoformat() if invoice.paid_at else None,
+            },
+        )
+    db.commit()
+    db.refresh(invoice)
+    return PayStarInvoiceResponse(
+        invoice=_invoice_item(db, invoice),
+        balance=service.star_balance(current_user.id),
+    )
 

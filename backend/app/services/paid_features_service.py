@@ -19,6 +19,9 @@ from app.models.paid_features import (
     PaidMessageUnlock,
     PostBoost,
     StarGift,
+    StarGiveaway,
+    StarGiveawayParticipant,
+    StarInvoice,
     StarTransaction,
     UserStarGift,
 )
@@ -1203,6 +1206,402 @@ class PaidFeaturesService:
             reference_id=message.id,
             counterparty_user_id=user_id,
         )
+
+    def _channel_manage_access(self, user_id: int, channel_id: int) -> Channel:
+        from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import (
+            MEMBER_STATUS_ACTIVE,
+            is_channel_owner,
+        )
+
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if is_channel_owner(channel, user):
+            return channel
+        member = (
+            self.db.query(ChannelMember)
+            .filter(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.user_id == user_id,
+                ChannelMember.status == MEMBER_STATUS_ACTIVE,
+                ChannelMember.role.in_(("owner", "admin")),
+            )
+            .first()
+        )
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not channel admin")
+        return channel
+
+    def create_star_giveaway(
+        self,
+        user_id: int,
+        channel_id: int,
+        *,
+        prize_stars: int,
+        winners_count: int,
+        duration_hours: int,
+        title: Optional[str] = None,
+    ) -> StarGiveaway:
+        if prize_stars < 1 or prize_stars > 100_000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Prize must be between 1 and 100000 stars",
+            )
+        if winners_count < 1 or winners_count > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Winners count must be between 1 and 100",
+            )
+        if duration_hours < 1 or duration_hours > 24 * 30:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Duration must be between 1 hour and 30 days",
+            )
+        self._channel_manage_access(user_id, channel_id)
+        active = (
+            self.db.query(StarGiveaway.id)
+            .filter(
+                StarGiveaway.channel_id == channel_id,
+                StarGiveaway.status == "active",
+            )
+            .first()
+        )
+        if active is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel already has an active giveaway",
+            )
+        escrow = int(prize_stars) * int(winners_count)
+        giveaway = StarGiveaway(
+            channel_id=channel_id,
+            creator_user_id=user_id,
+            prize_stars=int(prize_stars),
+            winners_count=int(winners_count),
+            total_escrow_stars=escrow,
+            status="active",
+            ends_at=datetime.utcnow() + timedelta(hours=int(duration_hours)),
+            require_membership=True,
+            participants_count=0,
+            title=(title or "").strip()[:160] or None,
+        )
+        self.db.add(giveaway)
+        self.db.flush()
+        self._spend_stars(
+            user_id,
+            escrow,
+            tx_type="giveaway_escrow",
+            reference_type="giveaway",
+            reference_id=giveaway.id,
+            counterparty_user_id=None,
+            idempotency_key=f"giveaway_escrow:{giveaway.id}",
+            meta={"channel_id": channel_id, "winners_count": winners_count},
+        )
+        self.db.flush()
+        return giveaway
+
+    def list_channel_giveaways(
+        self, channel_id: int, *, active_only: bool = False, limit: int = 20
+    ) -> list[StarGiveaway]:
+        limit = max(1, min(int(limit or 20), 50))
+        q = self.db.query(StarGiveaway).filter(StarGiveaway.channel_id == channel_id)
+        if active_only:
+            q = q.filter(StarGiveaway.status == "active")
+        return q.order_by(StarGiveaway.created_at.desc(), StarGiveaway.id.desc()).limit(limit).all()
+
+    def get_giveaway(self, giveaway_id: int) -> StarGiveaway:
+        row = self.db.query(StarGiveaway).filter(StarGiveaway.id == giveaway_id).first()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+        return row
+
+    def join_star_giveaway(self, user_id: int, giveaway_id: int) -> StarGiveawayParticipant:
+        from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import (
+            MEMBER_STATUS_ACTIVE,
+            is_channel_owner,
+        )
+
+        giveaway = (
+            self.db.query(StarGiveaway)
+            .filter(StarGiveaway.id == giveaway_id)
+            .with_for_update()
+            .first()
+        )
+        if not giveaway:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+        if giveaway.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway is not active"
+            )
+        now = datetime.utcnow()
+        if giveaway.ends_at <= now:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway already ended"
+            )
+        if giveaway.creator_user_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Creator cannot join own giveaway",
+            )
+        existing = (
+            self.db.query(StarGiveawayParticipant)
+            .filter(
+                StarGiveawayParticipant.giveaway_id == giveaway_id,
+                StarGiveawayParticipant.user_id == user_id,
+            )
+            .first()
+        )
+        if existing is not None:
+            return existing
+        channel = self.db.query(Channel).filter(Channel.id == giveaway.channel_id).first()
+        user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+        if not channel or not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        if giveaway.require_membership and not is_channel_owner(channel, user):
+            member = (
+                self.db.query(ChannelMember)
+                .filter(
+                    ChannelMember.channel_id == giveaway.channel_id,
+                    ChannelMember.user_id == user_id,
+                    ChannelMember.status == MEMBER_STATUS_ACTIVE,
+                )
+                .first()
+            )
+            if member is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Join the channel to enter the giveaway",
+                )
+        row = StarGiveawayParticipant(giveaway_id=giveaway_id, user_id=user_id)
+        self.db.add(row)
+        giveaway.participants_count = int(giveaway.participants_count or 0) + 1
+        self.db.flush()
+        return row
+
+    def cancel_star_giveaway(self, user_id: int, giveaway_id: int) -> StarGiveaway:
+        giveaway = (
+            self.db.query(StarGiveaway)
+            .filter(StarGiveaway.id == giveaway_id)
+            .with_for_update()
+            .first()
+        )
+        if not giveaway:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+        self._channel_manage_access(user_id, giveaway.channel_id)
+        if giveaway.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway is not active"
+            )
+        remaining = int(giveaway.total_escrow_stars or 0)
+        if remaining > 0:
+            self.add_stars(
+                giveaway.creator_user_id,
+                remaining,
+                tx_type="giveaway_refund",
+                idempotency_key=f"giveaway_refund:{giveaway.id}",
+                meta={"giveaway_id": giveaway.id},
+            )
+        giveaway.status = "cancelled"
+        giveaway.completed_at = datetime.utcnow()
+        self.db.flush()
+        return giveaway
+
+    def finalize_star_giveaway(self, giveaway_id: int) -> StarGiveaway:
+        import random
+
+        giveaway = (
+            self.db.query(StarGiveaway)
+            .filter(StarGiveaway.id == giveaway_id)
+            .with_for_update()
+            .first()
+        )
+        if not giveaway:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+        if giveaway.status != "active":
+            return giveaway
+        participants = (
+            self.db.query(StarGiveawayParticipant)
+            .filter(StarGiveawayParticipant.giveaway_id == giveaway_id)
+            .all()
+        )
+        winners_n = min(int(giveaway.winners_count), len(participants))
+        winners = random.sample(participants, winners_n) if winners_n else []
+        prize = int(giveaway.prize_stars)
+        paid_out = 0
+        for winner in winners:
+            winner.is_winner = True
+            self.add_stars(
+                winner.user_id,
+                prize,
+                tx_type="giveaway_prize",
+                idempotency_key=f"giveaway_prize:{giveaway.id}:{winner.user_id}",
+                meta={"giveaway_id": giveaway.id, "channel_id": giveaway.channel_id},
+            )
+            paid_out += prize
+        refund = int(giveaway.total_escrow_stars or 0) - paid_out
+        if refund > 0:
+            self.add_stars(
+                giveaway.creator_user_id,
+                refund,
+                tx_type="giveaway_refund",
+                idempotency_key=f"giveaway_refund:{giveaway.id}",
+                meta={"giveaway_id": giveaway.id, "unused_prizes": refund // max(prize, 1)},
+            )
+        giveaway.status = "completed"
+        giveaway.completed_at = datetime.utcnow()
+        self.db.flush()
+        return giveaway
+
+    def create_star_invoice(
+        self,
+        creator_user_id: int,
+        bot_id: int,
+        *,
+        title: str,
+        amount_stars: int,
+        description: Optional[str] = None,
+        payload: Optional[str] = None,
+        expires_in_hours: int = 24,
+    ) -> StarInvoice:
+        bot = (
+            self.db.query(User)
+            .filter(User.id == bot_id, User.is_bot.is_(True), User.deleted_at.is_(None))
+            .first()
+        )
+        if not bot:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
+        if int(getattr(bot, "created_by_user_id", 0) or 0) != creator_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not bot owner")
+        clean_title = (title or "").strip()
+        if not clean_title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title required")
+        if amount_stars < 1 or amount_stars > 100_000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amount must be between 1 and 100000",
+            )
+        if expires_in_hours < 1 or expires_in_hours > 24 * 30:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Expiry must be between 1 hour and 30 days",
+            )
+        invoice = StarInvoice(
+            bot_id=bot_id,
+            creator_user_id=creator_user_id,
+            title=clean_title[:160],
+            description=((description or "").strip()[:512] or None),
+            amount_stars=int(amount_stars),
+            payload=((payload or "").strip()[:256] or None),
+            status="pending",
+            expires_at=datetime.utcnow() + timedelta(hours=int(expires_in_hours)),
+        )
+        self.db.add(invoice)
+        self.db.flush()
+        return invoice
+
+    def get_star_invoice(self, invoice_id: int) -> StarInvoice:
+        row = self.db.query(StarInvoice).filter(StarInvoice.id == invoice_id).first()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        return row
+
+    def pay_star_invoice(self, payer_user_id: int, invoice_id: int) -> StarInvoice:
+        invoice = (
+            self.db.query(StarInvoice)
+            .filter(StarInvoice.id == invoice_id)
+            .with_for_update()
+            .first()
+        )
+        if not invoice:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        if invoice.status == "paid":
+            if invoice.payer_user_id == payer_user_id:
+                return invoice
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice already paid"
+            )
+        if invoice.status != "pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not payable"
+            )
+        now = datetime.utcnow()
+        if invoice.expires_at and invoice.expires_at <= now:
+            invoice.status = "expired"
+            self.db.flush()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice expired"
+            )
+        if payer_user_id in (invoice.bot_id, invoice.creator_user_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot pay own invoice"
+            )
+        self._spend_stars(
+            payer_user_id,
+            int(invoice.amount_stars),
+            tx_type="invoice_payment",
+            reference_type="invoice",
+            reference_id=invoice.id,
+            counterparty_user_id=invoice.creator_user_id,
+            idempotency_key=f"invoice_pay:{invoice.id}:{payer_user_id}",
+            meta={"bot_id": invoice.bot_id, "payload": invoice.payload},
+        )
+        self._credit_creator(
+            invoice.creator_user_id,
+            int(invoice.amount_stars),
+            tx_type="invoice_received",
+            reference_type="invoice",
+            reference_id=invoice.id,
+            counterparty_user_id=payer_user_id,
+            meta={"bot_id": invoice.bot_id, "payload": invoice.payload},
+        )
+        invoice.status = "paid"
+        invoice.payer_user_id = payer_user_id
+        invoice.paid_at = now
+        self.db.flush()
+        return invoice
+
+
+def finalize_due_star_giveaways(db: Session) -> int:
+    """Complete giveaways whose ends_at has passed."""
+    now = datetime.utcnow()
+    due = (
+        db.query(StarGiveaway)
+        .filter(
+            StarGiveaway.status == "active",
+            StarGiveaway.ends_at <= now,
+        )
+        .limit(50)
+        .all()
+    )
+    if not due:
+        return 0
+    service = PaidFeaturesService(db)
+    changed = 0
+    for giveaway in due:
+        service.finalize_star_giveaway(giveaway.id)
+        changed += 1
+    return changed
+
+
+def expire_due_star_invoices(db: Session) -> int:
+    now = datetime.utcnow()
+    rows = (
+        db.query(StarInvoice)
+        .filter(
+            StarInvoice.status == "pending",
+            StarInvoice.expires_at.isnot(None),
+            StarInvoice.expires_at <= now,
+        )
+        .limit(100)
+        .all()
+    )
+    for row in rows:
+        row.status = "expired"
+    return len(rows)
 
 
 def expire_due_post_boosts(db: Session) -> int:

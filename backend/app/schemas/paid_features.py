@@ -210,3 +210,68 @@ class ConvertUserStarGiftResponse(BaseModel):
     gift: UserStarGiftItem
     balance: int
 
+
+class CreateStarGiveawayRequest(BaseModel):
+    prize_stars: int = Field(ge=1, le=100000)
+    winners_count: int = Field(default=1, ge=1, le=100)
+    duration_hours: int = Field(default=24, ge=1, le=24 * 30)
+    title: Optional[str] = Field(default=None, max_length=160)
+
+
+class StarGiveawayItem(BaseModel):
+    id: int
+    channel_id: int
+    creator_user_id: int
+    prize_stars: int
+    winners_count: int
+    total_escrow_stars: int
+    status: str
+    ends_at: datetime
+    require_membership: bool = True
+    participants_count: int = 0
+    title: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    joined_by_me: bool = False
+    is_winner: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class StarGiveawaysResponse(BaseModel):
+    giveaways: List[StarGiveawayItem]
+
+
+class CreateStarInvoiceRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    amount_stars: int = Field(ge=1, le=100000)
+    description: Optional[str] = Field(default=None, max_length=512)
+    payload: Optional[str] = Field(default=None, max_length=256)
+    expires_in_hours: int = Field(default=24, ge=1, le=24 * 30)
+
+
+class StarInvoiceItem(BaseModel):
+    id: int
+    bot_id: int
+    creator_user_id: int
+    payer_user_id: Optional[int] = None
+    title: str
+    description: Optional[str] = None
+    amount_stars: int
+    payload: Optional[str] = None
+    status: str
+    expires_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    created_at: datetime
+    bot_username: Optional[str] = None
+    bot_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PayStarInvoiceResponse(BaseModel):
+    invoice: StarInvoiceItem
+    balance: int
+

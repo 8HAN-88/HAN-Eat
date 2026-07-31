@@ -20,7 +20,9 @@ import '../features/settings/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/star_gifts_inventory_screen.dart';
+import '../features/settings/presentation/star_invoice_pay_screen.dart';
 import '../features/settings/presentation/creator_revenue_screen.dart';
+import '../features/channels/presentation/channel_giveaways_screen.dart';
 import '../features/settings/presentation/stars_checkout_result_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
@@ -687,6 +689,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: StarGiftsInventoryRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: StarGiftsInventoryScreen()),
+      ),
+      GoRoute(
+        path: StarInvoicePayRoute.path,
+        name: StarInvoicePayRoute.name,
+        pageBuilder: (context, state) {
+          final id =
+              int.tryParse(state.pathParameters['invoiceId'] ?? '') ?? 0;
+          return MaterialPage(child: StarInvoicePayScreen(invoiceId: id));
+        },
+      ),
+      GoRoute(
+        path: ChannelGiveawaysRoute.path,
+        name: ChannelGiveawaysRoute.name,
+        pageBuilder: (context, state) {
+          final id =
+              int.tryParse(state.pathParameters['channelId'] ?? '') ?? 0;
+          final name = state.uri.queryParameters['name'] ?? 'Канал';
+          final manage = state.uri.queryParameters['manage'] == '1';
+          return MaterialPage(
+            child: ChannelGiveawaysScreen(
+              channelId: id,
+              channelName: name,
+              canManage: manage,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: StarsCheckoutSuccessRoute.path,
@@ -1641,6 +1669,33 @@ class StarsWalletRoute {
 class StarGiftsInventoryRoute {
   static const path = '/paid/gifts';
   static const name = 'star_gifts_inventory';
+}
+
+class StarInvoicePayRoute {
+  static const path = '/paid/invoices/:invoiceId';
+  static const name = 'star_invoice_pay';
+
+  static String pathFor(int invoiceId) => '/paid/invoices/$invoiceId';
+}
+
+class ChannelGiveawaysRoute {
+  static const path = '/channels/:channelId/giveaways';
+  static const name = 'channel_giveaways';
+
+  static String pathFor(
+    int channelId, {
+    String? name,
+    bool canManage = false,
+  }) {
+    final params = <String, String>{
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      if (canManage) 'manage': '1',
+    };
+    final q = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
+    return '/channels/$channelId/giveaways$q';
+  }
 }
 
 class StarsCheckoutSuccessRoute {

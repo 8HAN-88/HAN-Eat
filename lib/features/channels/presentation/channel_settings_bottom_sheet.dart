@@ -162,6 +162,26 @@ class _ChannelSettingsBottomSheetState
                   context.push(CreatorToolsRoute.path);
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.celebration_outlined),
+              title: const Text('Розыгрыш Stars'),
+              subtitle: Text(
+                widget.channel.isOwner || widget.channel.canManageChannelSettings
+                    ? 'Создать или управлять розыгрышем'
+                    : 'Участвовать в розыгрыше канала',
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                context.push(
+                  ChannelGiveawaysRoute.pathFor(
+                    widget.channelId,
+                    name: widget.channel.name,
+                    canManage: widget.channel.isOwner ||
+                        widget.channel.canManageChannelSettings,
+                  ),
+                );
+              },
+            ),
             const Divider(),
             // Настройки
             ListTile(
