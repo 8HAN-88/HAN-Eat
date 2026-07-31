@@ -292,6 +292,11 @@ class _NewPostCardState extends State<NewPostCard>
       await PaidFeaturesService.purchaseContent(_displayPost.id);
       await _reloadDisplayPost();
       if (!mounted) return;
+      final unlocked = _displayPost.copyWith(purchased: true);
+      setState(() => _displayPost = unlocked);
+      try {
+        await FeedCacheService.instance.upsertPostModelInCache(unlocked);
+      } catch (_) {}
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Контент открыт')),
       );

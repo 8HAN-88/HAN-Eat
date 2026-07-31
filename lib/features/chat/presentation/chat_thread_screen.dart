@@ -312,6 +312,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _retryAllBulkDone = 0;
   int _retryAllBulkTotal = 0;
   bool _recording = false;
+  /// Session confirm for paid-DM fee (once per thread until cancelled).
+  bool _paidDmFeeConfirmed = false;
   bool _holdActive = false;
   bool _recordCancelled = false;
   bool _voiceLocked = false;
@@ -9574,6 +9576,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<bool> _ensurePaidDmFeeConfirmed() async {
+    final fee = _conversation.peer?.paidMessageStars ?? 0;
+    if (fee <= 0 || _conversation.isGroup || _conversation.isSaved) {
+      return true;
+    }
+    if (_paidDmFeeConfirmed) return true;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Платные сообщения',
+      body:
+          'Собеседник берёт $fee ★ за каждое сообщение. Звёзды спишутся при отправке.',
+      amountStars: fee,
+      confirmLabel: 'Понятно',
+    );
+    if (ok) _paidDmFeeConfirmed = true;
+    return ok;
+  }
+
   Future<void> _sendText({bool silent = false}) async {
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
@@ -9581,6 +9601,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _editingMessage!.type == 'video' ||
             _editingMessage!.type == 'file');
     if ((!editingMedia && text.isEmpty) || _recording) return;
+    if (_editingMessage == null) {
+      final feeOk = await _ensurePaidDmFeeConfirmed();
+      if (!feeOk || !mounted) return;
+    }
     if (_conversation.isGroup &&
         _conversation.amISendRestricted &&
         !_conversation.amIGroupAdmin) {
@@ -10806,6 +10830,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     int priceStars = 0,
   }) async {
     if (files.isEmpty) return;
+    final feeOk = await _ensurePaidDmFeeConfirmed();
+    if (!feeOk || !mounted) return;
     final trimmedCaption = caption.trim();
     final mediaGroupId =
         files.length >= 2 ? const Uuid().v4() : null;

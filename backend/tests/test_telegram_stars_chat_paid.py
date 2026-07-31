@@ -122,6 +122,29 @@ def test_charge_paid_message_fee(db_session):
     assert svc.creator_balance(1).available_stars == 15
 
 
+def test_spend_topup_does_not_wipe_creator_available(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)  # top-up
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 40  # earnings ledger
+    db_session.commit()
+
+    svc._spend_stars(
+        1,
+        70,
+        tx_type="donation",
+        reference_type="user",
+        reference_id=2,
+        counterparty_user_id=2,
+    )
+    db_session.commit()
+    assert svc.star_balance(1) == 30
+    # Available earnings stay until spendable falls below them.
+    assert svc.creator_balance(1).available_stars == 30
+
+
 def test_payout_escrows_spendable_stars(db_session):
     _user(db_session, 1)
     _credit(db_session, 1, 200)

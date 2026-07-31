@@ -439,22 +439,27 @@ class PostModel {
   }
 }
 
-/// Не затирает локально закрытый опрос устаревшими данными ленты/кэша.
+/// Не затирает локально закрытый опрос / купленный контент устаревшими данными.
 PostModel applyIncomingPostPreservingLocalPoll(
   PostModel local,
   PostModel incoming,
 ) {
+  var next = incoming;
   final localPoll = local.poll;
   final incomingPoll = incoming.poll;
-  if (localPoll == null ||
-      incomingPoll == null ||
-      !localPoll.isClosed ||
-      incomingPoll.isClosed) {
-    return incoming;
+  if (localPoll != null &&
+      incomingPoll != null &&
+      localPoll.isClosed &&
+      !incomingPoll.isClosed) {
+    final body = Map<String, dynamic>.from(incoming.body ?? {});
+    body['poll'] = localPoll.toJson();
+    next = next.copyWith(body: body);
   }
-  final body = Map<String, dynamic>.from(incoming.body ?? {});
-  body['poll'] = localPoll.toJson();
-  return incoming.copyWith(body: body);
+  // Keep unlock after Stars purchase when feed refresh still says locked.
+  if (local.isPaid && local.purchased && !next.purchased) {
+    next = next.copyWith(purchased: true);
+  }
+  return next;
 }
 
 class PostAuthorModel {

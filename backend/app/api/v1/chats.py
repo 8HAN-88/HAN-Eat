@@ -1803,29 +1803,12 @@ async def send_message(
             price_stars=price_stars,
         )
         # Telegram-like paid DMs: charge Stars when peer requires it.
-        if is_new:
-            conv_for_fee = (
-                db.query(Conversation)
-                .filter(Conversation.id == conversation_id)
-                .first()
-            )
-            if conv_for_fee and conv_for_fee.type == "direct":
-                peer_id = (
-                    conv_for_fee.direct_user_high_id
-                    if conv_for_fee.direct_user_low_id == current_user.id
-                    else conv_for_fee.direct_user_low_id
-                )
-                if peer_id:
-                    from app.services.paid_features_service import PaidFeaturesService
-
-                    PaidFeaturesService(db).charge_paid_message_fee(
-                        current_user.id,
-                        peer_id,
-                        conversation_id=conversation_id,
-                        message_id=msg.id,
-                        media_group_id=getattr(msg, "media_group_id", None)
-                        or body.media_group_id,
-                    )
+        svc._charge_direct_paid_message_fee(
+            conversation_id=conversation_id,
+            sender_id=current_user.id,
+            msg=msg,
+            is_new=is_new,
+        )
         db.commit()
         db.refresh(msg)
 
@@ -1889,6 +1872,16 @@ async def send_message(
                         current_user.id,
                     ),
                 },
+            )
+        if code == "stars_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "STARS_REQUIRED", "message": "Недостаточно звёзд"},
+            )
+        if code == "paid_message_fee_failed":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "paid_message_fee_failed",
             )
         raise
     except HTTPException:

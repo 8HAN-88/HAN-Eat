@@ -7,7 +7,11 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.paid_features import PaidContentPurchase, PostBoost
 from app.models.post import Post
-from app.services.paid_features_service import PaidFeaturesService, expire_due_post_boosts
+from app.services.paid_features_service import (
+    PaidFeaturesService,
+    expire_due_channel_subscriptions,
+    expire_due_post_boosts,
+)
 
 
 @pytest.fixture()
@@ -336,6 +340,39 @@ def test_donate_requires_existing_recipient_and_rejects_self(db_session):
     with pytest.raises(HTTPException) as self_donation:
         service.donate(1, 1, 1)
     assert self_donation.value.status_code == 400
+
+
+def test_expire_channel_subscription_revokes_membership(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    _add_paid_channel(db_session, channel_id=100, owner_id=2, monthly_price_stars=25)
+    service = PaidFeaturesService(db_session)
+    service.add_stars(1, 50, tx_type="purchase")
+    sub = service.subscribe_channel(1, 100, months=1)
+    db_session.flush()
+
+    member_count = db_session.execute(
+        text(
+            "SELECT COUNT(*) FROM channel_members "
+            "WHERE channel_id = 100 AND user_id = 1 AND status = 'active'"
+        )
+    ).scalar()
+    assert member_count == 1
+
+    sub.expires_at = datetime.utcnow() - timedelta(minutes=1)
+    sub.auto_renew = False
+    db_session.flush()
+
+    assert expire_due_channel_subscriptions(db_session) == 1
+    db_session.flush()
+    assert sub.status == "expired"
+    member_count = db_session.execute(
+        text(
+            "SELECT COUNT(*) FROM channel_members "
+            "WHERE channel_id = 100 AND user_id = 1"
+        )
+    ).scalar()
+    assert member_count == 0
 
 
 def test_expire_due_post_boosts_keeps_post_promoted_until_last_boost_expires(db_session):
