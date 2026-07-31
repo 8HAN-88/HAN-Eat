@@ -108,6 +108,94 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось оформить подписку');
   }
 
+  static Future<ChannelSubscriptionInfo> getChannelSubscription(
+    int channelId,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/channels/$channelId/subscription'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return ChannelSubscriptionInfo.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось загрузить подписку');
+  }
+
+  static Future<ChannelSubscriptionInfo> updateChannelSubscription(
+    int channelId, {
+    required bool autoRenew,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/paid/channels/$channelId/subscription'),
+      headers: await _headers(),
+      body: jsonEncode({'auto_renew': autoRenew}),
+    );
+    if (response.statusCode == 200) {
+      return ChannelSubscriptionInfo.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось обновить подписку');
+  }
+
+  static Future<ChannelSubscriptionInfo> cancelChannelSubscription(
+    int channelId,
+  ) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/channels/$channelId/subscription/cancel'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return ChannelSubscriptionInfo.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось отменить подписку');
+  }
+
+  static Future<List<PaidMessageExceptionUser>> listMessageExceptions() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/message-exceptions'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data
+          .map(
+            (e) => PaidMessageExceptionUser.fromJson(
+              e as Map<String, dynamic>,
+            ),
+          )
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить исключения');
+  }
+
+  static Future<PaidMessageExceptionUser> addMessageException(int userId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/message-exceptions'),
+      headers: await _headers(),
+      body: jsonEncode({'user_id': userId}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return PaidMessageExceptionUser.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось добавить исключение');
+  }
+
+  static Future<void> removeMessageException(int userId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/paid/message-exceptions/$userId'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200 || response.statusCode == 204) return;
+    _throwForResponse(response, 'Не удалось удалить исключение');
+  }
+
   static Future<void> boostPost({
     required int postId,
     required int amountStars,
@@ -433,5 +521,66 @@ class SendGiftResult {
         giftId: json['gift_id'] as int? ?? 0,
         stars: json['stars'] as int? ?? 0,
         balance: json['balance'] as int? ?? 0,
+      );
+}
+
+class ChannelSubscriptionInfo {
+  const ChannelSubscriptionInfo({
+    required this.channelId,
+    required this.status,
+    this.amountStars = 0,
+    this.expiresAt,
+    this.autoRenew = false,
+    this.isActive = false,
+    this.monthlyPriceStars = 0,
+  });
+
+  final int channelId;
+  final String status;
+  final int amountStars;
+  final DateTime? expiresAt;
+  final bool autoRenew;
+  final bool isActive;
+  final int monthlyPriceStars;
+
+  factory ChannelSubscriptionInfo.fromJson(Map<String, dynamic> json) =>
+      ChannelSubscriptionInfo(
+        channelId: json['channel_id'] as int? ?? 0,
+        status: json['status'] as String? ?? 'none',
+        amountStars: json['amount_stars'] as int? ?? 0,
+        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
+        autoRenew: json['auto_renew'] as bool? ?? false,
+        isActive: json['is_active'] as bool? ?? false,
+        monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+      );
+}
+
+class PaidMessageExceptionUser {
+  const PaidMessageExceptionUser({
+    required this.id,
+    this.name,
+    this.username,
+    this.avatarUrl,
+  });
+
+  final int id;
+  final String? name;
+  final String? username;
+  final String? avatarUrl;
+
+  String get displayName {
+    final n = name?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    final u = username?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    return 'Пользователь';
+  }
+
+  factory PaidMessageExceptionUser.fromJson(Map<String, dynamic> json) =>
+      PaidMessageExceptionUser(
+        id: json['id'] as int? ?? 0,
+        name: json['name'] as String?,
+        username: json['username'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
       );
 }

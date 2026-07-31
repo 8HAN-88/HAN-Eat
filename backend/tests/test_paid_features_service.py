@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+from app.models.community import Channel
 from app.models.paid_features import PaidContentPurchase, PostBoost
 from app.models.post import Post
 from app.services.paid_features_service import (
@@ -373,6 +374,31 @@ def test_expire_channel_subscription_revokes_membership(db_session):
         )
     ).scalar()
     assert member_count == 0
+
+
+def test_cancel_channel_subscription_keeps_access_until_expiry(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    _add_paid_channel(db_session, channel_id=100, owner_id=2, monthly_price_stars=25)
+    service = PaidFeaturesService(db_session)
+    service.add_stars(1, 50, tx_type="purchase")
+    sub = service.subscribe_channel(1, 100, months=1, auto_renew=True)
+    db_session.flush()
+    assert sub.auto_renew is True
+
+    cancelled = service.cancel_channel_subscription(1, 100)
+    db_session.flush()
+    assert cancelled.auto_renew is False
+    assert cancelled.status == "active"
+    channel = db_session.get(Channel, 100)
+    assert channel is not None
+    assert service.has_paid_channel_access(1, channel)
+
+    renewed = service.update_channel_subscription_auto_renew(
+        1, 100, auto_renew=True
+    )
+    db_session.flush()
+    assert renewed.auto_renew is True
 
 
 def test_expire_due_post_boosts_keeps_post_promoted_until_last_boost_expires(db_session):

@@ -396,10 +396,12 @@ class ChatMessageReactionUser {
   const ChatMessageReactionUser({
     required this.emoji,
     required this.user,
+    this.starsAmount = 0,
   });
 
   final String emoji;
   final ChatUserBrief user;
+  final int starsAmount;
 }
 
 class ChatMessageReactionsResult {

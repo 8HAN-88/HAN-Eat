@@ -229,9 +229,24 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
                                                 : '@${user.username}',
                                           )
                                         : null,
-                                    trailing: Text(
-                                      item.emoji,
-                                      style: const TextStyle(fontSize: 22),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (item.starsAmount > 0) ...[
+                                          Text(
+                                            '${item.starsAmount} ★',
+                                            style: TextStyle(
+                                              color: scheme.secondary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Text(
+                                          item.emoji,
+                                          style: const TextStyle(fontSize: 22),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },

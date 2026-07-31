@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Кнопка подписки на платный канал
+/// Кнопка подписки / управления платной подпиской на канал (Telegram Stars).
 class ChannelSubscriptionButton extends StatelessWidget {
   const ChannelSubscriptionButton({
     super.key,
@@ -9,6 +9,7 @@ class ChannelSubscriptionButton extends StatelessWidget {
     required this.monthlyPriceStars,
     this.isSubscribed = false,
     this.onSubscribe,
+    this.onManage,
   });
 
   final int channelId;
@@ -16,14 +17,15 @@ class ChannelSubscriptionButton extends StatelessWidget {
   final int monthlyPriceStars;
   final bool isSubscribed;
   final VoidCallback? onSubscribe;
+  final VoidCallback? onManage;
 
   @override
   Widget build(BuildContext context) {
     if (isSubscribed) {
       return OutlinedButton.icon(
-        onPressed: null,
-        icon: const Icon(Icons.check_circle),
-        label: const Text('Вы подписаны'),
+        onPressed: onManage,
+        icon: const Icon(Icons.workspace_premium_rounded),
+        label: const Text('Подписка'),
       );
     }
 

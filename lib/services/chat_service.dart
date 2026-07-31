@@ -505,6 +505,7 @@ class ChatService {
           ChatMessageReactionUser(
             emoji: raw['emoji'] as String? ?? '',
             user: ChatUserBrief.fromJson(userRaw),
+            starsAmount: (raw['stars_amount'] as num?)?.toInt() ?? 0,
           ),
         );
       } catch (_) {}
