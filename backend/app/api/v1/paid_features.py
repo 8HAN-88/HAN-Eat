@@ -112,6 +112,18 @@ async def donate_stars(
         request.amount_stars,
         message=request.message,
     )
+    # Keep /donations history in sync with Stars tip path.
+    from app.models.donation import Donation
+
+    db.add(
+        Donation(
+            sender_id=current_user.id,
+            recipient_id=request.recipient_id,
+            amount_stars=request.amount_stars,
+            message=request.message,
+            status="completed",
+        )
+    )
     db.commit()
     return DonateStarsResponse(transaction_id=tx.id, balance=service.star_balance(current_user.id))
 

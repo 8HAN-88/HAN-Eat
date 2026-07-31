@@ -1823,6 +1823,8 @@ async def send_message(
                         peer_id,
                         conversation_id=conversation_id,
                         message_id=msg.id,
+                        media_group_id=getattr(msg, "media_group_id", None)
+                        or body.media_group_id,
                     )
         db.commit()
         db.refresh(msg)

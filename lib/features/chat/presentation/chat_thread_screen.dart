@@ -2620,8 +2620,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
     );
     if (idx >= 0) {
+      final prev = _messages[idx];
+      var incoming = msg;
+      // WS fanout redacts paid media_url for everyone; don't wipe own media.
+      if (prev.isMine &&
+          prev.isPaid &&
+          (incoming.mediaUrl == null || incoming.mediaUrl!.isEmpty) &&
+          prev.mediaUrl != null &&
+          prev.mediaUrl!.isNotEmpty) {
+        incoming = incoming.copyWith(
+          mediaUrl: prev.mediaUrl,
+          purchased: true,
+          isPaid: prev.isPaid,
+          priceStars: prev.priceStars,
+        );
+      }
       _messages[idx] =
-          applyIncomingChatMessagePreservingLocalPoll(_messages[idx], msg);
+          applyIncomingChatMessagePreservingLocalPoll(prev, incoming);
       return false;
     }
     _messages.add(msg);

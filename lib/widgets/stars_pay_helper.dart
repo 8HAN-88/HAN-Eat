@@ -99,23 +99,26 @@ Future<void> showStarsRequiredSnack(
   Object error, {
   String? fallback,
 }) async {
+  final stars = isStarsRequiredError(error);
   final message = userVisibleError(
     error,
-    fallback: fallback ?? 'Недостаточно звёзд',
+    fallback: fallback ?? (stars ? 'Недостаточно звёзд' : 'Произошла ошибка'),
   );
   final messenger = ScaffoldMessenger.of(context);
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
       content: Text(message),
-      action: SnackBarAction(
-        label: 'Купить ★',
-        onPressed: () {
-          if (context.mounted) {
-            context.push(StarsWalletRoute.path);
-          }
-        },
-      ),
+      action: stars
+          ? SnackBarAction(
+              label: 'Купить ★',
+              onPressed: () {
+                if (context.mounted) {
+                  context.push(StarsWalletRoute.path);
+                }
+              },
+            )
+          : null,
     ),
   );
 }
