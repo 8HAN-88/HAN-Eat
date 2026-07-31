@@ -25,13 +25,17 @@ def _message_payload(msg) -> Dict[str, Any]:
                 inline_keyboard = parsed
         except Exception:
             inline_keyboard = None
+    is_paid = bool(getattr(msg, "is_paid", False))
+    price_stars = int(getattr(msg, "price_stars", 0) or 0) if is_paid else 0
+    # Broadcast-safe: redact paid media until REST unlock (same as chats API).
+    media_url = None if is_paid else msg.media_url
     return {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
         "sender_id": msg.sender_id,
         "type": msg.type,
         "content": msg.content,
-        "media_url": msg.media_url,
+        "media_url": media_url,
         "reply_to_message_id": msg.reply_to_message_id,
         "forward_from_user_id": getattr(msg, "forward_from_user_id", None),
         "forward_from_name": getattr(msg, "forward_from_name", None),
@@ -46,6 +50,9 @@ def _message_payload(msg) -> Dict[str, Any]:
             getattr(msg, "disable_webpage_preview", False)
         ),
         "media_group_id": getattr(msg, "media_group_id", None),
+        "is_paid": is_paid,
+        "price_stars": price_stars,
+        "purchased": not is_paid,
         "reactions": [],
     }
 

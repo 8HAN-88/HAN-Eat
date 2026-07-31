@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'payment_service.dart';
@@ -26,7 +27,7 @@ class PaidFeaturesService {
     if (response.statusCode == 200) {
       return StarsBalance.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
-    throw Exception(_errorMessage(response, 'Не удалось загрузить баланс'));
+    _throwForResponse(response, 'Не удалось загрузить баланс');
   }
 
   static Future<List<StarPackage>> getStarPackages() async {
@@ -41,7 +42,7 @@ class PaidFeaturesService {
           .map((e) => StarPackage.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception(_errorMessage(response, 'Не удалось загрузить пакеты звёзд'));
+    _throwForResponse(response, 'Не удалось загрузить пакеты звёзд');
   }
 
   static Future<CheckoutSessionResponse> createStarsCheckout(
@@ -70,7 +71,7 @@ class PaidFeaturesService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception(_errorMessage(response, 'Не удалось купить контент'));
+    _throwForResponse(response, 'Не удалось купить контент');
   }
 
   static Future<int> donate({
@@ -91,7 +92,7 @@ class PaidFeaturesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data['balance'] as int? ?? 0;
     }
-    throw Exception(_errorMessage(response, 'Не удалось отправить донат'));
+    _throwForResponse(response, 'Не удалось отправить донат');
   }
 
   static Future<void> subscribeChannel(
@@ -105,7 +106,7 @@ class PaidFeaturesService {
       body: jsonEncode({'months': months, 'auto_renew': autoRenew}),
     );
     if (response.statusCode == 200) return;
-    throw Exception(_errorMessage(response, 'Не удалось оформить подписку'));
+    _throwForResponse(response, 'Не удалось оформить подписку');
   }
 
   static Future<void> boostPost({
@@ -122,7 +123,7 @@ class PaidFeaturesService {
       }),
     );
     if (response.statusCode == 200) return;
-    throw Exception(_errorMessage(response, 'Не удалось запустить буст'));
+    _throwForResponse(response, 'Не удалось запустить буст');
   }
 
   static Future<List<StarTransaction>> getTransactions({int limit = 30}) async {
@@ -136,7 +137,7 @@ class PaidFeaturesService {
           .map((e) => StarTransaction.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception(_errorMessage(response, 'Не удалось загрузить историю'));
+    _throwForResponse(response, 'Не удалось загрузить историю');
   }
 
   static Future<CreatorPayoutRequest> requestCreatorPayout({
@@ -156,7 +157,7 @@ class PaidFeaturesService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception(_errorMessage(response, 'Не удалось запросить выплату'));
+    _throwForResponse(response, 'Не удалось запросить выплату');
   }
 
   static Future<List<CreatorPayoutRequest>> getMyPayoutRequests({
@@ -172,7 +173,7 @@ class PaidFeaturesService {
           .map((e) => CreatorPayoutRequest.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception(_errorMessage(response, 'Не удалось загрузить выплаты'));
+    _throwForResponse(response, 'Не удалось загрузить выплаты');
   }
 
   static Future<PurchaseMessageResult> purchaseMessage(int messageId) async {
@@ -189,7 +190,7 @@ class PaidFeaturesService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception(_errorMessage(response, 'Не удалось открыть медиа'));
+    _throwForResponse(response, 'Не удалось открыть медиа');
   }
 
   static Future<List<StarGift>> getGifts() async {
@@ -204,7 +205,7 @@ class PaidFeaturesService {
           .map((e) => StarGift.fromJson(e as Map<String, dynamic>))
           .toList();
     }
-    throw Exception(_errorMessage(response, 'Не удалось загрузить подарки'));
+    _throwForResponse(response, 'Не удалось загрузить подарки');
   }
 
   static Future<SendGiftResult> sendGift({
@@ -226,28 +227,15 @@ class PaidFeaturesService {
         jsonDecode(response.body) as Map<String, dynamic>,
       );
     }
-    throw Exception(_errorMessage(response, 'Не удалось отправить подарок'));
+    _throwForResponse(response, 'Не удалось отправить подарок');
   }
 
-  static String _errorMessage(http.Response response, String fallback) {
-    try {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final detail = data['detail'];
-      if (detail is String) return detail;
-      if (detail is Map) {
-        final code = detail['code'] as String?;
-        final message = detail['message'] as String?;
-        if (code == 'STARS_REQUIRED') {
-          return (message != null && message.isNotEmpty)
-              ? message
-              : 'Недостаточно звёзд';
-        }
-        if (message != null && message.isNotEmpty) return message;
-        if (code != null && code.isNotEmpty) return code;
-      }
-    } catch (_) {}
-    if (response.statusCode == 402) return 'Недостаточно звёзд';
-    return fallback;
+  static Never _throwForResponse(http.Response response, String fallback) {
+    throw apiExceptionFromHttpResponse(
+      response.statusCode,
+      response.body,
+      fallback: fallback,
+    );
   }
 }
 

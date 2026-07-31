@@ -2689,6 +2689,51 @@ class ChatService:
         )
         return msg, True
 
+    def _charge_direct_paid_message_fee(
+        self,
+        *,
+        conversation_id: int,
+        sender_id: int,
+        msg: Message,
+        is_new: bool,
+    ) -> None:
+        """Charge paid-DM Stars for live and scheduled sends. Undoes msg on 402."""
+        if not is_new:
+            return
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if not conv or conv.type != "direct":
+            return
+        peer_id = (
+            conv.direct_user_high_id
+            if conv.direct_user_low_id == sender_id
+            else conv.direct_user_low_id
+        )
+        if not peer_id:
+            return
+        from fastapi import HTTPException
+
+        from app.services.paid_features_service import PaidFeaturesService
+
+        try:
+            PaidFeaturesService(self.db).charge_paid_message_fee(
+                sender_id,
+                int(peer_id),
+                conversation_id=conversation_id,
+                message_id=msg.id,
+                media_group_id=getattr(msg, "media_group_id", None),
+            )
+        except HTTPException as e:
+            # Don't deliver unpaid scheduled/live content.
+            self.db.delete(msg)
+            self.db.flush()
+            if int(getattr(e, "status_code", 0) or 0) == 402:
+                raise ValueError("stars_required") from e
+            raise ValueError("paid_message_fee_failed") from e
+
     def forward_message(
         self,
         *,
@@ -3202,7 +3247,7 @@ class ChatService:
                     from app.services.chat_poll_service import rebase_poll_closes_at
 
                     content = rebase_poll_closes_at(content)
-                msg, _ = self.send_message(
+                msg, is_new = self.send_message(
                     conversation_id=item.conversation_id,
                     sender_id=item.sender_id,
                     msg_type=item.type,
@@ -3216,6 +3261,12 @@ class ChatService:
                         getattr(item, "disable_webpage_preview", False)
                     ),
                     media_group_id=getattr(item, "media_group_id", None),
+                )
+                self._charge_direct_paid_message_fee(
+                    conversation_id=item.conversation_id,
+                    sender_id=item.sender_id,
+                    msg=msg,
+                    is_new=is_new,
                 )
                 item.status = "sent"
                 item.sent_message_id = msg.id

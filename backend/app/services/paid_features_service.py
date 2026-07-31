@@ -179,7 +179,9 @@ class PaidFeaturesService:
             meta=meta,
         )
         self.db.add(tx)
-        # Keep creator cashout ledger in sync with spendable Stars.
+        self.db.flush()
+        # Cashout ledger cannot exceed remaining spendable Stars.
+        # Do not subtract purchased top-ups from creator available earnings.
         balance = (
             self.db.query(CreatorBalance)
             .filter(CreatorBalance.user_id == user_id)
@@ -187,10 +189,10 @@ class PaidFeaturesService:
             .first()
         )
         if balance is not None:
+            spendable = self.star_balance(user_id)
             available = int(balance.available_stars or 0)
-            if available > 0:
-                balance.available_stars = max(0, available - amount)
-        self.db.flush()
+            if available > spendable:
+                balance.available_stars = max(0, spendable)
         return tx
 
     def _credit_creator(
@@ -943,6 +945,28 @@ def expire_due_post_boosts(db: Session) -> int:
     return len(expired)
 
 
+def _revoke_paid_channel_membership(db: Session, *, user_id: int, channel_id: int) -> None:
+    """Remove paid-subscriber membership so feed/posts lock after expiry."""
+    from app.models.community_member import ChannelMember
+    from app.services.channel_membership_service import sync_channel_members_count
+
+    member = (
+        db.query(ChannelMember)
+        .filter(
+            ChannelMember.channel_id == channel_id,
+            ChannelMember.user_id == user_id,
+        )
+        .first()
+    )
+    if member is None:
+        return
+    if member.role in ("owner", "admin"):
+        return
+    db.delete(member)
+    sync_channel_members_count(db, channel_id)
+    _invalidate_user_feed_cache(db, user_id)
+
+
 def expire_due_channel_subscriptions(db: Session) -> int:
     """Mark expired paid channel subscriptions; optionally auto-renew once."""
     now = datetime.utcnow()
@@ -971,9 +995,17 @@ def expire_due_channel_subscriptions(db: Session) -> int:
                 )
                 changed += 1
                 continue
+            except HTTPException as e:
+                # Only expire when the wallet truly can't renew.
+                if int(getattr(e, "status_code", 0) or 0) != 402:
+                    continue
             except Exception:
-                pass
+                # Transient errors: leave active for the next maintenance pass.
+                continue
         sub.status = "expired"
+        _revoke_paid_channel_membership(
+            db, user_id=sub.user_id, channel_id=sub.channel_id
+        )
         changed += 1
     return changed
 
