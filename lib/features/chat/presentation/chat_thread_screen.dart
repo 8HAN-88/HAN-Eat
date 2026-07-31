@@ -1699,7 +1699,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               _PendingMediaKind.file => 'Не удалось отправить файл',
               _PendingMediaKind.voice => 'Не удалось отправить голосовое',
             };
-            showErrorSnackBar(context, e, fallback: fallback);
+            if (isStarsRequiredError(e)) {
+              await showStarsRequiredSnack(context, e, fallback: fallback);
+            } else {
+              showErrorSnackBar(context, e, fallback: fallback);
+            }
           }
         }
       }
@@ -5398,19 +5402,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (picked == null || !mounted) return;
       final dests = picked.targets;
       var ok = 0;
+      Object? lastError;
       for (final chat in dests) {
         try {
           await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
           ok += 1;
-        } catch (_) {}
+        } catch (e) {
+          lastError = e;
+        }
       }
       if (!mounted) return;
+      if (ok == 0 && lastError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(lastError))),
+        );
+        return;
+      }
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final label = dests.length == 1
           ? '«${dests.first.displayTitle}»'
           : '$ok из ${dests.length} чатов';
+      final suffix = lastError != null && ok < dests.length
+          ? ' (часть не удалось)'
+          : '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$verb в $label')),
+        SnackBar(content: Text('$verb в $label$suffix')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -7447,16 +7463,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final dests = picked.targets;
       var sent = 0;
       var total = 0;
+      Object? lastError;
       for (final chat in dests) {
         for (final msg in selected) {
           total += 1;
           try {
             await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
             sent += 1;
-          } catch (_) {}
+          } catch (e) {
+            lastError = e;
+          }
         }
       }
       if (!mounted) return;
+      if (sent == 0 && lastError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(userVisibleError(lastError))),
+        );
+        return;
+      }
       _exitSelectionMode();
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final destLabel = dests.length == 1
@@ -9519,7 +9544,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _failedTextSends[pending.tempId] = pending;
           });
           unawaited(_persistFailedTextSends());
-          showErrorSnackBar(context, e);
+          if (isStarsRequiredError(e)) {
+            await showStarsRequiredSnack(context, e);
+          } else {
+            showErrorSnackBar(context, e);
+          }
         }
       }
     } finally {

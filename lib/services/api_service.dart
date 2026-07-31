@@ -933,6 +933,12 @@ class ApiService {
             fallback: 'Публикация не прошла модерацию',
           );
         }
+        // Stars / generic structured FastAPI errors (incl. 402 STARS_REQUIRED).
+        throw apiExceptionFromResponse(
+          resp.statusCode,
+          root!,
+          fallback: 'Произошла ошибка',
+        );
       }
       // Special handling for Spoonacular API limit errors
       if (resp.statusCode == 402) {
@@ -944,6 +950,11 @@ class ApiService {
             'Пожалуйста, обновите план подписки или попробуйте позже.',
           );
         }
+        throw const ApiClientException(
+          statusCode: 402,
+          code: 'STARS_REQUIRED',
+          message: 'Недостаточно звёзд',
+        );
       }
       throw Exception('API error ${resp.statusCode}: ${resp.body}');
     }

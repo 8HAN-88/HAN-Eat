@@ -38,6 +38,8 @@ String parseApiErrorMessage(
         'Слишком часто. В этом чате включен slow mode, подождите немного.',
       'group_flood_limited' =>
         'Превышен лимит сообщений в минуту. Подождите и попробуйте снова.',
+      'paid_media_locked' =>
+        'Сначала откройте платное медиа, чтобы переслать',
       _ => detail,
     };
   }
@@ -45,6 +47,12 @@ String parseApiErrorMessage(
     final msg = detail['message'] as String?;
     if (msg != null && msg.isNotEmpty) return msg;
     final code = detail['code'] as String?;
+    if (code == 'STARS_REQUIRED') {
+      return 'Недостаточно звёзд';
+    }
+    if (code == 'paid_media_locked') {
+      return 'Сначала откройте платное медиа, чтобы переслать';
+    }
     if (code == 'CONTENT_BLOCKED') {
       return 'Публикация не прошла модерацию и не может быть опубликована';
     }

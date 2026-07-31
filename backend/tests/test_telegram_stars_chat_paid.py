@@ -12,6 +12,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from app.core.database import Base
 from app.models.conversation import Conversation, ConversationMember, Message
+from app.models.notification import Notification
 from app.models.paid_features import CreatorBalance, PaidMessageUnlock, StarGift, StarTransaction
 from app.models.user import User
 from app.services.paid_features_service import PaidFeaturesService
@@ -33,6 +34,7 @@ def db_session():
         CreatorBalance.__table__,
         PaidMessageUnlock.__table__,
         StarGift.__table__,
+        Notification.__table__,
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
     Session = sessionmaker(bind=engine)
@@ -166,3 +168,52 @@ def test_purchase_requires_membership(db_session):
     with pytest.raises(HTTPException) as exc:
         svc.purchase_message(2, msg.id)
     assert exc.value.status_code == 403
+
+
+def test_forward_paid_media_requires_unlock(db_session):
+    from app.services.chat_service import ChatService
+
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 100)
+    src = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(src)
+    db_session.flush()
+    dst = Conversation(type="group", title="g")
+    db_session.add(dst)
+    db_session.flush()
+    for cid, uid in ((src.id, 1), (src.id, 2), (dst.id, 1), (dst.id, 2)):
+        db_session.add(ConversationMember(conversation_id=cid, user_id=uid))
+    msg = Message(
+        conversation_id=src.id,
+        sender_id=1,
+        type="image",
+        content="",
+        media_url="https://example.com/paid.jpg",
+        is_paid=True,
+        price_stars=20,
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    chat = ChatService(db_session)
+    with pytest.raises(ValueError, match="paid_media_locked"):
+        chat.forward_message(
+            target_conversation_id=dst.id,
+            source_conversation_id=src.id,
+            message_id=msg.id,
+            sender_id=2,
+        )
+
+    PaidFeaturesService(db_session).purchase_message(2, msg.id)
+    db_session.commit()
+    forwarded = chat.forward_message(
+        target_conversation_id=dst.id,
+        source_conversation_id=src.id,
+        message_id=msg.id,
+        sender_id=2,
+    )
+    db_session.commit()
+    assert forwarded.is_paid is True
+    assert int(forwarded.price_stars or 0) == 20
+    assert forwarded.media_url == "https://example.com/paid.jpg"

@@ -31,6 +31,12 @@ class _DonationScreenState extends State<DonationScreen> {
 
   final List<int> _quickAmounts = [50, 100, 250, 500, 1000, 2500];
 
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
   Future<void> _sendDonation() async {
     setState(() => _isSending = true);
 

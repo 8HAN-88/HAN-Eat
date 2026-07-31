@@ -2754,11 +2754,19 @@ class ChatService:
             )
             media_url = None
 
-        # Paid media stays locked after forward (Telegram Stars parity).
+        # Paid media: only sender or unlocker may forward (Telegram Stars parity).
         src_paid = bool(getattr(src, "is_paid", False))
         src_price = int(getattr(src, "price_stars", 0) or 0) if src_paid else 0
-        if src_paid and not media_url:
-            raise ValueError("paid_media_locked")
+        if src_paid:
+            if int(src.sender_id) != int(sender_id):
+                from app.services.paid_features_service import PaidFeaturesService
+
+                if not PaidFeaturesService(self.db).has_unlocked_message(
+                    sender_id, src
+                ):
+                    raise ValueError("paid_media_locked")
+            if not media_url:
+                raise ValueError("paid_media_locked")
         msg, _ = self.send_message(
             conversation_id=target_conversation_id,
             sender_id=sender_id,
