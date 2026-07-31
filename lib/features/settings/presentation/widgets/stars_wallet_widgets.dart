@@ -350,7 +350,8 @@ enum WalletFilter {
                 type == 'paid_media_sale' ||
                 type == 'paid_message_received' ||
                 type == 'paid_reaction_received' ||
-                type == 'gift_received');
+                type == 'gift_received' ||
+                type == 'gift_converted');
       case WalletFilter.boosts:
         return type == 'boost';
     }
