@@ -64,6 +64,7 @@ class ChannelDetailScreen extends ConsumerStatefulWidget {
 class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   ChannelDetail? _channel;
   bool _isLoading = true;
+  bool _subscribingPaid = false;
   Object? _channelLoadError;
   bool _isJoining = false;
   final GlobalKey<ChannelPostsListState> _postsListKey =
@@ -152,7 +153,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
 
   Future<void> _subscribePaidChannelFromAppBar() async {
     final channel = _channel;
-    if (channel == null || channel.paidAccess) return;
+    if (channel == null || channel.paidAccess || _subscribingPaid) return;
     final ok = await confirmStarsSpend(
       context,
       title: 'Подписка на канал',
@@ -162,6 +163,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       confirmLabel: 'Подписаться',
     );
     if (!ok || !mounted) return;
+    setState(() => _subscribingPaid = true);
     try {
       await PaidFeaturesService.subscribeChannel(channel.id);
       if (!mounted) return;
@@ -175,6 +177,8 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _subscribingPaid = false);
     }
   }
 

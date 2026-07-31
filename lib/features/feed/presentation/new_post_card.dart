@@ -107,6 +107,7 @@ class _NewPostCardState extends State<NewPostCard>
   bool _isSaving = false;
   bool _isReposting = false;
   bool _isSendingDonation = false;
+  bool _isBoosting = false;
   int? _currentUserId;
   bool _showLikeAnimation = false;
   bool _captionExpanded = false;
@@ -694,50 +695,72 @@ class _NewPostCardState extends State<NewPostCard>
   }
 
   Future<void> _showBoostDialog() async {
-    final amountController = TextEditingController(text: '100');
-    final daysController = TextEditingController(text: '7');
+    if (_isBoosting) return;
+    const presets = <int>[50, 100, 250, 500];
+    var amount = 100;
+    var days = 7;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Бустить пост'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Бюджет в звёздах',
-                prefixIcon: Icon(Icons.stars_rounded),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Бустить пост'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Бюджет'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final n in presets)
+                    ChoiceChip(
+                      selected: amount == n,
+                      label: Text('$n ★'),
+                      onSelected: (_) => setLocal(() => amount = n),
+                    ),
+                ],
               ),
+              const SizedBox(height: 14),
+              const Text('Срок'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final d in const [3, 7, 14])
+                    ChoiceChip(
+                      selected: days == d,
+                      label: Text('$d дн.'),
+                      onSelected: (_) => setLocal(() => days = d),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Отмена'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: daysController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Срок, дней',
-                prefixIcon: Icon(Icons.schedule_rounded),
-              ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Запустить · $amount ★'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Запустить'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true) return;
-    final amount = int.tryParse(amountController.text.trim()) ?? 0;
-    final days = int.tryParse(daysController.text.trim()) ?? 7;
-    if (amount <= 0) return;
+    if (confirmed != true || !mounted) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Запустить буст',
+      body: 'Пост будет продвигаться $days дн. за $amount ★.',
+      amountStars: amount,
+      confirmLabel: 'Буст',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _isBoosting = true);
     try {
       await PaidFeaturesService.boostPost(
         postId: _displayPost.id,
@@ -758,6 +781,8 @@ class _NewPostCardState extends State<NewPostCard>
           SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isBoosting = false);
     }
   }
 

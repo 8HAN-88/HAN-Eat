@@ -231,12 +231,54 @@ def test_send_star_gift_direct(db_session):
 
     svc = PaidFeaturesService(db_session)
     gift = svc.list_star_gifts()[0]
-    msg = svc.send_star_gift(1, gift_id=gift.id, conversation_id=conv.id, message="hi")
+    msg = svc.send_star_gift(
+        1,
+        gift_id=gift.id,
+        conversation_id=conv.id,
+        message="hi",
+        idempotency_key="gift-once",
+    )
+    again = svc.send_star_gift(
+        1,
+        gift_id=gift.id,
+        conversation_id=conv.id,
+        message="hi",
+        idempotency_key="gift-once",
+    )
     db_session.commit()
     assert msg.type == "gift"
+    assert again.id == msg.id
     assert "🌹" in msg.content
     assert svc.star_balance(1) == 175
     assert svc.creator_balance(2).available_stars == 25
+
+
+def test_pay_for_reaction_idempotent(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 50)
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=1,
+        type="text",
+        content="hi",
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.pay_for_reaction(
+        2, message=msg, amount_stars=10, idempotency_key="react-1"
+    )
+    svc.pay_for_reaction(
+        2, message=msg, amount_stars=10, idempotency_key="react-1"
+    )
+    db_session.commit()
+    assert svc.star_balance(2) == 40
+    assert svc.creator_balance(1).available_stars == 10
 
 
 def test_purchase_requires_membership(db_session):

@@ -2680,6 +2680,14 @@ class ChatService:
                     member.last_group_message_at = now
 
         self.db.flush()
+        # Charge paid-DM fee BEFORE notify so 402 never sends ghost pushes.
+        self._charge_direct_paid_message_fee(
+            conversation_id=conversation_id,
+            sender_id=sender_id,
+            msg=msg,
+            is_new=True,
+            conv=conv,
+        )
         self._notify_new_message(
             msg,
             sender_id=sender_id,
@@ -2696,15 +2704,17 @@ class ChatService:
         sender_id: int,
         msg: Message,
         is_new: bool,
+        conv: Optional[Conversation] = None,
     ) -> None:
         """Charge paid-DM Stars for live and scheduled sends. Undoes msg on 402."""
         if not is_new:
             return
-        conv = (
-            self.db.query(Conversation)
-            .filter(Conversation.id == conversation_id)
-            .first()
-        )
+        if conv is None:
+            conv = (
+                self.db.query(Conversation)
+                .filter(Conversation.id == conversation_id)
+                .first()
+            )
         if not conv or conv.type != "direct":
             return
         peer_id = (
@@ -3247,7 +3257,7 @@ class ChatService:
                     from app.services.chat_poll_service import rebase_poll_closes_at
 
                     content = rebase_poll_closes_at(content)
-                msg, is_new = self.send_message(
+                msg, _is_new = self.send_message(
                     conversation_id=item.conversation_id,
                     sender_id=item.sender_id,
                     msg_type=item.type,
@@ -3262,12 +3272,7 @@ class ChatService:
                     ),
                     media_group_id=getattr(item, "media_group_id", None),
                 )
-                self._charge_direct_paid_message_fee(
-                    conversation_id=item.conversation_id,
-                    sender_id=item.sender_id,
-                    msg=msg,
-                    is_new=is_new,
-                )
+                # Paid-DM fee charged inside send_message (before notify).
                 item.status = "sent"
                 item.sent_message_id = msg.id
                 item.sent_at = datetime.now(timezone.utc).replace(tzinfo=None)

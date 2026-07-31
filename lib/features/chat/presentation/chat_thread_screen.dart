@@ -314,6 +314,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _recording = false;
   /// Session confirm for paid-DM fee (once per thread until cancelled).
   bool _paidDmFeeConfirmed = false;
+  bool _sendingStarGift = false;
+  bool _sendingPaidReaction = false;
   bool _holdActive = false;
   bool _recordCancelled = false;
   bool _voiceLocked = false;
@@ -4308,7 +4310,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendPaidReaction(ChatMessage msg) async {
-    if (msg.isMine || msg.id <= 0) return;
+    if (msg.isMine || msg.id <= 0 || _sendingPaidReaction) return;
     final amountController = TextEditingController(text: '1');
     final amount = await showDialog<int>(
       context: context,
@@ -4340,18 +4342,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     amountController.dispose();
     if (amount == null || !mounted) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Платная реакция',
+      body: 'Отправить $amount ★ за реакцию на это сообщение?',
+      amountStars: amount,
+      confirmLabel: 'Отправить',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _sendingPaidReaction = true);
+    final idem = 'flutter:react:${msg.id}:${const Uuid().v4()}';
     try {
       final reactions = await ChatService.setReaction(
         conversationId: widget.conversationId,
         messageId: msg.id,
         emoji: '⭐',
         stars: amount,
+        idempotencyKey: idem,
       );
       if (!mounted) return;
       _applyReactions(msg.id, reactions);
     } catch (e) {
       if (!mounted) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _sendingPaidReaction = false);
     }
   }
 
@@ -6450,7 +6465,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _sendStarGift() async {
     final peer = _conversation.peer;
-    if (peer == null) return;
+    if (peer == null || _sendingStarGift) return;
     final gift = await showStarGiftPickerSheet(context);
     if (gift == null || !mounted) return;
     final noteController = TextEditingController();
@@ -6479,11 +6494,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     noteController.dispose();
     if (note == null || !mounted) return;
+    setState(() => _sendingStarGift = true);
+    final idem =
+        'flutter:gift:${widget.conversationId}:${gift.id}:${const Uuid().v4()}';
     try {
       await PaidFeaturesService.sendGift(
         giftId: gift.id,
         conversationId: widget.conversationId,
         message: note.isEmpty ? null : note,
+        idempotencyKey: idem,
       );
       if (!mounted) return;
       await _pollNew();
@@ -6493,6 +6512,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _sendingStarGift = false);
     }
   }
 
