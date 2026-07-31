@@ -236,7 +236,9 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   secondary: Icon(Icons.lock_rounded, color: scheme.secondary),
                   title: const Text('Платное медиа'),
-                  subtitle: const Text('Открыть можно только за звёзды'),
+                  subtitle: const Text(
+                    'Открыть можно только за звёзды. С отложенной отправкой недоступно.',
+                  ),
                   value: _isPaid,
                   onChanged: (v) => setState(() => _isPaid = v),
                 ),

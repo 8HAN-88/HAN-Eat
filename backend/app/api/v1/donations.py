@@ -63,7 +63,7 @@ async def create_donation(
     # Проверка канала (если указан)
     if payload.channel_id:
         channel = db.query(Channel).filter(Channel.id == payload.channel_id).first()
-        if not channel or channel.owner_id != payload.recipient_id:
+        if not channel or int(channel.admin_user_id) != int(payload.recipient_id):
             raise HTTPException(status_code=400, detail="Invalid channel")
 
     # Проверка поста (если указан)
@@ -72,7 +72,17 @@ async def create_donation(
         if not post or post.user_id != payload.recipient_id:
             raise HTTPException(status_code=400, detail="Invalid post")
 
-    # Создаём донат
+    from app.services.paid_features_service import PaidFeaturesService
+
+    service = PaidFeaturesService(db)
+    # Списываем ★ и зачисляем автору (как /paid/stars/donate).
+    service.donate(
+        current_user.id,
+        payload.recipient_id,
+        payload.amount_stars,
+        message=payload.message,
+    )
+
     donation = Donation(
         sender_id=current_user.id,
         recipient_id=payload.recipient_id,
@@ -85,9 +95,6 @@ async def create_donation(
     db.add(donation)
     db.commit()
     db.refresh(donation)
-
-    # TODO: В будущем — списывать Stars со счёта отправителя
-    # и зачислять получателю через StarTransaction
 
     return DonationResponse(
         id=donation.id,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/api_service.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../data/donation_models.dart';
 
 /// Экран отправки доната
@@ -58,9 +59,7 @@ class _DonationScreenState extends State<DonationScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
       }
     } finally {
       if (mounted) setState(() => _isSending = false);

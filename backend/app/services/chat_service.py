@@ -2754,12 +2754,19 @@ class ChatService:
             )
             media_url = None
 
+        # Paid media stays locked after forward (Telegram Stars parity).
+        src_paid = bool(getattr(src, "is_paid", False))
+        src_price = int(getattr(src, "price_stars", 0) or 0) if src_paid else 0
+        if src_paid and not media_url:
+            raise ValueError("paid_media_locked")
         msg, _ = self.send_message(
             conversation_id=target_conversation_id,
             sender_id=sender_id,
             msg_type=src.type,
             content=content,
             media_url=media_url,
+            is_paid=src_paid,
+            price_stars=src_price,
         )
         if as_copy:
             msg.forward_from_user_id = None

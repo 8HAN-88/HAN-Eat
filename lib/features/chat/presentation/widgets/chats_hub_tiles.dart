@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -56,6 +58,8 @@ class ChatHubTile extends StatelessWidget {
         return Icons.circle_outlined;
       case 'sticker':
         return Icons.emoji_emotions_outlined;
+      case 'gift':
+        return Icons.card_giftcard_rounded;
       case 'location':
         return Icons.location_on_rounded;
       case 'file':
@@ -550,16 +554,29 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
     if (poll != null) return chatPollPreviewText(poll);
     return 'Опрос';
   }
-  if (msg.type == 'image') return 'Фото';
-  if (msg.type == 'video') return 'Видео';
+  if (msg.type == 'image') {
+    return msg.isPaid && !msg.purchased && !msg.isMine
+        ? 'Платное фото'
+        : 'Фото';
+  }
+  if (msg.type == 'video') {
+    return msg.isPaid && !msg.purchased && !msg.isMine
+        ? 'Платное видео'
+        : 'Видео';
+  }
   if (msg.type == 'video_note') return 'Видеосообщение';
   if (msg.type == 'sticker') return 'Стикер';
+  if (msg.type == 'gift') {
+    final emoji = _giftEmojiFromContent(msg.content);
+    return emoji == null ? 'Подарок' : 'Подарок $emoji';
+  }
   if (msg.type == 'location' ||
       ChatLocationPayload.tryParse(msg.content) != null) {
     return 'Геопозиция';
   }
   if (msg.type == 'file') {
     final name = msg.content.trim();
+    if (msg.isPaid && !msg.purchased && !msg.isMine) return 'Платный файл';
     return name.isEmpty ? 'Файл' : name;
   }
   final contact = ChatContactPayload.tryParse(msg.content);
@@ -575,6 +592,19 @@ String chatHubFormatInboxTime(DateTime dt) {
     return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
   return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}';
+}
+
+String? _giftEmojiFromContent(String content) {
+  final raw = content.trim();
+  if (!raw.startsWith('{')) return null;
+  try {
+    final data = jsonDecode(raw);
+    if (data is Map && data['emoji'] is String) {
+      final emoji = (data['emoji'] as String).trim();
+      return emoji.isEmpty ? null : emoji;
+    }
+  } catch (_) {}
+  return null;
 }
 
 class ChannelInboxTile extends StatefulWidget {

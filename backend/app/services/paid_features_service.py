@@ -179,6 +179,17 @@ class PaidFeaturesService:
             meta=meta,
         )
         self.db.add(tx)
+        # Keep creator cashout ledger in sync with spendable Stars.
+        balance = (
+            self.db.query(CreatorBalance)
+            .filter(CreatorBalance.user_id == user_id)
+            .with_for_update()
+            .first()
+        )
+        if balance is not None:
+            available = int(balance.available_stars or 0)
+            if available > 0:
+                balance.available_stars = max(0, available - amount)
         self.db.flush()
         return tx
 
@@ -356,6 +367,37 @@ class PaidFeaturesService:
             reference_id=channel_id,
             counterparty_user_id=user_id,
         )
+        # Paying for a private channel grants active membership (Telegram-like).
+        try:
+            from app.models.community import ChannelMember
+            from app.services.channel_membership_service import (
+                MEMBER_STATUS_ACTIVE,
+                sync_channel_members_count,
+            )
+
+            member = (
+                self.db.query(ChannelMember)
+                .filter(
+                    ChannelMember.channel_id == channel_id,
+                    ChannelMember.user_id == user_id,
+                )
+                .first()
+            )
+            if member is None:
+                self.db.add(
+                    ChannelMember(
+                        channel_id=channel_id,
+                        user_id=user_id,
+                        role="member",
+                        status=MEMBER_STATUS_ACTIVE,
+                    )
+                )
+                sync_channel_members_count(self.db, channel_id)
+            elif member.status != MEMBER_STATUS_ACTIVE:
+                member.status = MEMBER_STATUS_ACTIVE
+                sync_channel_members_count(self.db, channel_id)
+        except Exception:
+            pass
         _invalidate_user_feed_cache(self.db, user_id)
         self.db.flush()
         return sub
@@ -474,13 +516,31 @@ class PaidFeaturesService:
         if note is not None:
             payout.note = note.strip() or payout.note
         creator_balance = self.creator_balance(payout.creator_user_id)
+        amount = int(payout.amount_stars)
         if not approve:
             creator_balance.pending_stars = max(
-                0, int(creator_balance.pending_stars or 0) - int(payout.amount_stars)
+                0, int(creator_balance.pending_stars or 0) - amount
             )
-            creator_balance.available_stars = int(creator_balance.available_stars or 0) + int(
-                payout.amount_stars
+            creator_balance.available_stars = int(creator_balance.available_stars or 0) + amount
+        else:
+            creator_balance.pending_stars = max(
+                0, int(creator_balance.pending_stars or 0) - amount
             )
+            creator_balance.paid_out_stars = int(creator_balance.paid_out_stars or 0) + amount
+            payout.status = "paid"
+            payout.paid_at = datetime.utcnow()
+            # Burn payout amount from spendable Stars so cashout can't be spent twice.
+            if self.star_balance(payout.creator_user_id) >= amount:
+                self.db.add(
+                    StarTransaction(
+                        user_id=payout.creator_user_id,
+                        amount=-amount,
+                        type="payout",
+                        reference_type="payout",
+                        reference_id=payout.id,
+                        status="completed",
+                    )
+                )
         self.db.flush()
         return payout
 
@@ -543,7 +603,52 @@ class PaidFeaturesService:
         )
         if existing:
             return existing
-        amount = int(getattr(message, "price_stars", 0) or 0)
+
+        # Album: one Stars charge unlocks every paid item in the media group.
+        group_id = (getattr(message, "media_group_id", None) or "").strip()
+        album_messages = [message]
+        if group_id:
+            album_messages = (
+                self.db.query(Message)
+                .filter(
+                    Message.conversation_id == message.conversation_id,
+                    Message.media_group_id == group_id,
+                    Message.deleted_at.is_(None),
+                    Message.is_paid.is_(True),
+                )
+                .order_by(Message.id.asc())
+                .all()
+            ) or [message]
+
+        already_unlocked_ids = {
+            int(row[0])
+            for row in self.db.query(PaidMessageUnlock.message_id)
+            .filter(
+                PaidMessageUnlock.user_id == user_id,
+                PaidMessageUnlock.message_id.in_([m.id for m in album_messages]),
+                PaidMessageUnlock.status == "completed",
+            )
+            .all()
+        }
+        to_unlock = [m for m in album_messages if m.id not in already_unlocked_ids]
+        if not to_unlock:
+            # All album items already unlocked — return the original row if any.
+            return (
+                self.db.query(PaidMessageUnlock)
+                .filter(
+                    PaidMessageUnlock.user_id == user_id,
+                    PaidMessageUnlock.message_id == message_id,
+                )
+                .first()
+            ) or PaidMessageUnlock(
+                user_id=user_id,
+                message_id=message_id,
+                author_id=message.sender_id,
+                amount_stars=0,
+                status="completed",
+            )
+
+        amount = max(int(getattr(m, "price_stars", 0) or 0) for m in to_unlock)
         if amount <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -557,14 +662,27 @@ class PaidFeaturesService:
             reference_id=message_id,
             counterparty_user_id=message.sender_id,
             idempotency_key=idempotency_key,
+            meta={"media_group_id": group_id or None, "unlocked_count": len(to_unlock)},
         )
-        unlock = PaidMessageUnlock(
-            user_id=user_id,
-            message_id=message_id,
-            author_id=message.sender_id,
-            amount_stars=amount,
-        )
-        self.db.add(unlock)
+        unlock: Optional[PaidMessageUnlock] = None
+        for m in to_unlock:
+            row = PaidMessageUnlock(
+                user_id=user_id,
+                message_id=m.id,
+                author_id=m.sender_id,
+                amount_stars=amount if m.id == message_id else 0,
+            )
+            self.db.add(row)
+            if m.id == message_id:
+                unlock = row
+        if unlock is None:
+            unlock = PaidMessageUnlock(
+                user_id=user_id,
+                message_id=message_id,
+                author_id=message.sender_id,
+                amount_stars=amount,
+            )
+            self.db.add(unlock)
         self._credit_creator(
             message.sender_id,
             amount,
@@ -572,6 +690,7 @@ class PaidFeaturesService:
             reference_type="message",
             reference_id=message_id,
             counterparty_user_id=user_id,
+            meta={"media_group_id": group_id or None, "unlocked_count": len(to_unlock)},
         )
         self.db.flush()
         return unlock
@@ -780,4 +899,39 @@ def expire_due_post_boosts(db: Session) -> int:
             if post:
                 post.is_promoted = False
     return len(expired)
+
+
+def expire_due_channel_subscriptions(db: Session) -> int:
+    """Mark expired paid channel subscriptions; optionally auto-renew once."""
+    now = datetime.utcnow()
+    due = (
+        db.query(PaidChannelSubscription)
+        .filter(
+            PaidChannelSubscription.status == "active",
+            PaidChannelSubscription.expires_at.isnot(None),
+            PaidChannelSubscription.expires_at <= now,
+        )
+        .limit(100)
+        .all()
+    )
+    if not due:
+        return 0
+    service = PaidFeaturesService(db)
+    changed = 0
+    for sub in due:
+        if sub.auto_renew:
+            try:
+                service.subscribe_channel(
+                    sub.user_id,
+                    sub.channel_id,
+                    months=1,
+                    auto_renew=True,
+                )
+                changed += 1
+                continue
+            except Exception:
+                pass
+        sub.status = "expired"
+        changed += 1
+    return changed
 

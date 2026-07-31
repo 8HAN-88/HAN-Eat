@@ -37,6 +37,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../comments/presentation/show_post_comments_sheet.dart';
 import 'widgets/paid_content_paywall_card.dart';
 import 'widgets/show_post_likers_sheet.dart';
+import '../../../widgets/stars_pay_helper.dart';
 
 int? _repostOriginalPostIdFromBody(Map<String, dynamic>? body) {
   final raw = body?['repost_original_post_id'];
@@ -278,6 +279,14 @@ class _NewPostCardState extends State<NewPostCard>
 
   Future<void> _purchasePaidContent() async {
     if (_isLoading) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Открыть контент',
+      body: 'Разовый доступ к эксклюзивному посту автора.',
+      amountStars: _displayPost.priceStars,
+      confirmLabel: 'Купить',
+    );
+    if (!ok || !mounted) return;
     setState(() => _isLoading = true);
     try {
       await PaidFeaturesService.purchaseContent(_displayPost.id);
@@ -288,10 +297,7 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
-      final message = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

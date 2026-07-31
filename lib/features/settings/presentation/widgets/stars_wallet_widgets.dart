@@ -334,14 +334,23 @@ enum WalletFilter {
       case WalletFilter.topUps:
         return type == 'purchase' || type == 'admin_adjust';
       case WalletFilter.purchases:
-        return type == 'content_purchase' || type == 'channel_subscription';
+        return type == 'content_purchase' ||
+            type == 'channel_subscription' ||
+            type == 'paid_media_purchase' ||
+            type == 'paid_message' ||
+            type == 'paid_reaction' ||
+            type == 'gift';
       case WalletFilter.donations:
         return type == 'donation' || type == 'donation_received';
       case WalletFilter.income:
         return amount > 0 &&
             (type == 'content_sale' ||
                 type == 'donation_received' ||
-                type == 'channel_subscription_received');
+                type == 'channel_subscription_received' ||
+                type == 'paid_media_sale' ||
+                type == 'paid_message_received' ||
+                type == 'paid_reaction_received' ||
+                type == 'gift_received');
       case WalletFilter.boosts:
         return type == 'boost';
     }

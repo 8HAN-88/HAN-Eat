@@ -24,6 +24,7 @@ import '../../../widgets/app_gradient_background.dart';
 import '../../monetization/presentation/support_button.dart';
 import '../../monetization/presentation/channel_subscription_button.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../../core/theme/app_card_decorations.dart';
 import '../../../core/format/russian_count_labels.dart';
 
@@ -146,6 +147,32 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       await _handleChannelGone();
     } catch (e) {
       debugPrint('Фоновое обновление канала: $e');
+    }
+  }
+
+  Future<void> _subscribePaidChannelFromAppBar() async {
+    final channel = _channel;
+    if (channel == null || channel.paidAccess) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Подписка на канал',
+      body:
+          'Доступ к «${channel.name}» на 1 месяц. Звёзды спишутся с кошелька.',
+      amountStars: channel.monthlyPriceStars,
+      confirmLabel: 'Подписаться',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await PaidFeaturesService.subscribeChannel(channel.id);
+      if (!mounted) return;
+      await _loadChannel(forceRefresh: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подписка оформлена')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
     }
   }
 
@@ -331,15 +358,16 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
               channelName: _channel!.name,
               compact: true,
             ),
-          if (_channel != null && _channel!.isPaid == true && !_channel!.isOwner)
+          if (_channel != null &&
+              _channel!.isPaid == true &&
+              !_channel!.isOwner &&
+              !_channel!.paidAccess)
             ChannelSubscriptionButton(
               channelId: _channel!.id,
               channelName: _channel!.name,
               monthlyPriceStars: _channel!.monthlyPriceStars,
-              isSubscribed: false, // TODO: Проверить реальный статус подписки
-              onSubscribe: () {
-                // TODO: Открыть экран подписки
-              },
+              isSubscribed: _channel!.paidAccess,
+              onSubscribe: () => unawaited(_subscribePaidChannelFromAppBar()),
             ),
           IconButton(
             tooltip: 'Поиск',
@@ -509,6 +537,15 @@ class _PrivateChannelPostsLockedState
 
   Future<void> _subscribe() async {
     if (_loading) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Подписка на канал',
+      body:
+          'Доступ к «${widget.channel.name}» на 1 месяц. Звёзды спишутся с кошелька.',
+      amountStars: widget.channel.monthlyPriceStars,
+      confirmLabel: 'Подписаться',
+    );
+    if (!ok || !mounted) return;
     setState(() => _loading = true);
     try {
       await PaidFeaturesService.subscribeChannel(widget.channel.id);
@@ -519,9 +556,7 @@ class _PrivateChannelPostsLockedState
       widget.onUnlocked();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _loading = false);
     }

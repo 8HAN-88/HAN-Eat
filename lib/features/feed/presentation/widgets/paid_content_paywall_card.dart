@@ -85,8 +85,9 @@ class PaidContentPaywallCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: const [
-                _PaywallChip(icon: Icons.visibility_rounded, label: 'Preview'),
-                _PaywallChip(icon: Icons.stars_rounded, label: 'Stars'),
+                _PaywallChip(
+                    icon: Icons.visibility_rounded, label: 'Превью'),
+                _PaywallChip(icon: Icons.stars_rounded, label: 'Звёзды'),
                 _PaywallChip(
                     icon: Icons.favorite_rounded, label: 'Поддержка автора'),
               ],

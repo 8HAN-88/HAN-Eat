@@ -75,6 +75,7 @@ import '../../../widgets/inline_video_player.dart';
 import '../../../widgets/chat_target_picker_sheet.dart';
 import '../../../widgets/chat_sticker_tile.dart';
 import '../../../widgets/report_content_dialog.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import 'widgets/chat_message_action_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
@@ -4329,9 +4330,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _applyReactions(msg.id, reactions);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      await showStarsRequiredSnack(context, e);
     }
   }
 
@@ -6460,14 +6459,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      await showStarsRequiredSnack(context, e);
     }
   }
 
   Future<void> _unlockPaidMedia(ChatMessage msg) async {
     if (!msg.isLockedPaidMedia) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Открыть медиа',
+      body: 'Один раз оплатите звёздами — медиа откроется в этом чате.',
+      amountStars: msg.priceStars,
+      confirmLabel: 'Открыть',
+    );
+    if (!ok || !mounted) return;
     setState(() => _unlockingMessageIds.add(msg.id));
     try {
       await PaidFeaturesService.purchaseMessage(msg.id);
@@ -6475,9 +6480,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await _load(refresh: true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) {
         setState(() => _unlockingMessageIds.remove(msg.id));
@@ -6558,9 +6561,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      await showStarsRequiredSnack(context, e);
     }
   }
 
@@ -6757,8 +6758,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   String _messagePreview(ChatMessage msg) {
     if (msg.type == 'voice') return '🎤 Голосовое';
-    if (msg.type == 'image') return '📷 Фото';
-    if (msg.type == 'video') return '🎬 Видео';
+    if (msg.type == 'gift') {
+      try {
+        final data = jsonDecode(msg.content);
+        if (data is Map && data['emoji'] is String) {
+          return '🎁 Подарок ${data['emoji']}';
+        }
+      } catch (_) {}
+      return '🎁 Подарок';
+    }
+    if (msg.type == 'image') {
+      return msg.isLockedPaidMedia ? '🔒 Платное фото' : '📷 Фото';
+    }
+    if (msg.type == 'video') {
+      return msg.isLockedPaidMedia ? '🔒 Платное видео' : '🎬 Видео';
+    }
     if (msg.type == 'video_note') return '⭕ Видеосообщение';
     if (msg.type == 'sticker') return '🧩 Стикер';
     if (msg.type == 'poll') {
@@ -6767,6 +6781,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return '📊 Опрос';
     }
     if (msg.type == 'file') {
+      if (msg.isLockedPaidMedia) return '🔒 Платный файл';
       final name = msg.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
     }
@@ -8018,6 +8033,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final hasGroup = groupId != null && groupId.isNotEmpty;
     final media = msg.mediaUrl?.trim();
     final hasMedia = media != null && media.isNotEmpty;
+    // Locked paid album items have no media_url until unlock.
+    if (hasGroup && msg.isLockedPaidMedia) return true;
     // Server albums: allow temp ids once grouped; need media for grid.
     if (hasGroup) return hasMedia || msg.id < 0;
     // Legacy heuristic: confirmed image messages only.
@@ -8055,6 +8072,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final mine = anchor.isMine;
     final caption = anchor.content.trim();
     final hasCaption = caption.isNotEmpty;
+    final lockedPaid = messages.where((m) => m.isLockedPaidMedia).toList();
+    if (lockedPaid.isNotEmpty && lockedPaid.length == messages.length) {
+      final price = lockedPaid
+          .map((m) => m.priceStars)
+          .fold<int>(0, (a, b) => a > b ? a : b);
+      final unlockTarget = lockedPaid.first;
+      final lockBubble = PaidMediaLockBubble(
+        priceStars: price,
+        loading: _unlockingMessageIds.contains(unlockTarget.id),
+        onUnlock: () => unawaited(_unlockPaidMedia(unlockTarget)),
+      );
+      if (!wrapWithAlign) return lockBubble;
+      return Align(
+        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+        child: lockBubble,
+      );
+    }
     final albumItems = messages
         .where((m) => (m.mediaUrl?.trim() ?? '').isNotEmpty)
         .toList(growable: false);
