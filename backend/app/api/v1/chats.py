@@ -1981,6 +1981,14 @@ async def forward_message(
                 status.HTTP_403_FORBIDDEN,
                 "Content is protected",
             )
+        if code == "paid_media_locked":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "paid_media_locked",
+                    "message": "Сначала откройте платное медиа, чтобы переслать",
+                },
+            )
         if code in (
             "group_write_restricted",
             "group_user_restricted",

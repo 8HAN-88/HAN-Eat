@@ -20,6 +20,7 @@ import '../features/settings/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/creator_revenue_screen.dart';
+import '../features/settings/presentation/stars_checkout_result_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
 import '../features/settings/presentation/support_security_screen.dart';
@@ -165,6 +166,17 @@ String? parseDeepLinkToGoPath(String raw) {
       }
       if (uri.pathSegments.contains('cancel')) {
         return SubscriptionCancelRoute.path;
+      }
+    }
+    if (uri.host == 'paid') {
+      if (uri.pathSegments.contains('success')) {
+        return StarsCheckoutSuccessRoute.path;
+      }
+      if (uri.pathSegments.contains('cancel')) {
+        return StarsCheckoutCancelRoute.path;
+      }
+      if (uri.pathSegments.contains('wallet')) {
+        return StarsWalletRoute.path;
       }
     }
     if (uri.host == 'invite') {
@@ -668,6 +680,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: StarsWalletRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: StarsWalletScreen()),
+      ),
+      GoRoute(
+        path: StarsCheckoutSuccessRoute.path,
+        name: StarsCheckoutSuccessRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StarsCheckoutSuccessScreen()),
+      ),
+      GoRoute(
+        path: StarsCheckoutCancelRoute.path,
+        name: StarsCheckoutCancelRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StarsCheckoutCancelScreen()),
       ),
       GoRoute(
         path: CreatorRevenueRoute.path,
@@ -1605,6 +1629,16 @@ class SubscriptionRoute {
 class StarsWalletRoute {
   static const path = '/paid/wallet';
   static const name = 'stars_wallet';
+}
+
+class StarsCheckoutSuccessRoute {
+  static const path = '/paid/success';
+  static const name = 'stars_checkout_success';
+}
+
+class StarsCheckoutCancelRoute {
+  static const path = '/paid/cancel';
+  static const name = 'stars_checkout_cancel';
 }
 
 class CreatorRevenueRoute {

@@ -20,6 +20,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   static const _periodPrefKey = 'creator_revenue_period_v1';
   static const _sourcePrefKey = 'creator_revenue_source_v1';
   late Future<List<StarTransaction>> _future;
+  late Future<List<CreatorPayoutRequest>> _payoutsFuture;
   CreatorRevenuePeriod _period = CreatorRevenuePeriod.days30;
   CreatorRevenueSource _source = CreatorRevenueSource.all;
   CreatorRevenueChartMode _chartMode = CreatorRevenueChartMode.line;
@@ -28,6 +29,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   void initState() {
     super.initState();
     _future = _load();
+    _payoutsFuture = _loadPayouts();
     _restoreRevenuePrefs();
   }
 
@@ -112,8 +114,30 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     return PaidFeaturesService.getTransactions(limit: 200);
   }
 
+  Future<List<CreatorPayoutRequest>> _loadPayouts() {
+    return PaidFeaturesService.getMyPayoutRequests(limit: 40);
+  }
+
   void _refresh() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+      _payoutsFuture = _loadPayouts();
+    });
+  }
+
+  String _payoutStatusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return 'В обработке';
+      case 'approved':
+        return 'Одобрено';
+      case 'paid':
+        return 'Выплачено';
+      case 'rejected':
+        return 'Отклонено';
+      default:
+        return status;
+    }
   }
 
   Future<void> _requestPayout() async {
@@ -177,6 +201,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         note: payload.note,
       );
       if (!mounted) return;
+      setState(() => _payoutsFuture = _loadPayouts());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -187,7 +212,7 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     }
   }
@@ -471,6 +496,70 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 12),
+              const TelegramSectionHeader(
+                title: 'Выплаты',
+                padding: EdgeInsets.fromLTRB(2, 0, 2, 8),
+              ),
+              FutureBuilder<List<CreatorPayoutRequest>>(
+                future: _payoutsFuture,
+                builder: (context, payoutSnap) {
+                  if (payoutSnap.hasError) {
+                    return TelegramGroupedSurface(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Text(
+                          'Не удалось загрузить выплаты',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                    );
+                  }
+                  if (!payoutSnap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    );
+                  }
+                  final payouts = payoutSnap.data!;
+                  if (payouts.isEmpty) {
+                    return TelegramGroupedSurface(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Text(
+                          'Запросов на выплату пока нет',
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                    );
+                  }
+                  return Column(
+                    children: [
+                      for (final p in payouts)
+                        TelegramGroupedSurface(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: TelegramActionRow(
+                            icon: Icons.account_balance_wallet_outlined,
+                            iconColor: scheme.secondary,
+                            title: '${p.amountStars} ★',
+                            subtitle:
+                                '${_payoutStatusLabel(p.status)}${p.createdAt != null ? ' · ${_date(p.createdAt!)}' : ''}',
+                            trailing: Text(
+                              '~${p.amountRub.toStringAsFixed(0)} ₽',
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 12),
               const TelegramSectionHeader(

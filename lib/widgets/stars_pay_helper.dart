@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/app_router.dart';
-import '../utils/api_error_parser.dart';
+import '../utils/api_error_parser.dart' show ApiClientException, userVisibleError;
 
 /// Shared Stars UX: confirm spend + recover from insufficient balance.
 Future<bool> confirmStarsSpend(
@@ -83,6 +83,10 @@ Future<bool> confirmStarsSpend(
 }
 
 bool isStarsRequiredError(Object error) {
+  if (error is ApiClientException) {
+    if (error.code == 'STARS_REQUIRED') return true;
+    if (error.statusCode == 402) return true;
+  }
   final raw = error.toString().toLowerCase();
   return raw.contains('stars_required') ||
       raw.contains('недостаточно звёзд') ||

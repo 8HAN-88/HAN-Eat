@@ -44,8 +44,16 @@ class PaidFeaturesService {
     throw Exception(_errorMessage(response, 'Не удалось загрузить пакеты звёзд'));
   }
 
-  static Future<CheckoutSessionResponse> createStarsCheckout(String packageId) {
-    return PaymentService.createStarsCheckout(packageId: packageId);
+  static Future<CheckoutSessionResponse> createStarsCheckout(
+    String packageId, {
+    String? successUrl,
+    String? cancelUrl,
+  }) {
+    return PaymentService.createStarsCheckout(
+      packageId: packageId,
+      successUrl: successUrl,
+      cancelUrl: cancelUrl,
+    );
   }
 
   static Future<PurchaseContentResult> purchaseContent(int postId) async {
@@ -226,10 +234,19 @@ class PaidFeaturesService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final detail = data['detail'];
       if (detail is String) return detail;
-      if (detail is Map && detail['message'] is String) {
-        return detail['message'] as String;
+      if (detail is Map) {
+        final code = detail['code'] as String?;
+        final message = detail['message'] as String?;
+        if (code == 'STARS_REQUIRED') {
+          return (message != null && message.isNotEmpty)
+              ? message
+              : 'Недостаточно звёзд';
+        }
+        if (message != null && message.isNotEmpty) return message;
+        if (code != null && code.isNotEmpty) return code;
       }
     } catch (_) {}
+    if (response.statusCode == 402) return 'Недостаточно звёзд';
     return fallback;
   }
 }

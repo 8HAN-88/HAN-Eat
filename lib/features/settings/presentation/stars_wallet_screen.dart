@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
+import '../../../core/config/stars_checkout_urls.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../services/payment_service.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -15,16 +16,33 @@ class StarsWalletScreen extends StatefulWidget {
   State<StarsWalletScreen> createState() => _StarsWalletScreenState();
 }
 
-class _StarsWalletScreenState extends State<StarsWalletScreen> {
+class _StarsWalletScreenState extends State<StarsWalletScreen>
+    with WidgetsBindingObserver {
   late Future<_WalletData> _future;
   bool _checkoutLoading = false;
+  bool _awaitingCheckoutReturn = false;
   WalletFilter _filter = WalletFilter.all;
   WalletStatsPeriod _statsPeriod = WalletStatsPeriod.days30;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _future = _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingCheckoutReturn) {
+      _awaitingCheckoutReturn = false;
+      _refresh();
+    }
   }
 
   Future<_WalletData> _load() async {
@@ -54,10 +72,15 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
     if (_checkoutLoading) return;
     setState(() => _checkoutLoading = true);
     try {
-      final checkout =
-          await PaidFeaturesService.createStarsCheckout(package.id);
+      final checkout = await PaidFeaturesService.createStarsCheckout(
+        package.id,
+        successUrl: StarsCheckoutUrls.successUrl(),
+        cancelUrl: StarsCheckoutUrls.cancelUrl(),
+      );
+      _awaitingCheckoutReturn = true;
       await PaymentService.openCheckout(checkout.url);
     } catch (e) {
+      _awaitingCheckoutReturn = false;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),

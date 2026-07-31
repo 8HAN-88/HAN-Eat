@@ -676,9 +676,13 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      if (isStarsRequiredError(e)) {
+        await showStarsRequiredSnack(context, e, fallback: 'Не удалось отправить донат');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSendingDonation = false);
     }
@@ -742,9 +746,13 @@ class _NewPostCardState extends State<NewPostCard>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
+      if (isStarsRequiredError(e)) {
+        await showStarsRequiredSnack(context, e, fallback: 'Не удалось запустить буст');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
     }
   }
 
