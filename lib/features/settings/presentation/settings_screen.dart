@@ -16,6 +16,7 @@ import '../application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
 import 'blocked_users_screen.dart';
 
@@ -120,38 +121,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _editPaidMessageStars() async {
     if (_privacyBusy) return;
-    final controller =
-        TextEditingController(text: _paidMessageStars.toString());
-    final next = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Плата за сообщения'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Звёзды за каждое входящее ЛС',
-            helperText: '0 — бесплатно, как в Telegram Stars',
-            prefixIcon: Icon(Icons.stars_rounded),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final n = int.tryParse(controller.text.trim());
-              if (n == null || n < 0) return;
-              Navigator.pop(ctx, n);
-            },
-            child: const Text('Сохранить'),
-          ),
-        ],
-      ),
+    final next = await pickPaidMessageStars(
+      context,
+      current: _paidMessageStars,
     );
-    controller.dispose();
     if (next == null || !mounted) return;
     setState(() {
       _paidMessageStars = next;

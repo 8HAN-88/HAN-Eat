@@ -272,6 +272,14 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
         return 'Донат получен';
       case 'channel_subscription_received':
         return 'Подписка на канал';
+      case 'paid_media_sale':
+        return 'Продажа медиа';
+      case 'paid_message_received':
+        return 'Оплата за сообщение';
+      case 'paid_reaction_received':
+        return 'Платная реакция';
+      case 'gift_received':
+        return 'Подарок';
       default:
         return type;
     }
@@ -922,11 +930,18 @@ enum CreatorRevenueSource {
       case CreatorRevenueSource.all:
         return type == 'content_sale' ||
             type == 'donation_received' ||
-            type == 'channel_subscription_received';
+            type == 'channel_subscription_received' ||
+            type == 'paid_media_sale' ||
+            type == 'paid_message_received' ||
+            type == 'paid_reaction_received' ||
+            type == 'gift_received';
       case CreatorRevenueSource.content:
-        return type == 'content_sale';
+        return type == 'content_sale' || type == 'paid_media_sale';
       case CreatorRevenueSource.donations:
-        return type == 'donation_received';
+        return type == 'donation_received' ||
+            type == 'gift_received' ||
+            type == 'paid_reaction_received' ||
+            type == 'paid_message_received';
       case CreatorRevenueSource.subscriptions:
         return type == 'channel_subscription_received';
     }

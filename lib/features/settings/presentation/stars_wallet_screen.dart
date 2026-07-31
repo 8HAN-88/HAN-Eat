@@ -230,6 +230,24 @@ class _StarsWalletScreenState extends State<StarsWalletScreen> {
         return 'Подписка на канал';
       case 'channel_subscription_received':
         return 'Подписка на ваш канал';
+      case 'gift':
+        return 'Подарок отправлен';
+      case 'gift_received':
+        return 'Подарок получен';
+      case 'paid_media_purchase':
+        return 'Платное медиа';
+      case 'paid_media_sale':
+        return 'Продажа медиа';
+      case 'paid_message':
+        return 'Плата за сообщение';
+      case 'paid_message_received':
+        return 'Оплата за сообщение вам';
+      case 'paid_reaction':
+        return 'Платная реакция';
+      case 'paid_reaction_received':
+        return 'Платная реакция получена';
+      case 'payout':
+        return 'Выплата';
       default:
         return type;
     }

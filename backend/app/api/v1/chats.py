@@ -136,7 +136,12 @@ def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> No
         return
 
 
-def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, Any]:
+def _message_payload(
+    msg,
+    reactions: Optional[List[dict]] = None,
+    *,
+    viewer_user_id: Optional[int] = None,
+) -> Dict[str, Any]:
     inline_keyboard = None
     raw_keyboard = getattr(msg, "inline_keyboard_json", None)
     if raw_keyboard:
@@ -147,14 +152,19 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         except Exception:
             inline_keyboard = None
     is_paid = bool(getattr(msg, "is_paid", False))
-    price_stars = int(getattr(msg, "price_stars", 0) or 0)
+    price_stars = int(getattr(msg, "price_stars", 0) or 0) if is_paid else 0
+    # Broadcast-safe: paid media is always locked in realtime fanout unless
+    # the viewer is the sender. Peers unlock via REST purchase + refresh.
+    is_sender = viewer_user_id is not None and viewer_user_id == msg.sender_id
+    purchased = (not is_paid) or is_sender
+    media_url = msg.media_url if purchased else None
     return {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
         "sender_id": msg.sender_id,
         "type": msg.type,
         "content": msg.content,
-        "media_url": msg.media_url,
+        "media_url": media_url,
         "reply_to_message_id": msg.reply_to_message_id,
         "forward_from_user_id": getattr(msg, "forward_from_user_id", None),
         "forward_from_name": getattr(msg, "forward_from_name", None),
@@ -168,8 +178,8 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
         ),
         "media_group_id": getattr(msg, "media_group_id", None),
         "is_paid": is_paid,
-        "price_stars": price_stars if is_paid else 0,
-        "purchased": True,
+        "price_stars": price_stars,
+        "purchased": purchased,
         "reactions": reactions or [],
     }
 
@@ -700,6 +710,7 @@ def _conversation_response(
             conv,
             svc,
             sender,
+            db=db,
             peer_last_delivered_id=peer_delivered,
         )
     return ConversationResponse(
