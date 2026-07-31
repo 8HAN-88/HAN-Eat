@@ -412,23 +412,41 @@ class ChatMessageReactionsResult {
   final int reactionCount;
 }
 
-/// Не затирает локально закрытый опрос устаревшими данными чата/кэша.
+/// Не затирает локально закрытый опрос / купленное медиа устаревшим fanout.
 ChatMessage applyIncomingChatMessagePreservingLocalPoll(
   ChatMessage local,
   ChatMessage incoming,
 ) {
-  if (local.type != 'poll' || incoming.type != 'poll') return incoming;
-  final localPoll = local.poll;
-  final incomingPoll = incoming.poll;
-  if (localPoll == null ||
-      incomingPoll == null ||
-      !localPoll.isClosed ||
-      incomingPoll.isClosed) {
-    return incoming;
+  var next = incoming;
+  if (local.type == 'poll' && incoming.type == 'poll') {
+    final localPoll = local.poll;
+    final incomingPoll = incoming.poll;
+    if (localPoll != null &&
+        incomingPoll != null &&
+        localPoll.isClosed &&
+        !incomingPoll.isClosed) {
+      next = next.copyWith(
+        content: patchChatPollClosedInContent(incoming.content, isClosed: true),
+      );
+    }
   }
-  return incoming.copyWith(
-    content: patchChatPollClosedInContent(incoming.content, isClosed: true),
-  );
+  // WS/edit fanout redacts paid media; keep unlock + URL the user already paid for.
+  if (local.isPaid &&
+      local.purchased &&
+      !local.isMine &&
+      (next.mediaUrl == null || next.mediaUrl!.isEmpty) &&
+      local.mediaUrl != null &&
+      local.mediaUrl!.isNotEmpty) {
+    next = next.copyWith(
+      mediaUrl: local.mediaUrl,
+      purchased: true,
+      isPaid: true,
+      priceStars: local.priceStars > 0 ? local.priceStars : next.priceStars,
+    );
+  } else if (local.isPaid && local.purchased && !next.purchased) {
+    next = next.copyWith(purchased: true, isPaid: true);
+  }
+  return next;
 }
 
 class ChatConversation {

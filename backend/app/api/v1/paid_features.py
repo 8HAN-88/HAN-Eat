@@ -278,6 +278,7 @@ async def send_star_gift(
         gift_id=gift_id,
         conversation_id=request.conversation_id,
         message=request.message,
+        idempotency_key=request.idempotency_key,
     )
     stars = int(gift.stars) if gift else 0
     if not stars:

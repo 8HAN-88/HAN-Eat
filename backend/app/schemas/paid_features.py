@@ -138,6 +138,7 @@ class StarGiftsResponse(BaseModel):
 class SendStarGiftRequest(BaseModel):
     conversation_id: int
     message: Optional[str] = Field(default=None, max_length=500)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
 
 class SendStarGiftResponse(BaseModel):

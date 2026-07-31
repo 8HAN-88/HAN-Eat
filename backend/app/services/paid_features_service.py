@@ -795,6 +795,7 @@ class PaidFeaturesService:
         gift_id: int,
         conversation_id: int,
         message: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> Message:
         gift = (
             self.db.query(StarGift)
@@ -803,6 +804,21 @@ class PaidFeaturesService:
         )
         if not gift:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        idem = (idempotency_key or "").strip() or None
+        if idem:
+            existing_tx = (
+                self.db.query(StarTransaction)
+                .filter(StarTransaction.idempotency_key == idem)
+                .first()
+            )
+            if existing_tx is not None and existing_tx.reference_id:
+                existing_msg = (
+                    self.db.query(Message)
+                    .filter(Message.id == int(existing_tx.reference_id))
+                    .first()
+                )
+                if existing_msg is not None:
+                    return existing_msg
         member = (
             self.db.query(ConversationMember)
             .filter(
@@ -830,6 +846,13 @@ class PaidFeaturesService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Gift recipient not found",
+            )
+
+        # Fail fast before creating a gift message.
+        if self.star_balance(sender_id) < int(gift.stars):
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={"code": "STARS_REQUIRED", "message": "Недостаточно звёзд"},
             )
 
         import json as _json
@@ -863,6 +886,7 @@ class PaidFeaturesService:
             reference_type="message",
             reference_id=msg.id,
             counterparty_user_id=recipient_id,
+            idempotency_key=idem or f"gift:msg:{msg.id}",
             meta={"gift_id": gift.id, "slug": gift.slug},
         )
         self._credit_creator(
@@ -884,6 +908,7 @@ class PaidFeaturesService:
         *,
         message: Message,
         amount_stars: int,
+        idempotency_key: Optional[str] = None,
     ) -> None:
         if amount_stars <= 0:
             return
@@ -892,6 +917,15 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot pay reaction on your own message",
             )
+        idem = (idempotency_key or "").strip() or None
+        if idem:
+            existing = (
+                self.db.query(StarTransaction.id)
+                .filter(StarTransaction.idempotency_key == idem)
+                .first()
+            )
+            if existing is not None:
+                return
         self._spend_stars(
             user_id,
             amount_stars,
@@ -899,6 +933,7 @@ class PaidFeaturesService:
             reference_type="message",
             reference_id=message.id,
             counterparty_user_id=message.sender_id,
+            idempotency_key=idem,
         )
         self._credit_creator(
             message.sender_id,
@@ -985,6 +1020,7 @@ def expire_due_channel_subscriptions(db: Session) -> int:
     service = PaidFeaturesService(db)
     changed = 0
     for sub in due:
+        renewed = False
         if sub.auto_renew:
             try:
                 service.subscribe_channel(
@@ -993,15 +1029,13 @@ def expire_due_channel_subscriptions(db: Session) -> int:
                     months=1,
                     auto_renew=True,
                 )
+                renewed = True
                 changed += 1
-                continue
-            except HTTPException as e:
-                # Only expire when the wallet truly can't renew.
-                if int(getattr(e, "status_code", 0) or 0) != 402:
-                    continue
             except Exception:
-                # Transient errors: leave active for the next maintenance pass.
-                continue
+                # Calendar already expired — fail closed (revoke access).
+                renewed = False
+        if renewed:
+            continue
         sub.status = "expired"
         _revoke_paid_channel_membership(
             db, user_id=sub.user_id, channel_id=sub.channel_id

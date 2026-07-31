@@ -194,6 +194,7 @@ class MessageReactionRequest(BaseModel):
     emoji: str = Field(..., min_length=1, max_length=16)
     # Optional Stars to attach (Telegram paid reaction).
     stars: int = Field(default=0, ge=0, le=100000)
+    idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
 
 class TypingActivityRequest(BaseModel):

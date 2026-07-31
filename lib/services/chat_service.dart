@@ -570,6 +570,7 @@ class ChatService {
     required int messageId,
     required String emoji,
     int stars = 0,
+    String? idempotencyKey,
   }) async {
     final uri = Uri.parse(
       '$_base/chats/$conversationId/messages/$messageId/reactions',
@@ -579,6 +580,8 @@ class ChatService {
       body: jsonEncode({
         'emoji': emoji,
         if (stars > 0) 'stars': stars,
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotency_key': idempotencyKey,
       }),
     );
     _ensureOk(response, 'Не удалось поставить реакцию');

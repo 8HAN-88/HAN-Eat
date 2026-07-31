@@ -1802,13 +1802,7 @@ async def send_message(
             is_paid=is_paid,
             price_stars=price_stars,
         )
-        # Telegram-like paid DMs: charge Stars when peer requires it.
-        svc._charge_direct_paid_message_fee(
-            conversation_id=conversation_id,
-            sender_id=current_user.id,
-            msg=msg,
-            is_new=is_new,
-        )
+        # Paid-DM fee is charged inside send_message (before notify).
         db.commit()
         db.refresh(msg)
 
@@ -2843,6 +2837,7 @@ async def add_message_reaction(
                 current_user.id,
                 message=msg,
                 amount_stars=stars,
+                idempotency_key=getattr(body, "idempotency_key", None),
             )
         svc.set_message_reaction(
             conversation_id,

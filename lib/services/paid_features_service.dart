@@ -62,8 +62,7 @@ class PaidFeaturesService {
       Uri.parse('$baseUrl/paid/content/$postId/purchase'),
       headers: await _headers(),
       body: jsonEncode({
-        'idempotency_key':
-            'flutter:post:$postId:${DateTime.now().millisecondsSinceEpoch}',
+        'idempotency_key': 'flutter:post:$postId',
       }),
     );
     if (response.statusCode == 200) {
@@ -181,8 +180,7 @@ class PaidFeaturesService {
       Uri.parse('$baseUrl/paid/messages/$messageId/purchase'),
       headers: await _headers(),
       body: jsonEncode({
-        'idempotency_key':
-            'flutter:msg:$messageId:${DateTime.now().millisecondsSinceEpoch}',
+        'idempotency_key': 'flutter:msg:$messageId',
       }),
     );
     if (response.statusCode == 200) {
@@ -212,6 +210,7 @@ class PaidFeaturesService {
     required int giftId,
     required int conversationId,
     String? message,
+    String? idempotencyKey,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/gifts/$giftId/send'),
@@ -220,6 +219,8 @@ class PaidFeaturesService {
         'conversation_id': conversationId,
         if (message != null && message.trim().isNotEmpty)
           'message': message.trim(),
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotency_key': idempotencyKey,
       }),
     );
     if (response.statusCode == 200) {
