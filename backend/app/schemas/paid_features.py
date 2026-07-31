@@ -108,3 +108,42 @@ class CreatorPayoutResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class PurchaseMessageRequest(BaseModel):
+    idempotency_key: Optional[str] = None
+
+
+class PurchaseMessageResponse(BaseModel):
+    message_id: int
+    purchased: bool
+    amount_stars: int
+    balance: int
+
+
+class StarGiftItem(BaseModel):
+    id: int
+    slug: str
+    title: str
+    emoji: str
+    stars: int
+
+    class Config:
+        from_attributes = True
+
+
+class StarGiftsResponse(BaseModel):
+    gifts: List[StarGiftItem]
+
+
+class SendStarGiftRequest(BaseModel):
+    conversation_id: int
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
+class SendStarGiftResponse(BaseModel):
+    message_id: int
+    conversation_id: int
+    gift_id: int
+    stars: int
+    balance: int
+

@@ -167,6 +167,60 @@ class PaidFeaturesService {
     throw Exception(_errorMessage(response, 'Не удалось загрузить выплаты'));
   }
 
+  static Future<PurchaseMessageResult> purchaseMessage(int messageId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/messages/$messageId/purchase'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'idempotency_key':
+            'flutter:msg:$messageId:${DateTime.now().millisecondsSinceEpoch}',
+      }),
+    );
+    if (response.statusCode == 200) {
+      return PurchaseMessageResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception(_errorMessage(response, 'Не удалось открыть медиа'));
+  }
+
+  static Future<List<StarGift>> getGifts() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/gifts'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final gifts = data['gifts'] as List<dynamic>? ?? const [];
+      return gifts
+          .map((e) => StarGift.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception(_errorMessage(response, 'Не удалось загрузить подарки'));
+  }
+
+  static Future<SendGiftResult> sendGift({
+    required int giftId,
+    required int conversationId,
+    String? message,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/$giftId/send'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'conversation_id': conversationId,
+        if (message != null && message.trim().isNotEmpty)
+          'message': message.trim(),
+      }),
+    );
+    if (response.statusCode == 200) {
+      return SendGiftResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    throw Exception(_errorMessage(response, 'Не удалось отправить подарок'));
+  }
+
   static String _errorMessage(http.Response response, String fallback) {
     try {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -303,5 +357,75 @@ class CreatorPayoutRequest {
         status: json['status'] as String? ?? 'pending',
         note: json['note'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+      );
+}
+
+class PurchaseMessageResult {
+  const PurchaseMessageResult({
+    required this.messageId,
+    required this.purchased,
+    required this.amountStars,
+    required this.balance,
+  });
+
+  final int messageId;
+  final bool purchased;
+  final int amountStars;
+  final int balance;
+
+  factory PurchaseMessageResult.fromJson(Map<String, dynamic> json) =>
+      PurchaseMessageResult(
+        messageId: json['message_id'] as int? ?? 0,
+        purchased: json['purchased'] as bool? ?? false,
+        amountStars: json['amount_stars'] as int? ?? 0,
+        balance: json['balance'] as int? ?? 0,
+      );
+}
+
+class StarGift {
+  const StarGift({
+    required this.id,
+    required this.slug,
+    required this.title,
+    required this.emoji,
+    required this.stars,
+  });
+
+  final int id;
+  final String slug;
+  final String title;
+  final String emoji;
+  final int stars;
+
+  factory StarGift.fromJson(Map<String, dynamic> json) => StarGift(
+        id: json['id'] as int? ?? 0,
+        slug: json['slug'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        emoji: json['emoji'] as String? ?? '🎁',
+        stars: json['stars'] as int? ?? 0,
+      );
+}
+
+class SendGiftResult {
+  const SendGiftResult({
+    required this.messageId,
+    required this.conversationId,
+    required this.giftId,
+    required this.stars,
+    required this.balance,
+  });
+
+  final int messageId;
+  final int conversationId;
+  final int giftId;
+  final int stars;
+  final int balance;
+
+  factory SendGiftResult.fromJson(Map<String, dynamic> json) => SendGiftResult(
+        messageId: json['message_id'] as int? ?? 0,
+        conversationId: json['conversation_id'] as int? ?? 0,
+        giftId: json['gift_id'] as int? ?? 0,
+        stars: json['stars'] as int? ?? 0,
+        balance: json['balance'] as int? ?? 0,
       );
 }

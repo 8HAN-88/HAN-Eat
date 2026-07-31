@@ -14,8 +14,14 @@ from app.schemas.paid_features import (
     CreatorPayoutRequestCreate,
     CreatorPayoutResponse,
     CreatorPayoutReviewRequest,
+    PurchaseMessageRequest,
+    PurchaseMessageResponse,
     PurchasePostRequest,
     PurchasePostResponse,
+    SendStarGiftRequest,
+    SendStarGiftResponse,
+    StarGiftItem,
+    StarGiftsResponse,
     StarPackage,
     StarPackagesResponse,
     StarTransactionResponse,
@@ -203,4 +209,115 @@ async def review_payout(
     db.commit()
     db.refresh(payout)
     return payout
+
+
+@router.post("/messages/{message_id}/purchase", response_model=PurchaseMessageResponse)
+async def purchase_paid_message(
+    message_id: int,
+    request: PurchaseMessageRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    unlock = service.purchase_message(
+        current_user.id,
+        message_id,
+        idempotency_key=request.idempotency_key,
+    )
+    db.commit()
+    return PurchaseMessageResponse(
+        message_id=message_id,
+        purchased=True,
+        amount_stars=unlock.amount_stars,
+        balance=service.star_balance(current_user.id),
+    )
+
+
+@router.get("/gifts", response_model=StarGiftsResponse)
+async def list_star_gifts(
+    _: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gifts = service.list_star_gifts()
+    return StarGiftsResponse(gifts=[StarGiftItem.model_validate(g) for g in gifts])
+
+
+@router.post("/gifts/{gift_id}/send", response_model=SendStarGiftResponse)
+async def send_star_gift(
+    gift_id: int,
+    request: SendStarGiftRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    import json
+
+    from app.models.conversation import ConversationMember
+    from app.services.chat_event_bus import publish as publish_chat_event
+    from app.services.user_event_bus import publish_user_event
+
+    service = PaidFeaturesService(db)
+    gift = next((g for g in service.list_star_gifts() if g.id == gift_id), None)
+    if gift is None:
+        # Still allow send_star_gift to raise 404 with its own lookup
+        pass
+    msg = service.send_star_gift(
+        current_user.id,
+        gift_id=gift_id,
+        conversation_id=request.conversation_id,
+        message=request.message,
+    )
+    stars = int(gift.stars) if gift else 0
+    if not stars:
+        try:
+            stars = int(json.loads(msg.content or "{}").get("stars") or 0)
+        except Exception:
+            stars = 0
+    db.commit()
+    db.refresh(msg)
+    payload = {
+        "id": msg.id,
+        "conversation_id": msg.conversation_id,
+        "sender_id": msg.sender_id,
+        "type": msg.type,
+        "content": msg.content,
+        "media_url": msg.media_url,
+        "reply_to_message_id": msg.reply_to_message_id,
+        "forward_from_user_id": None,
+        "forward_from_name": None,
+        "forwarded_from_message_id": None,
+        "forwarded_from_conversation_id": None,
+        "inline_keyboard": None,
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "edited_at": None,
+        "disable_webpage_preview": False,
+        "media_group_id": None,
+        "is_paid": False,
+        "price_stars": 0,
+        "purchased": True,
+        "reactions": [],
+    }
+    publish_chat_event(
+        request.conversation_id,
+        {"type": "message.new", "message": payload},
+    )
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == request.conversation_id)
+        .all()
+    )
+    for (user_id,) in member_ids:
+        if user_id == current_user.id:
+            continue
+        publish_user_event(
+            user_id,
+            {"event": "chat.inbox", "conversation_id": request.conversation_id},
+        )
+    return SendStarGiftResponse(
+        message_id=msg.id,
+        conversation_id=request.conversation_id,
+        gift_id=gift_id,
+        stars=stars,
+        balance=service.star_balance(current_user.id),
+    )
 

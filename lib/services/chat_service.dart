@@ -569,11 +569,18 @@ class ChatService {
     required int conversationId,
     required int messageId,
     required String emoji,
+    int stars = 0,
   }) async {
     final uri = Uri.parse(
       '$_base/chats/$conversationId/messages/$messageId/reactions',
     );
-    final response = await _post(uri, body: jsonEncode({'emoji': emoji}));
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'emoji': emoji,
+        if (stars > 0) 'stars': stars,
+      }),
+    );
     _ensureOk(response, 'Не удалось поставить реакцию');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return _parseReactions(data['reactions']);
@@ -795,6 +802,8 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     String? mediaGroupId,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -805,6 +814,8 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       mediaGroupId: mediaGroupId,
+      isPaid: isPaid,
+      priceStars: priceStars,
     );
   }
 
@@ -815,6 +826,8 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -824,6 +837,8 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      isPaid: isPaid,
+      priceStars: priceStars,
     );
   }
 
@@ -835,6 +850,8 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     String? mediaGroupId,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -845,6 +862,8 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       mediaGroupId: mediaGroupId,
+      isPaid: isPaid,
+      priceStars: priceStars,
     );
   }
 
@@ -1004,6 +1023,8 @@ class ChatService {
     bool silent = false,
     bool disableWebpagePreview = false,
     String? mediaGroupId,
+    bool isPaid = false,
+    int priceStars = 0,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1022,6 +1043,8 @@ class ChatService {
         if (disableWebpagePreview) 'disable_webpage_preview': true,
         if (mediaGroupId != null && mediaGroupId.isNotEmpty)
           'media_group_id': mediaGroupId,
+        if (isPaid) 'is_paid': true,
+        if (isPaid && priceStars > 0) 'price_stars': priceStars,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');

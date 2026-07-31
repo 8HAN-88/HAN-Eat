@@ -146,6 +146,8 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
                 inline_keyboard = parsed
         except Exception:
             inline_keyboard = None
+    is_paid = bool(getattr(msg, "is_paid", False))
+    price_stars = int(getattr(msg, "price_stars", 0) or 0)
     return {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
@@ -165,6 +167,9 @@ def _message_payload(msg, reactions: Optional[List[dict]] = None) -> Dict[str, A
             getattr(msg, "disable_webpage_preview", False)
         ),
         "media_group_id": getattr(msg, "media_group_id", None),
+        "is_paid": is_paid,
+        "price_stars": price_stars if is_paid else 0,
+        "purchased": True,
         "reactions": reactions or [],
     }
 
@@ -300,6 +305,7 @@ def _brief(
         send_restricted=send_restricted,
         send_restricted_until=send_restricted_until,
         send_restriction_reason=send_restriction_reason,
+        paid_message_stars=max(0, int(getattr(user, "paid_message_stars", 0) or 0)),
     )
 
 
@@ -487,6 +493,7 @@ def _message_response(
     peer_last_delivered_id: Optional[int] = None,
     group_read_cursors: Optional[List] = None,
     forward_source_conv_map: Optional[Dict[int, int]] = None,
+    unlocked_message_ids: Optional[set] = None,
 ) -> MessageResponse:
     is_mine = msg.sender_id == current_user_id
     read_count = 0
@@ -554,6 +561,25 @@ def _message_response(
             )
             if src_row is not None:
                 fwd_src_conv_id = int(src_row[0])
+    is_paid = bool(getattr(msg, "is_paid", False))
+    price_stars = int(getattr(msg, "price_stars", 0) or 0) if is_paid else 0
+    purchased = True
+    media_url = msg.media_url
+    if is_paid:
+        if is_mine:
+            purchased = True
+        elif unlocked_message_ids is not None:
+            purchased = msg.id in unlocked_message_ids
+        elif db is not None:
+            from app.services.paid_features_service import PaidFeaturesService
+
+            purchased = PaidFeaturesService(db).has_unlocked_message(
+                current_user_id, msg
+            )
+        else:
+            purchased = False
+        if not purchased:
+            media_url = None
     return MessageResponse(
         id=msg.id,
         conversation_id=msg.conversation_id,
@@ -561,7 +587,7 @@ def _message_response(
         sender_name=_sender_name(sender),
         type=msg.type,
         content=content,
-        media_url=msg.media_url,
+        media_url=media_url,
         reply_to_message_id=msg.reply_to_message_id,
         forward_from_user_id=getattr(msg, "forward_from_user_id", None),
         forward_from_name=getattr(msg, "forward_from_name", None),
@@ -578,6 +604,9 @@ def _message_response(
             getattr(msg, "disable_webpage_preview", False)
         ),
         media_group_id=getattr(msg, "media_group_id", None),
+        is_paid=is_paid,
+        price_stars=price_stars,
+        purchased=purchased,
         reactions=reactions or [],
     )
 
@@ -1452,6 +1481,26 @@ async def list_messages(
         ):
             forward_source_conv_map[int(src_id)] = int(src_cid)
 
+    paid_ids = [
+        m.id
+        for m in messages
+        if getattr(m, "is_paid", False) and m.sender_id != current_user.id
+    ]
+    unlocked_message_ids: set = set()
+    if paid_ids:
+        from app.models.paid_features import PaidMessageUnlock
+
+        unlocked_message_ids = {
+            int(row[0])
+            for row in db.query(PaidMessageUnlock.message_id)
+            .filter(
+                PaidMessageUnlock.user_id == current_user.id,
+                PaidMessageUnlock.message_id.in_(paid_ids),
+                PaidMessageUnlock.status == "completed",
+            )
+            .all()
+        }
+
     items = [
         _message_response(
             m,
@@ -1467,6 +1516,7 @@ async def list_messages(
             peer_last_delivered_id=peer_delivered,
             group_read_cursors=group_read_cursors,
             forward_source_conv_map=forward_source_conv_map,
+            unlocked_message_ids=unlocked_message_ids,
         )
         for m in messages
     ]
@@ -1707,6 +1757,22 @@ async def send_message(
             )
         except ValueError as e:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    is_paid = bool(body.is_paid)
+    price_stars = max(0, int(body.price_stars or 0))
+    if is_paid:
+        if body.type not in ("image", "video", "file"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "paid_media_type_unsupported",
+            )
+        if price_stars <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "paid_media_price_required",
+            )
+    else:
+        price_stars = 0
+
     try:
         msg, is_new = svc.send_message(
             conversation_id=conversation_id,
@@ -1722,7 +1788,31 @@ async def send_message(
             silent=bool(body.silent),
             disable_webpage_preview=bool(body.disable_webpage_preview),
             media_group_id=body.media_group_id,
+            is_paid=is_paid,
+            price_stars=price_stars,
         )
+        # Telegram-like paid DMs: charge Stars when peer requires it.
+        if is_new:
+            conv_for_fee = (
+                db.query(Conversation)
+                .filter(Conversation.id == conversation_id)
+                .first()
+            )
+            if conv_for_fee and conv_for_fee.type == "direct":
+                peer_id = (
+                    conv_for_fee.direct_user_high_id
+                    if conv_for_fee.direct_user_low_id == current_user.id
+                    else conv_for_fee.direct_user_low_id
+                )
+                if peer_id:
+                    from app.services.paid_features_service import PaidFeaturesService
+
+                    PaidFeaturesService(db).charge_paid_message_fee(
+                        current_user.id,
+                        peer_id,
+                        conversation_id=conversation_id,
+                        message_id=msg.id,
+                    )
         db.commit()
         db.refresh(msg)
 
@@ -1787,6 +1877,9 @@ async def send_message(
                     ),
                 },
             )
+        raise
+    except HTTPException:
+        db.rollback()
         raise
 
     if is_new:
@@ -2716,9 +2809,33 @@ async def add_message_reaction(
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    stars = max(0, int(body.stars or 0))
     try:
+        msg = (
+            db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not msg:
+            raise ValueError("not_found")
+        if stars > 0:
+            from app.services.paid_features_service import PaidFeaturesService
+
+            PaidFeaturesService(db).pay_for_reaction(
+                current_user.id,
+                message=msg,
+                amount_stars=stars,
+            )
         svc.set_message_reaction(
-            conversation_id, message_id, current_user.id, body.emoji
+            conversation_id,
+            message_id,
+            current_user.id,
+            body.emoji,
+            stars_amount=stars,
         )
         db.commit()
     except ValueError as e:
@@ -2730,6 +2847,9 @@ async def add_message_reaction(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "invalid_emoji":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    except HTTPException:
+        db.rollback()
         raise
     reactions = _reaction_summaries(svc, [message_id], current_user.id).get(
         message_id, []

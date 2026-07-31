@@ -9,12 +9,15 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.community import Channel
+from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.paid_features import (
     CreatorPayoutRequest,
     CreatorBalance,
     PaidChannelSubscription,
     PaidContentPurchase,
+    PaidMessageUnlock,
     PostBoost,
+    StarGift,
     StarTransaction,
 )
 from app.models.post import Post
@@ -480,6 +483,268 @@ class PaidFeaturesService:
             )
         self.db.flush()
         return payout
+
+    def has_unlocked_message(self, user_id: Optional[int], message: Message) -> bool:
+        if not getattr(message, "is_paid", False):
+            return True
+        if user_id is None:
+            return False
+        if message.sender_id == user_id:
+            return True
+        return (
+            self.db.query(PaidMessageUnlock.id)
+            .filter(
+                PaidMessageUnlock.user_id == user_id,
+                PaidMessageUnlock.message_id == message.id,
+                PaidMessageUnlock.status == "completed",
+            )
+            .first()
+            is not None
+        )
+
+    def purchase_message(
+        self,
+        user_id: int,
+        message_id: int,
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> PaidMessageUnlock:
+        message = (
+            self.db.query(Message)
+            .filter(Message.id == message_id, Message.deleted_at.is_(None))
+            .first()
+        )
+        if not message:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        if not getattr(message, "is_paid", False):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not paid")
+        member = (
+            self.db.query(ConversationMember.id)
+            .filter(
+                ConversationMember.conversation_id == message.conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if not member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if message.sender_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Authors already own their media",
+            )
+        existing = (
+            self.db.query(PaidMessageUnlock)
+            .filter(
+                PaidMessageUnlock.user_id == user_id,
+                PaidMessageUnlock.message_id == message_id,
+            )
+            .first()
+        )
+        if existing:
+            return existing
+        amount = int(getattr(message, "price_stars", 0) or 0)
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Paid media price must be greater than 0 stars",
+            )
+        self._spend_stars(
+            user_id,
+            amount,
+            tx_type="paid_media_purchase",
+            reference_type="message",
+            reference_id=message_id,
+            counterparty_user_id=message.sender_id,
+            idempotency_key=idempotency_key,
+        )
+        unlock = PaidMessageUnlock(
+            user_id=user_id,
+            message_id=message_id,
+            author_id=message.sender_id,
+            amount_stars=amount,
+        )
+        self.db.add(unlock)
+        self._credit_creator(
+            message.sender_id,
+            amount,
+            tx_type="paid_media_sale",
+            reference_type="message",
+            reference_id=message_id,
+            counterparty_user_id=user_id,
+        )
+        self.db.flush()
+        return unlock
+
+    def charge_paid_message_fee(
+        self,
+        sender_id: int,
+        recipient_id: int,
+        *,
+        conversation_id: int,
+        message_id: int,
+    ) -> Optional[StarTransaction]:
+        """Charge Stars to send a DM when recipient has paid_message_stars > 0."""
+        if sender_id == recipient_id:
+            return None
+        recipient = (
+            self.db.query(User)
+            .filter(User.id == recipient_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not recipient:
+            return None
+        amount = int(getattr(recipient, "paid_message_stars", 0) or 0)
+        if amount <= 0:
+            return None
+        tx = self._spend_stars(
+            sender_id,
+            amount,
+            tx_type="paid_message",
+            reference_type="message",
+            reference_id=message_id,
+            counterparty_user_id=recipient_id,
+            meta={"conversation_id": conversation_id},
+        )
+        self._credit_creator(
+            recipient_id,
+            amount,
+            tx_type="paid_message_received",
+            reference_type="message",
+            reference_id=message_id,
+            counterparty_user_id=sender_id,
+            meta={"conversation_id": conversation_id},
+        )
+        return tx
+
+    def list_star_gifts(self) -> list[StarGift]:
+        return (
+            self.db.query(StarGift)
+            .filter(StarGift.is_active.is_(True))
+            .order_by(StarGift.sort_order.asc(), StarGift.id.asc())
+            .all()
+        )
+
+    def send_star_gift(
+        self,
+        sender_id: int,
+        *,
+        gift_id: int,
+        conversation_id: int,
+        message: Optional[str] = None,
+    ) -> Message:
+        gift = (
+            self.db.query(StarGift)
+            .filter(StarGift.id == gift_id, StarGift.is_active.is_(True))
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == sender_id,
+            )
+            .first()
+        )
+        if not member:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        conv = self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        if not conv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+        if conv.type != "direct":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Gifts can only be sent in direct chats",
+            )
+        recipient_id = (
+            conv.direct_user_high_id
+            if conv.direct_user_low_id == sender_id
+            else conv.direct_user_low_id
+        )
+        if not recipient_id or recipient_id == sender_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Gift recipient not found",
+            )
+
+        import json as _json
+
+        note = (message or "").strip()
+        content = _json.dumps(
+            {
+                "gift_id": gift.id,
+                "slug": gift.slug,
+                "title": gift.title,
+                "emoji": gift.emoji,
+                "stars": gift.stars,
+                "message": note or None,
+            },
+            ensure_ascii=False,
+        )
+        msg = Message(
+            conversation_id=conversation_id,
+            sender_id=sender_id,
+            type="gift",
+            content=content,
+            media_url=None,
+        )
+        self.db.add(msg)
+        self.db.flush()
+
+        self._spend_stars(
+            sender_id,
+            int(gift.stars),
+            tx_type="gift",
+            reference_type="message",
+            reference_id=msg.id,
+            counterparty_user_id=recipient_id,
+            meta={"gift_id": gift.id, "slug": gift.slug},
+        )
+        self._credit_creator(
+            recipient_id,
+            int(gift.stars),
+            tx_type="gift_received",
+            reference_type="message",
+            reference_id=msg.id,
+            counterparty_user_id=sender_id,
+            meta={"gift_id": gift.id, "slug": gift.slug},
+        )
+        conv.updated_at = datetime.utcnow()
+        self.db.flush()
+        return msg
+
+    def pay_for_reaction(
+        self,
+        user_id: int,
+        *,
+        message: Message,
+        amount_stars: int,
+    ) -> None:
+        if amount_stars <= 0:
+            return
+        if message.sender_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot pay reaction on your own message",
+            )
+        self._spend_stars(
+            user_id,
+            amount_stars,
+            tx_type="paid_reaction",
+            reference_type="message",
+            reference_id=message.id,
+            counterparty_user_id=message.sender_id,
+        )
+        self._credit_creator(
+            message.sender_id,
+            amount_stars,
+            tx_type="paid_reaction_received",
+            reference_type="message",
+            reference_id=message.id,
+            counterparty_user_id=user_id,
+        )
 
 
 def expire_due_post_boosts(db: Session) -> int:

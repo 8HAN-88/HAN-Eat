@@ -34,6 +34,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _autoRetryOnLimitsEnabled = true;
   bool _showLastSeen = true;
   bool _showReadReceipts = true;
+  int _paidMessageStars = 0;
   bool _privacyBusy = false;
 
   @override
@@ -112,8 +113,67 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() {
         _showLastSeen = user.showLastSeen;
         _showReadReceipts = user.showReadReceipts;
+        _paidMessageStars = user.paidMessageStars;
       });
     } catch (_) {}
+  }
+
+  Future<void> _editPaidMessageStars() async {
+    if (_privacyBusy) return;
+    final controller =
+        TextEditingController(text: _paidMessageStars.toString());
+    final next = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Плата за сообщения'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Звёзды за каждое входящее ЛС',
+            helperText: '0 — бесплатно, как в Telegram Stars',
+            prefixIcon: Icon(Icons.stars_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final n = int.tryParse(controller.text.trim());
+              if (n == null || n < 0) return;
+              Navigator.pop(ctx, n);
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (next == null || !mounted) return;
+    setState(() {
+      _paidMessageStars = next;
+      _privacyBusy = true;
+    });
+    try {
+      final updated =
+          await UserService.updateProfile(paidMessageStars: next);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _paidMessageStars = updated.paidMessageStars;
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _privacyBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      await _loadPrivacyPrefs();
+    }
   }
 
   Future<void> _toggleShowLastSeen(bool enabled) async {
@@ -410,6 +470,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     value: _showReadReceipts,
                     onChanged: _privacyBusy ? null : _toggleShowReadReceipts,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.stars_rounded),
+                    title: const Text('Плата за сообщения'),
+                    subtitle: Text(
+                      _paidMessageStars > 0
+                          ? '$_paidMessageStars ★ за каждое входящее ЛС'
+                          : 'Выключено — писать вам можно бесплатно',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: _privacyBusy ? null : _editPaidMessageStars,
                   ),
                 ],
               ),

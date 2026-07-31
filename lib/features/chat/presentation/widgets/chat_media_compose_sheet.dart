@@ -24,11 +24,15 @@ class ChatMediaComposeResult {
     required this.files,
     required this.caption,
     this.schedule = false,
+    this.isPaid = false,
+    this.priceStars = 0,
   });
 
   final List<XFile> files;
   final String caption;
   final bool schedule;
+  final bool isPaid;
+  final int priceStars;
 }
 
 class _ChatMediaComposeSheet extends StatefulWidget {
@@ -43,9 +47,11 @@ class _ChatMediaComposeSheet extends StatefulWidget {
 class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
   late final PageController _page;
   late final TextEditingController _caption;
+  late final TextEditingController _price;
   late List<XFile> _files;
   final Map<int, Uint8List?> _previews = {};
   int _index = 0;
+  bool _isPaid = false;
 
   @override
   void initState() {
@@ -53,6 +59,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
     _files = List<XFile>.from(widget.files);
     _page = PageController();
     _caption = TextEditingController();
+    _price = TextEditingController(text: '50');
     unawaited(_loadPreviews());
   }
 
@@ -86,7 +93,19 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
   void dispose() {
     _page.dispose();
     _caption.dispose();
+    _price.dispose();
     super.dispose();
+  }
+
+  ChatMediaComposeResult _result({required bool schedule}) {
+    final price = int.tryParse(_price.text.trim()) ?? 0;
+    return ChatMediaComposeResult(
+      files: List<XFile>.from(_files),
+      caption: _caption.text.trim(),
+      schedule: schedule,
+      isPaid: _isPaid && price > 0 && !schedule,
+      priceStars: _isPaid ? price : 0,
+    );
   }
 
   bool _isVideo(XFile file) {
@@ -213,6 +232,33 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                       ),
                     ),
                   ),
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  secondary: Icon(Icons.lock_rounded, color: scheme.secondary),
+                  title: const Text('Платное медиа'),
+                  subtitle: const Text('Открыть можно только за звёзды'),
+                  value: _isPaid,
+                  onChanged: (v) => setState(() => _isPaid = v),
+                ),
+                if (_isPaid)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                    child: TextField(
+                      controller: _price,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Цена в звёздах',
+                        prefixIcon: const Icon(Icons.stars_rounded),
+                        filled: true,
+                        fillColor: scheme.surfaceContainerHighest
+                            .withValues(alpha: 0.55),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                   child: Row(
@@ -245,11 +291,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                         onPressed: () {
                           Navigator.pop(
                             context,
-                            ChatMediaComposeResult(
-                              files: List<XFile>.from(_files),
-                              caption: _caption.text.trim(),
-                              schedule: true,
-                            ),
+                            _result(schedule: true),
                           );
                         },
                         icon: Icon(
@@ -263,13 +305,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                           foregroundColor: scheme.onPrimary,
                         ),
                         onPressed: () {
-                          Navigator.pop(
-                            context,
-                            ChatMediaComposeResult(
-                              files: List<XFile>.from(_files),
-                              caption: _caption.text.trim(),
-                            ),
-                          );
+                          Navigator.pop(context, _result(schedule: false));
                         },
                         icon: const Icon(Icons.send_rounded),
                       ),

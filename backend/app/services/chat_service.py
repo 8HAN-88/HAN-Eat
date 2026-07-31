@@ -2627,6 +2627,8 @@ class ChatService:
         silent: bool = False,
         disable_webpage_preview: bool = False,
         media_group_id: Optional[str] = None,
+        is_paid: bool = False,
+        price_stars: int = 0,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2650,6 +2652,8 @@ class ChatService:
             reply_to_message_id=reply_to_message_id,
         )
         group_id = self._normalize_media_group_id(media_group_id, msg_type)
+        paid = bool(is_paid) and msg_type in ("image", "video", "file")
+        stars = max(0, int(price_stars or 0)) if paid else 0
 
         msg = Message(
             conversation_id=conversation_id,
@@ -2662,6 +2666,8 @@ class ChatService:
             inline_keyboard_json=inline_keyboard_json,
             disable_webpage_preview=bool(disable_webpage_preview),
             media_group_id=group_id,
+            is_paid=paid,
+            price_stars=stars,
         )
         self.db.add(msg)
 
@@ -3385,9 +3391,17 @@ class ChatService:
             by_emoji = grouped.setdefault(row.message_id, {})
             entry = by_emoji.setdefault(
                 row.emoji,
-                {"emoji": row.emoji, "count": 0, "reacted_by_me": False},
+                {
+                    "emoji": row.emoji,
+                    "count": 0,
+                    "reacted_by_me": False,
+                    "stars_total": 0,
+                },
             )
             entry["count"] += 1
+            entry["stars_total"] = int(entry.get("stars_total") or 0) + int(
+                getattr(row, "stars_amount", 0) or 0
+            )
             if row.user_id == viewer_id:
                 entry["reacted_by_me"] = True
         return {
@@ -3432,12 +3446,18 @@ class ChatService:
         return [(row.emoji, user) for row, user in rows]
 
     def set_message_reaction(
-        self, conversation_id: int, message_id: int, user_id: int, emoji: str
+        self,
+        conversation_id: int,
+        message_id: int,
+        user_id: int,
+        emoji: str,
+        stars_amount: int = 0,
     ) -> Optional[str]:
         self._get_active_message(conversation_id, message_id, user_id)
         clean = emoji.strip()
         if not clean or len(clean) > 16:
             raise ValueError("invalid_emoji")
+        stars = max(0, int(stars_amount or 0))
         existing = (
             self.db.query(MessageReaction)
             .filter(
@@ -3447,16 +3467,19 @@ class ChatService:
             .first()
         )
         if existing:
-            if existing.emoji == clean:
+            if existing.emoji == clean and stars <= 0:
                 self.db.delete(existing)
                 return None
             existing.emoji = clean
+            if stars > 0:
+                existing.stars_amount = int(existing.stars_amount or 0) + stars
             return clean
         self.db.add(
             MessageReaction(
                 message_id=message_id,
                 user_id=user_id,
                 emoji=clean,
+                stars_amount=stars,
             )
         )
         return clean
