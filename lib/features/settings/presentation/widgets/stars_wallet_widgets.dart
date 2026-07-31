@@ -339,7 +339,9 @@ enum WalletFilter {
             type == 'paid_media_purchase' ||
             type == 'paid_message' ||
             type == 'paid_reaction' ||
-            type == 'gift';
+            type == 'gift' ||
+            type == 'giveaway_escrow' ||
+            type == 'invoice_payment';
       case WalletFilter.donations:
         return type == 'donation' || type == 'donation_received';
       case WalletFilter.income:
@@ -351,7 +353,10 @@ enum WalletFilter {
                 type == 'paid_message_received' ||
                 type == 'paid_reaction_received' ||
                 type == 'gift_received' ||
-                type == 'gift_converted');
+                type == 'gift_converted' ||
+                type == 'giveaway_prize' ||
+                type == 'giveaway_refund' ||
+                type == 'invoice_received');
       case WalletFilter.boosts:
         return type == 'boost';
     }

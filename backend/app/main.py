@@ -179,6 +179,8 @@ async def _background_maintenance_loop() -> None:
     from app.services.paid_features_service import (
         expire_due_channel_subscriptions,
         expire_due_post_boosts,
+        expire_due_star_invoices,
+        finalize_due_star_giveaways,
     )
     from app.services.subscription_maintenance_service import SubscriptionMaintenanceService
 
@@ -191,6 +193,8 @@ async def _background_maintenance_loop() -> None:
             published = publish_due_scheduled_posts(db)
             expired_boosts = expire_due_post_boosts(db)
             expired_channel_subs = expire_due_channel_subscriptions(db)
+            finished_giveaways = finalize_due_star_giveaways(db)
+            expired_invoices = expire_due_star_invoices(db)
             SubscriptionMaintenanceService(db).run()
             chat_stats = run_chat_maintenance(db)
             db.commit()
@@ -200,6 +204,10 @@ async def _background_maintenance_loop() -> None:
                 logger.info("Expired %s post boosts", expired_boosts)
             if expired_channel_subs:
                 logger.info("Processed %s paid channel subscriptions", expired_channel_subs)
+            if finished_giveaways:
+                logger.info("Finalized %s star giveaways", finished_giveaways)
+            if expired_invoices:
+                logger.info("Expired %s star invoices", expired_invoices)
             if chat_stats.get("scheduled_sent") or chat_stats.get("ttl_purged"):
                 logger.info("Chat maintenance stats: %s", chat_stats)
         except Exception:

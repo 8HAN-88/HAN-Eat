@@ -188,3 +188,72 @@ class UserStarGift(Base):
     converted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
+
+class StarGiveaway(Base):
+    """Channel Stars giveaway (Telegram-like)."""
+
+    __tablename__ = "star_giveaways"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(
+        Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    creator_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    prize_stars = Column(Integer, nullable=False)
+    winners_count = Column(Integer, nullable=False)
+    total_escrow_stars = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default="active", index=True)
+    ends_at = Column(DateTime, nullable=False, index=True)
+    require_membership = Column(Boolean, nullable=False, default=True)
+    participants_count = Column(Integer, nullable=False, default=0)
+    title = Column(String(160), nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+
+class StarGiveawayParticipant(Base):
+    __tablename__ = "star_giveaway_participants"
+    __table_args__ = (
+        UniqueConstraint("giveaway_id", "user_id", name="uq_star_giveaway_participant"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    giveaway_id = Column(
+        Integer,
+        ForeignKey("star_giveaways.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    is_winner = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class StarInvoice(Base):
+    """Bot Stars invoice (Telegram Bot Payments with Stars)."""
+
+    __tablename__ = "star_invoices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    creator_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    payer_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title = Column(String(160), nullable=False)
+    description = Column(String(512), nullable=True)
+    amount_stars = Column(Integer, nullable=False)
+    payload = Column(String(256), nullable=True)
+    status = Column(String(24), nullable=False, default="pending", index=True)
+    expires_at = Column(DateTime, nullable=True)
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+

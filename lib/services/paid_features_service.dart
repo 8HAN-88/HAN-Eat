@@ -396,6 +396,145 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось обновить отображение подарка');
   }
 
+  static Future<List<StarGiveaway>> listChannelGiveaways(
+    int channelId, {
+    bool activeOnly = false,
+  }) async {
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/paid/channels/$channelId/giveaways?active_only=$activeOnly',
+      ),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final items = data['giveaways'] as List<dynamic>? ?? const [];
+      return items
+          .map((e) => StarGiveaway.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить розыгрыши');
+  }
+
+  static Future<StarGiveaway> createChannelGiveaway(
+    int channelId, {
+    required int prizeStars,
+    int winnersCount = 1,
+    int durationHours = 24,
+    String? title,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/channels/$channelId/giveaways'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'prize_stars': prizeStars,
+        'winners_count': winnersCount,
+        'duration_hours': durationHours,
+        if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+      }),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return StarGiveaway.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось создать розыгрыш');
+  }
+
+  static Future<StarGiveaway> joinGiveaway(int giveawayId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/giveaways/$giveawayId/join'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarGiveaway.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось участвовать в розыгрыше');
+  }
+
+  static Future<StarGiveaway> cancelGiveaway(int giveawayId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/giveaways/$giveawayId/cancel'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarGiveaway.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось отменить розыгрыш');
+  }
+
+  static Future<StarGiveaway> finalizeGiveaway(int giveawayId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/giveaways/$giveawayId/finalize'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarGiveaway.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось завершить розыгрыш');
+  }
+
+  static Future<StarInvoice> createBotInvoice(
+    int botId, {
+    required String title,
+    required int amountStars,
+    String? description,
+    String? payload,
+    int expiresInHours = 24,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/bots/$botId/invoices'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'title': title,
+        'amount_stars': amountStars,
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        if (payload != null && payload.trim().isNotEmpty)
+          'payload': payload.trim(),
+        'expires_in_hours': expiresInHours,
+      }),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return StarInvoice.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось создать счёт');
+  }
+
+  static Future<StarInvoice> getInvoice(int invoiceId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/invoices/$invoiceId'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarInvoice.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось загрузить счёт');
+  }
+
+  static Future<PayInvoiceResult> payInvoice(int invoiceId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/invoices/$invoiceId/pay'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return PayInvoiceResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось оплатить счёт');
+  }
+
   static Never _throwForResponse(http.Response response, String fallback) {
     throw apiExceptionFromHttpResponse(
       response.statusCode,
@@ -733,5 +872,133 @@ class PaidMessageExceptionUser {
         name: json['name'] as String?,
         username: json['username'] as String?,
         avatarUrl: json['avatar_url'] as String?,
+      );
+}
+
+class StarGiveaway {
+  const StarGiveaway({
+    required this.id,
+    required this.channelId,
+    required this.creatorUserId,
+    required this.prizeStars,
+    required this.winnersCount,
+    required this.totalEscrowStars,
+    required this.status,
+    required this.endsAt,
+    this.requireMembership = true,
+    this.participantsCount = 0,
+    this.title,
+    this.completedAt,
+    this.createdAt,
+    this.joinedByMe = false,
+    this.isWinner = false,
+  });
+
+  final int id;
+  final int channelId;
+  final int creatorUserId;
+  final int prizeStars;
+  final int winnersCount;
+  final int totalEscrowStars;
+  final String status;
+  final DateTime endsAt;
+  final bool requireMembership;
+  final int participantsCount;
+  final String? title;
+  final DateTime? completedAt;
+  final DateTime? createdAt;
+  final bool joinedByMe;
+  final bool isWinner;
+
+  bool get isActive => status == 'active';
+
+  factory StarGiveaway.fromJson(Map<String, dynamic> json) => StarGiveaway(
+        id: json['id'] as int? ?? 0,
+        channelId: json['channel_id'] as int? ?? 0,
+        creatorUserId: json['creator_user_id'] as int? ?? 0,
+        prizeStars: json['prize_stars'] as int? ?? 0,
+        winnersCount: json['winners_count'] as int? ?? 0,
+        totalEscrowStars: json['total_escrow_stars'] as int? ?? 0,
+        status: json['status'] as String? ?? 'active',
+        endsAt: DateTime.tryParse(json['ends_at'] as String? ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        requireMembership: json['require_membership'] as bool? ?? true,
+        participantsCount: json['participants_count'] as int? ?? 0,
+        title: json['title'] as String?,
+        completedAt: DateTime.tryParse(json['completed_at'] as String? ?? ''),
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        joinedByMe: json['joined_by_me'] as bool? ?? false,
+        isWinner: json['is_winner'] as bool? ?? false,
+      );
+}
+
+class StarInvoice {
+  const StarInvoice({
+    required this.id,
+    required this.botId,
+    required this.creatorUserId,
+    required this.title,
+    required this.amountStars,
+    required this.status,
+    this.payerUserId,
+    this.description,
+    this.payload,
+    this.expiresAt,
+    this.paidAt,
+    this.createdAt,
+    this.botUsername,
+    this.botName,
+  });
+
+  final int id;
+  final int botId;
+  final int creatorUserId;
+  final int? payerUserId;
+  final String title;
+  final String? description;
+  final int amountStars;
+  final String? payload;
+  final String status;
+  final DateTime? expiresAt;
+  final DateTime? paidAt;
+  final DateTime? createdAt;
+  final String? botUsername;
+  final String? botName;
+
+  bool get isPayable => status == 'pending';
+
+  factory StarInvoice.fromJson(Map<String, dynamic> json) => StarInvoice(
+        id: json['id'] as int? ?? 0,
+        botId: json['bot_id'] as int? ?? 0,
+        creatorUserId: json['creator_user_id'] as int? ?? 0,
+        payerUserId: json['payer_user_id'] as int?,
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String?,
+        amountStars: json['amount_stars'] as int? ?? 0,
+        payload: json['payload'] as String?,
+        status: json['status'] as String? ?? 'pending',
+        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
+        paidAt: DateTime.tryParse(json['paid_at'] as String? ?? ''),
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        botUsername: json['bot_username'] as String?,
+        botName: json['bot_name'] as String?,
+      );
+}
+
+class PayInvoiceResult {
+  const PayInvoiceResult({
+    required this.invoice,
+    required this.balance,
+  });
+
+  final StarInvoice invoice;
+  final int balance;
+
+  factory PayInvoiceResult.fromJson(Map<String, dynamic> json) =>
+      PayInvoiceResult(
+        invoice: StarInvoice.fromJson(
+          json['invoice'] as Map<String, dynamic>? ?? const {},
+        ),
+        balance: json['balance'] as int? ?? 0,
       );
 }
