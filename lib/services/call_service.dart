@@ -40,6 +40,41 @@ class CallIceConfig {
   }
 }
 
+class CallParticipantInfo {
+  const CallParticipantInfo({
+    required this.userId,
+    required this.status,
+    this.name,
+    this.avatarUrl,
+    this.isHost = false,
+  });
+
+  final int userId;
+  final String status;
+  final String? name;
+  final String? avatarUrl;
+  final bool isHost;
+
+  bool get isJoined => status == 'joined';
+
+  factory CallParticipantInfo.fromJson(Map<String, dynamic> json) {
+    int asInt(dynamic v, [int fallback = 0]) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v) ?? fallback;
+      return fallback;
+    }
+
+    return CallParticipantInfo(
+      userId: asInt(json['user_id']),
+      status: json['status'] as String? ?? 'invited',
+      name: json['name'] as String?,
+      avatarUrl: json['avatar_url'] as String?,
+      isHost: json['is_host'] as bool? ?? false,
+    );
+  }
+}
+
 class CallSessionInfo {
   const CallSessionInfo({
     required this.id,
@@ -48,6 +83,7 @@ class CallSessionInfo {
     required this.calleeId,
     required this.media,
     required this.status,
+    this.kind = 'direct',
     this.peerId,
     this.peerName,
     this.peerAvatarUrl,
@@ -56,6 +92,7 @@ class CallSessionInfo {
     this.endedAt,
     this.createdAt,
     this.ringTimeoutSeconds = 60,
+    this.participants = const [],
   });
 
   final int id;
@@ -64,6 +101,7 @@ class CallSessionInfo {
   final int calleeId;
   final String media;
   final String status;
+  final String kind;
   final int? peerId;
   final String? peerName;
   final String? peerAvatarUrl;
@@ -72,9 +110,11 @@ class CallSessionInfo {
   final DateTime? endedAt;
   final DateTime? createdAt;
   final int ringTimeoutSeconds;
+  final List<CallParticipantInfo> participants;
 
   bool get isVideo => media == 'video';
   bool get isVoice => media != 'video';
+  bool get isGroup => kind == 'group';
   bool get isRinging => status == 'ringing';
   bool get isActive => status == 'active';
   bool get isTerminal =>
@@ -96,11 +136,22 @@ class CallSessionInfo {
       return fallback;
     }
 
+    final rawParts = json['participants'];
+    final parts = <CallParticipantInfo>[];
+    if (rawParts is List) {
+      for (final item in rawParts) {
+        if (item is Map) {
+          parts.add(CallParticipantInfo.fromJson(Map<String, dynamic>.from(item)));
+        }
+      }
+    }
+
     return CallSessionInfo(
       id: asInt(json['id']),
       conversationId: asInt(json['conversation_id']),
       callerId: asInt(json['caller_id']),
       calleeId: asInt(json['callee_id']),
+      kind: json['kind'] as String? ?? 'direct',
       media: json['media'] as String? ?? 'voice',
       status: json['status'] as String? ?? 'ringing',
       peerId: json['peer_id'] == null ? null : asInt(json['peer_id']),
@@ -111,6 +162,7 @@ class CallSessionInfo {
       endedAt: asDate(json['ended_at']),
       createdAt: asDate(json['created_at']),
       ringTimeoutSeconds: asInt(json['ring_timeout_seconds'], 60),
+      participants: parts,
     );
   }
 }
@@ -233,6 +285,7 @@ class CallService {
     int callId, {
     required String kind,
     required Map<String, dynamic> payload,
+    int? toUserId,
   }) async {
     final response = await http.post(
       ApiService.uri('/calls/$callId/signal'),
@@ -240,9 +293,33 @@ class CallService {
       body: jsonEncode({
         'kind': kind,
         'payload': payload,
+        if (toUserId != null) 'to_user_id': toUserId,
       }),
     );
     if (response.statusCode == 200) return;
     _throw(response, 'Не удалось отправить сигнал звонка');
+  }
+
+  static Future<List<CallParticipantInfo>> participants(int callId) async {
+    final response = await http.get(
+      ApiService.uri('/calls/$callId/participants'),
+      headers: await ApiService.authHeaders(),
+    );
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final raw = body['participants'];
+      final out = <CallParticipantInfo>[];
+      if (raw is List) {
+        for (final item in raw) {
+          if (item is Map) {
+            out.add(
+              CallParticipantInfo.fromJson(Map<String, dynamic>.from(item)),
+            );
+          }
+        }
+      }
+      return out;
+    }
+    _throw(response, 'Не удалось загрузить участников звонка');
   }
 }

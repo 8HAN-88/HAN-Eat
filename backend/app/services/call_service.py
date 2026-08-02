@@ -10,7 +10,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.call import CallSession
+from app.models.call import CallParticipant, CallSession
 from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.user import User
 from app.models.user_block import UserBlock
@@ -19,6 +19,8 @@ from app.services.notification_service import NotificationService
 from app.services.user_event_bus import publish_user_event
 
 ACTIVE_STATUSES = ("ringing", "active")
+MAX_GROUP_CALL_PARTICIPANTS = 4
+PARTICIPANT_LIVE = ("invited", "ringing", "joined")
 
 
 def ring_timeout_seconds() -> int:
@@ -39,11 +41,37 @@ class CallService:
         return call
 
     def _assert_participant(self, call: CallSession, user_id: int) -> None:
+        if getattr(call, "kind", "direct") == "group":
+            row = (
+                self.db.query(CallParticipant.id)
+                .filter(
+                    CallParticipant.call_id == call.id,
+                    CallParticipant.user_id == user_id,
+                    CallParticipant.status.in_(PARTICIPANT_LIVE + ("left", "rejected", "missed")),
+                )
+                .first()
+            )
+            if not row and user_id != call.caller_id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+            return
         if user_id not in (call.caller_id, call.callee_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     def _peer_id(self, call: CallSession, user_id: int) -> int:
+        if call.callee_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Peer signaling requires to_user_id"
+            )
         return call.callee_id if user_id == call.caller_id else call.caller_id
+
+    def _is_group(self, call: CallSession) -> bool:
+        return (getattr(call, "kind", None) or "direct") == "group"
+
+    def _participant_ids(self, call_id: int, *, live_only: bool = True) -> list[int]:
+        q = self.db.query(CallParticipant.user_id).filter(CallParticipant.call_id == call_id)
+        if live_only:
+            q = q.filter(CallParticipant.status.in_(("invited", "ringing", "joined")))
+        return [uid for (uid,) in q.all()]
 
     def _has_block(self, a: int, b: int) -> bool:
         return (
@@ -71,7 +99,20 @@ class CallService:
         )
         if exclude_call_id is not None:
             q = q.filter(CallSession.id != exclude_call_id)
-        return q.first() is not None
+        if q.first() is not None:
+            return True
+        pq = (
+            self.db.query(CallParticipant.id)
+            .join(CallSession, CallSession.id == CallParticipant.call_id)
+            .filter(
+                CallParticipant.user_id == user_id,
+                CallParticipant.status.in_(("ringing", "joined")),
+                CallSession.status.in_(ACTIVE_STATUSES),
+            )
+        )
+        if exclude_call_id is not None:
+            pq = pq.filter(CallParticipant.call_id != exclude_call_id)
+        return pq.first() is not None
 
     def _duration_sec(self, call: CallSession) -> int:
         if not call.started_at or not call.ended_at:
@@ -183,6 +224,7 @@ class CallService:
             "conversation_id": call.conversation_id,
             "caller_id": call.caller_id,
             "callee_id": call.callee_id,
+            "call_kind": getattr(call, "kind", None) or "direct",
             "media": call.media,
             "status": call.status,
             "started_at": call.started_at.isoformat() if call.started_at else None,
@@ -200,8 +242,13 @@ class CallService:
         publish_user_event(user_id, body)
 
     def _publish_both(self, call: CallSession, event: str, extra: Optional[dict] = None) -> None:
+        if self._is_group(call):
+            for uid in set(self._participant_ids(call.id, live_only=False) + [call.caller_id]):
+                self._publish(uid, event, call, extra)
+            return
         self._publish(call.caller_id, event, call, extra)
-        self._publish(call.callee_id, event, call, extra)
+        if call.callee_id is not None:
+            self._publish(call.callee_id, event, call, extra)
 
     @staticmethod
     def ice_servers() -> list[dict[str, Any]]:
@@ -254,7 +301,13 @@ class CallService:
             .filter(Conversation.id == conversation_id)
             .first()
         )
-        if not conv or conv.type != "direct":
+        if not conv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+        if conv.type == "group":
+            return self.create_group_call(
+                caller_id, conversation_id=conversation_id, media=media_norm
+            )
+        if conv.type != "direct":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Calls only supported in direct chats"
             )
@@ -288,6 +341,7 @@ class CallService:
             conversation_id=conversation_id,
             caller_id=caller_id,
             callee_id=callee_id,
+            kind="direct",
             media=media_norm,
             status="ringing",
         )
@@ -337,6 +391,8 @@ class CallService:
     def answer_call(self, user_id: int, call_id: int) -> CallSession:
         call = self._get_call(call_id, for_update=True)
         self._expire_if_needed(call)
+        if self._is_group(call):
+            return self.join_group_call(user_id, call_id)
         self._assert_participant(call, user_id)
         if user_id != call.callee_id:
             raise HTTPException(
@@ -360,6 +416,8 @@ class CallService:
     def reject_call(self, user_id: int, call_id: int) -> CallSession:
         call = self._get_call(call_id, for_update=True)
         self._expire_if_needed(call)
+        if self._is_group(call):
+            return self.leave_group_call(user_id, call_id, end_for_all=False)
         self._assert_participant(call, user_id)
         if user_id != call.callee_id:
             raise HTTPException(
@@ -403,6 +461,8 @@ class CallService:
         self._assert_participant(call, user_id)
         if call.status in ("ended", "rejected", "missed", "cancelled"):
             return call
+        if self._is_group(call):
+            return self.leave_group_call(user_id, call_id, end_for_all=(user_id == call.caller_id))
         if call.status == "ringing":
             # Treat hangup during ring as cancel/reject depending on role.
             if user_id == call.caller_id:
@@ -423,6 +483,7 @@ class CallService:
         *,
         kind: str,
         payload: dict[str, Any],
+        to_user_id: Optional[int] = None,
     ) -> CallSession:
         call = self._get_call(call_id, for_update=True)
         self._expire_if_needed(call)
@@ -440,13 +501,27 @@ class CallService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="payload must be an object"
             )
-        peer_id = self._peer_id(call, user_id)
+        if self._is_group(call):
+            if not to_user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="to_user_id required for group call signaling",
+                )
+            if to_user_id == user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot signal self"
+                )
+            peer_id = to_user_id
+            self._assert_participant(call, peer_id)
+        else:
+            peer_id = self._peer_id(call, user_id)
         self._publish(
             peer_id,
             "call.signal",
             call,
             {
                 "from_user_id": user_id,
+                "to_user_id": peer_id,
                 "kind": kind_norm,
                 "payload": payload,
             },
@@ -459,9 +534,267 @@ class CallService:
         self._assert_participant(call, user_id)
         return call
 
+    def create_group_call(
+        self,
+        host_id: int,
+        *,
+        conversation_id: int,
+        media: str = "voice",
+    ) -> CallSession:
+        media_norm = (media or "voice").strip().lower()
+        if media_norm not in ("voice", "video"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="media must be voice or video"
+            )
+        members = (
+            self.db.query(ConversationMember.user_id)
+            .filter(ConversationMember.conversation_id == conversation_id)
+            .all()
+        )
+        member_ids = [uid for (uid,) in members]
+        if host_id not in member_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        # Host + up to MAX-1 others (invite first N by membership order).
+        others = [uid for uid in member_ids if uid != host_id][: MAX_GROUP_CALL_PARTICIPANTS - 1]
+        if not others:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Group has no other members"
+            )
+        if self._user_busy(host_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "USER_BUSY", "message": "Вы уже в звонке"},
+            )
+        call = CallSession(
+            conversation_id=conversation_id,
+            caller_id=host_id,
+            callee_id=None,
+            kind="group",
+            media=media_norm,
+            status="active",
+            started_at=datetime.utcnow(),
+        )
+        self.db.add(call)
+        self.db.flush()
+        self.db.add(
+            CallParticipant(
+                call_id=call.id,
+                user_id=host_id,
+                status="joined",
+                joined_at=datetime.utcnow(),
+            )
+        )
+        for uid in others:
+            self.db.add(
+                CallParticipant(
+                    call_id=call.id,
+                    user_id=uid,
+                    status="ringing",
+                )
+            )
+        self.db.flush()
+        setattr(call, "_invite_user_ids", others)
+        return call
+
+    def notify_group_incoming(self, call: CallSession) -> None:
+        invite_ids = getattr(call, "_invite_user_ids", None) or [
+            uid
+            for uid in self._participant_ids(call.id, live_only=True)
+            if uid != call.caller_id
+        ]
+        host = self.db.query(User).filter(User.id == call.caller_id).first()
+        host_name = (host.name if host else None) or "Групповой звонок"
+        for uid in invite_ids:
+            self._publish(
+                uid,
+                "call.invite",
+                call,
+                {
+                    "from_user_id": call.caller_id,
+                    "from_name": host_name,
+                    "from_avatar_url": getattr(host, "avatar_url", None) if host else None,
+                },
+            )
+            try:
+                NotificationService(self.db).create_notification(
+                    user_id=uid,
+                    type="call.incoming",
+                    title=host_name,
+                    body="Групповой видеозвонок" if call.media == "video" else "Групповой звонок",
+                    entity_type="call",
+                    entity_id=call.id,
+                    actor_id=call.caller_id,
+                    data={
+                        "type": "call.incoming",
+                        "route": "call",
+                        "call_id": call.id,
+                        "conversation_id": call.conversation_id,
+                        "media": call.media,
+                        "call_kind": "group",
+                        "caller_id": call.caller_id,
+                        "caller_name": host_name,
+                    },
+                    persist=False,
+                )
+            except Exception:
+                pass
+
+    def join_group_call(self, user_id: int, call_id: int) -> CallSession:
+        call = self._get_call(call_id, for_update=True)
+        if not self._is_group(call):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+        if call.status not in ("ringing", "active"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
+            )
+        row = (
+            self.db.query(CallParticipant)
+            .filter(CallParticipant.call_id == call.id, CallParticipant.user_id == user_id)
+            .with_for_update()
+            .first()
+        )
+        if not row:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if row.status == "joined":
+            return call
+        joined_count = (
+            self.db.query(CallParticipant.id)
+            .filter(CallParticipant.call_id == call.id, CallParticipant.status == "joined")
+            .count()
+        )
+        if joined_count >= MAX_GROUP_CALL_PARTICIPANTS:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "CALL_FULL", "message": "Звонок заполнен"},
+            )
+        if self._user_busy(user_id, exclude_call_id=call.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "USER_BUSY", "message": "Вы уже в звонке"},
+            )
+        row.status = "joined"
+        row.joined_at = datetime.utcnow()
+        row.left_at = None
+        if call.status == "ringing":
+            call.status = "active"
+            call.started_at = call.started_at or datetime.utcnow()
+        self.db.flush()
+        already = [
+            uid
+            for uid in self._participant_ids(call.id, live_only=True)
+            if uid != user_id
+        ]
+        joined_peers = (
+            self.db.query(CallParticipant.user_id)
+            .filter(
+                CallParticipant.call_id == call.id,
+                CallParticipant.status == "joined",
+                CallParticipant.user_id != user_id,
+            )
+            .all()
+        )
+        peer_ids = [uid for (uid,) in joined_peers]
+        for uid in set(already + peer_ids + [call.caller_id]):
+            self._publish(
+                uid,
+                "call.participant_joined",
+                call,
+                {"user_id": user_id, "joined_user_ids": peer_ids},
+            )
+        self._publish(
+            user_id,
+            "call.answered",
+            call,
+            {"joined_user_ids": peer_ids},
+        )
+        return call
+
+    def leave_group_call(
+        self, user_id: int, call_id: int, *, end_for_all: bool = False
+    ) -> CallSession:
+        call = self._get_call(call_id, for_update=True)
+        if not self._is_group(call):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+        row = (
+            self.db.query(CallParticipant)
+            .filter(CallParticipant.call_id == call.id, CallParticipant.user_id == user_id)
+            .with_for_update()
+            .first()
+        )
+        if row and row.status != "left":
+            if row.status == "ringing":
+                row.status = "rejected"
+            else:
+                row.status = "left"
+            row.left_at = datetime.utcnow()
+            self.db.flush()
+
+        if end_for_all or user_id == call.caller_id:
+            call.status = "ended"
+            call.ended_at = datetime.utcnow()
+            call.ended_by_user_id = user_id
+            for p in (
+                self.db.query(CallParticipant)
+                .filter(
+                    CallParticipant.call_id == call.id,
+                    CallParticipant.status.in_(("invited", "ringing", "joined")),
+                )
+                .all()
+            ):
+                if p.status == "ringing":
+                    p.status = "missed"
+                elif p.status == "joined":
+                    p.status = "left"
+                p.left_at = p.left_at or datetime.utcnow()
+            self.db.flush()
+            self._append_call_message(call)
+            self._publish_both(call, "call.ended", {"reason": "hangup", "ended_by": user_id})
+            return call
+
+        still = (
+            self.db.query(CallParticipant.id)
+            .filter(CallParticipant.call_id == call.id, CallParticipant.status == "joined")
+            .count()
+        )
+        self._publish_both(
+            call,
+            "call.participant_left",
+            {"user_id": user_id, "joined_count": still},
+        )
+        if still == 0:
+            call.status = "ended"
+            call.ended_at = datetime.utcnow()
+            call.ended_by_user_id = user_id
+            self.db.flush()
+            self._append_call_message(call)
+            self._publish_both(call, "call.ended", {"reason": "empty"})
+        return call
+
+    def list_participants(self, user_id: int, call_id: int) -> list[dict[str, Any]]:
+        call = self.get_call_for_user(user_id, call_id)
+        rows = (
+            self.db.query(CallParticipant, User)
+            .join(User, User.id == CallParticipant.user_id)
+            .filter(CallParticipant.call_id == call.id)
+            .all()
+        )
+        out = []
+        for part, user in rows:
+            out.append(
+                {
+                    "user_id": user.id,
+                    "name": user.name,
+                    "avatar_url": getattr(user, "avatar_url", None),
+                    "status": part.status,
+                    "is_host": user.id == call.caller_id,
+                    "joined_at": part.joined_at.isoformat() if part.joined_at else None,
+                }
+            )
+        return out
+
     @classmethod
     def expire_stale_rings(cls, db: Session) -> list[CallSession]:
-        """Mark unanswered ringing calls as missed (maintenance loop)."""
+        """Mark unanswered ringing calls / group invites as missed (maintenance loop)."""
         cutoff = datetime.utcnow() - timedelta(seconds=ring_timeout_seconds())
         rows = (
             db.query(CallSession)
@@ -477,4 +810,22 @@ class CallService:
             svc._append_call_message(call)
             svc._publish_both(call, "call.ended", {"reason": "missed"})
             expired.append(call)
+
+        # Group calls start as active for the host; expire unanswered invitees separately.
+        stale_invites = (
+            db.query(CallParticipant, CallSession)
+            .join(CallSession, CallSession.id == CallParticipant.call_id)
+            .filter(
+                CallSession.kind == "group",
+                CallSession.status == "active",
+                CallParticipant.status == "ringing",
+                CallSession.created_at <= cutoff,
+            )
+            .all()
+        )
+        for part, call in stale_invites:
+            part.status = "missed"
+            part.left_at = datetime.utcnow()
+            db.flush()
+            svc._publish(part.user_id, "call.ended", call, {"reason": "missed"})
         return expired
