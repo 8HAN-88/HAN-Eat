@@ -378,7 +378,9 @@ async def update_user_profile(
         current_user.avatar_url = request.avatar_url
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
-    
+    if request.voip_token is not None:
+        current_user.voip_token = request.voip_token or None
+
     if request.device_platform is not None:
         # Валидация платформы
         if request.device_platform not in ["android", "ios", "web"]:

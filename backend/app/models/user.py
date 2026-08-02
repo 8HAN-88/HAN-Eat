@@ -57,6 +57,8 @@ class User(Base):
     bot_webhook_last_ok_at = Column(DateTime, nullable=True)
     created_by_user_id = Column(Integer, nullable=True)  # кто создал бота (для is_bot=True)
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token (для Android и iOS)
+    # iOS PushKit VoIP token for CallKit when the app is killed.
+    voip_token = Column(String(500), nullable=True)
     device_platform = Column(String(20), nullable=True)  # android | ios | web
     country_code = Column(String(2), nullable=True)  # ISO 3166-1 alpha-2 код страны (RU, US, etc.)
     last_seen_at = Column(DateTime, nullable=True)

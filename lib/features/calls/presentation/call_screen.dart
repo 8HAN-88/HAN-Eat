@@ -8,6 +8,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../call_kit_bridge.dart';
 import 'call_coordinator.dart';
 
 /// Working 1:1 WebRTC voice/video call (Telegram-like).
@@ -157,6 +158,7 @@ class _CallScreenState extends State<CallScreen> {
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
           _disconnectTimer?.cancel();
           _disconnectTimer = null;
+          unawaited(CallKitBridge.setConnected(_call.id));
           setState(() {
             _status = 'Идёт звонок';
             _callStartedAt ??= DateTime.now();
@@ -447,6 +449,7 @@ class _CallScreenState extends State<CallScreen> {
     await _localRenderer.dispose();
     await _remoteRenderer.dispose();
     CallCoordinator.instance.clearActiveCall(_call.id);
+    await CallKitBridge.end(_call.id);
     try {
       await WakelockPlus.disable();
     } catch (_) {}

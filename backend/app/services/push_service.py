@@ -164,48 +164,71 @@ class PushService:
             
             # Определяем платформу для настройки уведомления
             platform = user.device_platform or "android"  # По умолчанию Android
-            
-            # Создаем сообщение
-            message = messaging.Message(
-                notification=messaging.Notification(
-                    title=notification.title,
-                    body=notification.body or notification.title,
-                ),
-                data=notification_data,
-                token=user.fcm_token,
-                # Настройки для iOS (APNs)
-                apns=messaging.APNSConfig(
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            alert=messaging.ApsAlert(
-                                title=notification.title,
-                                body=notification.body or notification.title,
+            is_call = (notification.type or "").startswith("call.")
+
+            # Calls: data-only FCM so Android background handler can show CallKit UI.
+            # (A visible notification payload prevents onBackgroundMessage on Android.)
+            if is_call:
+                if "title" not in notification_data and notification.title:
+                    notification_data["title"] = str(notification.title)
+                if "body" not in notification_data and notification.body:
+                    notification_data["body"] = str(notification.body)
+                message = messaging.Message(
+                    data=notification_data,
+                    token=user.fcm_token,
+                    apns=messaging.APNSConfig(
+                        payload=messaging.APNSPayload(
+                            aps=messaging.Aps(
+                                content_available=True,
+                                sound="default",
+                                badge=1,
                             ),
-                            badge=1,  # Увеличиваем badge на 1
-                            sound="default",
-                            content_available=True,  # Для фоновых уведомлений
                         ),
+                        headers={
+                            "apns-priority": "10",
+                            "apns-push-type": "background",
+                        },
                     ),
-                    headers={
-                        "apns-priority": "10",  # Высокий приоритет
-                    },
-                ),
-                # Настройки для Android (FCM)
-                android=messaging.AndroidConfig(
-                    priority="high",
-                    notification=messaging.AndroidNotification(
+                    android=messaging.AndroidConfig(
+                        priority="high",
+                    ),
+                )
+            else:
+                message = messaging.Message(
+                    notification=messaging.Notification(
                         title=notification.title,
                         body=notification.body or notification.title,
-                        sound="default",
-                        channel_id=(
-                            "han_calls"
-                            if (notification.type or "").startswith("call.")
-                            else "han_push"
-                        ),
-                        click_action="FLUTTER_NOTIFICATION_CLICK",  # Для Flutter
                     ),
-                ),
-            )
+                    data=notification_data,
+                    token=user.fcm_token,
+                    # Настройки для iOS (APNs)
+                    apns=messaging.APNSConfig(
+                        payload=messaging.APNSPayload(
+                            aps=messaging.Aps(
+                                alert=messaging.ApsAlert(
+                                    title=notification.title,
+                                    body=notification.body or notification.title,
+                                ),
+                                badge=1,
+                                sound="default",
+                                content_available=True,
+                            ),
+                        ),
+                        headers={
+                            "apns-priority": "10",
+                        },
+                    ),
+                    android=messaging.AndroidConfig(
+                        priority="high",
+                        notification=messaging.AndroidNotification(
+                            title=notification.title,
+                            body=notification.body or notification.title,
+                            sound="default",
+                            channel_id="han_push",
+                            click_action="FLUTTER_NOTIFICATION_CLICK",
+                        ),
+                    ),
+                )
             
             # Отправляем уведомление
             response = messaging.send(message)

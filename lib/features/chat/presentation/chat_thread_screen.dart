@@ -6731,6 +6731,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         media: 'video',
         context: context,
+        peerName: peer.name,
       );
     } catch (e) {
       if (!mounted) return;
@@ -6746,6 +6747,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         media: 'voice',
         context: context,
+        peerName: peer.name,
       );
     } catch (e) {
       if (!mounted) return;

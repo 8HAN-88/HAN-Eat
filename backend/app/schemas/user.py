@@ -98,6 +98,7 @@ class UpdateUserRequest(BaseModel):
     paid_message_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     avatar_url: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
+    voip_token: Optional[str] = None  # iOS PushKit VoIP token (CallKit)
     device_platform: Optional[str] = None  # android | ios | web
 
 
