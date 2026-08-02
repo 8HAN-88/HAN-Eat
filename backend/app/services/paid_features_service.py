@@ -1236,8 +1236,12 @@ class PaidFeaturesService:
         user_gift_id: int,
         *,
         to_user_id: int,
-    ) -> UserStarGift:
-        """Transfer a held/kept gift (Telegram collectible transfer)."""
+    ) -> tuple[UserStarGift, Message]:
+        """Transfer a collectible gift; returns (gift, notice message in DM)."""
+        import json as _json
+
+        from app.services.chat_service import ChatService
+
         if owner_id == to_user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot transfer to yourself"
@@ -1261,38 +1265,95 @@ class PaidFeaturesService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be transferred"
             )
+        if not bool(getattr(owned, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only collectible gifts can be transferred",
+            )
         fee = 0
+        total_supply = None
         if owned.gift_id:
             catalog = self.db.query(StarGift).filter(StarGift.id == owned.gift_id).first()
             if catalog is not None:
                 fee = int(getattr(catalog, "transfer_stars", 0) or 0)
-        if fee <= 0 and bool(getattr(owned, "is_collectible", False)):
+                total_supply = getattr(catalog, "total_supply", None)
+        if fee <= 0:
             fee = max(25, int(owned.stars) // 10)
-        if fee > 0:
-            import secrets
+        import secrets
 
-            # Unique key per transfer attempt: ownership moves after success,
-            # so a retry from the old owner 404s; avoid reusable keys that
-            # would skip the fee on A→B→A→B loops.
-            self._spend_stars(
-                owner_id,
-                fee,
-                tx_type="gift_transfer_fee",
-                reference_type="user_gift",
-                reference_id=owned.id,
-                counterparty_user_id=to_user_id,
-                idempotency_key=(
-                    f"gift_transfer_fee:{owned.id}:{owner_id}:{to_user_id}:"
-                    f"{secrets.token_hex(8)}"
-                ),
-                meta={"to_user_id": to_user_id, "serial": owned.serial},
-            )
+        # Unique key per transfer attempt: ownership moves after success,
+        # so a retry from the old owner 404s; avoid reusable keys that
+        # would skip the fee on A→B→A→B loops.
+        self._spend_stars(
+            owner_id,
+            fee,
+            tx_type="gift_transfer_fee",
+            reference_type="user_gift",
+            reference_id=owned.id,
+            counterparty_user_id=to_user_id,
+            idempotency_key=(
+                f"gift_transfer_fee:{owned.id}:{owner_id}:{to_user_id}:"
+                f"{secrets.token_hex(8)}"
+            ),
+            meta={"to_user_id": to_user_id, "serial": owned.serial},
+        )
+        # Retire actions on the original gift bubble.
+        self._patch_gift_message_status(
+            owned,
+            status="transferred",
+            extra={
+                "is_collectible": True,
+                "serial": owned.serial,
+                "transferred_to_user_id": to_user_id,
+            },
+        )
+        try:
+            conv = ChatService(self.db).get_or_create_direct(owner_id, to_user_id)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "user_blocked":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked"
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open chat"
+            ) from exc
+
+        notice = Message(
+            conversation_id=conv.id,
+            sender_id=owner_id,
+            type="gift",
+            content="{}",
+            media_url=None,
+        )
+        self.db.add(notice)
+        self.db.flush()
+
         owned.transferred_from_user_id = owner_id
         owned.owner_id = to_user_id
         owned.status = "kept"
         owned.is_displayed = True
+        owned.message_id = notice.id
+        notice.content = _json.dumps(
+            {
+                "gift_id": owned.gift_id,
+                "user_gift_id": owned.id,
+                "slug": owned.slug,
+                "title": owned.title,
+                "emoji": owned.emoji,
+                "stars": owned.stars,
+                "message": None,
+                "status": "kept",
+                "is_collectible": True,
+                "serial": owned.serial,
+                "total_supply": total_supply,
+                "transferred_from_user_id": owner_id,
+            },
+            ensure_ascii=False,
+        )
+        conv.updated_at = datetime.utcnow()
         self.db.flush()
-        return owned
+        return owned, notice
 
     def cancel_star_invoice(self, actor_user_id: int, invoice_id: int) -> StarInvoice:
         invoice = (
@@ -1310,6 +1371,84 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not pending"
             )
         invoice.status = "cancelled"
+        self.db.flush()
+        return invoice
+
+    def list_bot_star_invoices(
+        self,
+        actor_user_id: int,
+        bot_id: int,
+        *,
+        status_filter: Optional[str] = None,
+        limit: int = 50,
+    ) -> list[StarInvoice]:
+        bot = (
+            self.db.query(User)
+            .filter(User.id == bot_id, User.is_bot.is_(True), User.deleted_at.is_(None))
+            .first()
+        )
+        if not bot:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
+        if int(getattr(bot, "created_by_user_id", 0) or 0) != actor_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not bot owner")
+        limit = max(1, min(int(limit or 50), 100))
+        q = self.db.query(StarInvoice).filter(StarInvoice.bot_id == bot_id)
+        if status_filter:
+            q = q.filter(StarInvoice.status == status_filter.strip().lower())
+        return (
+            q.order_by(StarInvoice.created_at.desc(), StarInvoice.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def refund_star_invoice(self, actor_user_id: int, invoice_id: int) -> StarInvoice:
+        """Telegram-like refundStarPayment: claw back from creator, credit payer."""
+        invoice = (
+            self.db.query(StarInvoice)
+            .filter(StarInvoice.id == invoice_id)
+            .with_for_update()
+            .first()
+        )
+        if not invoice:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        if invoice.creator_user_id != actor_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not invoice owner")
+        if invoice.status == "refunded":
+            return invoice
+        if invoice.status != "paid":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Only paid invoices can be refunded"
+            )
+        if not invoice.payer_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice has no payer"
+            )
+        amount = int(invoice.amount_stars)
+        # Claw back from creator wallet (requires sufficient Stars balance).
+        self._spend_stars(
+            actor_user_id,
+            amount,
+            tx_type="invoice_refund_debit",
+            reference_type="invoice",
+            reference_id=invoice.id,
+            counterparty_user_id=invoice.payer_user_id,
+            idempotency_key=f"invoice_refund_debit:{invoice.id}",
+            meta={"bot_id": invoice.bot_id, "payload": invoice.payload},
+        )
+        balance = self.creator_balance(actor_user_id)
+        balance.available_stars = max(0, int(balance.available_stars or 0) - amount)
+        self.add_stars(
+            int(invoice.payer_user_id),
+            amount,
+            tx_type="invoice_refund",
+            idempotency_key=f"invoice_refund:{invoice.id}",
+            meta={
+                "bot_id": invoice.bot_id,
+                "invoice_id": invoice.id,
+                "creator_user_id": actor_user_id,
+            },
+        )
+        invoice.status = "refunded"
         self.db.flush()
         return invoice
 

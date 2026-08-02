@@ -14517,6 +14517,8 @@ class _Bubble extends StatelessWidget {
           ? (totalSupply != null ? '#$serial / $totalSupply' : '#$serial')
           : null;
       final canAct = !mine &&
+          status != 'transferred' &&
+          status != 'converted' &&
           (status == 'held' || status == 'kept') &&
           (onConvertGift != null || onKeepGift != null);
       mainContent = _withBottomMeta(
@@ -14550,9 +14552,11 @@ class _Bubble extends StatelessWidget {
               Text(
                 status == 'converted'
                     ? 'Конвертирован · $stars ★'
-                    : status == 'kept'
-                        ? 'В профиле · $stars ★'
-                        : '$stars ★',
+                    : status == 'transferred'
+                        ? 'Передан · $stars ★'
+                        : status == 'kept'
+                            ? 'В профиле · $stars ★'
+                            : '$stars ★',
                 style: TextStyle(
                   color: scheme.secondary,
                   fontWeight: FontWeight.w700,

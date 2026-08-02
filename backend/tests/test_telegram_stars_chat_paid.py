@@ -23,6 +23,7 @@ from app.models.paid_features import (
     UserStarGift,
 )
 from app.models.user import User
+from app.models.user_block import UserBlock
 from app.services.paid_features_service import PaidFeaturesService
 
 
@@ -46,6 +47,7 @@ def db_session():
         UserStarGift.__table__,
         Notification.__table__,
         CreatorPayoutRequest.__table__,
+        UserBlock.__table__,
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
     Session = sessionmaker(bind=engine)
@@ -415,14 +417,47 @@ def test_upgrade_and_transfer_gift_fee(db_session):
     assert upgraded.status == "kept"
     assert svc.star_balance(2) == 60  # 100 - 40 upgrade
 
-    transferred = svc.transfer_user_star_gift(2, upgraded.id, to_user_id=3)
+    original_msg_id = upgraded.message_id
+    transferred, notice = svc.transfer_user_star_gift(2, upgraded.id, to_user_id=3)
     db_session.commit()
     assert transferred.owner_id == 3
     assert transferred.transferred_from_user_id == 2
     assert transferred.serial == 1
+    assert transferred.message_id == notice.id
+    assert notice.type == "gift"
+    assert notice.sender_id == 2
     assert svc.star_balance(2) == 45  # 60 - 15 transfer fee
     assert svc.list_user_star_gifts(2) == []
     assert svc.list_user_star_gifts(3)[0].id == transferred.id
+    if original_msg_id:
+        old = db_session.query(Message).filter(Message.id == original_msg_id).first()
+        assert old is not None
+        assert '"status": "transferred"' in old.content or '"status":"transferred"' in old.content
+
+
+def test_transfer_rejects_non_collectible(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    _credit(db_session, 1, 100)
+    catalog = StarGift(
+        slug="rose2",
+        title="Роза",
+        emoji="🌹",
+        stars=25,
+        is_active=True,
+        sort_order=1,
+        transfer_stars=10,
+    )
+    db_session.add(catalog)
+    conv = _direct_conv(db_session, 1, 2)
+    db_session.commit()
+    svc = PaidFeaturesService(db_session)
+    svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv.id)
+    owned = svc.list_user_star_gifts(2)[0]
+    with pytest.raises(HTTPException) as exc:
+        svc.transfer_user_star_gift(2, owned.id, to_user_id=3)
+    assert exc.value.status_code == 400
 
 
 def test_pay_for_reaction_idempotent(db_session):

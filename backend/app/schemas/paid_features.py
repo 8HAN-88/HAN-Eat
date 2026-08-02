@@ -291,3 +291,12 @@ class PayStarInvoiceResponse(BaseModel):
     invoice: StarInvoiceItem
     balance: int
 
+
+class StarInvoicesResponse(BaseModel):
+    invoices: List[StarInvoiceItem]
+
+
+class RefundStarInvoiceResponse(BaseModel):
+    invoice: StarInvoiceItem
+    balance: int
+
