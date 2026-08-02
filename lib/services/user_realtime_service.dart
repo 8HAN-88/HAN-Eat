@@ -33,6 +33,15 @@ class UserRealtimeEvent {
     this.muted,
     this.mutedUntil,
     this.notifyMode,
+    this.callId,
+    this.callerId,
+    this.calleeId,
+    this.callMedia,
+    this.fromUserId,
+    this.fromName,
+    this.fromAvatarUrl,
+    this.signalKind,
+    this.signalPayload,
   });
 
   final String event;
@@ -55,6 +64,16 @@ class UserRealtimeEvent {
   final bool? muted;
   final DateTime? mutedUntil;
   final String? notifyMode;
+  /// 1:1 WebRTC call signaling (`call.*` events).
+  final int? callId;
+  final int? callerId;
+  final int? calleeId;
+  final String? callMedia;
+  final int? fromUserId;
+  final String? fromName;
+  final String? fromAvatarUrl;
+  final String? signalKind;
+  final Map<String, dynamic>? signalPayload;
 
   factory UserRealtimeEvent.fromJson(Map<String, dynamic> json) {
     final rawCount = json['notifications'] ?? json['unread_count'];
@@ -76,6 +95,13 @@ class UserRealtimeEvent {
     }
     final rawActivity = json['activity'] as String?;
     final activity = rawActivity == 'recording' ? 'recording' : rawActivity;
+    Map<String, dynamic>? signalPayload;
+    final rawPayload = json['payload'];
+    if (rawPayload is Map<String, dynamic>) {
+      signalPayload = rawPayload;
+    } else if (rawPayload is Map) {
+      signalPayload = Map<String, dynamic>.from(rawPayload);
+    }
 
     return UserRealtimeEvent(
       event: '${json['event'] ?? json['type'] ?? ''}',
@@ -95,6 +121,15 @@ class UserRealtimeEvent {
       muted: json['muted'] is bool ? json['muted'] as bool : null,
       mutedUntil: asDate(json['muted_until']),
       notifyMode: (json['notify_mode'] as String?)?.trim(),
+      callId: asInt(json['call_id']),
+      callerId: asInt(json['caller_id']),
+      calleeId: asInt(json['callee_id']),
+      callMedia: json['media'] as String?,
+      fromUserId: asInt(json['from_user_id']),
+      fromName: json['from_name'] as String?,
+      fromAvatarUrl: json['from_avatar_url'] as String?,
+      signalKind: json['kind'] as String?,
+      signalPayload: signalPayload,
     );
   }
 }

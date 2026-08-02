@@ -23,6 +23,7 @@ import '../../../../services/chat_service.dart';
 import '../../../../services/presence_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/user_realtime_service.dart';
+import '../../calls/presentation/call_coordinator.dart';
 import '../../chat/application/channel_inbox_badge.dart';
 import '../../chat/application/chats_hub_refresh_provider.dart';
 import '../../chat/application/chat_realtime_signals.dart';
@@ -168,6 +169,7 @@ class _RootShellState extends ConsumerState<RootShell> {
     };
     UserRealtimeService.instance.connected
         .addListener(_realtimeConnectedListener!);
+    CallCoordinator.instance.start();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (AuthService.instance.currentUser != null) {
         PresenceService.instance.start();

@@ -32,6 +32,7 @@ from app.models.conversation import (
     ScheduledMessage,
 )
 from app.models.user_block import UserBlock
+from app.models.call import CallSession
 from app.models.paid_features import (
     CreatorPayoutRequest,
     CreatorBalance,
@@ -75,5 +76,6 @@ __all__ = [
     "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
     "StickerPackInstall", "StickerFavorite", "StickerPackPin",
+    "CallSession",
 ]
 

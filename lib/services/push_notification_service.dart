@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app/app_router.dart';
 import '../app/router_keys.dart';
 import '../models/chat_models.dart';
+import '../features/calls/presentation/call_coordinator.dart';
 import '../features/chat/application/chat_realtime_signals.dart';
 import '../features/chat/application/chats_hub_refresh_provider.dart';
 import '../features/navigation/application/shell_chat_badge_refresh_provider.dart';
@@ -81,6 +84,23 @@ class PushNotificationService {
     }
     final route = data['route']?.toString();
     final type = data['type']?.toString() ?? '';
+    if (route == 'call' || type == 'call.incoming') {
+      final callId = _parseId(data, 'call_id', 'callId') ??
+          (data['entity_type']?.toString() == 'call'
+              ? _parseId(data, 'entity_id')
+              : null);
+      if (callId != null) {
+        unawaited(
+          CallCoordinator.instance.openIncomingFromPush(
+            callId: callId,
+            callerName:
+                data['caller_name']?.toString() ?? data['title']?.toString(),
+            media: data['media']?.toString(),
+          ),
+        );
+        return;
+      }
+    }
     if (route == 'chat' || type == 'message') {
       final conversationId = _parseId(data, 'conversation_id', 'conversationId') ??
           (data['entity_type']?.toString() == 'conversation'
