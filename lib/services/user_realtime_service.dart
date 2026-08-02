@@ -36,6 +36,7 @@ class UserRealtimeEvent {
     this.callId,
     this.callerId,
     this.calleeId,
+    this.callKind,
     this.callMedia,
     this.fromUserId,
     this.fromName,
@@ -68,6 +69,8 @@ class UserRealtimeEvent {
   final int? callId;
   final int? callerId;
   final int? calleeId;
+  /// `direct` | `group` (not the WebRTC signal kind).
+  final String? callKind;
   final String? callMedia;
   final int? fromUserId;
   final String? fromName;
@@ -124,6 +127,7 @@ class UserRealtimeEvent {
       callId: asInt(json['call_id']),
       callerId: asInt(json['caller_id']),
       calleeId: asInt(json['callee_id']),
+      callKind: (json['call_kind'] as String?)?.trim(),
       callMedia: json['media'] as String?,
       fromUserId: asInt(json['from_user_id']),
       fromName: json['from_name'] as String?,

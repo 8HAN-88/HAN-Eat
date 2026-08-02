@@ -32,7 +32,7 @@ from app.models.conversation import (
     ScheduledMessage,
 )
 from app.models.user_block import UserBlock
-from app.models.call import CallSession
+from app.models.call import CallSession, CallParticipant
 from app.models.paid_features import (
     CreatorPayoutRequest,
     CreatorBalance,

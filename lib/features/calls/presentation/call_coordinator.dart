@@ -12,6 +12,7 @@ import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../call_kit_bridge.dart';
 import 'call_screen.dart';
+import 'group_call_screen.dart';
 import 'incoming_call_screen.dart';
 
 /// Global listener for incoming 1:1 calls (SSE + push + CallKit).
@@ -89,7 +90,9 @@ class CallCoordinator {
     if (!context.mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CallScreen(call: call),
+        builder: (_) => call.isGroup
+            ? GroupCallScreen(call: call)
+            : CallScreen(call: call),
         fullscreenDialog: true,
       ),
     );
@@ -193,10 +196,12 @@ class CallCoordinator {
       if (ctx == null) return;
       await Navigator.of(ctx, rootNavigator: true).push(
         MaterialPageRoute(
-          builder: (_) => CallScreen(
-            call: answered,
-            initialAsCallee: true,
-          ),
+          builder: (_) => answered.isGroup
+              ? GroupCallScreen(call: answered)
+              : CallScreen(
+                  call: answered,
+                  initialAsCallee: true,
+                ),
           fullscreenDialog: true,
         ),
       );
@@ -224,6 +229,7 @@ class CallCoordinator {
         conversationId: event.conversationId ?? 0,
         callerId: event.callerId ?? event.fromUserId ?? 0,
         calleeId: me,
+        kind: event.callKind ?? 'direct',
         media: event.callMedia ?? 'voice',
         status: 'ringing',
         peerId: event.callerId ?? event.fromUserId,

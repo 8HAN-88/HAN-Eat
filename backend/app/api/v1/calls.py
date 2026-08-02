@@ -24,6 +24,7 @@ class CreateCallRequest(BaseModel):
 class CallSignalRequest(BaseModel):
     kind: str = Field(..., min_length=1, max_length=32)
     payload: dict[str, Any] = Field(default_factory=dict)
+    to_user_id: Optional[int] = Field(default=None, gt=0)
 
 
 class IceServersResponse(BaseModel):
@@ -35,7 +36,8 @@ class CallItem(BaseModel):
     id: int
     conversation_id: int
     caller_id: int
-    callee_id: int
+    callee_id: Optional[int] = None
+    kind: str = "direct"
     media: str
     status: str
     started_at: Optional[datetime] = None
@@ -46,19 +48,31 @@ class CallItem(BaseModel):
     peer_avatar_url: Optional[str] = None
     is_caller: bool = False
     ring_timeout_seconds: int = 60
+    participants: list[dict[str, Any]] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
 
 
 def _call_item(db: Session, call, viewer_id: int) -> CallItem:
-    peer_id = call.callee_id if viewer_id == call.caller_id else call.caller_id
-    peer = db.query(User).filter(User.id == peer_id).first()
+    kind = getattr(call, "kind", None) or "direct"
+    peer_id = None
+    peer = None
+    if kind != "group" and call.callee_id is not None:
+        peer_id = call.callee_id if viewer_id == call.caller_id else call.caller_id
+        peer = db.query(User).filter(User.id == peer_id).first()
+    participants: list[dict[str, Any]] = []
+    if kind == "group":
+        try:
+            participants = CallService(db).list_participants(viewer_id, call.id)
+        except Exception:
+            participants = []
     return CallItem(
         id=call.id,
         conversation_id=call.conversation_id,
         caller_id=call.caller_id,
         callee_id=call.callee_id,
+        kind=kind,
         media=call.media,
         status=call.status,
         started_at=call.started_at,
@@ -69,6 +83,7 @@ def _call_item(db: Session, call, viewer_id: int) -> CallItem:
         peer_avatar_url=getattr(peer, "avatar_url", None) if peer else None,
         is_caller=viewer_id == call.caller_id,
         ring_timeout_seconds=ring_timeout_seconds(),
+        participants=participants,
     )
 
 
@@ -101,7 +116,10 @@ async def create_call(
     db.commit()
     db.refresh(call)
     # Notify only after commit so callee GET /calls/{id} cannot 404.
-    service.notify_incoming(call)
+    if getattr(call, "kind", "direct") == "group":
+        service.notify_group_incoming(call)
+    else:
+        service.notify_incoming(call)
     return _call_item(db, call, current_user.id)
 
 
@@ -187,7 +205,18 @@ async def signal_call(
         call_id,
         kind=body.kind,
         payload=body.payload,
+        to_user_id=body.to_user_id,
     )
     db.commit()
     db.refresh(call)
     return _call_item(db, call, current_user.id)
+
+
+@router.get("/{call_id}/participants")
+async def list_call_participants(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    return {"participants": service.list_participants(current_user.id, call_id)}

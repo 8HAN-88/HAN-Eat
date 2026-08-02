@@ -4681,14 +4681,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             title: 'Отправить подарок',
             onTap: _sendStarGift,
           ),
+        ],
+        if ((!isGroup && peer != null) || isGroup) ...[
           TelegramActionSheetAction(
             icon: Icons.videocam_outlined,
-            title: 'Видеозвонок',
+            title: isGroup ? 'Групповой видеозвонок' : 'Видеозвонок',
             onTap: () => unawaited(_startVideoCall()),
           ),
           TelegramActionSheetAction(
             icon: Icons.call_outlined,
-            title: 'Аудиозвонок',
+            title: isGroup ? 'Групповой звонок' : 'Аудиозвонок',
             onTap: () => unawaited(_startVoiceCall()),
           ),
         ],
@@ -6725,13 +6727,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _startVideoCall() async {
     final peer = _conversation.peer;
-    if (peer == null) return;
+    if (!_conversation.isGroup && peer == null) return;
     try {
       await CallCoordinator.instance.openOutgoing(
         conversationId: widget.conversationId,
         media: 'video',
         context: context,
-        peerName: peer.name,
+        peerName: _conversation.isGroup
+            ? (_conversation.title ?? 'Группа')
+            : peer?.name,
       );
     } catch (e) {
       if (!mounted) return;
@@ -6741,13 +6745,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _startVoiceCall() async {
     final peer = _conversation.peer;
-    if (peer == null) return;
+    if (!_conversation.isGroup && peer == null) return;
     try {
       await CallCoordinator.instance.openOutgoing(
         conversationId: widget.conversationId,
         media: 'voice',
         context: context,
-        peerName: peer.name,
+        peerName: _conversation.isGroup
+            ? (_conversation.title ?? 'Группа')
+            : peer?.name,
       );
     } catch (e) {
       if (!mounted) return;
@@ -12344,7 +12350,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       child: const Icon(Icons.schedule_outlined),
                     ),
                   ),
-                  if (!isGroup && peer != null) ...[
+                  if ((!isGroup && peer != null) || isGroup) ...[
                     IconButton(
                       tooltip: 'Связь',
                       icon: const Icon(Icons.call_outlined),

@@ -11,7 +11,7 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from app.core.database import Base
-from app.models.call import CallSession
+from app.models.call import CallParticipant, CallSession
 from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.user import User
 from app.models.user_block import UserBlock
@@ -34,6 +34,7 @@ def db_session():
             ConversationMember.__table__,
             Message.__table__,
             CallSession.__table__,
+            CallParticipant.__table__,
             UserBlock.__table__,
             Notification.__table__,
         ],
