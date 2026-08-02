@@ -23,6 +23,7 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
   bool _loading = true;
   bool _paying = false;
   bool _cancelling = false;
+  bool _refunding = false;
 
   @override
   void initState() {
@@ -130,6 +131,54 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
     }
   }
 
+  Future<void> _refund() async {
+    final invoice = _invoice;
+    final me = AuthService.instance.currentUser?.id;
+    if (invoice == null ||
+        _refunding ||
+        invoice.status != 'paid' ||
+        me == null ||
+        me != invoice.creatorUserId) {
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Вернуть оплату'),
+        content: Text(
+          'Плательщику будет возвращено ${invoice.amountStars} ★ с вашего баланса.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Вернуть ${invoice.amountStars} ★'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _refunding = true);
+    try {
+      final result = await PaidFeaturesService.refundInvoice(invoice.id);
+      if (!mounted) return;
+      setState(() {
+        _invoice = result.invoice;
+        _refunding = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Возврат выполнен · баланс ${result.balance} ★')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _refunding = false);
+      await showStarsRequiredSnack(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -227,18 +276,40 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                                 : const Text('Отменить счёт'),
                           ),
                         ],
-                      ] else
+                      ] else ...[
                         Text(
                           invoice.status == 'paid'
                               ? 'Счёт уже оплачен'
                               : invoice.status == 'cancelled'
                                   ? 'Счёт отменён'
-                                  : 'Счёт недоступен для оплаты',
+                                  : invoice.status == 'refunded'
+                                      ? 'Оплата возвращена'
+                                      : 'Счёт недоступен для оплаты',
                           style: TextStyle(
                             color: scheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
+                        if (invoice.status == 'paid' &&
+                            AuthService.instance.currentUser?.id ==
+                                invoice.creatorUserId) ...[
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed: _refunding ? null : _refund,
+                            child: _refunding
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    'Вернуть оплату · ${invoice.amountStars} ★',
+                                  ),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
       ),

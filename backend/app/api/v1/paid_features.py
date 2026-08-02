@@ -1,5 +1,6 @@
 """Telegram-like paid features API."""
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -22,6 +23,7 @@ from app.schemas.paid_features import (
     CreatorPayoutReviewRequest,
     PaidMessageExceptionItem,
     PayStarInvoiceResponse,
+    RefundStarInvoiceResponse,
     PurchaseMessageRequest,
     PurchaseMessageResponse,
     PurchasePostRequest,
@@ -36,6 +38,7 @@ from app.schemas.paid_features import (
     StarGiveawayItem,
     StarGiveawaysResponse,
     StarInvoiceItem,
+    StarInvoicesResponse,
     StarPackage,
     StarPackagesResponse,
     StarTransactionResponse,
@@ -615,12 +618,63 @@ async def transfer_my_star_gift(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.models.conversation import ConversationMember
+    from app.services.chat_event_bus import publish as publish_chat_event
+    from app.services.user_event_bus import publish_user_event
+
     service = PaidFeaturesService(db)
-    gift = service.transfer_user_star_gift(
+    gift, notice = service.transfer_user_star_gift(
         current_user.id, user_gift_id, to_user_id=request.to_user_id
     )
     db.commit()
     db.refresh(gift)
+    db.refresh(notice)
+    payload = {
+        "id": notice.id,
+        "conversation_id": notice.conversation_id,
+        "sender_id": notice.sender_id,
+        "type": notice.type,
+        "content": notice.content,
+        "media_url": notice.media_url,
+        "reply_to_message_id": notice.reply_to_message_id,
+        "forward_from_user_id": None,
+        "forward_from_name": None,
+        "forwarded_from_message_id": None,
+        "forwarded_from_conversation_id": None,
+        "inline_keyboard": None,
+        "created_at": notice.created_at.isoformat() if notice.created_at else None,
+        "edited_at": None,
+        "disable_webpage_preview": False,
+        "media_group_id": None,
+        "is_paid": False,
+        "price_stars": 0,
+        "purchased": True,
+        "reactions": [],
+    }
+    publish_chat_event(
+        notice.conversation_id,
+        {"type": "message.new", "message": payload},
+    )
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == notice.conversation_id)
+        .all()
+    )
+    for (user_id,) in member_ids:
+        if user_id == current_user.id:
+            continue
+        publish_user_event(
+            user_id,
+            {"event": "chat.inbox", "conversation_id": notice.conversation_id},
+        )
+    publish_user_event(
+        request.to_user_id,
+        {
+            "event": "gift.received",
+            "user_gift_id": gift.id,
+            "from_user_id": current_user.id,
+        },
+    )
     return _owned_gift_item(db, gift)
 
 
@@ -848,9 +902,86 @@ async def cancel_star_invoice(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    import secrets
+
+    from app.services.bot_webhook_service import deliver_webhook_update
+
     service = PaidFeaturesService(db)
     invoice = service.cancel_star_invoice(current_user.id, invoice_id)
+    bot = db.query(User).filter(User.id == invoice.bot_id).first()
+    if bot is not None:
+        deliver_webhook_update(
+            db,
+            bot_user=bot,
+            update_type="stars_invoice.cancelled",
+            delivery_id=secrets.token_hex(12),
+            payload={
+                "invoice_id": invoice.id,
+                "bot_id": invoice.bot_id,
+                "amount_stars": invoice.amount_stars,
+                "payload": invoice.payload,
+                "title": invoice.title,
+                "status": invoice.status,
+            },
+        )
     db.commit()
     db.refresh(invoice)
     return _invoice_item(db, invoice)
+
+
+@router.get("/bots/{bot_id}/invoices", response_model=StarInvoicesResponse)
+async def list_bot_star_invoices(
+    bot_id: int,
+    status: Optional[str] = None,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    invoices = service.list_bot_star_invoices(
+        current_user.id, bot_id, status_filter=status, limit=limit
+    )
+    return StarInvoicesResponse(
+        invoices=[_invoice_item(db, inv) for inv in invoices]
+    )
+
+
+@router.post(
+    "/invoices/{invoice_id}/refund",
+    response_model=RefundStarInvoiceResponse,
+)
+async def refund_star_invoice(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    import secrets
+
+    from app.services.bot_webhook_service import deliver_webhook_update
+
+    service = PaidFeaturesService(db)
+    invoice = service.refund_star_invoice(current_user.id, invoice_id)
+    bot = db.query(User).filter(User.id == invoice.bot_id).first()
+    if bot is not None:
+        deliver_webhook_update(
+            db,
+            bot_user=bot,
+            update_type="stars_invoice.refunded",
+            delivery_id=secrets.token_hex(12),
+            payload={
+                "invoice_id": invoice.id,
+                "bot_id": invoice.bot_id,
+                "payer_user_id": invoice.payer_user_id,
+                "amount_stars": invoice.amount_stars,
+                "payload": invoice.payload,
+                "title": invoice.title,
+                "status": invoice.status,
+            },
+        )
+    db.commit()
+    db.refresh(invoice)
+    return RefundStarInvoiceResponse(
+        invoice=_invoice_item(db, invoice),
+        balance=service.star_balance(current_user.id),
+    )
 

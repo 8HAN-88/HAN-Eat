@@ -578,6 +578,44 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось отменить счёт');
   }
 
+  static Future<List<StarInvoice>> listBotInvoices(
+    int botId, {
+    String? status,
+    int limit = 50,
+  }) async {
+    final params = <String, String>{
+      'limit': '$limit',
+      if (status != null && status.isNotEmpty) 'status': status,
+    };
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/bots/$botId/invoices').replace(
+        queryParameters: params,
+      ),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final items = data['invoices'] as List<dynamic>? ?? const [];
+      return items
+          .map((e) => StarInvoice.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить счета');
+  }
+
+  static Future<PayInvoiceResult> refundInvoice(int invoiceId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/invoices/$invoiceId/refund'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return PayInvoiceResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось вернуть оплату');
+  }
+
   static Never _throwForResponse(http.Response response, String fallback) {
     throw apiExceptionFromHttpResponse(
       response.statusCode,
@@ -860,7 +898,8 @@ class UserStarGift {
       upgradeStars > 0 &&
       (status == 'held' || status == 'kept');
 
-  bool get canTransfer => status == 'held' || status == 'kept';
+  bool get canTransfer =>
+      isCollectible && (status == 'held' || status == 'kept');
 
   String get serialLabel {
     if (!isCollectible || serial == null) return '';

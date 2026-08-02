@@ -270,6 +270,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Подарок получен';
       case 'gift_converted':
         return 'Подарок → ★';
+      case 'gift_upgrade':
+        return 'Улучшение подарка';
+      case 'gift_transfer_fee':
+        return 'Комиссия передачи подарка';
       case 'giveaway_escrow':
         return 'Розыгрыш (эскроу)';
       case 'giveaway_prize':
@@ -280,6 +284,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Оплата счёта бота';
       case 'invoice_received':
         return 'Счёт бота оплачен';
+      case 'invoice_refund':
+        return 'Возврат по счёту';
+      case 'invoice_refund_debit':
+        return 'Возврат счёта (списание)';
       case 'paid_media_purchase':
         return 'Платное медиа';
       case 'paid_media_sale':

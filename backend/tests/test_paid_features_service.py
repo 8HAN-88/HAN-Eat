@@ -655,3 +655,56 @@ def test_star_invoice_cancel(db_session):
     with pytest.raises(HTTPException) as forbidden:
         service.cancel_star_invoice(2, invoice.id)
     assert forbidden.value.status_code in (400, 403)
+
+
+def test_star_invoice_list_and_refund(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    db_session.execute(
+        text(
+            "INSERT INTO users (id, email, password_hash, name, is_bot, bot_username, created_by_user_id) "
+            "VALUES (11, 'bot3@example.com', 'hash', 'PayBot3', 1, 'paybot3', 1)"
+        )
+    )
+    service = PaidFeaturesService(db_session)
+    service.add_stars(2, 100, tx_type="purchase")
+
+    pending = service.create_star_invoice(
+        1, 11, title="Pending", amount_stars=10, payload="p1"
+    )
+    paid = service.create_star_invoice(
+        1, 11, title="Paid", amount_stars=40, payload="p2"
+    )
+    db_session.flush()
+    service.pay_star_invoice(2, paid.id)
+    db_session.flush()
+
+    listed = service.list_bot_star_invoices(1, 11)
+    assert len(listed) == 2
+    paid_only = service.list_bot_star_invoices(1, 11, status_filter="paid")
+    assert len(paid_only) == 1
+    assert paid_only[0].id == paid.id
+
+    with pytest.raises(HTTPException) as not_owner:
+        service.list_bot_star_invoices(2, 11)
+    assert not_owner.value.status_code == 403
+
+    assert service.star_balance(1) == 40
+    assert service.creator_balance(1).available_stars == 40
+    assert service.star_balance(2) == 60
+
+    refunded = service.refund_star_invoice(1, paid.id)
+    db_session.flush()
+    assert refunded.status == "refunded"
+    assert service.star_balance(1) == 0
+    assert service.creator_balance(1).available_stars == 0
+    assert service.star_balance(2) == 100
+
+    # Idempotent second refund.
+    again = service.refund_star_invoice(1, paid.id)
+    assert again.status == "refunded"
+    assert service.star_balance(2) == 100
+
+    with pytest.raises(HTTPException) as pending_refund:
+        service.refund_star_invoice(1, pending.id)
+    assert pending_refund.value.status_code == 400

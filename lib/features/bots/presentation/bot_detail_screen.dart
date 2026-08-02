@@ -432,6 +432,78 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     );
   }
 
+  Future<void> _listStarsInvoices() async {
+    try {
+      final invoices = await PaidFeaturesService.listBotInvoices(widget.botId);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) {
+          final scheme = Theme.of(ctx).colorScheme;
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(ctx).height * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Text(
+                      'Счета Stars',
+                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: invoices.isEmpty
+                        ? const Center(child: Text('Пока нет счетов'))
+                        : ListView.separated(
+                            itemCount: invoices.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final inv = invoices[index];
+                              return ListTile(
+                                title: Text(
+                                  inv.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Text(
+                                  '#${inv.id} · ${inv.status} · ${inv.amountStars} ★',
+                                  style: TextStyle(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.pop(ctx);
+                                  context.push(
+                                    StarInvoicePayRoute.pathFor(inv.id),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _createStarsInvoice() async {
     final titleController = TextEditingController(text: 'Оплата');
     final amountController = TextEditingController(text: '50');
@@ -743,6 +815,12 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                     title: 'Stars Invoice',
                                     subtitle: 'Счёт на оплату звёздами',
                                     onTap: _createStarsInvoice,
+                                  ),
+                                  _BotFatherTile(
+                                    icon: Icons.receipt_long_outlined,
+                                    title: 'Stars Invoices',
+                                    subtitle: 'История и возвраты',
+                                    onTap: _listStarsInvoices,
                                   ),
                                   _BotFatherTile(
                                     icon: Icons.chat_bubble_outline_rounded,
