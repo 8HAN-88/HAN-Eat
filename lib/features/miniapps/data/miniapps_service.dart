@@ -132,6 +132,26 @@ class MiniAppsService {
     );
   }
 
+  /// Telegram WebApp.sendData → bot webhook + chat message.
+  static Future<void> sendWebAppData(
+    int miniAppId, {
+    required String data,
+    int? conversationId,
+    String? buttonText,
+  }) async {
+    final response = await http.post(
+      ApiService.uri('/miniapps/$miniAppId/web-app-data'),
+      headers: await ApiService.authHeaders(),
+      body: jsonEncode({
+        'data': data,
+        if (conversationId != null) 'conversation_id': conversationId,
+        if (buttonText != null && buttonText.trim().isNotEmpty)
+          'button_text': buttonText.trim(),
+      }),
+    );
+    ApiService.ensureSuccess(response);
+  }
+
   static Future<List<MiniAppItem>> fetchModerationQueue({
     String? status,
   }) async {

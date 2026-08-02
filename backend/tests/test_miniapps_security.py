@@ -51,3 +51,32 @@ def test_url_risk_summary_marks_non_https_as_medium():
     assert summary["scheme"] == "http"
     assert summary["risk_level"] == "medium"
     assert "non_https" in summary["risk_reasons"]
+
+
+def test_inline_keyboard_accepts_web_app_miniapp_id():
+    from app.api.v1.chats import _normalize_inline_keyboard
+    from app.api.v1.bots import BotInlineButton, _normalize_inline_buttons
+
+    normalized = _normalize_inline_keyboard(
+        [[{"text": "Open", "web_app": {"miniapp_id": 42}}]]
+    )
+    assert normalized == [
+        [{"text": "Open", "miniapp_id": 42, "web_app": {"miniapp_id": 42}}]
+    ]
+
+    from_bot = _normalize_inline_buttons(
+        [BotInlineButton(text="Play", miniapp_id=7)]
+    )
+    assert from_bot == [
+        [{"text": "Play", "miniapp_id": 7, "web_app": {"miniapp_id": 7}}]
+    ]
+
+
+def test_bot_handler_keeps_web_app_buttons():
+    from app.services.bot_handler import _normalize_inline_buttons
+
+    rows = _normalize_inline_buttons(
+        [[{"text": "App", "miniapp_id": 9, "callback_data": "ignored_ok"}]]
+    )
+    assert rows[0][0]["miniapp_id"] == 9
+    assert rows[0][0]["web_app"]["miniapp_id"] == 9

@@ -2394,6 +2394,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             url: launch.url,
             initData: launch.initData,
             initDataUnsafe: launch.initDataUnsafe,
+            miniAppId: miniAppId,
+            conversationId: widget.conversationId,
           ),
         ),
       );
@@ -11459,6 +11461,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ChatMessage msg,
     ChatInlineKeyboardButton button,
   ) async {
+    if (button.isWebApp) {
+      try {
+        final launch = await MiniAppsService.getLaunchContext(
+          button.miniAppId!,
+          conversationId: widget.conversationId,
+        );
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => MiniAppWebViewScreen(
+              title: button.text.trim().isNotEmpty ? button.text.trim() : 'Mini App',
+              subtitle: '',
+              url: launch.url,
+              initData: launch.initData,
+              initDataUnsafe: launch.initDataUnsafe,
+              miniAppId: button.miniAppId,
+              conversationId: widget.conversationId,
+            ),
+          ),
+        );
+      } catch (e) {
+        if (mounted) {
+          showErrorSnackBar(context, e, fallback: 'Не удалось открыть Mini App');
+        }
+      }
+      return;
+    }
     final url = button.url?.trim();
     if (url != null && url.isNotEmpty) {
       final uri = Uri.tryParse(url);
@@ -14497,6 +14526,53 @@ class _Bubble extends StatelessWidget {
           priceStars: message.priceStars,
           loading: unlockingPaidMedia,
           onUnlock: onUnlockPaidMedia ?? () {},
+        ),
+      );
+    } else if (message.type == 'web_app_data') {
+      Map<String, dynamic>? payload;
+      try {
+        final decoded = jsonDecode(message.content);
+        if (decoded is Map<String, dynamic>) payload = decoded;
+      } catch (_) {}
+      final buttonText = payload?['button_text'] as String? ?? 'Mini App';
+      final dataPreview = (payload?['data'] as String? ?? message.content).trim();
+      final shortData = dataPreview.length > 120
+          ? '${dataPreview.substring(0, 120)}…'
+          : dataPreview;
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: Container(
+          width: 240,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: quoteBg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Данные Mini App',
+                style: TextStyle(color: fg, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                buttonText,
+                style: TextStyle(
+                  color: scheme.secondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (shortData.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  shortData,
+                  style: TextStyle(color: fg.withValues(alpha: 0.85)),
+                ),
+              ],
+            ],
+          ),
         ),
       );
     } else if (message.type == 'gift') {

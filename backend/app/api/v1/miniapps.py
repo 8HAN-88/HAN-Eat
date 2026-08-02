@@ -249,6 +249,14 @@ class MiniAppLaunchRequest(BaseModel):
     start_param: Optional[str] = Field(None, max_length=64)
 
 
+class MiniAppSendDataRequest(BaseModel):
+    """Telegram WebApp.sendData payload."""
+
+    data: str = Field(..., min_length=1, max_length=4096)
+    conversation_id: Optional[int] = None
+    button_text: Optional[str] = Field(None, max_length=64)
+
+
 class MiniAppVerifyInitDataRequest(BaseModel):
     init_data: str = Field(..., min_length=2, max_length=8192)
 
@@ -673,6 +681,168 @@ async def launch_miniapp_init_data(
         "url": app.url,
         "init_data_unsafe": unsafe,
         "init_data": json.dumps(unsafe, ensure_ascii=False, separators=(",", ":")),
+    }
+
+
+@router.post("/{miniapp_id}/web-app-data")
+async def send_miniapp_web_app_data(
+    miniapp_id: int,
+    payload: MiniAppSendDataRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Telegram-like WebApp.sendData: deliver data to the bot (webhook + chat message).
+    """
+    from app.models.conversation import ConversationMember, Message
+    from app.services.bot_webhook_queue_service import enqueue_webhook_task
+    from app.services.chat_event_bus import publish as publish_chat_event
+    from app.services.user_event_bus import publish_user_event
+
+    _enforce_user_rate_limit(
+        current_user.id,
+        action="web_app_data",
+        per_minute=max(10, int(settings.MINIAPP_LAUNCH_PER_MINUTE)),
+    )
+    app = db.query(BotMiniApp).filter(BotMiniApp.id == miniapp_id, BotMiniApp.is_active == True).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Mini app not found")
+    bot = db.query(User).filter(User.id == app.bot_id, User.is_bot == True).first()
+    if not bot:
+        raise HTTPException(status_code=400, detail="Bot not found")
+    if (
+        bool(getattr(settings, "MINIAPP_REQUIRE_APPROVED_FOR_USE", True))
+        and app.moderation_status != "approved"
+        and not _can_user_access_non_approved_app(app, current_user, bot)
+    ):
+        raise HTTPException(status_code=403, detail="Mini app is not approved yet")
+
+    data = (payload.data or "").strip()
+    if not data:
+        raise HTTPException(status_code=400, detail="data is required")
+    if len(data) > 4096:
+        raise HTTPException(status_code=400, detail="data too long")
+
+    conversation_id = payload.conversation_id
+    if conversation_id is None:
+        last_launch = (
+            db.query(MiniAppLaunch)
+            .filter(
+                MiniAppLaunch.miniapp_id == miniapp_id,
+                MiniAppLaunch.user_id == current_user.id,
+                MiniAppLaunch.conversation_id.isnot(None),
+            )
+            .order_by(MiniAppLaunch.id.desc())
+            .first()
+        )
+        if last_launch is not None:
+            conversation_id = last_launch.conversation_id
+    if conversation_id is None:
+        # Fallback: open/find DM with the bot.
+        from app.services.chat_service import ChatService
+
+        try:
+            conv = ChatService(db).get_or_create_direct(current_user.id, bot.id)
+            conversation_id = conv.id
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Cannot open bot chat") from exc
+
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=403, detail="Access denied")
+    bot_member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == bot.id,
+        )
+        .first()
+    )
+    if not bot_member:
+        raise HTTPException(status_code=400, detail="Bot is not in this chat")
+
+    button_text = (payload.button_text or app.name or "Mini App").strip()[:64]
+    content = json.dumps(
+        {
+            "data": data,
+            "button_text": button_text,
+            "miniapp_id": app.id,
+            "bot_id": bot.id,
+        },
+        ensure_ascii=False,
+    )
+    msg = Message(
+        conversation_id=conversation_id,
+        sender_id=current_user.id,
+        type="web_app_data",
+        content=content,
+    )
+    db.add(msg)
+    db.flush()
+
+    webhook_payload = {
+        "conversation_id": conversation_id,
+        "message_id": msg.id,
+        "from_user_id": current_user.id,
+        "bot_id": bot.id,
+        "miniapp_id": app.id,
+        "web_app_data": {
+            "data": data,
+            "button_text": button_text,
+        },
+    }
+    enqueue_webhook_task(
+        bot_id=bot.id,
+        update_type="web_app_data",
+        payload=webhook_payload,
+    )
+    db.commit()
+    db.refresh(msg)
+
+    message_event = {
+        "id": msg.id,
+        "conversation_id": msg.conversation_id,
+        "sender_id": msg.sender_id,
+        "type": msg.type,
+        "content": msg.content,
+        "media_url": None,
+        "reply_to_message_id": None,
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "is_paid": False,
+        "price_stars": 0,
+        "purchased": True,
+        "reactions": [],
+        "inline_keyboard": None,
+    }
+    publish_chat_event(
+        conversation_id,
+        {"type": "message.new", "message": message_event},
+    )
+    peer_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == conversation_id)
+        .all()
+    )
+    for (uid,) in peer_ids:
+        if uid == current_user.id:
+            continue
+        publish_user_event(
+            uid,
+            {"event": "chat.inbox", "conversation_id": conversation_id},
+        )
+
+    return {
+        "ok": True,
+        "message_id": msg.id,
+        "conversation_id": conversation_id,
+        "miniapp_id": app.id,
     }
 
 

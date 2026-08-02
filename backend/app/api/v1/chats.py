@@ -474,6 +474,8 @@ def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]
             callback_data = btn.get("callback_data")
             url = btn.get("url")
             callback_text = btn.get("callback_text")
+            miniapp_id = btn.get("miniapp_id")
+            web_app = btn.get("web_app")
             out_btn: Dict[str, Any] = {"text": text}
             if isinstance(callback_data, str) and callback_data.strip():
                 out_btn["callback_data"] = callback_data.strip()[:128]
@@ -481,7 +483,27 @@ def _normalize_inline_keyboard(raw: Any) -> Optional[List[List[Dict[str, Any]]]]
                 out_btn["url"] = url.strip()[:512]
             if isinstance(callback_text, str) and callback_text.strip():
                 out_btn["callback_text"] = callback_text.strip()[:300]
-            if "callback_data" not in out_btn and "url" not in out_btn:
+            if miniapp_id is None and isinstance(web_app, dict):
+                raw_id = web_app.get("miniapp_id") or web_app.get("id")
+                try:
+                    miniapp_id = int(raw_id) if raw_id is not None else None
+                except Exception:
+                    miniapp_id = None
+                web_url = web_app.get("url")
+                if isinstance(web_url, str) and web_url.strip() and "url" not in out_btn:
+                    out_btn["url"] = web_url.strip()[:512]
+            try:
+                miniapp_id_int = int(miniapp_id) if miniapp_id is not None else None
+            except Exception:
+                miniapp_id_int = None
+            if miniapp_id_int is not None and miniapp_id_int > 0:
+                out_btn["miniapp_id"] = miniapp_id_int
+                out_btn["web_app"] = {"miniapp_id": miniapp_id_int}
+            if (
+                "callback_data" not in out_btn
+                and "url" not in out_btn
+                and "miniapp_id" not in out_btn
+            ):
                 continue
             out_row.append(out_btn)
         if out_row:

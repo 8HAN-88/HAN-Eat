@@ -228,6 +228,7 @@ class _MiniAppsCatalogScreenState extends State<MiniAppsCatalogScreen>
             url: launch.url,
             initData: launch.initData,
             initDataUnsafe: launch.initDataUnsafe,
+            miniAppId: app.id,
           ),
         ),
       );

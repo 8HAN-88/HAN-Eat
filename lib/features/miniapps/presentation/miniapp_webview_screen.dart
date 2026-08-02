@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../data/miniapps_service.dart';
 
 /// Полноценный экран запуска мини-приложения с WebView + JS bridge (как Telegram WebApp).
 class MiniAppWebViewScreen extends StatefulWidget {
@@ -14,6 +18,8 @@ class MiniAppWebViewScreen extends StatefulWidget {
     this.url, // для внешних мини-приложений
     this.initData,
     this.initDataUnsafe,
+    this.miniAppId,
+    this.conversationId,
   });
 
   final String title;
@@ -22,6 +28,8 @@ class MiniAppWebViewScreen extends StatefulWidget {
   final String? url;
   final String? initData;
   final Map<String, dynamic>? initDataUnsafe;
+  final int? miniAppId;
+  final int? conversationId;
 
   @override
   State<MiniAppWebViewScreen> createState() => _MiniAppWebViewScreenState();
@@ -34,6 +42,8 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
   bool _mainButtonVisible = false;
   bool _mainButtonLoading = false;
   String _mainButtonText = 'Продолжить';
+  bool _backButtonVisible = false;
+  bool _sendingData = false;
 
   String get _effectiveInitData {
     final raw = widget.initData?.trim();
@@ -128,6 +138,22 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         titleSpacing: 0,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          tooltip: _backButtonVisible ? 'Назад' : 'Закрыть',
+          icon: Icon(
+            _backButtonVisible
+                ? Icons.arrow_back_rounded
+                : Icons.close_rounded,
+          ),
+          onPressed: () {
+            if (_backButtonVisible) {
+              unawaited(_emitBackButton());
+              return;
+            }
+            Navigator.of(context).pop();
+          },
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -275,6 +301,73 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
     );
   }
 
+  Future<void> _emitBackButton() async {
+    await _controller?.evaluateJavascript(
+      source: '''
+        if (window.HanWe && window.HanWe.WebApp) {
+          window.HanWe.WebApp._emit('backButtonClicked');
+        }
+      ''',
+    );
+  }
+
+  void _triggerHaptic(String? type) {
+    final kind = (type ?? 'impact').toLowerCase();
+    switch (kind) {
+      case 'success':
+      case 'warning':
+      case 'error':
+      case 'rigid':
+      case 'soft':
+      case 'medium':
+      case 'heavy':
+        HapticFeedback.mediumImpact();
+        break;
+      case 'selection':
+      case 'selectionchanged':
+        HapticFeedback.selectionClick();
+        break;
+      case 'light':
+      case 'impact':
+      default:
+        HapticFeedback.lightImpact();
+        break;
+    }
+  }
+
+  Future<void> _handleSendData(dynamic raw) async {
+    if (_sendingData) return;
+    final miniAppId = widget.miniAppId;
+    if (miniAppId == null || miniAppId <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mini App не привязан к боту')),
+      );
+      return;
+    }
+    final data = raw is String
+        ? raw
+        : (raw == null ? '' : jsonEncode(raw));
+    if (data.trim().isEmpty) return;
+    setState(() => _sendingData = true);
+    try {
+      await MiniAppsService.sendWebAppData(
+        miniAppId,
+        data: data,
+        conversationId: widget.conversationId,
+        buttonText: widget.title,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _sendingData = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отправить данные: $e')),
+      );
+    }
+  }
+
   /// Регистрирует handlers для callHandler из JS (close, sendData)
   void _registerHandlers(InAppWebViewController controller) {
     controller.addJavaScriptHandler(
@@ -288,10 +381,14 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
       callback: (args) {
         final data = args.isNotEmpty ? args.first : null;
         debugPrint('[MiniApp] sendData received: $data');
-        // TODO: Здесь можно отправить данные на бэкенд или обработать в приложении
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Приложение отправило данные')),
-        );
+        unawaited(_handleSendData(data));
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'hapticFeedback',
+      callback: (args) {
+        final type = args.isNotEmpty ? args.first?.toString() : null;
+        _triggerHaptic(type);
       },
     );
     controller.addJavaScriptHandler(
@@ -318,6 +415,16 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
           }
           if (loading is bool) _mainButtonLoading = loading;
         });
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'backButton',
+      callback: (args) async {
+        if (args.isEmpty || args.first is! Map) return;
+        final payload = Map<String, dynamic>.from(args.first as Map);
+        final visible = payload['visible'];
+        if (!mounted || visible is! bool) return;
+        setState(() => _backButtonVisible = visible);
       },
     );
   }
@@ -383,9 +490,21 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
               window.flutter_inappwebview.callHandler('openLink', url);
             },
 
+            HapticFeedback: {
+              impactOccurred: function(style) {
+                window.flutter_inappwebview.callHandler('hapticFeedback', String(style || 'impact'));
+              },
+              notificationOccurred: function(type) {
+                window.flutter_inappwebview.callHandler('hapticFeedback', String(type || 'success'));
+              },
+              selectionChanged: function() {
+                window.flutter_inappwebview.callHandler('hapticFeedback', 'selection');
+              }
+            },
+
+            // Legacy flat helper used by some HanWe demos.
             hapticFeedback: function(type) {
-              console.log('[HanWe.WebApp] hapticFeedback:', type);
-              // TODO: Реализовать через platform channel
+              window.flutter_inappwebview.callHandler('hapticFeedback', String(type || 'impact'));
             },
 
             onEvent: function(eventType, callback) {
@@ -443,6 +562,22 @@ class _MiniAppWebViewScreenState extends State<MiniAppWebViewScreen> {
             window.HanWe.WebApp.onEvent('mainButtonClicked', callback);
           }
         };
+
+        window.HanWe.WebApp.BackButton = {
+          show: function() {
+            window.flutter_inappwebview.callHandler('backButton', { visible: true });
+          },
+          hide: function() {
+            window.flutter_inappwebview.callHandler('backButton', { visible: false });
+          },
+          onClick: function(callback) {
+            window.HanWe.WebApp.onEvent('backButtonClicked', callback);
+          }
+        };
+
+        // Telegram WebApp alias for third-party Mini Apps.
+        window.Telegram = window.Telegram || {};
+        window.Telegram.WebApp = window.HanWe.WebApp;
 
         console.log('[HanWe] WebApp bridge injected');
       })();
