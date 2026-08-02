@@ -5,6 +5,41 @@ import 'package:http/http.dart' as http;
 import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 
+class CallIceConfig {
+  const CallIceConfig({
+    required this.iceServers,
+    required this.ringTimeoutSeconds,
+  });
+
+  final List<Map<String, dynamic>> iceServers;
+  final int ringTimeoutSeconds;
+
+  factory CallIceConfig.fromJson(Map<String, dynamic> json) {
+    final raw = json['ice_servers'];
+    final servers = <Map<String, dynamic>>[];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) {
+          servers.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+    if (servers.isEmpty) {
+      servers.addAll(const [
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+      ]);
+    }
+    final timeout = json['ring_timeout_seconds'];
+    return CallIceConfig(
+      iceServers: servers,
+      ringTimeoutSeconds: timeout is int
+          ? timeout
+          : int.tryParse('$timeout') ?? 60,
+    );
+  }
+}
+
 class CallSessionInfo {
   const CallSessionInfo({
     required this.id,
@@ -20,6 +55,7 @@ class CallSessionInfo {
     this.startedAt,
     this.endedAt,
     this.createdAt,
+    this.ringTimeoutSeconds = 60,
   });
 
   final int id;
@@ -35,6 +71,7 @@ class CallSessionInfo {
   final DateTime? startedAt;
   final DateTime? endedAt;
   final DateTime? createdAt;
+  final int ringTimeoutSeconds;
 
   bool get isVideo => media == 'video';
   bool get isVoice => media != 'video';
@@ -73,6 +110,7 @@ class CallSessionInfo {
       startedAt: asDate(json['started_at']),
       endedAt: asDate(json['ended_at']),
       createdAt: asDate(json['created_at']),
+      ringTimeoutSeconds: asInt(json['ring_timeout_seconds'], 60),
     );
   }
 }
@@ -83,6 +121,26 @@ class CallService {
       response.statusCode,
       response.body,
       fallback: fallback,
+    );
+  }
+
+  static Future<CallIceConfig> fetchIceConfig() async {
+    final response = await http.get(
+      ApiService.uri('/calls/ice-servers'),
+      headers: await ApiService.authHeaders(),
+    );
+    if (response.statusCode == 200) {
+      return CallIceConfig.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    // Fallback STUN so calls still try to connect offline of ICE endpoint.
+    return const CallIceConfig(
+      iceServers: [
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+      ],
+      ringTimeoutSeconds: 60,
     );
   }
 

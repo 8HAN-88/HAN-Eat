@@ -27,6 +27,7 @@ import '../../miniapps/data/miniapps_service.dart';
 import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../../bots/data/bot_models.dart';
 import '../../../services/api_service.dart';
+import '../../calls/call_message_labels.dart';
 import '../../calls/presentation/call_coordinator.dart';
 
 import '../../../app/app_router.dart';
@@ -2650,6 +2651,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   String _pinnedPreview(ChatMessage msg) {
+    if (msg.type == 'call') {
+      return CallMessageLabels.preview(msg.content, mine: msg.isMine);
+    }
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'image') return '📷 Фото';
     if (msg.type == 'video') return '🎬 Видео';
@@ -6917,6 +6921,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   String _messagePreview(ChatMessage msg) {
+    if (msg.type == 'call') {
+      return CallMessageLabels.preview(msg.content, mine: msg.isMine);
+    }
     if (msg.type == 'voice') return '🎤 Голосовое';
     if (msg.type == 'gift') {
       try {
@@ -14493,6 +14500,29 @@ class _Bubble extends StatelessWidget {
     final quoteBg = mine
         ? scheme.primary.withValues(alpha: 0.12)
         : scheme.onSurface.withValues(alpha: 0.06);
+
+    if (message.type == 'call') {
+      final label = CallMessageLabels.preview(message.content, mine: mine);
+      final chip = Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: scheme.onSurface.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: scheme.onSurface.withValues(alpha: 0.85),
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+      if (!wrapWithAlign) return chip;
+      return Align(alignment: Alignment.center, child: chip);
+    }
 
     final isLockedPaid = message.isLockedPaidMedia;
     final isImage =

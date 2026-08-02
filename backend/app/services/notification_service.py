@@ -23,9 +23,15 @@ class NotificationService:
         entity_type: Optional[str] = None,
         entity_id: Optional[int] = None,
         actor_id: Optional[int] = None,
-        data: Optional[Dict[str, Any]] = None
+        data: Optional[Dict[str, Any]] = None,
+        *,
+        persist: bool = True,
     ) -> Notification:
-        """Создать уведомление"""
+        """Создать уведомление.
+
+        persist=False — только FCM (без строки в inbox), для эфемерных событий
+        вроде входящего звонка.
+        """
         notification = Notification(
             user_id=user_id,
             type=type,
@@ -36,13 +42,14 @@ class NotificationService:
             actor_id=actor_id,
             data=data or {}
         )
-        
-        self.db.add(notification)
-        # Не коммитим здесь, чтобы можно было батчить уведомления
-        
+
+        if persist:
+            self.db.add(notification)
+            # Не коммитим здесь, чтобы можно было батчить уведомления
+
         # Отправляем push-уведомление (если есть FCM токен)
         self._send_push_notification(notification)
-        
+
         return notification
     
     def notify_like(

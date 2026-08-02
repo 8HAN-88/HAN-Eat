@@ -198,7 +198,14 @@ async def _background_maintenance_loop() -> None:
             expired_invoices = expire_due_star_invoices(db)
             SubscriptionMaintenanceService(db).run()
             chat_stats = run_chat_maintenance(db)
+            from app.services.call_service import CallService
+
+            expired_calls = CallService.expire_stale_rings(db)
             db.commit()
+            for call in expired_calls:
+                CallService.publish_history_events(db, call)
+            if expired_calls:
+                logger.info("Expired %s unanswered calls", len(expired_calls))
             if published:
                 logger.info("Published %s scheduled posts", published)
             if expired_boosts:

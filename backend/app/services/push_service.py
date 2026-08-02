@@ -119,6 +119,12 @@ class PushService:
             notification_data["conversation_id"] = str(payload["conversation_id"])
         if payload.get("message_id") is not None:
             notification_data["message_id"] = str(payload["message_id"])
+        if payload.get("call_id") is not None:
+            notification_data["call_id"] = str(payload["call_id"])
+        if payload.get("media") is not None:
+            notification_data["media"] = str(payload["media"])
+        if payload.get("caller_name") is not None:
+            notification_data["caller_name"] = str(payload["caller_name"])
 
         if extra:
             notification_data.update({k: str(v) for k, v in extra.items()})
@@ -191,7 +197,11 @@ class PushService:
                         title=notification.title,
                         body=notification.body or notification.title,
                         sound="default",
-                        channel_id="han_push",
+                        channel_id=(
+                            "han_calls"
+                            if (notification.type or "").startswith("call.")
+                            else "han_push"
+                        ),
                         click_action="FLUTTER_NOTIFICATION_CLICK",  # Для Flutter
                     ),
                 ),

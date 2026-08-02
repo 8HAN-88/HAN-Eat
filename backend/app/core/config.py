@@ -278,6 +278,17 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_HOUR: int = 5000
     RATE_LIMIT_BURST: int = 20  # Кратковременные всплески
     
+    # WebRTC ICE (1:1 calls). TURN optional — without it strict NAT may fail.
+    # Comma-separated URLs, e.g. "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+    WEBRTC_STUN_URLS: str = (
+        "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+    )
+    # e.g. "turn:turn.example.com:3478,turns:turn.example.com:5349"
+    WEBRTC_TURN_URLS: str = ""
+    WEBRTC_TURN_USERNAME: str = ""
+    WEBRTC_TURN_CREDENTIAL: str = ""
+    CALL_RING_TIMEOUT_SECONDS: int = 60
+
     # Media
     MAX_IMAGE_SIZE_MB: int = 10
     # 0 = без лимита (чаты/каналы); nginx client_max_body_size — фактический потолок

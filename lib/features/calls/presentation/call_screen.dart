@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
@@ -25,13 +26,6 @@ class CallScreen extends StatefulWidget {
 }
 
 class _CallScreenState extends State<CallScreen> {
-  static const _iceServers = {
-    'iceServers': [
-      {'urls': 'stun:stun.l.google.com:19302'},
-      {'urls': 'stun:stun1.l.google.com:19302'},
-    ],
-  };
-
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   RTCPeerConnection? _pc;
@@ -46,10 +40,19 @@ class _CallScreenState extends State<CallScreen> {
   bool _remoteReady = false;
   bool _ending = false;
   bool _offerSent = false;
+  bool _iceRestartAttempted = false;
   String _status = 'Подключение...';
   DateTime? _callStartedAt;
   Timer? _ticker;
+  Timer? _ringTimer;
+  Timer? _disconnectTimer;
   late CallSessionInfo _call;
+  Map<String, dynamic> _iceServers = {
+    'iceServers': [
+      {'urls': 'stun:stun.l.google.com:19302'},
+      {'urls': 'stun:stun1.l.google.com:19302'},
+    ],
+  };
 
   bool get _isVideo => _call.isVideo;
 
@@ -57,14 +60,35 @@ class _CallScreenState extends State<CallScreen> {
   void initState() {
     super.initState();
     _call = widget.call;
+    _speakerOn = _isVideo;
     CallCoordinator.instance.attachActiveCall(_call.id);
     _sub = UserRealtimeService.instance.events.listen(_onRealtime);
+    unawaited(WakelockPlus.enable());
     unawaited(_bootstrap());
   }
 
   Future<void> _bootstrap() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
+
+    try {
+      final ice = await CallService.fetchIceConfig();
+      _iceServers = {'iceServers': ice.iceServers};
+      if (_call.isCaller && _call.isRinging) {
+        final seconds = _call.ringTimeoutSeconds > 0
+            ? _call.ringTimeoutSeconds
+            : ice.ringTimeoutSeconds;
+        _ringTimer = Timer(Duration(seconds: seconds), () async {
+          if (_ending || !_call.isRinging) return;
+          setState(() => _status = 'Нет ответа');
+          try {
+            await CallService.cancel(_call.id);
+          } catch (_) {}
+          await _cleanup(notifyServer: false);
+          if (mounted) Navigator.of(context).pop();
+        });
+      }
+    } catch (_) {}
 
     final mic = await Permission.microphone.request();
     if (!mic.isGranted) {
@@ -78,6 +102,10 @@ class _CallScreenState extends State<CallScreen> {
         return;
       }
     }
+    // Optional Bluetooth route permission (Android 12+).
+    try {
+      await Permission.bluetoothConnect.request();
+    } catch (_) {}
 
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
@@ -96,8 +124,7 @@ class _CallScreenState extends State<CallScreen> {
             : false,
       });
       _localRenderer.srcObject = _localStream;
-      await Helper.setSpeakerphoneOn(_isVideo ? true : _speakerOn);
-      _speakerOn = _isVideo ? true : _speakerOn;
+      await Helper.setSpeakerphoneOn(_speakerOn);
 
       _pc = await createPeerConnection(_iceServers);
       _pc!.onIceCandidate = (candidate) {
@@ -123,24 +150,26 @@ class _CallScreenState extends State<CallScreen> {
           _status = 'Идёт звонок';
           _callStartedAt ??= DateTime.now();
         });
-        _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-          if (mounted) setState(() {});
-        });
+        _startTicker();
       };
       _pc!.onConnectionState = (state) {
-        if (!mounted) return;
+        if (!mounted || _ending) return;
         if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+          _disconnectTimer?.cancel();
+          _disconnectTimer = null;
           setState(() {
             _status = 'Идёт звонок';
             _callStartedAt ??= DateTime.now();
           });
-          _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-            if (mounted) setState(() {});
-          });
+          _startTicker();
         } else if (state ==
                 RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-            state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+            state ==
+                RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
           setState(() => _status = 'Соединение прервано');
+          _disconnectTimer ??= Timer(const Duration(seconds: 6), () {
+            unawaited(_handleDisconnectRecovery());
+          });
         }
       };
 
@@ -156,8 +185,6 @@ class _CallScreenState extends State<CallScreen> {
             : 'Вызов...';
       });
 
-      // Caller waits for answer then creates offer.
-      // Callee already answered before opening this screen (or answers here).
       if (!_call.isCaller && _call.isRinging) {
         final answered = await CallService.answer(_call.id);
         if (!mounted) return;
@@ -166,7 +193,6 @@ class _CallScreenState extends State<CallScreen> {
           _status = 'Соединение...';
         });
       } else if (_call.isCaller) {
-        // Refresh in case answer event arrived before we subscribed.
         final fresh = await CallService.getCall(_call.id);
         if (!mounted) return;
         setState(() {
@@ -174,12 +200,50 @@ class _CallScreenState extends State<CallScreen> {
           _status = fresh.isActive ? 'Соединение...' : 'Вызов...';
         });
         if (fresh.isActive) {
+          _ringTimer?.cancel();
           await _createAndSendOffer();
         }
       }
     } catch (e) {
       await _failAndClose(userVisibleError(e, fallback: 'Не удалось начать звонок'));
     }
+  }
+
+  void _startTicker() {
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _handleDisconnectRecovery() async {
+    if (_ending || !mounted || _pc == null) return;
+    if (!_iceRestartAttempted) {
+      _iceRestartAttempted = true;
+      setState(() => _status = 'Переподключение...');
+      try {
+        await _pc!.restartIce();
+        final offer = await _pc!.createOffer({
+          'offerToReceiveAudio': 1,
+          'offerToReceiveVideo': _isVideo ? 1 : 0,
+        });
+        await _pc!.setLocalDescription(offer);
+        await CallService.signal(
+          _call.id,
+          kind: 'renegotiate',
+          payload: {
+            'sdp': offer.sdp,
+            'type': offer.type,
+          },
+        );
+        _disconnectTimer = Timer(const Duration(seconds: 8), () {
+          unawaited(_endCall());
+        });
+        return;
+      } catch (e) {
+        debugPrint('ICE restart failed: $e');
+      }
+    }
+    await _endCall();
   }
 
   Future<void> _failAndClose(String message) async {
@@ -212,6 +276,7 @@ class _CallScreenState extends State<CallScreen> {
     switch (event.event) {
       case 'call.answered':
         if (_call.isCaller && !_offerSent) {
+          _ringTimer?.cancel();
           setState(() {
             _status = 'Соединение...';
             _call = CallSessionInfo(
@@ -225,6 +290,7 @@ class _CallScreenState extends State<CallScreen> {
               peerName: _call.peerName,
               peerAvatarUrl: _call.peerAvatarUrl,
               isCaller: _call.isCaller,
+              ringTimeoutSeconds: _call.ringTimeoutSeconds,
             );
           });
           await _createAndSendOffer();
@@ -250,7 +316,7 @@ class _CallScreenState extends State<CallScreen> {
     final payload = event.signalPayload;
     if (kind == null || payload == null || _pc == null) return;
     try {
-      if (kind == 'offer') {
+      if (kind == 'offer' || kind == 'renegotiate') {
         final sdp = payload['sdp'] as String?;
         final type = payload['type'] as String? ?? 'offer';
         if (sdp == null) return;
@@ -304,34 +370,48 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _toggleMic() async {
-    final track = _localStream?.getAudioTracks().firstOrNull;
-    if (track == null) return;
+    final tracks = _localStream?.getAudioTracks() ?? const [];
+    if (tracks.isEmpty) return;
     final next = !_micMuted;
-    track.enabled = !next;
+    tracks.first.enabled = !next;
     if (!mounted) return;
     setState(() => _micMuted = next);
   }
 
   Future<void> _toggleCamera() async {
-    final track = _localStream?.getVideoTracks().firstOrNull;
-    if (track == null) return;
+    final tracks = _localStream?.getVideoTracks() ?? const [];
+    if (tracks.isEmpty) return;
     final next = !_cameraOff;
-    track.enabled = !next;
+    tracks.first.enabled = !next;
     if (!mounted) return;
     setState(() => _cameraOff = next);
   }
 
   Future<void> _switchCamera() async {
-    final track = _localStream?.getVideoTracks().firstOrNull;
-    if (track == null) return;
-    await Helper.switchCamera(track);
+    final tracks = _localStream?.getVideoTracks() ?? const [];
+    if (tracks.isEmpty) return;
+    try {
+      await Helper.switchCamera(tracks.first);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось сменить камеру'))),
+      );
+    }
   }
 
   Future<void> _toggleSpeaker() async {
     final next = !_speakerOn;
-    await Helper.setSpeakerphoneOn(next);
-    if (!mounted) return;
-    setState(() => _speakerOn = next);
+    try {
+      await Helper.setSpeakerphoneOn(next);
+      if (!mounted) return;
+      setState(() => _speakerOn = next);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось переключить звук'))),
+      );
+    }
   }
 
   Future<void> _endCall() async {
@@ -344,6 +424,8 @@ class _CallScreenState extends State<CallScreen> {
     if (_ending) return;
     _ending = true;
     _ticker?.cancel();
+    _ringTimer?.cancel();
+    _disconnectTimer?.cancel();
     await _sub?.cancel();
     _sub = null;
     if (notifyServer && !_call.isTerminal) {
@@ -365,6 +447,9 @@ class _CallScreenState extends State<CallScreen> {
     await _localRenderer.dispose();
     await _remoteRenderer.dispose();
     CallCoordinator.instance.clearActiveCall(_call.id);
+    try {
+      await WakelockPlus.disable();
+    } catch (_) {}
   }
 
   String get _durationLabel {
@@ -383,6 +468,8 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _ringTimer?.cancel();
+    _disconnectTimer?.cancel();
     _sub?.cancel();
     _sub = null;
     if (!_ending) {
@@ -400,6 +487,7 @@ class _CallScreenState extends State<CallScreen> {
       unawaited(_localRenderer.dispose());
       unawaited(_remoteRenderer.dispose());
       CallCoordinator.instance.clearActiveCall(_call.id);
+      unawaited(WakelockPlus.disable());
     }
     super.dispose();
   }
@@ -409,170 +497,170 @@ class _CallScreenState extends State<CallScreen> {
     final peerName = _call.peerName?.trim().isNotEmpty == true
         ? _call.peerName!.trim()
         : 'Собеседник';
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: _endCall,
-                  ),
-                  const Spacer(),
-                  Text(
-                    peerName,
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
-                  ),
-                  const Spacer(),
-                  const SizedBox(width: 48),
-                ],
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 48),
+                    const Spacer(),
+                    Text(
+                      peerName,
+                      style: const TextStyle(color: Colors.white, fontSize: 18),
+                    ),
+                    const Spacer(),
+                    const SizedBox(width: 48),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: _initializing
-                        ? const Center(child: CircularProgressIndicator())
-                        : _isVideo
-                            ? (_remoteReady
-                                ? RTCVideoView(
-                                    _remoteRenderer,
-                                    objectFit: RTCVideoViewObjectFit
-                                        .RTCVideoViewObjectFitCover,
-                                  )
-                                : Container(
-                                    color: Colors.grey.shade900,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      peerName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                      ),
-                                    ),
-                                  ))
-                            : Container(
-                                color: Colors.grey.shade900,
-                                alignment: Alignment.center,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 48,
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: _initializing
+                          ? const Center(child: CircularProgressIndicator())
+                          : _isVideo
+                              ? (_remoteReady
+                                  ? RTCVideoView(
+                                      _remoteRenderer,
+                                      objectFit: RTCVideoViewObjectFit
+                                          .RTCVideoViewObjectFitCover,
+                                    )
+                                  : Container(
+                                      color: Colors.grey.shade900,
+                                      alignment: Alignment.center,
                                       child: Text(
-                                        peerName.isNotEmpty
-                                            ? peerName[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(fontSize: 36),
+                                        peerName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      peerName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w700,
+                                    ))
+                              : Container(
+                                  color: Colors.grey.shade900,
+                                  alignment: Alignment.center,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 48,
+                                        child: Text(
+                                          peerName.isNotEmpty
+                                              ? peerName[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(fontSize: 36),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        peerName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                  ),
-                  if (_isVideo && !_initializing)
+                    ),
+                    if (_isVideo && !_initializing)
+                      Positioned(
+                        right: 16,
+                        top: 16,
+                        width: 110,
+                        height: 160,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: _cameraOff
+                              ? Container(color: Colors.black54)
+                              : RTCVideoView(
+                                  _localRenderer,
+                                  mirror: true,
+                                  objectFit: RTCVideoViewObjectFit
+                                      .RTCVideoViewObjectFitCover,
+                                ),
+                        ),
+                      ),
                     Positioned(
-                      right: 16,
-                      top: 16,
-                      width: 110,
-                      height: 160,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: _cameraOff
-                            ? Container(color: Colors.black54)
-                            : RTCVideoView(
-                                _localRenderer,
-                                mirror: true,
-                                objectFit: RTCVideoViewObjectFit
-                                    .RTCVideoViewObjectFitCover,
+                      left: 20,
+                      right: 20,
+                      bottom: 20,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                _status,
+                                style: const TextStyle(color: Colors.white),
                               ),
-                      ),
-                    ),
-                  Positioned(
-                    left: 20,
-                    right: 20,
-                    bottom: 20,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            Text(
-                              _status,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            const Spacer(),
-                            Text(
-                              _durationLabel,
-                              style: const TextStyle(color: Colors.white70),
-                            ),
-                          ],
+                              const Spacer(),
+                              Text(
+                                _durationLabel,
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              color: Colors.black87,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _CallButton(
-                    icon: _micMuted ? Icons.mic_off : Icons.mic,
-                    label: 'Микрофон',
-                    onPressed: _toggleMic,
-                  ),
-                  if (_isVideo)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                color: Colors.black87,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
                     _CallButton(
-                      icon: _cameraOff ? Icons.videocam_off : Icons.videocam,
-                      label: 'Видео',
-                      onPressed: _toggleCamera,
+                      icon: _micMuted ? Icons.mic_off : Icons.mic,
+                      label: 'Микрофон',
+                      onPressed: _toggleMic,
                     ),
-                  if (_isVideo)
+                    if (_isVideo)
+                      _CallButton(
+                        icon: _cameraOff ? Icons.videocam_off : Icons.videocam,
+                        label: 'Видео',
+                        onPressed: _toggleCamera,
+                      ),
+                    if (_isVideo)
+                      _CallButton(
+                        icon: Icons.cameraswitch_outlined,
+                        label: 'Камера',
+                        onPressed: _switchCamera,
+                      ),
                     _CallButton(
-                      icon: Icons.cameraswitch_outlined,
-                      label: 'Камера',
-                      onPressed: _switchCamera,
+                      icon: _speakerOn ? Icons.volume_up : Icons.hearing,
+                      label: 'Звук',
+                      onPressed: _toggleSpeaker,
                     ),
-                  _CallButton(
-                    icon: _speakerOn ? Icons.volume_up : Icons.hearing,
-                    label: 'Звук',
-                    onPressed: _toggleSpeaker,
-                  ),
-                  _CallButton(
-                    icon: Icons.call_end,
-                    label: 'Завершить',
-                    color: Colors.red,
-                    onPressed: _endCall,
-                  ),
-                ],
+                    _CallButton(
+                      icon: Icons.call_end,
+                      label: 'Завершить',
+                      color: Colors.red,
+                      onPressed: _endCall,
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
