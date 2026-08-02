@@ -76,6 +76,16 @@ class NotificationService {
     importance: Importance.high,
   );
 
+  static const AndroidNotificationChannel _callsChannel =
+      AndroidNotificationChannel(
+    'han_calls',
+    'Звонки',
+    description: 'Входящие голосовые и видеозвонки',
+    importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
+  );
+
   static void Function(Map<String, dynamic> data)? _onPushPayloadTap;
 
   /// Локальные уведомления (напоминания о еде + foreground push) на iOS/Android.
@@ -113,6 +123,7 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.createNotificationChannel(_mealChannel);
       await androidPlugin?.createNotificationChannel(_pushChannel);
+      await androidPlugin?.createNotificationChannel(_callsChannel);
       _localPluginReady = true;
     } catch (e, st) {
       debugPrint('NotificationService.init local plugin: $e\n$st');

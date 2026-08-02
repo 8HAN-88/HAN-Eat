@@ -303,6 +303,26 @@ class PushNotificationService {
           'Message also contained a notification: ${message.notification}',
         );
       }
+      final type = message.data['type']?.toString() ?? '';
+      final route = message.data['route']?.toString();
+      if (route == 'call' || type == 'call.incoming') {
+        final callId = _parseId(message.data, 'call_id', 'callId') ??
+            (message.data['entity_type']?.toString() == 'call'
+                ? _parseId(message.data, 'entity_id')
+                : null);
+        if (callId != null) {
+          unawaited(
+            CallCoordinator.instance.openIncomingFromPush(
+              callId: callId,
+              callerName: message.data['caller_name']?.toString() ??
+                  message.notification?.title ??
+                  message.data['title']?.toString(),
+              media: message.data['media']?.toString(),
+            ),
+          );
+        }
+        return;
+      }
       _maybeForegroundNotification(message);
       _refreshUnreadBadge();
       _onForegroundChatMessage(message.data);

@@ -52,9 +52,13 @@
 	<key>FirebaseCrashlyticsCollectionEnabled</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>Камера используется для сканирования блюд по фото.</string>
+	<string>Камера нужна для видеозвонков и сканирования блюд по фото.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Микрофон используется для голосового поиска рецептов.</string>
+	<string>Микрофон нужен для голосовых и видеозвонков, а также голосового поиска рецептов.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth нужен, чтобы подключать наушники во время звонков.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Bluetooth нужен, чтобы подключать наушники во время звонков.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Геолокация нужна, чтобы отправить ваше местоположение в чат.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -88,6 +92,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

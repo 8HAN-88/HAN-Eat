@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user_required
 from app.core.database import get_db
 from app.models.user import User
-from app.services.call_service import CallService
+from app.services.call_service import CallService, ring_timeout_seconds
 
 router = APIRouter(prefix="/calls", tags=["Calls"])
 
@@ -24,6 +24,11 @@ class CreateCallRequest(BaseModel):
 class CallSignalRequest(BaseModel):
     kind: str = Field(..., min_length=1, max_length=32)
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class IceServersResponse(BaseModel):
+    ice_servers: list[dict[str, Any]]
+    ring_timeout_seconds: int
 
 
 class CallItem(BaseModel):
@@ -40,6 +45,7 @@ class CallItem(BaseModel):
     peer_name: Optional[str] = None
     peer_avatar_url: Optional[str] = None
     is_caller: bool = False
+    ring_timeout_seconds: int = 60
 
     class Config:
         from_attributes = True
@@ -62,6 +68,21 @@ def _call_item(db: Session, call, viewer_id: int) -> CallItem:
         peer_name=peer.name if peer else None,
         peer_avatar_url=getattr(peer, "avatar_url", None) if peer else None,
         is_caller=viewer_id == call.caller_id,
+        ring_timeout_seconds=ring_timeout_seconds(),
+    )
+
+
+def _after_terminal(db: Session, call) -> None:
+    CallService.publish_history_events(db, call)
+
+
+@router.get("/ice-servers", response_model=IceServersResponse)
+async def get_ice_servers(
+    current_user: User = Depends(get_current_user_required),
+):
+    return IceServersResponse(
+        ice_servers=CallService.ice_servers(),
+        ring_timeout_seconds=ring_timeout_seconds(),
     )
 
 
@@ -79,6 +100,8 @@ async def create_call(
     )
     db.commit()
     db.refresh(call)
+    # Notify only after commit so callee GET /calls/{id} cannot 404.
+    service.notify_incoming(call)
     return _call_item(db, call, current_user.id)
 
 
@@ -91,6 +114,7 @@ async def get_call(
     service = CallService(db)
     call = service.get_call_for_user(current_user.id, call_id)
     db.commit()
+    _after_terminal(db, call)
     return _call_item(db, call, current_user.id)
 
 
@@ -104,6 +128,7 @@ async def answer_call(
     call = service.answer_call(current_user.id, call_id)
     db.commit()
     db.refresh(call)
+    _after_terminal(db, call)
     return _call_item(db, call, current_user.id)
 
 
@@ -117,6 +142,7 @@ async def reject_call(
     call = service.reject_call(current_user.id, call_id)
     db.commit()
     db.refresh(call)
+    _after_terminal(db, call)
     return _call_item(db, call, current_user.id)
 
 
@@ -130,6 +156,7 @@ async def cancel_call(
     call = service.cancel_call(current_user.id, call_id)
     db.commit()
     db.refresh(call)
+    _after_terminal(db, call)
     return _call_item(db, call, current_user.id)
 
 
@@ -143,6 +170,7 @@ async def end_call(
     call = service.end_call(current_user.id, call_id)
     db.commit()
     db.refresh(call)
+    _after_terminal(db, call)
     return _call_item(db, call, current_user.id)
 
 

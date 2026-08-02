@@ -1,5 +1,6 @@
 """Tests for 1:1 WebRTC call lifecycle."""
 import pytest
+from datetime import datetime, timedelta
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -11,11 +12,11 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from app.core.database import Base
 from app.models.call import CallSession
-from app.models.conversation import Conversation, ConversationMember
+from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.models.notification import Notification
-from app.services.call_service import CallService
+from app.services.call_service import CallService, ring_timeout_seconds
 
 
 @pytest.fixture()
@@ -31,6 +32,7 @@ def db_session():
             User.__table__,
             Conversation.__table__,
             ConversationMember.__table__,
+            Message.__table__,
             CallSession.__table__,
             UserBlock.__table__,
             Notification.__table__,
@@ -77,6 +79,7 @@ def test_create_answer_end_call(db_session):
     svc = CallService(db_session)
     call = svc.create_call(1, conversation_id=conv.id, media="voice")
     db_session.commit()
+    svc.notify_incoming(call)
     assert call.status == "ringing"
     assert call.caller_id == 1
     assert call.callee_id == 2
@@ -90,6 +93,13 @@ def test_create_answer_end_call(db_session):
     db_session.commit()
     assert ended.status == "ended"
     assert ended.ended_by_user_id == 1
+    note = (
+        db_session.query(Message)
+        .filter(Message.conversation_id == conv.id, Message.type == "call")
+        .first()
+    )
+    assert note is not None
+    assert '"status": "ended"' in note.content
 
 
 def test_reject_and_busy(db_session):
@@ -106,6 +116,12 @@ def test_reject_and_busy(db_session):
     rejected = svc.reject_call(2, call.id)
     db_session.commit()
     assert rejected.status == "rejected"
+    assert (
+        db_session.query(Message)
+        .filter(Message.conversation_id == conv12.id, Message.type == "call")
+        .count()
+        == 1
+    )
 
     active = svc.create_call(1, conversation_id=conv12.id, media="voice")
     db_session.commit()
@@ -145,3 +161,34 @@ def test_signal_relay_requires_participant(db_session):
             payload={"candidate": "x"},
         )
     assert forbidden.value.status_code == 403
+
+
+def test_expire_stale_rings_marks_missed(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    conv = _direct(db_session, 1, 2)
+    db_session.commit()
+    svc = CallService(db_session)
+    call = svc.create_call(1, conversation_id=conv.id, media="voice")
+    db_session.commit()
+    call.created_at = datetime.utcnow() - timedelta(seconds=ring_timeout_seconds() + 5)
+    db_session.commit()
+
+    expired = CallService.expire_stale_rings(db_session)
+    db_session.commit()
+    assert len(expired) == 1
+    db_session.refresh(call)
+    assert call.status == "missed"
+    note = (
+        db_session.query(Message)
+        .filter(Message.conversation_id == conv.id, Message.type == "call")
+        .first()
+    )
+    assert note is not None
+    assert '"status": "missed"' in note.content
+
+
+def test_ice_servers_include_stun(db_session):
+    servers = CallService.ice_servers()
+    assert isinstance(servers, list)
+    assert any("stun" in str(s.get("urls", "")).lower() for s in servers)

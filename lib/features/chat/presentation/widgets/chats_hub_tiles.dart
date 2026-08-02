@@ -7,6 +7,7 @@ import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
+import '../../../calls/call_message_labels.dart';
 import 'chat_contact_bubble.dart';
 import 'chat_location_bubble.dart';
 import 'chat_mute_duration_sheet.dart';
@@ -547,6 +548,9 @@ String chatHubAvatarLetter(String value) {
 String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg == null) {
     return isSaved ? 'Сохраняйте сообщения и заметки' : 'Нет сообщений';
+  }
+  if (msg.type == 'call') {
+    return CallMessageLabels.preview(msg.content, mine: msg.isMine);
   }
   if (msg.type == 'voice') return 'Голосовое сообщение';
   if (msg.type == 'poll') {

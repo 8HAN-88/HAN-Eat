@@ -2979,6 +2979,25 @@ class ChatService:
             preview = "🧩 Стикер"
         elif msg_type == "location":
             preview = "📍 Геопозиция"
+        elif msg_type == "call":
+            preview = "📞 Звонок"
+            try:
+                import json as _json
+
+                data = _json.loads(content or "{}")
+                status = (data.get("status") or "").strip()
+                media = (data.get("media") or "voice").strip()
+                is_video = media == "video"
+                if status == "missed":
+                    preview = "📞 Пропущенный видеозвонок" if is_video else "📞 Пропущенный звонок"
+                elif status == "rejected":
+                    preview = "📹 Видеозвонок · отклонён" if is_video else "📞 Звонок · отклонён"
+                elif status == "cancelled":
+                    preview = "📹 Видеозвонок · отменён" if is_video else "📞 Звонок · отменён"
+                elif status == "ended":
+                    preview = "📹 Видеозвонок" if is_video else "📞 Звонок"
+            except Exception:
+                pass
         elif msg_type == "poll":
             from app.services.chat_poll_service import poll_preview_text
 

@@ -8,6 +8,7 @@ import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import 'call_screen.dart';
+import 'incoming_call_screen.dart';
 
 /// Global listener for incoming 1:1 calls (SSE + push).
 class CallCoordinator {
@@ -93,6 +94,7 @@ class CallCoordinator {
         peerName: event.fromName,
         peerAvatarUrl: event.fromAvatarUrl,
         isCaller: false,
+        ringTimeoutSeconds: 60,
       );
       await _showIncoming(call);
       return;
@@ -103,8 +105,7 @@ class CallCoordinator {
       if (_incomingDialogCallId != null &&
           event.callId == _incomingDialogCallId) {
         final ctx = hanEatRootNavigatorKey.currentContext;
-        if (ctx != null && Navigator.of(ctx).canPop()) {
-          // Close incoming dialog if still open.
+        if (ctx != null && Navigator.of(ctx, rootNavigator: true).canPop()) {
           Navigator.of(ctx, rootNavigator: true).pop();
         }
         _incomingDialogCallId = null;
@@ -116,29 +117,16 @@ class CallCoordinator {
     final ctx = hanEatRootNavigatorKey.currentContext;
     if (ctx == null) return;
     if (_incomingDialogCallId == call.id) return;
+    if (_activeCallId != null) return;
     _incomingDialogCallId = call.id;
-    final peerName = call.peerName?.trim().isNotEmpty == true
-        ? call.peerName!.trim()
-        : 'Входящий звонок';
-    final accepted = await showDialog<bool>(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          title: Text(call.isVideo ? 'Видеозвонок' : 'Звонок'),
-          content: Text('$peerName звонит вам'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx, false),
-              child: const Text('Отклонить'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogCtx, true),
-              child: const Text('Ответить'),
-            ),
-          ],
-        );
-      },
+    final timeout = Duration(
+      seconds: call.ringTimeoutSeconds > 0 ? call.ringTimeoutSeconds : 60,
+    );
+    final accepted = await Navigator.of(ctx, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => IncomingCallScreen(call: call, timeout: timeout),
+        fullscreenDialog: true,
+      ),
     );
     _incomingDialogCallId = null;
     if (accepted == true) {
@@ -146,7 +134,7 @@ class CallCoordinator {
         final answered = await CallService.answer(call.id);
         final navCtx = hanEatRootNavigatorKey.currentContext;
         if (navCtx == null) return;
-        await Navigator.of(navCtx).push(
+        await Navigator.of(navCtx, rootNavigator: true).push(
           MaterialPageRoute(
             builder: (_) => CallScreen(
               call: answered,
@@ -168,5 +156,6 @@ class CallCoordinator {
         await CallService.reject(call.id);
       } catch (_) {}
     }
+    // null = timeout / remote cancel — server marks missed.
   }
 }
