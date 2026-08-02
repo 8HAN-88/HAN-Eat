@@ -93,20 +93,32 @@ class BotInlineButton {
   final String? callbackData;
   final String? url;
   final String? callbackText;
+  final int? miniAppId;
 
   const BotInlineButton({
     required this.text,
     this.callbackData,
     this.url,
     this.callbackText,
+    this.miniAppId,
   });
 
-  factory BotInlineButton.fromJson(Map<String, dynamic> json) => BotInlineButton(
-        text: json['text'] as String? ?? '',
-        callbackData: json['callback_data'] as String?,
-        url: json['url'] as String?,
-        callbackText: json['callback_text'] as String?,
-      );
+  factory BotInlineButton.fromJson(Map<String, dynamic> json) {
+    int? miniAppId = (json['miniapp_id'] as num?)?.toInt();
+    final webApp = json['web_app'];
+    if (miniAppId == null && webApp is Map) {
+      final raw = webApp['miniapp_id'] ?? webApp['id'];
+      if (raw is num) miniAppId = raw.toInt();
+      if (raw is String) miniAppId = int.tryParse(raw);
+    }
+    return BotInlineButton(
+      text: json['text'] as String? ?? '',
+      callbackData: json['callback_data'] as String?,
+      url: json['url'] as String?,
+      callbackText: json['callback_text'] as String?,
+      miniAppId: miniAppId,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'text': text,
@@ -115,6 +127,10 @@ class BotInlineButton {
         if (url != null && url!.trim().isNotEmpty) 'url': url!.trim(),
         if (callbackText != null && callbackText!.trim().isNotEmpty)
           'callback_text': callbackText!.trim(),
+        if (miniAppId != null && miniAppId! > 0) ...{
+          'miniapp_id': miniAppId,
+          'web_app': {'miniapp_id': miniAppId},
+        },
       };
 }
 

@@ -172,19 +172,31 @@ class ChatInlineKeyboardButton {
     this.callbackData,
     this.url,
     this.callbackText,
+    this.miniAppId,
   });
 
   final String text;
   final String? callbackData;
   final String? url;
   final String? callbackText;
+  final int? miniAppId;
+
+  bool get isWebApp => miniAppId != null && miniAppId! > 0;
 
   factory ChatInlineKeyboardButton.fromJson(Map<String, dynamic> json) {
+    int? miniAppId = (json['miniapp_id'] as num?)?.toInt();
+    final webApp = json['web_app'];
+    if (miniAppId == null && webApp is Map) {
+      final raw = webApp['miniapp_id'] ?? webApp['id'];
+      if (raw is num) miniAppId = raw.toInt();
+      if (raw is String) miniAppId = int.tryParse(raw);
+    }
     return ChatInlineKeyboardButton(
       text: json['text'] as String? ?? '',
       callbackData: json['callback_data'] as String?,
       url: json['url'] as String?,
       callbackText: json['callback_text'] as String?,
+      miniAppId: miniAppId,
     );
   }
 }

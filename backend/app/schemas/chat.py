@@ -286,6 +286,8 @@ class InlineKeyboardButton(BaseModel):
     callback_data: Optional[str] = Field(default=None, max_length=128)
     url: Optional[str] = Field(default=None, max_length=512)
     callback_text: Optional[str] = Field(default=None, max_length=300)
+    miniapp_id: Optional[int] = Field(default=None, gt=0)
+    web_app: Optional[dict] = None
 
 
 class CallbackQueryRequest(BaseModel):

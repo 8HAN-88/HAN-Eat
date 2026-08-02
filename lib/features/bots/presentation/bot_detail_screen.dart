@@ -1212,6 +1212,7 @@ class _BotMiniAppsScreenState extends State<_BotMiniAppsScreen> {
             url: launch.url,
             initData: launch.initData,
             initDataUnsafe: launch.initDataUnsafe,
+            miniAppId: app.id,
           ),
         ),
       );
@@ -1886,7 +1887,8 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
               controller: _buttonsController,
               decoration: const InputDecoration(
                 labelText: 'Inline-кнопки (строки через пустую строку)',
-                hintText: 'Текст|cb_data|Ответ\nТекст|url:https://site',
+                hintText:
+                    'Текст|cb_data|Ответ\nТекст|url:https://site\nТекст|web_app:123',
               ),
               minLines: 2,
               maxLines: 8,
@@ -1965,7 +1967,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
       final parts = line.split('|');
       if (parts.length < 2) {
         errors.add(
-          'Строка ${i + 1}: формат Текст|cb_data или Текст|url:https://...',
+          'Строка ${i + 1}: формат Текст|cb_data, Текст|url:https://... или Текст|web_app:ID',
         );
         continue;
       }
@@ -1989,6 +1991,17 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
           continue;
         }
         btn = BotInlineButton(text: text, url: url);
+      } else if (action.startsWith('web_app:') ||
+          action.startsWith('miniapp:')) {
+        final rawId = action.contains(':')
+            ? action.substring(action.indexOf(':') + 1).trim()
+            : '';
+        final miniAppId = int.tryParse(rawId);
+        if (miniAppId == null || miniAppId <= 0) {
+          errors.add('Строка ${i + 1}: укажите ID мини-приложения (web_app:123)');
+          continue;
+        }
+        btn = BotInlineButton(text: text, miniAppId: miniAppId);
       } else if (action.startsWith('http://') ||
           action.startsWith('https://')) {
         if (!_isValidButtonUrl(action)) {
@@ -2039,6 +2052,10 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
     final out = <String>[];
     for (final row in rows) {
       for (final btn in row) {
+        if (btn.miniAppId != null && btn.miniAppId! > 0) {
+          out.add('${btn.text}|web_app:${btn.miniAppId}');
+          continue;
+        }
         if (btn.url != null && btn.url!.trim().isNotEmpty) {
           out.add('${btn.text}|url:${btn.url}');
           continue;

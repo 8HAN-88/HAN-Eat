@@ -73,6 +73,42 @@ class BotInlineButton(BaseModel):
     callback_data: Optional[str] = Field(None, max_length=128)
     url: Optional[str] = Field(None, max_length=512)
     callback_text: Optional[str] = Field(None, max_length=300)
+    # Telegram WebApp button: open mini app by id (or nested {"url": "..."}).
+    web_app: Optional[dict] = None
+    miniapp_id: Optional[int] = Field(None, gt=0)
+
+
+def _button_item_from_inline(btn: BotInlineButton) -> dict:
+    item: dict = {"text": btn.text.strip()[:64]}
+    if btn.callback_data and btn.callback_data.strip():
+        item["callback_data"] = btn.callback_data.strip()[:128]
+    if btn.url and btn.url.strip():
+        item["url"] = btn.url.strip()[:512]
+    if btn.callback_text and btn.callback_text.strip():
+        item["callback_text"] = btn.callback_text.strip()[:300]
+    miniapp_id = btn.miniapp_id
+    if miniapp_id is None and isinstance(btn.web_app, dict):
+        raw_id = btn.web_app.get("miniapp_id") or btn.web_app.get("id")
+        try:
+            miniapp_id = int(raw_id) if raw_id is not None else None
+        except Exception:
+            miniapp_id = None
+        web_url = btn.web_app.get("url")
+        if isinstance(web_url, str) and web_url.strip() and "url" not in item:
+            item["url"] = web_url.strip()[:512]
+    if miniapp_id is not None and int(miniapp_id) > 0:
+        item["miniapp_id"] = int(miniapp_id)
+        item["web_app"] = {"miniapp_id": int(miniapp_id)}
+    if (
+        "callback_data" not in item
+        and "url" not in item
+        and "miniapp_id" not in item
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Each inline button requires callback_data, url, or web_app/miniapp_id",
+        )
+    return item
 
 
 def _normalize_inline_buttons(
@@ -84,39 +120,13 @@ def _normalize_inline_buttons(
         for row_buttons in rows:
             row: List[dict] = []
             for btn in row_buttons:
-                item = {"text": btn.text.strip()[:64]}
-                if btn.callback_data and btn.callback_data.strip():
-                    item["callback_data"] = btn.callback_data.strip()[:128]
-                if btn.url and btn.url.strip():
-                    item["url"] = btn.url.strip()[:512]
-                if btn.callback_text and btn.callback_text.strip():
-                    item["callback_text"] = btn.callback_text.strip()[:300]
-                if "callback_data" not in item and "url" not in item:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Each inline button requires callback_data or url",
-                    )
-                row.append(item)
+                row.append(_button_item_from_inline(btn))
             if row:
                 normalized_rows.append(row)
         return normalized_rows or None
     if not buttons:
         return None
-    row = []
-    for btn in buttons:
-        item = {"text": btn.text.strip()[:64]}
-        if btn.callback_data and btn.callback_data.strip():
-            item["callback_data"] = btn.callback_data.strip()[:128]
-        if btn.url and btn.url.strip():
-            item["url"] = btn.url.strip()[:512]
-        if btn.callback_text and btn.callback_text.strip():
-            item["callback_text"] = btn.callback_text.strip()[:300]
-        if "callback_data" not in item and "url" not in item:
-            raise HTTPException(
-                status_code=400,
-                detail="Each inline button requires callback_data or url",
-            )
-        row.append(item)
+    row = [_button_item_from_inline(btn) for btn in buttons]
     return [row] if row else None
 
 

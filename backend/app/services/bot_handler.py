@@ -52,6 +52,8 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
             callback_data = btn.get("callback_data")
             url = btn.get("url")
             callback_text = btn.get("callback_text")
+            miniapp_id = btn.get("miniapp_id")
+            web_app = btn.get("web_app")
             clean: Dict[str, Any] = {"text": text}
             if isinstance(callback_data, str) and callback_data.strip():
                 clean["callback_data"] = callback_data.strip()[:128]
@@ -59,7 +61,27 @@ def _normalize_inline_buttons(raw: Any) -> Optional[List[List[Dict[str, Any]]]]:
                 clean["url"] = url.strip()[:512]
             if isinstance(callback_text, str) and callback_text.strip():
                 clean["callback_text"] = callback_text.strip()[:300]
-            if "callback_data" not in clean and "url" not in clean:
+            if miniapp_id is None and isinstance(web_app, dict):
+                raw_id = web_app.get("miniapp_id") or web_app.get("id")
+                try:
+                    miniapp_id = int(raw_id) if raw_id is not None else None
+                except Exception:
+                    miniapp_id = None
+                web_url = web_app.get("url")
+                if isinstance(web_url, str) and web_url.strip() and "url" not in clean:
+                    clean["url"] = web_url.strip()[:512]
+            try:
+                miniapp_id_int = int(miniapp_id) if miniapp_id is not None else None
+            except Exception:
+                miniapp_id_int = None
+            if miniapp_id_int is not None and miniapp_id_int > 0:
+                clean["miniapp_id"] = miniapp_id_int
+                clean["web_app"] = {"miniapp_id": miniapp_id_int}
+            if (
+                "callback_data" not in clean
+                and "url" not in clean
+                and "miniapp_id" not in clean
+            ):
                 continue
             out_row.append(clean)
         if out_row:
