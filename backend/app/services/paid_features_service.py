@@ -933,6 +933,7 @@ class PaidFeaturesService:
         gift = (
             self.db.query(StarGift)
             .filter(StarGift.id == gift_id, StarGift.is_active.is_(True))
+            .with_for_update()
             .first()
         )
         if not gift:
@@ -981,6 +982,21 @@ class PaidFeaturesService:
                 detail="Gift recipient not found",
             )
 
+        is_collectible = bool(getattr(gift, "is_limited", False))
+        serial = None
+        if is_collectible:
+            sold = int(getattr(gift, "sold_count", 0) or 0)
+            supply = getattr(gift, "total_supply", None)
+            if supply is not None and sold >= int(supply):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "GIFT_SOLD_OUT",
+                        "message": "Лимитированный подарок распродан",
+                    },
+                )
+            serial = sold + 1
+
         # Fail fast before creating a gift message.
         if self.star_balance(sender_id) < int(gift.stars):
             raise HTTPException(
@@ -1010,9 +1026,17 @@ class PaidFeaturesService:
             reference_id=msg.id,
             counterparty_user_id=recipient_id,
             idempotency_key=idem or f"gift:msg:{msg.id}",
-            meta={"gift_id": gift.id, "slug": gift.slug},
+            meta={
+                "gift_id": gift.id,
+                "slug": gift.slug,
+                "is_collectible": is_collectible,
+                "serial": serial,
+            },
         )
-        # Telegram-like: Stars sit in the gift until the recipient converts.
+        if is_collectible:
+            gift.sold_count = int(gift.sold_count or 0) + 1
+        # Telegram-like: Stars sit in the gift until the recipient converts
+        # (collectibles cannot be converted — kept as unique items).
         owned = UserStarGift(
             owner_id=recipient_id,
             sender_id=sender_id,
@@ -1023,8 +1047,10 @@ class PaidFeaturesService:
             title=gift.title,
             emoji=gift.emoji,
             note=note or None,
-            status="held",
+            status="kept" if is_collectible else "held",
             is_displayed=True,
+            is_collectible=is_collectible,
+            serial=serial,
         )
         self.db.add(owned)
         self.db.flush()
@@ -1037,7 +1063,10 @@ class PaidFeaturesService:
                 "emoji": gift.emoji,
                 "stars": gift.stars,
                 "message": note or None,
-                "status": "held",
+                "status": owned.status,
+                "is_collectible": is_collectible,
+                "serial": serial,
+                "total_supply": getattr(gift, "total_supply", None),
             },
             ensure_ascii=False,
         )
@@ -1079,6 +1108,11 @@ class PaidFeaturesService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
         if gift.status == "converted":
             return gift
+        if bool(getattr(gift, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Collectible gifts cannot be converted to Stars",
+            )
         if gift.status not in ("held", "kept"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be converted"
@@ -1125,6 +1159,160 @@ class PaidFeaturesService:
         self.db.flush()
         return gift
 
+    def upgrade_user_star_gift(self, owner_id: int, user_gift_id: int) -> UserStarGift:
+        """Pay upgrade_stars to turn a regular gift into a numbered collectible."""
+        owned = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not owned:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if owned.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be upgraded"
+            )
+        if bool(getattr(owned, "is_collectible", False)):
+            return owned
+        if not owned.gift_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift catalog entry missing"
+            )
+        catalog = (
+            self.db.query(StarGift)
+            .filter(StarGift.id == owned.gift_id)
+            .with_for_update()
+            .first()
+        )
+        if not catalog:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        fee = int(getattr(catalog, "upgrade_stars", 0) or 0)
+        if fee <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This gift cannot be upgraded",
+            )
+        supply = getattr(catalog, "total_supply", None)
+        sold = int(getattr(catalog, "sold_count", 0) or 0)
+        # If catalog becomes limited via upgrade pool, enforce supply when set.
+        if supply is not None and sold >= int(supply):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "GIFT_SOLD_OUT",
+                    "message": "Лимит коллекционных экземпляров исчерпан",
+                },
+            )
+        self._spend_stars(
+            owner_id,
+            fee,
+            tx_type="gift_upgrade",
+            reference_type="user_gift",
+            reference_id=owned.id,
+            counterparty_user_id=None,
+            idempotency_key=f"gift_upgrade:{owned.id}",
+            meta={"gift_id": catalog.id, "slug": catalog.slug},
+        )
+        serial = sold + 1
+        catalog.sold_count = sold + 1
+        if not bool(getattr(catalog, "is_limited", False)):
+            catalog.is_limited = True
+        owned.is_collectible = True
+        owned.serial = serial
+        owned.status = "kept"
+        owned.is_displayed = True
+        self._patch_gift_message_status(
+            owned,
+            status="kept",
+            extra={"is_collectible": True, "serial": serial},
+        )
+        self.db.flush()
+        return owned
+
+    def transfer_user_star_gift(
+        self,
+        owner_id: int,
+        user_gift_id: int,
+        *,
+        to_user_id: int,
+    ) -> UserStarGift:
+        """Transfer a held/kept gift (Telegram collectible transfer)."""
+        if owner_id == to_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot transfer to yourself"
+            )
+        recipient = (
+            self.db.query(User)
+            .filter(User.id == to_user_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not recipient:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        owned = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not owned:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if owned.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be transferred"
+            )
+        fee = 0
+        if owned.gift_id:
+            catalog = self.db.query(StarGift).filter(StarGift.id == owned.gift_id).first()
+            if catalog is not None:
+                fee = int(getattr(catalog, "transfer_stars", 0) or 0)
+        if fee <= 0 and bool(getattr(owned, "is_collectible", False)):
+            fee = max(25, int(owned.stars) // 10)
+        if fee > 0:
+            import secrets
+
+            # Unique key per transfer attempt: ownership moves after success,
+            # so a retry from the old owner 404s; avoid reusable keys that
+            # would skip the fee on A→B→A→B loops.
+            self._spend_stars(
+                owner_id,
+                fee,
+                tx_type="gift_transfer_fee",
+                reference_type="user_gift",
+                reference_id=owned.id,
+                counterparty_user_id=to_user_id,
+                idempotency_key=(
+                    f"gift_transfer_fee:{owned.id}:{owner_id}:{to_user_id}:"
+                    f"{secrets.token_hex(8)}"
+                ),
+                meta={"to_user_id": to_user_id, "serial": owned.serial},
+            )
+        owned.transferred_from_user_id = owner_id
+        owned.owner_id = to_user_id
+        owned.status = "kept"
+        owned.is_displayed = True
+        self.db.flush()
+        return owned
+
+    def cancel_star_invoice(self, actor_user_id: int, invoice_id: int) -> StarInvoice:
+        invoice = (
+            self.db.query(StarInvoice)
+            .filter(StarInvoice.id == invoice_id)
+            .with_for_update()
+            .first()
+        )
+        if not invoice:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        if invoice.creator_user_id != actor_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not invoice owner")
+        if invoice.status != "pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invoice is not pending"
+            )
+        invoice.status = "cancelled"
+        self.db.flush()
+        return invoice
+
     def set_user_star_gift_displayed(
         self, owner_id: int, user_gift_id: int, *, displayed: bool
     ) -> UserStarGift:
@@ -1147,7 +1335,13 @@ class PaidFeaturesService:
         self.db.flush()
         return gift
 
-    def _patch_gift_message_status(self, gift: UserStarGift, *, status: str) -> None:
+    def _patch_gift_message_status(
+        self,
+        gift: UserStarGift,
+        *,
+        status: str,
+        extra: Optional[dict] = None,
+    ) -> None:
         if not gift.message_id:
             return
         import json as _json
@@ -1163,6 +1357,8 @@ class PaidFeaturesService:
             payload = {}
         payload["status"] = status
         payload["user_gift_id"] = gift.id
+        if extra:
+            payload.update(extra)
         msg.content = _json.dumps(payload, ensure_ascii=False)
 
     def pay_for_reaction(

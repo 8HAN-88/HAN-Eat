@@ -89,45 +89,65 @@ class _StarGiftPickerSheetState extends State<_StarGiftPickerSheet> {
                   ),
                   itemBuilder: (context, index) {
                     final gift = gifts[index];
-                    return Material(
-                      color: scheme.surfaceContainerHighest.withValues(
-                        alpha: 0.55,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
+                    final soldOut = gift.isSoldOut;
+                    return Opacity(
+                      opacity: soldOut ? 0.45 : 1,
+                      child: Material(
+                        color: scheme.surfaceContainerHighest.withValues(
+                          alpha: 0.55,
+                        ),
                         borderRadius: BorderRadius.circular(16),
-                        onTap: () => Navigator.pop(context, gift),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                gift.emoji,
-                                style: const TextStyle(fontSize: 32),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                gift.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelLarge
-                                    ?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${gift.stars} ★',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      color: scheme.secondary,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                            ],
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: soldOut
+                              ? null
+                              : () => Navigator.pop(context, gift),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  gift.emoji,
+                                  style: const TextStyle(fontSize: 32),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  gift.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  soldOut
+                                      ? 'Sold out'
+                                      : gift.isLimited && gift.remaining != null
+                                          ? '${gift.stars} ★ · ${gift.remaining}'
+                                          : '${gift.stars} ★',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(
+                                        color: scheme.secondary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                if (gift.isLimited && !soldOut)
+                                  Text(
+                                    'limited',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

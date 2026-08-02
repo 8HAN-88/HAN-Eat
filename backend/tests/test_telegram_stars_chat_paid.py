@@ -330,6 +330,101 @@ def test_keep_star_gift_shows_on_profile(db_session):
     assert svc.star_balance(2) == 0
 
 
+def _direct_conv(db, a: int, b: int) -> Conversation:
+    low, high = (a, b) if a < b else (b, a)
+    conv = Conversation(type="direct", direct_user_low_id=low, direct_user_high_id=high)
+    db.add(conv)
+    db.flush()
+    db.add(ConversationMember(conversation_id=conv.id, user_id=a))
+    db.add(ConversationMember(conversation_id=conv.id, user_id=b))
+    db.flush()
+    return conv
+
+
+def test_limited_gift_serial_sold_out_and_no_convert(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    _credit(db_session, 1, 500)
+    catalog = StarGift(
+        slug="lonestar",
+        title="Одинокая звезда",
+        emoji="🌟",
+        stars=100,
+        is_active=True,
+        sort_order=1,
+        is_limited=True,
+        total_supply=1,
+        sold_count=0,
+        transfer_stars=25,
+    )
+    db_session.add(catalog)
+    conv12 = _direct_conv(db_session, 1, 2)
+    conv13 = _direct_conv(db_session, 1, 3)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    msg = svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv12.id)
+    db_session.commit()
+    assert '"is_collectible": true' in msg.content or '"is_collectible":true' in msg.content
+    owned = svc.list_user_star_gifts(2)[0]
+    assert owned.is_collectible is True
+    assert owned.serial == 1
+    assert owned.status == "kept"
+    assert catalog.sold_count == 1
+
+    with pytest.raises(HTTPException) as sold_out:
+        svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv13.id)
+    assert sold_out.value.status_code == 409
+
+    with pytest.raises(HTTPException) as no_convert:
+        svc.convert_user_star_gift(2, owned.id)
+    assert no_convert.value.status_code == 400
+    assert svc.star_balance(2) == 0
+
+
+def test_upgrade_and_transfer_gift_fee(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    _credit(db_session, 1, 200)
+    _credit(db_session, 2, 100)
+    catalog = StarGift(
+        slug="diamond",
+        title="Алмаз",
+        emoji="💎",
+        stars=50,
+        is_active=True,
+        sort_order=1,
+        upgrade_stars=40,
+        transfer_stars=15,
+    )
+    db_session.add(catalog)
+    conv = _direct_conv(db_session, 1, 2)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv.id)
+    owned = svc.list_user_star_gifts(2)[0]
+    assert owned.is_collectible is False
+
+    upgraded = svc.upgrade_user_star_gift(2, owned.id)
+    db_session.commit()
+    assert upgraded.is_collectible is True
+    assert upgraded.serial == 1
+    assert upgraded.status == "kept"
+    assert svc.star_balance(2) == 60  # 100 - 40 upgrade
+
+    transferred = svc.transfer_user_star_gift(2, upgraded.id, to_user_id=3)
+    db_session.commit()
+    assert transferred.owner_id == 3
+    assert transferred.transferred_from_user_id == 2
+    assert transferred.serial == 1
+    assert svc.star_balance(2) == 45  # 60 - 15 transfer fee
+    assert svc.list_user_star_gifts(2) == []
+    assert svc.list_user_star_gifts(3)[0].id == transferred.id
+
+
 def test_pay_for_reaction_idempotent(db_session):
     _user(db_session, 1)
     _user(db_session, 2)

@@ -642,10 +642,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           children: [
                             for (final g in _profileGifts.take(12))
                               Tooltip(
-                                message: '${g.title} · ${g.stars} ★',
-                                child: Text(
-                                  g.emoji,
-                                  style: const TextStyle(fontSize: 22),
+                                message: g.serialLabel.isNotEmpty
+                                    ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
+                                    : '${g.title} · ${g.stars} ★',
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      g.emoji,
+                                      style: const TextStyle(fontSize: 22),
+                                    ),
+                                    if (g.serial != null)
+                                      Text(
+                                        '#${g.serial}',
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             if (_profileGifts.length > 12)

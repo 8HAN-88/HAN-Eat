@@ -396,6 +396,36 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось обновить отображение подарка');
   }
 
+  static Future<ConvertGiftResult> upgradeGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/upgrade'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return ConvertGiftResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось улучшить подарок');
+  }
+
+  static Future<UserStarGift> transferGift(
+    int userGiftId, {
+    required int toUserId,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/transfer'),
+      headers: await _headers(),
+      body: jsonEncode({'to_user_id': toUserId}),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось передать подарок');
+  }
+
   static Future<List<StarGiveaway>> listChannelGiveaways(
     int channelId, {
     bool activeOnly = false,
@@ -533,6 +563,19 @@ class PaidFeaturesService {
       );
     }
     _throwForResponse(response, 'Не удалось оплатить счёт');
+  }
+
+  static Future<StarInvoice> cancelInvoice(int invoiceId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/invoices/$invoiceId/cancel'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarInvoice.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось отменить счёт');
   }
 
   static Never _throwForResponse(http.Response response, String fallback) {
@@ -699,6 +742,12 @@ class StarGift {
     required this.title,
     required this.emoji,
     required this.stars,
+    this.isLimited = false,
+    this.totalSupply,
+    this.soldCount = 0,
+    this.remaining,
+    this.upgradeStars = 0,
+    this.transferStars = 0,
   });
 
   final int id;
@@ -706,6 +755,15 @@ class StarGift {
   final String title;
   final String emoji;
   final int stars;
+  final bool isLimited;
+  final int? totalSupply;
+  final int soldCount;
+  final int? remaining;
+  final int upgradeStars;
+  final int transferStars;
+
+  bool get isSoldOut =>
+      isLimited && remaining != null && remaining! <= 0;
 
   factory StarGift.fromJson(Map<String, dynamic> json) => StarGift(
         id: json['id'] as int? ?? 0,
@@ -713,6 +771,12 @@ class StarGift {
         title: json['title'] as String? ?? '',
         emoji: json['emoji'] as String? ?? '🎁',
         stars: json['stars'] as int? ?? 0,
+        isLimited: json['is_limited'] as bool? ?? false,
+        totalSupply: json['total_supply'] as int?,
+        soldCount: json['sold_count'] as int? ?? 0,
+        remaining: json['remaining'] as int?,
+        upgradeStars: json['upgrade_stars'] as int? ?? 0,
+        transferStars: json['transfer_stars'] as int? ?? 0,
       );
 }
 
@@ -757,6 +821,12 @@ class UserStarGift {
     this.messageId,
     this.note,
     this.isDisplayed = true,
+    this.isCollectible = false,
+    this.serial,
+    this.transferredFromUserId,
+    this.upgradeStars = 0,
+    this.transferStars = 0,
+    this.totalSupply,
     this.convertedAt,
     this.createdAt,
   });
@@ -773,10 +843,30 @@ class UserStarGift {
   final String? note;
   final String status;
   final bool isDisplayed;
+  final bool isCollectible;
+  final int? serial;
+  final int? transferredFromUserId;
+  final int upgradeStars;
+  final int transferStars;
+  final int? totalSupply;
   final DateTime? convertedAt;
   final DateTime? createdAt;
 
-  bool get canConvert => status == 'held' || status == 'kept';
+  bool get canConvert =>
+      !isCollectible && (status == 'held' || status == 'kept');
+
+  bool get canUpgrade =>
+      !isCollectible &&
+      upgradeStars > 0 &&
+      (status == 'held' || status == 'kept');
+
+  bool get canTransfer => status == 'held' || status == 'kept';
+
+  String get serialLabel {
+    if (!isCollectible || serial == null) return '';
+    if (totalSupply != null) return '#$serial / $totalSupply';
+    return '#$serial';
+  }
 
   factory UserStarGift.fromJson(Map<String, dynamic> json) => UserStarGift(
         id: json['id'] as int? ?? 0,
@@ -791,6 +881,12 @@ class UserStarGift {
         note: json['note'] as String?,
         status: json['status'] as String? ?? 'held',
         isDisplayed: json['is_displayed'] as bool? ?? true,
+        isCollectible: json['is_collectible'] as bool? ?? false,
+        serial: json['serial'] as int?,
+        transferredFromUserId: json['transferred_from_user_id'] as int?,
+        upgradeStars: json['upgrade_stars'] as int? ?? 0,
+        transferStars: json['transfer_stars'] as int? ?? 0,
+        totalSupply: json['total_supply'] as int?,
         convertedAt: DateTime.tryParse(json['converted_at'] as String? ?? ''),
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
       );

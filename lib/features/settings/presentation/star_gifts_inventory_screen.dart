@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../models/chat_models.dart';
+import '../../../services/chat_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_gradient_background.dart';
-/// Telegram-like received Star gifts: keep on profile or convert to ★.
+import '../../../widgets/stars_pay_helper.dart';
+
+/// Telegram-like received Star gifts: keep, convert, upgrade, transfer.
 class StarGiftsInventoryScreen extends StatefulWidget {
   const StarGiftsInventoryScreen({super.key});
 
@@ -49,7 +54,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
   }
 
   Future<void> _convert(UserStarGift gift) async {
-    if (_busy.contains(gift.id)) return;
+    if (_busy.contains(gift.id) || !gift.canConvert) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -112,7 +117,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
   }
 
   Future<void> _toggleDisplay(UserStarGift gift) async {
-    if (_busy.contains(gift.id) || !gift.canConvert) return;
+    if (_busy.contains(gift.id) || gift.status == 'converted') return;
     setState(() => _busy.add(gift.id));
     try {
       final next = await PaidFeaturesService.setGiftDisplayed(
@@ -132,6 +137,86 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    }
+  }
+
+  Future<void> _upgrade(UserStarGift gift) async {
+    if (_busy.contains(gift.id) || !gift.canUpgrade) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Улучшить до коллекционного',
+      body:
+          '«${gift.title}» получит уникальный номер. Стоимость улучшения: ${gift.upgradeStars} ★.',
+      amountStars: gift.upgradeStars,
+      confirmLabel: 'Улучшить',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy.add(gift.id));
+    try {
+      final result = await PaidFeaturesService.upgradeGift(gift.id);
+      if (!mounted) return;
+      setState(() {
+        _gifts = _gifts
+            .map((g) => g.id == result.gift.id ? result.gift : g)
+            .toList(growable: false);
+        _busy.remove(gift.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.gift.serialLabel.isNotEmpty
+                ? 'Коллекционный ${result.gift.serialLabel}'
+                : 'Подарок улучшен',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(gift.id));
+      await showStarsRequiredSnack(context, e);
+    }
+  }
+
+  Future<void> _transfer(UserStarGift gift) async {
+    if (_busy.contains(gift.id) || !gift.canTransfer) return;
+    final fee = gift.transferStars > 0
+        ? gift.transferStars
+        : (gift.isCollectible ? (gift.stars ~/ 10).clamp(25, 999999) : 0);
+    final toUserId = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => _GiftTransferUserPicker(
+        giftTitle: gift.title,
+        feeStars: fee,
+      ),
+    );
+    if (toUserId == null || !mounted) return;
+    if (fee > 0) {
+      final ok = await confirmStarsSpend(
+        context,
+        title: 'Передать подарок',
+        body: '«${gift.title}» будет передан другому пользователю.',
+        amountStars: fee,
+        confirmLabel: 'Передать',
+      );
+      if (!ok || !mounted) return;
+    }
+    setState(() => _busy.add(gift.id));
+    try {
+      await PaidFeaturesService.transferGift(gift.id, toUserId: toUserId);
+      if (!mounted) return;
+      setState(() {
+        _gifts = _gifts.where((g) => g.id != gift.id).toList(growable: false);
+        _busy.remove(gift.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подарок передан')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(gift.id));
+      await showStarsRequiredSnack(context, e);
     }
   }
 
@@ -208,6 +293,11 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
         final gift = _gifts[index];
         final busy = _busy.contains(gift.id);
         final scheme = Theme.of(context).colorScheme;
+        final statusLabel = gift.isCollectible
+            ? (gift.serialLabel.isNotEmpty
+                ? 'Коллекционный ${gift.serialLabel}'
+                : 'Коллекционный')
+            : (gift.status == 'kept' ? 'В профиле' : 'Ожидает решения');
         return Card(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -227,7 +317,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           Text(
-                            '${gift.stars} ★ · ${gift.status == 'kept' ? 'В профиле' : 'Ожидает решения'}',
+                            '${gift.stars} ★ · $statusLabel',
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
                         ],
@@ -259,11 +349,28 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                         onPressed: busy ? null : () => unawaited(_keep(gift)),
                         child: const Text('Оставить'),
                       ),
-                    FilledButton(
-                      onPressed:
-                          busy ? null : () => unawaited(_convert(gift)),
-                      child: Text('В ★ · ${gift.stars}'),
-                    ),
+                    if (gift.canConvert)
+                      FilledButton(
+                        onPressed:
+                            busy ? null : () => unawaited(_convert(gift)),
+                        child: Text('В ★ · ${gift.stars}'),
+                      ),
+                    if (gift.canUpgrade)
+                      FilledButton.tonal(
+                        onPressed:
+                            busy ? null : () => unawaited(_upgrade(gift)),
+                        child: Text('Улучшить · ${gift.upgradeStars} ★'),
+                      ),
+                    if (gift.canTransfer)
+                      OutlinedButton(
+                        onPressed:
+                            busy ? null : () => unawaited(_transfer(gift)),
+                        child: Text(
+                          gift.transferStars > 0
+                              ? 'Передать · ${gift.transferStars} ★'
+                              : 'Передать',
+                        ),
+                      ),
                     OutlinedButton(
                       onPressed:
                           busy ? null : () => unawaited(_toggleDisplay(gift)),
@@ -278,6 +385,154 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _GiftTransferUserPicker extends StatefulWidget {
+  const _GiftTransferUserPicker({
+    required this.giftTitle,
+    required this.feeStars,
+  });
+
+  final String giftTitle;
+  final int feeStars;
+
+  @override
+  State<_GiftTransferUserPicker> createState() =>
+      _GiftTransferUserPickerState();
+}
+
+class _GiftTransferUserPickerState extends State<_GiftTransferUserPicker> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+  bool _loading = false;
+  String? _error;
+  List<ChatUserSearchItem> _results = const [];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 320), () {
+      unawaited(_search(value));
+    });
+  }
+
+  Future<void> _search(String raw) async {
+    final q = raw.trim();
+    if (q.length < 2) {
+      setState(() {
+        _results = const [];
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final items = await ChatService.searchUsers(q);
+      if (!mounted) return;
+      setState(() {
+        _results = items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userVisibleError(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.62,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: Text(
+                  'Кому передать «${widget.giftTitle}»?',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              if (widget.feeStars > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Text(
+                    'Комиссия передачи: ${widget.feeStars} ★',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Поиск по имени или @username',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: _onQueryChanged,
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                        ? Center(child: Text(_error!))
+                        : _results.isEmpty
+                            ? const Center(
+                                child: Text('Начните вводить имя'),
+                              )
+                            : ListView.builder(
+                                itemCount: _results.length,
+                                itemBuilder: (context, index) {
+                                  final item = _results[index];
+                                  final name =
+                                      item.name?.trim().isNotEmpty == true
+                                          ? item.name!.trim()
+                                          : (item.username ?? 'Пользователь');
+                                  return ListTile(
+                                    leading: AppUserAvatar(
+                                      imageUrl: item.avatarUrl,
+                                      displayName: name,
+                                      radius: 20,
+                                    ),
+                                    title: Text(name),
+                                    subtitle: item.username != null
+                                        ? Text('@${item.username}')
+                                        : null,
+                                    onTap: () =>
+                                        Navigator.pop(context, item.id),
+                                  );
+                                },
+                              ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

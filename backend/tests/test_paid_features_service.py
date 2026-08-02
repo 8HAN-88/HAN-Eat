@@ -624,3 +624,34 @@ def test_star_invoice_pay_and_expire(db_session):
     assert exc.value.status_code == 400
     db_session.refresh(invoice2)
     assert invoice2.status == "expired"
+
+
+def test_star_invoice_cancel(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    db_session.execute(
+        text(
+            "INSERT INTO users (id, email, password_hash, name, is_bot, bot_username, created_by_user_id) "
+            "VALUES (9, 'bot2@example.com', 'hash', 'PayBot2', 1, 'paybot2', 1)"
+        )
+    )
+    service = PaidFeaturesService(db_session)
+    invoice = service.create_star_invoice(
+        1, 9, title="Cancel me", amount_stars=20, payload="x"
+    )
+    db_session.flush()
+    cancelled = service.cancel_star_invoice(1, invoice.id)
+    db_session.flush()
+    assert cancelled.status == "cancelled"
+
+    with pytest.raises(HTTPException) as again:
+        service.cancel_star_invoice(1, invoice.id)
+    assert again.value.status_code == 400
+
+    with pytest.raises(HTTPException) as pay:
+        service.pay_star_invoice(2, invoice.id)
+    assert pay.value.status_code == 400
+
+    with pytest.raises(HTTPException) as forbidden:
+        service.cancel_star_invoice(2, invoice.id)
+    assert forbidden.value.status_code in (400, 403)

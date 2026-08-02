@@ -30,6 +30,7 @@ from app.schemas.paid_features import (
     SendStarGiftRequest,
     SendStarGiftResponse,
     SetUserStarGiftDisplayRequest,
+    TransferUserStarGiftRequest,
     StarGiftItem,
     StarGiftsResponse,
     StarGiveawayItem,
@@ -402,6 +403,30 @@ async def purchase_paid_message(
     )
 
 
+def _catalog_gift_item(gift) -> StarGiftItem:
+    item = StarGiftItem.model_validate(gift)
+    supply = getattr(gift, "total_supply", None)
+    sold = int(getattr(gift, "sold_count", 0) or 0)
+    if supply is not None:
+        item.remaining = max(0, int(supply) - sold)
+    return item
+
+
+def _owned_gift_item(db: Session, gift) -> UserStarGiftItem:
+    from app.models.paid_features import StarGift
+
+    item = UserStarGiftItem.model_validate(gift)
+    if gift.gift_id:
+        catalog = db.query(StarGift).filter(StarGift.id == gift.gift_id).first()
+        if catalog is not None:
+            item.upgrade_stars = int(getattr(catalog, "upgrade_stars", 0) or 0)
+            item.transfer_stars = int(getattr(catalog, "transfer_stars", 0) or 0)
+            item.total_supply = getattr(catalog, "total_supply", None)
+            if item.transfer_stars <= 0 and bool(getattr(gift, "is_collectible", False)):
+                item.transfer_stars = max(25, int(gift.stars) // 10)
+    return item
+
+
 @router.get("/gifts", response_model=StarGiftsResponse)
 async def list_star_gifts(
     _: User = Depends(get_current_user_required),
@@ -409,7 +434,7 @@ async def list_star_gifts(
 ):
     service = PaidFeaturesService(db)
     gifts = service.list_star_gifts()
-    return StarGiftsResponse(gifts=[StarGiftItem.model_validate(g) for g in gifts])
+    return StarGiftsResponse(gifts=[_catalog_gift_item(g) for g in gifts])
 
 
 @router.post("/gifts/{gift_id}/send", response_model=SendStarGiftResponse)
@@ -512,9 +537,7 @@ async def list_my_star_gifts(
     gifts = service.list_user_star_gifts(
         current_user.id, include_converted=include_converted
     )
-    return UserStarGiftsResponse(
-        gifts=[UserStarGiftItem.model_validate(g) for g in gifts]
-    )
+    return UserStarGiftsResponse(gifts=[_owned_gift_item(db, g) for g in gifts])
 
 
 @router.get("/users/{user_id}/gifts", response_model=UserStarGiftsResponse)
@@ -525,9 +548,7 @@ async def list_user_displayed_gifts(
 ):
     service = PaidFeaturesService(db)
     gifts = service.list_user_star_gifts(user_id, displayed_only=True, limit=40)
-    return UserStarGiftsResponse(
-        gifts=[UserStarGiftItem.model_validate(g) for g in gifts]
-    )
+    return UserStarGiftsResponse(gifts=[_owned_gift_item(db, g) for g in gifts])
 
 
 @router.post(
@@ -544,7 +565,7 @@ async def convert_my_star_gift(
     db.commit()
     db.refresh(gift)
     return ConvertUserStarGiftResponse(
-        gift=UserStarGiftItem.model_validate(gift),
+        gift=_owned_gift_item(db, gift),
         balance=service.star_balance(current_user.id),
     )
 
@@ -562,7 +583,45 @@ async def keep_my_star_gift(
     gift = service.keep_user_star_gift(current_user.id, user_gift_id)
     db.commit()
     db.refresh(gift)
-    return UserStarGiftItem.model_validate(gift)
+    return _owned_gift_item(db, gift)
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/upgrade",
+    response_model=ConvertUserStarGiftResponse,
+)
+async def upgrade_my_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.upgrade_user_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    return ConvertUserStarGiftResponse(
+        gift=_owned_gift_item(db, gift),
+        balance=service.star_balance(current_user.id),
+    )
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/transfer",
+    response_model=UserStarGiftItem,
+)
+async def transfer_my_star_gift(
+    user_gift_id: int,
+    request: TransferUserStarGiftRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.transfer_user_star_gift(
+        current_user.id, user_gift_id, to_user_id=request.to_user_id
+    )
+    db.commit()
+    db.refresh(gift)
+    return _owned_gift_item(db, gift)
 
 
 @router.patch(
@@ -581,7 +640,7 @@ async def set_my_star_gift_display(
     )
     db.commit()
     db.refresh(gift)
-    return UserStarGiftItem.model_validate(gift)
+    return _owned_gift_item(db, gift)
 
 
 def _giveaway_item(
@@ -781,4 +840,17 @@ async def pay_star_invoice(
         invoice=_invoice_item(db, invoice),
         balance=service.star_balance(current_user.id),
     )
+
+
+@router.post("/invoices/{invoice_id}/cancel", response_model=StarInvoiceItem)
+async def cancel_star_invoice(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    invoice = service.cancel_star_invoice(current_user.id, invoice_id)
+    db.commit()
+    db.refresh(invoice)
+    return _invoice_item(db, invoice)
 

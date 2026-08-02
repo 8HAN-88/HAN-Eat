@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../services/auth_service.dart';
 import '../../../services/paid_features_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -21,6 +22,7 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
   Object? _error;
   bool _loading = true;
   bool _paying = false;
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -77,6 +79,54 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
       if (!mounted) return;
       setState(() => _paying = false);
       await showStarsRequiredSnack(context, e);
+    }
+  }
+
+  Future<void> _cancel() async {
+    final invoice = _invoice;
+    final me = AuthService.instance.currentUser?.id;
+    if (invoice == null ||
+        _cancelling ||
+        !invoice.isPayable ||
+        me == null ||
+        me != invoice.creatorUserId) {
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отменить счёт'),
+        content: const Text('Счёт больше нельзя будет оплатить.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Нет'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Отменить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _cancelling = true);
+    try {
+      final next = await PaidFeaturesService.cancelInvoice(invoice.id);
+      if (!mounted) return;
+      setState(() {
+        _invoice = next;
+        _cancelling = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Счёт отменён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -150,7 +200,7 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 20),
-                      if (invoice.isPayable)
+                      if (invoice.isPayable) ...[
                         FilledButton(
                           onPressed: _paying ? null : _pay,
                           child: _paying
@@ -160,12 +210,30 @@ class _StarInvoicePayScreenState extends State<StarInvoicePayScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Text('Оплатить ${invoice.amountStars} ★'),
-                        )
-                      else
+                        ),
+                        if (AuthService.instance.currentUser?.id ==
+                            invoice.creatorUserId) ...[
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: _cancelling ? null : _cancel,
+                            child: _cancelling
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Отменить счёт'),
+                          ),
+                        ],
+                      ] else
                         Text(
                           invoice.status == 'paid'
                               ? 'Счёт уже оплачен'
-                              : 'Счёт недоступен для оплаты',
+                              : invoice.status == 'cancelled'
+                                  ? 'Счёт отменён'
+                                  : 'Счёт недоступен для оплаты',
                           style: TextStyle(
                             color: scheme.primary,
                             fontWeight: FontWeight.w700,
