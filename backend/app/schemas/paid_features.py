@@ -154,6 +154,12 @@ class StarGiftItem(BaseModel):
     title: str
     emoji: str
     stars: int
+    is_limited: bool = False
+    total_supply: Optional[int] = None
+    sold_count: int = 0
+    upgrade_stars: int = 0
+    transfer_stars: int = 0
+    remaining: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -191,8 +197,14 @@ class UserStarGiftItem(BaseModel):
     note: Optional[str] = None
     status: str
     is_displayed: bool = True
+    is_collectible: bool = False
+    serial: Optional[int] = None
+    transferred_from_user_id: Optional[int] = None
     converted_at: Optional[datetime] = None
     created_at: datetime
+    upgrade_stars: int = 0
+    transfer_stars: int = 0
+    total_supply: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -204,6 +216,10 @@ class UserStarGiftsResponse(BaseModel):
 
 class SetUserStarGiftDisplayRequest(BaseModel):
     displayed: bool
+
+
+class TransferUserStarGiftRequest(BaseModel):
+    to_user_id: int = Field(gt=0)
 
 
 class ConvertUserStarGiftResponse(BaseModel):

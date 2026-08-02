@@ -125,7 +125,7 @@ class PaidMessageUnlock(Base):
 
 
 class StarGift(Base):
-    """Catalog of Telegram-like star gifts."""
+    """Catalog of Telegram-like star gifts (incl. limited collectibles)."""
 
     __tablename__ = "star_gifts"
 
@@ -136,6 +136,11 @@ class StarGift(Base):
     stars = Column(Integer, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True, index=True)
     sort_order = Column(Integer, nullable=False, default=0, index=True)
+    is_limited = Column(Boolean, nullable=False, default=False, index=True)
+    total_supply = Column(Integer, nullable=True)
+    sold_count = Column(Integer, nullable=False, default=0)
+    upgrade_stars = Column(Integer, nullable=False, default=0)
+    transfer_stars = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
@@ -185,6 +190,11 @@ class UserStarGift(Base):
     # held = waiting for convert/keep; converted = Stars claimed; kept = saved on profile
     status = Column(String(24), nullable=False, default="held", index=True)
     is_displayed = Column(Boolean, nullable=False, default=True, index=True)
+    is_collectible = Column(Boolean, nullable=False, default=False, index=True)
+    serial = Column(Integer, nullable=True, index=True)
+    transferred_from_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     converted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 

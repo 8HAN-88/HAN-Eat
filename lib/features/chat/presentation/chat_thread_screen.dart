@@ -6445,12 +6445,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('${gift.emoji} ${gift.title}'),
-        content: TextField(
-          controller: noteController,
-          maxLines: 2,
-          decoration: const InputDecoration(
-            labelText: 'Сообщение (опционально)',
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (gift.isLimited)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  gift.remaining != null
+                      ? 'Лимитированный · осталось ${gift.remaining}'
+                      : 'Лимитированный подарок',
+                  style: TextStyle(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            TextField(
+              controller: noteController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Сообщение (опционально)',
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -6499,6 +6518,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     } catch (_) {}
     return null;
+  }
+
+  bool _giftMessageIsCollectible(ChatMessage msg) {
+    try {
+      final decoded = jsonDecode(msg.content);
+      if (decoded is Map<String, dynamic>) {
+        return decoded['is_collectible'] == true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   void _patchLocalGiftStatus(ChatMessage msg, String status) {
@@ -8124,7 +8153,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onConvertGift: interactive &&
               !msg.isMine &&
               msg.type == 'gift' &&
-              _userGiftIdFromMessage(msg) != null
+              _userGiftIdFromMessage(msg) != null &&
+              !_giftMessageIsCollectible(msg)
           ? () => unawaited(_convertReceivedGift(msg))
           : null,
       onKeepGift: interactive &&
@@ -14480,6 +14510,12 @@ class _Bubble extends StatelessWidget {
       final stars = gift?['stars'] as int? ?? 0;
       final note = gift?['message'] as String?;
       final status = gift?['status'] as String? ?? 'held';
+      final isCollectible = gift?['is_collectible'] == true;
+      final serial = gift?['serial'];
+      final totalSupply = gift?['total_supply'];
+      final serialText = isCollectible && serial != null
+          ? (totalSupply != null ? '#$serial / $totalSupply' : '#$serial')
+          : null;
       final canAct = !mine &&
           (status == 'held' || status == 'kept') &&
           (onConvertGift != null || onKeepGift != null);
@@ -14502,6 +14538,15 @@ class _Bubble extends StatelessWidget {
                 title,
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
+              if (serialText != null)
+                Text(
+                  'Collectible $serialText',
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               Text(
                 status == 'converted'
                     ? 'Конвертирован · $stars ★'
@@ -14538,7 +14583,7 @@ class _Bubble extends StatelessWidget {
                           onPressed: onKeepGift,
                           child: const Text('Оставить'),
                         ),
-                      if (onConvertGift != null)
+                      if (onConvertGift != null && !isCollectible)
                         FilledButton(
                           onPressed: onConvertGift,
                           child: Text('В ★ · $stars'),
