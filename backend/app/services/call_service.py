@@ -327,6 +327,7 @@ class CallService:
                     "media": call.media,
                     "caller_id": call.caller_id,
                     "caller_name": caller_name,
+                    "caller_avatar": getattr(caller, "avatar_url", None) or "",
                 },
                 persist=False,
             )

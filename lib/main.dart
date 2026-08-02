@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:io' show HttpOverrides;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +11,7 @@ import 'app/app_bootstrap_state.dart';
 import 'app/startup_shell.dart';
 import 'core/app_stability_guard.dart';
 import 'core/network/haneat_http_overrides.dart';
+import 'features/calls/fcm_background_handler.dart';
 
 void main() {
   runZonedGuarded(() {
@@ -19,6 +21,10 @@ void main() {
 
     if (!kIsWeb) {
       HttpOverrides.global = HanEatHttpOverrides();
+      // Android: native CallKit UI when app is backgrounded/killed.
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      }
     }
 
     AppBootstrapState.authReady.value = false;

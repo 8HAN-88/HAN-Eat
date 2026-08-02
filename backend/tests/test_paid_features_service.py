@@ -68,6 +68,7 @@ def db_session():
                 shadow_moderation BOOLEAN DEFAULT 0,
                 banned_at DATETIME,
                 fcm_token VARCHAR(500),
+                voip_token VARCHAR(500),
                 device_platform VARCHAR(20),
                 country_code VARCHAR(2),
                 last_seen_at DATETIME,

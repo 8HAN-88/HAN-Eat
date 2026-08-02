@@ -434,6 +434,7 @@ class UserService {
     int? paidMessageStars,
     String? avatarUrl,
     String? fcmToken,
+    String? voipToken,
   }) async {
     final uri = Uri.parse('$baseUrl/users/me');
     final body = <String, dynamic>{
@@ -445,6 +446,7 @@ class UserService {
       if (paidMessageStars != null) 'paid_message_stars': paidMessageStars,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
       if (fcmToken != null) 'fcm_token': fcmToken,
+      if (voipToken != null) 'voip_token': voipToken,
     };
     try {
       var headers = await _authHeaders();
