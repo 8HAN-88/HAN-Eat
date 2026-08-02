@@ -1,0 +1,165 @@
+"""1:1 WebRTC call API."""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.api.dependencies import get_current_user_required
+from app.core.database import get_db
+from app.models.user import User
+from app.services.call_service import CallService
+
+router = APIRouter(prefix="/calls", tags=["Calls"])
+
+
+class CreateCallRequest(BaseModel):
+    conversation_id: int = Field(gt=0)
+    media: str = Field(default="voice", pattern="^(voice|video)$")
+
+
+class CallSignalRequest(BaseModel):
+    kind: str = Field(..., min_length=1, max_length=32)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class CallItem(BaseModel):
+    id: int
+    conversation_id: int
+    caller_id: int
+    callee_id: int
+    media: str
+    status: str
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    peer_id: Optional[int] = None
+    peer_name: Optional[str] = None
+    peer_avatar_url: Optional[str] = None
+    is_caller: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+def _call_item(db: Session, call, viewer_id: int) -> CallItem:
+    peer_id = call.callee_id if viewer_id == call.caller_id else call.caller_id
+    peer = db.query(User).filter(User.id == peer_id).first()
+    return CallItem(
+        id=call.id,
+        conversation_id=call.conversation_id,
+        caller_id=call.caller_id,
+        callee_id=call.callee_id,
+        media=call.media,
+        status=call.status,
+        started_at=call.started_at,
+        ended_at=call.ended_at,
+        created_at=call.created_at,
+        peer_id=peer_id,
+        peer_name=peer.name if peer else None,
+        peer_avatar_url=getattr(peer, "avatar_url", None) if peer else None,
+        is_caller=viewer_id == call.caller_id,
+    )
+
+
+@router.post("", response_model=CallItem)
+async def create_call(
+    body: CreateCallRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.create_call(
+        current_user.id,
+        conversation_id=body.conversation_id,
+        media=body.media,
+    )
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)
+
+
+@router.get("/{call_id}", response_model=CallItem)
+async def get_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.get_call_for_user(current_user.id, call_id)
+    db.commit()
+    return _call_item(db, call, current_user.id)
+
+
+@router.post("/{call_id}/answer", response_model=CallItem)
+async def answer_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.answer_call(current_user.id, call_id)
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)
+
+
+@router.post("/{call_id}/reject", response_model=CallItem)
+async def reject_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.reject_call(current_user.id, call_id)
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)
+
+
+@router.post("/{call_id}/cancel", response_model=CallItem)
+async def cancel_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.cancel_call(current_user.id, call_id)
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)
+
+
+@router.post("/{call_id}/end", response_model=CallItem)
+async def end_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.end_call(current_user.id, call_id)
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)
+
+
+@router.post("/{call_id}/signal", response_model=CallItem)
+async def signal_call(
+    call_id: int,
+    body: CallSignalRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.relay_signal(
+        current_user.id,
+        call_id,
+        kind=body.kind,
+        payload=body.payload,
+    )
+    db.commit()
+    db.refresh(call)
+    return _call_item(db, call, current_user.id)

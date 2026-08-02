@@ -27,8 +27,7 @@ import '../../miniapps/data/miniapps_service.dart';
 import '../../miniapps/presentation/miniapp_webview_screen.dart';
 import '../../bots/data/bot_models.dart';
 import '../../../services/api_service.dart';
-import '../../calls/presentation/video_call_screen.dart';
-import '../../calls/presentation/voice_room_screen.dart';
+import '../../calls/presentation/call_coordinator.dart';
 
 import '../../../app/app_router.dart';
 import '../../../core/theme/color_schemes.dart';
@@ -4680,13 +4679,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
           TelegramActionSheetAction(
             icon: Icons.videocam_outlined,
-            title: 'Видео-звонок',
-            onTap: _startVideoCall,
+            title: 'Видеозвонок',
+            onTap: () => unawaited(_startVideoCall()),
           ),
           TelegramActionSheetAction(
-            icon: Icons.mic_outlined,
-            title: 'Голосовая комната',
-            onTap: _startVoiceRoom,
+            icon: Icons.call_outlined,
+            title: 'Аудиозвонок',
+            onTap: () => unawaited(_startVoiceCall()),
           ),
         ],
         if (!isSaved) ...[
@@ -6720,28 +6719,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  void _startVideoCall() {
+  Future<void> _startVideoCall() async {
     final peer = _conversation.peer;
     if (peer == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => VideoCallScreen(contactName: peer.displayName),
-      ),
-    );
+    try {
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: widget.conversationId,
+        media: 'video',
+        context: context,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось начать видеозвонок');
+    }
   }
 
-  void _startVoiceRoom() {
+  Future<void> _startVoiceCall() async {
     final peer = _conversation.peer;
     if (peer == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => VoiceRoomScreen(
-          roomName: 'Комната ${peer.displayName}',
-          roomId: 'room_${widget.conversationId}',
-          isCreator: true,
-        ),
-      ),
-    );
+    try {
+      await CallCoordinator.instance.openOutgoing(
+        conversationId: widget.conversationId,
+        media: 'voice',
+        context: context,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось начать звонок');
+    }
   }
 
   void _showQuickCallMenu() {
@@ -6751,13 +6756,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       actions: [
         TelegramActionSheetAction(
           icon: Icons.videocam_outlined,
-          title: 'Видео-звонок',
-          onTap: _startVideoCall,
+          title: 'Видеозвонок',
+          onTap: () => unawaited(_startVideoCall()),
         ),
         TelegramActionSheetAction(
-          icon: Icons.mic_outlined,
-          title: 'Голосовая комната',
-          onTap: _startVoiceRoom,
+          icon: Icons.call_outlined,
+          title: 'Аудиозвонок',
+          onTap: () => unawaited(_startVoiceCall()),
         ),
       ],
     );
