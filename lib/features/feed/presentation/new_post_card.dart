@@ -239,8 +239,16 @@ class _NewPostCardState extends State<NewPostCard>
         widget.post,
       );
     }
-    _isLiked = widget.post.isLiked;
-    _likesCount = widget.post.likesCount;
+    if (_likesViaPostApi) {
+      _isLiked = widget.post.isLiked;
+      _likesCount = widget.post.likesCount;
+    } else {
+      final fav = FavoritesService.safeIsFavorite(
+        _spoonacularRecipeIdFromPost.toString(),
+      );
+      _isLiked = fav;
+      _likesCount = fav ? 1 : 0;
+    }
     _isSaved = widget.post.isSaved ?? false;
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
