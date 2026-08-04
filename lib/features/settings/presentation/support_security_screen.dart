@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../app/app_router.dart';
 import '../../../core/config/legal_urls.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../services/web_app_update_service.dart';
 import 'blocked_users_screen.dart';
 
 class SupportSecurityScreen extends StatelessWidget {
@@ -37,6 +39,16 @@ class SupportSecurityScreen extends StatelessWidget {
           16 + floatingBottomPadding(context),
         ),
         children: [
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.lock_person_outlined),
+              title: const Text('Аккаунт и безопасность'),
+              subtitle: const Text('Сессия, пароль, выход со всех устройств'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(AccountSecurityRoute.path),
+            ),
+          ),
+          const SizedBox(height: 16),
           Card(
             child: Column(
               children: [
@@ -181,7 +193,20 @@ class SupportSecurityScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('О приложении'),
-              subtitle: const Text('H.A.N. Eat'),
+              subtitle: const Text('Версия, условия и правовая информация'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                showAboutDialog(
+                  context: context,
+                  applicationName: 'H.A.N. Eat',
+                  applicationVersion:
+                      kIsWeb && WebAppUpdateService.embeddedBuild.isNotEmpty
+                          ? '1.0.0 (${WebAppUpdateService.embeddedBuild})'
+                          : '1.0.0',
+                  applicationLegalese:
+                      '© H.A.N. Eat. Рецепты, план питания и сообщество.',
+                );
+              },
             ),
           ),
         ],

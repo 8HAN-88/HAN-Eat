@@ -249,6 +249,34 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
+  Future<void> _pickCameraImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+      setState(() {
+        _preparePlainComposerForMediaSelection();
+        if (_selectedImages.length < 10) {
+          _selectedImages.add(image);
+        }
+        _selectedVideo = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось сделать фото'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _pickImage() async {
     try {
       // Позволяем выбрать несколько изображений (как в Telegram)
@@ -1295,22 +1323,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             _ComposerToolButton(
               icon: Icons.photo_camera_outlined,
               tooltip: 'Камера',
-              onTap: _isLoading ? null : _pickImage,
+              onTap: _isLoading ? null : _pickCameraImage,
             ),
             _ComposerToolButton(
               icon: Icons.video_library_outlined,
               tooltip: 'Видео в рилсы',
               onTap: _isLoading ? null : _pickVideo,
-            ),
-            _ComposerToolButton(
-              icon: Icons.gif_box_outlined,
-              tooltip: 'GIF',
-              onTap: null,
-            ),
-            _ComposerToolButton(
-              icon: Icons.format_quote_rounded,
-              tooltip: 'Цитата',
-              onTap: null,
             ),
             _ComposerToolButton(
               icon: Icons.poll_outlined,

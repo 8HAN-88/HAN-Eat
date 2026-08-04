@@ -433,6 +433,10 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
       case 'channel':
         context.push(ChannelDetailRoute.pathFor(item.contentId));
         return;
+      case 'user':
+      case 'user_profile':
+        context.push(ProfileRoute.withUserId(item.contentId));
+        return;
       default:
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Просмотр недоступен для типа «${item.contentType}»')),
@@ -448,6 +452,9 @@ class _ModerationQueueScreenState extends ConsumerState<ModerationQueueScreen> {
         return 'Открыть комментарий';
       case 'channel':
         return 'Открыть канал';
+      case 'user':
+      case 'user_profile':
+        return 'Открыть профиль';
       default:
         return 'Открыть контент';
     }

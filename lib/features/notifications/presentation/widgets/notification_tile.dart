@@ -156,6 +156,7 @@ class _NotificationTileState extends State<NotificationTile> {
                                 isFollowing: _isFollowing,
                                 followLoading: widget.followLoading,
                                 onFollowTap: widget.onFollowTap,
+                                onFollowingTap: widget.onActorTap,
                                 onMessageTap: widget.onMessageTap,
                               ),
                             ],
@@ -500,12 +501,15 @@ class _FollowActions extends StatelessWidget {
     required this.isFollowing,
     required this.followLoading,
     this.onFollowTap,
+    this.onFollowingTap,
     this.onMessageTap,
   });
 
   final bool isFollowing;
   final bool followLoading;
   final VoidCallback? onFollowTap;
+  /// Opens the actor profile when already following (avoids a dead chip).
+  final VoidCallback? onFollowingTap;
   final VoidCallback? onMessageTap;
 
   @override
@@ -523,9 +527,9 @@ class _FollowActions extends StatelessWidget {
           )
         else
           _ActionChipButton(
-            label: 'Подписки',
+            label: 'Вы подписаны',
             filled: false,
-            onTap: null,
+            onTap: onFollowingTap,
           ),
         if (onMessageTap != null)
           _ActionChipButton(

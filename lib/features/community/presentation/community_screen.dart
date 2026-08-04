@@ -165,7 +165,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> with SingleTi
           ? null
           : FloatingActionButton.extended(
               onPressed: () async {
-                await showCreateContentSheet(context, ref: ref);
+                await showCreateContentSheet(
+                  context,
+                  ref: ref,
+                  includeReel: true,
+                );
                 controller.load(tag: state.activeTag);
               },
               icon: const Icon(Icons.add),

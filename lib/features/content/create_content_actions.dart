@@ -37,7 +37,7 @@ Future<bool?> openCreateReel(
 
 /// Выбор: обычный пост и (опционально) рилс в ленту.
 ///
-/// [includeReel] — для профиля; на главной не используется.
+/// [includeReel] — показать пункт «Рилс» (лента, профиль, community).
 Future<bool> showCreateContentSheet(
   BuildContext context, {
   WidgetRef? ref,

@@ -327,9 +327,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
               leading: const Icon(Icons.analytics_outlined),
               title: const Text('Аналитика'),
               subtitle: const Text('Статистика постов и активности'),
-              onTap: () {
-                context.pushNamed('analytics');
-              },
+              onTap: () => context.push(AppAnalyticsRoute.path),
             ),
           ),
           const SizedBox(height: 16),
