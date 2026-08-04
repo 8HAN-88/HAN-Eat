@@ -582,7 +582,8 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
       ),
       body: bodyContent,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showCreateContentSheet(context, ref: ref),
+        onPressed: () =>
+            showCreateContentSheet(context, ref: ref, includeReel: true),
         child: const Icon(Icons.add),
       ),
     );

@@ -48,18 +48,11 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   onTap: () => context.push(ProfileAuthRoute.path),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.shield_outlined),
-                  title: const Text('Двухфакторная защита'),
-                  subtitle: const Text('Точка входа для 2FA (TOTP/SMS)'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('2FA будет доступна в следующем обновлении'),
-                      ),
-                    );
-                  },
+                const ListTile(
+                  leading: Icon(Icons.shield_outlined),
+                  title: Text('Двухфакторная защита'),
+                  subtitle: Text('Скоро: TOTP / SMS. Пока недоступно.'),
+                  enabled: false,
                 ),
               ],
             ),

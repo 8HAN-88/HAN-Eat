@@ -283,8 +283,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final postId = notificationPostId(notification) ?? notification.entityId;
     if (postId == null) return;
     final channelId = notification.data?['channel_id'];
+    // Channel posts have no dedicated /comments route — open post detail.
     if (channelId != null) {
-      context.push('/channel/$channelId/post/$postId/comments');
+      context.push('/channel/$channelId/post/$postId');
     } else {
       context.push(PostCommentsRoute.pathFor(postId));
     }
@@ -316,7 +317,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       } else {
         context.push('/post/${notification.entityId}');
       }
-    } else if (notification.entityType == 'user' &&
+    } else if (notification.entityType == 'comment') {
+      final postId = notificationPostId(notification) ??
+          _parseNotificationId(notification.data?['post_id']);
+      final channelId = notification.data?['channel_id'];
+      if (postId != null && channelId != null) {
+        context.push('/channel/$channelId/post/$postId');
+      } else if (postId != null) {
+        context.push(PostCommentsRoute.pathFor(postId));
+      } else if (notification.actor != null) {
+        context.push(ProfileRoute.withUserId(notification.actor!.id));
+      }
+    } else if ((notification.entityType == 'user' ||
+            notification.entityType == 'user_profile') &&
         notification.entityId != null) {
       context.push(ProfileRoute.withUserId(notification.entityId!));
     } else if (notification.type == 'subscription_expiring' ||

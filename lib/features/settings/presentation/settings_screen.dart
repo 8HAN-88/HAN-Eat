@@ -247,13 +247,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: 'Поддержка',
         icon: Icons.support_agent_outlined,
         subtitle: 'Создать обращение, отменить подписку',
-        onTap: () => context.push('/support'),
+        onTap: () => context.push(SupportContactRoute.path),
       ),
       _SettingsItem(
         title: 'Подписка',
         icon: Icons.workspace_premium_outlined,
         subtitle: 'Тарифы AI, Creator и Pro — от 199 ₽/мес',
-        onTap: () => context.push('/subscription'),
+        onTap: () => context.push(SubscriptionRoute.path),
       ),
       _SettingsItem(
         title: 'Звёзды и кошелёк',
@@ -277,7 +277,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: 'Поддержка и безопасность',
         icon: Icons.verified_user_outlined,
         subtitle: 'GDPR, модерация, жалобы, правила сообщества',
-        onTap: () => context.push('/support-security'),
+        onTap: () => context.push(SupportSecurityRoute.path),
       ),
       _SettingsItem(
         title: 'Чёрный список',
@@ -293,7 +293,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: 'Резервная копия',
         icon: Icons.backup_outlined,
         subtitle: 'Экспорт и восстановление данных',
-        onTap: () => context.push('/backup'),
+        onTap: () => context.push(BackupRoute.path),
       ),
       if (_isAdmin)
         _SettingsItem(
