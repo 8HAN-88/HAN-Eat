@@ -811,6 +811,112 @@ class CallService:
             self._publish_both(call, "call.ended", {"reason": "empty"})
         return call
 
+    def invite_to_group_call(
+        self, actor_id: int, call_id: int, invitee_id: int
+    ) -> CallSession:
+        """Invite another group member into an active group call (mid-call)."""
+        call = self._get_call(call_id, for_update=True)
+        if not self._is_group(call):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a group call")
+        if call.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
+            )
+        actor = (
+            self.db.query(CallParticipant)
+            .filter(
+                CallParticipant.call_id == call.id,
+                CallParticipant.user_id == actor_id,
+                CallParticipant.status == "joined",
+            )
+            .first()
+        )
+        if not actor:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Only joined participants can invite"
+            )
+        if invitee_id == actor_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot invite yourself"
+            )
+        member = (
+            self.db.query(ConversationMember.id)
+            .filter(
+                ConversationMember.conversation_id == call.conversation_id,
+                ConversationMember.user_id == invitee_id,
+            )
+            .first()
+        )
+        if not member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="User is not in this group"
+            )
+        invitee = (
+            self.db.query(User)
+            .filter(User.id == invitee_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not invitee or bool(getattr(invitee, "is_bot", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot invite this user"
+            )
+
+        row = (
+            self.db.query(CallParticipant)
+            .filter(CallParticipant.call_id == call.id, CallParticipant.user_id == invitee_id)
+            .with_for_update()
+            .first()
+        )
+        if row and row.status == "joined":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="User is already in the call"
+            )
+
+        live_count = (
+            self.db.query(CallParticipant.id)
+            .filter(
+                CallParticipant.call_id == call.id,
+                CallParticipant.status.in_(("joined", "ringing")),
+            )
+            .count()
+        )
+        # Re-invite of an already-ringing user does not consume an extra seat.
+        if not (row and row.status == "ringing") and live_count >= MAX_GROUP_CALL_PARTICIPANTS:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "CALL_FULL", "message": "Звонок заполнен"},
+            )
+        if self._user_busy(invitee_id, exclude_call_id=call.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "USER_BUSY", "message": "Пользователь занят"},
+            )
+
+        if row:
+            row.status = "ringing"
+            row.joined_at = None
+            row.left_at = None
+        else:
+            self.db.add(
+                CallParticipant(
+                    call_id=call.id,
+                    user_id=invitee_id,
+                    status="ringing",
+                )
+            )
+        self.db.flush()
+        setattr(call, "_invite_user_ids", [invitee_id])
+        for uid in self._participant_ids(call.id, live_only=True):
+            if uid == invitee_id:
+                continue
+            self._publish(
+                uid,
+                "call.participant_invited",
+                call,
+                {"user_id": invitee_id, "invited_by": actor_id},
+            )
+        return call
+
     def list_participants(self, user_id: int, call_id: int) -> list[dict[str, Any]]:
         call = self.get_call_for_user(user_id, call_id)
         rows = (

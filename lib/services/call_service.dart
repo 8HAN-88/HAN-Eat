@@ -168,6 +168,8 @@ class CallSessionInfo {
 }
 
 class CallService {
+  static const int maxGroupParticipants = 4;
+
   static Never _throw(http.Response response, String fallback) {
     throw apiExceptionFromHttpResponse(
       response.statusCode,
@@ -321,5 +323,19 @@ class CallService {
       return out;
     }
     _throw(response, 'Не удалось загрузить участников звонка');
+  }
+
+  static Future<CallSessionInfo> invite(int callId, int userId) async {
+    final response = await http.post(
+      ApiService.uri('/calls/$callId/invite'),
+      headers: await ApiService.authHeaders(),
+      body: jsonEncode({'user_id': userId}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return CallSessionInfo.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throw(response, 'Не удалось пригласить в звонок');
   }
 }

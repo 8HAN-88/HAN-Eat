@@ -144,6 +144,62 @@ def test_expire_stale_group_invites(db_session):
     assert call.status == "active"
 
 
+def test_invite_additional_group_member(db_session):
+    from fastapi import HTTPException
+
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    _user(db_session, 4)
+    _user(db_session, 5)
+    # 5 members: create invites first 3 others (max 4 total with host).
+    conv = _group(db_session, 1, 2, 3, 4, 5)
+    db_session.commit()
+    svc = CallService(db_session)
+    call = svc.create_call(1, conversation_id=conv.id, media="voice")
+    db_session.commit()
+
+    parts = (
+        db_session.query(CallParticipant)
+        .filter(CallParticipant.call_id == call.id)
+        .all()
+    )
+    assert len(parts) == MAX_GROUP_CALL_PARTICIPANTS
+    invited_ids = {p.user_id for p in parts}
+    assert 1 in invited_ids
+    left_out = next(uid for uid in (2, 3, 4, 5) if uid not in invited_ids)
+
+    # Free a seat: one invitee rejects.
+    reject_id = next(uid for uid in invited_ids if uid != 1)
+    svc.reject_call(reject_id, call.id)
+    db_session.commit()
+
+    invited = svc.invite_to_group_call(1, call.id, left_out)
+    db_session.commit()
+    assert invited.kind == "group"
+    row = (
+        db_session.query(CallParticipant)
+        .filter(CallParticipant.call_id == call.id, CallParticipant.user_id == left_out)
+        .one()
+    )
+    assert row.status == "ringing"
+
+    # Full again — cannot invite another free member.
+    live = {
+        p.user_id
+        for p in db_session.query(CallParticipant)
+        .filter(
+            CallParticipant.call_id == call.id,
+            CallParticipant.status.in_(("joined", "ringing")),
+        )
+        .all()
+    }
+    candidate = next(uid for uid in (2, 3, 4, 5) if uid not in live)
+    with pytest.raises(HTTPException) as full:
+        svc.invite_to_group_call(1, call.id, candidate)
+    assert full.value.status_code == 409
+
+
 def test_group_mute_broadcast_without_to_user(db_session):
     _user(db_session, 1)
     _user(db_session, 2)
