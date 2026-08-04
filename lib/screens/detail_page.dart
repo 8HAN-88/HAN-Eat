@@ -19,7 +19,6 @@ import '../services/saved_posts_service.dart';
 import '../services/shopping_service.dart';
 import '../widgets/share_action_sheet.dart';
 import '../widgets/fullscreen_image_viewer.dart';
-import 'cooking_mode_screen.dart';
 import '../services/recipe_notes_service.dart';
 import '../utils/recipe_nutrition.dart';
 import '../core/layout/floating_bottom_padding.dart';
@@ -372,11 +371,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     switch (value) {
       case _menuCook:
         if (r.steps.isNotEmpty || (r.translatedSteps?.isNotEmpty == true)) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => CookingModeScreen(recipe: r),
-            ),
-          );
+          context.push(CookingModeRoute.path, extra: r);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Нет пошаговой инструкции')),

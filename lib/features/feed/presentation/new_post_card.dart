@@ -151,8 +151,16 @@ class _NewPostCardState extends State<NewPostCard>
       ),
     );
     _displayPost = widget.post;
-    _isLiked = widget.post.isLiked;
-    _likesCount = widget.post.likesCount;
+    if (_likesViaPostApi) {
+      _isLiked = widget.post.isLiked;
+      _likesCount = widget.post.likesCount;
+    } else {
+      final fav = FavoritesService.safeIsFavorite(
+        _spoonacularRecipeIdFromPost.toString(),
+      );
+      _isLiked = fav;
+      _likesCount = fav ? 1 : 0;
+    }
     _isSaved = widget.post.isSaved ?? false;
     _isReposted = widget.post.isReposted ?? false;
     _repostsCount = widget.post.repostsCount;
@@ -175,7 +183,6 @@ class _NewPostCardState extends State<NewPostCard>
   }
 
   void _handleDoubleTapLike() {
-    if (_isSpoonacularRecipePost) return;
     if (!_isLiked && !_isLiking) {
       unawaited(_toggleLike());
     }
@@ -331,6 +338,14 @@ class _NewPostCardState extends State<NewPostCard>
         nestedSource == 'spoonacular';
   }
 
+  /// Local/catalog Spoonacular cards reuse the recipe id as [PostModel.id].
+  /// Real feed/channel posts get an independent posts.id from the API.
+  bool get _likesViaPostApi {
+    if (!_isSpoonacularRecipePost) return true;
+    final spoonId = _spoonacularRecipeIdFromPost;
+    return widget.post.id > 0 && widget.post.id != spoonId;
+  }
+
   Future<void> _openLink(String url) async {
     final uri = Uri.tryParse(url);
     if (uri == null) return;
@@ -413,14 +428,20 @@ class _NewPostCardState extends State<NewPostCard>
   Future<void> _toggleLike() async {
     if (_isLiking) return;
 
-    if (_isSpoonacularRecipePost) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Лайки для Spoonacular-рецептов пока недоступны'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+    // Catalog/local Spoonacular cards: heart toggles favorites (no posts row).
+    if (!_likesViaPostApi) {
+      setState(() => _isLiking = true);
+      try {
+        final recipeId = _spoonacularRecipeIdFromPost.toString();
+        await FavoritesService.safeToggleFavorite(recipeId);
+        if (!mounted) return;
+        final liked = FavoritesService.safeIsFavorite(recipeId);
+        setState(() {
+          _isLiked = liked;
+          _likesCount = liked ? 1 : 0;
+        });
+      } finally {
+        if (mounted) setState(() => _isLiking = false);
       }
       return;
     }
@@ -1687,7 +1708,7 @@ class _NewPostCardState extends State<NewPostCard>
                 if (_likesCount > 0) ...[
                   const SizedBox(height: 8),
                   GestureDetector(
-                    onTap: _isSpoonacularRecipePost
+                    onTap: !_likesViaPostApi
                         ? null
                         : () => unawaited(
                               showPostLikersSheet(

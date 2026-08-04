@@ -628,8 +628,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: DietAllergiesRoute.path,
         name: DietAllergiesRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: AllergiesScreen()),
+        // Legacy alias: allergies + diet live under Categories.
+        redirect: (context, state) => CategoriesRoute.path,
       ),
       if (AppVariant.current.isSocial)
         GoRoute(
@@ -1495,11 +1495,6 @@ class WebSessionLandingRoute {
 class ChatsRoute {
   static const path = '/chats';
   static const name = 'chats';
-}
-
-class ChannelsHubRoute {
-  static const path = '/channels-hub';
-  static const name = 'channels_hub';
 }
 
 class MiniAppsRoute {
