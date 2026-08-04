@@ -57,20 +57,19 @@ Future<bool> showChannelCreateContentSheet(
   }
 
   if (choice == 'recipe') {
-    if (channelName != null && channelName.trim().isNotEmpty) {
-      await context.push(
-        ChannelDetailRoute.createRecipe(channelId, channelName),
-      );
-    }
-    return false;
+    if (channelName == null || channelName.trim().isEmpty) return false;
+    final result = await context.push(
+      ChannelDetailRoute.createRecipe(channelId, channelName),
+    );
+    return result == true || result != null;
   }
 
-  await context.push(
+  final result = await context.push(
     ChannelDetailRoute.createPost(
       channelId,
       channelName: channelName,
       type: choice!,
     ),
   );
-  return false;
+  return result == true || result != null;
 }
