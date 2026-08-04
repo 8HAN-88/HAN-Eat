@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../app/router_keys.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
@@ -43,6 +44,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   DateTime? _callStartedAt;
   Timer? _ticker;
   late CallSessionInfo _call;
+  late final Future<void> Function() _boundEnd = _hangup;
 
   int? get _me => AuthService.instance.currentUser?.id;
   bool get _isVideo => _call.isVideo;
@@ -60,6 +62,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     super.initState();
     _call = widget.call;
     CallCoordinator.instance.attachActiveCall(_call.id);
+    CallCoordinator.instance.bindHostedEndHandler(_boundEnd);
     _sub = UserRealtimeService.instance.events.listen(_onRealtime);
     unawaited(WakelockPlus.enable());
     unawaited(_bootstrap());
@@ -217,8 +220,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       case 'call.ended':
       case 'call.cancelled':
       case 'call.rejected':
-        await _cleanup(notifyServer: false);
-        if (mounted) Navigator.of(context).pop();
+        await _leaveUi(notifyServer: false);
         break;
     }
   }
@@ -298,15 +300,24 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   }
 
   Future<void> _fail(String msg) async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    await _cleanup(notifyServer: true);
-    if (mounted) Navigator.of(context).pop();
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+    }
+    await _leaveUi(notifyServer: true);
   }
 
   Future<void> _hangup() async {
-    await _cleanup(notifyServer: true);
-    if (mounted) Navigator.of(context).pop();
+    await _leaveUi(notifyServer: true);
+  }
+
+  Future<void> _leaveUi({required bool notifyServer}) async {
+    await _cleanup(notifyServer: notifyServer);
+    if (CallCoordinator.instance.hasHostedCallUi) {
+      CallCoordinator.instance.closeCallUi();
+    } else if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _cleanup({required bool notifyServer}) async {
@@ -372,6 +383,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
   @override
   void dispose() {
+    CallCoordinator.instance.unbindHostedEndHandler(_boundEnd);
     _ticker?.cancel();
     if (!_ending) {
       unawaited(_cleanup(notifyServer: true));
@@ -401,15 +413,23 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
 
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) CallCoordinator.instance.minimizeCall();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
                 child: Row(
                   children: [
+                    IconButton(
+                      tooltip: 'Свернуть',
+                      onPressed: CallCoordinator.instance.minimizeCall,
+                      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                    ),
                     Expanded(
                       child: Text(
                         _status,
