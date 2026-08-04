@@ -21,6 +21,10 @@ from app.services.user_event_bus import publish_user_event
 ACTIVE_STATUSES = ("ringing", "active")
 MAX_GROUP_CALL_PARTICIPANTS = 4
 PARTICIPANT_LIVE = ("invited", "ringing", "joined")
+WEBRTC_SIGNAL_KINDS = ("offer", "answer", "ice", "renegotiate")
+# Control signals may broadcast to all joined peers when to_user_id is omitted.
+CONTROL_SIGNAL_KINDS = ("mute", "camera")
+ALL_SIGNAL_KINDS = WEBRTC_SIGNAL_KINDS + CONTROL_SIGNAL_KINDS
 
 
 def ring_timeout_seconds() -> int:
@@ -513,7 +517,7 @@ class CallService:
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Call is not active"
             )
         kind_norm = (kind or "").strip().lower()
-        if kind_norm not in ("offer", "answer", "ice", "renegotiate"):
+        if kind_norm not in ALL_SIGNAL_KINDS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signal kind"
             )
@@ -521,31 +525,48 @@ class CallService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="payload must be an object"
             )
+        is_control = kind_norm in CONTROL_SIGNAL_KINDS
+        targets: list[int] = []
         if self._is_group(call):
-            if not to_user_id:
+            if to_user_id:
+                if to_user_id == user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot signal self"
+                    )
+                self._assert_participant(call, to_user_id)
+                targets = [to_user_id]
+            elif is_control:
+                # Fan-out media state to already-joined peers only.
+                joined = (
+                    self.db.query(CallParticipant.user_id)
+                    .filter(
+                        CallParticipant.call_id == call.id,
+                        CallParticipant.status == "joined",
+                        CallParticipant.user_id != user_id,
+                    )
+                    .all()
+                )
+                targets = [uid for (uid,) in joined]
+            else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="to_user_id required for group call signaling",
                 )
-            if to_user_id == user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot signal self"
-                )
-            peer_id = to_user_id
-            self._assert_participant(call, peer_id)
         else:
-            peer_id = self._peer_id(call, user_id)
-        self._publish(
-            peer_id,
-            "call.signal",
-            call,
-            {
-                "from_user_id": user_id,
-                "to_user_id": peer_id,
-                "kind": kind_norm,
-                "payload": payload,
-            },
-        )
+            targets = [self._peer_id(call, user_id)]
+
+        for peer_id in targets:
+            self._publish(
+                peer_id,
+                "call.signal",
+                call,
+                {
+                    "from_user_id": user_id,
+                    "to_user_id": peer_id,
+                    "kind": kind_norm,
+                    "payload": payload,
+                },
+            )
         return call
 
     def get_call_for_user(self, user_id: int, call_id: int) -> CallSession:

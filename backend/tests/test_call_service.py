@@ -165,6 +165,20 @@ def test_signal_relay_requires_participant(db_session):
         )
     assert forbidden.value.status_code == 403
 
+    svc.relay_signal(
+        1,
+        call.id,
+        kind="mute",
+        payload={"muted": True},
+    )
+    svc.relay_signal(
+        2,
+        call.id,
+        kind="camera",
+        payload={"off": True},
+    )
+    db_session.commit()
+
 
 def test_expire_stale_rings_marks_missed(db_session):
     _user(db_session, 1)

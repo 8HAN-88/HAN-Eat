@@ -144,6 +144,30 @@ def test_expire_stale_group_invites(db_session):
     assert call.status == "active"
 
 
+def test_group_mute_broadcast_without_to_user(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    conv = _group(db_session, 1, 2, 3)
+    db_session.commit()
+    svc = CallService(db_session)
+    call = svc.create_call(1, conversation_id=conv.id, media="voice")
+    db_session.commit()
+    svc.answer_call(2, call.id)
+    db_session.commit()
+    svc.answer_call(3, call.id)
+    db_session.commit()
+
+    # Control signals may omit to_user_id and fan out to joined peers.
+    svc.relay_signal(
+        1,
+        call.id,
+        kind="mute",
+        payload={"muted": True},
+    )
+    db_session.commit()
+
+
 def test_group_signal_requires_to_user(db_session):
     _user(db_session, 1)
     _user(db_session, 2)

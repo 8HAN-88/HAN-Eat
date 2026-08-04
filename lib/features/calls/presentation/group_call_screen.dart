@@ -11,6 +11,7 @@ import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../call_kit_bridge.dart';
+import '../call_media_controls.dart';
 import 'call_coordinator.dart';
 
 /// Small-group mesh call (up to 4 peers) using 1:1 PCs between members.
@@ -40,9 +41,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   bool _speakerOn = true;
   bool _ending = false;
   bool _initializing = true;
+  bool _weakLink = false;
   String _status = 'Подключение...';
   DateTime? _callStartedAt;
   Timer? _ticker;
+  Timer? _qualityTimer;
+  final Map<int, bool> _remoteMuted = {};
+  final Map<int, bool> _remoteCameraOff = {};
   late CallSessionInfo _call;
   late final Future<void> Function() _boundEnd = _hangup;
 
@@ -132,6 +137,15 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted) setState(() {});
       });
+      _qualityTimer?.cancel();
+      _qualityTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        unawaited(_refreshLinkQuality());
+      });
+      // Publish current media state so late joiners sync after answer.
+      unawaited(CallMediaControls.publishMute(_call.id, muted: _micMuted));
+      if (_isVideo) {
+        unawaited(CallMediaControls.publishCamera(_call.id, off: _cameraOff));
+      }
       setState(() {
         _initializing = false;
         _status = 'Групповой звонок';
@@ -209,6 +223,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
         } else {
           await _ensurePc(joinedId, createOffer: false);
         }
+        // Sync media state for the newcomer.
+        unawaited(CallMediaControls.publishMute(_call.id, muted: _micMuted));
+        if (_isVideo) {
+          unawaited(CallMediaControls.publishCamera(_call.id, off: _cameraOff));
+        }
         break;
       case 'call.signal':
         await _handleSignal(event);
@@ -225,8 +244,31 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     }
   }
 
+  Future<void> _refreshLinkQuality() async {
+    if (_ending || !mounted || _pcs.isEmpty) return;
+    var weak = false;
+    for (final pc in _pcs.values) {
+      if (await CallMediaControls.isWeakLink(pc)) {
+        weak = true;
+        break;
+      }
+    }
+    if (!mounted || weak == _weakLink) return;
+    setState(() => _weakLink = weak);
+  }
+
   Future<void> _handleSignal(UserRealtimeEvent event) async {
     final from = event.fromUserId;
+    final mute = CallMediaControls.muteFromEvent(event);
+    if (mute != null && from != null) {
+      if (mounted) setState(() => _remoteMuted[from] = mute);
+      return;
+    }
+    final camOff = CallMediaControls.cameraOffFromEvent(event);
+    if (camOff != null && from != null) {
+      if (mounted) setState(() => _remoteCameraOff[from] = camOff);
+      return;
+    }
     final kind = event.signalKind;
     final payload = event.signalPayload;
     if (from == null || kind == null || payload == null) return;
@@ -325,6 +367,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     _ending = true;
     _ticker?.cancel();
     _ticker = null;
+    _qualityTimer?.cancel();
+    _qualityTimer = null;
     await _sub?.cancel();
     _sub = null;
     if (notifyServer && !_call.isTerminal) {
@@ -355,6 +399,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final next = !_micMuted;
     tracks.first.enabled = !next;
     setState(() => _micMuted = next);
+    unawaited(CallMediaControls.publishMute(_call.id, muted: next));
   }
 
   Future<void> _toggleCamera() async {
@@ -363,6 +408,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     final next = !_cameraOff;
     tracks.first.enabled = !next;
     setState(() => _cameraOff = next);
+    unawaited(CallMediaControls.publishCamera(_call.id, off: next));
   }
 
   Future<void> _toggleSpeaker() async {
@@ -385,6 +431,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   void dispose() {
     CallCoordinator.instance.unbindHostedEndHandler(_boundEnd);
     _ticker?.cancel();
+    _qualityTimer?.cancel();
     if (!_ending) {
       unawaited(_cleanup(notifyServer: true));
     }
@@ -402,11 +449,13 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       ),
       ..._remotes.entries.map((e) {
         final name = _peerLabel(e.key);
+        final muted = _remoteMuted[e.key] == true;
+        final camOff = _remoteCameraOff[e.key] == true;
+        final showVideo = e.value.srcObject != null && !camOff;
         return _tile(
           label: name,
-          child: e.value.srcObject != null
-              ? RTCVideoView(e.value)
-              : _avatar(name),
+          muted: muted,
+          child: showVideo ? RTCVideoView(e.value) : _avatar(name),
         );
       }),
     ];
@@ -432,8 +481,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        _status,
-                        style: const TextStyle(color: Colors.white, fontSize: 18),
+                        _weakLink ? 'Плохая связь' : _status,
+                        style: TextStyle(
+                          color: _weakLink ? const Color(0xFFFFD38A) : Colors.white,
+                          fontSize: 18,
+                        ),
                       ),
                     ),
                     if (_durationLabel.isNotEmpty)
@@ -511,7 +563,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     return 'Участник';
   }
 
-  Widget _tile({required String label, required Widget child}) {
+  Widget _tile({
+    required String label,
+    required Widget child,
+    bool muted = false,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Stack(
@@ -521,7 +577,16 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           Positioned(
             left: 8,
             bottom: 8,
-            child: Text(label, style: const TextStyle(color: Colors.white70)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: const TextStyle(color: Colors.white70)),
+                if (muted) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.mic_off, color: Colors.white70, size: 16),
+                ],
+              ],
+            ),
           ),
         ],
       ),
