@@ -27,6 +27,10 @@ class CallSignalRequest(BaseModel):
     to_user_id: Optional[int] = Field(default=None, gt=0)
 
 
+class InviteCallRequest(BaseModel):
+    user_id: int = Field(gt=0)
+
+
 class IceServersResponse(BaseModel):
     ice_servers: list[dict[str, Any]]
     ring_timeout_seconds: int
@@ -220,3 +224,19 @@ async def list_call_participants(
 ):
     service = CallService(db)
     return {"participants": service.list_participants(current_user.id, call_id)}
+
+
+@router.post("/{call_id}/invite", response_model=CallItem)
+async def invite_to_call(
+    call_id: int,
+    body: InviteCallRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = CallService(db)
+    call = service.invite_to_group_call(current_user.id, call_id, body.user_id)
+    db.commit()
+    db.refresh(call)
+    # Push/SSE after commit so GET /calls/{id} cannot 404 for the invitee.
+    service.notify_group_incoming(call)
+    return _call_item(db, call, current_user.id)

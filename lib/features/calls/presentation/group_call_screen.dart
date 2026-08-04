@@ -6,8 +6,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/router_keys.dart';
+import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/call_service.dart';
+import '../../../services/chat_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../call_kit_bridge.dart';
@@ -427,6 +429,118 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     } catch (_) {}
   }
 
+  bool get _canInviteMore {
+    final live = _call.participants
+        .where((p) => p.status == 'joined' || p.status == 'ringing')
+        .length;
+    return live < CallService.maxGroupParticipants;
+  }
+
+  Future<void> _showInviteSheet() async {
+    if (!_canInviteMore) {
+      final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Звонок заполнен (макс. 4)')),
+        );
+      }
+      return;
+    }
+    List<ChatUserBrief> members;
+    try {
+      members = await ChatService.listMembers(_call.conversationId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось загрузить участников'))),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final busyIds = _call.participants
+        .where((p) => p.status == 'joined' || p.status == 'ringing')
+        .map((p) => p.userId)
+        .toSet();
+    final candidates = members
+        .where((m) => !m.isBot && m.id != _me && !busyIds.contains(m.id))
+        .toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Некого пригласить')),
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<ChatUserBrief>(
+      context: context,
+      backgroundColor: const Color(0xFF111827),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  'Пригласить в звонок',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(ctx).height * 0.5,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: candidates.length,
+                  itemBuilder: (_, i) {
+                    final m = candidates[i];
+                    final name = (m.name?.trim().isNotEmpty == true)
+                        ? m.name!.trim()
+                        : (m.username ?? 'Участник');
+                    return ListTile(
+                      leading: CircleAvatar(
+                        child: Text(name.isNotEmpty ? name[0].toUpperCase() : '?'),
+                      ),
+                      title: Text(name, style: const TextStyle(color: Colors.white)),
+                      onTap: () => Navigator.of(ctx).pop(m),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    try {
+      _call = await CallService.invite(_call.id, picked.id);
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Приглашение отправлено: ${picked.name?.trim().isNotEmpty == true ? picked.name!.trim() : 'участник'}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e, fallback: 'Не удалось пригласить'))),
+      );
+    }
+  }
+
   @override
   void dispose() {
     CallCoordinator.instance.unbindHostedEndHandler(_boundEnd);
@@ -493,6 +607,14 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                         _durationLabel,
                         style: const TextStyle(color: Colors.white70, fontSize: 16),
                       ),
+                    IconButton(
+                      tooltip: 'Пригласить',
+                      onPressed: _initializing ? null : _showInviteSheet,
+                      icon: Icon(
+                        Icons.person_add_alt_1,
+                        color: _canInviteMore ? Colors.white : Colors.white38,
+                      ),
+                    ),
                   ],
                 ),
               ),
