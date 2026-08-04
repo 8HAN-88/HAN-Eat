@@ -228,6 +228,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(ProfileAuthRoute.path),
       ),
       _SettingsItem(
+        title: 'Аккаунт и безопасность',
+        icon: Icons.security_outlined,
+        subtitle: 'Сессия, пароль, выход со всех устройств',
+        onTap: () => context.push(AccountSecurityRoute.path),
+      ),
+      _SettingsItem(
         title: 'Входящие',
         icon: Icons.inbox_outlined,
         subtitle: 'Лайки, комментарии, сообщения и другие события',

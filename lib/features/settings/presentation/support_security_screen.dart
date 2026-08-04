@@ -40,6 +40,16 @@ class SupportSecurityScreen extends StatelessWidget {
         ),
         children: [
           Card(
+            child: ListTile(
+              leading: const Icon(Icons.lock_person_outlined),
+              title: const Text('Аккаунт и безопасность'),
+              subtitle: const Text('Сессия, пароль, выход со всех устройств'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(AccountSecurityRoute.path),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
             child: Column(
               children: [
                 ListTile(
