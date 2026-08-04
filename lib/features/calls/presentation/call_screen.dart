@@ -10,6 +10,7 @@ import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../call_kit_bridge.dart';
+import '../call_media_controls.dart';
 import 'call_coordinator.dart';
 
 /// Working 1:1 WebRTC voice/video call (Telegram-like).
@@ -38,6 +39,9 @@ class _CallScreenState extends State<CallScreen> {
   bool _micMuted = false;
   bool _cameraOff = false;
   bool _speakerOn = true;
+  bool _remoteMuted = false;
+  bool _remoteCameraOff = false;
+  bool _weakLink = false;
   bool _initializing = true;
   bool _remoteReady = false;
   bool _ending = false;
@@ -48,6 +52,7 @@ class _CallScreenState extends State<CallScreen> {
   Timer? _ticker;
   Timer? _ringTimer;
   Timer? _disconnectTimer;
+  Timer? _qualityTimer;
   late CallSessionInfo _call;
   late final Future<void> Function() _boundEnd = _endCall;
   Map<String, dynamic> _iceServers = {
@@ -166,6 +171,12 @@ class _CallScreenState extends State<CallScreen> {
             _callStartedAt ??= DateTime.now();
           });
           _startTicker();
+          unawaited(CallMediaControls.publishMute(_call.id, muted: _micMuted));
+          if (_isVideo) {
+            unawaited(
+              CallMediaControls.publishCamera(_call.id, off: _cameraOff),
+            );
+          }
         } else if (state ==
                 RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
             state ==
@@ -217,6 +228,16 @@ class _CallScreenState extends State<CallScreen> {
     _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
+    _qualityTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
+      unawaited(_refreshLinkQuality());
+    });
+  }
+
+  Future<void> _refreshLinkQuality() async {
+    if (_ending || !mounted) return;
+    final weak = await CallMediaControls.isWeakLink(_pc);
+    if (!mounted || weak == _weakLink) return;
+    setState(() => _weakLink = weak);
   }
 
   Future<void> _handleDisconnectRecovery() async {
@@ -326,6 +347,16 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _handleSignal(UserRealtimeEvent event) async {
     final kind = event.signalKind;
+    final mute = CallMediaControls.muteFromEvent(event);
+    if (mute != null) {
+      if (mounted) setState(() => _remoteMuted = mute);
+      return;
+    }
+    final camOff = CallMediaControls.cameraOffFromEvent(event);
+    if (camOff != null) {
+      if (mounted) setState(() => _remoteCameraOff = camOff);
+      return;
+    }
     final payload = event.signalPayload;
     if (kind == null || payload == null || _pc == null) return;
     try {
@@ -389,6 +420,7 @@ class _CallScreenState extends State<CallScreen> {
     tracks.first.enabled = !next;
     if (!mounted) return;
     setState(() => _micMuted = next);
+    unawaited(CallMediaControls.publishMute(_call.id, muted: next));
   }
 
   Future<void> _toggleCamera() async {
@@ -398,6 +430,7 @@ class _CallScreenState extends State<CallScreen> {
     tracks.first.enabled = !next;
     if (!mounted) return;
     setState(() => _cameraOff = next);
+    unawaited(CallMediaControls.publishCamera(_call.id, off: next));
   }
 
   Future<void> _switchCamera() async {
@@ -438,6 +471,7 @@ class _CallScreenState extends State<CallScreen> {
     _ticker?.cancel();
     _ringTimer?.cancel();
     _disconnectTimer?.cancel();
+    _qualityTimer?.cancel();
     await _sub?.cancel();
     _sub = null;
     if (notifyServer && !_call.isTerminal) {
@@ -484,6 +518,7 @@ class _CallScreenState extends State<CallScreen> {
     _ticker?.cancel();
     _ringTimer?.cancel();
     _disconnectTimer?.cancel();
+    _qualityTimer?.cancel();
     _sub?.cancel();
     _sub = null;
     if (!_ending) {
@@ -547,51 +582,34 @@ class _CallScreenState extends State<CallScreen> {
                       child: _initializing
                           ? const Center(child: CircularProgressIndicator())
                           : _isVideo
-                              ? (_remoteReady
+                              ? (_remoteReady && !_remoteCameraOff
                                   ? RTCVideoView(
                                       _remoteRenderer,
                                       objectFit: RTCVideoViewObjectFit
                                           .RTCVideoViewObjectFitCover,
                                     )
-                                  : Container(
-                                      color: Colors.grey.shade900,
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        peerName,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 24,
-                                        ),
-                                      ),
-                                    ))
-                              : Container(
-                                  color: Colors.grey.shade900,
-                                  alignment: Alignment.center,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 48,
-                                        child: Text(
-                                          peerName.isNotEmpty
-                                              ? peerName[0].toUpperCase()
-                                              : '?',
-                                          style: const TextStyle(fontSize: 36),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        peerName,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                  : _peerPlaceholder(peerName))
+                              : _peerPlaceholder(peerName),
                     ),
+                    if (_remoteMuted && !_initializing)
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: _pill(
+                          icon: Icons.mic_off,
+                          label: 'Микрофон выкл.',
+                        ),
+                      ),
+                    if (_weakLink && !_initializing)
+                      Positioned(
+                        top: 16,
+                        right: _isVideo ? 140 : 16,
+                        child: _pill(
+                          icon: Icons.signal_wifi_statusbar_connected_no_internet_4,
+                          label: 'Плохая связь',
+                          color: const Color(0xFFB45309),
+                        ),
+                      ),
                     if (_isVideo && !_initializing)
                       Positioned(
                         right: 16,
@@ -626,9 +644,16 @@ class _CallScreenState extends State<CallScreen> {
                           ),
                           child: Row(
                             children: [
-                              Text(
-                                _status,
-                                style: const TextStyle(color: Colors.white),
+                              Flexible(
+                                child: Text(
+                                  _weakLink ? 'Плохая связь' : _status,
+                                  style: TextStyle(
+                                    color: _weakLink
+                                        ? const Color(0xFFFFD38A)
+                                        : Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               const Spacer(),
                               Text(
@@ -682,6 +707,72 @@ class _CallScreenState extends State<CallScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _peerPlaceholder(String peerName) {
+    return Container(
+      color: Colors.grey.shade900,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 48,
+            child: Text(
+              peerName.isNotEmpty ? peerName[0].toUpperCase() : '?',
+              style: const TextStyle(fontSize: 36),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            peerName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (_remoteMuted) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Микрофон выключен',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+          ],
+          if (_isVideo && _remoteCameraOff) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Камера выключена',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pill({
+    required IconData icon,
+    required String label,
+    Color color = const Color(0xCC111827),
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          ],
         ),
       ),
     );
