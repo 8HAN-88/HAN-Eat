@@ -14,8 +14,9 @@ import '../call_kit_bridge.dart';
 import 'call_screen.dart';
 import 'group_call_screen.dart';
 import 'incoming_call_screen.dart';
+import 'minimized_call_banner.dart';
 
-/// Global listener for incoming 1:1 calls (SSE + push + CallKit).
+/// Global listener for incoming calls (SSE + push + CallKit) and in-app call UI host.
 class CallCoordinator {
   CallCoordinator._();
 
@@ -27,6 +28,18 @@ class CallCoordinator {
   int? _activeCallId;
   int? _incomingDialogCallId;
   final Set<int> _kitShownIds = {};
+
+  OverlayEntry? _callOverlay;
+  Completer<void>? _callUiCompleter;
+  final ValueNotifier<bool> minimized = ValueNotifier(false);
+  final ValueNotifier<String> bannerTitle = ValueNotifier('Звонок');
+  final ValueNotifier<String> bannerSubtitle = ValueNotifier('Идёт звонок');
+  final ValueNotifier<bool> bannerIsVideo = ValueNotifier(false);
+  DateTime? _hostedStartedAt;
+  Timer? _bannerTick;
+  Future<void> Function()? _hostedEndHandler;
+
+  bool get hasHostedCallUi => _callOverlay != null;
 
   void start() {
     if (_started) return;
@@ -68,12 +81,158 @@ class CallCoordinator {
     _kitShownIds.remove(callId);
   }
 
+  void bindHostedEndHandler(Future<void> Function() end) {
+    _hostedEndHandler = end;
+  }
+
+  void unbindHostedEndHandler(Future<void> Function() end) {
+    if (_hostedEndHandler == end) _hostedEndHandler = null;
+  }
+
+  void minimizeCall() {
+    if (_callOverlay == null) return;
+    if (minimized.value) return;
+    minimized.value = true;
+    _callOverlay?.markNeedsBuild();
+  }
+
+  void expandCall() {
+    if (_callOverlay == null) return;
+    if (!minimized.value) return;
+    minimized.value = false;
+    _callOverlay?.markNeedsBuild();
+  }
+
+  Future<void> endFromBanner() async {
+    final handler = _hostedEndHandler;
+    if (handler != null) {
+      await handler();
+      return;
+    }
+    final id = _activeCallId;
+    if (id != null) {
+      try {
+        await CallService.end(id);
+      } catch (_) {}
+    }
+    closeCallUi();
+  }
+
+  void closeCallUi() {
+    _bannerTick?.cancel();
+    _bannerTick = null;
+    _hostedStartedAt = null;
+    _hostedEndHandler = null;
+    final entry = _callOverlay;
+    _callOverlay = null;
+    minimized.value = false;
+    entry?.remove();
+    final c = _callUiCompleter;
+    _callUiCompleter = null;
+    if (c != null && !c.isCompleted) c.complete();
+  }
+
+  Future<void> _hostCallUi({
+    required CallSessionInfo call,
+    required String title,
+    required Widget child,
+  }) async {
+    if (_callOverlay != null) {
+      expandCall();
+      return _callUiCompleter?.future ?? Future<void>.value();
+    }
+    final overlay = hanEatRootNavigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      final ctx = hanEatRootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      await Navigator.of(ctx, rootNavigator: true).push(
+        MaterialPageRoute(builder: (_) => child, fullscreenDialog: true),
+      );
+      return;
+    }
+
+    bannerTitle.value = title;
+    bannerIsVideo.value = call.isVideo;
+    bannerSubtitle.value = 'Идёт звонок';
+    _hostedStartedAt = DateTime.now();
+    minimized.value = false;
+    _bannerTick?.cancel();
+    _bannerTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      final started = _hostedStartedAt;
+      if (started == null) return;
+      final d = DateTime.now().difference(started);
+      final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+      final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+      bannerSubtitle.value = d.inHours > 0
+          ? '${d.inHours.toString().padLeft(2, '0')}:$mm:$ss'
+          : '$mm:$ss';
+    });
+
+    _callUiCompleter = Completer<void>();
+    _callOverlay = OverlayEntry(
+      builder: (context) {
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            minimized,
+            bannerTitle,
+            bannerSubtitle,
+            bannerIsVideo,
+          ]),
+          builder: (context, _) {
+            final isMin = minimized.value;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Keep WebRTC State alive while minimized; IgnorePointer lets
+                // taps reach the app under the overlay when the call is collapsed.
+                IgnorePointer(
+                  ignoring: isMin,
+                  child: Offstage(
+                    offstage: isMin,
+                    child: child,
+                  ),
+                ),
+                if (isMin)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: SafeArea(
+                      bottom: false,
+                      child: MinimizedCallBanner(
+                        title: bannerTitle.value,
+                        subtitle: bannerSubtitle.value,
+                        isVideo: bannerIsVideo.value,
+                        onExpand: expandCall,
+                        onEnd: () => unawaited(endFromBanner()),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    overlay.insert(_callOverlay!);
+    await _callUiCompleter!.future;
+  }
+
   Future<void> openOutgoing({
     required int conversationId,
     required String media,
     required BuildContext context,
     String? peerName,
   }) async {
+    if (_callOverlay != null || _activeCallId != null) {
+      expandCall();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Сначала завершите текущий звонок')),
+        );
+      }
+      return;
+    }
     final call = await CallService.createCall(
       conversationId: conversationId,
       media: media,
@@ -87,14 +246,17 @@ class CallCoordinator {
         media: media,
       );
     }
-    if (!context.mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => call.isGroup
-            ? GroupCallScreen(call: call)
-            : CallScreen(call: call),
-        fullscreenDialog: true,
-      ),
+    final title = peerName?.trim().isNotEmpty == true
+        ? peerName!.trim()
+        : (call.peerName?.trim().isNotEmpty == true
+            ? call.peerName!.trim()
+            : (call.isGroup ? 'Групповой звонок' : 'Собеседник'));
+    await _hostCallUi(
+      call: call,
+      title: title,
+      child: call.isGroup
+          ? GroupCallScreen(call: call)
+          : CallScreen(call: call),
     );
   }
 
@@ -183,28 +345,28 @@ class CallCoordinator {
   }
 
   Future<void> _answerAndOpen(int callId) async {
-    if (_activeCallId == callId) return;
+    if (_activeCallId == callId || _callOverlay != null) return;
     try {
       final answered = await CallService.answer(callId);
       _incomingDialogCallId = null;
       _kitShownIds.remove(callId);
       await CallKitBridge.setConnected(callId);
-      var ctx = hanEatRootNavigatorKey.currentContext;
-      if (ctx == null) {
+      // Wait briefly for root overlay after cold start from CallKit.
+      if (hanEatRootNavigatorKey.currentState?.overlay == null) {
         await Future<void>.delayed(const Duration(milliseconds: 700));
-        ctx = hanEatRootNavigatorKey.currentContext;
       }
-      if (ctx == null) return;
-      await Navigator.of(ctx, rootNavigator: true).push(
-        MaterialPageRoute(
-          builder: (_) => answered.isGroup
-              ? GroupCallScreen(call: answered)
-              : CallScreen(
-                  call: answered,
-                  initialAsCallee: true,
-                ),
-          fullscreenDialog: true,
-        ),
+      final title = answered.peerName?.trim().isNotEmpty == true
+          ? answered.peerName!.trim()
+          : (answered.isGroup ? 'Групповой звонок' : 'Собеседник');
+      await _hostCallUi(
+        call: answered,
+        title: title,
+        child: answered.isGroup
+            ? GroupCallScreen(call: answered)
+            : CallScreen(
+                call: answered,
+                initialAsCallee: true,
+              ),
       );
     } catch (e) {
       await CallKitBridge.end(callId);
@@ -223,7 +385,11 @@ class CallCoordinator {
     if (event.event == 'call.invite') {
       final callId = event.callId;
       if (callId == null) return;
-      if (_activeCallId != null || _incomingDialogCallId == callId) return;
+      if (_activeCallId != null ||
+          _callOverlay != null ||
+          _incomingDialogCallId == callId) {
+        return;
+      }
       if (event.callerId == me) return;
       final call = CallSessionInfo(
         id: callId,
@@ -262,7 +428,7 @@ class CallCoordinator {
 
   Future<void> _showIncoming(CallSessionInfo call) async {
     if (_incomingDialogCallId == call.id) return;
-    if (_activeCallId != null) return;
+    if (_activeCallId != null || _callOverlay != null) return;
 
     if (CallKitBridge.isSupported) {
       if (_kitShownIds.contains(call.id)) return;

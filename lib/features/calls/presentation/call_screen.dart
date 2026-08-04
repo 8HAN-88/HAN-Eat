@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../app/router_keys.dart';
 import '../../../services/call_service.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -48,6 +49,7 @@ class _CallScreenState extends State<CallScreen> {
   Timer? _ringTimer;
   Timer? _disconnectTimer;
   late CallSessionInfo _call;
+  late final Future<void> Function() _boundEnd = _endCall;
   Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
@@ -63,6 +65,7 @@ class _CallScreenState extends State<CallScreen> {
     _call = widget.call;
     _speakerOn = _isVideo;
     CallCoordinator.instance.attachActiveCall(_call.id);
+    CallCoordinator.instance.bindHostedEndHandler(_boundEnd);
     _sub = UserRealtimeService.instance.events.listen(_onRealtime);
     unawaited(WakelockPlus.enable());
     unawaited(_bootstrap());
@@ -85,8 +88,7 @@ class _CallScreenState extends State<CallScreen> {
           try {
             await CallService.cancel(_call.id);
           } catch (_) {}
-          await _cleanup(notifyServer: false);
-          if (mounted) Navigator.of(context).pop();
+          await _leaveUi(notifyServer: false);
         });
       }
     } catch (_) {}
@@ -249,10 +251,20 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _failAndClose(String message) async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-    await _cleanup(notifyServer: true);
-    if (mounted) Navigator.of(context).pop();
+    final ctx = hanEatRootNavigatorKey.currentContext ?? context;
+    if (ctx.mounted) {
+      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(message)));
+    }
+    await _leaveUi(notifyServer: true);
+  }
+
+  Future<void> _leaveUi({required bool notifyServer}) async {
+    await _cleanup(notifyServer: notifyServer);
+    if (CallCoordinator.instance.hasHostedCallUi) {
+      CallCoordinator.instance.closeCallUi();
+    } else if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _createAndSendOffer() async {
@@ -307,8 +319,7 @@ class _CallScreenState extends State<CallScreen> {
         if (_ending) return;
         setState(() => _status = 'Звонок завершён');
         await Future<void>.delayed(const Duration(milliseconds: 400));
-        await _cleanup(notifyServer: false);
-        if (mounted) Navigator.of(context).pop();
+        await _leaveUi(notifyServer: false);
         break;
     }
   }
@@ -418,8 +429,7 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _endCall() async {
     if (_ending) return;
-    await _cleanup(notifyServer: true);
-    if (mounted) Navigator.of(context).pop();
+    await _leaveUi(notifyServer: true);
   }
 
   Future<void> _cleanup({required bool notifyServer}) async {
@@ -470,6 +480,7 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
+    CallCoordinator.instance.unbindHostedEndHandler(_boundEnd);
     _ticker?.cancel();
     _ringTimer?.cancel();
     _disconnectTimer?.cancel();
@@ -502,6 +513,9 @@ class _CallScreenState extends State<CallScreen> {
         : 'Собеседник';
     return PopScope(
       canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) CallCoordinator.instance.minimizeCall();
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -511,7 +525,11 @@ class _CallScreenState extends State<CallScreen> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    const SizedBox(width: 48),
+                    IconButton(
+                      tooltip: 'Свернуть',
+                      onPressed: CallCoordinator.instance.minimizeCall,
+                      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                    ),
                     const Spacer(),
                     Text(
                       peerName,
