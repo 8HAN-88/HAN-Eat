@@ -80,6 +80,7 @@ def test_create_answer_end_call(db_session):
     svc = CallService(db_session)
     call = svc.create_call(1, conversation_id=conv.id, media="voice")
     db_session.commit()
+    assert (getattr(call, "kind", None) or "direct") == "direct"
     svc.notify_incoming(call)
     assert call.status == "ringing"
     assert call.caller_id == 1
@@ -101,6 +102,7 @@ def test_create_answer_end_call(db_session):
     )
     assert note is not None
     assert '"status": "ended"' in note.content
+    assert '"kind": "direct"' in note.content
 
 
 def test_reject_and_busy(db_session):

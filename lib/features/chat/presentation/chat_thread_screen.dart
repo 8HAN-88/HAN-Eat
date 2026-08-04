@@ -6761,6 +6761,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _redialFromCallMessage(ChatMessage msg) async {
+    final media = CallMessageLabels.mediaOf(msg.content);
+    if (media == 'video') {
+      await _startVideoCall();
+    } else {
+      await _startVoiceCall();
+    }
+  }
+
   void _showQuickCallMenu() {
     showTelegramActionSheet<void>(
       context: context,
@@ -8215,6 +8224,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               msg.id > 0 &&
               msg.readCount > 0
           ? () => unawaited(_showMessageReaders(msg))
+          : null,
+      onCallTap: interactive && msg.type == 'call'
+          ? () => unawaited(_redialFromCallMessage(msg))
           : null,
       outgoingBubbleColor: msg.isMine
           ? _bubbleAccent.outgoingColor(
@@ -14029,6 +14041,7 @@ class _Bubble extends StatelessWidget {
     this.onVoiceCompleted,
     this.onEditedTap,
     this.onReadersTap,
+    this.onCallTap,
     this.outgoingBubbleColor,
     this.onUnlockPaidMedia,
     this.unlockingPaidMedia = false,
@@ -14085,6 +14098,7 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<ChatMessage>? onVoiceCompleted;
   final VoidCallback? onEditedTap;
   final VoidCallback? onReadersTap;
+  final VoidCallback? onCallTap;
 
   double _metaReserveWidth(bool mine) {
     var width = 42.0; // time
@@ -14511,21 +14525,43 @@ class _Bubble extends StatelessWidget {
 
     if (message.type == 'call') {
       final label = CallMessageLabels.preview(message.content, mine: mine);
-      final chip = Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: scheme.onSurface.withValues(alpha: 0.08),
+      final chip = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onCallTap,
           borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: scheme.onSurface.withValues(alpha: 0.85),
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: scheme.onSurface.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: scheme.onSurface.withValues(alpha: 0.85),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                if (onCallTap != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    CallMessageLabels.mediaOf(message.content) == 'video'
+                        ? Icons.videocam_outlined
+                        : Icons.call_outlined,
+                    size: 16,
+                    color: scheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                ],
+              ],
+            ),
           ),
-          textAlign: TextAlign.center,
         ),
       );
       if (!wrapWithAlign) return chip;

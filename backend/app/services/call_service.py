@@ -139,6 +139,7 @@ class CallService:
         payload = {
             "call_id": call.id,
             "media": call.media,
+            "kind": getattr(call, "kind", None) or "direct",
             "status": call.status,
             "duration_sec": self._duration_sec(call),
             "caller_id": call.caller_id,

@@ -104,6 +104,17 @@ def test_create_group_call_and_join(db_session):
     listed = svc.list_participants(1, call.id)
     assert any(x["user_id"] == 2 and x["status"] == "joined" for x in listed)
 
+    ended = svc.end_call(1, call.id)
+    db_session.commit()
+    assert ended.status == "ended"
+    note = (
+        db_session.query(Message)
+        .filter(Message.conversation_id == conv.id, Message.type == "call")
+        .first()
+    )
+    assert note is not None
+    assert '"kind": "group"' in note.content
+
 
 def test_expire_stale_group_invites(db_session):
     from datetime import datetime, timedelta
