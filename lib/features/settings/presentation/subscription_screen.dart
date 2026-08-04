@@ -593,48 +593,57 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen>
               ),
               const SizedBox(height: 8),
             ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: DecoratedBox(
-                decoration: subscriptionBrandGradientDecoration(
-                  radius: BorderRadius.circular(14),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: (_isLoading ||
-                            _tierOwned(_selectedProduct, status) ||
-                            !_checkoutAvailable)
-                        ? null
-                        : _purchaseSelected,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Center(
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+            if (_checkoutAvailable) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: DecoratedBox(
+                  decoration: subscriptionBrandGradientDecoration(
+                    radius: BorderRadius.circular(14),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: (_isLoading || _tierOwned(_selectedProduct, status))
+                          ? null
+                          : _purchaseSelected,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Center(
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                _checkoutButtonLabel(status, hasPaid),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                               ),
-                            )
-                          : Text(
-                              _checkoutButtonLabel(status, hasPaid),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                SubscriptionCopy.paymentsComingSoonCta,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => context.pop(),
