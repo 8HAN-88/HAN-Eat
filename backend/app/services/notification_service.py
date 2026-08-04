@@ -217,11 +217,14 @@ class NotificationService:
         )
     
     def _send_push_notification(self, notification: Notification):
-        """Отправить push-уведомление через FCM/APNs"""
+        """Отправить push-уведомление через FCM/APNs (+ PushKit VoIP for calls)."""
         try:
             # Получаем пользователя
             user = self.db.query(User).filter(User.id == notification.user_id).first()
-            if not user or not user.fcm_token:
+            is_call = (notification.type or "").startswith("call.")
+            if not user:
+                return
+            if not user.fcm_token and not (is_call and getattr(user, "voip_token", None)):
                 return
             
             # Проверяем настройки уведомлений
@@ -262,6 +265,27 @@ class NotificationService:
                     "post_scheduled_published",
                 ) and not prefs.system_enabled:
                     return
+
+            # iOS CallKit when killed: PushKit VoIP (topic bundle_id.voip).
+            if is_call and getattr(user, "voip_token", None):
+                try:
+                    from app.services.voip_push_service import get_voip_push_service
+                    from app.services.push_service import PushService
+
+                    payload = PushService._build_fcm_data(notification, notification.data)
+                    if notification.title and "title" not in payload:
+                        payload["title"] = str(notification.title)
+                    if notification.body and "body" not in payload:
+                        payload["body"] = str(notification.body)
+                    get_voip_push_service().send_incoming(self.db, user, payload)
+                except Exception as voip_err:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "VoIP push failed for user %s: %s", user.id, voip_err
+                    )
+
+            if not user.fcm_token:
+                return
             
             # Импортируем PushService
             from app.services.push_service import get_push_service

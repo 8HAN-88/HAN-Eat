@@ -41,6 +41,7 @@ class CallKitBridge {
     required String callerName,
     String? avatarUrl,
     String media = 'voice',
+    String callKind = 'direct',
     int? conversationId,
     int durationMs = 60000,
   }) async {
@@ -58,6 +59,7 @@ class CallKitBridge {
       extra: <String, dynamic>{
         'call_id': callId,
         'media': media,
+        'call_kind': callKind,
         if (conversationId != null) 'conversation_id': conversationId,
         'caller_name': callerName,
       },
@@ -105,12 +107,14 @@ class CallKitBridge {
     if (callId == null) return;
     final name = (data['caller_name'] ?? data['title'] ?? 'Звонок').toString();
     final media = (data['media'] ?? 'voice').toString();
+    final callKind = (data['call_kind'] ?? data['callKind'] ?? 'direct').toString();
     final conversationId =
         int.tryParse('${data['conversation_id'] ?? data['conversationId'] ?? ''}');
     await showIncoming(
       callId: callId,
       callerName: name,
       media: media,
+      callKind: callKind,
       conversationId: conversationId,
       avatarUrl: data['caller_avatar']?.toString() ??
           data['from_avatar_url']?.toString(),

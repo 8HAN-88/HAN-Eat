@@ -116,6 +116,7 @@ class CallCoordinator {
               ? callerName!.trim()
               : 'Входящий звонок',
           media: media ?? 'voice',
+          callKind: 'direct',
         );
         _kitShownIds.add(callId);
         _incomingDialogCallId = callId;
@@ -273,9 +274,10 @@ class CallCoordinator {
         callId: call.id,
         callerName: call.peerName?.trim().isNotEmpty == true
             ? call.peerName!.trim()
-            : 'Входящий звонок',
+            : (call.isGroup ? 'Групповой звонок' : 'Входящий звонок'),
         avatarUrl: call.peerAvatarUrl,
         media: call.media,
+        callKind: call.kind,
         conversationId: call.conversationId,
         durationMs: timeoutMs,
       );

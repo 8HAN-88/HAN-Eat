@@ -125,6 +125,10 @@ class PushService:
             notification_data["media"] = str(payload["media"])
         if payload.get("caller_name") is not None:
             notification_data["caller_name"] = str(payload["caller_name"])
+        if payload.get("caller_avatar") is not None:
+            notification_data["caller_avatar"] = str(payload["caller_avatar"])
+        if payload.get("call_kind") is not None:
+            notification_data["call_kind"] = str(payload["call_kind"])
 
         if extra:
             notification_data.update({k: str(v) for k, v in extra.items()})
@@ -168,6 +172,7 @@ class PushService:
 
             # Calls: data-only FCM so Android background handler can show CallKit UI.
             # (A visible notification payload prevents onBackgroundMessage on Android.)
+            # iOS killed-state CallKit uses PushKit VoIP separately (see VoipPushService).
             if is_call:
                 if "title" not in notification_data and notification.title:
                     notification_data["title"] = str(notification.title)
