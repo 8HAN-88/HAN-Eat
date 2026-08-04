@@ -1274,9 +1274,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: UserSearchRoute.path,
         name: UserSearchRoute.name,
-        pageBuilder: (context, state) => const MaterialPage<void>(
-          child: SearchScreen(scope: SearchScope.main),
-        ),
+        // Legacy alias — same UI as SearchRoute.
+        redirect: (context, state) => SearchRoute.path,
       ),
       GoRoute(
         path: '${ChatThreadRoute.path}/:conversationId',

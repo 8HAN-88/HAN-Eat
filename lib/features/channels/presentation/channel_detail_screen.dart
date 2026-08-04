@@ -18,6 +18,7 @@ import '../application/channels_list_refresh_provider.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_detail_screen_tabs.dart';
 import 'channel_search_screen.dart';
+import 'channel_create_content_sheet.dart';
 
 import 'channel_post_card.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -215,14 +216,13 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
   }
 
   Future<void> _openCreatePost() async {
-    final result = await context.push(
-      ChannelDetailRoute.createPost(widget.channelId),
+    final created = await showChannelCreateContentSheet(
+      context,
+      channelId: widget.channelId,
+      channelName: _channel?.name,
     );
-    if (result is PostModel) {
-      _postsListKey.currentState?.addPost(result);
-    } else if (result == true) {
-      _postsListKey.currentState?.refreshPosts();
-    }
+    if (!mounted || !created) return;
+    _postsListKey.currentState?.refreshPosts();
   }
 
   Future<void> _toggleSubscribe() async {
@@ -419,20 +419,7 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
       ),
       floatingActionButton: c.canCreatePosts
           ? FloatingActionButton(
-              onPressed: () async {
-                final result = await context.push(
-                  ChannelDetailRoute.createPost(
-                    widget.channelId,
-                    channelName: c.name,
-                    type: 'text',
-                  ),
-                );
-                if (result is PostModel) {
-                  _postsListKey.currentState?.addPost(result);
-                } else if (result == true) {
-                  _postsListKey.currentState?.refreshPosts();
-                }
-              },
+              onPressed: _openCreatePost,
               tooltip: 'Создать',
               child: const Icon(Icons.add),
             )
