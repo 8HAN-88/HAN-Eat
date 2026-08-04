@@ -68,9 +68,10 @@ class CallMediaControls {
       var received = 0;
       for (final report in reports) {
         final values = report.values;
-        final type = '${report.type}'.toLowerCase();
+        final type = report.type.toLowerCase();
         if (type != 'inbound-rtp' && type != 'remote-inbound-rtp') continue;
-        final media = '${values['kind'] ?? values['mediaType'] ?? ''}'.toLowerCase();
+        final media =
+            (values['kind'] ?? values['mediaType'] ?? '').toString().toLowerCase();
         if (media.isNotEmpty && media != 'audio' && media != 'video') continue;
         final pl = values['packetsLost'];
         final pr = values['packetsReceived'] ?? values['packetsSent'];
