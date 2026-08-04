@@ -36,13 +36,24 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   };
   bool _micMuted = false;
   bool _cameraOff = false;
+  bool _speakerOn = true;
   bool _ending = false;
   bool _initializing = true;
   String _status = 'Подключение...';
+  DateTime? _callStartedAt;
+  Timer? _ticker;
   late CallSessionInfo _call;
 
   int? get _me => AuthService.instance.currentUser?.id;
   bool get _isVideo => _call.isVideo;
+
+  String get _durationLabel {
+    if (_callStartedAt == null) return '';
+    final sec = DateTime.now().difference(_callStartedAt!).inSeconds;
+    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+    final ss = (sec % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
 
   @override
   void initState() {
@@ -90,7 +101,7 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
             : false,
       });
       _localRenderer.srcObject = _localStream;
-      await Helper.setSpeakerphoneOn(true);
+      await Helper.setSpeakerphoneOn(_speakerOn);
 
       // Host is already joined; invitees answer via CallCoordinator before open.
       if (!_call.isCaller && _call.status != 'active') {
@@ -113,6 +124,11 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
       }
 
       if (!mounted) return;
+      _callStartedAt = DateTime.now();
+      _ticker?.cancel();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
       setState(() {
         _initializing = false;
         _status = 'Групповой звонок';
@@ -296,6 +312,8 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
   Future<void> _cleanup({required bool notifyServer}) async {
     if (_ending) return;
     _ending = true;
+    _ticker?.cancel();
+    _ticker = null;
     await _sub?.cancel();
     _sub = null;
     if (notifyServer && !_call.isTerminal) {
@@ -336,8 +354,25 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
     setState(() => _cameraOff = next);
   }
 
+  Future<void> _toggleSpeaker() async {
+    final next = !_speakerOn;
+    try {
+      await Helper.setSpeakerphoneOn(next);
+      if (mounted) setState(() => _speakerOn = next);
+    } catch (_) {}
+  }
+
+  Future<void> _switchCamera() async {
+    final tracks = _localStream?.getVideoTracks() ?? const [];
+    if (tracks.isEmpty) return;
+    try {
+      await Helper.switchCamera(tracks.first);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
+    _ticker?.cancel();
     if (!_ending) {
       unawaited(_cleanup(notifyServer: true));
     }
@@ -372,10 +407,21 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _status,
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _status,
+                        style: const TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+                    ),
+                    if (_durationLabel.isNotEmpty)
+                      Text(
+                        _durationLabel,
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                  ],
                 ),
               ),
               Expanded(
@@ -409,6 +455,18 @@ class _GroupCallScreenState extends State<GroupCallScreen> {
                         ),
                         onPressed: _toggleCamera,
                       ),
+                    if (_isVideo)
+                      IconButton(
+                        icon: const Icon(Icons.cameraswitch_outlined, color: Colors.white),
+                        onPressed: _switchCamera,
+                      ),
+                    IconButton(
+                      icon: Icon(
+                        _speakerOn ? Icons.volume_up : Icons.hearing,
+                        color: Colors.white,
+                      ),
+                      onPressed: _toggleSpeaker,
+                    ),
                     IconButton(
                       icon: const Icon(Icons.call_end, color: Colors.red, size: 32),
                       onPressed: _hangup,
