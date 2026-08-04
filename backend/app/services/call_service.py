@@ -236,10 +236,28 @@ class CallService:
             payload.update(extra)
         return payload
 
+    def _voip_end_user(self, user_id: int, call: CallSession) -> None:
+        """Dismiss CallKit UI on iOS when the call ends before/while ringing."""
+        try:
+            from app.services.voip_push_service import get_voip_push_service, voip_push_configured
+
+            if not voip_push_configured():
+                return
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user or not getattr(user, "voip_token", None):
+                return
+            get_voip_push_service().send_end(
+                self.db, user, call_id=call.id, media=call.media or "voice"
+            )
+        except Exception:
+            pass
+
     def _publish(self, user_id: int, event: str, call: CallSession, extra: Optional[dict] = None) -> None:
         body = self._call_payload(call, extra)
         body["event"] = event
         publish_user_event(user_id, body)
+        if event in ("call.ended", "call.cancelled", "call.rejected"):
+            self._voip_end_user(user_id, call)
 
     def _publish_both(self, call: CallSession, event: str, extra: Optional[dict] = None) -> None:
         if self._is_group(call):
@@ -379,6 +397,7 @@ class CallService:
                     "call_id": call.id,
                     "conversation_id": call.conversation_id,
                     "media": call.media,
+                    "call_kind": "direct",
                     "caller_id": call.caller_id,
                     "caller_name": caller_name,
                     "caller_avatar": getattr(caller, "avatar_url", None) or "",

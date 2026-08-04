@@ -289,6 +289,17 @@ class Settings(BaseSettings):
     WEBRTC_TURN_CREDENTIAL: str = ""
     CALL_RING_TIMEOUT_SECONDS: int = 60
 
+    # Apple PushKit VoIP (CallKit when iOS app is killed). Requires APNs Auth Key (.p8)
+    # with Push Notifications enabled; topic is "{APNS_BUNDLE_ID}.voip".
+    APNS_KEY_ID: str = ""
+    APNS_TEAM_ID: str = ""
+    APNS_BUNDLE_ID: str = "com.haneat.app"
+    # PEM contents (use \n for newlines) OR path via APNS_AUTH_KEY_PATH.
+    APNS_AUTH_KEY: str = ""
+    APNS_AUTH_KEY_PATH: str = ""
+    # true = api.sandbox.push.apple.com (dev builds); false = production.
+    APNS_USE_SANDBOX: bool = False
+
     # Media
     MAX_IMAGE_SIZE_MB: int = 10
     # 0 = без лимита (чаты/каналы); nginx client_max_body_size — фактический потолок

@@ -61,6 +61,21 @@ import UIKit
     let dataMap = (raw["data"] as? [String: Any]) ?? raw
     let callId = "\(dataMap["call_id"] ?? dataMap["callId"] ?? UUID().uuidString)"
     let uuid = Self.callUuid(from: callId)
+    let action = "\(dataMap["action"] ?? "")"
+    let eventType = "\(dataMap["type"] ?? "")"
+    // End / miss / cancel: dismiss CallKit without showing a new incoming UI.
+    if action == "end"
+      || eventType == "call.ended"
+      || eventType == "call.cancelled"
+      || eventType == "call.rejected"
+    {
+      // Same UUID as the incoming VoIP push so CallKit dismisses cleanly.
+      let endData = flutter_callkit_incoming.Data(args: ["id": uuid])
+      SwiftFlutterCallkitIncomingPlugin.sharedInstance?.endCall(endData)
+      completion()
+      return
+    }
+
     let name =
       (dataMap["caller_name"] as? String)
       ?? (dataMap["from_name"] as? String)
@@ -80,6 +95,7 @@ import UIKit
         "media": media,
         "conversation_id": "\(dataMap["conversation_id"] ?? "")",
         "caller_name": name,
+        "call_kind": "\(dataMap["call_kind"] ?? "direct")",
       ],
     ]
     if let avatar = dataMap["caller_avatar"] as? String ?? dataMap["from_avatar_url"] as? String {
