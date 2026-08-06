@@ -29,12 +29,11 @@ class GlobalSearchCache {
     String? dateTo,
     int? minLikes,
     int? minComments,
-    bool recipeSearch = false,
   }) {
     return [
       scope ?? 'main',
       mainTab,
-      recipeSearch ? 'recipe' : 'posts',
+      'posts',
       followingOnly ? '1' : '0',
       postType ?? '',
       sortBy ?? 'relevance',

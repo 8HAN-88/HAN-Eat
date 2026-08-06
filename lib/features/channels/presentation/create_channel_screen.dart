@@ -290,7 +290,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     controller: _slugController,
                     decoration: const InputDecoration(
                       labelText: 'URL идентификатор',
-                      hintText: 'vegan_recipes',
+                      hintText: 'news_channel',
                       prefixIcon: Icon(Icons.link),
                       helperText: 'Используется в URL канала',
                     ),

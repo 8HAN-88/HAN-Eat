@@ -62,8 +62,8 @@ class NotificationService {
 
   static const AndroidNotificationChannel _mealChannel =
       AndroidNotificationChannel(
-    'meal_reminders',
-    'Напоминания о еде',
+    'app_reminders',
+    'Напоминания',
     description: 'Локальные напоминания приложения',
     importance: Importance.defaultImportance,
   );

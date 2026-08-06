@@ -281,7 +281,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
       case 'reel':
         return Icons.videocam_outlined;
       case 'recipe':
-        return Icons.restaurant_menu_outlined;
+        return Icons.article_outlined;
       default:
         return Icons.article_outlined;
     }

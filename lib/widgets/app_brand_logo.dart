@@ -4,7 +4,7 @@ enum AppBrandLogoLayout {
   /// Квадратная иконка приложения.
   square,
 
-  /// На экранах входа — только буквы HAN без фона и рамок.
+  /// На экранах входа — wordmark без фона и рамок.
   horizontal,
 }
 
@@ -40,7 +40,7 @@ class AppBrandLogo extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => Icon(
-          Icons.restaurant_menu,
+          Icons.forum_rounded,
           size: logoWidth * 0.35,
           color: theme.colorScheme.primary,
         ),
@@ -58,7 +58,7 @@ class AppBrandLogo extends StatelessWidget {
         filterQuality: FilterQuality.medium,
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => Icon(
-          Icons.restaurant_menu,
+          Icons.forum_rounded,
           size: edge * 0.45,
           color: theme.colorScheme.primary,
         ),

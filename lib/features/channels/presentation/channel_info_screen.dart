@@ -101,7 +101,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     }
   }
 
-  String get _publicLink => 'https://han-eat.app/channel/${widget.channelId}';
+  String get _publicLink => 'https://haneat.app/channel/${widget.channelId}';
 
   Future<void> _toggleSubscribe() async {
     if (_channel == null || _isJoining) return;

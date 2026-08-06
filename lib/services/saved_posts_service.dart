@@ -92,29 +92,8 @@ class SavedPostsService {
         final op = data['op'] as String?;
         final id = data['id'] as int?;
         if (op == null || id == null) continue;
-        if (op == 'save_recipe') {
-          final recipeJson = _recipesBox?.get('recipe_$id');
-          if (recipeJson != null) {
-            final uri = Uri.parse('$baseUrl/recipes/$id/save');
-            await http.post(
-              uri,
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-              body: recipeJson,
-            );
-          }
-        } else if (op == 'unsave_recipe') {
-          final uri = Uri.parse('$baseUrl/recipes/$id/save');
-          await http.delete(
-            uri,
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-          );
-        } else if (op == 'save_post') {
+        // Legacy kitchen queue ops map onto posts save API.
+        if (op == 'save_recipe' || op == 'save_post') {
           final uri = Uri.parse('$baseUrl/posts/$id/save');
           await http.post(
             uri,
@@ -123,7 +102,7 @@ class SavedPostsService {
               'Content-Type': 'application/json',
             },
           );
-        } else if (op == 'unsave_post') {
+        } else if (op == 'unsave_recipe' || op == 'unsave_post') {
           final uri = Uri.parse('$baseUrl/posts/$id/save');
           await http.delete(
             uri,
