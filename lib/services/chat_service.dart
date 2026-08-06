@@ -647,6 +647,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     bool disableWebpagePreview = false,
+    String? effectId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -656,6 +657,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       disableWebpagePreview: disableWebpagePreview,
+      effectId: effectId,
     );
   }
 
@@ -1119,6 +1121,7 @@ class ChatService {
     bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
+    String? effectId,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1140,6 +1143,7 @@ class ChatService {
         if (hasSpoiler) 'has_spoiler': true,
         if (isPaid) 'is_paid': true,
         if (isPaid && priceStars > 0) 'price_stars': priceStars,
+        if (effectId != null && effectId.isNotEmpty) 'effect_id': effectId,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
@@ -1938,6 +1942,9 @@ class ChatService {
       purchased: mine ? true : msg.purchased,
       reactions: msg.reactions,
       inlineKeyboard: msg.inlineKeyboard,
+      replyKeyboard: msg.replyKeyboard,
+      effectId: msg.effectId,
+      hasSpoiler: msg.hasSpoiler,
     );
   }
 

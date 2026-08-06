@@ -72,6 +72,7 @@ class MessageResponse(BaseModel):
     price_stars: int = 0
     purchased: bool = True
     reactions: List["MessageReactionSummary"] = []
+    effect_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -245,6 +246,8 @@ class SendMessageRequest(BaseModel):
     # Telegram Stars paid media (image/video/file).
     is_paid: bool = False
     price_stars: int = Field(default=0, ge=0, le=100000)
+    # Telegram-like send effect: confetti | fireworks | hearts | celebration | thumbs_up
+    effect_id: Optional[str] = Field(default=None, max_length=32)
 
 
 class ScheduleMessageRequest(BaseModel):
