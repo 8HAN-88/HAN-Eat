@@ -1,7 +1,6 @@
 // Новая карточка поста для нового API
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -163,9 +162,6 @@ class _NewPostCardState extends State<NewPostCard>
     if (_currentUserId == null) {
       _loadCurrentUserId();
     }
-    if (!kIsWeb) {
-      _hydrateSpoonacularCommentsCount();
-    }
     _syncFeedChannelRepostFuture();
   }
 
@@ -322,22 +318,8 @@ class _NewPostCardState extends State<NewPostCard>
     });
   }
 
-  bool get _isSpoonacularRecipePost {
-    if (_displayPost.type != 'recipe') return false;
-    final body = _displayPost.body;
-    if (body == null) return false;
-    final source = body['source']?.toString().trim().toLowerCase();
-    final nestedRecipe = body['recipe'];
-    final nestedSource = nestedRecipe is Map<String, dynamic>
-        ? nestedRecipe['source']?.toString().trim().toLowerCase()
-        : null;
-    return body['spoonacular_recipe_id'] != null ||
-        source == 'spoonacular' ||
-        nestedSource == 'spoonacular';
-  }
 
-  /// Local/catalog Spoonacular cards reuse the recipe id as [PostModel.id].
-  /// Real feed/channel posts get an independent posts.id from the API.
+
   bool get _likesViaPostApi => true;
 
   Future<void> _openLink(String url) async {
@@ -351,19 +333,9 @@ class _NewPostCardState extends State<NewPostCard>
     }
   }
 
-  int get _spoonacularRecipeIdFromPost {
-    final body = widget.post.body;
-    if (body == null) return widget.post.id;
-    final spoonacularId = body['spoonacular_recipe_id'];
-    if (spoonacularId is int) return spoonacularId;
-    if (spoonacularId is String) {
-      return int.tryParse(spoonacularId) ?? widget.post.id;
-    }
-    return widget.post.id;
-  }
+
 
   Future<void> _refreshCommentsCount() async {
-    if (_isSpoonacularRecipePost) return;
     try {
       final total = await CommentService.getCommentsTotal(widget.post.id);
       if (mounted) {
@@ -371,8 +343,6 @@ class _NewPostCardState extends State<NewPostCard>
       }
     } catch (_) {}
   }
-
-  Future<void> _hydrateSpoonacularCommentsCount() async {}
 
 
   Future<void> _toggleLike() async {
@@ -1880,10 +1850,7 @@ class _NewPostCardState extends State<NewPostCard>
     return 'Пост';
   }
 
-  /// Получить прокси URL для изображений Spoonacular (для обхода CORS на веб)
   String _getProxyUrl(String originalUrl) {
-    // Для Spoonacular на iOS/Android используем прямой URL (надежнее),
-    // а на Web ServerConfig сам переведет на proxy.
     return ServerConfig.resolveRecipeImageUrl(originalUrl);
   }
 
@@ -1928,7 +1895,7 @@ class _NewPostCardState extends State<NewPostCard>
 
     final media = body['media'] as List<dynamic>?;
 
-    // Если media пустой, пытаемся собрать превью из известных полей рецепта.
+    // Если media пустой, пытаемся собрать превью из известных полей body.
     List<dynamic>? effectiveMedia = media;
     if (media == null || media.isEmpty) {
       final imageUrl = _extractRecipeImageUrl(body);
@@ -1972,7 +1939,7 @@ class _NewPostCardState extends State<NewPostCard>
         // Для обычных постов пока просто ничего не делаем (можно добавить роут позже)
       }
 
-      // Извлекаем URL изображений и применяем прокси для Spoonacular
+      // Извлекаем URL изображений (с proxy для legacy CDN при необходимости)
       final imageUrls = images
           .map((img) => img['url'] as String?)
           .whereType<String>()

@@ -210,7 +210,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
       return const AppEmptyState(
         icon: Icons.bookmark_border,
         title: 'Нет сохранённых постов',
-        subtitle: 'Сохраняйте рецепты и посты — они появятся здесь',
+        subtitle: 'Сохраняйте посты — они появятся здесь',
       );
     }
     
@@ -285,7 +285,7 @@ class _SavedPostsScreenState extends ConsumerState<SavedPostsScreen>
           MaterialBanner(
             content: Text(
               _isOffline
-                  ? 'Офлайн — показаны сохранённые на устройстве рецепты и посты'
+                  ? 'Офлайн — показаны сохранённые на устройстве посты'
                   : 'Показаны данные с устройства — потяните вниз для обновления',
             ),
             leading: Icon(

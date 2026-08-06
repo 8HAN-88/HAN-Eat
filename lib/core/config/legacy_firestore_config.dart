@@ -1,4 +1,4 @@
-/// Синхронизация через Firestore (избранное, локальный meal plan, legacy community).
+/// Синхронизация через Firestore (legacy offline sync).
 ///
 /// В release отключено — источник правды: Hive локально + FastAPI.
 /// Включить вручную: `--dart-define=HANEAT_LEGACY_FIRESTORE=true`

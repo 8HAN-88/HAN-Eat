@@ -689,7 +689,7 @@ class _PaidChannelBenefitRow extends StatelessWidget {
 class ChannelPostsList extends StatefulWidget {
   final int channelId;
   final ChannelDetail channel;
-  final String? postType; // null = все посты, 'recipe' = только рецепты
+  final String? postType; // null = все посты; legacy 'recipe' ignored in UI
   final VoidCallback? onPostDeleted;
 
   const ChannelPostsList({

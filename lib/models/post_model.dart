@@ -100,7 +100,7 @@ class PostModel {
   final PostAuthorModel? author;
   final PostAuthorModel? repostedBy;  // Информация о том, кто репостнул
   final ChannelModel? channel;  // Информация о канале (если пост из канала)
-  /// public | private | followers — для рецептов в канале
+  /// public | private | followers
   final String visibility;
 
   bool get isPrivateRecipe => type == 'recipe' && visibility == 'private';
@@ -251,11 +251,11 @@ class PostModel {
     } else if (json['id'] is String) {
       final idStr = json['id'] as String;
       if (idStr.startsWith('spoonacular_')) {
-        // Для рецептов Spoonacular используем числовую часть
+        // Legacy catalog ids: spoonacular_<n>
         final numPart = idStr.replaceFirst('spoonacular_', '');
         parsedId = int.tryParse(numPart) ?? 0;
       } else if (idStr.startsWith('user_') || idStr.startsWith('channel_')) {
-        // Для пользовательских/канальных рецептов тоже извлекаем числовую часть.
+        // Для user_/channel_ ids тоже извлекаем числовую часть.
         final numPart = idStr.replaceFirst(RegExp(r'^(user_|channel_)'), '');
         parsedId = int.tryParse(numPart) ?? 0;
       } else {

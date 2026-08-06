@@ -128,8 +128,7 @@ class ServerConfig {
       url.startsWith('https://img.spoonacular.com') ||
       url.startsWith('https://spoonacular.com');
 
-  /// URL для отображения фото рецепта.
-  /// Spoonacular напрямую из РФ часто «висит» десятки секунд — на production идём через API (Amsterdam).
+  /// URL для отображения изображений постов (legacy CDN через proxy при необходимости).
   static String resolveRecipeImageUrl(String url) {
     if (url.isEmpty) return url;
     if (_isSpoonacularImageUrl(url)) {

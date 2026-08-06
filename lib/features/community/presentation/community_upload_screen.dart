@@ -36,7 +36,7 @@ class _CommunityUploadScreenState
   final _titleCtrl = TextEditingController();
   final _authorCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
-  final _tagsCtrl = TextEditingController(text: 'боул,здоровье');
+  final _tagsCtrl = TextEditingController(text: 'lifestyle,news');
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
   
@@ -280,7 +280,7 @@ class _CommunityUploadScreenState
               controller: _tagsCtrl,
               decoration: const InputDecoration(
                 labelText: 'Теги',
-                helperText: 'Через запятую: боул, здоровое питание, кето',
+                helperText: 'Через запятую: новости, спорт, музыка',
               ),
             ),
             const SizedBox(height: 12),

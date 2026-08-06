@@ -22,13 +22,11 @@ class CreatePostScreen extends ConsumerStatefulWidget {
   const CreatePostScreen({
     super.key,
     this.initialType = 'text',
-    this.recipeOnly = false,
   });
 
   static const routeName = '/create-post';
 
   final String initialType;
-  final bool recipeOnly;
 
   @override
   ConsumerState<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -43,9 +41,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   String? _loadingStatus;
   int? _selectedChannelId;
   final List<Channel> _userChannels = [];
-  String _recipeVisibility = 'public';
-  String? _channelVisibilityMode;
-  String? _originCountryCode;
   bool _isPaidContent = false;
 
   // Медиа файлы
@@ -57,18 +52,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool _isUploading = false;
   List<String> _uploadedMediaUrls = [];
 
-  // Для рецепта
-  final List<TextEditingController> _ingredientControllers = [];
-  final List<TextEditingController> _stepControllers = [];
-  final List<XFile?> _stepImages = [];
-  final _prepTimeController = TextEditingController();
-  final _cookTimeController = TextEditingController();
-  final _servingsController = TextEditingController();
-  final _caloriesController = TextEditingController();
-  final _proteinController = TextEditingController();
-  final _carbsController = TextEditingController();
-  final _fatController = TextEditingController();
-  final _fiberController = TextEditingController();
   final _tagsController = TextEditingController();
   final _linkUrlController = TextEditingController();
   final _linkPreviewController = TextEditingController();
@@ -81,8 +64,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   bool get _isPollMode => _selectedType == 'poll';
   bool get _isLinkMode => _selectedType == 'link';
-  bool get _recipeComposerEnabled =>
-      false;
   int get _paidPriceStars => _isPaidContent
       ? (int.tryParse(_priceStarsController.text.trim()) ?? 0)
       : 0;
@@ -94,34 +75,26 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   void initState() {
     super.initState();
-    final wantsRecipe = widget.recipeOnly || widget.initialType == 'recipe';
-    // В social recipe запрещён
-    _selectedType =
-        'text';
+    // Recipe composer removed — messenger posts only.
+    _selectedType = widget.initialType == 'recipe' ? 'text' : widget.initialType;
+    if (_selectedType != 'poll' &&
+        _selectedType != 'link' &&
+        _selectedType != 'text' &&
+        _selectedType != 'photo' &&
+        _selectedType != 'reel') {
+      _selectedType = 'text';
+    }
     _linkUrlController.addListener(_scheduleLinkPreviewLoad);
     _linkPreviewController.addListener(() {
       if (!mounted) return;
       setState(() {});
     });
-    // Добавляем начальные поля для рецепта, если это рецепт
-    if (_selectedType == 'recipe') {
-      _addIngredientField();
-      _addStepField();
-    }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _prepTimeController.dispose();
-    _cookTimeController.dispose();
-    _servingsController.dispose();
-    _caloriesController.dispose();
-    _proteinController.dispose();
-    _carbsController.dispose();
-    _fatController.dispose();
-    _fiberController.dispose();
     _tagsController.dispose();
     _linkPreviewDebounce?.cancel();
     _linkUrlController.removeListener(_scheduleLinkPreviewLoad);
@@ -132,71 +105,13 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     for (var ctrl in _pollOptionControllers) {
       ctrl.dispose();
     }
-    for (var ctrl in _ingredientControllers) {
-      ctrl.dispose();
-    }
-    for (var ctrl in _stepControllers) {
-      ctrl.dispose();
-    }
     super.dispose();
   }
 
-  void _addIngredientField() {
-    setState(() {
-      _ingredientControllers.add(TextEditingController());
-    });
-  }
 
-  void _removeIngredientField(int index) {
-    if (_ingredientControllers.length > 1) {
-      setState(() {
-        _ingredientControllers[index].dispose();
-        _ingredientControllers.removeAt(index);
-      });
-    }
-  }
 
-  void _addStepField() {
-    setState(() {
-      _stepControllers.add(TextEditingController());
-      _stepImages.add(null);
-    });
-  }
 
-  void _removeStepField(int index) {
-    if (_stepControllers.length > 1) {
-      setState(() {
-        _stepControllers[index].dispose();
-        _stepControllers.removeAt(index);
-        _stepImages.removeAt(index);
-      });
-    }
-  }
 
-  Future<void> _pickStepImage(int index) async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        setState(() {
-          _stepImages[index] = image;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось выбрать изображение'))),
-        );
-      }
-    }
-  }
 
   /// Helper метод для отображения изображения (поддержка веб и мобильных)
   Widget _buildImageWidget(XFile imageFile,
@@ -345,17 +260,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
-  void _disposeRecipeDraftFields() {
-    for (final ctrl in _ingredientControllers) {
-      ctrl.dispose();
-    }
-    for (final ctrl in _stepControllers) {
-      ctrl.dispose();
-    }
-    _ingredientControllers.clear();
-    _stepControllers.clear();
-    _stepImages.clear();
-  }
 
   void _clearLinkDraft() {
     _linkPreviewDebounce?.cancel();
@@ -366,7 +270,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   void _preparePlainComposerForMediaSelection() {
     if (_selectedType == 'recipe') {
-      _disposeRecipeDraftFields();
+      
     }
     _clearLinkDraft();
     _selectedType = 'text';
@@ -400,23 +304,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     return urls.whereType<String>().toList();
   }
 
-  Future<void> _loadChannelVisibilityMode(int? channelId) async {
-    if (channelId == null) {
-      setState(() {
-        _channelVisibilityMode = null;
-        _recipeVisibility = 'public';
-      });
-      return;
-    }
-    try {
-      final channel = await ChannelService.getChannel(channelId);
-      if (!mounted) return;
-      setState(() {
-        _channelVisibilityMode = channel.recipeVisibilityMode;
-        _recipeVisibility = 'public';
-      });
-    } catch (_) {}
-  }
 
   Future<void> _uploadMedia() async {
     if (_selectedImages.isEmpty && _selectedVideo == null) return;
@@ -609,32 +496,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   Future<void> _handlePublish() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Валидация только для рецепта
-    if (_selectedType == 'recipe') {
-      final ingredients = _ingredientControllers
-          .map((c) => c.text.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
-      if (ingredients.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Добавьте хотя бы один ингредиент')),
-        );
-        return;
-      }
-
-      final steps = _stepControllers
-          .map((c) => c.text.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
-      if (steps.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Добавьте хотя бы один шаг')),
-        );
-        return;
-      }
-    } else if (!_isPollMode && !_isLinkMode) {
+    if (!_isPollMode && !_isLinkMode) {
       final hasText = _descriptionController.text.trim().isNotEmpty ||
           _titleController.text.trim().isNotEmpty;
       final hasMedia = _selectedImages.isNotEmpty || _selectedVideo != null;
@@ -695,8 +557,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           isPaid: _isPaidContent,
           priceStars: _paidPriceStars,
         );
-      } else if (_selectedType == 'recipe') {
-        throw Exception('Создание рецептов больше недоступно');
       } else {
         if ((_selectedImages.isNotEmpty || _selectedVideo != null) &&
             _uploadedMediaUrls.isEmpty) {
@@ -768,11 +628,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         Navigator.of(context).pop(true); // Возвращаемся с успехом
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.recipeOnly
-                ? 'Рецепт опубликован'
-                : wasVideoSelected
-                    ? 'Рилс опубликован'
-                    : 'Пост опубликован'),
+            content: Text(wasVideoSelected
+                ? 'Рилс опубликован'
+                : 'Пост опубликован'),
           ),
         );
       }
@@ -844,11 +702,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(widget.recipeOnly
-                        ? 'Опубликовать рецепт'
-                        : _selectedVideo != null
-                            ? 'В рилсы'
-                            : 'Опубликовать'),
+                    : Text(_selectedVideo != null
+                        ? 'В рилсы'
+                        : 'Опубликовать'),
               ),
             ),
           ],
@@ -910,7 +766,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
                   // Контент в зависимости от типа
 
-                  // Кнопки для добавления медиа (не для рецепта и опроса)
+                  // Кнопки для добавления медиа (не для опроса/ссылки)
                   if (_selectedType != 'recipe' &&
                       !_isPollMode &&
                       !_isLinkMode) ...[
@@ -1060,7 +916,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ],
                       onChanged: (value) {
                         setState(() => _selectedChannelId = value);
-                        _loadChannelVisibilityMode(value);
                       },
                     ),
                     const SizedBox(height: 16),
@@ -1076,8 +931,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Widget _buildComposerTextField() {
     final scheme = Theme.of(context).colorScheme;
-    final isStructured =
-        _selectedType == 'recipe' || _isPollMode || _isLinkMode;
+    final isStructured = _isPollMode || _isLinkMode;
 
     return FutureBuilder(
       future: AuthService.getCurrentUser(),
@@ -1124,10 +978,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     minLines: isStructured ? 3 : 8,
                     maxLines: null,
                     validator: (value) {
-                      if (_selectedType == 'recipe' &&
-                          (value == null || value.trim().isEmpty)) {
-                        return 'Введите описание рецепта';
-                      }
                       return null;
                     },
                   ),
@@ -1212,12 +1062,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   void _setContentType(String type) {
-    if (type == 'recipe' && !_recipeComposerEnabled) return;
-    if (widget.recipeOnly && type != 'recipe') return;
+    if (type == 'recipe') return;
     setState(() {
-      if (_selectedType == 'recipe' && type != 'recipe') {
-        _disposeRecipeDraftFields();
-      }
       if (type != 'link') {
         _clearLinkDraft();
       }
@@ -1226,16 +1072,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         _selectedVideo = null;
       }
       _selectedType = type;
-      if (type == 'recipe') {
-        _selectedVideo = null;
-        if (_ingredientControllers.isEmpty) {
-          _ingredientControllers.add(TextEditingController());
-        }
-        if (_stepControllers.isEmpty) {
-          _stepControllers.add(TextEditingController());
-          _stepImages.add(null);
-        }
-      }
     });
   }
 
@@ -1296,9 +1132,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       ],
     );
   }
-
-  Widget _buildRecipeSection() => const SizedBox.shrink();
-
 
 }
 

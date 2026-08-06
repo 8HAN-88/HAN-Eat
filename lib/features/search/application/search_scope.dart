@@ -70,7 +70,5 @@ extension SearchScopeLabels on SearchScope {
     }
   }
 
-  bool get usesRecipeSearch => false;
-
   bool get usesChatsHubSearch => this == SearchScope.chats;
 }

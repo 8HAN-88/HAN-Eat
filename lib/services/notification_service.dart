@@ -64,7 +64,7 @@ class NotificationService {
       AndroidNotificationChannel(
     'meal_reminders',
     'Напоминания о еде',
-    description: 'Локальные напоминания по плану питания',
+    description: 'Локальные напоминания приложения',
     importance: Importance.defaultImportance,
   );
 

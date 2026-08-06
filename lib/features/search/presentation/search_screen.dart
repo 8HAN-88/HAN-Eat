@@ -76,7 +76,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _showSuggestions = false;
 
   late final bool _followingOnly;
-  late final bool _recipeSearch;
   late final bool _lockPostTypeFilter;
 
   String get _screenTitle => widget.scope?.title ?? 'Поиск';
@@ -89,7 +88,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool get _chatsHubMode => widget.scope?.usesChatsHubSearch ?? false;
 
   bool get _unifiedPeopleSearch =>
-      !_recipeSearch &&
       !_channelsOnlyMode &&
       !_chatsHubMode &&
       (widget.scope == null || widget.scope == SearchScope.main);
@@ -123,7 +121,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void initState() {
     super.initState();
     _followingOnly = widget.followingOnly;
-    _recipeSearch = widget.scope?.usesRecipeSearch ?? false;
     _selectedPostType = feedFilterToPostType(widget.feedType);
     _lockPostTypeFilter = widget.feedType != null && widget.feedType != 'all';
     _searchController.addListener(_onSearchChanged);
@@ -210,7 +207,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       dateTo: _dateTo?.toIso8601String().split('T').first,
       minLikes: _minLikes,
       minComments: _minComments,
-      recipeSearch: _recipeSearch,
     );
   }
 
@@ -289,44 +285,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     });
 
     try {
-      if (_recipeSearch) {
-        final response = await SearchService.searchRecipes(
-          query: query,
-          tags: _selectedTags.isNotEmpty ? _selectedTags : null,
-          dateFrom: _dateFrom,
-          dateTo: _dateTo,
-          minLikes: _minLikes,
-          minComments: _minComments,
-          sortBy: _selectedSortBy!,
-          limit: _limit,
-          offset: _offset,
-        );
-        if (mounted) {
-          setState(() {
-            if (reset) {
-              _posts = response.recipes;
-            } else {
-              _posts.addAll(response.recipes);
-            }
-            _total = response.total;
-            _offset = _offset + response.recipes.length;
-            _isLoading = false;
-          });
-          if (reset) {
-            unawaited(
-              GlobalSearchCache.save(
-                _buildSearchCacheKey(query),
-                GlobalSearchCachedResult(
-                  posts: response.recipes,
-                  total: response.total,
-                ),
-              ),
-            );
-            unawaited(_rememberQuery(query));
-          }
-        }
-        return;
-      }
+
 
       List<ChatUserSearchItem>? peopleResult;
       if (_searchPeople && reset) {
@@ -626,8 +585,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         ),
                       ],
                       if (_searchController.text.trim().isEmpty &&
-                          _recentQueries.isNotEmpty &&
-                          !_recipeSearch)
+                          _recentQueries.isNotEmpty)
                         _buildRecentQueries(),
                       // Автодополнение
                       if (_showSuggestions && _suggestions.isNotEmpty)
@@ -716,7 +674,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ],
           ),
-          if (!_recipeSearch && !_lockPostTypeFilter) ...[
+          if (!_lockPostTypeFilter) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
