@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     
     # Spoonacular API (для рецептов)
     SPOONACULAR_API_KEY: str = ""
+
+    # Tenor GIF catalog (Google). Empty key = search/featured return configured=false.
+    TENOR_API_KEY: str = ""
+    TENOR_CLIENT_KEY: str = "hanwe"
+    TENOR_CONTENT_FILTER: str = "medium"
+    TENOR_LOCALE: str = "ru_RU"
     
     # Google Sign-In (OAuth id_token): audiences из Cloud Console, через запятую; пусто = любой валидный aud от Google
     GOOGLE_OAUTH_CLIENT_IDS: str = ""
