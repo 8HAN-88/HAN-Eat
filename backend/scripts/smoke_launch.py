@@ -122,11 +122,13 @@ def test_public() -> None:
     else:
         fail(f"system/readiness HTTP {c}")
 
-    c, _ = req("GET", "/ai-scan/limits")
-    if c == 200:
-        ok("ai-scan/limits")
+    c, retired = req("GET", "/ai-scan/limits")
+    if c == 410 and (
+        isinstance(retired, dict) and retired.get("code") == "kitchen_retired"
+    ):
+        ok("ai-scan retired (410)")
     else:
-        fail(f"ai-scan/limits HTTP {c}")
+        fail(f"ai-scan/limits expected 410 kitchen_retired, got HTTP {c}")
 
     c, prices = req("GET", "/payments/prices?country=RU")
     if c == 200 and isinstance(prices, dict):
