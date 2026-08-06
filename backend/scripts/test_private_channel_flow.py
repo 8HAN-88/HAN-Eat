@@ -83,7 +83,6 @@ def main() -> int:
                 "slug": channel_slug,
                 "description": "QA private channel",
                 "is_public": False,
-                "recipe_visibility_mode": "mixed",
             },
             timeout=30.0,
         )

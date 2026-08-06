@@ -8,7 +8,6 @@ from app.models.community_member import ChannelMember
 from app.models.saved_post import SavedPost
 from app.models.like import Like
 from app.models.comment import Comment
-from app.models.base_recipe import BaseRecipe
 from app.models.repost import Repost
 from app.models.moderation_queue import ModerationQueue
 from app.models.content_report import ContentReport
@@ -68,7 +67,7 @@ __all__ = [
     "ContentReport", "ModerationAuditLog", "AnalyticsEvent", "Notification",
     "Subscription", "SupportTicket", "NotificationPreferences",
     "VideoProcessing", "ImageProcessing", "Community", "CommunityMember",
-    "BaseRecipe", "StarTransaction", "PaidContentPurchase", "CreatorBalance",
+    "StarTransaction", "PaidContentPurchase", "CreatorBalance",
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest",
     "PaidMessageUnlock", "PaidMessageException", "StarGift", "UserStarGift",
     "StarGiveaway", "StarGiveawayParticipant", "StarInvoice", "Story",

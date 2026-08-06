@@ -61,7 +61,8 @@ class FeedService:
         if feed_type == "photos":
             return query.filter(Post.type == "photo")
         if feed_type == "recipes":
-            return query.filter(Post.type == "recipe")
+            # Legacy kitchen filter — include all post types.
+            return query
         return query.filter(Post.type == feed_type)
     
     def __init__(self, db: Session, redis_client):

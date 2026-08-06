@@ -20,7 +20,6 @@ from app.models.post_view import PostView
 logger = logging.getLogger(__name__)
 from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
 from app.services.subscription_service import SubscriptionService
-from app.services.recipe_body_nutrition import apply_nutrition_to_recipe_body
 from app.services.channel_membership_service import (
     MEMBER_STATUS_ACTIVE,
     MEMBER_STATUS_PENDING,
@@ -34,14 +33,6 @@ from app.services.channel_membership_service import (
     membership_status_for_user,
     normalize_role_permissions,
     sync_channel_members_count,
-)
-from app.services.recipe_visibility_service import (
-    assert_can_create_private_channel,
-    assert_can_set_channel_visibility_mode,
-    invalidate_recipe_search_cache,
-    normalize_channel_visibility_mode,
-    resolve_recipe_visibility,
-    sync_recipe_index_flags,
 )
 from app.services.search_normalization import escaped_like_pattern, search_terms, stable_search_key
 from app.schemas.channel import (
@@ -58,7 +49,7 @@ from app.schemas.channel import (
     ChannelInboxPrefsListResponse,
     ChannelJoinRequestResponse,
 )
-from app.schemas.post import CreatePostRequest, UpdatePostRequest, PostResponse, RecipeStep
+from app.schemas.post import CreatePostRequest, UpdatePostRequest, PostResponse
 
 router = APIRouter()
 
@@ -101,6 +92,18 @@ def _require_can_view_posts(
     return member
 
 
+def assert_can_create_private_channel(is_public: bool, has_creator: bool) -> None:
+    """Private channels require Creator/Pro (messenger product rule)."""
+    if is_public is False and not has_creator:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": HAN_CREATOR_REQUIRED_CODE,
+                "message": "Приватные каналы доступны с тарифом Creator или Pro",
+            },
+        )
+
+
 def _post_preview_text(post: Post) -> str:
     title = (post.title or "").strip()
     if title:
@@ -109,8 +112,6 @@ def _post_preview_text(post: Post) -> str:
     if desc:
         return desc[:120]
     ptype = (post.type or "").lower()
-    if ptype == "recipe":
-        return "Рецепт"
     if ptype in ("reel", "video"):
         return "Видео"
     if ptype in ("photo", "image"):
@@ -235,12 +236,6 @@ async def create_channel(
         has_creator = SubscriptionService(db).has_creator_access(current_user.id)
         assert_can_create_private_channel(is_public, has_creator)
 
-        mode = normalize_channel_visibility_mode(request.recipe_visibility_mode)
-        if not has_creator:
-            mode = "public"
-        else:
-            assert_can_set_channel_visibility_mode(mode, has_creator)
-
         # Создаем канал
         channel = Channel(
             name=request.name,
@@ -250,7 +245,7 @@ async def create_channel(
             avatar_url=request.avatar_url,
             admin_user_id=current_user.id,
             is_public=is_public,
-            recipe_visibility_mode=mode,
+            recipe_visibility_mode="mixed",  # legacy DB column
             category=request.category,
             tags=request.tags if request.tags is not None else [],
             members_count=1,  # Админ автоматически становится участником
@@ -361,10 +356,6 @@ async def update_channel(
     if request.is_public is not None:
         assert_can_create_private_channel(request.is_public, has_creator)
         channel.is_public = request.is_public
-    if request.recipe_visibility_mode is not None:
-        mode = normalize_channel_visibility_mode(request.recipe_visibility_mode)
-        assert_can_set_channel_visibility_mode(mode, has_creator)
-        channel.recipe_visibility_mode = mode
     if request.category is not None:
         channel.category = request.category
     if request.tags is not None:
@@ -373,8 +364,6 @@ async def update_channel(
         channel.rules = request.rules
     if request.auto_publish_to_feed is not None:
         channel.auto_publish_to_feed = request.auto_publish_to_feed
-    if request.auto_publish_to_menu is not None:
-        channel.auto_publish_to_menu = bool(request.auto_publish_to_menu)
     if request.allow_comments is not None:
         channel.allow_comments = request.allow_comments
     if request.allow_likes is not None:
@@ -602,9 +591,7 @@ async def get_channel(
         category=channel.category,
         tags=channel.tags if channel.tags is not None else [],
         rules=channel.rules,
-        recipe_visibility_mode=normalize_channel_visibility_mode(
-            channel.recipe_visibility_mode
-        ),
+        recipe_visibility_mode=channel.recipe_visibility_mode or "mixed",
         auto_publish_to_feed=channel.auto_publish_to_feed if channel.auto_publish_to_feed is not None else True,
         auto_publish_to_menu=channel.auto_publish_to_menu if channel.auto_publish_to_menu is not None else False,
         allow_comments=channel.allow_comments if channel.allow_comments is not None else True,
@@ -1617,49 +1604,9 @@ async def update_channel_post(
     if request.tags is not None:
         post.tags = request.tags
     
-    visibility_changed = False
-    if request.visibility is not None and post.type == "recipe":
-        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
-        new_vis = resolve_recipe_visibility(request.visibility, channel, has_creator)
-        if new_vis != post.visibility:
-            visibility_changed = True
-            post.visibility = new_vis
-            sync_recipe_index_flags(post)
+    if request.visibility is not None and post.type != "recipe":
+        post.visibility = request.visibility
 
-    # Обновляем body для рецептов
-    if post.type == "recipe":
-        body = post.body or {}
-        
-        if request.ingredients is not None:
-            body["ingredients"] = request.ingredients
-        if request.steps is not None:
-            body["steps"] = [step.model_dump() for step in request.steps]
-        if request.prep_time_min is not None:
-            body["prep_time_min"] = request.prep_time_min
-        if request.cook_time_min is not None:
-            body["cook_time_min"] = request.cook_time_min
-        if request.servings is not None:
-            body["servings"] = request.servings
-        apply_nutrition_to_recipe_body(
-            body,
-            calories=request.calories,
-            protein_g=request.protein_g,
-            carbs_g=request.carbs_g,
-            fat_g=request.fat_g,
-            fiber_g=request.fiber_g,
-        )
-        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
-
-        if request.origin_country_code is not None:
-            apply_origin_country_to_recipe_body(
-                body,
-                origin_country_code=request.origin_country_code,
-                origin_country_name=request.origin_country_name,
-                clear_if_empty=request.origin_country_code == "",
-            )
-        
-        post.body = body
-    
     # Обновляем медиа
     if request.media is not None:
         body = post.body or {}
@@ -1697,26 +1644,6 @@ async def update_channel_post(
     db.commit()
     db.refresh(post)
 
-    if visibility_changed:
-        invalidate_recipe_search_cache()
-        try:
-            from app.services.analytics_service import AnalyticsService
-
-            AnalyticsService(db).log_event(
-                event_type="recipe_visibility_changed",
-                entity_type="post",
-                entity_id=post.id,
-                user_id=current_user.id,
-                author_id=post.user_id,
-                metadata={
-                    "channel_id": channel_id,
-                    "visibility": post.visibility,
-                    "is_global_visible": post.is_global_visible,
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Analytics recipe_visibility_changed failed: {e}")
-    
     # Инвалидируем кэш ленты
     if post.status == "published":
         try:

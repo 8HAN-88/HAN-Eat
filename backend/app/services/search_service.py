@@ -152,15 +152,14 @@ class SearchService:
             tags_text
         )
         
-        # Для рецептов добавляем текст из body (ingredients и steps)
-        if post_type == "recipe" or post_type is None:
-            search_vector = func.to_tsvector('russian',
-                func.coalesce(Post.title, '') + ' ' +
-                func.coalesce(Post.description, '') + ' ' +
-                tags_text + ' ' +
-                func.coalesce(ingredients_text, '') + ' ' +
-                func.coalesce(steps_text, '')
-            )
+        # Include legacy body fields (old recipe posts stored ingredients/steps in body).
+        search_vector = func.to_tsvector('russian',
+            func.coalesce(Post.title, '') + ' ' +
+            func.coalesce(Post.description, '') + ' ' +
+            tags_text + ' ' +
+            func.coalesce(ingredients_text, '') + ' ' +
+            func.coalesce(steps_text, '')
+        )
         
         # Применяем полнотекстовый поиск и fallback по подстрокам:
         # FTS хорошо ранжирует слова, fallback ловит частичные названия,
