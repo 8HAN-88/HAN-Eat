@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../recipe_composer_stubs.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:han_eat/core/app/app_variant.dart';
-import 'package:han_eat/features/kitchen/domain/recipe_nutrition_input.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/features/settings/application/subscription_status_provider.dart';
 import 'package:han_eat/services/post_service.dart';
@@ -16,9 +15,6 @@ import 'package:han_eat/services/feed_api_cache.dart';
 import 'package:han_eat/services/media_upload_service.dart';
 import 'package:han_eat/utils/file_helper.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
-import 'package:han_eat/features/kitchen/presentation/widgets/recipe_nutrition_form_section.dart';
-import 'package:han_eat/features/kitchen/presentation/widgets/recipe_visibility_selector.dart';
-import 'package:han_eat/features/kitchen/presentation/widgets/recipe_origin_country_field.dart';
 import 'package:han_eat/widgets/telegram_photo_grid.dart';
 import 'package:han_eat/widgets/create_poll_form_section.dart';
 import 'package:han_eat/utils/url_validator.dart';
@@ -88,7 +84,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   bool get _isPollMode => _selectedType == 'poll';
   bool get _isLinkMode => _selectedType == 'link';
   bool get _recipeComposerEnabled =>
-      widget.recipeOnly || AppVariant.current.isKitchen;
+      false;
   int get _paidPriceStars => _isPaidContent
       ? (int.tryParse(_priceStarsController.text.trim()) ?? 0)
       : 0;
@@ -103,7 +99,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     final wantsRecipe = widget.recipeOnly || widget.initialType == 'recipe';
     // В social recipe запрещён
     _selectedType =
-        wantsRecipe && AppVariant.current.isKitchen ? 'recipe' : 'text';
+        'text';
     _linkUrlController.addListener(_scheduleLinkPreviewLoad);
     _linkPreviewController.addListener(() {
       if (!mounted) return;
@@ -1298,9 +1294,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   Widget _buildComposerToolbar() {
-    if (widget.recipeOnly || AppVariant.current.isKitchen) {
-      return const SizedBox.shrink();
-    }
     final scheme = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(

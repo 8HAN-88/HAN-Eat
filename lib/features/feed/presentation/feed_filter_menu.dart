@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/app/app_variant.dart';
 import '../../../models/post_types.dart';
 
 /// Пункты фильтра контента ленты (подписки / рекомендации).
@@ -8,7 +7,6 @@ List<PopupMenuEntry<String>> feedContentFilterMenuItems(String current) {
   final options = <String, String>{
     'all': 'Все',
     'photos': 'Фото',
-    if (AppVariant.current.isKitchen) 'recipes': 'Рецепты',
     'reels': 'Рилсы',
   };
   return options.entries

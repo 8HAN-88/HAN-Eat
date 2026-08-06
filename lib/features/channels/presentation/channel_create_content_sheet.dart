@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../../core/app/app_variant.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
 
-/// Меню создания контента внутри канала (пост, рецепт, рилс).
+/// Меню создания контента внутри канала (пост, рилс).
 ///
 /// Возвращает `true`, если рилс был создан.
 Future<bool> showChannelCreateContentSheet(
@@ -25,13 +24,6 @@ Future<bool> showChannelCreateContentSheet(
         subtitle: 'Короткое видео в ленту рилсов',
         onTap: () => choice = 'reel',
       ),
-      if (AppVariant.current.isKitchen)
-        TelegramActionSheetAction(
-          icon: Icons.restaurant_menu,
-          title: 'Создать рецепт',
-          subtitle: 'Публичный в Menu или приватный в канале',
-          onTap: () => choice = 'recipe',
-        ),
       TelegramActionSheetAction(
         icon: Icons.photo_library_outlined,
         title: 'Пост с фото',
@@ -54,14 +46,6 @@ Future<bool> showChannelCreateContentSheet(
       channelName: channelName,
     );
     return created == true;
-  }
-
-  if (choice == 'recipe') {
-    if (channelName == null || channelName.trim().isEmpty) return false;
-    final result = await context.push(
-      ChannelDetailRoute.createRecipe(channelId, channelName),
-    );
-    return result == true || result != null;
   }
 
   final result = await context.push(

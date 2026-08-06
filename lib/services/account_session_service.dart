@@ -1,9 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import 'auth_service.dart';
-import '../features/kitchen/data/services/favorites_service.dart';
-import '../features/kitchen/data/services/ai_meal_plan_service.dart';
-import '../features/kitchen/data/services/meal_plan_service.dart';
 import 'saved_posts_service.dart';
 import 'subscription_status_cache.dart';
 import 'user_service.dart';
@@ -57,19 +54,6 @@ class AccountSessionService {
       } catch (e) {
         if (kDebugMode) debugPrint('AccountSession: subscription cache clear: $e');
       }
-      try {
-        final fav = await FavoritesService.ensureInitialized();
-        await fav.clearLocalSession();
-      } catch (e) {
-        if (kDebugMode) debugPrint('AccountSession: favorites clear: $e');
-      }
-      try {
-        final mealPlan = await MealPlanService.ensureInitialized();
-        await mealPlan.clearAllPlans();
-      } catch (e) {
-        if (kDebugMode) debugPrint('AccountSession: meal plan clear: $e');
-      }
-      AiMealPlanService.instance.clear();
       // Remount shell only on logout / account switch. Fresh login must not
       // tear down the just-built home tree (black → white blank on web).
       epoch.value++;

@@ -6,20 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/post_model.dart';
-import '../../kitchen/data/models/recipe.dart';
 import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../services/auth_service.dart';
-import '../../kitchen/data/services/favorites_service.dart';
-import '../../kitchen/data/services/recipe_comments_service.dart';
 import '../../../services/comment_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
-import '../../kitchen/recipe_detail/presentation/detail_page.dart';
 import '../../../utils/number_formatter.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/feed_video_player.dart';
@@ -155,11 +151,8 @@ class _NewPostCardState extends State<NewPostCard>
       _isLiked = widget.post.isLiked;
       _likesCount = widget.post.likesCount;
     } else {
-      final fav = FavoritesService.safeIsFavorite(
-        _spoonacularRecipeIdFromPost.toString(),
-      );
-      _isLiked = fav;
-      _likesCount = fav ? 1 : 0;
+      _isLiked = false;
+      _likesCount = 0;
     }
     _isSaved = widget.post.isSaved ?? false;
     _isReposted = widget.post.isReposted ?? false;
@@ -243,11 +236,8 @@ class _NewPostCardState extends State<NewPostCard>
       _isLiked = widget.post.isLiked;
       _likesCount = widget.post.likesCount;
     } else {
-      final fav = FavoritesService.safeIsFavorite(
-        _spoonacularRecipeIdFromPost.toString(),
-      );
-      _isLiked = fav;
-      _likesCount = fav ? 1 : 0;
+      _isLiked = false;
+      _likesCount = 0;
     }
     _isSaved = widget.post.isSaved ?? false;
     _isReposted = widget.post.isReposted ?? false;
@@ -386,71 +376,23 @@ class _NewPostCardState extends State<NewPostCard>
     } catch (_) {}
   }
 
-  Future<void> _hydrateSpoonacularCommentsCount() async {
-    if (!_isSpoonacularRecipePost) return;
-    try {
-      final recipeId = _spoonacularRecipeIdFromPost;
-      final comments =
-          await RecipeCommentsService.getComments(recipeId.toString());
-      if (!mounted) return;
-      setState(() {
-        _displayCommentsCount = comments.length;
-      });
-    } catch (_) {
-      // keep existing counter value
-    }
-  }
+  Future<void> _hydrateSpoonacularCommentsCount() async {}
 
   Future<void> _openRecipeFromPost() async {
-    final post = widget.post;
-    final body = post.body;
-    if (body == null) return;
-    try {
-      final recipe = Recipe.fromPostModel(post);
-      final isFavorite = FavoritesService.safeIsFavorite(recipe.id.toString());
-      if (!mounted) return;
-      FeedAnalyticsService.openDetail(
-        post,
-        source: 'post_card',
-        target: 'recipe',
-      );
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => DetailPage(
-            recipe: recipe,
-            isFavorite: isFavorite,
-            onToggle: () async {
-              await FavoritesService.safeToggleFavorite(
-                recipe.id.toString(),
-              );
-            },
-          ),
-        ),
-      );
-      await _hydrateSpoonacularCommentsCount();
-    } catch (_) {
-      // ignore navigation parse errors
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Каталог рецептов больше недоступен')),
+    );
   }
 
   Future<void> _toggleLike() async {
     if (_isLiking) return;
 
-    // Catalog/local Spoonacular cards: heart toggles favorites (no posts row).
     if (!_likesViaPostApi) {
-      setState(() => _isLiking = true);
-      try {
-        final recipeId = _spoonacularRecipeIdFromPost.toString();
-        await FavoritesService.safeToggleFavorite(recipeId);
-        if (!mounted) return;
-        final liked = FavoritesService.safeIsFavorite(recipeId);
-        setState(() {
-          _isLiked = liked;
-          _likesCount = liked ? 1 : 0;
-        });
-      } finally {
-        if (mounted) setState(() => _isLiking = false);
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Каталог рецептов больше недоступен')),
+      );
       return;
     }
 
@@ -2097,29 +2039,12 @@ class _NewPostCardState extends State<NewPostCard>
             return;
           }
 
-          final recipe = Recipe.fromPostModel(post);
-
-          final isFavorite =
-              FavoritesService.safeIsFavorite(recipe.id.toString());
-
-          FeedAnalyticsService.openDetail(
-            post,
-            source: 'post_card',
-            target: 'recipe',
-          );
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => DetailPage(
-                recipe: recipe,
-                isFavorite: isFavorite,
-                onToggle: () async {
-                  await FavoritesService.safeToggleFavorite(
-                    recipe.id.toString(),
-                  );
-                },
-              ),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Каталог рецептов больше недоступен')),
+            );
+          }
+          return;
         } catch (e, stackTrace) {
           if (kDebugMode) {
             debugPrint('Recipe open failed: $e\n$stackTrace');

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
-import '../../core/app/app_variant.dart';
 import '../../services/feed_api_cache.dart';
 import '../../widgets/telegram_ui.dart';
 import '../reels/application/reels_feed_refresh_provider.dart';
@@ -43,11 +42,6 @@ Future<bool> showCreateContentSheet(
   WidgetRef? ref,
   bool includeReel = false,
 }) async {
-  // В kitchen показываем только создание рецепта
-  if (AppVariant.current.isKitchen) {
-    final created = await context.push<bool?>(CreateRecipeRoute.path);
-    return created == true;
-  }
 
   String? choice;
   await showTelegramActionSheet<void>(

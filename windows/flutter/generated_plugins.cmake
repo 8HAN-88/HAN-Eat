@@ -14,6 +14,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_storage
   flutter_inappwebview_windows
   flutter_webrtc
+  geolocator_windows
   permission_handler_windows
   record_windows
   share_plus

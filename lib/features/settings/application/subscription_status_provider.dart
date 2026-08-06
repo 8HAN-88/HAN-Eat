@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../kitchen/domain/recipe_nutrition_access.dart';
 import '../../../services/subscription_service.dart';
 import '../../../services/subscription_status_cache.dart';
 
@@ -32,35 +31,7 @@ void refreshSubscriptionStatus(WidgetRef ref) {
   ref.read(subscriptionStatusRefreshProvider.notifier).state++;
 }
 
-/// Калории и БЖУ доступны подписчикам (AI / Creator / Pro).
-final canViewRecipeNutritionProvider = Provider<bool>((ref) {
-  final status = ref.watch(subscriptionStatusProvider);
-  return status.when(
-    data: RecipeNutritionAccess.fromSubscription,
-    loading: () => false,
-    error: (_, __) => false,
-  );
-});
-
 final hasProSubscriptionProvider = Provider<bool>((ref) {
-  final status = ref.watch(subscriptionStatusProvider);
-  return status.when(
-    data: (s) => s?.hasPro ?? false,
-    loading: () => false,
-    error: (_, __) => false,
-  );
-});
-
-final canSaveRecipesOfflineProvider = Provider<bool>((ref) {
-  final status = ref.watch(subscriptionStatusProvider);
-  return status.when(
-    data: (s) => (s?.hasAi ?? false) || (s?.isPlus ?? false),
-    loading: () => false,
-    error: (_, __) => false,
-  );
-});
-
-final hasFamilyMealPlanProvider = Provider<bool>((ref) {
   final status = ref.watch(subscriptionStatusProvider);
   return status.when(
     data: (s) => s?.hasPro ?? false,

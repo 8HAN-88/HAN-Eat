@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
 import '../models/post_model.dart';
-import '../features/kitchen/data/models/recipe.dart';
 import '../services/channel_service.dart';
 import '../services/chat_service.dart';
 import '../services/repost_service.dart';
@@ -58,57 +57,6 @@ class ShareActionSheet {
         post: reel,
         link: link,
         onRepostToWall: onRepostToWall,
-      ),
-    );
-  }
-
-  static Future<void> showForRecipe(
-    BuildContext context, {
-    required Recipe recipe,
-  }) async {
-    final link = ShareLinkService.recipeLink(recipe.id);
-    final text = ShareLinkService.recipeShareText(recipe);
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            const Text(
-              'Поделиться',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('Скопировать ссылку'),
-              onTap: () async {
-                await Clipboard.setData(ClipboardData(text: link));
-                if (ctx.mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ссылка скопирована')),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('Поделиться через...'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _shareAfterSheetClosed(
-                  context,
-                  text: text,
-                  subject: recipe.translatedTitle ?? recipe.title,
-                );
-              },
-            ),
-            const SizedBox(height: 6),
-          ],
-        ),
       ),
     );
   }

@@ -50,7 +50,7 @@ extension SearchScopeLabels on SearchScope {
       case SearchScope.channels:
         return 'Поиск каналов';
       case SearchScope.menu:
-        return 'Поиск рецептов';
+        return 'Поиск';
       case SearchScope.chats:
         return 'Поиск';
     }
@@ -59,17 +59,17 @@ extension SearchScopeLabels on SearchScope {
   String get hint {
     switch (this) {
       case SearchScope.main:
-        return 'Посты, люди, рилсы, рецепты…';
+        return 'Посты, люди, рилсы…';
       case SearchScope.channels:
         return 'Название или описание канала…';
       case SearchScope.menu:
-        return 'Название, ингредиенты, теги…';
+        return 'Посты, люди, рилсы…';
       case SearchScope.chats:
         return 'Имя, @username или название канала…';
     }
   }
 
-  bool get usesRecipeSearch => this == SearchScope.menu;
+  bool get usesRecipeSearch => false;
 
   bool get usesChatsHubSearch => this == SearchScope.chats;
 }

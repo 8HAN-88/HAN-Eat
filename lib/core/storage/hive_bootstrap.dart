@@ -6,11 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../features/kitchen/data/models/meal_plan.dart';
-import '../../features/kitchen/data/models/recipe_category.dart';
-import '../../features/kitchen/data/models/recipe_model.dart';
-import '../../features/kitchen/data/models/search_history_entry.dart';
-
 Future<void>? _hiveInitFuture;
 bool hiveCoreReady = false;
 
@@ -73,26 +68,5 @@ Future<void> _initHiveCoreOnce() async {
         return;
       }
     }
-  }
-  if (!Hive.isAdapterRegistered(RecipeModelAdapter().typeId)) {
-    Hive.registerAdapter(RecipeModelAdapter());
-  }
-  if (!Hive.isAdapterRegistered(MealTypeAdapter().typeId)) {
-    Hive.registerAdapter(MealTypeAdapter());
-  }
-  if (!Hive.isAdapterRegistered(MealPlanEntryAdapter().typeId)) {
-    Hive.registerAdapter(MealPlanEntryAdapter());
-  }
-  if (!Hive.isAdapterRegistered(DailyMealPlanAdapter().typeId)) {
-    Hive.registerAdapter(DailyMealPlanAdapter());
-  }
-  if (!Hive.isAdapterRegistered(RecipeCategoryAdapter().typeId)) {
-    Hive.registerAdapter(RecipeCategoryAdapter());
-  }
-  if (!Hive.isAdapterRegistered(CategoryFilterAdapter().typeId)) {
-    Hive.registerAdapter(CategoryFilterAdapter());
-  }
-  if (!Hive.isAdapterRegistered(SearchHistoryEntryAdapter().typeId)) {
-    Hive.registerAdapter(SearchHistoryEntryAdapter());
   }
 }

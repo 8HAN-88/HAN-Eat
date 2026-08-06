@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'app_bootstrap_state.dart';
-import '../core/app/app_variant.dart';
 import '../core/theme/color_schemes.dart';
 import '../core/web/boot_ready_signal.dart';
 import '../services/auth_service.dart';
@@ -52,7 +51,7 @@ class _WebSessionLandingScreenState extends State<WebSessionLandingScreen> {
     }
 
     final destination =
-        AppVariant.current.isKitchen ? MenuRoute.path : WebSocialHomeRoute.path;
+        WebSocialHomeRoute.path;
     context.go(destination);
   }
 

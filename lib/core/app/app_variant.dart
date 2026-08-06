@@ -1,28 +1,16 @@
+/// Product branding for the HanWe messenger build.
+///
+/// Kitchen / HAN Eat was removed; this type remains so existing call sites
+/// (`AppVariant.current.appTitle`, etc.) keep working.
 enum AppVariant {
-  social,
-  kitchen;
+  social;
 
-  static const _raw = String.fromEnvironment(
-    'APP_VARIANT',
-    defaultValue: 'social',
-  );
+  static AppVariant get current => AppVariant.social;
 
-  static AppVariant get current {
-    switch (_raw.toLowerCase().trim()) {
-      case 'kitchen':
-        return AppVariant.kitchen;
-      case 'social':
-      default:
-        return AppVariant.social;
-    }
-  }
+  bool get isSocial => true;
+  bool get isKitchen => false;
 
-  bool get isSocial => this == AppVariant.social;
-  bool get isKitchen => this == AppVariant.kitchen;
-
-  String get appTitle => isKitchen ? 'HAN Eat' : 'HanWe';
-  String get shortAppTitle => isKitchen ? 'HAN Eat' : 'HanWe';
-  String get appDescription => isKitchen
-      ? 'Рецепты, меню и план питания'
-      : 'Чаты, лента, каналы и общение';
+  String get appTitle => 'HanWe';
+  String get shortAppTitle => 'HanWe';
+  String get appDescription => 'Чаты, лента, каналы и общение';
 }

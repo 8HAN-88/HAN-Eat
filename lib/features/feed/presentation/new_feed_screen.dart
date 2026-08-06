@@ -553,16 +553,6 @@ class _NewFeedScreenState extends ConsumerState<NewFeedScreen>
                           _feedType == 'photos' ? FontWeight.bold : null),
                 ),
               ),
-              if (AppVariant.current.isKitchen)
-                PopupMenuItem(
-                  value: 'recipes',
-                  child: Text(
-                    'Рецепты',
-                    style: TextStyle(
-                        fontWeight:
-                            _feedType == 'recipes' ? FontWeight.bold : null),
-                  ),
-                ),
               PopupMenuItem(
                 value: 'reels',
                 child: Text(

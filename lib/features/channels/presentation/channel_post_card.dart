@@ -1,3 +1,4 @@
+import '../../posts/recipe_composer_stubs.dart';
 // Карточка поста в канале — тот же каркас, что и в ленте (шапка канала, мета, действия).
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -6,16 +7,13 @@ import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../../models/post_model.dart';
-import '../../kitchen/data/models/recipe.dart';
 import '../../../models/post.dart' show PollData;
 import '../../../services/like_service.dart';
 import '../../../services/saved_posts_service.dart';
 import '../../../services/repost_service.dart';
 import '../../../services/comment_service.dart';
 import '../../../services/auth_service.dart';
-import '../../kitchen/data/services/favorites_service.dart';
 import '../../../services/server_config.dart';
-import '../../kitchen/recipe_detail/presentation/detail_page.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../widgets/inline_video_player.dart';
 import '../../../utils/number_formatter.dart';
@@ -28,11 +26,8 @@ import '../../../services/api_service.dart';
 import '../../../app/app_router.dart';
 import '../../../services/subscription_service.dart';
 import '../../../widgets/report_content_dialog.dart';
-import '../../kitchen/presentation/widgets/recipe_visibility_badge.dart';
-import '../../kitchen/presentation/widgets/recipe_visibility_selector.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
-import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 int? _channelRepostOriginalPostId(Map<String, dynamic>? body) {
@@ -282,53 +277,10 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   }
 
   Future<void> _changeRecipeVisibility() async {
-    try {
-      final status = await SubscriptionService.getSubscriptionStatus();
-      if (!mounted) return;
-      final newVis = await showChangeRecipeVisibilitySheet(
-        context,
-        currentVisibility: _recipeVisibility,
-        hasCreator: status.hasCreator,
-        channelMode: widget.channel.recipeVisibilityMode,
-      );
-      if (newVis == null || newVis == _recipeVisibility || !mounted) return;
-
-      await ChannelService.updateChannelPost(
-        channelId: widget.channelId,
-        postId: widget.post.id,
-        visibility: newVis,
-      );
-      if (!mounted) return;
-      setState(() => _visibilityOverride = newVis);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            newVis == 'private'
-                ? 'Рецепт теперь только в канале'
-                : 'Рецепт опубликован в общем Menu',
-          ),
-        ),
-      );
-    } on ApiClientException catch (e) {
-      if (!mounted) return;
-      if (e.code == 'HAN_CREATOR_REQUIRED') {
-        await showCreatorRecipeUpsellSheet(context);
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(userVisibleError(e,
-                fallback: 'Не удалось изменить видимость'))),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось изменить видимость'))),
-        );
-      }
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Настройки рецептов больше недоступны')),
+    );
   }
 
   Future<void> _toggleLike() async {
@@ -1481,29 +1433,9 @@ class _ChannelPostCardState extends State<ChannelPostCard>
 
       // Обработчик клика для рецепта - открываем рецепт
       void onRecipeTap() {
-        try {
-          final recipe = Recipe.fromPostModel(post);
-          // Получаем информацию о том, является ли рецепт избранным
-          final isFavorite =
-              FavoritesService.safeIsFavorite(recipe.id.toString());
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => DetailPage(
-                recipe: recipe,
-                isFavorite: isFavorite,
-                onToggle: () async {
-                  await FavoritesService.safeToggleFavorite(
-                    recipe.id.toString(),
-                  );
-                },
-              ),
-            ),
-          );
-        } catch (e, stackTrace) {
-          debugPrint('Error parsing recipe from post: $e');
-          debugPrint('Body: ${post.body}');
-          debugPrint('Stack trace: $stackTrace');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Каталог рецептов больше недоступен')),
+        );
       }
 
       final imageUrls = images
