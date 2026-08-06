@@ -48,7 +48,7 @@ void main() {
     expect(likeGroup.group.actors.length, 2);
     expect(
       notificationLeadText(likeGroup.group),
-      contains('нравится ваш рецепт'),
+      contains('нравится ваш пост'),
     );
   });
 
