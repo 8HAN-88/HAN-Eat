@@ -8,5 +8,6 @@ bool routeAllowsGuestAccess(String location) {
       loc == '/forgot-password' ||
       loc == '/reset-password' ||
       loc.startsWith('/verify-email') ||
-      loc.startsWith('/confirm-email-change');
+      loc.startsWith('/confirm-email-change') ||
+      loc == '/2fa-verify';
 }

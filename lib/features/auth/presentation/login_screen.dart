@@ -114,6 +114,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           });
           return;
         }
+        if (e.isTwoFactorRequired &&
+            (e.pendingToken != null && e.pendingToken!.isNotEmpty)) {
+          context.go(
+            AuthPaths.twoFactorVerify,
+            extra: {
+              'pendingToken': e.pendingToken,
+              'email': _emailController.text.trim(),
+            },
+          );
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message)),
         );

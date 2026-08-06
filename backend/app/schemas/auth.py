@@ -77,6 +77,30 @@ class AuthSessionListResponse(BaseModel):
     items: list[AuthSessionResponse]
 
 
+class TotpStatusResponse(BaseModel):
+    enabled: bool
+
+
+class TotpSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+    issuer: str = "HanWe"
+
+
+class TotpCodeRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=12)
+
+
+class TotpDisableRequest(BaseModel):
+    password: str
+    code: str = Field(..., min_length=6, max_length=12)
+
+
+class TotpVerifyLoginRequest(BaseModel):
+    pending_token: str = Field(..., min_length=16)
+    code: str = Field(..., min_length=6, max_length=12)
+
+
 class GoogleAuthRequest(BaseModel):
     id_token: str
     accept_legal: bool = False

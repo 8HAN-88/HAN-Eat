@@ -34,6 +34,20 @@ from app.schemas.auth import (
     ResendVerificationRequest,
     AuthSessionListResponse,
     AuthSessionResponse,
+    TotpStatusResponse,
+    TotpSetupResponse,
+    TotpCodeRequest,
+    TotpDisableRequest,
+    TotpVerifyLoginRequest,
+)
+from app.services.totp_service import (
+    ISSUER as TOTP_ISSUER,
+    create_pending_token,
+    decode_pending_token,
+    generate_secret,
+    is_2fa_enabled,
+    provisioning_uri,
+    verify_code as verify_totp_code,
 )
 from app.models.auth_token import (
     PURPOSE_CHANGE_EMAIL,
@@ -57,7 +71,7 @@ from app.services.yandex_oauth_service import (
 )
 from app.schemas.user import UserResponse
 from app.models.user import User
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -148,6 +162,17 @@ def _auth_response(
         user=_user_response(user),
         message=message,
         session_id=session_id,
+    )
+
+
+def _raise_two_factor_required(user: User) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TWO_FACTOR_REQUIRED",
+            "message": "Введите код из приложения-аутентификатора.",
+            "pending_token": create_pending_token(user.id),
+        },
     )
 
 
@@ -377,6 +402,10 @@ async def login(
                 },
             )
 
+        if is_2fa_enabled(user):
+            logger.info("2FA challenge for user: %s", user.id)
+            _raise_two_factor_required(user)
+
         logger.info(f"Login successful for user: {user.id} ({request.email})")
 
         # Убеждаемся, что is_private не None (для совместимости со старыми данными)
@@ -575,6 +604,8 @@ async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Ses
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Account suspended",
                 )
+            if is_2fa_enabled(user):
+                _raise_two_factor_required(user)
 
         if user.is_private is None:
             user.is_private = False
@@ -673,6 +704,8 @@ async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Ses
             if yandex_name and (not user.name or user.name.strip() == ""):
                 user.name = yandex_name
                 db.commit()
+            if is_2fa_enabled(user):
+                _raise_two_factor_required(user)
 
         if user.is_private is None:
             user.is_private = False
@@ -952,3 +985,124 @@ async def revoke_all_auth_sessions(
     count = revoke_all_sessions(db, user_id=current_user.id)
     db.commit()
     return MessageResponse(message=f"Revoked {count} sessions")
+
+
+@router.get("/2fa/status", response_model=TotpStatusResponse)
+async def totp_status(
+    current_user: User = Depends(get_current_user_required),
+):
+    return TotpStatusResponse(enabled=is_2fa_enabled(current_user))
+
+
+@router.post("/2fa/setup", response_model=TotpSetupResponse)
+async def totp_setup(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Generate a new TOTP secret (does not enable until /2fa/enable)."""
+    if is_2fa_enabled(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is already enabled",
+        )
+    secret = generate_secret()
+    account = current_user.email or current_user.username or str(current_user.id)
+    uri = provisioning_uri(secret, account)
+    current_user.totp_secret = secret
+    current_user.totp_enabled = False
+    current_user.totp_enabled_at = None
+    db.commit()
+    return TotpSetupResponse(secret=secret, otpauth_uri=uri, issuer=TOTP_ISSUER)
+
+
+@router.post("/2fa/enable", response_model=MessageResponse)
+async def totp_enable(
+    body: TotpCodeRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if is_2fa_enabled(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is already enabled",
+        )
+    secret = getattr(current_user, "totp_secret", None)
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Call /auth/2fa/setup first",
+        )
+    if not verify_totp_code(secret, body.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid authenticator code",
+        )
+
+    current_user.totp_enabled = True
+    current_user.totp_enabled_at = datetime.utcnow()
+    db.commit()
+    return MessageResponse(message="Two-factor authentication enabled")
+
+
+@router.post("/2fa/disable", response_model=MessageResponse)
+async def totp_disable(
+    body: TotpDisableRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    if not is_2fa_enabled(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is not enabled",
+        )
+    if not verify_password(body.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password",
+        )
+    if not verify_totp_code(current_user.totp_secret or "", body.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid authenticator code",
+        )
+    current_user.totp_secret = None
+    current_user.totp_enabled = False
+    current_user.totp_enabled_at = None
+    db.commit()
+    return MessageResponse(message="Two-factor authentication disabled")
+
+
+@router.post("/2fa/verify-login", response_model=AuthResponse)
+async def totp_verify_login(
+    body: TotpVerifyLoginRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+):
+    """Complete login after password/OAuth when 2FA is required."""
+    user_id = decode_pending_token(body.pending_token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired 2FA pending token",
+        )
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or user.deleted_at or user.banned_at:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired 2FA pending token",
+        )
+    if not is_2fa_enabled(user):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Two-factor authentication is not enabled",
+        )
+    if not verify_totp_code(user.totp_secret or "", body.code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authenticator code",
+        )
+    if user.is_private is None:
+        user.is_private = False
+        db.commit()
+    access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
+    return _auth_response(user, access_token, refresh_token, session_id=session_id)

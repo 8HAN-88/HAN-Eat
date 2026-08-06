@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     legal_consent_at: Optional[datetime] = None
     phone_linked: bool = False
     phone: Optional[str] = None
+    totp_enabled: bool = False
 
     @model_validator(mode="wrap")
     @classmethod
@@ -42,6 +43,13 @@ class UserResponse(BaseModel):
                 updates["email_verified"] = verified
             if result.phone_linked != linked:
                 updates["phone_linked"] = linked
+        if hasattr(data, "totp_enabled"):
+            enabled = bool(
+                getattr(data, "totp_enabled", False)
+                and getattr(data, "totp_secret", None)
+            )
+            if result.totp_enabled != enabled:
+                updates["totp_enabled"] = enabled
         if hasattr(data, "email"):
             from app.services.legal_consent_service import consent_required
 

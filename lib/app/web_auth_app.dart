@@ -8,6 +8,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
+import '../features/auth/presentation/two_factor_verify_screen.dart';
 import 'auth_route_paths.dart';
 import 'theme_mode_controller.dart';
 
@@ -60,6 +61,25 @@ final GoRouter _authRouter = GoRouter(
       builder: (context, state) {
         final email = state.uri.queryParameters['email'] ?? '';
         return VerifyEmailScreen(email: email);
+      },
+    ),
+    GoRoute(
+      path: AuthPaths.twoFactorVerify,
+      builder: (context, state) {
+        final extra = state.extra;
+        String pending = '';
+        String? email;
+        if (extra is Map) {
+          pending = extra['pendingToken'] as String? ?? '';
+          email = extra['email'] as String?;
+        }
+        if (pending.isEmpty) {
+          return const LoginScreen();
+        }
+        return TwoFactorVerifyScreen(
+          pendingToken: pending,
+          email: email,
+        );
       },
     ),
   ],
