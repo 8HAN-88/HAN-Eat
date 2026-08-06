@@ -6,10 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../models/meal_plan.dart';
-import '../../models/recipe_category.dart';
-import '../../models/recipe_model.dart';
-import '../../models/search_history_entry.dart';
+import '../../features/kitchen/data/models/meal_plan.dart';
+import '../../features/kitchen/data/models/recipe_category.dart';
+import '../../features/kitchen/data/models/recipe_model.dart';
+import '../../features/kitchen/data/models/search_history_entry.dart';
 
 Future<void>? _hiveInitFuture;
 bool hiveCoreReady = false;

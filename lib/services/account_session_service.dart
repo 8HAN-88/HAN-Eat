@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 import 'auth_service.dart';
-import 'favorites_service.dart';
-import 'ai_meal_plan_service.dart';
-import 'meal_plan_service.dart';
+import '../features/kitchen/data/services/favorites_service.dart';
+import '../features/kitchen/data/services/ai_meal_plan_service.dart';
+import '../features/kitchen/data/services/meal_plan_service.dart';
 import 'saved_posts_service.dart';
 import 'subscription_status_cache.dart';
 import 'user_service.dart';

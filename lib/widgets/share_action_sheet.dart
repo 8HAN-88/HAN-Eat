@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
 import '../models/post_model.dart';
-import '../models/recipe.dart';
+import '../features/kitchen/data/models/recipe.dart';
 import '../services/channel_service.dart';
 import '../services/chat_service.dart';
 import '../services/repost_service.dart';

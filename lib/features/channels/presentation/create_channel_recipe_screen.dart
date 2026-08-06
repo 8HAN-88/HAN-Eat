@@ -7,10 +7,10 @@ import '../../../services/channel_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../services/media_upload_service.dart';
 import '../../settings/application/subscription_status_provider.dart';
-import '../../../core/recipe/recipe_nutrition_input.dart';
-import '../../../widgets/recipe_nutrition_form_section.dart';
-import '../../../widgets/recipe_visibility_selector.dart';
-import '../../../widgets/recipe_origin_country_field.dart';
+import '../../kitchen/domain/recipe_nutrition_input.dart';
+import '../../kitchen/presentation/widgets/recipe_nutrition_form_section.dart';
+import '../../kitchen/presentation/widgets/recipe_visibility_selector.dart';
+import '../../kitchen/presentation/widgets/recipe_origin_country_field.dart';
 import '../../subscription/presentation/widgets/creator_recipe_upsell.dart';
 
 class CreateChannelRecipeScreen extends ConsumerStatefulWidget {

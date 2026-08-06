@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../app/app_bootstrap_state.dart';
 import '../core/storage/hive_bootstrap.dart';
-import '../services/category_service.dart';
-import '../services/favorites_service.dart';
-import '../services/meal_plan_service.dart';
-import '../services/recipe_service.dart';
-import '../services/shopping_service.dart';
+import '../features/kitchen/data/services/category_service.dart';
+import '../features/kitchen/data/services/favorites_service.dart';
+import '../features/kitchen/data/services/meal_plan_service.dart';
+import '../features/kitchen/data/services/recipe_service.dart';
+import '../features/kitchen/data/services/shopping_service.dart';
 
 /// Какие локальные сервисы должны быть готовы перед показом [child].
 enum DeferredLocalService {

@@ -4,9 +4,9 @@ import '../../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/user_service.dart';
-import '../../services/favorites_service.dart';
-import '../../services/shopping_service.dart';
-import '../../services/recipe_notes_service.dart';
+import '../kitchen/data/services/favorites_service.dart';
+import '../kitchen/data/services/shopping_service.dart';
+import '../kitchen/data/services/recipe_notes_service.dart';
 
 class BackupPage extends StatefulWidget {
   const BackupPage({super.key});
