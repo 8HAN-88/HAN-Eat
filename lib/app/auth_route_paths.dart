@@ -8,6 +8,7 @@ abstract final class AuthPaths {
   static const forgotPassword = '/forgot-password';
   static const resetPassword = '/reset-password';
   static const verifyEmail = '/verify-email';
+  static const twoFactorVerify = '/2fa-verify';
   static const legalConsent = '/legal-consent';
   static const feed = '/feed';
   static const menu = '/';

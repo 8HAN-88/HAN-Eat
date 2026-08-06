@@ -468,12 +468,10 @@ class AuthService {
         
         return authResponse;
       } else {
-        try {
-          final error = jsonDecode(response.body) as Map<String, dynamic>;
-          throw AuthException(error['detail']?.toString() ?? 'Ошибка входа через Google');
-        } catch (e) {
-          throw AuthException('Ошибка входа через Google (${response.statusCode})');
-        }
+        throw _authExceptionFromResponse(
+          response,
+          'Ошибка входа через Google (${response.statusCode})',
+        );
       }
     } catch (e) {
       if (e is AuthException) {
@@ -699,6 +697,51 @@ class AuthService {
     final user = instance._cachedUser;
     if (user == null) return;
     _dispatchSessionChanged(user);
+  }
+
+  /// Complete login after password/OAuth when server returned TWO_FACTOR_REQUIRED.
+  static Future<AuthResponse> verifyTwoFactorLogin({
+    required String pendingToken,
+    required String code,
+  }) async {
+    final uri = Uri.parse('$baseUrl/auth/2fa/verify-login');
+    final response = await HanEatHttpClient.withShared(
+      (client) => client
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              ..._clientDeviceHeaders(),
+            },
+            body: jsonEncode({
+              'pending_token': pendingToken,
+              'code': code.trim(),
+            }),
+          )
+          .timeout(
+            _authRequestTimeout,
+            onTimeout: () => throw _loginTimeoutException(),
+          ),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final authResponse = AuthResponse.fromJson(data);
+      await _saveTokens(
+        authResponse.token,
+        authResponse.refreshToken,
+        sessionId: authResponse.sessionId,
+      );
+      await _saveUser(authResponse.user);
+      instance.setUserAfterAuth(
+        authResponse.user,
+        notifySessionListeners: false,
+      );
+      return authResponse;
+    }
+    throw _authExceptionFromResponse(
+      response,
+      'Неверный код двухфакторной защиты',
+    );
   }
   
   static Future<MessageResponse> forgotPassword({required String email}) async {
@@ -1337,10 +1380,13 @@ class User {
 class AuthException implements Exception {
   final String message;
   final String? code;
+  final String? pendingToken;
 
-  AuthException(this.message, {this.code});
+  AuthException(this.message, {this.code, this.pendingToken});
 
   bool get isEmailNotVerified => code == 'EMAIL_NOT_VERIFIED';
+
+  bool get isTwoFactorRequired => code == 'TWO_FACTOR_REQUIRED';
 
   @override
   String toString() => message;
@@ -1359,7 +1405,8 @@ AuthException _authExceptionFromResponse(
         final message = (detail['message'] as String?) ??
             (detail['detail'] as String?) ??
             fallback;
-        return AuthException(message, code: code);
+        final pending = detail['pending_token'] as String?;
+        return AuthException(message, code: code, pendingToken: pending);
       }
       if (detail is String && detail.isNotEmpty) {
         return AuthException(detail);

@@ -141,12 +141,14 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   onTap: () => context.push(ProfileAuthRoute.path),
                 ),
                 const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.shield_outlined),
-                  title: Text('Двухфакторная защита'),
-                  subtitle:
-                      Text('Дополнительная защита аккаунта. Пока недоступно.'),
-                  enabled: false,
+                ListTile(
+                  leading: const Icon(Icons.shield_outlined),
+                  title: const Text('Двухфакторная защита'),
+                  subtitle: const Text(
+                    'Код из аутентификатора при входе',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(TwoFactorSetupRoute.path),
                 ),
               ],
             ),

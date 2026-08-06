@@ -26,9 +26,11 @@ import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/reset_password_screen.dart';
 import '../features/auth/presentation/verify_email_screen.dart';
+import '../features/auth/presentation/two_factor_verify_screen.dart';
 import '../features/legal/presentation/legal_consent_screen.dart';
 import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
+import '../features/settings/presentation/two_factor_setup_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -288,7 +290,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             loc == ForgotPasswordRoute.path ||
             loc == ResetPasswordRoute.path ||
             loc.startsWith(VerifyEmailRoute.path) ||
-            loc.startsWith(ConfirmEmailChangeRoute.path);
+            loc.startsWith(ConfirmEmailChangeRoute.path) ||
+            loc == TwoFactorVerifyRoute.path ||
+            loc.startsWith('${TwoFactorVerifyRoute.path}?');
         if (isAuthRoute) return null;
         return LoginRoute.path;
       } catch (e, st) {
@@ -641,6 +645,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: TwoFactorVerifyRoute.path,
+        name: TwoFactorVerifyRoute.name,
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          String pending = '';
+          String? email;
+          if (extra is Map) {
+            pending = extra['pendingToken'] as String? ?? '';
+            email = extra['email'] as String?;
+          }
+          if (pending.isEmpty) {
+            return const MaterialPage(child: LoginScreen());
+          }
+          return MaterialPage(
+            child: TwoFactorVerifyScreen(
+              pendingToken: pending,
+              email: email,
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: ConfirmEmailChangeRoute.path,
         name: ConfirmEmailChangeRoute.name,
         pageBuilder: (context, state) {
@@ -655,6 +681,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AccountSecurityRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: AccountSecurityScreen()),
+      ),
+      GoRoute(
+        path: TwoFactorSetupRoute.path,
+        name: TwoFactorSetupRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: TwoFactorSetupScreen()),
       ),
       // Profile
       GoRoute(
@@ -1493,6 +1525,11 @@ class VerifyEmailRoute {
       AuthPaths.verifyEmailWithEmail(email);
 }
 
+class TwoFactorVerifyRoute {
+  static const path = AuthPaths.twoFactorVerify;
+  static const name = 'two_factor_verify';
+}
+
 class ConfirmEmailChangeRoute {
   static const path = '/confirm-email-change';
   static const name = 'confirm_email_change';
@@ -1501,6 +1538,11 @@ class ConfirmEmailChangeRoute {
 class AccountSecurityRoute {
   static const path = '/account-security';
   static const name = 'account_security';
+}
+
+class TwoFactorSetupRoute {
+  static const path = '/two-factor-setup';
+  static const name = 'two_factor_setup';
 }
 
 class ProfileRoute {
