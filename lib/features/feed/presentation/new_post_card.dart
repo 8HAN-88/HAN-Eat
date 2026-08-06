@@ -1877,7 +1877,7 @@ class _NewPostCardState extends State<NewPostCard>
     if (translated != null && translated.isNotEmpty) return translated;
     if (bodyName != null && bodyName.isNotEmpty) return bodyName;
     if (nestedTitle != null && nestedTitle.isNotEmpty) return nestedTitle;
-    return 'Рецепт';
+    return 'Пост';
   }
 
   /// Получить прокси URL для изображений Spoonacular (для обхода CORS на веб)

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/app/kitchen_removed_notice.dart';
+
 import '../screens/post_by_id_screen.dart';
 import '../features/navigation/presentation/root_shell.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -247,7 +249,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (loc == ChannelsListRoute.path) {
           return ChatsRoute.path;
         }
-        // Legacy kitchen deep links → feed
+        // Legacy kitchen deep links → feed (+ one-shot notice)
         if (loc == MenuRoute.path ||
             loc == '/meal-plan' ||
             loc.startsWith('/meal-plan/') ||
@@ -255,6 +257,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             loc == '/shopping-list' ||
             loc == '/shopping-import' ||
             loc == '/create-recipe' ||
+            loc == CreateRecipeRoute.path ||
             loc == '/categories' ||
             loc == '/allergies' ||
             loc == '/diet' ||
@@ -264,6 +267,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             loc == '/cooking-mode' ||
             loc.startsWith('/recipe/') ||
             (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
+          KitchenRemovedNotice.markPending();
           return FeedRoute.path;
         }
         final user = AuthService.instance.currentUser;

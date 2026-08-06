@@ -34,7 +34,8 @@ String? feedFilterToPostType(String? feedType) {
     case 'photos':
       return 'photo';
     case 'recipes':
-      return 'recipe';
+      // Legacy kitchen filter — treat as all posts.
+      return null;
     case 'reels':
       return 'reel';
     default:
