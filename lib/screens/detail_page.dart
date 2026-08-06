@@ -5,8 +5,10 @@ import '../utils/api_error_parser.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/recipe_network_image.dart';
 import '../widgets/app_avatar.dart';
+import '../widgets/inline_video_player.dart';
 import '../models/recipe.dart';
 import '../models/recipe_model.dart';
 import '../features/meal_plan/presentation/add_to_meal_plan_screen.dart';
@@ -17,6 +19,7 @@ import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/saved_posts_service.dart';
 import '../services/shopping_service.dart';
+import '../services/server_config.dart';
 import '../widgets/share_action_sheet.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../services/recipe_notes_service.dart';
@@ -2114,8 +2117,13 @@ class _DetailPageState extends ConsumerState<DetailPage> {
 
     if (dedupedGallery.isNotEmpty) {
       final primaryRaw = dedupedGallery.first;
+      final hasVideo = r.videoUrl != null && r.videoUrl!.isNotEmpty;
       return GestureDetector(
         onTap: () {
+          if (hasVideo) {
+            _playVideo(context, r.videoUrl!);
+            return;
+          }
           showFullscreenImageViewer(
             context,
             imageUrls: dedupedGallery,
@@ -2133,7 +2141,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
               errorWidget: _buildPlaceholder(context),
             ),
             // Иконка видео поверх изображения
-            if (r.videoUrl != null && r.videoUrl!.isNotEmpty)
+            if (hasVideo)
               Center(
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -2314,50 +2322,73 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     );
   }
 
-  void _playVideo(BuildContext context, String videoUrl) {
-    // Открываем видео в диалоге или навигации
-    showDialog(
+  Future<void> _playVideo(BuildContext context, String videoUrl) async {
+    final resolved = ServerConfig.resolveMediaUrl(videoUrl.trim());
+    if (resolved.isEmpty) return;
+
+    final uri = Uri.tryParse(resolved);
+    final looksExternalHost = uri != null &&
+        (uri.host.contains('youtube.com') ||
+            uri.host.contains('youtu.be') ||
+            uri.host.contains('vimeo.com'));
+
+    // YouTube/Vimeo — во внешнем приложении/браузере; остальное — inline player.
+    if (looksExternalHost && uri != null) {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть видео')),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    await showDialog<void>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.black,
-        child: Stack(
-          children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Здесь можно использовать video_player пакет для воспроизведения
-                  // Пока показываем ссылку
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Видео: $videoUrl',
-                      style: const TextStyle(color: Colors.white),
-                      textAlign: TextAlign.center,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                InlineVideoPlayer(
+                  videoUrl: resolved,
+                  aspectRatio: 16 / 9,
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                ),
+                if (uri != null)
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: TextButton.icon(
+                      onPressed: () => launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('Внешне'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Можно открыть в браузере или использовать video_player
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Закрыть'),
-                  ),
-                ],
-              ),
+              ],
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

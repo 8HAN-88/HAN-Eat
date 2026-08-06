@@ -5,6 +5,9 @@ import '../../../core/share/system_share.dart';
 import 'dart:async';
 
 import '../../../models/meal_plan.dart';
+import '../../../models/recipe_model.dart';
+import '../../../screens/detail_page.dart';
+import '../../../services/favorites_service.dart';
 import '../../../services/meal_plan_service.dart';
 import '../../../services/shopping_service.dart';
 import '../../../widgets/services_ready_gate.dart';
@@ -515,9 +518,21 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         icon: const Icon(Icons.delete_outline),
         onPressed: () => _removeEntry(entry),
       ),
-      onTap: () {
-        // Можно открыть детали рецепта
-      },
+      onTap: () => _openRecipeDetail(entry.recipe),
+    );
+  }
+
+  void _openRecipeDetail(RecipeModel recipeModel) {
+    final recipe = recipeModel.toRecipe();
+    final recipeKey = recipeModel.id;
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => DetailPage(
+          recipe: recipe,
+          isFavorite: FavoritesService.safeIsFavorite(recipeKey),
+          onToggle: () => FavoritesService.safeToggleFavorite(recipeKey),
+        ),
+      ),
     );
   }
 
