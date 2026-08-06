@@ -31,6 +31,7 @@ from app.models.conversation import (
     MessageEditHistory,
     ScheduledMessage,
 )
+from app.models.forum_topic import ForumTopic
 from app.models.user_block import UserBlock
 from app.models.call import CallSession, CallParticipant
 from app.models.paid_features import (
@@ -76,7 +77,7 @@ __all__ = [
     "StoryView", "StoryReaction", "CloseFriend",
 
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
-    "MessageEditHistory",
+    "MessageEditHistory", "ForumTopic",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
     "StickerPackInstall", "StickerFavorite", "StickerPackPin",
     "CallSession",

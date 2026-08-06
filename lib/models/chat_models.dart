@@ -301,6 +301,7 @@ class ChatMessage {
     this.inlineKeyboard = const [],
     this.replyKeyboard,
     this.effectId,
+    this.topicId,
   });
 
   final int id;
@@ -337,6 +338,8 @@ class ChatMessage {
   final ChatReplyKeyboard? replyKeyboard;
   /// Telegram-like send effect id (confetti, hearts, …).
   final String? effectId;
+  /// Forum topic id (null = General / pre-forum).
+  final int? topicId;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -427,6 +430,7 @@ class ChatMessage {
       effectId: (json['effect_id'] as String?)?.trim().isEmpty == true
           ? null
           : (json['effect_id'] as String?)?.trim(),
+      topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
     );
   }
 
@@ -447,6 +451,7 @@ class ChatMessage {
     List<List<ChatInlineKeyboardButton>>? inlineKeyboard,
     ChatReplyKeyboard? replyKeyboard,
     String? effectId,
+    int? topicId,
   }) {
     return ChatMessage(
       id: id,
@@ -478,6 +483,7 @@ class ChatMessage {
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
       replyKeyboard: replyKeyboard ?? this.replyKeyboard,
       effectId: effectId ?? this.effectId,
+      topicId: topicId ?? this.topicId,
     );
   }
 }
@@ -583,6 +589,7 @@ class ChatConversation {
     this.antiFloodMaxMessagesPerMinute = 0,
     this.protectContent = false,
     this.autoDeleteSeconds = 0,
+    this.isForum = false,
     this.amIGroupAdmin = false,
     this.amICanManageMembers = false,
     this.amICanManagePostingPermissions = false,
@@ -627,6 +634,8 @@ class ChatConversation {
   final int antiFloodMaxMessagesPerMinute;
   final bool protectContent;
   final int autoDeleteSeconds;
+  /// Telegram-like Topics / Forum mode for groups.
+  final bool isForum;
   final bool amIGroupAdmin;
   final bool amICanManageMembers;
   final bool amICanManagePostingPermissions;
@@ -726,6 +735,7 @@ class ChatConversation {
           _parseInt(json['anti_flood_max_messages_per_minute']),
       protectContent: json['protect_content'] as bool? ?? false,
       autoDeleteSeconds: _parseInt(json['auto_delete_seconds']),
+      isForum: json['is_forum'] as bool? ?? false,
       amIGroupAdmin: json['am_i_group_admin'] as bool? ?? false,
       amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
       amICanManagePostingPermissions:
@@ -775,6 +785,7 @@ class ChatConversation {
     int? antiFloodMaxMessagesPerMinute,
     bool? protectContent,
     int? autoDeleteSeconds,
+    bool? isForum,
     bool? amIGroupAdmin,
     bool? amICanManageMembers,
     bool? amICanManagePostingPermissions,
@@ -830,6 +841,7 @@ class ChatConversation {
           antiFloodMaxMessagesPerMinute ?? this.antiFloodMaxMessagesPerMinute,
       protectContent: protectContent ?? this.protectContent,
       autoDeleteSeconds: autoDeleteSeconds ?? this.autoDeleteSeconds,
+      isForum: isForum ?? this.isForum,
       amIGroupAdmin: amIGroupAdmin ?? this.amIGroupAdmin,
       amICanManageMembers: amICanManageMembers ?? this.amICanManageMembers,
       amICanManagePostingPermissions:
@@ -1390,6 +1402,46 @@ class ScheduledChatMessage {
       mediaGroupId:
           (groupRaw == null || groupRaw.trim().isEmpty) ? null : groupRaw.trim(),
       status: json['status'] as String? ?? 'pending',
+      createdAt: _parseDate(json['created_at']),
+    );
+  }
+}
+
+class ChatForumTopic {
+  const ChatForumTopic({
+    required this.id,
+    required this.conversationId,
+    required this.title,
+    this.iconEmoji,
+    this.isGeneral = false,
+    this.closed = false,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int conversationId;
+  final String title;
+  final String? iconEmoji;
+  final bool isGeneral;
+  final bool closed;
+  final DateTime createdAt;
+
+  String get displayLabel {
+    final emoji = (iconEmoji ?? '').trim();
+    final name = title.trim().isEmpty ? 'Тема' : title.trim();
+    return emoji.isEmpty ? name : '$emoji $name';
+  }
+
+  factory ChatForumTopic.fromJson(Map<String, dynamic> json) {
+    return ChatForumTopic(
+      id: _parseInt(json['id']),
+      conversationId: _parseInt(json['conversation_id']),
+      title: json['title'] as String? ?? '',
+      iconEmoji: (json['icon_emoji'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['icon_emoji'] as String?)?.trim(),
+      isGeneral: json['is_general'] as bool? ?? false,
+      closed: json['closed'] as bool? ?? false,
       createdAt: _parseDate(json['created_at']),
     );
   }

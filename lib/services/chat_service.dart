@@ -308,11 +308,13 @@ class ChatService {
     required int conversationId,
     int? cursor,
     int limit = 50,
+    int? topicId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages').replace(
       queryParameters: {
         if (cursor != null) 'cursor': '$cursor',
         'limit': '$limit',
+        if (topicId != null) 'topic_id': '$topicId',
       },
     );
     final response = await _get(uri);
@@ -412,11 +414,13 @@ class ChatService {
     required int conversationId,
     required int afterId,
     int limit = 50,
+    int? topicId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages').replace(
       queryParameters: {
         'after_id': '$afterId',
         'limit': '$limit',
+        if (topicId != null) 'topic_id': '$topicId',
       },
     );
     final response = await _get(uri);
@@ -648,6 +652,7 @@ class ChatService {
     bool silent = false,
     bool disableWebpagePreview = false,
     String? effectId,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -658,6 +663,7 @@ class ChatService {
       silent: silent,
       disableWebpagePreview: disableWebpagePreview,
       effectId: effectId,
+      topicId: topicId,
     );
   }
 
@@ -667,6 +673,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -675,6 +682,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      topicId: topicId,
     );
   }
 
@@ -856,6 +864,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -865,6 +874,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      topicId: topicId,
     );
   }
 
@@ -879,6 +889,7 @@ class ChatService {
     bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -892,6 +903,7 @@ class ChatService {
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
+      topicId: topicId,
     );
   }
 
@@ -904,6 +916,7 @@ class ChatService {
     bool silent = false,
     bool isPaid = false,
     int priceStars = 0,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -915,6 +928,7 @@ class ChatService {
       silent: silent,
       isPaid: isPaid,
       priceStars: priceStars,
+      topicId: topicId,
     );
   }
 
@@ -929,6 +943,7 @@ class ChatService {
     bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -942,6 +957,7 @@ class ChatService {
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
+      topicId: topicId,
     );
   }
 
@@ -952,6 +968,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -961,6 +978,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      topicId: topicId,
     );
   }
 
@@ -971,6 +989,7 @@ class ChatService {
     int? replyToMessageId,
     String? clientMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -980,6 +999,7 @@ class ChatService {
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
       silent: silent,
+      topicId: topicId,
     );
   }
 
@@ -989,6 +1009,7 @@ class ChatService {
     String? mediaUrl,
     String? clientMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -997,6 +1018,7 @@ class ChatService {
       mediaUrl: mediaUrl,
       clientMessageId: clientMessageId,
       silent: silent,
+      topicId: topicId,
     );
   }
 
@@ -1008,6 +1030,7 @@ class ChatService {
     Map<String, dynamic>? settings,
     int? replyToMessageId,
     bool silent = false,
+    int? topicId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
@@ -1022,6 +1045,7 @@ class ChatService {
         if (settings != null) 'poll_settings': settings,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
         if (silent) 'silent': true,
+        if (topicId != null) 'topic_id': topicId,
       }),
     );
     _ensureOk(response, 'Не удалось отправить опрос');
@@ -1122,6 +1146,7 @@ class ChatService {
     bool isPaid = false,
     int priceStars = 0,
     String? effectId,
+    int? topicId,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1144,6 +1169,7 @@ class ChatService {
         if (isPaid) 'is_paid': true,
         if (isPaid && priceStars > 0) 'price_stars': priceStars,
         if (effectId != null && effectId.isNotEmpty) 'effect_id': effectId,
+        if (topicId != null) 'topic_id': topicId,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');
@@ -1509,6 +1535,82 @@ class ChatService {
     );
     _ensureOk(response, 'Не удалось обновить защиту контента');
     return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatConversation> setGroupIsForum({
+    required int conversationId,
+    required bool enabled,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({'is_forum': enabled}),
+    );
+    _ensureOk(response, 'Не удалось обновить режим тем');
+    return ChatConversation.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<List<ChatForumTopic>> listForumTopics({
+    required int conversationId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/topics');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить темы');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final items = data['items'] as List<dynamic>? ?? const [];
+    final out = <ChatForumTopic>[];
+    for (final raw in items) {
+      if (raw is Map<String, dynamic>) {
+        try {
+          out.add(ChatForumTopic.fromJson(raw));
+        } catch (_) {}
+      }
+    }
+    return out;
+  }
+
+  static Future<ChatForumTopic> createForumTopic({
+    required int conversationId,
+    required String title,
+    String? iconEmoji,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/topics');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'title': title,
+        if (iconEmoji != null && iconEmoji.trim().isNotEmpty)
+          'icon_emoji': iconEmoji.trim(),
+      }),
+    );
+    _ensureOk(response, 'Не удалось создать тему');
+    return ChatForumTopic.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatForumTopic> updateForumTopic({
+    required int conversationId,
+    required int topicId,
+    String? title,
+    String? iconEmoji,
+    bool? closed,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/topics/$topicId');
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (iconEmoji != null) 'icon_emoji': iconEmoji,
+        if (closed != null) 'closed': closed,
+      }),
+    );
+    _ensureOk(response, 'Не удалось обновить тему');
+    return ChatForumTopic.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
@@ -1944,6 +2046,7 @@ class ChatService {
       inlineKeyboard: msg.inlineKeyboard,
       replyKeyboard: msg.replyKeyboard,
       effectId: msg.effectId,
+      topicId: msg.topicId,
       hasSpoiler: msg.hasSpoiler,
     );
   }

@@ -279,6 +279,39 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     }
   }
 
+  Future<void> _toggleIsForum() async {
+    if (!_canChangeInfo) return;
+    final next = !_conversation.isForum;
+    setState(() => _busy = true);
+    try {
+      final conv = await ChatService.setGroupIsForum(
+        conversationId: _conversation.id,
+        enabled: next,
+      );
+      if (!mounted) return;
+      setState(() {
+        _conversation = conv;
+        _busy = false;
+      });
+      widget.onConversationChanged?.call(conv);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next
+                ? 'Темы включены — в чате появится General и новые темы'
+                : 'Темы выключены',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _toggleJoinByRequestEnabled() async {
     if (!_canManageMembers) return;
     final next = !_conversation.joinByRequestEnabled;
@@ -1790,6 +1823,19 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                           onChanged: (_busy || !_canManagePostingPermissions)
                               ? null
                               : (_) => _toggleProtectContent(),
+                        ),
+                        SwitchListTile(
+                          secondary: const Icon(Icons.topic_outlined),
+                          title: const Text('Темы (форум)'),
+                          subtitle: Text(
+                            _canChangeInfo
+                                ? 'Разделить группу на темы вроде Telegram Topics'
+                                : 'Нет права менять информацию группы',
+                          ),
+                          value: _conversation.isForum,
+                          onChanged: (_busy || !_canChangeInfo)
+                              ? null
+                              : (_) => _toggleIsForum(),
                         ),
                         ListTile(
                           leading: const Icon(Icons.auto_delete_outlined),

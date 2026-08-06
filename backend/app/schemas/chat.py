@@ -73,6 +73,7 @@ class MessageResponse(BaseModel):
     purchased: bool = True
     reactions: List["MessageReactionSummary"] = []
     effect_id: Optional[str] = None
+    topic_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -138,6 +139,7 @@ class ConversationResponse(BaseModel):
     bubble_accent: Optional[str] = None
     created_by_user_id: Optional[int] = None
     only_admins_can_post: bool = False
+    is_forum: bool = False
     join_by_request_enabled: bool = False
     slow_mode_seconds: int = 0
     anti_flood_max_messages_per_minute: int = 0
@@ -248,6 +250,7 @@ class SendMessageRequest(BaseModel):
     price_stars: int = Field(default=0, ge=0, le=100000)
     # Telegram-like send effect: confetti | fireworks | hearts | celebration | thumbs_up
     effect_id: Optional[str] = Field(default=None, max_length=32)
+    topic_id: Optional[int] = None
 
 
 class ScheduleMessageRequest(BaseModel):
@@ -389,6 +392,7 @@ class UpdateGroupChatRequest(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=120)
     avatar_url: Optional[str] = Field(None, max_length=512)
     only_admins_can_post: Optional[bool] = None
+    is_forum: Optional[bool] = None
     join_by_request_enabled: Optional[bool] = None
     slow_mode_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
     anti_flood_max_messages_per_minute: Optional[int] = Field(
@@ -396,6 +400,34 @@ class UpdateGroupChatRequest(BaseModel):
     )
     protect_content: Optional[bool] = None
     auto_delete_seconds: Optional[int] = Field(default=None, ge=0, le=2592000)
+
+
+class ForumTopicCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=128)
+    icon_emoji: Optional[str] = Field(None, max_length=16)
+
+
+class ForumTopicUpdateRequest(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=128)
+    icon_emoji: Optional[str] = Field(None, max_length=16)
+    closed: Optional[bool] = None
+
+
+class ForumTopicResponse(BaseModel):
+    id: int
+    conversation_id: int
+    title: str
+    icon_emoji: Optional[str] = None
+    is_general: bool = False
+    closed: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ForumTopicListResponse(BaseModel):
+    items: List[ForumTopicResponse]
 
 
 class TranslateTextRequest(BaseModel):

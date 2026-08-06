@@ -60,6 +60,10 @@ from app.schemas.chat import (
     WallpaperStyleRequest,
     BubbleAccentRequest,
     UpdateGroupChatRequest,
+    ForumTopicCreateRequest,
+    ForumTopicUpdateRequest,
+    ForumTopicResponse,
+    ForumTopicListResponse,
     GroupMemberAdminRequest,
     GroupMemberPermissionsRequest,
     GroupMemberSendRestrictionRequest,
@@ -185,6 +189,7 @@ def _message_payload(
         "purchased": purchased,
         "reactions": reactions or [],
         "effect_id": getattr(msg, "effect_id", None),
+        "topic_id": getattr(msg, "topic_id", None),
     }
     kb_update = getattr(msg, "_reply_keyboard_update", None)
     if isinstance(kb_update, dict):
@@ -661,6 +666,7 @@ def _message_response(
         purchased=purchased,
         reactions=reactions or [],
         effect_id=getattr(msg, "effect_id", None),
+        topic_id=getattr(msg, "topic_id", None),
     )
 
 
@@ -790,6 +796,7 @@ def _conversation_response(
         if conv.type in ("group", "saved")
         else None,
         only_admins_can_post=bool(getattr(conv, "only_admins_can_post", False)),
+        is_forum=bool(getattr(conv, "is_forum", False)),
         join_by_request_enabled=bool(getattr(conv, "join_by_request_enabled", False)),
         slow_mode_seconds=int(getattr(conv, "slow_mode_seconds", 0) or 0),
         anti_flood_max_messages_per_minute=int(
@@ -1455,6 +1462,7 @@ async def list_messages(
     conversation_id: int,
     cursor: Optional[int] = Query(None),
     after_id: Optional[int] = Query(None),
+    topic_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1472,8 +1480,12 @@ async def list_messages(
             cursor,
             after_id,
             limit,
+            topic_id=topic_id,
         )
-    except ValueError:
+    except ValueError as e:
+        code = str(e)
+        if code == "topic_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
 
     if purged_ids:
@@ -1501,6 +1513,7 @@ async def list_messages(
             cursor,
             after_id,
             limit,
+            topic_id=topic_id,
         )
 
     member = (
@@ -1861,6 +1874,7 @@ async def send_message(
             is_paid=is_paid,
             price_stars=price_stars,
             effect_id=body.effect_id,
+            topic_id=body.topic_id,
         )
         # Paid-DM fee is charged inside send_message (before notify).
         db.commit()
@@ -1911,8 +1925,12 @@ async def send_message(
             "story_reply_too_long",
             "invalid_reply",
             "effect_id_invalid",
+            "topic_closed",
+            "not_a_forum",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "topic_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
         if code == "group_write_restricted":
@@ -3884,6 +3902,7 @@ async def update_group_chat(
             body.title is None
             and body.avatar_url is None
             and body.only_admins_can_post is None
+            and body.is_forum is None
             and body.join_by_request_enabled is None
             and body.slow_mode_seconds is None
             and body.anti_flood_max_messages_per_minute is None
@@ -3928,6 +3947,24 @@ async def update_group_chat(
                         "only admins can post."
                         if body.only_admins_can_post
                         else "all members can post."
+                    ),
+                )
+            )
+        if body.is_forum is not None:
+            svc.set_group_is_forum(
+                conversation_id,
+                current_user.id,
+                body.is_forum,
+            )
+            notes.append(
+                svc.create_group_system_note(
+                    conversation_id,
+                    current_user.id,
+                    "🛡 "
+                    + (
+                        "Topics enabled (forum mode)."
+                        if body.is_forum
+                        else "Topics disabled."
                     ),
                 )
             )
@@ -4047,6 +4084,120 @@ async def update_group_chat(
     if notes:
         _notify_chat_inbox(db, conversation_id, current_user.id)
     return item
+
+
+def _topic_response(t) -> ForumTopicResponse:
+    return ForumTopicResponse(
+        id=int(t.id),
+        conversation_id=int(t.conversation_id),
+        title=str(t.title or ""),
+        icon_emoji=(str(t.icon_emoji) if t.icon_emoji else None),
+        is_general=bool(getattr(t, "is_general", False)),
+        closed=getattr(t, "closed_at", None) is not None,
+        created_at=t.created_at,
+    )
+
+
+@router.get(
+    "/chats/{conversation_id}/topics",
+    response_model=ForumTopicListResponse,
+)
+async def list_forum_topics(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        topics = svc.list_forum_topics(conversation_id, current_user.id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "not_group":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Not a group chat")
+        raise
+    return ForumTopicListResponse(items=[_topic_response(t) for t in topics])
+
+
+@router.post(
+    "/chats/{conversation_id}/topics",
+    response_model=ForumTopicResponse,
+)
+async def create_forum_topic(
+    conversation_id: int,
+    body: ForumTopicCreateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        topic = svc.create_forum_topic(
+            conversation_id,
+            current_user.id,
+            title=body.title,
+            icon_emoji=body.icon_emoji,
+        )
+        db.commit()
+        db.refresh(topic)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code in ("not_a_forum", "empty_title", "not_group"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    return _topic_response(topic)
+
+
+@router.patch(
+    "/chats/{conversation_id}/topics/{topic_id}",
+    response_model=ForumTopicResponse,
+)
+async def update_forum_topic(
+    conversation_id: int,
+    topic_id: int,
+    body: ForumTopicUpdateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = ChatService(db)
+    try:
+        topic = svc.update_forum_topic(
+            conversation_id,
+            current_user.id,
+            topic_id,
+            title=body.title,
+            icon_emoji=body.icon_emoji,
+            closed=body.closed,
+        )
+        db.commit()
+        db.refresh(topic)
+    except ValueError as e:
+        db.rollback()
+        code = str(e)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "topic_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Topic not found")
+        if code in (
+            "not_a_forum",
+            "empty_title",
+            "cannot_close_general",
+            "not_group",
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    return _topic_response(topic)
 
 
 @router.post("/chats/{conversation_id}/members")
