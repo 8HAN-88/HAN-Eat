@@ -5,32 +5,23 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:han_eat/firebase_options.dart';
 import '../services/push_notification_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import '../features/kitchen/data/services/favorites_service.dart';
-import '../features/kitchen/data/services/shopping_service.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/notification_service.dart';
 import '../services/post_moderation_service.dart';
 import '../services/notification_settings_service.dart';
-import '../features/kitchen/data/services/meal_plan_service.dart';
-import '../features/kitchen/data/services/category_service.dart';
-import '../features/kitchen/data/services/recipe_service.dart';
 import '../services/feed_sync_service.dart';
 import '../services/feed_cache_service.dart';
 import '../services/feed_api_cache.dart';
 import '../services/saved_posts_service.dart';
 import '../services/chat_cache_service.dart';
 import '../services/profile_cache_service.dart';
-import '../features/kitchen/data/services/menu_recommendations_cache.dart';
-import '../features/kitchen/data/services/menu_search_cache.dart';
 import '../services/global_search_cache.dart';
 import '../services/subscription_status_cache.dart';
 import '../services/api_reachability_service.dart';
-import '../features/kitchen/data/services/history_storage.dart';
 import '../core/config/legacy_firestore_config.dart';
 import '../core/crash_reporting.dart';
 import '../services/server_config.dart';
-import '../services/api_service.dart';
 import '../services/user_realtime_service.dart';
 import '../core/network/haneat_http_client.dart';
 import '../core/storage/hive_bootstrap.dart';
@@ -60,14 +51,7 @@ Future<void> bootstrapServicesForFirstFrame() async {
       ProfileCacheService.warmUp(AuthService.instance.currentUser?.id)
           .catchError((Object e) {
         debugPrint('ProfileCacheService warmUp: $e');
-      }),
-      MenuRecommendationsCache.warmUp().catchError((Object e) {
-        debugPrint('MenuRecommendationsCache warmUp: $e');
-      }),
-      MenuSearchCache.warmUp().catchError((Object e) {
-        debugPrint('MenuSearchCache warmUp: $e');
-      }),
-      GlobalSearchCache.warmUp().catchError((Object e) {
+      }),      GlobalSearchCache.warmUp().catchError((Object e) {
         debugPrint('GlobalSearchCache warmUp: $e');
       }),
       SubscriptionStatusCache.warmUp().catchError((Object e) {
@@ -172,15 +156,11 @@ Future<void> bootstrapServicesDeferred() async {
     // Delay all heavyweight local caches, realtime, and sync services until the
     // user already sees a stable first screen.
     unawaited(() async {
-      await Future<void>.delayed(const Duration(seconds: 8));
-      await safeInit(HistoryStorage.ensureOpen(), 'HistoryStorage.ensureOpen');
-      await safeInit(UserService.init(), 'UserService');
+      await Future<void>.delayed(const Duration(seconds: 8));      await safeInit(UserService.init(), 'UserService');
       await safeInit(UserRealtimeService.init(), 'UserRealtimeService');
       await safeInit(SavedPostsService.init(), 'SavedPostsService');
 
-      if (AuthService.instance.currentUser != null) {
-        unawaited(ApiService.touchAiScanCreditsSilently());
-        unawaited(
+      if (AuthService.instance.currentUser != null) {        unawaited(
           SavedPostsService.processPendingOps().catchError((Object e) {
             debugPrint('SavedPostsService.processPendingOps: $e');
           }),
@@ -194,23 +174,13 @@ Future<void> bootstrapServicesDeferred() async {
       }
 
       await Future<void>.delayed(const Duration(seconds: 4));
-      await Future.wait<void>([
-        safeInit(FavoritesService.init(), 'FavoritesService'),
-        safeInit(ShoppingService.init(), 'ShoppingService'),
-        safeInit(MealPlanService.init(), 'MealPlanService'),
-        safeInit(CategoryService.init(), 'CategoryService'),
-        safeInit(RecipeService.init(), 'RecipeService'),
-      ], eagerError: false);
+      await Future.wait<void>([      ], eagerError: false);
     }());
 
     AuthService.registerSessionListener((user) {
-      if (user != null) {
-        unawaited(ApiService.touchAiScanCreditsSilently());
-      }
+      if (user != null) {      }
     });
-    if (AuthService.instance.currentUser != null) {
-      unawaited(ApiService.touchAiScanCreditsSilently());
-    }
+    if (AuthService.instance.currentUser != null) {    }
     if (kDebugMode) {
       debugPrint('✅ bootstrapServicesDeferred web: lightweight mode');
     }
@@ -251,13 +221,6 @@ Future<void> bootstrapServicesDeferred() async {
     }
     // Manrope в assets/fonts — сеть не нужна.
   }());
-
-  unawaited(
-    HistoryStorage.ensureOpen().catchError((Object e) {
-      debugPrint('HistoryStorage.ensureOpen: $e');
-    }),
-  );
-
   if (firebaseInitialized) {
     try {
       await NotificationSettingsService.init();
@@ -310,13 +273,9 @@ Future<void> bootstrapServicesDeferred() async {
   }
 
   AuthService.registerSessionListener((user) {
-    if (user != null) {
-      unawaited(ApiService.touchAiScanCreditsSilently());
-    }
+    if (user != null) {    }
   });
-  if (AuthService.instance.currentUser != null) {
-    unawaited(ApiService.touchAiScanCreditsSilently());
-  }
+  if (AuthService.instance.currentUser != null) {  }
 
   if (firebaseInitialized && AuthService.instance.currentUser != null) {
     unawaited(
@@ -339,25 +298,13 @@ Future<void> bootstrapServicesDeferred() async {
     safeInit(UserRealtimeService.init(), 'UserRealtimeService'),
   ];
   if (!kIsWeb) {
-    criticalInits.addAll([
-      safeInit(FavoritesService.init(), 'FavoritesService'),
-      safeInit(ShoppingService.init(), 'ShoppingService'),
-      safeInit(MealPlanService.init(), 'MealPlanService'),
-      safeInit(CategoryService.init(), 'CategoryService'),
-      safeInit(RecipeService.init(), 'RecipeService'),
-    ]);
+    criticalInits.addAll([    ]);
   }
   await Future.wait<void>(criticalInits, eagerError: false);
 
   if (kIsWeb) {
     unawaited(
-      Future.wait<void>([
-        safeInit(FavoritesService.init(), 'FavoritesService'),
-        safeInit(ShoppingService.init(), 'ShoppingService'),
-        safeInit(MealPlanService.init(), 'MealPlanService'),
-        safeInit(CategoryService.init(), 'CategoryService'),
-        safeInit(RecipeService.init(), 'RecipeService'),
-      ], eagerError: false),
+      Future.wait<void>([      ], eagerError: false),
     );
   }
   if (AuthService.instance.currentUser != null) {

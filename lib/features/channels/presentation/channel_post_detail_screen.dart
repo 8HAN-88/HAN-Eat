@@ -7,11 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../app/app_router.dart';
 import '../../../models/post_model.dart';
-import '../../kitchen/data/models/recipe.dart';
-import '../../kitchen/recipe_detail/presentation/detail_page.dart';
 import '../../../services/api_service.dart';
 import '../../../services/channel_service.dart';
-import '../../kitchen/data/services/favorites_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/image_url_helper.dart';
 import '../../../widgets/telegram_photo_grid.dart';
@@ -503,78 +500,10 @@ class _ChannelPostDetailScreenState
   }
 
   void _openRecipeScreen() {
-    // Преобразуем PostModel в Recipe для DetailPage
-    final body = _displayPost.body;
-    final ingredientsList = body?['ingredients'] as List<dynamic>? ?? [];
-    final stepsList = body?['steps'] as List<dynamic>? ?? [];
-
-    // Преобразуем ингредиенты в List<String>
-    final ingredients = ingredientsList.map((e) => e.toString()).toList();
-
-    // Преобразуем шаги в List<Map<String, dynamic>>
-    final steps = stepsList.asMap().entries.map((entry) {
-      final step = entry.value;
-      if (step is Map<String, dynamic>) {
-        // Убеждаемся, что есть правильные поля
-        final imageValue = step['image'] ?? step['image_url'];
-        final imageStr = imageValue != null
-            ? (imageValue is String ? imageValue : imageValue.toString())
-            : null;
-        // Проверяем, что изображение не пустое и не 'null'
-        final finalImage =
-            (imageStr != null && imageStr.isNotEmpty && imageStr != 'null')
-                ? imageStr
-                : null;
-        return {
-          'number': step['number'] ?? entry.key + 1,
-          'step': step['step'] ?? step['text'] ?? step['instruction'] ?? '',
-          'image': finalImage,
-          'image_url': finalImage, // Дублируем для совместимости
-        };
-      } else if (step is String) {
-        return {
-          'number': entry.key + 1,
-          'step': step,
-          'image': null,
-        };
-      } else {
-        return {
-          'number': entry.key + 1,
-          'step': step.toString(),
-          'image': null,
-        };
-      }
-    }).toList();
-
-    final recipe = Recipe.fromPostModel(_displayPost);
-
-    // Проверяем, находится ли рецепт в избранном
-    final isFavorite =
-        FavoritesService.safeIsFavorite(recipe.id.toString());
-
-    // Открываем экран рецепта
-    // Используем push, и при возврате сразу закрываем этот экран, чтобы попасть на канал
-    if (mounted) {
-      Navigator.of(context)
-          .push(
-        MaterialPageRoute(
-          builder: (context) => DetailPage(
-            recipe: recipe,
-            isFavorite: isFavorite,
-            onToggle: () {
-              FavoritesService.safeToggleFavorite(recipe.id.toString());
-            },
-          ),
-        ),
-      )
-          .then((_) {
-        // Когда возвращаемся из DetailPage, сразу закрываем этот экран (ChannelPostDetailScreen)
-        // чтобы пользователь попал сразу на канал, минуя экран загрузки
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      });
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Каталог рецептов больше недоступен')),
+    );
   }
 
   String? _getImageUrl() {

@@ -5,16 +5,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:han_eat/core/app/app_variant.dart';
 import '../application/feed_scroll_chrome.dart';
 import '../application/app_search_context.dart';
 import '../application/shell_tab_visibility.dart';
 import '../application/root_shell_chrome.dart';
-import '../../kitchen/menu/application/menu_recommendations_refresh_provider.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../onboarding/onboarding_overlay.dart';
 import 'package:han_eat/services/account_session_service.dart';
-import 'package:han_eat/services/api_service.dart';
 import 'package:han_eat/services/api_reachability_service.dart';
 import 'package:han_eat/widgets/connectivity_status_banner.dart';
 import 'package:han_eat/widgets/pwa_install_banner.dart';
@@ -60,31 +57,7 @@ class RootShell extends ConsumerStatefulWidget {
     ),
   ];
 
-  static const _kitchenDestinations = [
-    _NavDestination(
-      label: 'Меню',
-      icon: Icons.restaurant_menu_outlined,
-      selectedIcon: Icons.restaurant_menu_rounded,
-    ),
-    _NavDestination(
-      label: 'План',
-      icon: Icons.calendar_month_outlined,
-      selectedIcon: Icons.calendar_month_rounded,
-    ),
-    _NavDestination(
-      label: 'Покупки',
-      icon: Icons.shopping_basket_outlined,
-      selectedIcon: Icons.shopping_basket_rounded,
-    ),
-    _NavDestination(
-      label: 'Профиль',
-      icon: Icons.person_outline_rounded,
-      selectedIcon: Icons.person_rounded,
-    ),
-  ];
-
-  static List<_NavDestination> get _destinations =>
-      AppVariant.current.isKitchen ? _kitchenDestinations : _socialDestinations;
+  static List<_NavDestination> get _destinations => _socialDestinations;
 
   @override
   ConsumerState<RootShell> createState() => _RootShellState();
@@ -265,14 +238,9 @@ class _RootShellState extends ConsumerState<RootShell> {
     }
     resetShellNavCompact();
 
-    if (AppVariant.current.isSocial && index == 1) {
+    if (index == 1) {
       _loadChatUnreadCount();
       ref.read(chatsHubRefreshProvider.notifier).state++;
-    }
-    // Kitchen стартует с «Меню»; в social меню больше не является главной вкладкой.
-    if (AppVariant.current.isKitchen && index == 0) {
-      ref.read(menuRecommendationsRefreshProvider.notifier).state++;
-      unawaited(ApiService.touchAiScanCreditsSilently());
     }
   }
 
@@ -429,9 +397,7 @@ class _RootShellState extends ConsumerState<RootShell> {
                                 RootShell._destinations[i],
                                 badgeLabel: _badgeLabelForTab(i),
                                 badgeTooltip:
-                                    AppVariant.current.isSocial && i == 1
-                                        ? _chatTabBadgeTooltip()
-                                        : null,
+                                    i == 1 ? _chatTabBadgeTooltip() : null,
                               ),
                           ],
                         ),
@@ -511,7 +477,7 @@ class _RootShellState extends ConsumerState<RootShell> {
   }
 
   String? _badgeLabelForTab(int index) {
-    if (AppVariant.current.isSocial && index == 1) return _chatTabBadgeLabel();
+    if (index == 1) return _chatTabBadgeLabel();
     return null;
   }
 

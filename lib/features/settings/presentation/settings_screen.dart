@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../kitchen/meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/user_service.dart';
@@ -12,9 +11,7 @@ import '../../../services/web_app_update_service.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../app/theme_mode_controller.dart';
-import '../../kitchen/ai_scan/application/analysis_mode_controller.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
-import '../../kitchen/presentation/widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -206,18 +203,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
-      applicationName: 'H.A.N. Eat',
+      applicationName: 'HanWe',
       applicationVersion: kIsWeb && WebAppUpdateService.embeddedBuild.isNotEmpty
           ? '1.0.0 (${WebAppUpdateService.embeddedBuild})'
           : '1.0.0',
-      applicationLegalese: '© H.A.N. Eat. Рецепты, план питания и сообщество.',
+      applicationLegalese: '© HanWe. Чаты, лента, каналы и общение.',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(analysisSettingsProvider);
-    final controller = ref.read(analysisSettingsProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
 
     final serviceItems = <_SettingsItem>[
@@ -272,12 +267,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         icon: Icons.smart_toy_outlined,
         subtitle: 'Создание ботов, команды и подключение к чатам',
         onTap: () => context.push(MyBotsRoute.path),
-      ),
-      _SettingsItem(
-        title: 'Настройки питания',
-        icon: Icons.monitor_heart_outlined,
-        subtitle: 'Цель, калории, повторы — для AI-плана',
-        onTap: () => context.push(MealPlanNutritionSettingsRoute.path),
       ),
       _SettingsItem(
         title: 'Поддержка и безопасность',
@@ -383,49 +372,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onChanged: _toggleAutoRetryOnLimits,
               ),
             ),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Язык перевода',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue:
-                          supportedLanguages.keys.contains(settings.language)
-                              ? settings.language
-                              : 'ru',
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.language),
-                      ),
-                      items: [
-                        for (final entry in supportedLanguages.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        controller.changeLanguage(value);
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Все рецепты, ингредиенты и шаги будут автоматически переводиться на выбранный язык.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
             _SettingsSectionHeader(title: 'Приватность'),
             Card(
@@ -487,10 +433,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 24),
             _SettingsSectionHeader(title: 'Аккаунт и сервисы'),
-            const Card(
-              child: AiScanCreditsTile(),
-            ),
-            const SizedBox(height: 12),
             Card(
               clipBehavior: Clip.antiAlias,
               child: Column(

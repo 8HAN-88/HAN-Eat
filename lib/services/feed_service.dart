@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
-import '../core/app/app_variant.dart';
 import '../models/post_model.dart';
 import '../models/post_types.dart';
 import 'auth_service.dart';
@@ -53,7 +52,7 @@ class FeedService {
       }
 
       final shouldIncludeRecipes = feedType == 'recipes' ||
-          (includeRecipes ?? AppVariant.current.isKitchen);
+          (includeRecipes ?? false);
       final uri = Uri.parse('$baseUrl/feed').replace(queryParameters: {
         if (cursor != null) 'cursor': cursor,
         'limit': limit.toString(),

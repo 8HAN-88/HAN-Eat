@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/app_bootstrap_state.dart';
 import '../../../../app/auth_navigation.dart';
 import '../../../../app/auth_route_paths.dart';
-import '../../../../core/app/app_variant.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../core/web/boot_ready_signal.dart';
 import '../../../../services/auth_service.dart';
@@ -86,7 +85,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         destination = AuthPaths.legalConsent;
       } else {
         destination =
-            AppVariant.current.isKitchen ? AuthPaths.menu : AuthPaths.feed;
+            AuthPaths.feed;
       }
       navigateAfterAuth(context, destination);
       WidgetsBinding.instance.addPostFrameCallback((_) {

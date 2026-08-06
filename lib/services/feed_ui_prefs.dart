@@ -1,6 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/app/app_variant.dart';
 import '../models/post_types.dart';
 
 /// Последняя выбранная вкладка и фильтры ленты (между сессиями).
@@ -15,7 +14,7 @@ class FeedUiPrefs {
   static const _reelsFollowingKey = 'feed_reels_following_v1';
 
   static String _normalizeFeedType(String? value) {
-    if (value == 'recipes' && AppVariant.current.isSocial) return 'all';
+    if (value == 'recipes') return 'all';
     return value ?? 'all';
   }
 

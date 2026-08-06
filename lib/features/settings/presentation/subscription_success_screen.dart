@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
-import '../../kitchen/data/services/ai_scan_gate.dart';
 import '../../../services/subscription_service.dart';
 import '../application/subscription_status_provider.dart';
 
@@ -59,7 +58,6 @@ class _SubscriptionSuccessScreenState
         final paid = status.hasAnyPaid;
         if (paid) {
           refreshSubscriptionStatus(ref);
-          AiScanGate.invalidateCache();
           if (mounted) {
             setState(() {
               _subscriptionActive = true;

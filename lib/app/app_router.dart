@@ -4,19 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/kitchen/menu/presentation/menu_screen.dart';
-import '../features/kitchen/menu/presentation/create_recipe_screen.dart';
-import '../features/kitchen/menu/presentation/scan_result_screen.dart';
-import '../features/kitchen/recipe_detail/presentation/cooking_mode_screen.dart';
-import '../features/kitchen/recipe_detail/presentation/recipe_by_id_screen.dart';
 import '../screens/post_by_id_screen.dart';
-import '../features/kitchen/shopping/shopping_import_screen.dart';
-import '../features/kitchen/data/models/recipe.dart';
 import '../features/navigation/presentation/root_shell.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/profile_auth_screen.dart';
-import '../features/kitchen/diet/presentation/allergies_screen.dart';
-import '../features/kitchen/diet/presentation/diet_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/star_gifts_inventory_screen.dart';
@@ -28,13 +19,6 @@ import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
 import '../features/settings/presentation/support_security_screen.dart';
 import '../features/settings/backup_page.dart';
-import '../features/kitchen/meal_plan/presentation/meal_plan_screen.dart';
-import '../features/kitchen/meal_plan/presentation/ai_meal_plan_screen.dart';
-import '../features/kitchen/meal_plan/presentation/meal_plan_analytics_screen.dart';
-import '../features/kitchen/meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
-import '../features/kitchen/meal_plan/presentation/meal_plan_survey_flow_screen.dart';
-import '../features/kitchen/shopping/shopping_page.dart';
-import '../features/kitchen/categories/presentation/categories_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
@@ -59,7 +43,6 @@ import '../features/channels/presentation/channel_subscribers_screen.dart';
 import '../features/channels/presentation/channel_post_detail_screen.dart';
 import '../features/channels/presentation/channels_management_screen.dart';
 import '../features/channels/presentation/create_channel_screen.dart';
-import '../features/channels/presentation/create_channel_recipe_screen.dart';
 import '../features/channels/presentation/create_channel_post_screen.dart';
 import '../features/channels/presentation/channel_settings_screen.dart';
 import '../features/creator/presentation/scheduled_posts_screen.dart';
@@ -76,7 +59,6 @@ import '../features/moderation/presentation/moderation_queue_screen.dart';
 import '../features/moderation/presentation/miniapps_moderation_screen.dart';
 import '../features/search/application/search_scope.dart';
 import '../features/search/presentation/search_screen.dart';
-import '../features/kitchen/favorites/favorites_page.dart';
 import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
@@ -87,7 +69,6 @@ import '../features/bots/presentation/bot_detail_screen.dart';
 import '../features/bots/presentation/my_bots_screen.dart';
 import '../models/chat_models.dart';
 import '../services/auth_service.dart';
-import '../core/app/app_variant.dart';
 import 'app_bootstrap_state.dart';
 import 'auth_route_paths.dart';
 import 'boot_screen.dart';
@@ -105,12 +86,6 @@ String? parseDeepLinkToGoPath(String raw) {
       final host = uri.host.toLowerCase();
       if (host == 'haneat.app' || host == 'www.haneat.app') {
         final path = uri.path;
-        if (path == '/shopping/import') {
-          final data = uri.queryParameters['data'];
-          if (data != null && data.isNotEmpty) {
-            return '${ShoppingImportRoute.path}?data=${Uri.encodeComponent(data)}';
-          }
-        }
         // https://haneat.app/@username → /u/username
         if (path.startsWith('/@') && path.length > 2) {
           final handle = path.substring(2).split('/').first;
@@ -132,15 +107,6 @@ String? parseDeepLinkToGoPath(String raw) {
       return null;
     }
     if (uri.scheme != 'haneat') return null;
-    if (uri.host == 'recipe' && uri.pathSegments.isNotEmpty) {
-      return '/recipe/${uri.pathSegments.first}';
-    }
-    if (uri.host == 'shopping' && uri.pathSegments.contains('import')) {
-      final data = uri.queryParameters['data'];
-      if (data != null && data.isNotEmpty) {
-        return '${ShoppingImportRoute.path}?data=${Uri.encodeComponent(data)}';
-      }
-    }
     if ((uri.host == 'post' || uri.host == 'reel') &&
         uri.pathSegments.isNotEmpty) {
       return '/post/${uri.pathSegments.first}';
@@ -238,7 +204,7 @@ Widget _safeShellIndexedStack(
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final homePath =
-      AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+      FeedRoute.path;
   // Use the real authenticated home (shell). Temporary /web-session landing
   // and hard reloads after login caused blank Safari pages, not stability.
   final stableHomePath = homePath;
@@ -281,26 +247,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (loc == ChannelsListRoute.path) {
           return ChatsRoute.path;
         }
-        if (loc == '/shopping') {
-          return ShoppingListRoute.path;
-        }
-        // Variant guards: prevent cross-app navigation
-        if (AppVariant.current.isKitchen) {
-          if (loc == FeedRoute.path ||
-              loc == ChatsRoute.path ||
-              loc == CreatePostRoute.path ||
-              loc == CreateReelRoute.path ||
-              (loc.startsWith('/channel/') && loc.contains('/create-post'))) {
-            return MenuRoute.path;
-          }
-        } else {
-          if (loc == MenuRoute.path ||
-              loc == MealPlanRoute.path ||
-              loc == ShoppingListRoute.path ||
-              loc == CreateRecipeRoute.path ||
-              (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
-            return FeedRoute.path;
-          }
+        // Legacy kitchen deep links → feed
+        if (loc == MenuRoute.path ||
+            loc == '/meal-plan' ||
+            loc.startsWith('/meal-plan/') ||
+            loc == '/shopping' ||
+            loc == '/shopping-list' ||
+            loc == '/shopping-import' ||
+            loc == '/create-recipe' ||
+            loc == '/categories' ||
+            loc == '/allergies' ||
+            loc == '/diet' ||
+            loc == '/diet-allergies' ||
+            loc == '/favorites' ||
+            loc == '/scan-result' ||
+            loc == '/cooking-mode' ||
+            loc.startsWith('/recipe/') ||
+            (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
+          return FeedRoute.path;
         }
         final user = AuthService.instance.currentUser;
         final isAuth = user != null;
@@ -355,7 +319,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: BootScreen(),
         ),
       ),
-      if (kIsWeb && AppVariant.current.isSocial)
+      if (kIsWeb)
         GoRoute(
           path: WebSocialHomeRoute.path,
           name: WebSocialHomeRoute.name,
@@ -375,58 +339,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         navigatorContainerBuilder: _safeShellIndexedStack,
         builder: (context, state, navigationShell) =>
             RootShell(navigationShell: navigationShell),
-        branches: AppVariant.current.isKitchen
-            ? [
-                StatefulShellBranch(
-                  routes: [
-                    GoRoute(
-                      path: MenuRoute.path,
-                      name: MenuRoute.name,
-                      pageBuilder: (context, state) => NoTransitionPage(
-                        key: const ValueKey('kitchen_menu_branch'),
-                        child: const MenuScreen(),
-                      ),
-                    ),
-                  ],
-                ),
-                StatefulShellBranch(
-                  routes: [
-                    GoRoute(
-                      path: MealPlanRoute.path,
-                      name: MealPlanRoute.name,
-                      pageBuilder: (context, state) => NoTransitionPage(
-                        key: const ValueKey('kitchen_meal_plan_branch'),
-                        child: const MealPlanScreen(),
-                      ),
-                    ),
-                  ],
-                ),
-                StatefulShellBranch(
-                  routes: [
-                    GoRoute(
-                      path: ShoppingListRoute.path,
-                      name: ShoppingListRoute.name,
-                      pageBuilder: (context, state) => NoTransitionPage(
-                        key: const ValueKey('kitchen_shopping_branch'),
-                        child: const ShoppingPage(),
-                      ),
-                    ),
-                  ],
-                ),
-                StatefulShellBranch(
-                  routes: [
-                    GoRoute(
-                      path: ProfileTabRoute.path,
-                      name: ProfileTabRoute.name,
-                      pageBuilder: (context, state) => NoTransitionPage(
-                        key: const ValueKey('kitchen_profile_branch'),
-                        child: const ProfileScreen(),
-                      ),
-                    ),
-                  ],
-                ),
-              ]
-            : [
+        branches: [
                 StatefulShellBranch(
                   routes: [
                     GoRoute(
@@ -494,111 +407,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: SettingsScreen()),
       ),
-      if (AppVariant.current.isSocial)
-        GoRoute(
-          path: MealPlanRoute.path,
-          name: MealPlanRoute.name,
-          pageBuilder: (context, state) =>
-              const MaterialPage(child: MealPlanScreen()),
-        ),
-      GoRoute(
-        path: AiMealPlanRoute.path,
-        name: AiMealPlanRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: AiMealPlanScreen()),
-      ),
-      GoRoute(
-        path: MealPlanAnalyticsRoute.path,
-        name: MealPlanAnalyticsRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: MealPlanAnalyticsScreen()),
-      ),
-      GoRoute(
-        path: NutritionSurveyRoute.path,
-        name: NutritionSurveyRoute.name,
-        pageBuilder: (context, state) => MaterialPage(
-          child: MealPlanSurveyFlowScreen(
-            skipWelcome: state.extra == true,
-          ),
-        ),
-      ),
-      GoRoute(
-        path: MealPlanNutritionSettingsRoute.path,
-        name: MealPlanNutritionSettingsRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: MealPlanNutritionSettingsScreen()),
-      ),
-      // Результат сканирования блюда (фото → питательность и рецепты)
-      GoRoute(
-        path: ScanResultRoute.path,
-        name: ScanResultRoute.name,
-        pageBuilder: (context, state) {
-          final bytes =
-              state.extra is Uint8List ? state.extra as Uint8List : null;
-          if (bytes == null) {
-            return MaterialPage(
-              child: Scaffold(
-                appBar: AppBar(title: const Text('Сканирование')),
-                body: const Center(
-                  child:
-                      Text('Нет данных изображения. Сделайте снимок ещё раз.'),
-                ),
-              ),
-            );
-          }
-          return MaterialPage(child: ScanResultScreen(bytes: bytes));
-        },
-      ),
-      GoRoute(
-        path: CookingModeRoute.path,
-        name: CookingModeRoute.name,
-        pageBuilder: (context, state) {
-          final recipe = state.extra is Recipe ? state.extra as Recipe : null;
-          if (recipe == null) {
-            return const MaterialPage(
-              child: InvalidLinkScreen(
-                title: 'Режим готовки',
-                message: 'Рецепт не передан',
-              ),
-            );
-          }
-          return MaterialPage(child: CookingModeScreen(recipe: recipe));
-        },
-      ),
-      GoRoute(
-        path: RecipeByIdRoute.path,
-        name: RecipeByIdRoute.name,
-        pageBuilder: (context, state) {
-          final idStr = state.pathParameters['id'];
-          final id = int.tryParse(idStr ?? '');
-          if (id == null || id < 1) {
-            return const MaterialPage(
-              child: InvalidLinkScreen(
-                title: 'Рецепт',
-                message: 'Неверная ссылка на рецепт',
-              ),
-            );
-          }
-          return MaterialPage(child: RecipeByIdScreen(recipeId: id));
-        },
-      ),
-      GoRoute(
-        path: ShoppingImportRoute.path,
-        name: ShoppingImportRoute.name,
-        pageBuilder: (context, state) {
-          final data = state.uri.queryParameters['data'];
-          return MaterialPage(
-            child: ShoppingImportScreen(dataBase64: data),
-          );
-        },
-      ),
-      // Маршрут для категорий
-      GoRoute(
-        path: CategoriesRoute.path,
-        name: CategoriesRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: CategoriesScreen()),
-      ),
       // Маршруты настроек
       GoRoute(
         path: ProfileAuthRoute.path,
@@ -606,31 +414,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: ProfileAuthScreen()),
       ),
-      GoRoute(
-        path: AllergiesRoute.path,
-        name: AllergiesRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: AllergiesScreen()),
-      ),
-      GoRoute(
-        path: DietRoute.path,
-        name: DietRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: DietScreen()),
-      ),
-      GoRoute(
-        path: DietAllergiesRoute.path,
-        name: DietAllergiesRoute.name,
-        // Legacy alias: allergies + diet live under Categories.
-        redirect: (context, state) => CategoriesRoute.path,
-      ),
-      if (AppVariant.current.isSocial)
-        GoRoute(
-          path: ShoppingListRoute.path,
-          name: ShoppingListRoute.name,
-          pageBuilder: (context, state) =>
-              const MaterialPage(child: ShoppingPage()),
-        ),
       GoRoute(
         path: NotificationsRoute.path,
         name: NotificationsRoute.name,
@@ -932,24 +715,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: CreatePostRoute.path,
         name: CreatePostRoute.name,
-        redirect: (context, state) =>
-            AppVariant.current.isKitchen ? CreateRecipeRoute.path : null,
         pageBuilder: (context, state) =>
             const MaterialPage(child: CreatePostScreen()),
       ),
-      GoRoute(
-        path: CreateRecipeRoute.path,
-        name: CreateRecipeRoute.name,
-        redirect: (context, state) =>
-            AppVariant.current.isSocial ? FeedRoute.path : null,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: CreateRecipeScreen()),
-      ),
-      GoRoute(
+            GoRoute(
         path: CreateReelRoute.path,
         name: CreateReelRoute.name,
-        redirect: (context, state) =>
-            AppVariant.current.isKitchen ? MenuRoute.path : null,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.uri.queryParameters['channelId']);
@@ -1086,34 +857,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) =>
             const MaterialPage(child: CreateChannelScreen()),
       ),
-      GoRoute(
-        path: '/channel/:channelId/create-recipe',
-        name: 'create_channel_recipe',
-        redirect: (context, state) =>
-            AppVariant.current.isSocial ? FeedRoute.path : null,
-        pageBuilder: (context, state) {
-          final channelId =
-              parseRoutePositiveId(state.pathParameters['channelId']);
-          if (channelId == null) {
-            return const MaterialPage(
-              child: InvalidLinkScreen(title: 'Канал'),
-            );
-          }
-          final channelName =
-              state.uri.queryParameters['channelName'] ?? 'канал';
-          return MaterialPage(
-            child: CreateChannelRecipeScreen(
-              channelId: channelId,
-              channelName: channelName,
-            ),
-          );
-        },
-      ),
-      GoRoute(
+            GoRoute(
         path: '/channel/:channelId/create-post',
         name: 'create_channel_post',
-        redirect: (context, state) =>
-            AppVariant.current.isKitchen ? MenuRoute.path : null,
         pageBuilder: (context, state) {
           final channelId =
               parseRoutePositiveId(state.pathParameters['channelId']);
@@ -1258,13 +1004,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: CommunityRoute.name,
         redirect: (context, state) => FeedRoute.path,
       ),
-      GoRoute(
-        path: LegacyFavoritesRoute.path,
-        name: LegacyFavoritesRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage<void>(child: FavoritesPage()),
-      ),
-      GoRoute(
+            GoRoute(
         path: UserSearchRoute.path,
         name: UserSearchRoute.name,
         // Legacy alias — same UI as SearchRoute.
@@ -1365,7 +1105,7 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   bool _forcedLogout = false;
 
   String get _stableHomePath =>
-      AppVariant.current.isKitchen ? MenuRoute.path : FeedRoute.path;
+      FeedRoute.path;
 
   @override
   void initState() {
@@ -1419,10 +1159,6 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
   }
 }
 
-class MenuRoute {
-  static const path = '/';
-  static const name = 'menu';
-}
 
 class CommunityRoute {
   static const path = '/community';
@@ -1449,10 +1185,6 @@ class AdminRefundQueueRoute {
   static const name = 'admin_refunds';
 }
 
-class LegacyFavoritesRoute {
-  static const path = '/favorites';
-  static const name = 'legacy_favorites';
-}
 
 class UserSearchRoute {
   static const path = '/users';
@@ -1540,75 +1272,37 @@ class ProfileTabRoute {
   static const name = 'profile_tab';
 }
 
+
+/// Legacy kitchen paths (redirect to feed).
+class MenuRoute {
+  static const path = '/menu';
+}
+
+class CreateRecipeRoute {
+  static const path = '/create-recipe';
+}
+
 class SettingsRoute {
   static const path = '/settings';
   static const name = 'settings';
 }
 
-class MealPlanRoute {
-  static const path = '/meal-plan';
-  static const name = 'meal_plan';
-}
 
-class AiMealPlanRoute {
-  static const path = '/meal-plan/ai';
-  static const name = 'ai_meal_plan';
-}
 
-class MealPlanAnalyticsRoute {
-  static const path = '/meal-plan/analytics';
-  static const name = 'meal_plan_analytics';
-}
 
-class ScanResultRoute {
-  static const path = '/scan-result';
-  static const name = 'scan_result';
-}
 
-class CookingModeRoute {
-  static const path = '/cooking-mode';
-  static const name = 'cooking_mode';
-}
 
-class RecipeByIdRoute {
-  static const path = '/recipe/:id';
-  static const name = 'recipe_by_id';
-}
 
-class ShoppingImportRoute {
-  static const path = '/shopping-import';
-  static const name = 'shopping_import';
-}
 
-class CategoriesRoute {
-  static const path = '/categories';
-  static const name = 'categories';
-}
 
 class ProfileAuthRoute {
   static const path = '/profile-auth';
   static const name = 'profile_auth';
 }
 
-class AllergiesRoute {
-  static const path = '/allergies';
-  static const name = 'allergies';
-}
 
-class DietRoute {
-  static const path = '/diet';
-  static const name = 'diet';
-}
 
-class DietAllergiesRoute {
-  static const path = '/diet-allergies';
-  static const name = 'diet_allergies';
-}
 
-class ShoppingListRoute {
-  static const path = '/shopping-list';
-  static const name = 'shopping_list';
-}
 
 class NotificationsRoute {
   static const path = '/notifications';
@@ -1870,8 +1564,6 @@ class ChannelDetailRoute {
     return '${pathFor(channelId)}/create-post${q.isEmpty ? '' : '?$q'}';
   }
 
-  static String createRecipe(int channelId, String channelName) =>
-      '${pathFor(channelId)}/create-recipe?channelName=${Uri.encodeComponent(channelName)}';
 
   static String post(int channelId, int postId) =>
       '${pathFor(channelId)}/post/$postId';
@@ -1945,10 +1637,6 @@ class CreatePostRoute {
   static const name = 'create_post';
 }
 
-class CreateRecipeRoute {
-  static const path = '/create-recipe';
-  static const name = 'create_recipe';
-}
 
 class CreateReelRoute {
   static const path = '/create-reel';
