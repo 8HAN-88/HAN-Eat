@@ -2715,6 +2715,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? get _activeTopicIdForSend =>
       _conversation.isForum ? _selectedTopicId : null;
 
+  bool get _canManageForumTopics =>
+      _conversation.amICanChangeInfo ||
+      (_conversation.createdByUserId != null &&
+          _conversation.createdByUserId ==
+              AuthService.instance.currentUser?.id);
+
+  ChatForumTopic? get _selectedForumTopic {
+    final id = _selectedTopicId;
+    if (id == null) return null;
+    for (final t in _forumTopics) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  bool get _selectedTopicIsClosed => _selectedForumTopic?.closed == true;
+
   Future<void> _loadForumTopics({bool selectGeneralIfNeeded = false}) async {
     if (!_conversation.isForum) {
       if (_forumTopics.isNotEmpty || _selectedTopicId != null) {
@@ -2729,6 +2746,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       final topics = await ChatService.listForumTopics(
         conversationId: widget.conversationId,
+        includeClosed: _canManageForumTopics,
       );
       if (!mounted) return;
       var selected = _selectedTopicId;
@@ -2766,9 +2784,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _createForumTopicDialog() async {
-    if (!_conversation.amICanChangeInfo &&
-        _conversation.createdByUserId !=
-            AuthService.instance.currentUser?.id) {
+    if (!_canManageForumTopics) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Нет права создавать темы')),
       );
@@ -2822,12 +2838,148 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Future<void> _renameForumTopicDialog(ChatForumTopic topic) async {
+    final controller = TextEditingController(text: topic.title);
+    final title = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Переименовать тему'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 128,
+          decoration: const InputDecoration(labelText: 'Название'),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title == null || title.isEmpty || !mounted) return;
+    if (title == topic.title) return;
+    try {
+      final updated = await ChatService.updateForumTopic(
+        conversationId: widget.conversationId,
+        topicId: topic.id,
+        title: title,
+      );
+      if (!mounted) return;
+      setState(() {
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id == updated.id) updated else t,
+        ];
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _setForumTopicClosed(ChatForumTopic topic, bool closed) async {
+    try {
+      final updated = await ChatService.updateForumTopic(
+        conversationId: widget.conversationId,
+        topicId: topic.id,
+        closed: closed,
+      );
+      if (!mounted) return;
+      setState(() {
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id == updated.id) updated else t,
+        ];
+      });
+      if (closed && _selectedTopicId == topic.id) {
+        ChatForumTopic? general;
+        for (final t in _forumTopics) {
+          if (t.isGeneral) {
+            general = t;
+            break;
+          }
+        }
+        if (general != null) {
+          await _selectForumTopic(general.id);
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(closed ? 'Тема закрыта' : 'Тема снова открыта'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _showForumTopicActions(ChatForumTopic topic) async {
+    if (!_canManageForumTopics) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(topic.displayLabel),
+              subtitle: Text(
+                topic.isGeneral
+                    ? 'Главная тема группы'
+                    : (topic.closed ? 'Закрыта для новых сообщений' : 'Открыта'),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Переименовать'),
+              onTap: () => Navigator.pop(ctx, 'rename'),
+            ),
+            if (!topic.isGeneral && !topic.closed)
+              ListTile(
+                leading: const Icon(Icons.lock_outline),
+                title: const Text('Закрыть тему'),
+                subtitle: const Text('Нельзя писать, история останется'),
+                onTap: () => Navigator.pop(ctx, 'close'),
+              ),
+            if (!topic.isGeneral && topic.closed)
+              ListTile(
+                leading: const Icon(Icons.lock_open_outlined),
+                title: const Text('Открыть тему'),
+                onTap: () => Navigator.pop(ctx, 'reopen'),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    if (action == 'rename') {
+      await _renameForumTopicDialog(topic);
+    } else if (action == 'close') {
+      await _setForumTopicClosed(topic, true);
+    } else if (action == 'reopen') {
+      await _setForumTopicClosed(topic, false);
+    }
+  }
+
   Widget _buildForumTopicsStrip(ColorScheme scheme) {
     if (!_conversation.isForum) return const SizedBox.shrink();
-    final canCreate = _conversation.amICanChangeInfo ||
-        (_conversation.createdByUserId != null &&
-            _conversation.createdByUserId ==
-                AuthService.instance.currentUser?.id);
+    final canManage = _canManageForumTopics;
     return Material(
       color: Theme.of(context).brightness == Brightness.dark
           ? const Color(0xFF18222D)
@@ -2852,15 +3004,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             for (final topic in _forumTopics)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Text(topic.displayLabel),
-                  selected: _selectedTopicId == topic.id,
-                  onSelected: (_) => unawaited(_selectForumTopic(topic.id)),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                child: GestureDetector(
+                  onLongPress: canManage
+                      ? () => unawaited(_showForumTopicActions(topic))
+                      : null,
+                  child: Opacity(
+                    opacity: topic.closed ? 0.65 : 1,
+                    child: ChoiceChip(
+                      avatar: topic.closed
+                          ? Icon(
+                              Icons.lock_outline,
+                              size: 14,
+                              color: scheme.onSurfaceVariant,
+                            )
+                          : null,
+                      label: Text(
+                        topic.closed
+                            ? '${topic.displayLabel} · закрыта'
+                            : topic.displayLabel,
+                      ),
+                      selected: _selectedTopicId == topic.id,
+                      onSelected: (_) =>
+                          unawaited(_selectForumTopic(topic.id)),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
                 ),
               ),
-            if (canCreate)
+            if (canManage)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: ActionChip(
@@ -12556,7 +12728,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _conversation.onlyAdminsCanPost &&
             !_conversation.amIGroupAdmin) &&
         !isRestrictedByModeration;
-    final canCompose = canSendInGroup && !peerBlockedByMe;
+    final canCompose =
+        canSendInGroup && !peerBlockedByMe && !_selectedTopicIsClosed;
     String formatSlowMode(int seconds) {
       if (seconds <= 0) return 'выкл';
       if (seconds < 60) return '$seconds сек';
@@ -14283,9 +14456,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                               hintText: !canCompose
                                                   ? (peerBlockedByMe
                                                       ? 'Пользователь заблокирован'
-                                                      : (isRestrictedByModeration
-                                                          ? 'Отправка ограничена'
-                                                          : 'Только админы'))
+                                                      : (_selectedTopicIsClosed
+                                                          ? 'Тема закрыта'
+                                                          : (isRestrictedByModeration
+                                                              ? 'Отправка ограничена'
+                                                              : 'Только админы')))
                                                   : (activeCooldownSeconds > 0
                                                       ? 'Подождите ${_formatSlowModeCountdown(activeCooldownSeconds)}'
                                                       : (_editingMessage !=

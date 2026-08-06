@@ -1452,4 +1452,21 @@ class ChatForumTopic {
       createdAt: _parseDate(json['created_at']),
     );
   }
+
+  ChatForumTopic copyWith({
+    String? title,
+    String? iconEmoji,
+    bool clearIconEmoji = false,
+    bool? closed,
+  }) {
+    return ChatForumTopic(
+      id: id,
+      conversationId: conversationId,
+      title: title ?? this.title,
+      iconEmoji: clearIconEmoji ? null : (iconEmoji ?? this.iconEmoji),
+      isGeneral: isGeneral,
+      closed: closed ?? this.closed,
+      createdAt: createdAt,
+    );
+  }
 }

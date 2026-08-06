@@ -175,3 +175,52 @@ def test_member_cannot_create_topic(db_session):
     svc.set_group_is_forum(conv.id, 1, True)
     with pytest.raises(ValueError, match="forbidden"):
         svc.create_forum_topic(conv.id, 2, title="Hack")
+
+
+def test_rename_and_reopen_topic(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    conv = _group(db_session, 1, 2)
+    svc = ChatService(db_session)
+    svc.set_group_is_forum(conv.id, 1, True)
+    topic = svc.create_forum_topic(conv.id, 1, title="News")
+    renamed = svc.update_forum_topic(conv.id, 1, topic.id, title="Updates")
+    assert renamed.title == "Updates"
+    svc.update_forum_topic(conv.id, 1, topic.id, closed=True)
+    open_only = svc.list_forum_topics(conv.id, 1)
+    assert all(t.id != topic.id for t in open_only)
+    with_closed = svc.list_forum_topics(conv.id, 1, include_closed=True)
+    assert any(t.id == topic.id and t.closed_at is not None for t in with_closed)
+    # Members without can_change_info never see closed even if requested.
+    member_view = svc.list_forum_topics(conv.id, 2, include_closed=True)
+    assert all(t.closed_at is None for t in member_view)
+    reopened = svc.update_forum_topic(conv.id, 1, topic.id, closed=False)
+    assert reopened.closed_at is None
+
+
+def test_disable_forum_keeps_topics_for_reenable(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    conv = _group(db_session, 1, 2)
+    svc = ChatService(db_session)
+    svc.set_group_is_forum(conv.id, 1, True)
+    news = svc.create_forum_topic(conv.id, 1, title="News")
+    msg, _ = svc.send_message(
+        conversation_id=conv.id,
+        sender_id=1,
+        msg_type="text",
+        content="in news",
+        topic_id=news.id,
+    )
+    db_session.commit()
+    svc.set_group_is_forum(conv.id, 1, False)
+    db_session.commit()
+    db_session.refresh(conv)
+    assert conv.is_forum is False
+    assert svc.list_forum_topics(conv.id, 1) == []
+    # Topics remain in DB; re-enable restores them.
+    svc.set_group_is_forum(conv.id, 1, True)
+    topics = svc.list_forum_topics(conv.id, 1)
+    assert any(t.id == news.id for t in topics)
+    db_session.refresh(msg)
+    assert msg.topic_id == news.id

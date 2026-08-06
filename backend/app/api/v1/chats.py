@@ -4112,12 +4112,17 @@ def _topic_response(t) -> ForumTopicResponse:
 )
 async def list_forum_topics(
     conversation_id: int,
+    include_closed: bool = Query(False),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
     try:
-        topics = svc.list_forum_topics(conversation_id, current_user.id)
+        topics = svc.list_forum_topics(
+            conversation_id,
+            current_user.id,
+            include_closed=bool(include_closed),
+        )
         db.commit()
     except ValueError as e:
         db.rollback()
