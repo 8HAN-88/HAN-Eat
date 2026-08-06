@@ -240,6 +240,8 @@ class Message(Base):
     # Telegram Stars paid media: locked until unlock purchase.
     is_paid = Column(Boolean, default=False, nullable=False, index=True)
     price_stars = Column(Integer, default=0, nullable=False)
+    # Telegram-like fullscreen send effect (confetti, hearts, …).
+    effect_id = Column(String(32), nullable=True)
 
 
 class ScheduledMessage(Base):

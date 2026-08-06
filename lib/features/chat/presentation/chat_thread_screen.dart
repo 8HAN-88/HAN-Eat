@@ -78,6 +78,7 @@ import '../../../widgets/chat_sticker_tile.dart';
 import '../../../widgets/report_content_dialog.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import 'widgets/chat_message_action_overlay.dart';
+import 'widgets/message_effect_overlay.dart';
 import 'widgets/chat_message_selection_toolbar.dart';
 import '../application/chat_recent_files_store.dart';
 import '../application/chat_recent_gifs_store.dart';
@@ -543,6 +544,33 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   ChatReplyKeyboard? _replyKeyboard;
+  String? _activeEffectId;
+  int? _activeEffectToken;
+  final Set<int> _playedEffectMessageIds = {};
+
+  static const _messageEffects = <(String, String, IconData)>[
+    ('confetti', 'Конфетти', Icons.celebration_outlined),
+    ('fireworks', 'Фейерверк', Icons.auto_awesome),
+    ('hearts', 'Сердца', Icons.favorite_outline),
+    ('celebration', 'Праздник', Icons.party_mode_outlined),
+    ('thumbs_up', 'Класс', Icons.thumb_up_alt_outlined),
+  ];
+
+  void _playMessageEffect(String? effectId, {int? messageId}) {
+    final id = (effectId ?? '').trim();
+    if (id.isEmpty) return;
+    if (messageId != null) {
+      if (_playedEffectMessageIds.contains(messageId)) return;
+      _playedEffectMessageIds.add(messageId);
+      if (_playedEffectMessageIds.length > 80) {
+        _playedEffectMessageIds.remove(_playedEffectMessageIds.first);
+      }
+    }
+    setState(() {
+      _activeEffectId = id;
+      _activeEffectToken = DateTime.now().millisecondsSinceEpoch;
+    });
+  }
 
   void _applyReplyKeyboard(ChatReplyKeyboard? kb) {
     if (kb == null) return;
@@ -2469,6 +2497,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             }
           }
         });
+        if ((msg.effectId ?? '').isNotEmpty) {
+          _playMessageEffect(msg.effectId, messageId: msg.id);
+        }
         // Delivered as soon as the client receives the message (Telegram).
         if (!msg.isMine) {
           _scheduleMarkDelivered();
@@ -9789,6 +9820,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             disableWebpagePreview: pending.disableWebpagePreview,
+            effectId: pending.effectId,
           );
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
@@ -9797,6 +9829,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _integrateMessage(msg, removeTempId: pending.tempId);
             _activateSlowModeCooldownFromNow();
           });
+          if ((msg.effectId ?? pending.effectId ?? '').isNotEmpty) {
+            _playMessageEffect(
+              msg.effectId ?? pending.effectId,
+              messageId: msg.id,
+            );
+          }
           _scrollToBottom();
           unawaited(
             ChatCacheService.saveThread(widget.conversationId, _messages),
@@ -9921,7 +9959,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return ok;
   }
 
-  Future<void> _sendText({bool silent = false}) async {
+  Future<void> _sendText({bool silent = false, String? effectId}) async {
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
         (_editingMessage!.type == 'image' ||
@@ -10091,6 +10129,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       tempId: tempId,
       silent: silent,
       disableWebpagePreview: disablePreview,
+      effectId: effectId,
     );
     setState(() {
       _messages.add(optimistic);
@@ -10259,6 +10298,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Future<String?> _pickMessageEffect() async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Эффект сообщения'),
+              subtitle: Text('Анимация при отправке и у получателя'),
+            ),
+            for (final effect in _messageEffects)
+              ListTile(
+                leading: Icon(effect.$3),
+                title: Text(effect.$2),
+                onTap: () => Navigator.pop(ctx, effect.$1),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _scheduleCurrentTextMessage() async {
     if (_recording || _editingMessage != null) return;
     final text = _controller.text.trim();
@@ -10278,6 +10342,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               onTap: () => Navigator.pop(ctx, 'silent'),
             ),
             ListTile(
+              leading: const Icon(Icons.auto_awesome),
+              title: const Text('Эффект'),
+              subtitle: const Text('Конфетти, сердца и другие анимации'),
+              onTap: () => Navigator.pop(ctx, 'effect'),
+            ),
+            ListTile(
               leading: const Icon(Icons.schedule_outlined),
               title: const Text('Отложить'),
               onTap: () => Navigator.pop(ctx, 'schedule'),
@@ -10295,6 +10365,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (mode == null || !mounted) return;
     if (mode == 'silent') {
       await _sendText(silent: true);
+      return;
+    }
+    if (mode == 'effect') {
+      final effectId = await _pickMessageEffect();
+      if (effectId == null || !mounted) return;
+      await _sendText(effectId: effectId);
       return;
     }
 
@@ -12613,7 +12689,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   ),
                 ],
               ),
-        body: AnimatedPadding(
+        body: Stack(
+          children: [
+            AnimatedPadding(
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: keyboardInset),
@@ -14127,6 +14205,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
           ),
         ),
+            if (_activeEffectId != null)
+              Positioned.fill(
+                child: MessageEffectOverlay(
+                  key: ValueKey('fx_$_activeEffectToken'),
+                  effectId: _activeEffectId!,
+                  onCompleted: () {
+                    if (!mounted) return;
+                    setState(() => _activeEffectId = null);
+                  },
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -14205,6 +14296,7 @@ class _PendingTextSend {
     this.replyToMessageId,
     this.silent = false,
     this.disableWebpagePreview = false,
+    this.effectId,
   });
 
   final String text;
@@ -14213,6 +14305,7 @@ class _PendingTextSend {
   final int? replyToMessageId;
   final bool silent;
   final bool disableWebpagePreview;
+  final String? effectId;
   int attempts = 0;
   int? lastRetryAfterSeconds;
   DateTime? lastLimitedAt;

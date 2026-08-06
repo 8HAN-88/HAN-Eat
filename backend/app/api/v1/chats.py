@@ -184,6 +184,7 @@ def _message_payload(
         "price_stars": price_stars,
         "purchased": purchased,
         "reactions": reactions or [],
+        "effect_id": getattr(msg, "effect_id", None),
     }
     kb_update = getattr(msg, "_reply_keyboard_update", None)
     if isinstance(kb_update, dict):
@@ -659,6 +660,7 @@ def _message_response(
         price_stars=price_stars,
         purchased=purchased,
         reactions=reactions or [],
+        effect_id=getattr(msg, "effect_id", None),
     )
 
 
@@ -1858,6 +1860,7 @@ async def send_message(
             has_spoiler=bool(body.has_spoiler),
             is_paid=is_paid,
             price_stars=price_stars,
+            effect_id=body.effect_id,
         )
         # Paid-DM fee is charged inside send_message (before notify).
         db.commit()
@@ -1907,6 +1910,7 @@ async def send_message(
             "invalid_story_reply",
             "story_reply_too_long",
             "invalid_reply",
+            "effect_id_invalid",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
@@ -2034,6 +2038,7 @@ async def forward_message(
             "invalid_story_reply",
             "story_reply_too_long",
             "invalid_reply",
+            "effect_id_invalid",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":

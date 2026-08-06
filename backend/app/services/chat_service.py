@@ -2736,6 +2736,7 @@ class ChatService:
         has_spoiler: bool = False,
         is_paid: bool = False,
         price_stars: int = 0,
+        effect_id: Optional[str] = None,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2749,6 +2750,10 @@ class ChatService:
             )
             if existing:
                 return existing, False
+
+        from app.services.message_effect_service import normalize_effect_id
+
+        effect = normalize_effect_id(effect_id)
 
         conv = self._validate_message_payload(
             conversation_id=conversation_id,
@@ -2777,6 +2782,7 @@ class ChatService:
             has_spoiler=spoiler,
             is_paid=paid,
             price_stars=stars,
+            effect_id=effect,
         )
         self.db.add(msg)
 

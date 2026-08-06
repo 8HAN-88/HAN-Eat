@@ -300,6 +300,7 @@ class ChatMessage {
     this.reactions = const [],
     this.inlineKeyboard = const [],
     this.replyKeyboard,
+    this.effectId,
   });
 
   final int id;
@@ -334,6 +335,8 @@ class ChatMessage {
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
   /// Present on bot replies that set/clear ReplyKeyboard for the peer.
   final ChatReplyKeyboard? replyKeyboard;
+  /// Telegram-like send effect id (confetti, hearts, …).
+  final String? effectId;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -421,6 +424,9 @@ class ChatMessage {
       reactions: reactions,
       inlineKeyboard: keyboard,
       replyKeyboard: ChatReplyKeyboard.tryParse(json),
+      effectId: (json['effect_id'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['effect_id'] as String?)?.trim(),
     );
   }
 
@@ -440,6 +446,7 @@ class ChatMessage {
     List<ChatReactionSummary>? reactions,
     List<List<ChatInlineKeyboardButton>>? inlineKeyboard,
     ChatReplyKeyboard? replyKeyboard,
+    String? effectId,
   }) {
     return ChatMessage(
       id: id,
@@ -470,6 +477,7 @@ class ChatMessage {
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
       replyKeyboard: replyKeyboard ?? this.replyKeyboard,
+      effectId: effectId ?? this.effectId,
     );
   }
 }
