@@ -1,4 +1,3 @@
-import '../../posts/recipe_composer_stubs.dart';
 // Карточка поста в канале — тот же каркас, что и в ленте (шапка канала, мета, действия).
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -95,7 +94,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   int _displayCommentsCount = 0;
   bool _promotedLocally = false;
   bool _pinnedLocally = false;
-  String? _visibilityOverride;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isReposting = false;
@@ -176,7 +174,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
       _isReposted = widget.post.isReposted ?? false;
       _repostsCount = widget.post.repostsCount;
       _displayCommentsCount = widget.post.commentsCount;
-      _visibilityOverride = null;
     }
     _syncChannelRepostFuture();
   }
@@ -259,9 +256,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     }
   }
 
-  bool get _isRecipe => widget.post.type == 'recipe';
 
-  String get _recipeVisibility => _visibilityOverride ?? widget.post.visibility;
 
   bool get _isPostAuthor {
     final uid = AuthService.instance.currentUser?.id;
@@ -276,12 +271,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     return _canEditPost || _canDeletePost;
   }
 
-  Future<void> _changeRecipeVisibility() async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Настройки рецептов больше недоступны')),
-    );
-  }
 
   Future<void> _toggleLike() async {
     if (_isLoading) return;
@@ -730,8 +719,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             await _unpromotePost();
           } else if (value == 'edit') {
             await _openEditPost();
-          } else if (value == 'visibility') {
-            await _changeRecipeVisibility();
           } else if (value == 'delete') {
             await _confirmAndDeletePost();
           } else if (value == 'save') {
@@ -812,17 +799,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                     Icon(Icons.edit_outlined, size: 20),
                     SizedBox(width: 8),
                     Text('Редактировать'),
-                  ],
-                ),
-              ),
-            if (_isRecipe && _canEditPost)
-              const PopupMenuItem(
-                value: 'visibility',
-                child: Row(
-                  children: [
-                    Icon(Icons.visibility_outlined, size: 20),
-                    SizedBox(width: 8),
-                    Text('Изменить видимость'),
                   ],
                 ),
               ),
@@ -1115,13 +1091,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                         ),
                       ),
                     ),
-                    if (post.type == 'recipe') ...[
-                      const SizedBox(width: 8),
-                      RecipeVisibilityBadge(
-                        visibility: _recipeVisibility,
-                        compact: true,
-                      ),
-                    ],
                     if (post.isPinned || _pinnedLocally) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -1431,13 +1400,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
         }
       }
 
-      // Обработчик клика для рецепта - открываем рецепт
-      void onRecipeTap() {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Каталог рецептов больше недоступен')),
-        );
-      }
-
       final imageUrls = images
           .map((img) => img['url'] as String?)
           .whereType<String>()
@@ -1446,20 +1408,13 @@ class _ChannelPostCardState extends State<ChannelPostCard>
           .toList();
 
       if (imageUrls.isNotEmpty) {
-        final isRecipe = post.type == 'recipe';
         final screenWidth = MediaQuery.of(context).size.width;
-
-        // Для одной картинки тоже используем TelegramPhotoGrid для единообразия
         return AspectRatio(
           aspectRatio: 1,
           child: TelegramPhotoGrid(
             imageUrls: imageUrls,
             maxHeight: screenWidth,
-            onTap: isRecipe
-                ? onRecipeTap
-                : null, // Для рецептов используем onTap, для обычных постов - полноэкранный просмотр
-            enableFullscreen:
-                !isRecipe, // Для рецептов отключаем полноэкранный просмотр, для обычных постов - включаем
+            enableFullscreen: true,
           ),
         );
       }
