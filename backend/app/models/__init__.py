@@ -1,5 +1,6 @@
 # Models
 from app.models.user import User
+from app.models.auth_session import AuthSession
 from app.models.post import Post
 from app.models.post_view import PostView
 from app.models.community import Channel
@@ -62,7 +63,7 @@ Community = Channel
 CommunityMember = ChannelMember
 
 __all__ = [
-    "User", "Post", "PostView", "Channel", "Follower", "ChannelMember",
+    "User", "AuthSession", "Post", "PostView", "Channel", "Follower", "ChannelMember",
     "SavedPost", "Like", "Comment", "Repost", "ModerationQueue",
     "ContentReport", "ModerationAuditLog", "AnalyticsEvent", "Notification",
     "Subscription", "SupportTicket", "NotificationPreferences",
