@@ -156,6 +156,15 @@ async def create_post(
     from datetime import datetime
     from app.services.post_poll_service import build_poll_body, enrich_body_poll
 
+    if request.type == "recipe":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={
+                "detail": "Kitchen features were removed. HanWe is a messenger.",
+                "code": "kitchen_retired",
+            },
+        )
+
     if request.type == "poll":
         if not request.poll:
             raise HTTPException(

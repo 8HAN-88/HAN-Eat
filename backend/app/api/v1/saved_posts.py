@@ -127,110 +127,32 @@ async def is_post_saved(
     return {"is_saved": saved}
 
 
-@router.post("/recipes/{recipe_id}/save", status_code=status.HTTP_201_CREATED)
-async def save_spoonacular_recipe(
-    recipe_id: int,
-    recipe_data: Dict[str, Any] = Body(..., description="Данные рецепта для сохранения"),
-    current_user: User = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
-):
-    """Сохранить рецепт Spoonacular (офлайн-доступ — тариф HanWe AI / Pro)."""
-    from app.core.entitlements import HAN_AI_REQUIRED_CODE
-    from app.services.subscription_service import SubscriptionService
-
-    if not SubscriptionService(db).has_ai_access(current_user.id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_AI_REQUIRED_CODE,
-                "message": "Сохранение рецептов для офлайн доступно с подпиской HanWe AI или Pro",
-            },
-        )
-
-    # Проверяем, не сохранен ли уже
-    existing = db.query(SavedPost).filter(
-        SavedPost.user_id == current_user.id,
-        SavedPost.spoonacular_recipe_id == recipe_id
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Recipe already saved"
-        )
-    
-    # Логируем данные для отладки
-    print(f"💾 Сохранение рецепта {recipe_id}:")
-    print(f"   - image: {recipe_data.get('image')}")
-    print(f"   - source_image: {recipe_data.get('source_image')}")
-    print(f"   - translated_title: {recipe_data.get('translated_title')}")
-    print(f"   - Все ключи recipe_data: {list(recipe_data.keys())}")
-    
-    # Убеждаемся, что image и source_image сохраняются
-    if not recipe_data.get('image') and not recipe_data.get('source_image'):
-        print(f"⚠️ ВНИМАНИЕ: Рецепт {recipe_id} сохраняется БЕЗ изображения!")
-    
-    # Создаем запись о сохранении
-    # Используем try-except для обработки случая, если поля еще не добавлены в БД
-    try:
-        saved_post = SavedPost(
-            user_id=current_user.id,
-            post_id=None,  # Для рецептов Spoonacular post_id = None
-            spoonacular_recipe_id=recipe_id,
-            recipe_data=recipe_data,
-        )
-    except Exception as e:
-        # Если поля еще не существуют в БД, создаем без них (временная мера)
-        print(f"⚠️ Warning: Could not create SavedPost with new fields: {e}")
-        print("⚠️ Please run migration 022_spoonacular_saved")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database schema needs to be updated. Please run migrations."
-        )
-    
-    db.add(saved_post)
-    db.commit()
-    
-    return {"saved": True, "message": "Recipe saved successfully"}
+def _kitchen_recipe_save_gone() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "detail": "Kitchen features were removed. HanWe is a messenger.",
+            "code": "kitchen_retired",
+        },
+    )
 
 
-@router.delete("/recipes/{recipe_id}/save")
-async def unsave_spoonacular_recipe(
-    recipe_id: int,
-    current_user: User = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
-):
-    """Удалить рецепт Spoonacular из сохраненных"""
-    saved_post = db.query(SavedPost).filter(
-        SavedPost.user_id == current_user.id,
-        SavedPost.spoonacular_recipe_id == recipe_id
-    ).first()
-    
-    if not saved_post:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Recipe not saved"
-        )
-    
-    db.delete(saved_post)
-    db.commit()
-    
-    return {"saved": False, "message": "Recipe unsaved successfully"}
+@router.post("/recipes/{recipe_id}/save", status_code=status.HTTP_410_GONE)
+async def save_spoonacular_recipe_retired(recipe_id: int):
+    """Spoonacular recipe save retired with kitchen product."""
+    _kitchen_recipe_save_gone()
 
 
-@router.get("/recipes/{recipe_id}/is_saved")
-async def is_recipe_saved(
-    recipe_id: int,
-    current_user: User = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
-):
-    """Проверить, сохранен ли рецепт Spoonacular"""
-    saved = db.query(SavedPost).filter(
-        SavedPost.user_id == current_user.id,
-        SavedPost.spoonacular_recipe_id == recipe_id
-    ).first() is not None
-    
-    return {"is_saved": saved}
+@router.delete("/recipes/{recipe_id}/save", status_code=status.HTTP_410_GONE)
+async def unsave_spoonacular_recipe_retired(recipe_id: int):
+    """Spoonacular recipe unsave retired with kitchen product."""
+    _kitchen_recipe_save_gone()
+
+
+@router.get("/recipes/{recipe_id}/is_saved", status_code=status.HTTP_410_GONE)
+async def is_recipe_saved_retired(recipe_id: int):
+    """Spoonacular recipe saved-check retired with kitchen product."""
+    _kitchen_recipe_save_gone()
 
 
 @router.get("/users/{user_id}/saved")

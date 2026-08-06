@@ -58,7 +58,9 @@ def subscription_entitlements(tier: SubscriptionTier) -> Dict[str, bool]:
         "creator_badge": tier_includes_creator(tier),
         "creator_pinned": tier_includes_creator(tier),
         "creator_scheduled_posts": tier_includes_creator(tier),
-        "offline_recipes": tier_includes_ai(tier),
+        "offline_recipes": tier_includes_ai(tier),  # legacy alias
+        "offline_saved_posts": tier_includes_ai(tier),
+        "pro": tier == "pro",
         "priority_support": tier == "pro",
         "premium_badge": tier != "free",
         "exclusive_reactions": tier != "free",

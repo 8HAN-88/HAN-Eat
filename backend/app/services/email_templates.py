@@ -1,4 +1,4 @@
-"""HTML-шаблоны транзакционных писем HAN Eat (совместимость с Gmail, Apple Mail)."""
+"""HTML-шаблоны транзакционных писем HanWe (совместимость с Gmail, Apple Mail)."""
 from __future__ import annotations
 
 import html
@@ -78,9 +78,9 @@ def render_branded_email(
           <tr>
             <td style="background:{_BG_HEADER};border-radius:16px 16px 0 0;padding:28px 32px;text-align:center;">
               <div style="font-size:22px;font-weight:700;color:{_TEXT_ON_DARK};letter-spacing:-0.3px;">
-                H<span style="color:{_BRAND_PRIMARY};">.</span>A<span style="color:{_BRAND_PRIMARY};">.</span>N. Eat
+                HanWe
               </div>
-              <div style="margin-top:8px;font-size:13px;color:#9CA3AF;">Умный помощник в мире еды</div>
+              <div style="margin-top:8px;font-size:13px;color:#9CA3AF;">Мессенджер для общения и каналов</div>
             </td>
           </tr>
           <tr>
@@ -102,7 +102,7 @@ def render_branded_email(
               </table>
               {expiry_html}
               <p style="margin:24px 0 0;font-size:13px;line-height:20px;color:{_TEXT_MUTED};">
-                Кнопка не работает? Откройте ссылку ниже в браузере на телефоне с установленным HAN Eat:
+                Кнопка не работает? Откройте ссылку ниже в браузере на телефоне с установленным HanWe:
               </p>
               <p style="margin:8px 0 0;font-size:12px;line-height:18px;word-break:break-all;">
                 <a href="{safe_url}" style="color:{_BRAND_PRIMARY_DARK};">{safe_url}</a>
@@ -119,7 +119,7 @@ def render_branded_email(
           <tr>
             <td style="padding:24px 8px;text-align:center;">
               <p style="margin:0;font-size:11px;line-height:16px;color:#9CA3AF;">
-                © HAN Eat · Это автоматическое письмо, отвечать на него не нужно.
+                © HanWe · Это автоматическое письмо, отвечать на него не нужно.
               </p>
             </td>
           </tr>
@@ -144,7 +144,7 @@ def render_branded_email(
     )
     if expiry_note:
         plain_parts.append(expiry_note)
-    plain_parts.extend(["", security_note, "", "— HAN Eat"])
+    plain_parts.extend(["", security_note, "", "— HanWe"])
     plain_text = "\n".join(plain_parts)
 
     return plain_text, html_doc

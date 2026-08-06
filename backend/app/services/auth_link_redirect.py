@@ -35,11 +35,11 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
         "confirm-email-change": "Смена email",
     }
     cta = {
-        "reset-password": "Открыть в HAN Eat",
+        "reset-password": "Открыть в HanWe",
         "verify-email": "Подтвердить в приложении",
         "confirm-email-change": "Подтвердить в приложении",
     }
-    title = titles.get(purpose, "HAN Eat")
+    title = titles.get(purpose, "HanWe")
     button = cta.get(purpose, "Открыть приложение")
     deep_js = json.dumps(deep)
 
@@ -48,7 +48,7 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(title)} — HAN Eat</title>
+  <title>{html.escape(title)} — HanWe</title>
   <style>
     body {{
       margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -78,9 +78,9 @@ def render_open_link_page(purpose: str, raw_token: str) -> str:
 </head>
 <body>
   <div class="card">
-    <div class="logo">H<span>.</span>A<span>.</span>N. Eat</div>
+    <div class="logo">HanWe</div>
     <h1>{html.escape(title)}</h1>
-    <p>Нажмите кнопку ниже — откроется приложение HAN Eat на этом телефоне.</p>
+    <p>Нажмите кнопку ниже — откроется приложение HanWe на этом телефоне.</p>
     <a class="btn" href="{safe_deep}" id="open-app">{html.escape(button)}</a>
     <p style="font-size:13px;">Если кнопка не сработала, откройте приложение вручную → «Новый пароль» / «Код из письма» и вставьте:</p>
     <code id="token">{safe_token}</code>

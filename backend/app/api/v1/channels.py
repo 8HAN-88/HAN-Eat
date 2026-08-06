@@ -1424,208 +1424,17 @@ async def get_channel_members(
     }
 
 
-@router.post("/{channel_id}/recipe", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
-async def create_channel_recipe(
-    channel_id: int,
-    request: CreatePostRequest,
-    current_user: User = Depends(get_current_user_required),
-    db: Session = Depends(get_db)
-):
-    """
-    Создать рецепт в канале.
-
-    visibility=public — в общем Menu/поиске/рекомендациях.
-    visibility=private — только в канале (тариф Creator или Pro).
-    """
-    from datetime import datetime
-    from app.services.moderation_service import ModerationService
-    # Используем глобальный logger из начала файла
-    
-    # Проверяем существование канала
-    channel = db.query(Channel).filter(Channel.id == channel_id).first()
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
-        )
-
-    has_creator = SubscriptionService(db).has_creator_access(current_user.id)
-    recipe_visibility = resolve_recipe_visibility(
-        request.visibility, channel, has_creator
+@router.post("/{channel_id}/recipe", status_code=status.HTTP_410_GONE)
+async def create_channel_recipe_retired(channel_id: int):
+    """Channel recipe create retired — HanWe is a messenger."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "detail": "Kitchen features were removed. HanWe is a messenger.",
+            "code": "kitchen_retired",
+        },
     )
 
-    _require_channel_permission(
-        db,
-        channel,
-        current_user,
-        "create_posts",
-        "Недостаточно прав для публикации рецептов в канале",
-    )
-    
-    # Валидация: должен быть тип recipe
-    if request.type != "recipe":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This endpoint is only for creating recipes. Use /posts for other types."
-        )
-
-    # Рецепт без названия публиковать нельзя
-    if not (request.title or "").strip():
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Название рецепта обязательно"
-        )
-    
-    # Формируем body для рецепта
-    steps_data = []
-    for step in (request.steps or []):
-        step_dict = step.model_dump(exclude_none=True)
-        # Убеждаемся, что изображения сохраняются
-        # Проверяем оба поля и сохраняем оба для совместимости
-        if step.image:
-            step_dict['image'] = step.image
-            step_dict['image_url'] = step.image  # Дублируем для совместимости
-        elif step.image_url:
-            step_dict['image'] = step.image_url  # Дублируем для совместимости
-            step_dict['image_url'] = step.image_url
-        steps_data.append(step_dict)
-        logger.info(f"Шаг {step.number}: текст={step.text[:50]}..., изображение={step.image or step.image_url or 'нет'}")
-        logger.info(f"Шаг {step.number} step_dict: {step_dict}")
-    
-    body = {
-        "ingredients": request.ingredients or [],
-        "steps": steps_data,
-        "prep_time_min": request.prep_time_min,
-        "cook_time_min": request.cook_time_min,
-        "servings": request.servings,
-    }
-    apply_nutrition_to_recipe_body(
-        body,
-        calories=request.calories,
-        protein_g=request.protein_g,
-        carbs_g=request.carbs_g,
-        fat_g=request.fat_g,
-        fiber_g=request.fiber_g,
-    )
-    from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
-
-    apply_origin_country_to_recipe_body(
-        body,
-        origin_country_code=request.origin_country_code,
-        origin_country_name=request.origin_country_name,
-    )
-    # Денормализация для карточек «Меню» / клиентов, читающих только body
-    if channel.name:
-        body["channel_name"] = channel.name
-    ch_img = (channel.avatar_url or channel.cover_url or "").strip()
-    if ch_img:
-        body["channel_avatar"] = ch_img
-    
-    # Добавляем медиа, если есть
-    if request.media:
-        body["media"] = [{"type": item.type, "url": item.url} for item in request.media]
-    
-    # Логируем финальный body для отладки
-    logger.info(f"Создаем пост с body: {body}")
-    import json
-    logger.info(f"Body JSON: {json.dumps(body, ensure_ascii=False, indent=2)}")
-    
-    publish_to = [f"channel:{channel_id}"]
-    if channel.auto_publish_to_feed:
-        publish_to.insert(0, "feed")
-
-    post = Post(
-        user_id=current_user.id,
-        channel_id=channel_id,
-        type="recipe",
-        title=request.title,
-        description=request.description,
-        body=body,
-        publish_to=publish_to,
-        visibility=recipe_visibility,
-        tags=request.tags or [],
-    )
-    sync_recipe_index_flags(post)
-
-    db.add(post)
-    channel.posts_count = (channel.posts_count or 0) + 1
-    db.flush()
-
-    from app.services.moderation_apply import run_post_moderation, raise_if_post_rejected
-
-    scores = run_post_moderation(db, post, current_user)
-    raise_if_post_rejected(db, post, scores)
-    sync_recipe_index_flags(post)
-
-    db.commit()
-    db.refresh(post)
-
-    try:
-        from app.services.user_stats_cache import invalidate_user_stats_cache
-
-        invalidate_user_stats_cache([current_user.id])
-    except Exception as e:
-        logger.warning("Failed to invalidate user stats after channel recipe: %s", e)
-
-    try:
-        from app.services.analytics_service import AnalyticsService
-
-        AnalyticsService(db).log_event(
-            event_type="recipe_created",
-            entity_type="post",
-            entity_id=post.id,
-            user_id=current_user.id,
-            author_id=current_user.id,
-            metadata={
-                "channel_id": channel_id,
-                "visibility": recipe_visibility,
-                "is_global_visible": post.is_global_visible,
-                "recipe_visibility_mode": channel.recipe_visibility_mode,
-            },
-        )
-    except Exception as e:
-        logger.warning(f"Analytics recipe_created failed: {e}")
-
-    if post.is_global_visible:
-        invalidate_recipe_search_cache()
-    
-    # Инвалидируем кэш ленты для всех подписчиков канала
-    if post.status == "published":
-        try:
-            from app.services.feed_service import FeedService
-            from app.core.redis_client import get_redis
-            redis_client = get_redis()
-            feed_service = FeedService(db=db, redis_client=redis_client)
-            
-            # Получаем всех подписчиков канала
-            channel_members = db.query(ChannelMember.user_id).filter(
-                ChannelMember.channel_id == channel_id,
-                ChannelMember.status == MEMBER_STATUS_ACTIVE,
-            ).all()
-            
-            # Инвалидируем кэш для каждого подписчика
-            for member_user_id, in channel_members:
-                feed_service.invalidate_feed_cache(member_user_id)
-                logger.info(f"Invalidated feed cache for user {member_user_id} after channel post creation")
-        except Exception as e:
-            logger.warning(f"Failed to invalidate feed cache: {e}")
-    
-    # Отправляем уведомления подписчикам канала о новом рецепте
-    if post.status == "published":
-        from app.services.channel_notification_service import send_channel_post_notification
-        try:
-            send_channel_post_notification(
-                db=db,
-                channel_id=channel_id,
-                post_id=post.id,
-                post_type="recipe",
-                post_title=request.title,
-                author_id=current_user.id
-            )
-        except Exception as e:
-            print(f"⚠️ Error sending channel notifications: {e}")
-    
-    return PostResponse.model_validate(post)
 
 
 @router.post("/{channel_id}/post", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
@@ -1662,11 +1471,13 @@ async def create_channel_post(
         "Недостаточно прав для публикации постов в канале",
     )
     
-    # Валидация: не должен быть тип recipe (для рецептов используется отдельный эндпоинт)
     if request.type == "recipe":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Use /recipe endpoint for creating recipes"
+            status_code=status.HTTP_410_GONE,
+            detail={
+                "detail": "Kitchen features were removed. HanWe is a messenger.",
+                "code": "kitchen_retired",
+            },
         )
     
     # Формируем body для поста

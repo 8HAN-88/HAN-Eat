@@ -88,15 +88,15 @@ def send_verify_email(db: Session, user: User) -> None:
         settings.AUTH_VERIFY_EMAIL_HOURS,
     )
     link = email_web_link("verify-email", raw)
-    subject = "Подтвердите email — HAN Eat"
+    subject = "Подтвердите email — HanWe"
     text, html = render_branded_email(
-        preheader="Подтвердите email, чтобы войти в HAN Eat",
+        preheader="Подтвердите email, чтобы войти в HanWe",
         title="Подтвердите ваш email",
         greeting=f"Здравствуйте, {user.name}!",
         paragraphs=[
-            "Спасибо за регистрацию в HAN Eat. Нажмите кнопку ниже, "
+            "Спасибо за регистрацию в HanWe. Нажмите кнопку ниже, "
             "чтобы подтвердить адрес почты и завершить создание аккаунта.",
-            f"Или откройте приложение HAN Eat и вставьте код: {raw}",
+            f"Или откройте приложение HanWe и вставьте код: {raw}",
         ],
         cta_label="Подтвердить email",
         cta_url=link,
@@ -113,14 +113,14 @@ def send_password_reset_email(db: Session, user: User) -> bool:
         settings.AUTH_RESET_PASSWORD_HOURS,
     )
     link = email_web_link("reset-password", raw)
-    subject = "Сброс пароля — HAN Eat"
+    subject = "Сброс пароля — HanWe"
     display_name = (user.name or "").strip() or "друг"
     text, html = render_branded_email(
-        preheader="Запрос на сброс пароля в HAN Eat",
+        preheader="Запрос на сброс пароля в HanWe",
         title="Сброс пароля",
         greeting=f"Здравствуйте, {display_name}!",
         paragraphs=[
-            "Мы получили запрос на сброс пароля для вашего аккаунта HAN Eat.",
+            "Мы получили запрос на сброс пароля для вашего аккаунта HanWe.",
             "Нажмите кнопку ниже на этом телефоне — откроется приложение, "
             "где вы сможете задать новый пароль.",
         ],
@@ -144,9 +144,9 @@ def send_change_email_confirmation(db: Session, user: User, new_email: str) -> b
         extra_data={"new_email": new_email},
     )
     link = email_web_link("confirm-email-change", raw)
-    subject = "Подтвердите новый email — HAN Eat"
+    subject = "Подтвердите новый email — HanWe"
     text, html = render_branded_email(
-        preheader="Подтвердите смену email в HAN Eat",
+        preheader="Подтвердите смену email в HanWe",
         title="Подтвердите новый email",
         greeting=None,
         paragraphs=[
