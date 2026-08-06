@@ -67,18 +67,6 @@ class _CreateChannelPostScreenState
   bool _isUploadingMedia = false;
   double _uploadProgress = 0.0;
 
-  // Для рецепта
-  final List<TextEditingController> _ingredientControllers = [];
-  final List<TextEditingController> _stepControllers = [];
-  final List<XFile?> _stepImages = [];
-  final _prepTimeController = TextEditingController();
-  final _cookTimeController = TextEditingController();
-  final _servingsController = TextEditingController();
-  final _caloriesController = TextEditingController();
-  final _proteinController = TextEditingController();
-  final _carbsController = TextEditingController();
-  final _fatController = TextEditingController();
-  final _fiberController = TextEditingController();
   final _tagsController = TextEditingController();
   final _linkUrlController = TextEditingController();
   final _linkPreviewController = TextEditingController();
@@ -90,13 +78,7 @@ class _CreateChannelPostScreenState
 
   bool _isSubmitting = false;
   DateTime? _scheduledPublishAt;
-  String _recipeVisibility = 'public';
-  String? _channelVisibilityMode;
-  String? _originCountryCode;
-
-  bool get _isRecipeMode => _selectedPostType == 'recipe';
-  bool get _recipeAllowedInVariant => false;
-  bool get _nonRecipeAllowedInVariant => true;
+  bool get _isRecipeMode => false;
   bool get _isPollMode => _selectedPostType == 'poll';
   bool get _isLinkMode => _selectedPostType == 'link';
   bool get _isPlainComposerMode =>
@@ -111,47 +93,9 @@ class _CreateChannelPostScreenState
   bool get _canEditPollContent =>
       _isPollMode && !_pollIsClosed && _pollTotalVotes == 0;
 
-  String _nutritionFieldText(Map<String, dynamic>? body, String kind) {
-    if (body == null) return '';
-    final nut = body['nutrition'];
-    if (kind == 'protein') {
-      final v = body['protein_g'] ??
-          (nut is Map ? nut['protein_g'] ?? nut['protein'] : null);
-      return v == null ? '' : v.toString();
-    }
-    if (kind == 'carbs') {
-      final v = body['carbs_g'] ??
-          (nut is Map ? nut['carbs_g'] ?? nut['carbohydrates'] : null);
-      return v == null ? '' : v.toString();
-    }
-    if (kind == 'fat') {
-      final v =
-          body['fat_g'] ?? (nut is Map ? nut['fat_g'] ?? nut['fat'] : null);
-      return v == null ? '' : v.toString();
-    }
-    if (kind == 'fiber') {
-      final v = body['fiber_g'] ??
-          (nut is Map ? nut['fiber_g'] ?? nut['fiber'] : null);
-      return v == null ? '' : v.toString();
-    }
-    return '';
-  }
 
-  int? _parsedServings() {
-    final t = _servingsController.text.trim();
-    if (t.isEmpty) return null;
-    return int.tryParse(t);
-  }
 
-  List<String> _ingredientTexts() => _ingredientControllers
-      .map((c) => c.text.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
 
-  List<String> _stepTexts() => _stepControllers
-      .map((c) => c.text.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
 
   bool _hasCreatorAccess() {
     return ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
@@ -181,7 +125,6 @@ class _CreateChannelPostScreenState
       if (!mounted) return;
       setState(() {
         _channelAutoPublishReels = channel.autoPublishReels;
-        _channelVisibilityMode = channel.recipeVisibilityMode;
         if (widget.postId == null) {
           _sendToReels = _channelAutoPublishReels;
         }
@@ -199,56 +142,8 @@ class _CreateChannelPostScreenState
     }
     _titleController.text = postData['title'] ?? '';
     _descriptionController.text = postData['description'] ?? '';
-    final vis = postData['visibility'] as String?;
-    if (vis == 'private' || vis == 'public') {
-      _recipeVisibility = vis!;
-    }
     final body = postData['body'] as Map<String, dynamic>?;
     if (body != null) {
-      // Загружаем ингредиенты
-      final ingredients = body['ingredients'] as List<dynamic>?;
-      if (ingredients != null) {
-        _ingredientControllers.clear();
-        for (var ing in ingredients) {
-          _ingredientControllers
-              .add(TextEditingController(text: ing.toString()));
-        }
-      }
-
-      // Загружаем шаги
-      final steps = body['steps'] as List<dynamic>?;
-      if (steps != null) {
-        _stepControllers.clear();
-        _stepImages.clear();
-        for (var step in steps) {
-          if (step is Map<String, dynamic>) {
-            _stepControllers.add(TextEditingController(
-                text: step['text'] ?? step['step'] ?? ''));
-            // Сохраняем URL изображения шага, если оно есть (для отображения при редактировании)
-            // Примечание: XFile используется только для новых выбранных файлов
-            // Для существующих изображений из URL мы просто сохраняем URL
-            _stepImages.add(null); // URL будет сохранен в шаге
-          } else {
-            _stepControllers.add(TextEditingController(text: step.toString()));
-            _stepImages.add(null);
-          }
-        }
-      }
-
-      // Загружаем время приготовления
-      _prepTimeController.text = (body['prep_time_min'] ?? '').toString();
-      _cookTimeController.text = (body['cook_time_min'] ?? '').toString();
-      _servingsController.text = (body['servings'] ?? '').toString();
-      _caloriesController.text = (body['calories'] ?? '').toString();
-      _proteinController.text = _nutritionFieldText(body, 'protein');
-      _carbsController.text = _nutritionFieldText(body, 'carbs');
-      _fatController.text = _nutritionFieldText(body, 'fat');
-      _fiberController.text = _nutritionFieldText(body, 'fiber');
-      final rawOrigin = body['origin_country_code'];
-      if (rawOrigin is String && rawOrigin.isNotEmpty) {
-        _originCountryCode = rawOrigin.toUpperCase();
-      }
-
       // Загружаем теги
       final tags = postData['tags'] as List<dynamic>?;
       if (tags != null) {
@@ -304,10 +199,10 @@ class _CreateChannelPostScreenState
       }
     }
 
-    // Определяем тип поста
+    // Определяем тип поста (legacy recipe → text)
     final type = postData['type'] as String?;
     if (type != null) {
-      _selectedPostType = type;
+      _selectedPostType = type == 'recipe' ? 'text' : type;
     }
   }
 
@@ -317,25 +212,11 @@ class _CreateChannelPostScreenState
     _linkPreviewDebounce?.cancel();
     _linkUrlController.removeListener(_scheduleLinkPreviewLoad);
     _descriptionController.dispose();
-    _prepTimeController.dispose();
-    _cookTimeController.dispose();
-    _servingsController.dispose();
-    _caloriesController.dispose();
-    _proteinController.dispose();
-    _carbsController.dispose();
-    _fatController.dispose();
-    _fiberController.dispose();
     _tagsController.dispose();
     _linkUrlController.dispose();
     _linkPreviewController.dispose();
     _pollQuestionController.dispose();
     for (var ctrl in _pollOptionControllers) {
-      ctrl.dispose();
-    }
-    for (var ctrl in _ingredientControllers) {
-      ctrl.dispose();
-    }
-    for (var ctrl in _stepControllers) {
       ctrl.dispose();
     }
     _videoPreviewController?.dispose();
@@ -523,37 +404,9 @@ class _CreateChannelPostScreenState
     }
   }
 
-  void _addIngredientField() {
-    setState(() {
-      _ingredientControllers.add(TextEditingController());
-    });
-  }
 
-  void _removeIngredientField(int index) {
-    if (_ingredientControllers.length > 1) {
-      setState(() {
-        _ingredientControllers[index].dispose();
-        _ingredientControllers.removeAt(index);
-      });
-    }
-  }
 
-  void _addStepField() {
-    setState(() {
-      _stepControllers.add(TextEditingController());
-      _stepImages.add(null);
-    });
-  }
 
-  void _removeStepField(int index) {
-    if (_stepControllers.length > 1) {
-      setState(() {
-        _stepControllers[index].dispose();
-        _stepControllers.removeAt(index);
-        _stepImages.removeAt(index);
-      });
-    }
-  }
 
   Future<void> _pickImage() async {
     try {
@@ -786,30 +639,6 @@ class _CreateChannelPostScreenState
     }
   }
 
-  Future<void> _pickStepImage(int index) async {
-    try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 85,
-      );
-
-      if (image != null) {
-        setState(() {
-          _stepImages[index] = image;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(userVisibleError(e,
-                  fallback: 'Не удалось выбрать изображение'))),
-        );
-      }
-    }
-  }
 
   Future<void> _uploadMedia() async {
     if (_isUploadingMedia) return;
@@ -1002,8 +831,6 @@ class _CreateChannelPostScreenState
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Валидация только для рецепта
-    // Для обычных постов медиа опционально
     if (_isPlainComposerMode) {
       final hasText = _titleController.text.trim().isNotEmpty ||
           _descriptionController.text.trim().isNotEmpty;
@@ -1034,33 +861,6 @@ class _CreateChannelPostScreenState
               'Отключите «В Рилсы» или выберите более короткое видео.',
             ),
           ),
-        );
-        return;
-      }
-    }
-
-    if (_selectedPostType == 'recipe') {
-      // Валидация рецепта
-      final ingredients = _ingredientControllers
-          .map((c) => c.text.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
-      if (ingredients.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Добавьте хотя бы один ингредиент')),
-        );
-        return;
-      }
-
-      final steps = _stepControllers
-          .map((c) => c.text.trim())
-          .where((s) => s.isNotEmpty)
-          .toList();
-
-      if (steps.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Добавьте хотя бы один шаг')),
         );
         return;
       }
@@ -1156,8 +956,6 @@ class _CreateChannelPostScreenState
           );
           createdPostJson = post.toJson();
         }
-      } else if (_isRecipeMode) {
-        throw Exception('Создание рецептов больше недоступно');
       } else {
         // Создаем обычный пост
         // Автоматически определяем тип поста на основе загруженного медиа
@@ -1566,7 +1364,7 @@ class _CreateChannelPostScreenState
   }
 
   void _setContentType(String type) {
-    // Recipe composer removed with kitchen — messenger posts only.
+    // Recipe composer removed — messenger posts only.
     if (type == 'recipe') return;
 
     if (type == 'poll' || type == 'link') {
@@ -1576,17 +1374,6 @@ class _CreateChannelPostScreenState
       _videoPreviewFuture = null;
     }
     setState(() {
-      if (_selectedPostType == 'recipe' && type != 'recipe') {
-        for (var ctrl in _ingredientControllers) {
-          ctrl.dispose();
-        }
-        for (var ctrl in _stepControllers) {
-          ctrl.dispose();
-        }
-        _ingredientControllers.clear();
-        _stepControllers.clear();
-        _stepImages.clear();
-      }
       if (type != 'link') {
         _clearLinkDraftState();
       }
@@ -1603,15 +1390,6 @@ class _CreateChannelPostScreenState
         _sendToReels = _channelAutoPublishReels;
       }
       _selectedPostType = type;
-      if (type == 'recipe') {
-        if (_ingredientControllers.isEmpty) {
-          _ingredientControllers.add(TextEditingController());
-        }
-        if (_stepControllers.isEmpty) {
-          _stepControllers.add(TextEditingController());
-          _stepImages.add(null);
-        }
-      }
     });
   }
 
@@ -2030,10 +1808,6 @@ class _CreateChannelPostScreenState
       ],
     );
   }
-
-  Widget _buildRecipeSection() => const SizedBox.shrink();
-
-
 }
 
 class _PostTypeChip extends StatelessWidget {

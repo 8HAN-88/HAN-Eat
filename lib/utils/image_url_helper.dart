@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 
 import '../services/server_config.dart';
 
-// Утилита для оптимизации URL изображений рецептов.
+// Утилита для оптимизации URL изображений (включая legacy CDN).
 
-/// Превью Spoonacular: большие размеры (556x370) из РФ грузятся десятки секунд.
+/// Сжать oversized preview URL на legacy CDN (большие размеры грузятся медленно).
 String shrinkSpoonacularImageUrl(
   String url, {
   String dimensions = '312x231',
@@ -16,7 +16,7 @@ String shrinkSpoonacularImageUrl(
   );
 }
 
-/// URL для сетки карточек «Меню» (баланс скорости и чёткости на Retina).
+/// URL для сетки карточек (баланс скорости и чёткости на Retina).
 String getRecipeCardImageUrl(String raw) =>
     getRecipeImageUrl(raw, spoonacularDimensions: '240x150');
 
@@ -24,7 +24,7 @@ String getRecipeCardImageUrl(String raw) =>
 String getRecipeDetailImageUrl(String raw) =>
     getRecipeImageUrl(raw, spoonacularDimensions: '556x370');
 
-/// Кандидаты URL для полноэкранного просмотра: сначала оригинал, затем medium и fallback рецептов.
+/// Кандидаты URL для полноэкранного просмотра: оригинал, medium и fallback.
 List<String> getFullscreenImageUrlCandidates(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return const [];
@@ -57,7 +57,7 @@ List<String> getFullscreenImageUrlCandidates(String raw) {
   return candidates;
 }
 
-/// Общая сборка URL изображения рецепта.
+/// Общая сборка URL изображения (с proxy для legacy CDN при необходимости).
 String getRecipeImageUrl(
   String raw, {
   String spoonacularDimensions = '312x231',

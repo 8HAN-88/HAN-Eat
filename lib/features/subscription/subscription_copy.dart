@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Русские тексты подписок (premium UX, без pressure).
+/// Русские тексты подписок (messenger / HanWe).
 class SubscriptionCopy {
   // —— Soft paywall (legacy AiScanExhaustedPaywall widget) ——
   static const aiScanExhaustedTitle = 'Лимит AI на сегодня закончился';
   static const aiScanExhaustedSubtitle =
       'Оформите H.A.N. AI, чтобы пользоваться AI без ограничений.';
 
-  /// Перед последним бесплатным сканом (мягко, без красного UI).
-  static const aiScanSoftWarning =
-      'Скоро закончится бесплатный лимит AI';
-
-  // —— Подписчик AI/Pro без сканов (без цифр и таймеров) ——
   static const aiScanPlusExhaustedTitle = 'AI временно недоступен';
   static const aiScanPlusExhaustedSubtitle =
       'Новые AI-запросы скоро снова будут доступны. '
@@ -43,123 +38,11 @@ class SubscriptionCopy {
   static const paywallCta = 'Оформить подписку';
   static const paywallLater = 'Позже';
 
-  /// Релиз v1 без ЮKassa (оплата после публикации в сторе).
   static const paymentsComingSoonTitle = 'Оплата скоро';
   static const paymentsComingSoonBody =
       'Подключим оплату по СБП сразу после публикации в App Store. '
       'Сейчас можно оформить бесплатный пробный период, если он вам доступен.';
   static const paymentsComingSoonCta = 'Оплата появится после релиза';
-
-  static const nutritionUpsellTitle = 'Калории и БЖУ — в H.A.N. AI';
-  static const nutritionUpsellSubtitle =
-      'Оформите H.A.N. AI, чтобы видеть калории, белки, жиры и углеводы '
-      'и фильтровать рецепты по питательности.';
-  static const nutritionUpsellCta = 'Оформить подписку';
-  static const nutritionLockedValue = 'AI';
-
-  static const List<SubscriptionBenefitItem> nutritionBenefits = [
-    SubscriptionBenefitItem(
-      icon: Icons.local_fire_department_outlined,
-      text: 'Калории на карточках и в рецепте',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.fitness_center_outlined,
-      text: 'Белки, жиры и углеводы',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.tune_outlined,
-      text: 'Фильтры «низкокалорийное» и «высокий белок»',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.restaurant_menu_outlined,
-      text: 'Лимиты калорий и БЖУ в настройках диеты',
-    ),
-  ];
-
-  // —— AI meal plan cooldown (free, без таймеров) ——
-  static const mealPlanCooldownTitle =
-      'Следующий AI meal plan будет доступен позже';
-  static const mealPlanCooldownSubtitle =
-      'С H.A.N. AI вы можете создавать meal plans без ожидания';
-  static const mealPlanCooldownCta = 'Попробовать H.A.N. AI';
-
-  // —— Creator upsell (legacy recipe sheet → subscription) ——
-  static const creatorRecipeUpsellTitle = 'Инструменты автора — тариф Creator';
-  static const creatorRecipeUpsellSubtitle =
-      'Отложенные посты, аналитика канала и продвижение контента '
-      'для авторов в HanWe.';
-  static const creatorRecipeUpsellCta = 'Подключить H.A.N. Creator';
-  static const channelRecipeMenuHint =
-      'Контент доступен подписчикам этого канала.';
-
-  static const recipeVisibilitySectionTitle = 'Видимость рецепта';
-  static const recipeVisibilityChangeTitle = 'Изменить видимость';
-
-  static const recipeNutritionSectionTitle = 'Питание (на порцию)';
-  static const recipeNutritionAiCta = 'AI расчёт';
-  static const recipeNutritionAiLockedCta = 'AI · Creator';
-  static const recipeNutritionAiLockedHint =
-      'AI подставит калории и БЖУ по ингредиентам — в тарифе Creator или Pro.';
-  static const recipeVisibilityPublicTitle = 'Публичный рецепт';
-  static const recipeVisibilityPublicShort = 'Публичный';
-  static const recipeVisibilityPublicSubtitle =
-      'Рецепт появится в Menu и рекомендациях';
-  static const recipeVisibilityPrivateTitle = 'Приватный рецепт';
-  static const recipeVisibilityPrivateShort = 'Приватный';
-  static const recipeVisibilityPrivateSubtitle =
-      'Доступен только внутри вашего канала';
-  static const recipeVisibilityPrivateLockedSubtitle =
-      'Приватные рецепты доступны в Creator-подписке';
-  static const recipeVisibilityPrivateCta = 'Узнать о Creator';
-  static const recipeVisibilityChannelPublicHint =
-      'Канал в режиме «все публичные» — рецепты попадают в общий Menu.';
-  static const recipeVisibilityChannelPrivateHint =
-      'Канал в режиме «все приватные» — рецепты только для подписчиков канала.';
-
-  static const channelVisibilityModeTitle = 'Режим видимости рецептов';
-  static const channelVisibilityModePublic = 'Все публичные';
-  static const channelVisibilityModePublicHint =
-      'Новые рецепты появляются в Menu и рекомендациях';
-  static const channelVisibilityModePrivate = 'Все приватные';
-  static const channelVisibilityModePrivateHint =
-      'Рецепты только в канале, не в общем Menu';
-  static const channelVisibilityModeMixed = 'Смешанный';
-  static const channelVisibilityModeMixedHint =
-      'Для каждого рецепта выбираете public или private';
-
-  static const List<SubscriptionBenefitItem> creatorRecipeBenefits = [
-    SubscriptionBenefitItem(
-      icon: Icons.schedule_outlined,
-      text: 'Отложенная публикация постов',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.insights_outlined,
-      text: 'Аналитика канала и контента',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.groups_outlined,
-      text: 'Инструменты для роста аудитории',
-    ),
-  ];
-
-  static const List<SubscriptionBenefitItem> mealPlanAiBenefits = [
-    SubscriptionBenefitItem(
-      icon: Icons.calendar_month_outlined,
-      text: 'Планы на 7, 14, 21 и 30 дней',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.autorenew_outlined,
-      text: 'Обновление блюд и дней без лимита',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.tune_outlined,
-      text: 'Расширенная персонализация питания',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.shopping_bag_outlined,
-      text: 'Умный список покупок',
-    ),
-  ];
 
   static const screenTitle = 'Подписка';
   static const heroTitle = 'Больше возможностей\nдля авторов и общения';
@@ -206,7 +89,6 @@ class SubscriptionCopy {
     }
   }
 
-  /// Преимущества тарифа: API + запасной список из копирайта.
   static List<String> normalizeBenefits(String id, List<String> fromApi) {
     if (fromApi.isNotEmpty) return fromApi;
     return tierBenefits(id);
