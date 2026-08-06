@@ -230,6 +230,8 @@ class Message(Base):
     disable_webpage_preview = Column(Boolean, default=False, nullable=False)
     # Shared client/server id for multi-media albums (Telegram media_group).
     media_group_id = Column(String(64), nullable=True, index=True)
+    # Telegram media spoiler: blur until tapped (image/video).
+    has_spoiler = Column(Boolean, default=False, nullable=False)
     # Telegram Stars paid media: locked until unlock purchase.
     is_paid = Column(Boolean, default=False, nullable=False, index=True)
     price_stars = Column(Integer, default=0, nullable=False)
@@ -254,6 +256,7 @@ class ScheduledMessage(Base):
     silent = Column(Boolean, nullable=False, default=False)
     disable_webpage_preview = Column(Boolean, nullable=False, default=False)
     media_group_id = Column(String(64), nullable=True)
+    has_spoiler = Column(Boolean, nullable=False, default=False)
     target_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(16), nullable=False, default="pending", index=True)
     sent_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)

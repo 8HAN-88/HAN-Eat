@@ -177,6 +177,7 @@ def _message_payload(
             getattr(msg, "disable_webpage_preview", False)
         ),
         "media_group_id": getattr(msg, "media_group_id", None),
+        "has_spoiler": bool(getattr(msg, "has_spoiler", False)),
         "is_paid": is_paid,
         "price_stars": price_stars,
         "purchased": purchased,
@@ -200,6 +201,7 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
             getattr(item, "disable_webpage_preview", False)
         ),
         media_group_id=getattr(item, "media_group_id", None),
+        has_spoiler=bool(getattr(item, "has_spoiler", False)),
         status=item.status,
         created_at=item.created_at,
     )
@@ -646,6 +648,7 @@ def _message_response(
             getattr(msg, "disable_webpage_preview", False)
         ),
         media_group_id=getattr(msg, "media_group_id", None),
+        has_spoiler=bool(getattr(msg, "has_spoiler", False)),
         is_paid=is_paid,
         price_stars=price_stars,
         purchased=purchased,
@@ -1839,6 +1842,7 @@ async def send_message(
             silent=bool(body.silent),
             disable_webpage_preview=bool(body.disable_webpage_preview),
             media_group_id=body.media_group_id,
+            has_spoiler=bool(body.has_spoiler),
             is_paid=is_paid,
             price_stars=price_stars,
         )
@@ -2119,6 +2123,7 @@ async def schedule_message(
             silent=body.silent,
             disable_webpage_preview=body.disable_webpage_preview,
             media_group_id=body.media_group_id,
+            has_spoiler=bool(body.has_spoiler),
             media_url=body.media_url,
             reply_to_message_id=body.reply_to_message_id,
             client_message_id=body.client_message_id,
