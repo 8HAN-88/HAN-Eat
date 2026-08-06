@@ -2327,14 +2327,15 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     if (resolved.isEmpty) return;
 
     final uri = Uri.tryParse(resolved);
-    final looksExternalHost = uri != null &&
-        (uri.host.contains('youtube.com') ||
-            uri.host.contains('youtu.be') ||
-            uri.host.contains('vimeo.com'));
+    if (uri == null) return;
+
+    final looksExternalHost = uri.host.contains('youtube.com') ||
+        uri.host.contains('youtu.be') ||
+        uri.host.contains('vimeo.com');
 
     // YouTube/Vimeo — во внешнем приложении/браузере; остальное — inline player.
     if (looksExternalHost) {
-      final ok = await launchUrl(uri!, mode: LaunchMode.externalApplication);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Не удалось открыть видео')),
@@ -2368,22 +2369,21 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                     onPressed: () => Navigator.of(dialogContext).pop(),
                   ),
                 ),
-                if (uri != null)
-                  Positioned(
-                    left: 8,
-                    bottom: 8,
-                    child: TextButton.icon(
-                      onPressed: () => launchUrl(
-                        uri,
-                        mode: LaunchMode.externalApplication,
-                      ),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Внешне'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                      ),
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: TextButton.icon(
+                    onPressed: () => launchUrl(
+                      uri,
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Внешне'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
                     ),
                   ),
+                ),
               ],
             ),
           ),
