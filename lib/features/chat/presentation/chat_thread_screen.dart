@@ -542,10 +542,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _deleteForEveryoneMaxAge;
   }
 
+  ChatReplyKeyboard? _replyKeyboard;
+
+  void _applyReplyKeyboard(ChatReplyKeyboard? kb) {
+    if (kb == null) return;
+    if (kb.remove || kb.isEmpty) {
+      _replyKeyboard = null;
+      return;
+    }
+    _replyKeyboard = kb;
+  }
+
   @override
   void initState() {
     super.initState();
     _conversation = widget.conversation;
+    _replyKeyboard = widget.conversation.replyKeyboard;
+    if (_replyKeyboard != null &&
+        (_replyKeyboard!.remove || _replyKeyboard!.isEmpty)) {
+      _replyKeyboard = null;
+    }
     _pendingInitialJumpMessageId = widget.initialJumpMessageId;
     _pinned = widget.conversation.pinned;
     _muted = widget.conversation.muted;
@@ -2448,6 +2464,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _integrateMessage(msg);
           if (!msg.isMine) {
             _clearTypingState();
+            if (msg.replyKeyboard != null) {
+              _applyReplyKeyboard(msg.replyKeyboard);
+            }
           }
         });
         // Delivered as soon as the client receives the message (Telegram).
@@ -5360,6 +5379,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _conversation = conv;
         _pinned = conv.pinned;
         _muted = conv.muted;
+        if (conv.replyKeyboard != null) {
+          _applyReplyKeyboard(conv.replyKeyboard);
+        }
         _senderNames = names;
         _groupMembers = members;
         _bubbleAccent = ChatBubbleAccent.fromId(conv.bubbleAccent);
@@ -9241,6 +9263,69 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Widget _buildReplyKeyboardStrip(ColorScheme scheme) {
+    final kb = _replyKeyboard;
+    if (kb == null || kb.isEmpty) return const SizedBox.shrink();
+    return Material(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF1A2632)
+          : scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final row in kb.rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < row.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 6),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _sending
+                              ? null
+                              : () => unawaited(_tapReplyKeyboardButton(row[i])),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: scheme.onSurface,
+                            side: BorderSide(
+                              color: scheme.outline.withValues(alpha: 0.45),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                          ),
+                          child: Text(
+                            row[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _tapReplyKeyboardButton(String text) async {
+    final label = text.trim();
+    if (label.isEmpty || _sending) return;
+    _controller.text = label;
+    _controller.selection = TextSelection.collapsed(offset: label.length);
+    if (_replyKeyboard?.oneTime == true) {
+      setState(() => _replyKeyboard = null);
+    }
+    await _sendText();
+  }
+
   Widget _compactComposerStrip({
     required IconData icon,
     required String label,
@@ -9843,6 +9928,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _editingMessage!.type == 'video' ||
             _editingMessage!.type == 'file');
     if ((!editingMedia && text.isEmpty) || _recording) return;
+    // One-time ReplyKeyboard hides after any user reply (Telegram).
+    if (_editingMessage == null &&
+        _replyKeyboard != null &&
+        _replyKeyboard!.oneTime) {
+      setState(() => _replyKeyboard = null);
+    }
     if (_editingMessage == null) {
       final feeOk = await _ensurePaidDmFeeConfirmed();
       if (!feeOk || !mounted) return;
@@ -13335,6 +13426,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_replyKeyboard != null &&
+                            !_replyKeyboard!.isEmpty)
+                          _buildReplyKeyboardStrip(scheme),
                         if ((_conversation.peer?.paidMessageStars ?? 0) > 0 &&
                             !_conversation.isGroup &&
                             !_conversation.isSaved)

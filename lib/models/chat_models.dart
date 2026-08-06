@@ -221,6 +221,56 @@ class ChatInlineKeyboardButton {
   }
 }
 
+/// Bot ReplyKeyboard (above composer), Telegram-like.
+class ChatReplyKeyboard {
+  const ChatReplyKeyboard({
+    this.rows = const [],
+    this.oneTime = false,
+    this.resize = true,
+    this.placeholder,
+    this.remove = false,
+  });
+
+  final List<List<String>> rows;
+  final bool oneTime;
+  final bool resize;
+  final String? placeholder;
+  final bool remove;
+
+  bool get isEmpty => rows.isEmpty;
+
+  static ChatReplyKeyboard? tryParse(Map<String, dynamic> json) {
+    final remove = json['remove_reply_keyboard'] as bool? ?? false;
+    final raw = json['reply_keyboard'];
+    if (remove && raw == null) {
+      return const ChatReplyKeyboard(remove: true);
+    }
+    if (raw is! List) return null;
+    final rows = <List<String>>[];
+    for (final rowRaw in raw) {
+      if (rowRaw is! List) continue;
+      final row = <String>[];
+      for (final btn in rowRaw) {
+        if (btn is Map && btn['text'] is String) {
+          final t = (btn['text'] as String).trim();
+          if (t.isNotEmpty) row.add(t);
+        } else if (btn is String && btn.trim().isNotEmpty) {
+          row.add(btn.trim());
+        }
+      }
+      if (row.isNotEmpty) rows.add(row);
+    }
+    if (rows.isEmpty && !remove) return null;
+    return ChatReplyKeyboard(
+      rows: rows,
+      oneTime: json['reply_keyboard_one_time'] as bool? ?? false,
+      resize: json['reply_keyboard_resize'] as bool? ?? true,
+      placeholder: json['reply_keyboard_placeholder'] as String?,
+      remove: remove,
+    );
+  }
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -249,6 +299,7 @@ class ChatMessage {
     this.purchased = true,
     this.reactions = const [],
     this.inlineKeyboard = const [],
+    this.replyKeyboard,
   });
 
   final int id;
@@ -281,6 +332,8 @@ class ChatMessage {
   final bool purchased;
   final List<ChatReactionSummary> reactions;
   final List<List<ChatInlineKeyboardButton>> inlineKeyboard;
+  /// Present on bot replies that set/clear ReplyKeyboard for the peer.
+  final ChatReplyKeyboard? replyKeyboard;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -367,6 +420,7 @@ class ChatMessage {
           !(json['is_paid'] as bool? ?? false),
       reactions: reactions,
       inlineKeyboard: keyboard,
+      replyKeyboard: ChatReplyKeyboard.tryParse(json),
     );
   }
 
@@ -385,6 +439,7 @@ class ChatMessage {
     bool? purchased,
     List<ChatReactionSummary>? reactions,
     List<List<ChatInlineKeyboardButton>>? inlineKeyboard,
+    ChatReplyKeyboard? replyKeyboard,
   }) {
     return ChatMessage(
       id: id,
@@ -414,6 +469,7 @@ class ChatMessage {
       purchased: purchased ?? this.purchased,
       reactions: reactions ?? this.reactions,
       inlineKeyboard: inlineKeyboard ?? this.inlineKeyboard,
+      replyKeyboard: replyKeyboard ?? this.replyKeyboard,
     );
   }
 }
@@ -531,6 +587,7 @@ class ChatConversation {
     this.amISendRestrictedUntil,
     this.amISendRestrictionReason,
     this.peerBlockedByMe = false,
+    this.replyKeyboard,
   });
 
   final int id;
@@ -574,6 +631,7 @@ class ChatConversation {
   final DateTime? amISendRestrictedUntil;
   final String? amISendRestrictionReason;
   final bool peerBlockedByMe;
+  final ChatReplyKeyboard? replyKeyboard;
 
   bool get isGroup => type == 'group';
 
@@ -676,6 +734,7 @@ class ChatConversation {
           : null,
       amISendRestrictionReason: json['am_i_send_restriction_reason'] as String?,
       peerBlockedByMe: json['peer_blocked_by_me'] as bool? ?? false,
+      replyKeyboard: ChatReplyKeyboard.tryParse(json),
     );
   }
 
@@ -720,6 +779,8 @@ class ChatConversation {
     DateTime? amISendRestrictedUntil,
     String? amISendRestrictionReason,
     bool? peerBlockedByMe,
+    ChatReplyKeyboard? replyKeyboard,
+    bool clearReplyKeyboard = false,
   }) {
     return ChatConversation(
       id: id,
@@ -778,6 +839,9 @@ class ChatConversation {
       amISendRestrictionReason:
           amISendRestrictionReason ?? this.amISendRestrictionReason,
       peerBlockedByMe: peerBlockedByMe ?? this.peerBlockedByMe,
+      replyKeyboard: clearReplyKeyboard
+          ? null
+          : (replyKeyboard ?? this.replyKeyboard),
     );
   }
 }

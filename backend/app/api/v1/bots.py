@@ -60,12 +60,22 @@ def _bot_response(bot: User, *, token: Optional[str] = None) -> "BotResponse":
 
 # === Schemas ===
 
+class BotReplyButton(BaseModel):
+    text: str = Field(..., min_length=1, max_length=64)
+
+
 class BotCommandCreate(BaseModel):
     command: str = Field(..., min_length=1, max_length=32)
     description: str = Field(..., min_length=1, max_length=256)
     response_text: Optional[str] = Field(None, max_length=2000)
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
+    reply_buttons: Optional[List[BotReplyButton]] = None
+    reply_button_rows: Optional[List[List[BotReplyButton]]] = None
+    reply_keyboard_one_time: bool = False
+    reply_keyboard_resize: bool = True
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    remove_reply_keyboard: bool = False
 
 
 class BotInlineButton(BaseModel):
@@ -128,6 +138,23 @@ def _normalize_inline_buttons(
         return None
     row = [_button_item_from_inline(btn) for btn in buttons]
     return [row] if row else None
+
+
+def _normalize_reply_buttons(
+    buttons: Optional[List[BotReplyButton]],
+    rows: Optional[List[List[BotReplyButton]]] = None,
+) -> Optional[List[List[dict]]]:
+    from app.services.reply_keyboard_service import normalize_reply_keyboard
+
+    if rows:
+        raw = [
+            [{"text": b.text} for b in row_buttons if b.text and b.text.strip()]
+            for row_buttons in rows
+        ]
+        return normalize_reply_keyboard(raw)
+    if not buttons:
+        return None
+    return normalize_reply_keyboard([[{"text": b.text} for b in buttons]])
 
 
 class BotCreateRequest(BaseModel):
@@ -245,6 +272,10 @@ async def create_bot(
             cmd.inline_buttons,
             cmd.inline_button_rows,
         )
+        reply_buttons = _normalize_reply_buttons(
+            cmd.reply_buttons,
+            cmd.reply_button_rows,
+        )
         command_name = (cmd.command or "").strip().lstrip("/").lower()
         if not command_name:
             continue
@@ -254,6 +285,13 @@ async def create_bot(
             description=cmd.description,
             response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
+            reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
+            reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
+            reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
+            reply_keyboard_placeholder=(
+                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            ),
+            remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         ))
 
     db.commit()
@@ -517,6 +555,27 @@ async def list_bot_commands(
                             inline_button_rows.append(out_row)
             except Exception:
                 inline_button_rows = []
+        reply_button_rows: List[List[BotReplyButton]] = []
+        if getattr(c, "reply_buttons_json", None):
+            try:
+                parsed = json.loads(c.reply_buttons_json)
+                if isinstance(parsed, list):
+                    for row in parsed:
+                        if not isinstance(row, list):
+                            continue
+                        out_row: List[BotReplyButton] = []
+                        for btn in row:
+                            text = ""
+                            if isinstance(btn, dict):
+                                text = str(btn.get("text") or "").strip()
+                            elif isinstance(btn, str):
+                                text = btn.strip()
+                            if text:
+                                out_row.append(BotReplyButton(text=text))
+                        if out_row:
+                            reply_button_rows.append(out_row)
+            except Exception:
+                reply_button_rows = []
         result.append(
             BotCommandCreate(
                 command=c.command,
@@ -524,6 +583,12 @@ async def list_bot_commands(
                 response_text=c.response_text,
                 inline_button_rows=inline_button_rows or None,
                 inline_buttons=(inline_button_rows[0] if len(inline_button_rows) == 1 else None),
+                reply_button_rows=reply_button_rows or None,
+                reply_buttons=(reply_button_rows[0] if len(reply_button_rows) == 1 else None),
+                reply_keyboard_one_time=bool(getattr(c, "reply_keyboard_one_time", False)),
+                reply_keyboard_resize=bool(getattr(c, "reply_keyboard_resize", True)),
+                reply_keyboard_placeholder=getattr(c, "reply_keyboard_placeholder", None),
+                remove_reply_keyboard=bool(getattr(c, "remove_reply_keyboard", False)),
             )
         )
     return result
@@ -552,6 +617,10 @@ async def add_bot_command(
         cmd.inline_buttons,
         cmd.inline_button_rows,
     )
+    reply_buttons = _normalize_reply_buttons(
+        cmd.reply_buttons,
+        cmd.reply_button_rows,
+    )
     db.add(
         BotCommand(
             bot_id=bot_id,
@@ -559,6 +628,13 @@ async def add_bot_command(
             description=cmd.description,
             response_text=cmd.response_text.strip()[:2000] if cmd.response_text else None,
             inline_buttons_json=json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None,
+            reply_buttons_json=json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None,
+            reply_keyboard_one_time=bool(cmd.reply_keyboard_one_time),
+            reply_keyboard_resize=bool(cmd.reply_keyboard_resize),
+            reply_keyboard_placeholder=(
+                (cmd.reply_keyboard_placeholder or "").strip()[:64] or None
+            ),
+            remove_reply_keyboard=bool(cmd.remove_reply_keyboard),
         )
     )
     db.commit()
@@ -571,6 +647,13 @@ class BotCommandUpdateRequest(BaseModel):
     inline_buttons: Optional[List["BotInlineButton"]] = None
     inline_button_rows: Optional[List[List["BotInlineButton"]]] = None
     clear_inline_buttons: bool = False
+    reply_buttons: Optional[List[BotReplyButton]] = None
+    reply_button_rows: Optional[List[List[BotReplyButton]]] = None
+    clear_reply_buttons: bool = False
+    reply_keyboard_one_time: Optional[bool] = None
+    reply_keyboard_resize: Optional[bool] = None
+    reply_keyboard_placeholder: Optional[str] = Field(None, max_length=64)
+    remove_reply_keyboard: Optional[bool] = None
 
 
 BotCommandUpdateRequest.model_rebuild()
@@ -607,6 +690,26 @@ async def update_bot_command(
         cmd.inline_buttons_json = (
             json.dumps(inline_buttons, ensure_ascii=False) if inline_buttons else None
         )
+    if payload.clear_reply_buttons:
+        cmd.reply_buttons_json = None
+    elif payload.reply_button_rows is not None or payload.reply_buttons is not None:
+        reply_buttons = _normalize_reply_buttons(
+            payload.reply_buttons,
+            payload.reply_button_rows,
+        )
+        cmd.reply_buttons_json = (
+            json.dumps(reply_buttons, ensure_ascii=False) if reply_buttons else None
+        )
+    if payload.reply_keyboard_one_time is not None:
+        cmd.reply_keyboard_one_time = bool(payload.reply_keyboard_one_time)
+    if payload.reply_keyboard_resize is not None:
+        cmd.reply_keyboard_resize = bool(payload.reply_keyboard_resize)
+    if payload.reply_keyboard_placeholder is not None:
+        cmd.reply_keyboard_placeholder = (
+            payload.reply_keyboard_placeholder.strip()[:64] or None
+        )
+    if payload.remove_reply_keyboard is not None:
+        cmd.remove_reply_keyboard = bool(payload.remove_reply_keyboard)
     db.commit()
     return {"status": "ok"}
 

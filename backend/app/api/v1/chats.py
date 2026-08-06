@@ -160,7 +160,7 @@ def _message_payload(
     is_sender = viewer_user_id is not None and viewer_user_id == msg.sender_id
     purchased = (not is_paid) or is_sender
     media_url = msg.media_url if purchased else None
-    return {
+    payload = {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
         "sender_id": msg.sender_id,
@@ -185,6 +185,10 @@ def _message_payload(
         "purchased": purchased,
         "reactions": reactions or [],
     }
+    kb_update = getattr(msg, "_reply_keyboard_update", None)
+    if isinstance(kb_update, dict):
+        payload.update(kb_update)
+    return payload
 
 
 def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageResponse:
@@ -658,6 +662,12 @@ def _message_response(
     )
 
 
+def _reply_keyboard_fields(member) -> dict:
+    from app.services.reply_keyboard_service import keyboard_payload_from_member
+
+    return keyboard_payload_from_member(member)
+
+
 def _conversation_response(
     row: dict,
     svc: ChatService,
@@ -797,6 +807,7 @@ def _conversation_response(
         am_i_send_restricted_until=am_i_send_restricted_until,
         am_i_send_restriction_reason=am_i_send_restriction_reason,
         peer_blocked_by_me=peer_blocked_by_me,
+        **_reply_keyboard_fields(member),
     )
 
 
@@ -1852,11 +1863,21 @@ async def send_message(
         db.commit()
         db.refresh(msg)
 
+        # One-time ReplyKeyboard: hide after the user's reply (Telegram).
+        from app.services.reply_keyboard_service import clear_one_time_if_needed
+
+        cleared_kb = clear_one_time_if_needed(
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+        )
+
         # === Встроенный обработчик ботов ===
         from app.services.bot_handler import process_message_for_bot
         bot_reply = process_message_for_bot(db, conversation_id, current_user.id, content)
-        if bot_reply:
+        if bot_reply or cleared_kb:
             db.commit()
+        if bot_reply:
             db.refresh(bot_reply)
             _emit(
                 conversation_id,

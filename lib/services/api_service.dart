@@ -445,11 +445,33 @@ class ApiService {
             .toList();
         if (flat.isNotEmpty) rows.add(flat);
       }
+      final replyRowsRaw = item['reply_button_rows'] as List? ?? const [];
+      final replyRows = <List<String>>[];
+      for (final row in replyRowsRaw) {
+        if (row is! List) continue;
+        final parsed = <String>[];
+        for (final btn in row) {
+          if (btn is Map<String, dynamic>) {
+            final t = (btn['text'] as String?)?.trim() ?? '';
+            if (t.isNotEmpty) parsed.add(t);
+          } else if (btn is String && btn.trim().isNotEmpty) {
+            parsed.add(btn.trim());
+          }
+        }
+        if (parsed.isNotEmpty) replyRows.add(parsed);
+      }
       return BotCommandCreate(
         command: item['command'] as String,
         description: item['description'] as String,
         responseText: item['response_text'] as String?,
         inlineButtonRows: rows,
+        replyButtonRows: replyRows,
+        replyKeyboardOneTime:
+            item['reply_keyboard_one_time'] as bool? ?? false,
+        replyKeyboardResize: item['reply_keyboard_resize'] as bool? ?? true,
+        replyKeyboardPlaceholder:
+            item['reply_keyboard_placeholder'] as String?,
+        removeReplyKeyboard: item['remove_reply_keyboard'] as bool? ?? false,
       );
     }).toList();
   }
@@ -480,6 +502,14 @@ class ApiService {
             .map((row) => row.map((b) => b.toJson()).toList())
             .toList(),
         'clear_inline_buttons': cmd.inlineButtonRows.isEmpty,
+        'reply_button_rows': cmd.replyButtonRows
+            .map((row) => row.map((text) => {'text': text}).toList())
+            .toList(),
+        'clear_reply_buttons': cmd.replyButtonRows.isEmpty,
+        'reply_keyboard_one_time': cmd.replyKeyboardOneTime,
+        'reply_keyboard_resize': cmd.replyKeyboardResize,
+        'reply_keyboard_placeholder': cmd.replyKeyboardPlaceholder,
+        'remove_reply_keyboard': cmd.removeReplyKeyboard,
       }),
     );
     _ensureSuccess(response);

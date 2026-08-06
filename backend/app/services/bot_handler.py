@@ -212,11 +212,56 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
 
     reply_text: str
     inline_keyboard_json: Optional[str] = None
+    reply_keyboard_update: Optional[dict] = None
     if cmd_row:
         reply_text = (cmd_row.response_text or "").strip() or cmd_row.description
         keyboard = _normalize_inline_buttons(getattr(cmd_row, "inline_buttons_json", None))
         if keyboard:
             inline_keyboard_json = json.dumps(keyboard, ensure_ascii=False)
+        from app.services.reply_keyboard_service import (
+            normalize_reply_keyboard,
+            set_member_reply_keyboard,
+        )
+
+        if bool(getattr(cmd_row, "remove_reply_keyboard", False)):
+            set_member_reply_keyboard(
+                db,
+                conversation_id=conversation_id,
+                user_id=sender_id,
+                keyboard=None,
+                remove=True,
+            )
+            reply_keyboard_update = {
+                "reply_keyboard": None,
+                "reply_keyboard_one_time": False,
+                "reply_keyboard_resize": True,
+                "reply_keyboard_placeholder": None,
+                "remove_reply_keyboard": True,
+            }
+        else:
+            reply_kb = normalize_reply_keyboard(
+                getattr(cmd_row, "reply_buttons_json", None)
+            )
+            if reply_kb:
+                one_time = bool(getattr(cmd_row, "reply_keyboard_one_time", False))
+                resize = bool(getattr(cmd_row, "reply_keyboard_resize", True))
+                placeholder = getattr(cmd_row, "reply_keyboard_placeholder", None)
+                set_member_reply_keyboard(
+                    db,
+                    conversation_id=conversation_id,
+                    user_id=sender_id,
+                    keyboard=reply_kb,
+                    one_time=one_time,
+                    resize=resize,
+                    placeholder=placeholder,
+                )
+                reply_keyboard_update = {
+                    "reply_keyboard": reply_kb,
+                    "reply_keyboard_one_time": one_time,
+                    "reply_keyboard_resize": resize,
+                    "reply_keyboard_placeholder": placeholder,
+                    "remove_reply_keyboard": False,
+                }
         AnalyticsService(db).log_event(
             event_type="bot_command_invoked",
             entity_type="bot",
@@ -251,6 +296,9 @@ def process_message_for_bot(db: Session, conversation_id: int, sender_id: int, c
     )
     db.add(bot_msg)
     db.flush()
+    if reply_keyboard_update is not None:
+        # Attached for WS/API clients (not a DB column).
+        setattr(bot_msg, "_reply_keyboard_update", reply_keyboard_update)
     return bot_msg
 
 
