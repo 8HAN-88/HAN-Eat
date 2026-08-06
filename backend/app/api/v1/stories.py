@@ -7,14 +7,17 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 
 from app.api.dependencies import get_current_user_required
 from app.core.database import get_db
+from app.models.follower import Follower
 from app.models.story import Story, StoryReaction, StoryView
 from app.models.user import User
 
 router = APIRouter(prefix="/stories", tags=["Stories"])
+
+_VALID_VISIBILITY = frozenset({"public", "followers", "private"})
 
 
 class StoryCreateRequest(BaseModel):
@@ -154,17 +157,62 @@ def _recount_views(db: Session, story: Story) -> None:
     story.views_count = int(count or 0)
 
 
+def _following_ids(db: Session, user_id: int) -> list[int]:
+    rows = (
+        db.query(Follower.followee_id)
+        .filter(Follower.follower_id == user_id)
+        .all()
+    )
+    return [int(row[0]) for row in rows]
+
+
+def can_view_story(story: Story, viewer: User, db: Session) -> bool:
+    """Telegram-like story privacy: public / followers / private."""
+    if story.user_id == viewer.id:
+        return True
+    visibility = (story.visibility or "public").strip().lower()
+    if visibility == "public":
+        return True
+    if visibility == "private":
+        return False
+    if visibility == "followers":
+        row = (
+            db.query(Follower.id)
+            .filter(
+                Follower.follower_id == viewer.id,
+                Follower.followee_id == story.user_id,
+            )
+            .first()
+        )
+        return row is not None
+    return False
+
+
+def _ensure_can_view(story: Story, viewer: User, db: Session) -> None:
+    if not can_view_story(story, viewer, db):
+        raise HTTPException(status_code=404, detail="Story not found")
+
+
 @router.get("", response_model=List[StoryResponse])
 async def list_active_stories(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
     limit: int = 100,
 ):
-    """Активные сторис за последние 24 часа."""
+    """Активные сторис, видимые текущему пользователю (privacy-aware)."""
     limit = min(max(limit, 1), 200)
+    following = _following_ids(db, current_user.id)
+    visibility_filter = or_(
+        Story.user_id == current_user.id,
+        Story.visibility == "public",
+        and_(
+            Story.visibility == "followers",
+            Story.user_id.in_(following if following else [-1]),
+        ),
+    )
     stories = (
         _active_story_query(db)
-        .filter(Story.visibility == "public")
+        .filter(visibility_filter)
         .order_by(Story.created_at.desc())
         .limit(limit)
         .all()
@@ -193,13 +241,16 @@ async def create_story(
     db: Session = Depends(get_db),
 ):
     """Создать сторис. Срок жизни — 24 часа."""
+    visibility = (payload.visibility or "public").strip().lower()
+    if visibility not in _VALID_VISIBILITY:
+        raise HTTPException(status_code=400, detail="Invalid visibility")
     story = Story(
         user_id=current_user.id,
         media_url=payload.media_url,
         thumbnail_url=payload.thumbnail_url,
         media_type=payload.media_type,
         caption=payload.caption,
-        visibility=payload.visibility,
+        visibility=visibility,
         expires_at=datetime.utcnow() + timedelta(hours=24),
     )
     db.add(story)
@@ -218,6 +269,7 @@ async def mark_story_viewed(
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    _ensure_can_view(story, current_user, db)
     if story.user_id != current_user.id:
         existing = (
             db.query(StoryView)
@@ -304,6 +356,7 @@ async def set_story_reaction(
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    _ensure_can_view(story, current_user, db)
     if story.user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot react to your own story")
 
@@ -346,6 +399,7 @@ async def clear_story_reaction(
     story = _active_story_query(db).filter(Story.id == story_id).first()
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
+    _ensure_can_view(story, current_user, db)
     row = (
         db.query(StoryReaction)
         .filter(

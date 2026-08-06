@@ -48,6 +48,7 @@ class StoryService {
     required XFile file,
     required bool isVideo,
     String? caption,
+    String visibility = 'public',
   }) async {
     final uploaded = await MediaUploadService.uploadMediaFile(
       file: file,
@@ -64,6 +65,7 @@ class StoryService {
         thumbnailUrl: uploaded.thumbnailUrl,
         mediaType: isVideo ? 'video' : 'image',
         caption: caption,
+        visibility: visibility,
       ),
     );
   }
