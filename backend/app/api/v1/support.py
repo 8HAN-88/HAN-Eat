@@ -78,7 +78,7 @@ async def create_support_ticket(
         "message": (
             "Обращение создано. Мы ответим в ближайшее время."
             if not is_priority
-            else "Приоритетное обращение H.A.N. Pro создано — обработаем в первую очередь."
+            else "Приоритетное обращение HanWe Pro создано — обработаем в первую очередь."
         ),
         "is_priority": is_priority,
     }

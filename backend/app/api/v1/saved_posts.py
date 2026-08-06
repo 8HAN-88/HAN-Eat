@@ -134,7 +134,7 @@ async def save_spoonacular_recipe(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db)
 ):
-    """Сохранить рецепт Spoonacular (офлайн-доступ — тариф H.A.N. AI / Pro)."""
+    """Сохранить рецепт Spoonacular (офлайн-доступ — тариф HanWe AI / Pro)."""
     from app.core.entitlements import HAN_AI_REQUIRED_CODE
     from app.services.subscription_service import SubscriptionService
 
@@ -143,7 +143,7 @@ async def save_spoonacular_recipe(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_AI_REQUIRED_CODE,
-                "message": "Сохранение рецептов для офлайн доступно с подпиской H.A.N. AI или Pro",
+                "message": "Сохранение рецептов для офлайн доступно с подпиской HanWe AI или Pro",
             },
         )
 

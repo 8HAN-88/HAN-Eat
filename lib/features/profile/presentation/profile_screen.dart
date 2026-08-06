@@ -774,10 +774,8 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
   int _loadGeneration = 0;
 
   List<PostModel> _visibleProfilePosts(List<PostModel> posts) {
-    return posts.where((post) {
-      if (post.type == 'recipe') return false;
-      return !PostPublisherDisplay.isChannel(post);
-    }).toList();
+    // Legacy recipe posts are normal profile posts in HanWe.
+    return posts.where((post) => !PostPublisherDisplay.isChannel(post)).toList();
   }
 
   @override

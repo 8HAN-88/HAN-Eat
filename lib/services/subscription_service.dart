@@ -1,4 +1,4 @@
-// Сервис для работы с подписками H.A.N. (тарифы AI / Creator / Pro)
+// Сервис для работы с подписками HanWe (тарифы AI / Creator / Pro)
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
@@ -194,7 +194,7 @@ class SubscriptionStatusResponse {
   bool get hasAnyPaid => isActive && subscriptionType != 'free';
 
   bool get hasPro =>
-      isActive && (subscriptionType == 'pro' || entitlements['meal_plan_family'] == true);
+      isActive && (subscriptionType == 'pro' || entitlements['pro'] == true);
 
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;

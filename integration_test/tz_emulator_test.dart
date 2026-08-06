@@ -98,7 +98,7 @@ void main() {
       router.push(SubscriptionRoute.path);
       await tester.pumpAndSettle(const Duration(seconds: 15));
       expect(find.text(SubscriptionCopy.screenTitle), findsWidgets);
-      expect(find.textContaining('H.A.N.'), findsWidgets);
+      expect(find.textContaining('HanWe'), findsWidgets);
 
       // Trial via API then Creator tools
       final token = await _loginToken(baseUrl, email, password);

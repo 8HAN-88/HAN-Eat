@@ -51,7 +51,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 const ListTile(
                   leading: Icon(Icons.shield_outlined),
                   title: Text('Двухфакторная защита'),
-                  subtitle: Text('Скоро: TOTP / SMS. Пока недоступно.'),
+                  subtitle: Text('Дополнительная защита аккаунта. Пока недоступно.'),
                   enabled: false,
                 ),
               ],

@@ -80,12 +80,10 @@ class ChannelService {
     List<String>? tags,
     String? rules,
     bool? autoPublishToFeed,
-    bool? autoPublishToMenu,
     bool? autoPublishReels,
     bool? allowComments,
     bool? allowLikes,
     bool? allowReposts,
-    String? recipeVisibilityMode,
     Map<String, Map<String, bool>>? rolePermissions,
     String? accentColor,
   }) async {
@@ -106,13 +104,10 @@ class ChannelService {
       if (tags != null) 'tags': tags,
       if (rules != null) 'rules': rules,
       if (autoPublishToFeed != null) 'auto_publish_to_feed': autoPublishToFeed,
-      if (autoPublishToMenu != null) 'auto_publish_to_menu': autoPublishToMenu,
       if (autoPublishReels != null) 'auto_publish_reels': autoPublishReels,
       if (allowComments != null) 'allow_comments': allowComments,
       if (allowLikes != null) 'allow_likes': allowLikes,
       if (allowReposts != null) 'allow_reposts': allowReposts,
-      if (recipeVisibilityMode != null)
-        'recipe_visibility_mode': recipeVisibilityMode,
       if (rolePermissions != null) 'role_permissions': rolePermissions,
       if (accentColor != null) 'accent_color': accentColor,
     };
@@ -269,7 +264,6 @@ class ChannelService {
     String? mode, // recommendations | catalog
     int? minSubscribers,
     int? maxSubscribers,
-    bool? hasRecipes,
     int? minPosts,
     bool withLastPost = false,
   }) async {
@@ -307,9 +301,6 @@ class ChannelService {
     }
     if (maxSubscribers != null) {
       queryParams['max_subscribers'] = maxSubscribers.toString();
-    }
-    if (hasRecipes != null) {
-      queryParams['has_recipes'] = hasRecipes.toString();
     }
     if (minPosts != null) {
       queryParams['min_posts'] = minPosts.toString();
@@ -677,16 +668,6 @@ class ChannelService {
     String? description,
     List<Map<String, dynamic>>? media,
     List<String>? tags,
-    List<String>? ingredients,
-    List<Map<String, dynamic>>? steps,
-    int? prepTimeMin,
-    int? cookTimeMin,
-    int? servings,
-    int? calories,
-    double? proteinG,
-    double? carbsG,
-    double? fatG,
-    double? fiberG,
     String? visibility,
     String? linkUrl,
     String? linkPreview,
@@ -704,19 +685,9 @@ class ChannelService {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (visibility != null) body['visibility'] = visibility;
-    if (proteinG != null) body['protein_g'] = proteinG;
-    if (carbsG != null) body['carbs_g'] = carbsG;
-    if (fatG != null) body['fat_g'] = fatG;
-    if (fiberG != null) body['fiber_g'] = fiberG;
     if (description != null) body['description'] = description;
     if (media != null) body['media'] = media;
     if (tags != null) body['tags'] = tags;
-    if (ingredients != null) body['ingredients'] = ingredients;
-    if (steps != null) body['steps'] = steps;
-    if (prepTimeMin != null) body['prep_time_min'] = prepTimeMin;
-    if (cookTimeMin != null) body['cook_time_min'] = cookTimeMin;
-    if (servings != null) body['servings'] = servings;
-    if (calories != null) body['calories'] = calories;
     if (linkUrl != null) {
       body['link'] = {
         'url': linkUrl,

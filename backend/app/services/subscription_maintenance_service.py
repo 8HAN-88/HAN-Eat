@@ -144,11 +144,11 @@ class SubscriptionMaintenanceService:
                         continue
                     auto = bool(user.subscription_auto_renew and user.yookassa_payment_method_id)
                     body = (
-                        f"Ваша подписка H.A.N. истекает через {days_left} дн. "
+                        f"Ваша подписка HanWe истекает через {days_left} дн. "
                         "Списание по СБП пройдёт автоматически."
                         if auto
                         else (
-                            f"Ваша подписка H.A.N. истекает через {days_left} дн. "
+                            f"Ваша подписка HanWe истекает через {days_left} дн. "
                             "Продлите в разделе «Подписка», чтобы сохранить доступ."
                         )
                     )

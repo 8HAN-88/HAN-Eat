@@ -6,12 +6,14 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, ai_scan, creator, meal_plans, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.core.database import Base, engine
 import app.models
+from fastapi import APIRouter, Request, status
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +92,42 @@ app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(search.router, prefix="/api/v1", tags=["Search"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 app.include_router(paid_features.router, prefix="/api/v1/paid", tags=["Paid Features"])
-app.include_router(ai_scan.router, prefix="/api/v1/ai-scan", tags=["AI Scan"])
-app.include_router(meal_plans.router, prefix="/api/v1/meal-plans", tags=["Meal Plans"])
-# Роутер для рецептов с префиксом /api/v1
+# Soft-retired kitchen endpoints (messenger product). Recipe image proxy stays.
+_retired_kitchen = APIRouter(tags=["retired-kitchen"])
+
+
+@_retired_kitchen.api_route(
+    "/api/v1/ai-scan",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+@_retired_kitchen.api_route(
+    "/api/v1/ai-scan/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+@_retired_kitchen.api_route(
+    "/api/v1/meal-plans",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+@_retired_kitchen.api_route(
+    "/api/v1/meal-plans/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    include_in_schema=False,
+)
+async def _kitchen_gone(request: Request, path: str | None = None):
+    return JSONResponse(
+        status_code=status.HTTP_410_GONE,
+        content={
+            "detail": "Kitchen features were removed. HanWe is a messenger.",
+            "code": "kitchen_retired",
+        },
+    )
+
+
+app.include_router(_retired_kitchen)
+# Роутер для рецептов с префиксом /api/v1 (нужен recipe-image-proxy)
 app.include_router(recipes.router, prefix="/api/v1", tags=["Recipes"])
 app.include_router(community_upload.router, prefix="/api/v1", tags=["Community"])
 app.include_router(creator.router, prefix="/api/v1/creator", tags=["Creator"])
@@ -104,7 +139,7 @@ app.include_router(legal.api_router, prefix="/api/v1/legal", tags=["Legal"])
 @app.get("/")
 async def root():
     return {
-        "message": "H.A.N. Eat API",
+        "message": "HanWe API",
         "version": "1.0.0",
         "docs": "/docs"
     }

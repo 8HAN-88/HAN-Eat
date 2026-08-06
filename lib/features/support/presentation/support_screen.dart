@@ -146,7 +146,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'H.A.N. Pro: ваши обращения обрабатываются в приоритетной очереди.',
+                            'HanWe Pro: ваши обращения обрабатываются в приоритетной очереди.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
@@ -161,7 +161,7 @@ class _SupportScreenState extends ConsumerState<SupportScreen> {
                     leading: const Icon(Icons.workspace_premium_outlined),
                     title: const Text('Приоритетная поддержка'),
                     subtitle: const Text(
-                      'С H.A.N. Pro обращения обрабатываются быстрее.',
+                      'С HanWe Pro обращения обрабатываются быстрее.',
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () =>
