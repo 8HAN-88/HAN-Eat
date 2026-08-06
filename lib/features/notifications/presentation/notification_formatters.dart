@@ -205,13 +205,12 @@ String notificationLeadText(NotificationDisplayItem group) {
 
 String _likedTargetLabel(String? postType) {
   switch (postType) {
-    case 'recipe':
-      return 'нравится ваш пост';
     case 'reel':
       return 'нравится ваш рилс';
     case 'photo':
       return 'нравится ваше фото';
     case 'text':
+    case 'recipe': // legacy kitchen posts
       return 'нравится ваш пост';
     default:
       return 'нравится ваша публикация';

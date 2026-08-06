@@ -16,6 +16,7 @@ import '../../../utils/api_error_parser.dart';
 import '../../../utils/session_snackbar.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../utils/number_formatter.dart';
+import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/feed_video_player.dart';
 import '../../../services/server_config.dart';
@@ -54,11 +55,6 @@ String? _channelRepostUserCommentFromPost(PostModel post) {
   return first;
 }
 
-bool _isMeaningfulPostTitle(String? s) {
-  if (s == null) return false;
-  final t = s.trim();
-  return t.isNotEmpty && t != '.' && t != '…' && t != '...';
-}
 
 class NewPostCard extends StatefulWidget {
   final PostModel post;
@@ -989,11 +985,11 @@ class _NewPostCardState extends State<NewPostCard>
               )
             else if (orig != null) ...[
               _withDoubleTapLikeOverlay(_buildMedia(orig)),
-              if (orig.type == 'recipe' || _isMeaningfulPostTitle(orig.title))
+              if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   child: Text(
-                    orig.type == 'recipe' ? _recipeTitle(orig) : orig.title!,
+                    displayTitleForPost(orig),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1622,18 +1618,17 @@ class _NewPostCardState extends State<NewPostCard>
                     child: _buildLikedByLine(scheme),
                   ),
                 ],
-                if (post.type == 'recipe' ||
-                    _isMeaningfulPostTitle(post.title) ||
+                if (resolvePostDisplayTitle(title: post.title, body: post.body) !=
+                        null ||
                     (post.description != null &&
                         post.description!.trim().isNotEmpty)) ...[
                   const SizedBox(height: 6),
                   _buildInstagramCaption(
                     authorName: displayName,
-                    title: post.type == 'recipe'
-                        ? _recipeTitle(post)
-                        : (_isMeaningfulPostTitle(post.title)
-                            ? post.title
-                            : null),
+                    title: resolvePostDisplayTitle(
+                      title: post.title,
+                      body: post.body,
+                    ),
                     description: post.description,
                   ),
                 ],
@@ -1830,25 +1825,6 @@ class _NewPostCardState extends State<NewPostCard>
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
 
-  String _recipeTitle(PostModel post) {
-    final body = post.body;
-    final nestedRecipe = body?['recipe'];
-    final postTitle = post.title?.trim();
-    final bodyTitle = body?['title']?.toString().trim();
-    final translated = body?['translated_title']?.toString().trim();
-    final bodyName = body?['name']?.toString().trim();
-    String? nestedTitle;
-    if (nestedRecipe is Map<String, dynamic>) {
-      nestedTitle = nestedRecipe['title']?.toString().trim();
-    }
-
-    if (postTitle != null && postTitle.isNotEmpty) return postTitle;
-    if (bodyTitle != null && bodyTitle.isNotEmpty) return bodyTitle;
-    if (translated != null && translated.isNotEmpty) return translated;
-    if (bodyName != null && bodyName.isNotEmpty) return bodyName;
-    if (nestedTitle != null && nestedTitle.isNotEmpty) return nestedTitle;
-    return 'Пост';
-  }
 
   String _getProxyUrl(String originalUrl) {
     return ServerConfig.resolveRecipeImageUrl(originalUrl);
@@ -1898,7 +1874,7 @@ class _NewPostCardState extends State<NewPostCard>
     // Если media пустой, пытаемся собрать превью из известных полей body.
     List<dynamic>? effectiveMedia = media;
     if (media == null || media.isEmpty) {
-      final imageUrl = _extractRecipeImageUrl(body);
+      final imageUrl = _extractLegacyBodyImageUrl(body);
       if (imageUrl != null && imageUrl.isNotEmpty) {
         effectiveMedia = [
           {
@@ -2010,32 +1986,9 @@ class _NewPostCardState extends State<NewPostCard>
     return const SizedBox.shrink();
   }
 
-  String? _extractRecipeImageUrl(Map<String, dynamic> body) {
-    final directImage = body['image']?.toString();
-    if (directImage != null && directImage.trim().isNotEmpty) {
-      return directImage.trim();
-    }
+  String? _extractLegacyBodyImageUrl(Map<String, dynamic> body) =>
+      extractLegacyBodyImageUrl(body);
 
-    final sourceImage = body['source_image']?.toString();
-    if (sourceImage != null && sourceImage.trim().isNotEmpty) {
-      return sourceImage.trim();
-    }
-
-    final nestedRecipe = body['recipe'];
-    if (nestedRecipe is Map<String, dynamic>) {
-      final nestedImage = nestedRecipe['image']?.toString();
-      if (nestedImage != null && nestedImage.trim().isNotEmpty) {
-        return nestedImage.trim();
-      }
-
-      final nestedSourceImage = nestedRecipe['source_image']?.toString();
-      if (nestedSourceImage != null && nestedSourceImage.trim().isNotEmpty) {
-        return nestedSourceImage.trim();
-      }
-    }
-
-    return null;
-  }
 }
 
 class _ViewsBadge extends StatelessWidget {

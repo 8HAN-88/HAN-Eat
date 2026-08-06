@@ -11,6 +11,7 @@ import '../../../services/api_service.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/image_url_helper.dart';
+import '../../../utils/post_display_title.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../widgets/app_empty_state.dart';
 
@@ -34,11 +35,6 @@ String? _channelRepostUserComment(PostModel post) {
   return first;
 }
 
-bool _isMeaningfulTitle(String? s) {
-  if (s == null) return false;
-  final t = s.trim();
-  return t.isNotEmpty && t != '.' && t != '…' && t != '...';
-}
 
 class ChannelPostDetailScreen extends ConsumerStatefulWidget {
   final int channelId;
@@ -66,23 +62,6 @@ class _ChannelPostDetailScreenState
 
   PostModel get _displayPost => _originalPost ?? _post!;
 
-  String _recipeTitle(Map<String, dynamic>? body) {
-    final nestedRecipe = body?['recipe'];
-    final postTitle = _displayPost.title?.trim();
-    final bodyTitle = body?['title']?.toString().trim();
-    final translated = body?['translated_title']?.toString().trim();
-    final bodyName = body?['name']?.toString().trim();
-    String? nestedTitle;
-    if (nestedRecipe is Map<String, dynamic>) {
-      nestedTitle = nestedRecipe['title']?.toString().trim();
-    }
-    if (_isMeaningfulTitle(postTitle)) return postTitle!;
-    if (bodyTitle != null && bodyTitle.isNotEmpty) return bodyTitle;
-    if (translated != null && translated.isNotEmpty) return translated;
-    if (bodyName != null && bodyName.isNotEmpty) return bodyName;
-    if (nestedTitle != null && nestedTitle.isNotEmpty) return nestedTitle;
-    return 'Пост';
-  }
 
   @override
   void initState() {
@@ -408,7 +387,8 @@ class _ChannelPostDetailScreenState
   Widget _buildPostContent() {
     final p = _displayPost;
     final scheme = Theme.of(context).colorScheme;
-    final showTitle = p.type == 'recipe' || _isMeaningfulTitle(p.title);
+    final showTitle =
+        resolvePostDisplayTitle(title: p.title, body: p.body) != null;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -416,7 +396,7 @@ class _ChannelPostDetailScreenState
         children: [
           if (showTitle)
             Text(
-              p.type == 'recipe' ? _recipeTitle(p.body) : p.title!,
+              displayTitleForPost(p),
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,

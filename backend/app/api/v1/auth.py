@@ -206,7 +206,7 @@ async def register(
             },
         )
     
-    # Создаем пользователя (5 стартовых AI scan, база для суточного начисления)
+    # Создаем пользователя (scan_credits поле legacy; kitchen AI-scan retired)
     from datetime import datetime
 
     from app.services.ai_scan_credits_service import FREE_START
