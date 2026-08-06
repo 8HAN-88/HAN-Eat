@@ -24,6 +24,7 @@ class ChatMediaComposeResult {
     required this.files,
     required this.caption,
     this.schedule = false,
+    this.hasSpoiler = false,
     this.isPaid = false,
     this.priceStars = 0,
   });
@@ -31,6 +32,7 @@ class ChatMediaComposeResult {
   final List<XFile> files;
   final String caption;
   final bool schedule;
+  final bool hasSpoiler;
   final bool isPaid;
   final int priceStars;
 }
@@ -51,6 +53,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
   late List<XFile> _files;
   final Map<int, Uint8List?> _previews = {};
   int _index = 0;
+  bool _hasSpoiler = false;
   bool _isPaid = false;
 
   @override
@@ -103,6 +106,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
       files: List<XFile>.from(_files),
       caption: _caption.text.trim(),
       schedule: schedule,
+      hasSpoiler: _hasSpoiler,
       isPaid: _isPaid && price > 0 && !schedule,
       priceStars: _isPaid ? price : 0,
     );
@@ -232,6 +236,19 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                       ),
                     ),
                   ),
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  secondary: Icon(
+                    Icons.blur_on_rounded,
+                    color: scheme.secondary,
+                  ),
+                  title: const Text('Спойлер'),
+                  subtitle: const Text(
+                    'Медиа будет размыто, пока получатель не нажмёт',
+                  ),
+                  value: _hasSpoiler,
+                  onChanged: (v) => setState(() => _hasSpoiler = v),
+                ),
                 SwitchListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   secondary: Icon(Icons.lock_rounded, color: scheme.secondary),

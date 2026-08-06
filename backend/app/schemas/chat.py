@@ -66,6 +66,7 @@ class MessageResponse(BaseModel):
     read_count: int = 0
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = None
+    has_spoiler: bool = False
     # Telegram Stars paid media
     is_paid: bool = False
     price_stars: int = 0
@@ -236,6 +237,7 @@ class SendMessageRequest(BaseModel):
     silent: bool = False
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = Field(default=None, max_length=64)
+    has_spoiler: bool = False
     # Telegram Stars paid media (image/video/file).
     is_paid: bool = False
     price_stars: int = Field(default=0, ge=0, le=100000)
@@ -260,6 +262,7 @@ class ScheduleMessageRequest(BaseModel):
     silent: bool = False
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = Field(default=None, max_length=64)
+    has_spoiler: bool = False
 
 
 class ScheduledMessageResponse(BaseModel):
@@ -275,6 +278,7 @@ class ScheduledMessageResponse(BaseModel):
     silent: bool = False
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = None
+    has_spoiler: bool = False
     status: str
     created_at: datetime
 

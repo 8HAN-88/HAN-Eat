@@ -752,6 +752,7 @@ class ChatService {
     bool silent = false,
     bool disableWebpagePreview = false,
     String? mediaGroupId,
+    bool hasSpoiler = false,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -769,6 +770,7 @@ class ChatService {
       silent: silent,
       disableWebpagePreview: disableWebpagePreview,
       mediaGroupId: mediaGroupId,
+      hasSpoiler: hasSpoiler,
       mediaUrl: mediaUrl,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
@@ -806,6 +808,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     String? mediaGroupId,
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -818,6 +821,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       mediaGroupId: mediaGroupId,
+      hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
     );
@@ -854,6 +858,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     String? mediaGroupId,
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -866,6 +871,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       mediaGroupId: mediaGroupId,
+      hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
     );
@@ -1027,6 +1033,7 @@ class ChatService {
     bool silent = false,
     bool disableWebpagePreview = false,
     String? mediaGroupId,
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -1047,6 +1054,7 @@ class ChatService {
         if (disableWebpagePreview) 'disable_webpage_preview': true,
         if (mediaGroupId != null && mediaGroupId.isNotEmpty)
           'media_group_id': mediaGroupId,
+        if (hasSpoiler) 'has_spoiler': true,
         if (isPaid) 'is_paid': true,
         if (isPaid && priceStars > 0) 'price_stars': priceStars,
       }),
@@ -1066,6 +1074,7 @@ class ChatService {
     bool silent = false,
     bool disableWebpagePreview = false,
     String? mediaGroupId,
+    bool hasSpoiler = false,
     String? mediaUrl,
     int? replyToMessageId,
     String? clientMessageId,
@@ -1095,6 +1104,7 @@ class ChatService {
         if (disableWebpagePreview) 'disable_webpage_preview': true,
         if (mediaGroupId != null && mediaGroupId.isNotEmpty)
           'media_group_id': mediaGroupId,
+        if (hasSpoiler) 'has_spoiler': true,
       }),
     );
     _ensureOk(response, 'Не удалось запланировать сообщение');

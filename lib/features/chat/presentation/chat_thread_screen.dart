@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -352,6 +353,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _searchBackfillSeq = 0;
   bool _jumpingToDate = false;
   final List<ChatMessage> _pinnedMessages = [];
+  final Set<int> _revealedSpoilerIds = <int>{};
   int _pinnedBannerIndex = 0;
   ChatMessage? get _pinnedMessage {
     if (_pinnedMessages.isEmpty) return null;
@@ -1579,6 +1581,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isRead: false,
       replyToMessageId: pending.replyToMessageId,
       mediaGroupId: pending.mediaGroupId,
+      hasSpoiler: pending.hasSpoiler,
+      isPaid: pending.isPaid,
+      priceStars: pending.priceStars,
+      purchased: true,
     );
     setState(() {
       _pendingMediaByTempId[pending.tempId] = pending;
@@ -1799,6 +1805,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             mediaGroupId: pending.mediaGroupId,
+            hasSpoiler: pending.hasSpoiler,
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
           );
@@ -1814,6 +1821,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             mediaGroupId: pending.mediaGroupId,
+            hasSpoiler: pending.hasSpoiler,
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
           );
@@ -8237,6 +8245,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ? () => unawaited(_keepReceivedGift(msg))
           : null,
       giftActionBusy: _giftActionMessageIds.contains(msg.id),
+      spoilerRevealed: _revealedSpoilerIds.contains(msg.id),
+      onRevealSpoiler: interactive && msg.hasSpoiler
+          ? () => setState(() => _revealedSpoilerIds.add(msg.id))
+          : null,
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
@@ -10953,12 +10965,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await _scheduleGallerySelection(
         composed.files,
         caption: composed.caption,
+        hasSpoiler: composed.hasSpoiler,
       );
       return;
     }
     await _sendGallerySelection(
       composed.files,
       caption: composed.caption,
+      hasSpoiler: composed.hasSpoiler,
       isPaid: composed.isPaid,
       priceStars: composed.priceStars,
     );
@@ -10967,6 +10981,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _scheduleGallerySelection(
     List<XFile> files, {
     String caption = '',
+    bool hasSpoiler = false,
   }) async {
     if (files.isEmpty) return;
     final delivery = await _pickScheduleDelivery();
@@ -11014,6 +11029,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
           mediaGroupId: mediaGroupId,
+          hasSpoiler: hasSpoiler,
           replyToMessageId: i == 0 ? _replyTo?.id : null,
           clientMessageId: const Uuid().v4(),
         );
@@ -11039,6 +11055,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendGallerySelection(
     List<XFile> files, {
     String caption = '',
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -11074,6 +11091,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await _normalizeVideoFileForUpload(file),
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
+          hasSpoiler: hasSpoiler,
           isPaid: isPaid,
           priceStars: priceStars,
         );
@@ -11082,6 +11100,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           file,
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
+          hasSpoiler: hasSpoiler,
           isPaid: isPaid,
           priceStars: priceStars,
         );
@@ -11656,6 +11675,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String? clientMessageId,
     String caption = '',
     String? mediaGroupId,
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -11684,6 +11704,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       previewBytes: previewBytes,
       payloadBytes: previewBytes,
       mediaGroupId: mediaGroupId,
+      hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
     ));
@@ -11695,6 +11716,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String? clientMessageId,
     String caption = '',
     String? mediaGroupId,
+    bool hasSpoiler = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -11713,6 +11735,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       caption: caption,
       totalBytes: totalBytes,
       mediaGroupId: mediaGroupId,
+      hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
     ));
@@ -13974,6 +13997,7 @@ class _PendingMediaSend {
     this.payloadBytes,
     this.silent = false,
     this.mediaGroupId,
+    this.hasSpoiler = false,
     this.isPaid = false,
     this.priceStars = 0,
   });
@@ -13992,6 +14016,7 @@ class _PendingMediaSend {
   Uint8List? payloadBytes;
   final bool silent;
   final String? mediaGroupId;
+  final bool hasSpoiler;
   final bool isPaid;
   final int priceStars;
   String? uploadedMediaUrl;
@@ -14095,6 +14120,8 @@ class _Bubble extends StatelessWidget {
     this.onConvertGift,
     this.onKeepGift,
     this.giftActionBusy = false,
+    this.spoilerRevealed = false,
+    this.onRevealSpoiler,
   });
 
   final ChatMessage message;
@@ -14106,6 +14133,8 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onConvertGift;
   final VoidCallback? onKeepGift;
   final bool giftActionBusy;
+  final bool spoilerRevealed;
+  final VoidCallback? onRevealSpoiler;
   /// Still sending to server (Telegram clock icon).
   final bool isPending;
   /// Send failed (tap to retry).
@@ -14926,8 +14955,9 @@ class _Bubble extends StatelessWidget {
         ),
       );
     } else if (isImage) {
+      final spoilerHidden = message.hasSpoiler && !spoilerRevealed;
       final image = GestureDetector(
-        onTap: onImageTap,
+        onTap: spoilerHidden ? onRevealSpoiler : onImageTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 320),
           child: Builder(
@@ -14937,7 +14967,7 @@ class _Bubble extends StatelessWidget {
               );
               final animated = _chatIsGifMediaUrl(resolved) ||
                   _chatIsGifMediaUrl(message.mediaUrl!);
-              return CachedNetworkImage(
+              final raw = CachedNetworkImage(
                 imageUrl: resolved,
                 fit: BoxFit.cover,
                 memCacheWidth: animated ? null : 720,
@@ -14975,6 +15005,40 @@ class _Bubble extends StatelessWidget {
                     ),
                   ),
                 ),
+              );
+              if (!spoilerHidden) return raw;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  ImageFiltered(
+                    imageFilter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                    child: raw,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.blur_on, color: Colors.white, size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'Спойлер',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -15029,12 +15093,54 @@ class _Bubble extends StatelessWidget {
         child: sticker,
       );
     } else if (isVideo) {
+      final spoilerHidden = message.hasSpoiler && !spoilerRevealed;
       final video = ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 280),
-        child: InlineVideoPlayer(
-          videoUrl: message.mediaUrl!,
-          onTap: onVideoTap,
-        ),
+        child: spoilerHidden
+            ? GestureDetector(
+                onTap: onRevealSpoiler,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    ImageFiltered(
+                      imageFilter:
+                          ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                      child: InlineVideoPlayer(
+                        videoUrl: message.mediaUrl!,
+                        onTap: null,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.blur_on, color: Colors.white, size: 18),
+                          SizedBox(width: 6),
+                          Text(
+                            'Спойлер',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : InlineVideoPlayer(
+                videoUrl: message.mediaUrl!,
+                onTap: onVideoTap,
+              ),
       );
 
       if (hasCaption) {

@@ -2714,6 +2714,7 @@ class ChatService:
         silent: bool = False,
         disable_webpage_preview: bool = False,
         media_group_id: Optional[str] = None,
+        has_spoiler: bool = False,
         is_paid: bool = False,
         price_stars: int = 0,
     ) -> tuple[Message, bool]:
@@ -2741,6 +2742,7 @@ class ChatService:
         group_id = self._normalize_media_group_id(media_group_id, msg_type)
         paid = bool(is_paid) and msg_type in ("image", "video", "file")
         stars = max(0, int(price_stars or 0)) if paid else 0
+        spoiler = bool(has_spoiler) and msg_type in ("image", "video")
 
         msg = Message(
             conversation_id=conversation_id,
@@ -2753,6 +2755,7 @@ class ChatService:
             inline_keyboard_json=inline_keyboard_json,
             disable_webpage_preview=bool(disable_webpage_preview),
             media_group_id=group_id,
+            has_spoiler=spoiler,
             is_paid=paid,
             price_stars=stars,
         )
@@ -2918,6 +2921,7 @@ class ChatService:
             is_paid=src_paid,
             price_stars=src_price,
             media_group_id=getattr(src, "media_group_id", None),
+            has_spoiler=bool(getattr(src, "has_spoiler", False)),
         )
         if as_copy:
             msg.forward_from_user_id = None
@@ -3146,6 +3150,7 @@ class ChatService:
         silent: bool = False,
         disable_webpage_preview: bool = False,
         media_group_id: Optional[str] = None,
+        has_spoiler: bool = False,
         media_url: Optional[str] = None,
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
@@ -3198,6 +3203,7 @@ class ChatService:
             media_group_id=self._normalize_media_group_id(
                 media_group_id, msg_type
             ),
+            has_spoiler=bool(has_spoiler) and msg_type in ("image", "video"),
             target_user_id=target_user_id,
             status="pending",
         )
@@ -3377,6 +3383,7 @@ class ChatService:
                         getattr(item, "disable_webpage_preview", False)
                     ),
                     media_group_id=getattr(item, "media_group_id", None),
+                    has_spoiler=bool(getattr(item, "has_spoiler", False)),
                 )
                 # Paid-DM fee charged inside send_message (before notify).
                 item.status = "sent"

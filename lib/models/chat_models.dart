@@ -243,6 +243,7 @@ class ChatMessage {
     this.readCount = 0,
     this.disableWebpagePreview = false,
     this.mediaGroupId,
+    this.hasSpoiler = false,
     this.isPaid = false,
     this.priceStars = 0,
     this.purchased = true,
@@ -273,6 +274,8 @@ class ChatMessage {
   final bool disableWebpagePreview;
   /// Shared id for multi-photo/video albums.
   final String? mediaGroupId;
+  /// Telegram media spoiler — blur until tapped.
+  final bool hasSpoiler;
   final bool isPaid;
   final int priceStars;
   final bool purchased;
@@ -357,6 +360,7 @@ class ChatMessage {
       mediaGroupId: (json['media_group_id'] as String?)?.trim().isEmpty == true
           ? null
           : (json['media_group_id'] as String?)?.trim(),
+      hasSpoiler: json['has_spoiler'] as bool? ?? false,
       isPaid: json['is_paid'] as bool? ?? false,
       priceStars: _parseInt(json['price_stars']),
       purchased: json['purchased'] as bool? ??
@@ -372,6 +376,7 @@ class ChatMessage {
     int? readCount,
     bool? disableWebpagePreview,
     String? mediaGroupId,
+    bool? hasSpoiler,
     String? content,
     String? mediaUrl,
     DateTime? editedAt,
@@ -403,6 +408,7 @@ class ChatMessage {
       disableWebpagePreview:
           disableWebpagePreview ?? this.disableWebpagePreview,
       mediaGroupId: mediaGroupId ?? this.mediaGroupId,
+      hasSpoiler: hasSpoiler ?? this.hasSpoiler,
       isPaid: isPaid ?? this.isPaid,
       priceStars: priceStars ?? this.priceStars,
       purchased: purchased ?? this.purchased,
