@@ -2620,6 +2620,25 @@ class ChatService:
             raise ValueError("empty_poll")
         if msg_type == "location" and not content.strip():
             raise ValueError("empty_location")
+        if msg_type == "story_reply":
+            if not content.strip():
+                raise ValueError("empty_story_reply")
+            try:
+                import json as _json
+
+                data = _json.loads(content)
+            except Exception as exc:
+                raise ValueError("invalid_story_reply") from exc
+            if not isinstance(data, dict):
+                raise ValueError("invalid_story_reply")
+            story_id = data.get("story_id")
+            text = (data.get("text") or "").strip()
+            if not isinstance(story_id, int) or story_id <= 0:
+                raise ValueError("invalid_story_reply")
+            if not text:
+                raise ValueError("empty_story_reply")
+            if len(text) > 1000:
+                raise ValueError("story_reply_too_long")
         if reply_to_message_id is not None:
             reply_target = (
                 self.db.query(Message.id)
@@ -3070,6 +3089,17 @@ class ChatService:
             preview = "🧩 Стикер"
         elif msg_type == "location":
             preview = "📍 Геопозиция"
+        elif msg_type == "story_reply":
+            preview = "🖼 Ответ на сторис"
+            try:
+                import json as _json
+
+                data = _json.loads(content or "{}")
+                text = (data.get("text") or "").strip()
+                if text:
+                    preview = f"🖼 {text[:100]}"
+            except Exception:
+                pass
         elif msg_type == "call":
             preview = "📞 Звонок"
             try:

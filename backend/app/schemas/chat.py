@@ -223,7 +223,7 @@ class PinMessageRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|gift)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|gift|story_reply)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)

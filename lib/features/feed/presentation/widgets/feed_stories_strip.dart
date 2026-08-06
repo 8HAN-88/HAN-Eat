@@ -94,6 +94,7 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
         authorId: story.author.id,
         authorName: story.author.name,
         authorAvatar: story.author.avatarUrl,
+        thumbnailUrl: story.thumbnailUrl,
         isVideo: story.isVideo,
         viewsCount: story.viewsCount,
         myReaction: story.myReaction,

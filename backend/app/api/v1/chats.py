@@ -1882,6 +1882,9 @@ async def send_message(
             "missing_media",
             "empty_poll",
             "empty_location",
+            "empty_story_reply",
+            "invalid_story_reply",
+            "story_reply_too_long",
             "invalid_reply",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
@@ -2006,6 +2009,9 @@ async def forward_message(
             "missing_media",
             "empty_poll",
             "empty_location",
+            "empty_story_reply",
+            "invalid_story_reply",
+            "story_reply_too_long",
             "invalid_reply",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)

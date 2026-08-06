@@ -10,6 +10,7 @@ import '../../../../widgets/telegram_ui.dart';
 import '../../../calls/call_message_labels.dart';
 import 'chat_contact_bubble.dart';
 import 'chat_location_bubble.dart';
+import 'chat_story_reply_bubble.dart';
 import 'chat_mute_duration_sheet.dart';
 
 class ChatHubTile extends StatelessWidget {
@@ -61,6 +62,8 @@ class ChatHubTile extends StatelessWidget {
         return Icons.emoji_emotions_outlined;
       case 'gift':
         return Icons.card_giftcard_rounded;
+      case 'story_reply':
+        return Icons.auto_awesome_rounded;
       case 'location':
         return Icons.location_on_rounded;
       case 'file':
@@ -573,6 +576,11 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   if (msg.type == 'gift') {
     final emoji = _giftEmojiFromContent(msg.content);
     return emoji == null ? 'Подарок' : 'Подарок $emoji';
+  }
+  if (msg.type == 'story_reply' ||
+      ChatStoryReplyPayload.tryParse(msg.content) != null) {
+    final reply = ChatStoryReplyPayload.tryParse(msg.content);
+    return reply?.previewText.replaceFirst('🖼 ', '') ?? 'Ответ на сторис';
   }
   if (msg.type == 'location' ||
       ChatLocationPayload.tryParse(msg.content) != null) {
