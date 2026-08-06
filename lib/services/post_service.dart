@@ -305,12 +305,6 @@ class PostService {
     String? description,
     List<String>? tags,
     List<Map<String, String>>? media,
-    List<String>? ingredients,
-    List<Map<String, dynamic>>? steps,
-    int? prepTimeMin,
-    int? cookTimeMin,
-    int? servings,
-    int? calories,
     String? linkUrl,
     String? linkPreview,
     String? pollQuestion,
@@ -329,12 +323,6 @@ class PostService {
     if (description != null) body['description'] = description;
     if (tags != null) body['tags'] = tags;
     if (media != null) body['media'] = media;
-    if (ingredients != null) body['ingredients'] = ingredients;
-    if (steps != null) body['steps'] = steps;
-    if (prepTimeMin != null) body['prep_time_min'] = prepTimeMin;
-    if (cookTimeMin != null) body['cook_time_min'] = cookTimeMin;
-    if (servings != null) body['servings'] = servings;
-    if (calories != null) body['calories'] = calories;
     if (linkUrl != null) {
       body['link'] = {
         'url': linkUrl,

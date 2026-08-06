@@ -61,7 +61,7 @@ class YooKassaService:
 
     @staticmethod
     def receipt_item_description(product: str, plan: str = "monthly") -> str:
-        names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+        names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
         period = "1 мес." if plan == "monthly" else "1 год"
         return f"Подписка {names.get(product, product)} ({period})"
 
@@ -109,7 +109,7 @@ class YooKassaService:
         user_email: str,
         amount: float,
         plan: str,
-        description: str = "Подписка H.A.N. Pro",
+        description: str = "Подписка HanWe Pro",
         return_url: Optional[str] = None,
         product: str = "pro",
         receipt_description: Optional[str] = None,

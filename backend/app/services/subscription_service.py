@@ -59,7 +59,7 @@ def upgrade_options_for_tier(tier: SubscriptionTier, is_active: bool) -> list:
         options.append(
             {
                 "product": "pro",
-                "name": "H.A.N. Pro",
+                "name": "HanWe Pro",
                 "monthly_price": TIER_PRICES_RUB["pro"](),
                 "reason": "Добавит инструменты автора (Creator) к вашему AI",
             }
@@ -68,9 +68,9 @@ def upgrade_options_for_tier(tier: SubscriptionTier, is_active: bool) -> list:
         options.append(
             {
                 "product": "pro",
-                "name": "H.A.N. Pro",
+                "name": "HanWe Pro",
                 "monthly_price": TIER_PRICES_RUB["pro"](),
-                "reason": "Добавит AI-сканы и питание к Creator",
+                "reason": "Добавит AI-возможности к Creator",
             }
         )
     elif tier == "free":
@@ -87,9 +87,9 @@ def upgrade_options_for_tier(tier: SubscriptionTier, is_active: bool) -> list:
 
 def _tier_display(product: str) -> str:
     return {
-        "ai": "H.A.N. AI",
-        "creator": "H.A.N. Creator",
-        "pro": "H.A.N. Pro",
+        "ai": "HanWe AI",
+        "creator": "HanWe Creator",
+        "pro": "HanWe Pro",
     }.get(product, product)
 
 

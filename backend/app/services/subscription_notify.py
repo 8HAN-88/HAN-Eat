@@ -11,9 +11,9 @@ from app.services.notification_service import NotificationService
 logger = logging.getLogger(__name__)
 
 _PRODUCT_NAMES = {
-    "ai": "H.A.N. AI",
-    "creator": "H.A.N. Creator",
-    "pro": "H.A.N. Pro",
+    "ai": "HanWe AI",
+    "creator": "HanWe Creator",
+    "pro": "HanWe Pro",
 }
 
 

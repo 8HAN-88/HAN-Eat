@@ -122,11 +122,13 @@ def test_public() -> None:
     else:
         fail(f"system/readiness HTTP {c}")
 
-    c, _ = req("GET", "/ai-scan/limits")
-    if c == 200:
-        ok("ai-scan/limits")
+    c, retired = req("GET", "/ai-scan/limits")
+    if c == 410 and (
+        isinstance(retired, dict) and retired.get("code") == "kitchen_retired"
+    ):
+        ok("ai-scan retired (410)")
     else:
-        fail(f"ai-scan/limits HTTP {c}")
+        fail(f"ai-scan/limits expected 410 kitchen_retired, got HTTP {c}")
 
     c, prices = req("GET", "/payments/prices?country=RU")
     if c == 200 and isinstance(prices, dict):
@@ -183,7 +185,7 @@ def test_auth_feed_post(auth: dict) -> None:
 
 
 def test_payments_meal_plan(auth: dict) -> None:
-    section("payments + meal plan")
+    section("payments + kitchen retired")
     c, pay = req("GET", "/payments/readiness")
     if c == 200:
         ok("payments/readiness")
@@ -197,10 +199,12 @@ def test_payments_meal_plan(auth: dict) -> None:
         fail(f"payments/history HTTP {c}")
 
     c, limits = req("GET", "/meal-plans/limits", auth)
-    if c == 200 and "tier" in limits:
-        ok("meal-plans/limits")
+    if c == 410 and (
+        isinstance(limits, dict) and limits.get("code") == "kitchen_retired"
+    ):
+        ok("meal-plans retired (410)")
     else:
-        fail(f"meal-plans/limits HTTP {c} {limits}")
+        fail(f"meal-plans/limits expected 410 kitchen_retired, got HTTP {c} {limits}")
 
 
 def test_chats(auth: dict) -> None:

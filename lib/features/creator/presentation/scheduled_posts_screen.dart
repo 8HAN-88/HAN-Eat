@@ -191,7 +191,7 @@ class _ScheduledPostsScreenState extends ConsumerState<ScheduledPostsScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Доступно с тарифом H.A.N. Creator или Pro.',
+                'Доступно с тарифом HanWe Creator или Pro.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),

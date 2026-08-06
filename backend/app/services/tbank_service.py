@@ -43,7 +43,7 @@ class TBankService:
 
     @staticmethod
     def receipt_item_description(product: str, plan: str = "monthly") -> str:
-        names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+        names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
         period = "1 мес." if plan == "monthly" else "1 год"
         return f"Подписка {names.get(product, product)} ({period})"
 

@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_TIER_LABELS = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro", "free": "Free"}
+_TIER_LABELS = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro", "free": "Free"}
 
 
 def _tier_label(tier: Optional[str]) -> str:
@@ -75,7 +75,7 @@ def _ru_subscription_prices_response(
         "checkout_available": checkout_available,
         "tiers": {
             "ai": {
-                "name": "H.A.N. AI",
+                "name": "HanWe AI",
                 "monthly": {
                     "price": settings.AI_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -98,7 +98,7 @@ def _ru_subscription_prices_response(
                 ],
             },
             "creator": {
-                "name": "H.A.N. Creator",
+                "name": "HanWe Creator",
                 "monthly": {
                     "price": settings.CREATOR_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -119,7 +119,7 @@ def _ru_subscription_prices_response(
                 ],
             },
             "pro": {
-                "name": "H.A.N. Pro",
+                "name": "HanWe Pro",
                 "monthly": {
                     "price": settings.PRO_MONTHLY_PRICE_RUB,
                     "currency": "RUB",
@@ -128,8 +128,8 @@ def _ru_subscription_prices_response(
                 "trial_eligible": True,
                 "recommended": True,
                 "benefits": [
-                    "Всё из тарифа H.A.N. AI",
-                    "Всё из тарифа H.A.N. Creator",
+                    "Всё из тарифа HanWe AI",
+                    "Всё из тарифа HanWe Creator",
                     "Семейные AI-планы питания",
                     "Приоритетная поддержка",
                     "Сохранённые рецепты и посты офлайн",
@@ -243,7 +243,7 @@ async def create_stars_checkout(
 
     amount = float(package["price_rub"])
     stars = int(package["stars"])
-    description = f"H.A.N. Stars: {stars} звёзд"
+    description = f"HanWe Stars: {stars} звёзд"
     metadata_extra = {
         "package_id": request.package_id,
         "stars": str(stars),
@@ -409,7 +409,7 @@ async def create_checkout_session(
                     detail="Payment service (T-Bank) is not available",
                 )
 
-            tier_names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
             description = f"Подписка {tier_names.get(product, product)} (месяц)"
             if estimate.get("is_upgrade"):
                 description += (
@@ -485,7 +485,7 @@ async def create_checkout_session(
                     detail="Payment service (YooKassa) is not available"
                 )
             
-            tier_names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+            tier_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
             description = f"Подписка {tier_names.get(product, product)} (месяц)"
             if estimate.get("is_upgrade"):
                 description += (
@@ -1151,7 +1151,7 @@ async def get_subscription_prices(
 
 def _subscription_payment_dict(s: Subscription, svc: SubscriptionService) -> dict:
     product = getattr(s, "product", "pro") or "pro"
-    product_names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+    product_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
     refund_status = getattr(s, "refund_status", None) or "none"
     receipt_url = getattr(s, "receipt_url", None)
     if (
@@ -1499,7 +1499,7 @@ async def request_payment_refund(
             detail="Refund request already submitted",
         )
 
-    product_names = {"ai": "H.A.N. AI", "creator": "H.A.N. Creator", "pro": "H.A.N. Pro"}
+    product_names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
     product = getattr(sub, "product", "pro") or "pro"
     reason = (body.reason or "").strip() or "Прошу оформить возврат оплаты подписки."
     ticket = SupportTicket(

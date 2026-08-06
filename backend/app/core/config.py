@@ -8,7 +8,7 @@ from typing import List, Optional, Union, Any
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "H.A.N. Eat API"
+    APP_NAME: str = "HanWe API"
     APP_ENV: str = "development"
     DEBUG: bool = True
     # Разрешить POST /api/v1/subscriptions/create при APP_ENV=production (иначе только webhook’и оплаты)
@@ -142,7 +142,7 @@ class Settings(BaseSettings):
     EMAIL_SMTP_USE_TLS: bool = True
     EMAIL_SMTP_USE_SSL: bool = False
     EMAIL_FROM: str = ""
-    EMAIL_FROM_NAME: str = "HAN Eat"
+    EMAIL_FROM_NAME: str = "HanWe"
     # smtp (по умолчанию) или resend — HTTP API, обходит блокировки SMTP Яндекса с VPS
     EMAIL_PROVIDER: str = "smtp"
     RESEND_API_KEY: str = ""

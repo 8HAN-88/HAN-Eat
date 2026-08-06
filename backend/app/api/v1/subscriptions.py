@@ -95,7 +95,7 @@ async def start_subscription_trial(
         return {
             "success": True,
             "subscription": SubscriptionResponse.model_validate(sub),
-            "message": f"Пробный период H.A.N. {product.upper()} активирован",
+            "message": f"Пробный период HanWe {product.upper()} активирован",
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

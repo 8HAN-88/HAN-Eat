@@ -5,7 +5,7 @@ class SubscriptionCopy {
   // —— Soft paywall (legacy AiScanExhaustedPaywall widget) ——
   static const aiScanExhaustedTitle = 'Лимит AI на сегодня закончился';
   static const aiScanExhaustedSubtitle =
-      'Оформите H.A.N. AI, чтобы пользоваться AI без ограничений.';
+      'Оформите HanWe AI, чтобы пользоваться AI без ограничений.';
 
   static const aiScanPlusExhaustedTitle = 'AI временно недоступен';
   static const aiScanPlusExhaustedSubtitle =
@@ -66,11 +66,11 @@ class SubscriptionCopy {
   static String tierTitle(String id) {
     switch (id) {
       case 'ai':
-        return 'H.A.N. AI';
+        return 'HanWe AI';
       case 'creator':
-        return 'H.A.N. Creator';
+        return 'HanWe Creator';
       case 'pro':
-        return 'H.A.N. Pro';
+        return 'HanWe Pro';
       default:
         return id;
     }
@@ -125,8 +125,8 @@ class SubscriptionCopy {
   ];
 
   static const List<String> _proBenefits = [
-    'Всё из тарифа H.A.N. AI',
-    'Всё из тарифа H.A.N. Creator',
+    'Всё из тарифа HanWe AI',
+    'Всё из тарифа HanWe Creator',
     'Приоритетная поддержка',
     'Максимальный доступ ко всем функциям',
   ];

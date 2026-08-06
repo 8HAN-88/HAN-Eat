@@ -53,7 +53,7 @@ def require_creator_for_schedule(db: Session, user: User, scheduled_at: Optional
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Отложенная публикация доступна с тарифом H.A.N. Creator или Pro",
+                "message": "Отложенная публикация доступна с тарифом HanWe Creator или Pro",
             },
         )
 
@@ -154,7 +154,7 @@ def promote_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Продвижение доступно с тарифом H.A.N. Creator или Pro",
+                "message": "Продвижение доступно с тарифом HanWe Creator или Pro",
             },
         )
 
@@ -193,7 +193,7 @@ def unpromote_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Продвижение доступно с тарифом H.A.N. Creator или Pro",
+                "message": "Продвижение доступно с тарифом HanWe Creator или Pro",
             },
         )
     post.is_promoted = False
@@ -225,7 +225,7 @@ def pin_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Закрепление доступно с тарифом H.A.N. Creator или Pro",
+                "message": "Закрепление доступно с тарифом HanWe Creator или Pro",
             },
         )
 
@@ -261,7 +261,7 @@ def unpin_post(db: Session, post_id: int, user_id: int) -> Post:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Закрепление доступно с тарифом H.A.N. Creator или Pro",
+                "message": "Закрепление доступно с тарифом HanWe Creator или Pro",
             },
         )
     post.is_pinned = False
