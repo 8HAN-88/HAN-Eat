@@ -16,6 +16,7 @@ import '../../../services/server_config.dart';
 import '../../../widgets/telegram_photo_grid.dart';
 import '../../../widgets/inline_video_player.dart';
 import '../../../utils/number_formatter.dart';
+import '../../../utils/post_display_title.dart';
 import '../../../widgets/post_card_container.dart';
 import '../../../widgets/share_action_sheet.dart';
 import '../../../widgets/post_poll_section.dart';
@@ -51,11 +52,6 @@ String? _channelRepostUserComment(PostModel post) {
   return first;
 }
 
-bool _isMeaningfulTitle(String? s) {
-  if (s == null) return false;
-  final t = s.trim();
-  return t.isNotEmpty && t != '.' && t != '…' && t != '...';
-}
 
 class ChannelPostCard extends StatefulWidget {
   final PostModel post;
@@ -501,24 +497,6 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   // Используем утилиту для форматирования чисел
   String _formatCount(int count) => NumberFormatter.formatCount(count);
 
-  String _recipeTitle(PostModel post) {
-    final body = post.body;
-    final nestedRecipe = body?['recipe'];
-    final bodyTitle = body?['title']?.toString().trim();
-    final translated = body?['translated_title']?.toString().trim();
-    final bodyName = body?['name']?.toString().trim();
-    final postTitle = post.title?.trim();
-    String? nestedTitle;
-    if (nestedRecipe is Map<String, dynamic>) {
-      nestedTitle = nestedRecipe['title']?.toString().trim();
-    }
-    if (_isMeaningfulTitle(postTitle)) return postTitle!;
-    if (_isMeaningfulTitle(bodyTitle)) return bodyTitle!;
-    if (_isMeaningfulTitle(translated)) return translated!;
-    if (_isMeaningfulTitle(bodyName)) return bodyName!;
-    if (_isMeaningfulTitle(nestedTitle)) return nestedTitle!;
-    return 'Пост';
-  }
 
   Future<void> _openEditPost() async {
     final cid = widget.post.channelId ?? widget.channelId;
@@ -1032,11 +1010,11 @@ class _ChannelPostCardState extends State<ChannelPostCard>
               )
             else if (orig != null) ...[
               _buildMedia(orig),
-              if (orig.type == 'recipe' || _isMeaningfulTitle(orig.title))
+              if (resolvePostDisplayTitle(title: orig.title, body: orig.body) != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   child: Text(
-                    orig.type == 'recipe' ? _recipeTitle(orig) : orig.title!,
+                    displayTitleForPost(orig),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1073,8 +1051,8 @@ class _ChannelPostCardState extends State<ChannelPostCard>
             _buildChannelRepostSection(post)
           else ...[
             _buildMedia(post),
-            if (post.type == 'recipe' ||
-                (post.title != null && post.title!.isNotEmpty))
+            if (resolvePostDisplayTitle(title: post.title, body: post.body) !=
+                null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                 child: Row(
@@ -1082,9 +1060,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
                   children: [
                     Expanded(
                       child: Text(
-                        post.type == 'recipe'
-                            ? _recipeTitle(post)
-                            : post.title!,
+                        displayTitleForPost(post),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

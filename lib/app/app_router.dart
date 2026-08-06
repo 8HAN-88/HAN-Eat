@@ -250,23 +250,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return ChatsRoute.path;
         }
         // Legacy kitchen deep links → feed (+ one-shot notice)
-        if (loc == MenuRoute.path ||
-            loc == '/meal-plan' ||
-            loc.startsWith('/meal-plan/') ||
-            loc == '/shopping' ||
-            loc == '/shopping-list' ||
-            loc == '/shopping-import' ||
-            loc == '/create-recipe' ||
-            loc == CreateRecipeRoute.path ||
-            loc == '/categories' ||
-            loc == '/allergies' ||
-            loc == '/diet' ||
-            loc == '/diet-allergies' ||
-            loc == '/favorites' ||
-            loc == '/scan-result' ||
-            loc == '/cooking-mode' ||
-            loc.startsWith('/recipe/') ||
-            (loc.startsWith('/channel/') && loc.contains('/create-recipe'))) {
+        if (_isRetiredKitchenPath(loc)) {
           KitchenRemovedNotice.markPending();
           return FeedRoute.path;
         }
@@ -1276,6 +1260,28 @@ class ProfileTabRoute {
   static const name = 'profile_tab';
 }
 
+
+bool _isRetiredKitchenPath(String loc) {
+  if (loc == MenuRoute.path ||
+      loc == CreateRecipeRoute.path ||
+      loc == '/create-recipe' ||
+      loc == '/meal-plan' ||
+      loc.startsWith('/meal-plan/') ||
+      loc == '/shopping' ||
+      loc == '/shopping-list' ||
+      loc == '/shopping-import' ||
+      loc == '/categories' ||
+      loc == '/allergies' ||
+      loc == '/diet' ||
+      loc == '/diet-allergies' ||
+      loc == '/favorites' ||
+      loc == '/scan-result' ||
+      loc == '/cooking-mode' ||
+      loc.startsWith('/recipe/')) {
+    return true;
+  }
+  return loc.startsWith('/channel/') && loc.contains('/create-recipe');
+}
 
 /// Legacy kitchen paths (redirect to feed).
 class MenuRoute {

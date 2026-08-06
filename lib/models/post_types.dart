@@ -3,6 +3,7 @@
 enum PostType {
   text,
   photo,
+  /// Legacy kitchen post type still present in stored data.
   recipe,
   reel,
   link,

@@ -66,7 +66,8 @@ class PostLikerPreview {
 
 class PostModel {
   final int id;
-  final String type; // text | photo | recipe | reel
+  /// text | photo | reel | link | poll | …; `recipe` — legacy kitchen posts.
+  final String type;
   final String? title;
   final String? description;
   final String status;
@@ -102,8 +103,6 @@ class PostModel {
   final ChannelModel? channel;  // Информация о канале (если пост из канала)
   /// public | private | followers
   final String visibility;
-
-  bool get isPrivateRecipe => type == 'recipe' && visibility == 'private';
 
   PollData? get poll {
     final pollData = body?['poll'];

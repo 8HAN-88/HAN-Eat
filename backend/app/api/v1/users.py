@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, or_, and_, exists, case
 from typing import Optional
 from app.core.database import get_db
-from app.services.ai_scan_credits_service import AiScanCreditsService
 from app.api.dependencies import get_current_user, get_current_user_required
 from app.models.user import User
 from app.services.chat_service import ChatService
@@ -57,9 +56,8 @@ async def get_current_user_profile(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Получить профиль текущего пользователя (кредиты AI scan начисляются по суткам)."""
-    user = AiScanCreditsService(db).refresh_user(current_user.id)
-    return UserResponse.model_validate(user, context=_USER_ME_CONTEXT)
+    """Получить профиль текущего пользователя."""
+    return UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
 
 
 @router.post("/me/phone", response_model=LinkPhoneResponse)
