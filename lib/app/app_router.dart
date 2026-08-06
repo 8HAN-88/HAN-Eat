@@ -31,6 +31,7 @@ import '../features/legal/presentation/legal_consent_screen.dart';
 import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
 import '../features/settings/presentation/two_factor_setup_screen.dart';
+import '../features/settings/presentation/close_friends_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -687,6 +688,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: TwoFactorSetupRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: TwoFactorSetupScreen()),
+      ),
+      GoRoute(
+        path: CloseFriendsRoute.path,
+        name: CloseFriendsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: CloseFriendsScreen()),
       ),
       // Profile
       GoRoute(
@@ -1543,6 +1550,11 @@ class AccountSecurityRoute {
 class TwoFactorSetupRoute {
   static const path = '/two-factor-setup';
   static const name = 'two_factor_setup';
+}
+
+class CloseFriendsRoute {
+  static const path = '/close-friends';
+  static const name = 'close_friends';
 }
 
 class ProfileRoute {

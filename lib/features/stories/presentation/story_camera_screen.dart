@@ -24,6 +24,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   static const _visibilityOptions = <(String, String, IconData)>[
     ('public', 'Все', Icons.public),
     ('followers', 'Подписчики', Icons.group_outlined),
+    ('close_friends', 'Близкие', Icons.favorite_outline),
     ('private', 'Только я', Icons.lock_outline),
   ];
 

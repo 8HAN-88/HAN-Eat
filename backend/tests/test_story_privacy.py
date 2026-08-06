@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.v1 import stories as stories_api
 from app.core.database import Base
+from app.models.close_friend import CloseFriend
 from app.models.follower import Follower
 from app.models.story import Story, StoryReaction, StoryView
 from app.models.user import User
@@ -29,6 +30,7 @@ def db_session():
         tables=[
             User.__table__,
             Follower.__table__,
+            CloseFriend.__table__,
             Story.__table__,
             StoryView.__table__,
             StoryReaction.__table__,

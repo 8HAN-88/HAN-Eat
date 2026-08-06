@@ -26,7 +26,8 @@ class Story(Base):
     thumbnail_url = Column(Text, nullable=True)
     media_type = Column(String(20), nullable=False)  # image | video
     caption = Column(Text, nullable=True)
-    visibility = Column(String(20), default="public", nullable=False)  # public | followers | private
+    # public | followers | close_friends | private
+    visibility = Column(String(20), default="public", nullable=False)
     views_count = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)

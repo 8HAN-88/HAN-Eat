@@ -893,3 +893,89 @@ async def unblock_user(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Block not found")
     return {"ok": True}
 
+
+@router.get("/me/close-friends")
+async def list_close_friends(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.close_friend import CloseFriend
+
+    rows = (
+        db.query(CloseFriend, User)
+        .join(User, User.id == CloseFriend.friend_user_id)
+        .filter(
+            CloseFriend.user_id == current_user.id,
+            User.deleted_at.is_(None),
+        )
+        .order_by(CloseFriend.created_at.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": user.id,
+                "name": user.name,
+                "username": user.username,
+                "avatar_url": user.avatar_url,
+            }
+            for _, user in rows
+        ]
+    }
+
+
+@router.post("/me/close-friends/{friend_user_id}")
+async def add_close_friend(
+    friend_user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.close_friend import CloseFriend
+
+    if friend_user_id == current_user.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cannot add yourself")
+    friend = (
+        db.query(User)
+        .filter(User.id == friend_user_id, User.deleted_at.is_(None))
+        .first()
+    )
+    if not friend:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="User not found")
+    existing = (
+        db.query(CloseFriend)
+        .filter(
+            CloseFriend.user_id == current_user.id,
+            CloseFriend.friend_user_id == friend_user_id,
+        )
+        .first()
+    )
+    if existing is None:
+        db.add(
+            CloseFriend(user_id=current_user.id, friend_user_id=friend_user_id)
+        )
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/me/close-friends/{friend_user_id}")
+async def remove_close_friend(
+    friend_user_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.close_friend import CloseFriend
+
+    row = (
+        db.query(CloseFriend)
+        .filter(
+            CloseFriend.user_id == current_user.id,
+            CloseFriend.friend_user_id == friend_user_id,
+        )
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Close friend not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
