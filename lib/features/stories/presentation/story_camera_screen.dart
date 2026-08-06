@@ -18,7 +18,14 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   XFile? _selectedFile;
   bool _isVideo = false;
   bool _isPublishing = false;
+  String _visibility = 'public';
   final _captionController = TextEditingController();
+
+  static const _visibilityOptions = <(String, String, IconData)>[
+    ('public', 'Все', Icons.public),
+    ('followers', 'Подписчики', Icons.group_outlined),
+    ('private', 'Только я', Icons.lock_outline),
+  ];
 
   Future<void> _takePhoto() async {
     final XFile? photo = await _picker.pickImage(
@@ -58,6 +65,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
         caption: _captionController.text.trim().isEmpty
             ? null
             : _captionController.text.trim(),
+        visibility: _visibility,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -142,6 +150,47 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Кто увидит',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final option in _visibilityOptions)
+                      ChoiceChip(
+                        avatar: Icon(
+                          option.$3,
+                          size: 16,
+                          color: _visibility == option.$1
+                              ? Colors.black
+                              : Colors.white70,
+                        ),
+                        label: Text(option.$2),
+                        selected: _visibility == option.$1,
+                        onSelected: _isPublishing
+                            ? null
+                            : (_) => setState(() => _visibility = option.$1),
+                        selectedColor: Colors.white,
+                        labelStyle: TextStyle(
+                          color: _visibility == option.$1
+                              ? Colors.black
+                              : Colors.white,
+                        ),
+                        backgroundColor: Colors.white12,
+                        side: BorderSide.none,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
