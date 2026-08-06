@@ -316,6 +316,20 @@ class ChatPollAddOptionRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=120)
 
 
+class LiveLocationStartRequest(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    period_seconds: int = Field(..., description="900 | 3600 | 28800")
+    reply_to_message_id: Optional[int] = None
+    client_message_id: Optional[str] = Field(default=None, max_length=64)
+    silent: bool = False
+
+
+class LiveLocationUpdateRequest(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+
+
 class DirectChatRequest(BaseModel):
     user_id: int
 
