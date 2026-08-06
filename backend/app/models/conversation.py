@@ -26,6 +26,8 @@ class Conversation(Base):
     avatar_url = Column(Text, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     only_admins_can_post = Column(Boolean, default=False, nullable=False)
+    # Telegram-like Topics / Forum mode for groups.
+    is_forum = Column(Boolean, default=False, nullable=False)
     join_by_request_enabled = Column(Boolean, default=False, nullable=False)
     slow_mode_seconds = Column(Integer, default=0, nullable=False)
     anti_flood_max_messages_per_minute = Column(Integer, default=0, nullable=False)
@@ -242,6 +244,10 @@ class Message(Base):
     price_stars = Column(Integer, default=0, nullable=False)
     # Telegram-like fullscreen send effect (confetti, hearts, …).
     effect_id = Column(String(32), nullable=True)
+    # Forum topic (null = General / pre-forum messages).
+    topic_id = Column(
+        Integer, ForeignKey("forum_topics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class ScheduledMessage(Base):

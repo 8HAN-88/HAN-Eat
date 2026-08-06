@@ -24,6 +24,7 @@ from app.models.conversation import (
     MessageReaction,
     ScheduledMessage,
 )
+from app.models.forum_topic import ForumTopic
 from app.models.chat_folder import ChatFolder, ChatFolderItem
 from app.models.user import User
 from app.models.user_block import UserBlock
@@ -1316,6 +1317,169 @@ class ChatService:
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
 
+    def set_group_is_forum(
+        self, conversation_id: int, actor_id: int, enabled: bool
+    ) -> Conversation:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv = self._get_group_or_error(conversation_id)
+        if not self._can_change_group_info(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        was = bool(getattr(conv, "is_forum", False))
+        conv.is_forum = bool(enabled)
+        conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if conv.is_forum and not was:
+            self.ensure_general_topic(conversation_id, actor_id)
+        return conv
+
+    def ensure_general_topic(
+        self, conversation_id: int, actor_id: Optional[int] = None
+    ) -> ForumTopic:
+        existing = (
+            self.db.query(ForumTopic)
+            .filter(
+                ForumTopic.conversation_id == conversation_id,
+                ForumTopic.is_general.is_(True),
+            )
+            .first()
+        )
+        if existing:
+            return existing
+        topic = ForumTopic(
+            conversation_id=conversation_id,
+            title="General",
+            icon_emoji="💬",
+            created_by_user_id=actor_id,
+            is_general=True,
+        )
+        self.db.add(topic)
+        self.db.flush()
+        return topic
+
+    def list_forum_topics(
+        self,
+        conversation_id: int,
+        user_id: int,
+        *,
+        include_closed: bool = False,
+    ) -> List[ForumTopic]:
+        if not self._is_member(conversation_id, user_id):
+            raise ValueError("forbidden")
+        conv = self._get_group_or_error(conversation_id)
+        if not bool(getattr(conv, "is_forum", False)):
+            return []
+        self.ensure_general_topic(conversation_id, user_id)
+        q = self.db.query(ForumTopic).filter(
+            ForumTopic.conversation_id == conversation_id
+        )
+        if not include_closed:
+            q = q.filter(ForumTopic.closed_at.is_(None))
+        return q.order_by(
+            ForumTopic.is_general.desc(), ForumTopic.created_at.asc()
+        ).all()
+
+    def create_forum_topic(
+        self,
+        conversation_id: int,
+        actor_id: int,
+        title: str,
+        icon_emoji: Optional[str] = None,
+    ) -> ForumTopic:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        conv = self._get_group_or_error(conversation_id)
+        if not bool(getattr(conv, "is_forum", False)):
+            raise ValueError("not_a_forum")
+        if not self._can_change_group_info(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        clean = (title or "").strip()[:128]
+        if not clean:
+            raise ValueError("empty_title")
+        self.ensure_general_topic(conversation_id, actor_id)
+        emoji = (icon_emoji or "").strip()[:16] or None
+        topic = ForumTopic(
+            conversation_id=conversation_id,
+            title=clean,
+            icon_emoji=emoji,
+            created_by_user_id=actor_id,
+            is_general=False,
+        )
+        self.db.add(topic)
+        self.db.flush()
+        return topic
+
+    def update_forum_topic(
+        self,
+        conversation_id: int,
+        actor_id: int,
+        topic_id: int,
+        *,
+        title: Optional[str] = None,
+        closed: Optional[bool] = None,
+        icon_emoji: Optional[str] = None,
+    ) -> ForumTopic:
+        if not self._is_member(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        if not self._can_change_group_info(conversation_id, actor_id):
+            raise ValueError("forbidden")
+        topic = (
+            self.db.query(ForumTopic)
+            .filter(
+                ForumTopic.id == topic_id,
+                ForumTopic.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if topic is None:
+            raise ValueError("topic_not_found")
+        if title is not None:
+            clean = title.strip()[:128]
+            if not clean:
+                raise ValueError("empty_title")
+            if topic.is_general and clean.lower() not in ("general", "общий"):
+                # Allow rename of General but keep is_general.
+                pass
+            topic.title = clean
+        if icon_emoji is not None:
+            topic.icon_emoji = icon_emoji.strip()[:16] or None
+        if closed is not None:
+            if topic.is_general and closed:
+                raise ValueError("cannot_close_general")
+            topic.closed_at = (
+                datetime.now(timezone.utc).replace(tzinfo=None) if closed else None
+            )
+        topic.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.flush()
+        return topic
+
+    def _resolve_topic_for_send(
+        self, conversation_id: int, topic_id: Optional[int]
+    ) -> Optional[int]:
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if conv is None or conv.type != "group" or not bool(
+            getattr(conv, "is_forum", False)
+        ):
+            return None
+        general = self.ensure_general_topic(conversation_id)
+        resolved = int(topic_id) if topic_id is not None else int(general.id)
+        topic = (
+            self.db.query(ForumTopic)
+            .filter(
+                ForumTopic.id == resolved,
+                ForumTopic.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if topic is None:
+            raise ValueError("topic_not_found")
+        if topic.closed_at is not None:
+            raise ValueError("topic_closed")
+        return int(topic.id)
+
     def set_group_join_by_request_enabled(
         self, conversation_id: int, actor_id: int, enabled: bool
     ) -> Conversation:
@@ -2315,6 +2479,7 @@ class ChatService:
         cursor: Optional[int] = None,
         after_id: Optional[int] = None,
         limit: int = 50,
+        topic_id: Optional[int] = None,
     ) -> Tuple[List[Message], bool]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
@@ -2331,20 +2496,43 @@ class ChatService:
         )
         cleared_before = self._history_cleared_before_id(conversation_id, user_id) or 0
 
-        if after_id is not None:
-            rows = (
-                self.db.query(Message)
-                .filter(
-                    Message.conversation_id == conversation_id,
-                    Message.deleted_at.is_(None),
-                    Message.id > after_id,
-                    Message.id > cleared_before,
-                    ~Message.id.in_(hidden_ids),
-                )
-                .order_by(Message.id.asc())
-                .limit(limit + 1)
-                .all()
+        topic_filter = None
+        if topic_id is not None:
+            conv = (
+                self.db.query(Conversation)
+                .filter(Conversation.id == conversation_id)
+                .first()
             )
+            if conv is not None and bool(getattr(conv, "is_forum", False)):
+                topic = (
+                    self.db.query(ForumTopic)
+                    .filter(
+                        ForumTopic.id == topic_id,
+                        ForumTopic.conversation_id == conversation_id,
+                    )
+                    .first()
+                )
+                if topic is None:
+                    raise ValueError("topic_not_found")
+                if topic.is_general:
+                    topic_filter = or_(
+                        Message.topic_id == topic.id,
+                        Message.topic_id.is_(None),
+                    )
+                else:
+                    topic_filter = Message.topic_id == topic.id
+
+        if after_id is not None:
+            q = self.db.query(Message).filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+                Message.id > after_id,
+                Message.id > cleared_before,
+                ~Message.id.in_(hidden_ids),
+            )
+            if topic_filter is not None:
+                q = q.filter(topic_filter)
+            rows = q.order_by(Message.id.asc()).limit(limit + 1).all()
             has_more = len(rows) > limit
             if has_more:
                 rows = rows[:limit]
@@ -2360,6 +2548,8 @@ class ChatService:
             )
             .order_by(Message.id.desc())
         )
+        if topic_filter is not None:
+            q = q.filter(topic_filter)
         if cursor:
             q = q.filter(Message.id < cursor)
 
@@ -2737,6 +2927,7 @@ class ChatService:
         is_paid: bool = False,
         price_stars: int = 0,
         effect_id: Optional[str] = None,
+        topic_id: Optional[int] = None,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2754,6 +2945,7 @@ class ChatService:
         from app.services.message_effect_service import normalize_effect_id
 
         effect = normalize_effect_id(effect_id)
+        resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 
         conv = self._validate_message_payload(
             conversation_id=conversation_id,
@@ -2783,6 +2975,7 @@ class ChatService:
             is_paid=paid,
             price_stars=stars,
             effect_id=effect,
+            topic_id=resolved_topic_id,
         )
         self.db.add(msg)
 

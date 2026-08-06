@@ -345,6 +345,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   late ChatConversation _conversation;
   Map<int, String> _senderNames = {};
   List<ChatUserBrief> _groupMembers = [];
+  List<ChatForumTopic> _forumTopics = const [];
+  int? _selectedTopicId;
+  bool _forumTopicsLoading = false;
   bool _threadSearchOpen = false;
   bool _showOnlyFailedMessages = false;
   String _threadSearchQuery = '';
@@ -609,6 +612,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_loadBotCommands());
     unawaited(_refreshScheduledPendingCount());
     unawaited(_syncMuteSchedule());
+    if (_conversation.isForum) {
+      unawaited(_loadForumTopics(selectGeneralIfNeeded: true));
+    }
     _load(refresh: true);
     _startPolling();
     // Fallback poll; primary presence updates come via user.presence SSE.
@@ -1854,6 +1860,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             hasSpoiler: pending.hasSpoiler,
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
+            topicId: pending.topicId,
           );
           if (_chatIsGifMediaUrl(mediaUrl)) {
             unawaited(ChatRecentGifsStore.remember(mediaUrl));
@@ -1870,6 +1877,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             hasSpoiler: pending.hasSpoiler,
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
+            topicId: pending.topicId,
           );
         case _PendingMediaKind.file:
           msg = await ChatService.sendFile(
@@ -1881,6 +1889,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             silent: pending.silent,
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
+            topicId: pending.topicId,
           );
         case _PendingMediaKind.voice:
           msg = await ChatService.sendVoice(
@@ -1890,6 +1899,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             replyToMessageId: reply,
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
+            topicId: pending.topicId,
           );
       }
       if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
@@ -2684,9 +2694,198 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  bool _messageBelongsToSelectedTopic(ChatMessage msg) {
+    if (!_conversation.isForum) return true;
+    final selectedId = _selectedTopicId;
+    if (selectedId == null) return true;
+    ChatForumTopic? selected;
+    for (final t in _forumTopics) {
+      if (t.id == selectedId) {
+        selected = t;
+        break;
+      }
+    }
+    if (selected == null) return true;
+    if (selected.isGeneral) {
+      return msg.topicId == null || msg.topicId == selected.id;
+    }
+    return msg.topicId == selected.id;
+  }
+
+  int? get _activeTopicIdForSend =>
+      _conversation.isForum ? _selectedTopicId : null;
+
+  Future<void> _loadForumTopics({bool selectGeneralIfNeeded = false}) async {
+    if (!_conversation.isForum) {
+      if (_forumTopics.isNotEmpty || _selectedTopicId != null) {
+        setState(() {
+          _forumTopics = const [];
+          _selectedTopicId = null;
+        });
+      }
+      return;
+    }
+    setState(() => _forumTopicsLoading = true);
+    try {
+      final topics = await ChatService.listForumTopics(
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) return;
+      var selected = _selectedTopicId;
+      if (selectGeneralIfNeeded ||
+          selected == null ||
+          !topics.any((t) => t.id == selected)) {
+        int? generalId;
+        for (final t in topics) {
+          if (t.isGeneral) {
+            generalId = t.id;
+            break;
+          }
+        }
+        selected = generalId ?? (topics.isNotEmpty ? topics.first.id : null);
+      }
+      final changedTopic = selected != _selectedTopicId;
+      setState(() {
+        _forumTopics = topics;
+        _selectedTopicId = selected;
+        _forumTopicsLoading = false;
+      });
+      if (changedTopic) {
+        unawaited(_load(refresh: true));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _forumTopicsLoading = false);
+    }
+  }
+
+  Future<void> _selectForumTopic(int topicId) async {
+    if (_selectedTopicId == topicId) return;
+    setState(() => _selectedTopicId = topicId);
+    await _load(refresh: true);
+  }
+
+  Future<void> _createForumTopicDialog() async {
+    if (!_conversation.amICanChangeInfo &&
+        _conversation.createdByUserId !=
+            AuthService.instance.currentUser?.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нет права создавать темы')),
+      );
+      return;
+    }
+    final controller = TextEditingController();
+    final title = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Новая тема'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 128,
+          decoration: const InputDecoration(
+            labelText: 'Название',
+            hintText: 'Например: Новости',
+          ),
+          onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (title == null || title.isEmpty || !mounted) return;
+    try {
+      final topic = await ChatService.createForumTopic(
+        conversationId: widget.conversationId,
+        title: title,
+      );
+      if (!mounted) return;
+      setState(() {
+        _forumTopics = [..._forumTopics, topic];
+        _selectedTopicId = topic.id;
+      });
+      await _load(refresh: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Widget _buildForumTopicsStrip(ColorScheme scheme) {
+    if (!_conversation.isForum) return const SizedBox.shrink();
+    final canCreate = _conversation.amICanChangeInfo ||
+        (_conversation.createdByUserId != null &&
+            _conversation.createdByUserId ==
+                AuthService.instance.currentUser?.id);
+    return Material(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF18222D)
+          : scheme.surface,
+      child: SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          children: [
+            if (_forumTopicsLoading && _forumTopics.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              ),
+            for (final topic in _forumTopics)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Text(topic.displayLabel),
+                  selected: _selectedTopicId == topic.id,
+                  onSelected: (_) => unawaited(_selectForumTopic(topic.id)),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            if (canCreate)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ActionChip(
+                  avatar: const Icon(Icons.add, size: 16),
+                  label: const Text('Тема'),
+                  onPressed: () => unawaited(_createForumTopicDialog()),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Вставляет или обновляет сообщение, убирая оптимистичные и повторные копии.
   /// Возвращает true, если сообщение добавлено впервые.
   bool _integrateMessage(ChatMessage msg, {int? removeTempId}) {
+    if (!_messageBelongsToSelectedTopic(msg)) {
+      if (removeTempId != null) {
+        _messages.removeWhere((m) => m.id == removeTempId);
+      }
+      return false;
+    }
     if (removeTempId != null) {
       _messages.removeWhere((m) => m.id == removeTempId);
       final removedFailedText = _failedTextSends.remove(removeTempId) != null;
@@ -3546,6 +3745,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         voiceDurationSec: row['voice_duration_sec'] as int?,
         totalBytes: bytes.length,
         previewBytes: kind == _PendingMediaKind.image ? bytes : null,
+        topicId: row['topic_id'] as int? ?? _activeTopicIdForSend,
       );
       pending.payloadBytes = bytes;
       pending.uploadedMediaUrl = row['uploaded_media_url'] as String?;
@@ -5406,6 +5606,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         names = {for (final m in loaded) m.id: m.displayName};
       }
       if (!mounted) return;
+      final forumChanged = conv.isForum != _conversation.isForum;
       setState(() {
         _conversation = conv;
         _pinned = conv.pinned;
@@ -5421,6 +5622,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_syncMuteSchedule());
       unawaited(_hydrateWallpaperFromConversation());
       unawaited(_loadBotCommands());
+      if (forumChanged || conv.isForum) {
+        unawaited(
+          _loadForumTopics(selectGeneralIfNeeded: forumChanged && conv.isForum),
+        );
+      }
     } catch (_) {}
   }
 
@@ -6963,11 +7169,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           conversation: _conversation,
           onConversationChanged: (conv) {
             if (!mounted) return;
+            final forumChanged = conv.isForum != _conversation.isForum;
             setState(() {
               _conversation = conv;
               _muted = conv.muted;
             });
             _reconcileSlowModeCooldownWithConversation();
+            if (forumChanged || conv.isForum) {
+              unawaited(
+                _loadForumTopics(
+                  selectGeneralIfNeeded: forumChanged && conv.isForum,
+                ),
+              );
+            }
+            if (forumChanged && !conv.isForum) {
+              unawaited(_load(refresh: true));
+            }
           },
           onLeftGroup: () {
             if (mounted) Navigator.of(context).pop();
@@ -7307,6 +7524,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         replyToMessageId: _replyTo?.id,
         totalBytes: totalBytes,
         silent: mode == 'silent',
+        topicId: _activeTopicIdForSend,
       ));
     } finally {
       _voiceSending = false;
@@ -9588,6 +9806,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final result = await ChatService.listMessages(
         conversationId: widget.conversationId,
         cursor: refresh ? null : _nextCursor,
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted || seq != _messageLoadSeq) return;
       setState(() {
@@ -9665,6 +9884,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final fresh = await ChatService.listMessagesAfter(
         conversationId: widget.conversationId,
         afterId: lastId,
+        topicId: _activeTopicIdForSend,
       );
       _pollFailureCount = 0;
       if (!mounted || fresh.isEmpty) return;
@@ -9821,6 +10041,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             silent: pending.silent,
             disableWebpagePreview: pending.disableWebpagePreview,
             effectId: pending.effectId,
+            topicId: pending.topicId,
           );
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
@@ -10111,6 +10332,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         firstUrl == _composerLinkPreviewDismissedUrl;
     _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
+    final topicId = _activeTopicIdForSend;
     final optimistic = ChatMessage(
       id: tempId,
       conversationId: widget.conversationId,
@@ -10121,6 +10343,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isMine: true,
       replyToMessageId: replyId,
       disableWebpagePreview: disablePreview,
+      topicId: topicId,
     );
     final pending = _PendingTextSend(
       text: text,
@@ -10130,6 +10353,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       silent: silent,
       disableWebpagePreview: disablePreview,
       effectId: effectId,
+      topicId: topicId,
     );
     setState(() {
       _messages.add(optimistic);
@@ -10571,6 +10795,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             caption: item.content,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'video':
@@ -10582,6 +10807,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             caption: item.content,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'video_note':
@@ -10593,6 +10819,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             durationSec: int.tryParse(item.content.trim()) ?? 1,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'voice':
@@ -10604,6 +10831,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             durationSec: int.tryParse(item.content.trim()) ?? 1,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'file':
@@ -10616,6 +10844,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             fileName:
                 item.content.trim().isEmpty ? 'file' : item.content.trim(),
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'sticker':
@@ -10627,6 +10856,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             emoji: item.content,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'location':
@@ -10634,6 +10864,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             content: item.content,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         case 'poll':
@@ -10648,6 +10879,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             options: poll.options.map((o) => o.text).toList(),
             settings: poll.settings.toJson(),
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
           break;
         default:
@@ -10655,6 +10887,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             content: item.content,
             replyToMessageId: replyId,
+            topicId: _activeTopicIdForSend,
           );
       }
     } catch (e) {
@@ -11110,6 +11343,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: resolved,
         caption: '',
         replyToMessageId: _replyTo?.id,
+        topicId: _activeTopicIdForSend,
       );
       unawaited(ChatRecentGifsStore.remember(resolved));
       if (!mounted) return;
@@ -11132,6 +11366,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
         emoji: (emoji ?? '').trim(),
         replyToMessageId: _replyTo?.id,
+        topicId: _activeTopicIdForSend,
       );
       _controller.clear();
       setState(() => _replyTo = null);
@@ -11355,6 +11590,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         mediaUrl: ServerConfig.resolveMediaUrl(url),
         durationSec: durationSec,
         replyToMessageId: _replyTo?.id,
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() => _replyTo = null);
@@ -11466,6 +11702,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         content: content,
         replyToMessageId: _replyTo?.id,
         silent: mode == 'silent',
+        topicId: _activeTopicIdForSend,
       );
       setState(() => _replyTo = null);
       AppHaptics.selection();
@@ -11530,6 +11767,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         content: text,
         replyToMessageId: _replyTo?.id,
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() {
@@ -11599,6 +11837,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         settings: draft.settings.toJson(),
         replyToMessageId: _replyTo?.id,
         silent: mode == 'silent',
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() {
@@ -11660,6 +11899,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         fileName: name,
         replyToMessageId: _replyTo?.id,
         silent: mode == 'silent',
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() {
@@ -11952,6 +12192,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
+      topicId: _activeTopicIdForSend,
     ));
   }
 
@@ -11983,6 +12224,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
       priceStars: priceStars,
+      topicId: _activeTopicIdForSend,
     ));
   }
 
@@ -12063,6 +12305,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyToId ?? _replyTo?.id,
       totalBytes: totalBytes,
       silent: mode == 'silent',
+      topicId: _activeTopicIdForSend,
     ));
   }
 
@@ -12709,6 +12952,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   child: LinearProgressIndicator(minHeight: 2),
                 ),
               ),
+              if (_conversation.isForum) _buildForumTopicsStrip(scheme),
               _animatedVisibility(
                 visible: _showOnlyFailedMessages,
                 keyName: 'thread-failed-filter',
@@ -14263,6 +14507,7 @@ class _PendingMediaSend {
     this.hasSpoiler = false,
     this.isPaid = false,
     this.priceStars = 0,
+    this.topicId,
   });
 
   final int tempId;
@@ -14282,6 +14527,7 @@ class _PendingMediaSend {
   final bool hasSpoiler;
   final bool isPaid;
   final int priceStars;
+  final int? topicId;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -14297,6 +14543,7 @@ class _PendingTextSend {
     this.silent = false,
     this.disableWebpagePreview = false,
     this.effectId,
+    this.topicId,
   });
 
   final String text;
@@ -14306,6 +14553,7 @@ class _PendingTextSend {
   final bool silent;
   final bool disableWebpagePreview;
   final String? effectId;
+  final int? topicId;
   int attempts = 0;
   int? lastRetryAfterSeconds;
   DateTime? lastLimitedAt;
