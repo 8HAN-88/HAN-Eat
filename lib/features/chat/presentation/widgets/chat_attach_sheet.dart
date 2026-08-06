@@ -230,7 +230,7 @@ class _AttachSheetContact {
     final matched = phone!.matchedUser;
     if (matched != null) {
       final label = matched.username ?? matched.name;
-      if (label == null || label.isEmpty) return 'в HAN Eat';
+      if (label == null || label.isEmpty) return 'в HanWe';
       return label.startsWith('@') ? label : '@$label';
     }
     return phone!.phoneE164;

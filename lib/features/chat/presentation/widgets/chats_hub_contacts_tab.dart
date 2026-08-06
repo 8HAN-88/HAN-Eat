@@ -348,7 +348,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
         const SnackBar(
           content: Text(
             'Нужен доступ к контактам. '
-            'Настройки → HAN Eat → Контакты → разрешить изменения.',
+            'Настройки → HanWe → Контакты → разрешить изменения.',
           ),
         ),
       );
@@ -496,7 +496,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                 title: const Text('Доступ к контактам'),
                 subtitle: const Text(
                   'Разрешите доступ к телефонной книге — друзья и приглашения появятся автоматически. '
-                  'Если диалог не показывается, откройте Настройки → HAN Eat → Контакты.',
+                  'Если диалог не показывается, откройте Настройки → HanWe → Контакты.',
                 ),
                 trailing: _syncingPhone
                     ? const SizedBox(
@@ -518,7 +518,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                 title: const Text('Синхронизация контактов'),
                 subtitle: Text(
                   _phoneBook.isEmpty
-                      ? 'Выберите контакты из телефонной книги — покажем, кто уже в HAN Eat'
+                      ? 'Выберите контакты из телефонной книги — покажем, кто уже в HanWe'
                       : 'Добавить ещё контакты из телефонной книги',
                 ),
                 trailing: _syncingPhone
@@ -541,7 +541,7 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
                 title: Text('Импорт с телефона'),
                 subtitle: Text(
                   'В этом браузере нельзя прочитать телефонную книгу целиком. '
-                  'Откройте HAN Eat в Chrome на Android или добавляйте номера вручную.',
+                  'Откройте HanWe в Chrome на Android или добавляйте номера вручную.',
                 ),
               ),
             ),

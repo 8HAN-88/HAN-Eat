@@ -83,15 +83,14 @@ class SubscriptionCopy {
       'С H.A.N. AI вы можете создавать meal plans без ожидания';
   static const mealPlanCooldownCta = 'Попробовать H.A.N. AI';
 
-  // —— Приватные рецепты в канале (Creator / Pro) ——
-  static const creatorRecipeUpsellTitle = 'Приватные рецепты — тариф Creator';
+  // —— Creator upsell (legacy recipe sheet → subscription) ——
+  static const creatorRecipeUpsellTitle = 'Инструменты автора — тариф Creator';
   static const creatorRecipeUpsellSubtitle =
-      'Публикуйте индивидуальные рецепты в своём канале. Они не попадают '
-      'в общий Menu и доступны только подписчикам канала.';
+      'Отложенные посты, аналитика канала и продвижение контента '
+      'для авторов в HanWe.';
   static const creatorRecipeUpsellCta = 'Подключить H.A.N. Creator';
   static const channelRecipeMenuHint =
-      'Рецепт виден только в этом канале и не отображается в общем Menu. '
-      'Подписчики канала смогут открыть его здесь.';
+      'Контент доступен подписчикам этого канала.';
 
   static const recipeVisibilitySectionTitle = 'Видимость рецепта';
   static const recipeVisibilityChangeTitle = 'Изменить видимость';
@@ -130,16 +129,16 @@ class SubscriptionCopy {
 
   static const List<SubscriptionBenefitItem> creatorRecipeBenefits = [
     SubscriptionBenefitItem(
-      icon: Icons.restaurant_menu_outlined,
-      text: 'Индивидуальные рецепты в вашем канале',
+      icon: Icons.schedule_outlined,
+      text: 'Отложенная публикация постов',
     ),
     SubscriptionBenefitItem(
-      icon: Icons.lock_outline,
-      text: 'Не попадают в общий Menu — только для аудитории канала',
+      icon: Icons.insights_outlined,
+      text: 'Аналитика канала и контента',
     ),
     SubscriptionBenefitItem(
       icon: Icons.groups_outlined,
-      text: 'Контент только для аудитории канала',
+      text: 'Инструменты для роста аудитории',
     ),
   ];
 
@@ -163,7 +162,7 @@ class SubscriptionCopy {
   ];
 
   static const screenTitle = 'Подписка';
-  static const heroTitle = 'Больше возможностей\nдля готовки и творчества';
+  static const heroTitle = 'Больше возможностей\nдля авторов и общения';
   static const heroSubtitle =
       'Разовая оплата через СБП в приложении банка. Доступ на выбранный период; '
       'продление — снова в этом разделе. Автосписания подключим позже.';
@@ -197,11 +196,11 @@ class SubscriptionCopy {
   static String tierSubtitle(String id) {
     switch (id) {
       case 'ai':
-        return 'Сканы, питание, планы меню, рекомендации';
+        return 'AI-подсказки, офлайн-сохранения, без рекламы';
       case 'creator':
-        return 'Канал, приватные рецепты, аналитика, продвижение';
+        return 'Канал, аналитика, отложенные посты, продвижение';
       case 'pro':
-        return 'AI + Creator + семейные планы и поддержка';
+        return 'AI + Creator и приоритетная поддержка';
       default:
         return '';
     }
@@ -227,26 +226,15 @@ class SubscriptionCopy {
   }
 
   static const List<String> _aiBenefits = [
-    'Больше AI-сканов блюд',
-    'Калории и БЖУ на карточках и в рецепте',
-    'Фильтры «низкокалорийное» и «высокий белок»',
-    'Лимиты калорий и БЖУ в настройках диеты',
-    'AI-планы питания на 7, 14, 21 и 30 дней',
-    'Обновление блюд и дней в плане без лимита',
-    'Умный список покупок к плану питания',
-    'Расширенная персонализация питания',
-    'Умные рекомендации блюд',
-    'Ускоренная работа AI',
-    'Сохранённые рецепты и посты офлайн',
+    'Ускоренная работа AI в приложении',
+    'Сохранённые посты офлайн',
+    'Расширенные рекомендации в ленте',
     'Без рекламы (когда появится в приложении)',
   ];
 
   static const List<String> _creatorBenefits = [
-    'Приватные рецепты в канале (не в общем Menu)',
-    'Режимы видимости: публичные, приватные, смешанные',
-    'AI-расчёт калорий и БЖУ по ингредиентам',
     'Аналитика канала и контента',
-    'Продвижение постов и рецептов',
+    'Продвижение постов',
     'Закрепление важных публикаций',
     'Отложенная публикация',
     'Оформление и бейдж канала',
@@ -257,7 +245,6 @@ class SubscriptionCopy {
   static const List<String> _proBenefits = [
     'Всё из тарифа H.A.N. AI',
     'Всё из тарифа H.A.N. Creator',
-    'Семейные AI-планы питания',
     'Приоритетная поддержка',
     'Максимальный доступ ко всем функциям',
   ];

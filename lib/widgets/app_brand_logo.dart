@@ -8,7 +8,7 @@ enum AppBrandLogoLayout {
   horizontal,
 }
 
-/// Логотип HAN Eat.
+/// Логотип HanWe.
 class AppBrandLogo extends StatelessWidget {
   const AppBrandLogo({
     super.key,

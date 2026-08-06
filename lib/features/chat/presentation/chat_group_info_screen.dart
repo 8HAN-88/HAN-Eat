@@ -1131,7 +1131,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             final title = _conversation.title?.trim();
             final subject = (title != null && title.isNotEmpty)
                 ? 'Приглашение в «$title»'
-                : 'Приглашение в группу HAN Eat';
+                : 'Приглашение в группу HanWe';
             await SystemShare.shareText(
               context,
               text: link.inviteLink,

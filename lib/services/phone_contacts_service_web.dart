@@ -41,7 +41,7 @@ class PhoneContactsService {
     ]);
   }
 
-  /// Сопоставить сохранённые контакты с пользователями HAN Eat.
+  /// Сопоставить сохранённые контакты с пользователями HanWe.
   static Future<PhoneContactsSyncResult> syncFromDevice({
     String defaultRegion = 'RU',
   }) async {

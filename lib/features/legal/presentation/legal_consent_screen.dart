@@ -124,7 +124,7 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Чтобы продолжить пользоваться HAN Eat, ознакомьтесь '
+                      'Чтобы продолжить пользоваться HanWe, ознакомьтесь '
                       'с документами и подтвердите согласие. Это требование '
                       'законодательства о персональных данных (152-ФЗ).',
                       style: theme.textTheme.bodyMedium?.copyWith(

@@ -195,7 +195,7 @@ class PushNotificationService {
       return;
     }
     NotificationService.showForegroundPush(
-      title: title ?? 'H.A.N. Eat',
+      title: title ?? 'HanWe',
       body: body ?? '',
       data: message.data.isNotEmpty ? message.data : null,
     );

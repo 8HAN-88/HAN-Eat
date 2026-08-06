@@ -147,7 +147,7 @@ class NotificationService {
           : null;
       await _localNotifications.show(
         id: id,
-        title: t.isNotEmpty ? t : 'H.A.N. Eat',
+        title: t.isNotEmpty ? t : 'HanWe',
         body: b.isNotEmpty ? b : t,
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(

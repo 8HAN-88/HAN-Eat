@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_models.dart';
 
-/// Кэш сопоставления телефонных хэшей с пользователями HAN Eat (офлайн, как в Telegram).
+/// Кэш сопоставления телефонных хэшей с пользователями HanWe (офлайн, как в Telegram).
 class PhoneContactsMatchCache {
   PhoneContactsMatchCache._();
 

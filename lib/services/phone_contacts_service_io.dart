@@ -4,7 +4,7 @@ import '../core/phone/phone_hash.dart';
 import 'phone_contacts_sync_core.dart';
 import 'phone_contacts_types.dart';
 
-/// Синхронизация адресной книги телефона с HAN Eat (как в Telegram).
+/// Синхронизация адресной книги телефона с HanWe (как в Telegram).
 class PhoneContactsService {
   PhoneContactsService._();
 
@@ -58,7 +58,7 @@ class PhoneContactsService {
     await FlutterContacts.create(contact);
   }
 
-  /// Прочитать телефонную книгу и (по возможности) сопоставить с пользователями HAN Eat.
+  /// Прочитать телефонную книгу и (по возможности) сопоставить с пользователями HanWe.
   static Future<PhoneContactsSyncResult> syncFromDevice({
     String defaultRegion = 'RU',
   }) async {

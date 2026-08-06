@@ -111,33 +111,9 @@ class _OnboardingContentState extends State<_OnboardingContent> {
   int _currentPage = 0;
   static const _infoPages = [
     _OnboardingPage(
-      icon: Icons.restaurant_menu,
-      title: 'Добро пожаловать в H.A.N. Eat',
-      body: 'Ищите рецепты, сканируйте блюда по фото и планируйте питание.',
-    ),
-    _OnboardingPage(
-      icon: Icons.dynamic_feed_outlined,
-      title: 'Лента',
-      body:
-          'Подписки — посты друзей. Рекомендации — новое по вашим интересам. '
-          'Рилсы — короткие видео на весь экран.',
-    ),
-    _OnboardingPage(
-      icon: Icons.camera_alt_outlined,
-      title: 'Сканер блюд',
-      body: 'Сфотографируйте тарелку — узнайте калории и получите похожие рецепты.',
-    ),
-    _OnboardingPage(
-      icon: Icons.calendar_today_outlined,
-      title: 'План и список покупок',
-      body: 'Добавляйте рецепты в план на неделю и формируйте список покупок одним нажатием.',
-    ),
-    _OnboardingPage(
-      icon: Icons.auto_awesome_rounded,
-      title: 'AI-план питания',
-      body:
-          'Персональный план составляется в разделе «План питания» — '
-          'короткая анкета откроется только когда вы решите его создать.',
+      icon: Icons.chat_bubble_rounded,
+      title: 'Добро пожаловать в HanWe',
+      body: 'Чаты, лента, каналы и звонки — всё для общения в одном приложении.',
     ),
     _OnboardingPage(
       icon: Icons.forum_outlined,
@@ -148,11 +124,32 @@ class _OnboardingContentState extends State<_OnboardingContent> {
           'добавляйте автофильтры по непрочитанным и типу чата.',
     ),
     _OnboardingPage(
+      icon: Icons.dynamic_feed_outlined,
+      title: 'Лента',
+      body:
+          'Подписки — посты друзей. Рекомендации — новое по вашим интересам. '
+          'Рилсы — короткие видео на весь экран.',
+    ),
+    _OnboardingPage(
+      icon: Icons.campaign_outlined,
+      title: 'Каналы',
+      body:
+          'Подписывайтесь на авторов, публикуйте посты и рилсы, '
+          'управляйте аудиторией и инструментами канала.',
+    ),
+    _OnboardingPage(
+      icon: Icons.call_outlined,
+      title: 'Звонки',
+      body:
+          'Голосовые и видеозвонки один на один и в небольших группах — '
+          'прямо из чата.',
+    ),
+    _OnboardingPage(
       icon: Icons.notifications_active_outlined,
       title: 'Уведомления',
       body:
-          'Колокольчик в ленте показывает новую активность. '
-          'В профиле можно настроить, о чём получать push-уведомления.',
+          'Колокольчик показывает новую активность. '
+          'В настройках можно выбрать, о чём получать push.',
     ),
   ];
 

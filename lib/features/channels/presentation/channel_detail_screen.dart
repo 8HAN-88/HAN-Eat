@@ -621,8 +621,8 @@ class _PrivateChannelPostsLockedState
                     text: 'Мгновенный доступ ко всем постам канала',
                   ),
                   _PaidChannelBenefitRow(
-                    icon: Icons.restaurant_menu_rounded,
-                    text: 'Эксклюзивные рецепты, советы и материалы автора',
+                    icon: Icons.auto_awesome_rounded,
+                    text: 'Эксклюзивные посты, медиа и материалы автора',
                   ),
                   _PaidChannelBenefitRow(
                     icon: Icons.calendar_month_rounded,

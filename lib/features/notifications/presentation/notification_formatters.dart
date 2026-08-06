@@ -164,7 +164,7 @@ String notificationActionText(NotificationDisplayItem group) {
     case 'channel_post':
       return 'опубликовал(а) в канале';
     case 'channel_recipe':
-      return 'добавил(а) рецепт в канале';
+      return 'опубликовал(а) в канале';
     case 'channel_video':
       return 'опубликовал(а) видео в канале';
     case 'channel_announcement':
@@ -206,7 +206,7 @@ String notificationLeadText(NotificationDisplayItem group) {
 String _likedTargetLabel(String? postType) {
   switch (postType) {
     case 'recipe':
-      return 'нравится ваш рецепт';
+      return 'нравится ваш пост';
     case 'reel':
       return 'нравится ваш рилс';
     case 'photo':

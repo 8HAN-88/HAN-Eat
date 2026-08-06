@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../widgets/app_avatar.dart';
 
-/// Parsed contact payload from chat text (HAN Eat / Telegram-style card).
+/// Parsed contact payload from chat text (HanWe / Telegram-style card).
 class ChatContactPayload {
   const ChatContactPayload({
     required this.displayName,

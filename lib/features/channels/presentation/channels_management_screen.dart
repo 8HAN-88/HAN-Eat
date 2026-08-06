@@ -43,18 +43,17 @@ class _ChannelsManagementScreenState
   bool _isLoading = false;
   String _sortBy = 'popular';
   String? _selectedCategory;
-  bool? _hasRecipes;
   int? _minSubscribers;
   int? _minPosts;
   final List<String> _availableCategories = [
-    'Итальянская',
-    'Азиатская',
-    'Веган',
-    'ЗОЖ',
-    'Выпечка',
-    'Напитки',
-    'Завтраки',
-    'Ужины',
+    'Новости',
+    'Технологии',
+    'Образ жизни',
+    'Развлечения',
+    'Спорт',
+    'Музыка',
+    'Образование',
+    'Путешествия',
   ];
 
   @override
@@ -99,7 +98,6 @@ class _ChannelsManagementScreenState
         catalog: true,
         category: _selectedCategory,
         sort: _sortBy,
-        hasRecipes: _hasRecipes,
         minSubscribers: _minSubscribers,
         minPosts: _minPosts,
       );
@@ -135,7 +133,6 @@ class _ChannelsManagementScreenState
 
   bool get _hasActiveFilters =>
       _selectedCategory != null ||
-      _hasRecipes != null ||
       _minSubscribers != null ||
       _minPosts != null;
 
@@ -158,12 +155,10 @@ class _ChannelsManagementScreenState
             sortBy: _sortBy,
             onSortChanged: _setSort,
             selectedCategory: _selectedCategory,
-            hasRecipes: _hasRecipes,
             hasAdvancedFilters: _minSubscribers != null || _minPosts != null,
             hasActiveFilters: _hasActiveFilters,
             onSearch: _loadChannels,
             onCategoryTap: _showCategoryPicker,
-            onRecipesTap: _cycleRecipesFilter,
             onAdvancedTap: _showAdvancedFilters,
             onClearFilters: _clearFilters,
           ),
@@ -176,22 +171,8 @@ class _ChannelsManagementScreenState
   void _clearFilters() {
     setState(() {
       _selectedCategory = null;
-      _hasRecipes = null;
       _minSubscribers = null;
       _minPosts = null;
-    });
-    _loadChannels();
-  }
-
-  void _cycleRecipesFilter() {
-    setState(() {
-      if (_hasRecipes == null) {
-        _hasRecipes = true;
-      } else if (_hasRecipes == true) {
-        _hasRecipes = false;
-      } else {
-        _hasRecipes = null;
-      }
     });
     _loadChannels();
   }
@@ -459,12 +440,10 @@ class _ManagementHeader extends StatelessWidget {
     required this.sortBy,
     required this.onSortChanged,
     required this.selectedCategory,
-    required this.hasRecipes,
     required this.hasAdvancedFilters,
     required this.hasActiveFilters,
     required this.onSearch,
     required this.onCategoryTap,
-    required this.onRecipesTap,
     required this.onAdvancedTap,
     required this.onClearFilters,
   });
@@ -475,23 +454,15 @@ class _ManagementHeader extends StatelessWidget {
   final String sortBy;
   final ValueChanged<String> onSortChanged;
   final String? selectedCategory;
-  final bool? hasRecipes;
   final bool hasAdvancedFilters;
   final bool hasActiveFilters;
   final VoidCallback onSearch;
   final VoidCallback onCategoryTap;
-  final VoidCallback onRecipesTap;
   final VoidCallback onAdvancedTap;
   final VoidCallback onClearFilters;
 
   @override
   Widget build(BuildContext context) {
-    final recipesLabel = hasRecipes == null
-        ? 'Все каналы'
-        : hasRecipes!
-            ? 'С рецептами'
-            : 'Без рецептов';
-
     return Material(
       color: scheme.surface,
       elevation: 0,
@@ -596,20 +567,6 @@ class _ManagementHeader extends StatelessWidget {
                     showCheckmark: false,
                     selected: selectedCategory != null,
                     onSelected: (_) => onCategoryTap(),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text(recipesLabel),
-                    avatar: Icon(
-                      Icons.restaurant_menu_outlined,
-                      size: 18,
-                      color: hasRecipes != null
-                          ? scheme.onSecondaryContainer
-                          : scheme.onSurfaceVariant,
-                    ),
-                    showCheckmark: false,
-                    selected: hasRecipes != null,
-                    onSelected: (_) => onRecipesTap(),
                   ),
                   const SizedBox(width: 8),
                   FilterChip(
