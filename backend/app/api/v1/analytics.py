@@ -31,7 +31,7 @@ async def log_client_event(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Клиентские продуктовые события (ai_scan_paywall, и т.д.)."""
+    """Клиентские продуктовые события (paywall, открытие экранов и т.д.)."""
     allowed_prefixes = (
         "ai_scan_",
         "feed_",

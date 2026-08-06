@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # Vision для AI-скана (КБЖУ): дешевле и быстрее gpt-4o-mini
     OPENAI_FOOD_SCAN_MODEL: str = "gpt-4o-mini"
     
-    # Анализ фото (/analyze): авторизация обязательна; доступ по JWT ai_scan_ticket после POST /ai-scan/reserve.
+    # Legacy kitchen analyze/ai-scan settings (endpoints retired).
     # Флаг ниже больше не используется в analyze_photo (оставлен для совместимости .env).
     REQUIRE_PLUS_FOR_PHOTO_ANALYSIS: bool = False
 

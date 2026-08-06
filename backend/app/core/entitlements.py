@@ -11,8 +11,6 @@ HAN_AI_REQUIRED_CODE = "HAN_AI_REQUIRED"
 HAN_CREATOR_REQUIRED_CODE = "HAN_CREATOR_REQUIRED"
 HAN_PRO_REQUIRED_CODE = "HAN_PRO_REQUIRED"
 LOGIN_REQUIRED_CODE = "LOGIN_REQUIRED"
-AI_SCANS_EXHAUSTED_CODE = "AI_SCANS_EXHAUSTED"
-AI_SCAN_RESERVE_REQUIRED_CODE = "AI_SCAN_RESERVE_REQUIRED"
 
 VALID_PRODUCTS = frozenset({"ai", "creator", "pro"})
 
@@ -42,24 +40,17 @@ def subscription_entitlements(tier: SubscriptionTier) -> Dict[str, bool]:
     """Флаги возможностей для клиента."""
     return {
         "ad_free": tier != "free",
-        "ai_scans_extended": tier_includes_ai(tier),
-        "nutrition_ai_advanced": tier_includes_ai(tier),
-        "ai_meal_plans": tier_includes_ai(tier),
-        "meal_plan_free_days": 3,
-        "meal_plan_ai_durations": [7, 14, 21, 30] if tier_includes_ai(tier) else [],
-        "meal_plan_smart_shopping": tier_includes_ai(tier),
-        "meal_plan_family": tier == "pro",
-        "ai_recommendations": tier_includes_ai(tier),
-        "ai_voice": tier_includes_ai(tier),
+        # Messenger AI helpers (no kitchen scans / meal plans).
         "ai_priority_speed": tier_includes_ai(tier),
+        "ai_recommendations": tier_includes_ai(tier),
         "creator_analytics": tier_includes_creator(tier),
         "creator_promotion": tier_includes_creator(tier),
         "creator_tools": tier_includes_creator(tier),
         "creator_badge": tier_includes_creator(tier),
         "creator_pinned": tier_includes_creator(tier),
         "creator_scheduled_posts": tier_includes_creator(tier),
-        "offline_recipes": tier_includes_ai(tier),  # legacy alias
         "offline_saved_posts": tier_includes_ai(tier),
+        "offline_recipes": tier_includes_ai(tier),  # legacy alias
         "pro": tier == "pro",
         "priority_support": tier == "pro",
         "premium_badge": tier != "free",

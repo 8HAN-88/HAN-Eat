@@ -30,10 +30,10 @@ class User(Base):
     tbank_rebill_id = Column(String(64), nullable=True)
     legal_consent_version = Column(String(32), nullable=True)
     legal_consent_at = Column(DateTime, nullable=True)
-    # AI scan (мягкие лимиты): банк кредитов и момент последнего начисления «суток»
+    # Legacy kitchen AI-scan credits (unused in messenger product)
     scan_credits = Column(Integer, default=5, nullable=False)
     last_scan_credit_at = Column(DateTime, nullable=True)
-    # AI meal plan: free tier — 1 план / 7 дней
+    # Legacy kitchen meal-plan cooldown fields
     meal_plan_last_generated_at = Column(DateTime, nullable=True)
     meal_plan_cooldown_ends_at = Column(DateTime, nullable=True)
     is_admin = Column(Boolean, default=False, nullable=False)
