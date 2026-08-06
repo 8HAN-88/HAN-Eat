@@ -25,6 +25,7 @@ class AuthResponse(BaseModel):
     refresh_token: str
     user: "UserResponse"
     message: str | None = None
+    session_id: int | None = None
 
 
 class MessageResponse(BaseModel):
@@ -60,6 +61,20 @@ class ResendVerificationRequest(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class AuthSessionResponse(BaseModel):
+    id: int
+    device_name: str | None = None
+    device_platform: str | None = None
+    ip_address: str | None = None
+    created_at: str
+    last_seen_at: str
+    is_current: bool = False
+
+
+class AuthSessionListResponse(BaseModel):
+    items: list[AuthSessionResponse]
 
 
 class GoogleAuthRequest(BaseModel):

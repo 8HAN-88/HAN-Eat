@@ -224,6 +224,7 @@ class AuthService {
   // Ключи для хранения токенов
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
+  static const String _sessionIdKey = 'auth_session_id';
   static const String _userKey = 'user';
   
   /// Инициализация сервиса
@@ -447,7 +448,10 @@ class AuthService {
     try {
       final response = await http.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ..._clientDeviceHeaders(),
+        },
         body: jsonEncode({
           'id_token': idToken,
           'accept_legal': acceptLegal,
@@ -459,7 +463,7 @@ class AuthService {
         final authResponse = AuthResponse.fromJson(data);
         
         // Сохраняем токены
-        await _saveTokens(authResponse.token, authResponse.refreshToken);
+        await _saveTokens(authResponse.token, authResponse.refreshToken, sessionId: authResponse.sessionId);
         await _saveUser(authResponse.user);
         
         return authResponse;
@@ -513,6 +517,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessTokenKey);
     await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_sessionIdKey);
     await prefs.remove(_userKey);
   }
   
@@ -528,7 +533,10 @@ class AuthService {
     try {
       final response = await http.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ..._clientDeviceHeaders(),
+        },
         body: jsonEncode({
           'email': email,
           'password': password,
@@ -543,7 +551,7 @@ class AuthService {
         final authResponse = AuthResponse.fromJson(data);
         
         // Сохраняем токены и пользователя
-        await _saveTokens(authResponse.token, authResponse.refreshToken);
+        await _saveTokens(authResponse.token, authResponse.refreshToken, sessionId: authResponse.sessionId);
         await _saveUser(authResponse.user);
         // Same as login: defer session notify until the register screen has
         // navigated, otherwise GoRouter refresh blanks the shell on web.
@@ -645,7 +653,10 @@ class AuthService {
       (client) => client
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              ..._clientDeviceHeaders(),
+            },
             body: jsonEncode({
               'email': email,
               'password': password,
@@ -663,7 +674,7 @@ class AuthService {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final authResponse = AuthResponse.fromJson(data);
 
-      await _saveTokens(authResponse.token, authResponse.refreshToken);
+      await _saveTokens(authResponse.token, authResponse.refreshToken, sessionId: authResponse.sessionId);
       await _saveUser(authResponse.user);
       // Defer session notify to the login screen so GoRouter does not yank
       // /login → /feed mid-request (long black boot, then blank white shell).
@@ -843,6 +854,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessTokenKey);
     await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_sessionIdKey);
     await prefs.remove(_userKey);
     await prefs.remove('fcm_token');
     _dispatchSessionChanged(null);
@@ -960,6 +972,42 @@ class AuthService {
   /// запросы со старым токеном получали 401 и вызывали logout().
   static Future<String>? _refreshInFlight;
 
+
+  static Map<String, String> _clientDeviceHeaders() {
+    String platform;
+    if (kIsWeb) {
+      platform = 'web';
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      platform = 'ios';
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      platform = 'android';
+    } else if (defaultTargetPlatform == TargetPlatform.macOS) {
+      platform = 'macos';
+    } else {
+      platform = 'other';
+    }
+    return {
+      'X-Client-Platform': platform,
+      'X-Client-Device': 'HanWe $platform',
+    };
+  }
+
+  static Future<Map<String, String>> authSessionHeaders() async {
+    final headers = <String, String>{
+      ..._clientDeviceHeaders(),
+    };
+    final prefs = await SharedPreferences.getInstance();
+    final sid = prefs.getString(_sessionIdKey);
+    if (sid != null && sid.isNotEmpty) {
+      headers['X-Auth-Session-Id'] = sid;
+    }
+    final token = await getAccessTokenForApi();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
   /// Обновить токен
   static Future<String> refreshToken() async {
     final inFlight = _refreshInFlight;
@@ -988,7 +1036,10 @@ class AuthService {
     try {
       final response = await http.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          ..._clientDeviceHeaders(),
+        },
         body: jsonEncode({'refresh_token': refreshToken}),
       ).timeout(
         const Duration(seconds: 10),
@@ -1001,8 +1052,13 @@ class AuthService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final newAccessToken = data['token'] as String;
         final newRefreshToken = data['refresh_token'] as String;
+        final sessionId = data['session_id'] as int?;
 
-        await _saveTokens(newAccessToken, newRefreshToken);
+        await _saveTokens(
+          newAccessToken,
+          newRefreshToken,
+          sessionId: sessionId,
+        );
         return newAccessToken;
       }
       if (response.statusCode == 401 || response.statusCode == 403) {
@@ -1030,10 +1086,17 @@ class AuthService {
     }
   }
   
-  static Future<void> _saveTokens(String accessToken, String refreshToken) async {
+  static Future<void> _saveTokens(
+    String accessToken,
+    String refreshToken, {
+    int? sessionId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final saved1 = await prefs.setString(_accessTokenKey, accessToken);
     final saved2 = await prefs.setString(_refreshTokenKey, refreshToken);
+    if (sessionId != null) {
+      await prefs.setString(_sessionIdKey, '$sessionId');
+    }
     debugPrint('💾 Токены сохранены: access_token=$saved1, refresh_token=$saved2');
     
     // На веб-платформе нужно перезагрузить SharedPreferences для гарантии сохранения
@@ -1099,12 +1162,14 @@ class AuthResponse {
   final String refreshToken;
   final User user;
   final String? message;
+  final int? sessionId;
 
   AuthResponse({
     required this.token,
     required this.refreshToken,
     required this.user,
     this.message,
+    this.sessionId,
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
@@ -1113,6 +1178,7 @@ class AuthResponse {
       refreshToken: json['refresh_token'] as String,
       user: User.fromJson(json['user'] as Map<String, dynamic>),
       message: json['message'] as String?,
+      sessionId: json['session_id'] as int?,
     );
   }
 }

@@ -5,7 +5,7 @@ import logging
 import re
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -32,6 +32,8 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     ChangeEmailRequest,
     ResendVerificationRequest,
+    AuthSessionListResponse,
+    AuthSessionResponse,
 )
 from app.models.auth_token import (
     PURPOSE_CHANGE_EMAIL,
@@ -82,12 +84,70 @@ def _user_response(user: User) -> UserResponse:
     )
 
 
-def _auth_response(user: User, access_token: str, refresh_token: str, message: str | None = None) -> AuthResponse:
+
+def _client_meta(request: Request | None) -> dict[str, str | None]:
+    if request is None:
+        return {
+            "device_name": None,
+            "device_platform": None,
+            "user_agent": None,
+            "ip_address": None,
+        }
+    headers = request.headers
+    ua = (headers.get("user-agent") or "").strip() or None
+    return {
+        "device_name": (headers.get("x-client-device") or "").strip() or None,
+        "device_platform": (headers.get("x-client-platform") or "").strip() or None,
+        "user_agent": ua[:512] if ua else None,
+        "ip_address": request.client.host if request.client else None,
+    }
+
+
+def _issue_auth_tokens(
+    db: Session,
+    user: User,
+    request: Request | None = None,
+) -> tuple[str, str, int]:
+    from app.services.auth_session_service import create_session
+
+    meta = _client_meta(request)
+    access, refresh, session = create_session(
+        db,
+        user=user,
+        device_name=meta["device_name"],
+        device_platform=meta["device_platform"],
+        user_agent=meta["user_agent"],
+        ip_address=meta["ip_address"],
+    )
+    db.commit()
+    return access, refresh, session.id
+
+
+def _session_response(row, *, current_session_id: int | None) -> AuthSessionResponse:
+    return AuthSessionResponse(
+        id=row.id,
+        device_name=row.device_name,
+        device_platform=row.device_platform,
+        ip_address=row.ip_address,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+        last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else "",
+        is_current=bool(current_session_id and row.id == current_session_id),
+    )
+
+
+def _auth_response(
+    user: User,
+    access_token: str,
+    refresh_token: str,
+    message: str | None = None,
+    session_id: int | None = None,
+) -> AuthResponse:
     return AuthResponse(
         token=access_token,
         refresh_token=refresh_token,
         user=_user_response(user),
         message=message,
+        session_id=session_id,
     )
 
 
@@ -174,6 +234,7 @@ async def _resolve_google_claims(id_token: str) -> dict:
 async def register(
     request: RegisterRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     db: Session = Depends(get_db),
 ):
     """Регистрация нового пользователя"""
@@ -229,9 +290,7 @@ async def register(
         user.is_private = False
         db.commit()
 
-    # Создаем токены
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
     verify_msg = None
     try:
@@ -257,7 +316,7 @@ async def register(
         )
 
     try:
-        return _auth_response(user, access_token, refresh_token, verify_msg)
+        return _auth_response(user, access_token, refresh_token, verify_msg, session_id)
     except Exception as validation_error:
         logger.error(f"UserResponse validation error during registration: {validation_error}")
         raise HTTPException(
@@ -270,6 +329,7 @@ async def register(
 async def login(
     request: LoginRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     db: Session = Depends(get_db),
 ):
     """Вход пользователя"""
@@ -324,12 +384,10 @@ async def login(
             user.is_private = False
             db.commit()
 
-        # Создаем токены
-        access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         try:
-            return _auth_response(user, access_token, refresh_token)
+            return _auth_response(user, access_token, refresh_token, session_id=session_id)
         except Exception as validation_error:
             logger.error(f"UserResponse validation error: {validation_error}")
             raise HTTPException(
@@ -352,9 +410,16 @@ async def login(
 @router.post("/refresh", response_model=dict)
 async def refresh_token(
     request: RefreshTokenRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
 ):
     """Обновление access token"""
+    from app.services.auth_session_service import (
+        get_active_session,
+        rotate_session_tokens,
+        create_session,
+    )
+
     payload = decode_token(request.refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(
@@ -393,14 +458,46 @@ async def refresh_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account suspended",
         )
-    
-    # Создаем новый access token
-    new_access_token = create_access_token(data={"sub": user_id})
-    new_refresh_token = create_refresh_token(data={"sub": user_id})
+
+    sid = payload.get("sid")
+    jti = payload.get("jti")
+    if sid is not None:
+        try:
+            sid_int = int(sid)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
+        session = get_active_session(db, session_id=sid_int, jti=jti)
+        if session is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session revoked",
+            )
+        new_access_token, new_refresh_token = rotate_session_tokens(
+            db, session=session, user=user
+        )
+        session_id = session.id
+        db.commit()
+    else:
+        # Legacy refresh tokens without session binding: mint a tracked session.
+        meta = _client_meta(http_request)
+        new_access_token, new_refresh_token, session = create_session(
+            db,
+            user=user,
+            device_name=meta["device_name"],
+            device_platform=meta["device_platform"],
+            user_agent=meta["user_agent"],
+            ip_address=meta["ip_address"],
+        )
+        session_id = session.id
+        db.commit()
     
     return {
         "token": new_access_token,
-        "refresh_token": new_refresh_token
+        "refresh_token": new_refresh_token,
+        "session_id": session_id,
     }
 
 
@@ -421,7 +518,7 @@ async def google_auth_readiness():
 
 
 @router.post("/google", response_model=AuthResponse)
-async def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db)):
+async def google_auth(request: GoogleAuthRequest, http_request: Request, db: Session = Depends(get_db)):
     """Вход/регистрация через Google (проверка id_token через Google tokeninfo, если не отключено)."""
     try:
         claims = await _resolve_google_claims(request.id_token)
@@ -483,14 +580,13 @@ async def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db))
             user.is_private = False
             db.commit()
 
-        access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         if not is_email_verified(user):
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token)
+        return _auth_response(user, access_token, refresh_token, session_id=session_id)
 
     except HTTPException:
         raise
@@ -523,7 +619,7 @@ async def yandex_authorize_url(redirect_uri: str):
 
 
 @router.post("/yandex", response_model=AuthResponse)
-async def yandex_auth(request: YandexAuthRequest, db: Session = Depends(get_db)):
+async def yandex_auth(request: YandexAuthRequest, http_request: Request, db: Session = Depends(get_db)):
     """Вход/регистрация через Яндекс ID (authorization code)."""
     import secrets
 
@@ -582,14 +678,13 @@ async def yandex_auth(request: YandexAuthRequest, db: Session = Depends(get_db))
             user.is_private = False
             db.commit()
 
-        access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        access_token, refresh_token, session_id = _issue_auth_tokens(db, user, http_request)
 
         if not is_email_verified(user):
             mark_email_verified(user)
             db.commit()
 
-        return _auth_response(user, access_token, refresh_token)
+        return _auth_response(user, access_token, refresh_token, session_id=session_id)
 
     except HTTPException:
         raise
@@ -783,3 +878,77 @@ async def resend_verification(
     )
 
 
+def _current_session_id_from_auth_header(request: Request) -> int | None:
+    # Clients send the current auth session id from login/refresh response.
+    raw = (request.headers.get("x-auth-session-id") or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+@router.get("/sessions", response_model=AuthSessionListResponse)
+async def list_auth_sessions(
+    http_request: Request,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.auth_session_service import list_sessions
+
+    current_id = _current_session_id_from_auth_header(http_request)
+    items = list_sessions(db, user_id=current_user.id)
+    return AuthSessionListResponse(
+        items=[
+            _session_response(row, current_session_id=current_id) for row in items
+        ]
+    )
+
+
+@router.delete("/sessions/{session_id}", response_model=MessageResponse)
+async def revoke_auth_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.auth_session_service import revoke_session
+
+    row = revoke_session(db, user_id=current_user.id, session_id=session_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Session not found")
+    db.commit()
+    return MessageResponse(message="Session revoked")
+
+
+@router.post("/sessions/revoke-others", response_model=MessageResponse)
+async def revoke_other_auth_sessions(
+    http_request: Request,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.auth_session_service import revoke_other_sessions
+
+    current_id = _current_session_id_from_auth_header(http_request)
+    if current_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Current session id required (X-Auth-Session-Id)",
+        )
+    count = revoke_other_sessions(
+        db, user_id=current_user.id, keep_session_id=current_id
+    )
+    db.commit()
+    return MessageResponse(message=f"Revoked {count} sessions")
+
+
+@router.post("/sessions/revoke-all", response_model=MessageResponse)
+async def revoke_all_auth_sessions(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.auth_session_service import revoke_all_sessions
+
+    count = revoke_all_sessions(db, user_id=current_user.id)
+    db.commit()
+    return MessageResponse(message=f"Revoked {count} sessions")
