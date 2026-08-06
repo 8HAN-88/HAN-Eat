@@ -2333,8 +2333,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
             uri.host.contains('vimeo.com'));
 
     // YouTube/Vimeo — во внешнем приложении/браузере; остальное — inline player.
-    if (looksExternalHost && uri != null) {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (looksExternalHost) {
+      final ok = await launchUrl(uri!, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Не удалось открыть видео')),
