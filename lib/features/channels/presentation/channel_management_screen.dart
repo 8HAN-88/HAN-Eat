@@ -79,7 +79,6 @@ class _ChannelManagementScreenState
   bool _allowComments = true;
   bool _allowLikes = true;
   bool _allowReposts = true;
-  String _recipeVisibilityMode = 'mixed';
   Map<String, Map<String, bool>> _rolePermissions =
       defaultChannelRolePermissions();
 
@@ -139,7 +138,6 @@ class _ChannelManagementScreenState
         _allowComments = channel.allowComments ?? true;
         _allowLikes = channel.allowLikes ?? true;
         _allowReposts = channel.allowReposts ?? true;
-        _recipeVisibilityMode = channel.recipeVisibilityMode ?? 'mixed';
         _rolePermissions = _cloneRolePermissions(channel.rolePermissions);
       });
       await _loadJoinRequests();
@@ -359,7 +357,6 @@ class _ChannelManagementScreenState
         allowComments: _allowComments,
         allowLikes: _allowLikes,
         allowReposts: _allowReposts,
-        recipeVisibilityMode: _recipeVisibilityMode,
         rolePermissions: _channel?.isOwner == true ? _rolePermissions : null,
         accentColor: _accentColorController.text.trim().isNotEmpty
             ? _accentColorController.text.trim()

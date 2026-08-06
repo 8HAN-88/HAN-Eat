@@ -81,7 +81,7 @@ class _ChannelPostDetailScreenState
     if (translated != null && translated.isNotEmpty) return translated;
     if (bodyName != null && bodyName.isNotEmpty) return bodyName;
     if (nestedTitle != null && nestedTitle.isNotEmpty) return nestedTitle;
-    return 'Рецепт';
+    return 'Пост';
   }
 
   @override

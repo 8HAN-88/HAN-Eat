@@ -517,7 +517,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
     if (_isMeaningfulTitle(translated)) return translated!;
     if (_isMeaningfulTitle(bodyName)) return bodyName!;
     if (_isMeaningfulTitle(nestedTitle)) return nestedTitle!;
-    return 'Рецепт';
+    return 'Пост';
   }
 
   Future<void> _openEditPost() async {

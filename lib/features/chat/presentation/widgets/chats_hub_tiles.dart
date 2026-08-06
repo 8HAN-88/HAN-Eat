@@ -727,7 +727,7 @@ class _ChannelInboxTileState extends State<ChannelInboxTile> {
     final description = (post['description'] as String?)?.trim();
     if (description != null && description.isNotEmpty) return description;
     final type = (post['type'] as String?)?.toLowerCase() ?? '';
-    if (type == 'recipe') return 'Рецепт';
+    if (type == 'recipe') return 'Пост';
     if (type == 'reel' || type == 'video') return 'Видео';
     if (type == 'photo' || type == 'image') return 'Фото';
     return 'Новый пост';

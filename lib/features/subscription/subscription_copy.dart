@@ -1,42 +1,42 @@
 import 'package:flutter/material.dart';
 
-/// Русские тексты подписок и AI scan (premium UX, без pressure).
+/// Русские тексты подписок (premium UX, без pressure).
 class SubscriptionCopy {
-  // —— Soft paywall (free) ——
-  static const aiScanExhaustedTitle = 'Бесплатные AI-сканирования закончились';
+  // —— Soft paywall (legacy AiScanExhaustedPaywall widget) ——
+  static const aiScanExhaustedTitle = 'Лимит AI на сегодня закончился';
   static const aiScanExhaustedSubtitle =
-      'Получите больше AI-возможностей с H.A.N. AI';
+      'Оформите H.A.N. AI, чтобы пользоваться AI без ограничений.';
 
   /// Перед последним бесплатным сканом (мягко, без красного UI).
   static const aiScanSoftWarning =
-      'Скоро закончатся бесплатные AI-сканирования';
+      'Скоро закончится бесплатный лимит AI';
 
   // —— Подписчик AI/Pro без сканов (без цифр и таймеров) ——
-  static const aiScanPlusExhaustedTitle = 'AI-сканирования временно недоступны';
+  static const aiScanPlusExhaustedTitle = 'AI временно недоступен';
   static const aiScanPlusExhaustedSubtitle =
-      'Новые сканирования скоро снова будут доступны. '
-      'Пока можно пользоваться рецептами и планом питания.';
+      'Новые AI-запросы скоро снова будут доступны. '
+      'Пока можно пользоваться чатами, лентой и каналами.';
 
   static const List<SubscriptionBenefitItem> aiScanBenefits = [
     SubscriptionBenefitItem(
-      icon: Icons.document_scanner_outlined,
-      text: 'Больше AI-сканов блюд',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.monitor_heart_outlined,
-      text: 'Расширенный анализ питания',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.restaurant_menu_outlined,
-      text: 'Планы питания и рекомендации',
-    ),
-    SubscriptionBenefitItem(
       icon: Icons.auto_awesome_outlined,
-      text: 'Умные рекомендации блюд',
+      text: 'Больше AI-подсказок в приложении',
+    ),
+    SubscriptionBenefitItem(
+      icon: Icons.offline_bolt_outlined,
+      text: 'Сохранённые посты офлайн',
+    ),
+    SubscriptionBenefitItem(
+      icon: Icons.dynamic_feed_outlined,
+      text: 'Расширенные рекомендации в ленте',
     ),
     SubscriptionBenefitItem(
       icon: Icons.bolt_outlined,
       text: 'Быстрее работает AI',
+    ),
+    SubscriptionBenefitItem(
+      icon: Icons.block_outlined,
+      text: 'Без рекламы (когда появится)',
     ),
   ];
 

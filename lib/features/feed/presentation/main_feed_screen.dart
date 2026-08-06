@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'dart:async';
 
 import '../../../app/app_router.dart';
+import '../../../core/app/kitchen_removed_notice.dart';
 import '../../../services/feed_ui_prefs.dart';
 import '../../../models/post_types.dart';
 import 'subscriptions_feed_screen.dart';
@@ -44,6 +45,14 @@ class _MainFeedScreenState extends ConsumerState<MainFeedScreen>
     _tabController.addListener(_onTabUi);
     feedScrollChromeActive.value = _tabController.index != 2;
     unawaited(_restoreUiPrefs());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !KitchenRemovedNotice.take()) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Этот раздел удалён. HanWe — мессенджер: чаты, лента и каналы.'),
+        ),
+      );
+    });
   }
 
   Future<void> _restoreUiPrefs() async {
