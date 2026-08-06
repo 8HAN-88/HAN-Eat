@@ -516,8 +516,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _uploadAccent = AppColors.primary;
   static const _deleteForEveryoneMaxAge = Duration(hours: 48);
 
+  bool get _canPinMessages =>
+      !_conversation.isGroup ||
+      _conversation.amICanPinMessages ||
+      (_conversation.createdByUserId != null &&
+          _conversation.createdByUserId == AuthService.instance.currentUser?.id);
+
+  bool get _canManageGroupCalls =>
+      !_conversation.isGroup ||
+      _conversation.amICanManageVideoChats ||
+      (_conversation.createdByUserId != null &&
+          _conversation.createdByUserId == AuthService.instance.currentUser?.id);
+
   bool _canDeleteMessageForEveryone(ChatMessage msg) {
-    if (!msg.isMine || msg.id <= 0) return false;
+    if (msg.id <= 0) return false;
+    if (_conversation.isGroup && _conversation.amICanDeleteMessages) {
+      return true;
+    }
+    if (!msg.isMine) return false;
     return DateTime.now().difference(msg.createdAt.toLocal()) <=
         _deleteForEveryoneMaxAge;
   }
@@ -4685,7 +4701,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             onTap: _sendStarGift,
           ),
         ],
-        if ((!isGroup && peer != null) || isGroup) ...[
+        if ((!isGroup && peer != null) ||
+            (isGroup && _canManageGroupCalls)) ...[
           TelegramActionSheetAction(
             icon: Icons.videocam_outlined,
             title: isGroup ? 'Групповой видеозвонок' : 'Видеозвонок',
@@ -6731,6 +6748,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _startVideoCall() async {
     final peer = _conversation.peer;
     if (!_conversation.isGroup && peer == null) return;
+    if (_conversation.isGroup && !_canManageGroupCalls) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет права начинать групповые звонки'),
+        ),
+      );
+      return;
+    }
     try {
       await CallCoordinator.instance.openOutgoing(
         conversationId: widget.conversationId,
@@ -6749,6 +6775,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _startVoiceCall() async {
     final peer = _conversation.peer;
     if (!_conversation.isGroup && peer == null) return;
+    if (_conversation.isGroup && !_canManageGroupCalls) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет права начинать групповые звонки'),
+        ),
+      );
+      return;
+    }
     try {
       await CallCoordinator.instance.openOutgoing(
         conversationId: widget.conversationId,
@@ -7342,7 +7377,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           ),
           content: Text(
             canDeleteForAll
-                ? 'Можно убрать только у себя или удалить у всех участников (до 48 часов).'
+                ? (_conversation.isGroup && _conversation.amICanDeleteMessages
+                    ? 'Можно убрать только у себя или удалить у всех участников.'
+                    : 'Можно убрать только у себя или удалить у всех участников (до 48 часов).')
                 : 'Выбранные сообщения исчезнут только в вашем чате.',
           ),
           actions: [
@@ -8010,7 +8047,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           title: const Text('Удалить сообщение?'),
           content: Text(
             canDeleteForAll
-                ? 'Можно убрать только у себя или удалить у всех участников (до 48 часов).'
+                ? (_conversation.isGroup && _conversation.amICanDeleteMessages
+                    ? 'Можно убрать только у себя или удалить у всех участников.'
+                    : 'Можно убрать только у себя или удалить у всех участников (до 48 часов).')
                 : msg.isMine
                     ? 'Прошло больше 48 часов — можно удалить только у себя.'
                     : 'Сообщение исчезнет только в вашем чате.',
@@ -9045,7 +9084,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               msg.type == 'video' ||
               msg.type == 'file'),
       isPinned: isPinned,
-      canDelete: msg.isMine,
+      canPin: _canPinMessages && msg.id > 0 && !_conversation.isSaved,
+      canDelete: msg.id > 0 &&
+          (msg.isMine ||
+              (_conversation.isGroup && _conversation.amICanDeleteMessages)),
       hasCopyableText: copyable && (!protectContent || msg.isMine),
       canShowReaders: canShowReaders,
       canSaveToFavorites: canSaveToFavorites && !protectContent,
@@ -12508,17 +12550,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     onPressed: () =>
                                         unawaited(_showPinnedMessagesSheet()),
                                   ),
-                                IconButton(
-                                  tooltip: 'Открепить',
-                                  visualDensity: VisualDensity.compact,
-                                  icon: Icon(
-                                    Icons.close,
-                                    size: 18,
-                                    color: scheme.onSurfaceVariant,
+                                if (_canPinMessages)
+                                  IconButton(
+                                    tooltip: 'Открепить',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                    onPressed: () =>
+                                        _togglePinMessage(_pinnedMessage!),
                                   ),
-                                  onPressed: () =>
-                                      _togglePinMessage(_pinnedMessage!),
-                                ),
                               ],
                             ),
                           ),

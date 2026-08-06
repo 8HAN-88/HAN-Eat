@@ -294,6 +294,11 @@ def _brief(
     is_group_creator: bool = False,
     can_manage_members: bool = False,
     can_manage_posting_permissions: bool = False,
+    can_change_info: bool = False,
+    can_delete_messages: bool = False,
+    can_pin_messages: bool = False,
+    can_invite_users: bool = False,
+    can_manage_video_chats: bool = False,
     send_restricted: bool = False,
     send_restricted_until: Optional[datetime] = None,
     send_restriction_reason: Optional[str] = None,
@@ -312,6 +317,11 @@ def _brief(
         is_group_creator=is_group_creator,
         can_manage_members=can_manage_members,
         can_manage_posting_permissions=can_manage_posting_permissions,
+        can_change_info=can_change_info,
+        can_delete_messages=can_delete_messages,
+        can_pin_messages=can_pin_messages,
+        can_invite_users=can_invite_users,
+        can_manage_video_chats=can_manage_video_chats,
         send_restricted=send_restricted,
         send_restricted_until=send_restricted_until,
         send_restriction_reason=send_restriction_reason,
@@ -668,28 +678,26 @@ def _conversation_response(
             or (member is not None and member.is_admin)
         )
     )
-    am_i_can_manage_members = bool(
-        conv.type == "group"
-        and (
-            conv.created_by_user_id == current_user.id
-            or (
-                member is not None
-                and member.is_admin
-                and member.can_manage_members
-            )
+    def _am_i_right(attr: str) -> bool:
+        if conv.type != "group":
+            return False
+        if conv.created_by_user_id == current_user.id:
+            return True
+        return bool(
+            member is not None
+            and member.is_admin
+            and getattr(member, attr, False)
         )
+
+    am_i_can_manage_members = _am_i_right("can_manage_members")
+    am_i_can_manage_posting_permissions = _am_i_right(
+        "can_manage_posting_permissions"
     )
-    am_i_can_manage_posting_permissions = bool(
-        conv.type == "group"
-        and (
-            conv.created_by_user_id == current_user.id
-            or (
-                member is not None
-                and member.is_admin
-                and member.can_manage_posting_permissions
-            )
-        )
-    )
+    am_i_can_change_info = _am_i_right("can_change_info")
+    am_i_can_delete_messages = _am_i_right("can_delete_messages")
+    am_i_can_pin_messages = _am_i_right("can_pin_messages")
+    am_i_can_invite_users = _am_i_right("can_invite_users")
+    am_i_can_manage_video_chats = _am_i_right("can_manage_video_chats")
     am_i_send_restricted = False
     am_i_send_restricted_until = None
     am_i_send_restriction_reason = None
@@ -775,6 +783,11 @@ def _conversation_response(
         am_i_group_admin=am_i_group_admin,
         am_i_can_manage_members=am_i_can_manage_members,
         am_i_can_manage_posting_permissions=am_i_can_manage_posting_permissions,
+        am_i_can_change_info=am_i_can_change_info,
+        am_i_can_delete_messages=am_i_can_delete_messages,
+        am_i_can_pin_messages=am_i_can_pin_messages,
+        am_i_can_invite_users=am_i_can_invite_users,
+        am_i_can_manage_video_chats=am_i_can_manage_video_chats,
         am_i_send_restricted=am_i_send_restricted,
         am_i_send_restricted_until=am_i_send_restricted_until,
         am_i_send_restriction_reason=am_i_send_restriction_reason,
@@ -1405,6 +1418,11 @@ async def list_chat_members(
                 can_manage_posting_permissions=m.get(
                     "can_manage_posting_permissions", False
                 ),
+                can_change_info=m.get("can_change_info", False),
+                can_delete_messages=m.get("can_delete_messages", False),
+                can_pin_messages=m.get("can_pin_messages", False),
+                can_invite_users=m.get("can_invite_users", False),
+                can_manage_video_chats=m.get("can_manage_video_chats", False),
                 send_restricted=m.get("send_restricted", False),
                 send_restricted_until=m.get("send_restricted_until"),
                 send_restriction_reason=m.get("send_restriction_reason"),
@@ -3881,6 +3899,11 @@ async def set_group_member_permissions(
             target_user_id=member_user_id,
             can_manage_members=body.can_manage_members,
             can_manage_posting_permissions=body.can_manage_posting_permissions,
+            can_change_info=body.can_change_info,
+            can_delete_messages=body.can_delete_messages,
+            can_pin_messages=body.can_pin_messages,
+            can_invite_users=body.can_invite_users,
+            can_manage_video_chats=body.can_manage_video_chats,
         )
         target_user = db.query(User).filter(User.id == member_user_id).first()
         scopes = []
@@ -3888,6 +3911,16 @@ async def set_group_member_permissions(
             scopes.append("members")
         if body.can_manage_posting_permissions:
             scopes.append("chat settings")
+        if body.can_change_info:
+            scopes.append("info")
+        if body.can_delete_messages:
+            scopes.append("delete")
+        if body.can_pin_messages:
+            scopes.append("pin")
+        if body.can_invite_users:
+            scopes.append("invite")
+        if body.can_manage_video_chats:
+            scopes.append("calls")
         scope_text = ", ".join(scopes) if scopes else "no extra scopes"
         note = svc.create_group_system_note(
             conversation_id,

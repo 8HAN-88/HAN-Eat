@@ -69,6 +69,8 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   bool get _canManageMembers => _conversation.amICanManageMembers || _isCreator;
   bool get _canManagePostingPermissions =>
       _conversation.amICanManagePostingPermissions || _isCreator;
+  bool get _canChangeInfo => _conversation.amICanChangeInfo || _isCreator;
+  bool get _canInviteUsers => _conversation.amICanInviteUsers || _isCreator;
 
   @override
   void initState() {
@@ -102,7 +104,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _changeGroupPhoto() async {
-    if (!_canManagePostingPermissions || _busy) return;
+    if (!_canChangeInfo || _busy) return;
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
@@ -492,7 +494,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _addMembers() async {
-    if (!_canManageMembers) return;
+    if (!_canInviteUsers) return;
     List<ChatContact> contacts;
     try {
       contacts = await ChatService.listContacts();
@@ -668,33 +670,81 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     if (!_isCreator || !member.isGroupAdmin || !mounted) return;
     bool canManageMembers = member.canManageMembers;
     bool canManagePostingPermissions = member.canManagePostingPermissions;
+    bool canChangeInfo = member.canChangeInfo;
+    bool canDeleteMessages = member.canDeleteMessages;
+    bool canPinMessages = member.canPinMessages;
+    bool canInviteUsers = member.canInviteUsers;
+    bool canManageVideoChats = member.canManageVideoChats;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => AlertDialog(
           title: Text('Права: ${member.displayName}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Управлять участниками'),
-                subtitle: const Text('Добавлять и удалять участников'),
-                value: canManageMembers,
-                onChanged: (v) => setModalState(() => canManageMembers = v),
-              ),
-              SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Управлять правом писать'),
-                subtitle: const Text('Менять "Только админы могут писать"'),
-                value: canManagePostingPermissions,
-                onChanged: (v) => setModalState(
-                  () => canManagePostingPermissions = v,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Изменять информацию'),
+                  subtitle: const Text('Название и фото группы'),
+                  value: canChangeInfo,
+                  onChanged: (v) => setModalState(() => canChangeInfo = v),
                 ),
-              ),
-            ],
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Удалять сообщения'),
+                  subtitle: const Text('Удалять чужие сообщения у всех'),
+                  value: canDeleteMessages,
+                  onChanged: (v) =>
+                      setModalState(() => canDeleteMessages = v),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Закреплять сообщения'),
+                  value: canPinMessages,
+                  onChanged: (v) => setModalState(() => canPinMessages = v),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Приглашать пользователей'),
+                  subtitle: const Text('Добавлять участников и ссылки'),
+                  value: canInviteUsers,
+                  onChanged: (v) => setModalState(() => canInviteUsers = v),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Управлять участниками'),
+                  subtitle: const Text('Ограничивать, банить, заявки'),
+                  value: canManageMembers,
+                  onChanged: (v) => setModalState(() => canManageMembers = v),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Настройки чата'),
+                  subtitle: const Text('Slow mode, «только админы» и т.п.'),
+                  value: canManagePostingPermissions,
+                  onChanged: (v) => setModalState(
+                    () => canManagePostingPermissions = v,
+                  ),
+                ),
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Групповые звонки'),
+                  subtitle: const Text('Начинать видео/аудиозвонки'),
+                  value: canManageVideoChats,
+                  onChanged: (v) =>
+                      setModalState(() => canManageVideoChats = v),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -717,6 +767,11 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         userId: member.id,
         canManageMembers: canManageMembers,
         canManagePostingPermissions: canManagePostingPermissions,
+        canChangeInfo: canChangeInfo,
+        canDeleteMessages: canDeleteMessages,
+        canPinMessages: canPinMessages,
+        canInviteUsers: canInviteUsers,
+        canManageVideoChats: canManageVideoChats,
       );
       if (!mounted) return;
       await _load();
@@ -1080,7 +1135,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   }
 
   Future<void> _openInviteLinkSheet() async {
-    if (!_canManageMembers || !mounted) return;
+    if (!_canInviteUsers || !mounted) return;
     List<ChatGroupInviteLink> links = [];
     bool loading = false;
     String? err;
@@ -1611,7 +1666,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         const SizedBox(height: 16),
                         Center(
                           child: GestureDetector(
-                            onTap: (_busy || !_canManagePostingPermissions)
+                            onTap: (_busy || !_canChangeInfo)
                                 ? null
                                 : _changeGroupPhoto,
                             child: Stack(
@@ -1636,7 +1691,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                                         )
                                       : null,
                                 ),
-                                if (_canManagePostingPermissions)
+                                if (_canChangeInfo)
                                   Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
@@ -1672,7 +1727,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         const SizedBox(height: 8),
                         Center(
                           child: TextButton.icon(
-                            onPressed: (_busy || !_canManagePostingPermissions)
+                            onPressed: (_busy || !_canChangeInfo)
                                 ? null
                                 : _renameGroup,
                             icon: const Icon(Icons.edit_outlined),
@@ -1791,14 +1846,14 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                         ListTile(
                           leading: const Icon(Icons.person_add_outlined),
                           title: const Text('Добавить участников'),
-                          onTap: (_busy || !_canManageMembers)
+                          onTap: (_busy || !_canInviteUsers)
                               ? null
                               : _addMembers,
                         ),
                         ListTile(
                           leading: const Icon(Icons.link_outlined),
                           title: const Text('Ссылка-приглашение'),
-                          onTap: (_busy || !_canManageMembers)
+                          onTap: (_busy || !_canInviteUsers)
                               ? null
                               : _openInviteLinkSheet,
                         ),
@@ -1866,11 +1921,26 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               !member.isGroupCreator &&
                               member.isGroupAdmin;
                           final roleDetails = <String>[];
+                          if (member.canChangeInfo) {
+                            roleDetails.add('инфо');
+                          }
+                          if (member.canDeleteMessages) {
+                            roleDetails.add('удаление');
+                          }
+                          if (member.canPinMessages) {
+                            roleDetails.add('пин');
+                          }
+                          if (member.canInviteUsers) {
+                            roleDetails.add('инвайт');
+                          }
                           if (member.canManageMembers) {
                             roleDetails.add('участники');
                           }
                           if (member.canManagePostingPermissions) {
-                            roleDetails.add('права чата');
+                            roleDetails.add('настройки');
+                          }
+                          if (member.canManageVideoChats) {
+                            roleDetails.add('звонки');
                           }
                           final role = member.isGroupCreator
                               ? 'Создатель'

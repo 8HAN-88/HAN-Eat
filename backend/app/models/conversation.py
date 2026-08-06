@@ -58,6 +58,12 @@ class ConversationMember(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     can_manage_members = Column(Boolean, default=False, nullable=False)
     can_manage_posting_permissions = Column(Boolean, default=False, nullable=False)
+    # Telegram-like granular admin rights (in addition to the two above).
+    can_change_info = Column(Boolean, default=False, nullable=False)
+    can_delete_messages = Column(Boolean, default=False, nullable=False)
+    can_pin_messages = Column(Boolean, default=False, nullable=False)
+    can_invite_users = Column(Boolean, default=False, nullable=False)
+    can_manage_video_chats = Column(Boolean, default=False, nullable=False)
     send_restricted = Column(Boolean, default=False, nullable=False)
     send_restricted_until = Column(DateTime, nullable=True)
     send_restriction_reason = Column(Text, nullable=True)

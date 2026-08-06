@@ -121,6 +121,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required this.isOutgoing,
     required this.canEdit,
     required this.isPinned,
+    this.canPin = true,
     required this.canDelete,
     required this.hasCopyableText,
     required this.onReaction,
@@ -142,6 +143,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool isOutgoing;
   final bool canEdit;
   final bool isPinned;
+  final bool canPin;
   final bool canDelete;
   final bool hasCopyableText;
   final bool canShowReaders;
@@ -164,6 +166,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     required bool isOutgoing,
     required bool canEdit,
     required bool isPinned,
+    bool canPin = true,
     required bool canDelete,
     required bool hasCopyableText,
     required ValueChanged<String> onReaction,
@@ -197,6 +200,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         isOutgoing: isOutgoing,
         canEdit: canEdit,
         isPinned: isPinned,
+        canPin: canPin,
         canDelete: canDelete,
         hasCopyableText: hasCopyableText,
         canShowReaders: canShowReaders,
@@ -290,11 +294,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
           icon: Icons.edit_outlined,
           label: 'Изменить',
         ),
-      _MenuItem(
-        action: 'pin',
-        icon: widget.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-        label: widget.isPinned ? 'Открепить' : 'Закрепить',
-      ),
+      if (widget.canPin)
+        _MenuItem(
+          action: 'pin',
+          icon: widget.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          label: widget.isPinned ? 'Открепить' : 'Закрепить',
+        ),
       if (widget.canForward)
         _MenuItem(
           action: 'forward',
