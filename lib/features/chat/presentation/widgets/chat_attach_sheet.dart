@@ -15,9 +15,11 @@ import '../../../../core/haptics/app_haptics.dart';
 import '../../../../core/platform/device_location.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_models.dart';
+import '../../../../models/gif_models.dart';
 import '../../../../models/sticker_models.dart';
 import '../../../../services/api_reachability_service.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/gif_search_service.dart';
 import '../../../../services/media_upload_service.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/server_config.dart';
@@ -1289,8 +1291,17 @@ class _GifPickPanel extends StatefulWidget {
 }
 
 class _GifPickPanelState extends State<_GifPickPanel> {
+  final _searchController = TextEditingController();
+  Timer? _searchDebounce;
   List<String> _recentUrls = const [];
-  bool _loading = true;
+  List<GifCatalogItem> _catalogItems = const [];
+  String? _catalogNext;
+  bool _recentLoading = true;
+  bool _catalogLoading = false;
+  bool _catalogLoadingMore = false;
+  bool _catalogConfigured = true;
+  String? _catalogError;
+  String _activeQuery = '';
 
   bool _isGifUrl(String url) {
     final path = url.split('?').first.toLowerCase();
@@ -1300,10 +1311,30 @@ class _GifPickPanelState extends State<_GifPickPanel> {
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    unawaited(_loadRecent());
+    unawaited(_loadCatalog());
+    _searchController.addListener(_onSearchChanged);
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      final q = _searchController.text.trim();
+      if (q == _activeQuery) return;
+      unawaited(_loadCatalog(query: q));
+    });
+  }
+
+  Future<void> _loadRecent() async {
     final local = await ChatRecentGifsStore.load();
     final urls = <String>[
       for (final e in local)
@@ -1327,82 +1358,272 @@ class _GifPickPanelState extends State<_GifPickPanel> {
     if (!mounted) return;
     setState(() {
       _recentUrls = urls.take(36).toList();
-      _loading = false;
+      _recentLoading = false;
     });
+  }
+
+  Future<void> _loadCatalog({String? query, bool more = false}) async {
+    final q = (query ?? _activeQuery).trim();
+    if (more) {
+      final next = _catalogNext;
+      if (next == null || next.isEmpty || _catalogLoadingMore) return;
+      setState(() => _catalogLoadingMore = true);
+    } else {
+      setState(() {
+        _activeQuery = q;
+        _catalogLoading = true;
+        _catalogError = null;
+        _catalogItems = const [];
+        _catalogNext = null;
+      });
+    }
+    try {
+      final page = more
+          ? (q.isEmpty
+              ? await GifSearchService.featured(pos: _catalogNext)
+              : await GifSearchService.search(query: q, pos: _catalogNext))
+          : (q.isEmpty
+              ? await GifSearchService.featured()
+              : await GifSearchService.search(query: q));
+      if (!mounted) return;
+      setState(() {
+        _catalogConfigured = page.configured;
+        _catalogItems = more
+            ? [..._catalogItems, ...page.items]
+            : page.items;
+        _catalogNext = page.next;
+        _catalogLoading = false;
+        _catalogLoadingMore = false;
+        _catalogError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _catalogLoading = false;
+        _catalogLoadingMore = false;
+        if (!more) {
+          _catalogItems = const [];
+          _catalogNext = null;
+        }
+        _catalogError = 'Не удалось загрузить каталог GIF';
+      });
+    }
+  }
+
+  Widget _gifTile(
+    BuildContext context, {
+    required String sendUrl,
+    String? previewUrl,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final display = (previewUrl != null && previewUrl.isNotEmpty)
+        ? previewUrl
+        : sendUrl;
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => widget.onPickRecent(sendUrl),
+        child: ChatStickerTile(
+          mediaUrl: ServerConfig.resolveMediaUrl(display),
+          animated: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(BuildContext context, String text) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+    );
+  }
+
+  Widget _gifUrlGrid(BuildContext context, List<String> urls) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: urls.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemBuilder: (context, index) =>
+          _gifTile(context, sendUrl: urls[index]),
+    );
+  }
+
+  Widget _gifCatalogGrid(BuildContext context, List<GifCatalogItem> items) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return _gifTile(
+          context,
+          sendUrl: item.url,
+          previewUrl: item.previewUrl,
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final searching = _activeQuery.isNotEmpty;
+
     return ListView(
       controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
+        TextField(
+          controller: _searchController,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Поиск GIF',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Очистить',
+                    onPressed: () {
+                      _searchController.clear();
+                      unawaited(_loadCatalog(query: ''));
+                    },
+                    icon: const Icon(Icons.close),
+                  ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: widget.onPickDevice,
           icon: const Icon(Icons.folder_open_outlined),
           label: const Text('Выбрать GIF с устройства'),
         ),
         const SizedBox(height: 16),
-        Text(
-          'Недавние GIF',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+        _sectionTitle(
+          context,
+          searching ? 'Результаты' : 'Популярные',
         ),
         const SizedBox(height: 8),
-        if (_loading)
+        if (_catalogLoading)
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: 32),
+            padding: EdgeInsets.symmetric(vertical: 28),
             child: Center(child: CircularProgressIndicator()),
           )
-        else if (_recentUrls.isEmpty)
+        else if (_catalogError != null)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 28),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Column(
               children: [
-                Icon(
-                  Icons.gif_box_outlined,
-                  size: 48,
-                  color: scheme.primary.withValues(alpha: 0.85),
-                ),
-                const SizedBox(height: 12),
                 Text(
-                  'Пока нет GIF из истории чата.\nОтправьте .gif / .webp — они появятся здесь.',
+                  _catalogError!,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
                 ),
+                TextButton(
+                  onPressed: () => unawaited(_loadCatalog()),
+                  child: const Text('Повторить'),
+                ),
               ],
             ),
           )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _recentUrls.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-            ),
-            itemBuilder: (context, index) {
-              final url = _recentUrls[index];
-              return Material(
-                color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(12),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () => widget.onPickRecent(url),
-                  child: ChatStickerTile(
-                    mediaUrl: ServerConfig.resolveMediaUrl(url),
-                    animated: true,
+        else if (!_catalogConfigured)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'Каталог GIF пока недоступен. Можно выбрать файл с устройства '
+              'или недавние GIF ниже.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
                   ),
-                ),
-              );
-            },
-          ),
+            ),
+          )
+        else if (_catalogItems.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              searching
+                  ? 'Ничего не найдено. Попробуйте другой запрос.'
+                  : 'Пока нет популярных GIF.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+            ),
+          )
+        else ...[
+          _gifCatalogGrid(context, _catalogItems),
+          if (_catalogNext != null && _catalogNext!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                onPressed: _catalogLoadingMore
+                    ? null
+                    : () => unawaited(_loadCatalog(more: true)),
+                child: _catalogLoadingMore
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Ещё'),
+              ),
+            ),
+          ],
+        ],
+        if (!searching) ...[
+          const SizedBox(height: 20),
+          _sectionTitle(context, 'Недавние GIF'),
+          const SizedBox(height: 8),
+          if (_recentLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_recentUrls.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.gif_box_outlined,
+                    size: 40,
+                    color: scheme.primary.withValues(alpha: 0.85),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Пока нет GIF из истории чата.\n'
+                    'Отправьте .gif / .webp — они появятся здесь.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            )
+          else
+            _gifUrlGrid(context, _recentUrls),
+        ],
       ],
     );
   }

@@ -25,7 +25,7 @@ class ChatRecentGifEntry {
   }
 }
 
-/// Local recent GIFs sent from chat (no Tenor/Giphy).
+/// Local recent GIFs sent from chat (device / Tenor / chat history).
 class ChatRecentGifsStore {
   ChatRecentGifsStore._();
 
