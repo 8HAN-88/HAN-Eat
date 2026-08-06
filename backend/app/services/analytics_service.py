@@ -398,57 +398,6 @@ class AnalyticsService:
 
         return result
 
-    def get_meal_plan_analytics(self, user_id: int, days: int = 30) -> Dict[str, Any]:
-        """Продуктовая аналитика AI meal plan для пользователя."""
-        start_date = datetime.utcnow() - timedelta(days=days)
-        base = self.db.query(AnalyticsEvent).filter(
-            AnalyticsEvent.user_id == user_id,
-            AnalyticsEvent.event_type.like("meal_plan_%"),
-            AnalyticsEvent.created_at >= start_date,
-        )
-
-        def _count(event_type: str) -> int:
-            return (
-                self.db.query(func.count(AnalyticsEvent.id))
-                .filter(
-                    AnalyticsEvent.user_id == user_id,
-                    AnalyticsEvent.event_type == event_type,
-                    AnalyticsEvent.created_at >= start_date,
-                )
-                .scalar()
-                or 0
-            )
-
-        generations = _count("meal_plan_generated")
-        regenerations = _count("meal_plan_regenerated")
-        shopping = _count("meal_plan_shopping_applied")
-        recipe_opens = _count("meal_plan_recipe_open")
-        calendar_applies = _count("meal_plan_applied_to_calendar")
-
-        durations: List[int] = []
-        for row in base.filter(AnalyticsEvent.event_type == "meal_plan_generated").all():
-            meta = row.event_metadata or {}
-            d = meta.get("duration_days")
-            if isinstance(d, int):
-                durations.append(d)
-            elif isinstance(d, (float, str)):
-                try:
-                    durations.append(int(d))
-                except (TypeError, ValueError):
-                    pass
-
-        avg_duration = round(sum(durations) / len(durations), 1) if durations else 0
-
-        return {
-            "period_days": days,
-            "plans_generated": generations,
-            "regenerations": regenerations,
-            "shopping_list_uses": shopping,
-            "recipe_opens": recipe_opens,
-            "calendar_applies": calendar_applies,
-            "average_plan_duration_days": avg_duration,
-            "retention_hint": generations > 0 and regenerations > 0,
-        }
 
     def get_bot_analytics(
         self,

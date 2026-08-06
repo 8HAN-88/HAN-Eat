@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 import 'server_config.dart';
 
-/// Лёгкие клиентские события (ai_scan paywall, открытие экранов и т.д.).
+/// Лёгкие клиентские события (paywall, открытие экранов и т.д.).
 class ProductAnalytics {
   static String get _baseUrl => ServerConfig.apiBaseUrl;
 

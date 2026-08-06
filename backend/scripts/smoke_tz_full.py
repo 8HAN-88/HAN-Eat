@@ -89,7 +89,6 @@ def run_existing_scripts(email: str) -> None:
     ]
     if env.get("ADMIN_EMAIL") and env.get("ADMIN_PASSWORD"):
         scripts.append(("smoke_admin_refunds.py", [sys.executable, f"{root}/smoke_admin_refunds.py"]))
-    scripts.append(("smoke_ai_scan_auth.py", [sys.executable, f"{root}/smoke_ai_scan_auth.py"]))
 
     for name, cmd in scripts:
         section(f"script {name}")

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Публичные + опционально auth AI scan smoke.
+# Публичные + опционально auth subscription smoke.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="${BASE_URL:-http://127.0.0.1:5001}"
@@ -20,8 +20,6 @@ if [[ -n "${SMOKE_PASSWORD:-}" ]]; then
     python3.11 "$ROOT/scripts/smoke_admin_refunds.py" || python3 "$ROOT/scripts/smoke_admin_refunds.py"
     echo ""
   fi
-  echo "=== AI Scan (auth) $SMOKE_EMAIL ==="
-  python3.11 "$ROOT/scripts/smoke_ai_scan_auth.py" || python3 "$ROOT/scripts/smoke_ai_scan_auth.py"
 else
   echo ""
   echo "SKIP auth smoke (set SMOKE_PASSWORD, optional SMOKE_EMAIL, SMOKE_AUTO_REGISTER=1)"

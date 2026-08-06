@@ -209,15 +209,13 @@ async def register(
     # Создаем пользователя (scan_credits поле legacy; kitchen AI-scan retired)
     from datetime import datetime
 
-    from app.services.ai_scan_credits_service import FREE_START
-
     user = User(
         email=request.email,
         password_hash=get_password_hash(request.password),
         name=request.name,
         username=request.username or _generate_unique_username(db, request.email),
-        scan_credits=FREE_START,
-        last_scan_credit_at=datetime.utcnow(),
+        scan_credits=0,
+        last_scan_credit_at=None,
     )
     from app.services.legal_consent_service import record_consent
 
@@ -225,10 +223,6 @@ async def register(
     db.add(user)
     db.commit()
     db.refresh(user)
-
-    from app.services.auth_background_tasks import refresh_scan_credits_for_user
-
-    background_tasks.add_task(refresh_scan_credits_for_user, user.id)
 
     # Убеждаемся, что is_private не None
     if user.is_private is None:
@@ -324,10 +318,6 @@ async def login(
             )
 
         logger.info(f"Login successful for user: {user.id} ({request.email})")
-
-        from app.services.auth_background_tasks import refresh_scan_credits_for_user
-
-        background_tasks.add_task(refresh_scan_credits_for_user, user.id)
 
         # Убеждаемся, что is_private не None (для совместимости со старыми данными)
         if user.is_private is None:

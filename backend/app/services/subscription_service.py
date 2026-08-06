@@ -306,10 +306,6 @@ class SubscriptionService:
         self.db.commit()
         self.db.refresh(subscription)
 
-        from app.services.ai_scan_credits_service import grant_ai_scan_on_subscription
-
-        grant_ai_scan_on_subscription(self.db, user_id, product)
-
         return subscription
 
     def cancel_subscription(
