@@ -3,8 +3,9 @@
 """
 import asyncio
 import logging
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
@@ -12,8 +13,6 @@ from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.core.database import Base, engine
 import app.models
-from fastapi import APIRouter, Request, status
-from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
