@@ -68,12 +68,46 @@ class StoryService {
     );
   }
 
-  static Future<void> markViewed(int storyId) async {
+  static Future<StoryDto> markViewed(int storyId) async {
     final response = await http.post(
       ApiService.uri('/stories/$storyId/view'),
       headers: await ApiService.authHeaders(),
     );
     ApiService.ensureSuccess(response);
+    return StoryDto.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  static Future<StoryViewersPage> fetchViewers(int storyId) async {
+    final response = await http.get(
+      ApiService.uri('/stories/$storyId/viewers'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    return StoryViewersPage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<StoryDto> setReaction({
+    required int storyId,
+    required String emoji,
+  }) async {
+    final response = await http.post(
+      ApiService.uri('/stories/$storyId/reactions'),
+      headers: await ApiService.authHeaders(),
+      body: jsonEncode({'emoji': emoji}),
+    );
+    ApiService.ensureSuccess(response);
+    return StoryDto.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  static Future<StoryDto> clearReaction(int storyId) async {
+    final response = await http.delete(
+      ApiService.uri('/stories/$storyId/reactions'),
+      headers: await ApiService.authHeaders(),
+    );
+    ApiService.ensureSuccess(response);
+    return StoryDto.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   static Future<void> deleteStory(int storyId) async {

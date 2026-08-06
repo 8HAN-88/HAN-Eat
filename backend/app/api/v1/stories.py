@@ -7,11 +7,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 
 from app.api.dependencies import get_current_user_required
 from app.core.database import get_db
-from app.models.story import Story
+from app.models.story import Story, StoryReaction, StoryView
 from app.models.user import User
 
 router = APIRouter(prefix="/stories", tags=["Stories"])
@@ -32,6 +32,15 @@ class StoryAuthorResponse(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class StoryReactionSummary(BaseModel):
+    emoji: str
+    count: int
+
+
+class StoryReactionRequest(BaseModel):
+    emoji: str = Field(..., min_length=1, max_length=16)
+
+
 class StoryResponse(BaseModel):
     id: int
     user_id: int
@@ -44,6 +53,19 @@ class StoryResponse(BaseModel):
     created_at: str
     expires_at: str
     author: StoryAuthorResponse
+    reactions: List[StoryReactionSummary] = Field(default_factory=list)
+    my_reaction: Optional[str] = None
+
+
+class StoryViewerItem(BaseModel):
+    user: StoryAuthorResponse
+    viewed_at: str
+    reaction: Optional[str] = None
+
+
+class StoryViewersResponse(BaseModel):
+    views_count: int
+    items: List[StoryViewerItem]
 
 
 def _active_story_query(db: Session):
@@ -53,14 +75,59 @@ def _active_story_query(db: Session):
         .options(joinedload(Story.user))
         .filter(
             Story.deleted_at.is_(None),
-            Story.is_active == True,
+            Story.is_active == True,  # noqa: E712
             Story.expires_at > now,
         )
     )
 
 
-def _to_response(story: Story) -> StoryResponse:
+def _author_response(user: User) -> StoryAuthorResponse:
+    return StoryAuthorResponse(
+        id=user.id,
+        name=user.name,
+        username=user.username,
+        avatar_url=user.avatar_url,
+    )
+
+
+def _reaction_summaries(
+    db: Session, story_id: int, viewer_id: Optional[int]
+) -> tuple[list[StoryReactionSummary], Optional[str]]:
+    rows = (
+        db.query(StoryReaction.emoji, func.count(StoryReaction.id))
+        .filter(StoryReaction.story_id == story_id)
+        .group_by(StoryReaction.emoji)
+        .all()
+    )
+    summaries = [
+        StoryReactionSummary(emoji=emoji, count=int(count))
+        for emoji, count in rows
+        if emoji
+    ]
+    summaries.sort(key=lambda item: (-item.count, item.emoji))
+    my_reaction = None
+    if viewer_id is not None:
+        mine = (
+            db.query(StoryReaction)
+            .filter(
+                StoryReaction.story_id == story_id,
+                StoryReaction.user_id == viewer_id,
+            )
+            .first()
+        )
+        if mine:
+            my_reaction = mine.emoji
+    return summaries, my_reaction
+
+
+def _to_response(
+    story: Story,
+    db: Session,
+    *,
+    viewer_id: Optional[int] = None,
+) -> StoryResponse:
     user = story.user
+    reactions, my_reaction = _reaction_summaries(db, story.id, viewer_id)
     return StoryResponse(
         id=story.id,
         user_id=story.user_id,
@@ -72,13 +139,19 @@ def _to_response(story: Story) -> StoryResponse:
         views_count=story.views_count or 0,
         created_at=story.created_at.isoformat(),
         expires_at=story.expires_at.isoformat(),
-        author=StoryAuthorResponse(
-            id=user.id,
-            name=user.name,
-            username=user.username,
-            avatar_url=user.avatar_url,
-        ),
+        author=_author_response(user),
+        reactions=reactions,
+        my_reaction=my_reaction,
     )
+
+
+def _recount_views(db: Session, story: Story) -> None:
+    count = (
+        db.query(func.count(StoryView.id))
+        .filter(StoryView.story_id == story.id)
+        .scalar()
+    )
+    story.views_count = int(count or 0)
 
 
 @router.get("", response_model=List[StoryResponse])
@@ -96,7 +169,7 @@ async def list_active_stories(
         .limit(limit)
         .all()
     )
-    return [_to_response(story) for story in stories]
+    return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
 
 
 @router.get("/mine", response_model=List[StoryResponse])
@@ -110,7 +183,7 @@ async def list_my_stories(
         .order_by(Story.created_at.desc())
         .all()
     )
-    return [_to_response(story) for story in stories]
+    return [_to_response(story, db, viewer_id=current_user.id) for story in stories]
 
 
 @router.post("", response_model=StoryResponse, status_code=status.HTTP_201_CREATED)
@@ -133,7 +206,7 @@ async def create_story(
     db.commit()
     db.refresh(story)
     story.user = current_user
-    return _to_response(story)
+    return _to_response(story, db, viewer_id=current_user.id)
 
 
 @router.post("/{story_id}/view", response_model=StoryResponse)
@@ -146,10 +219,146 @@ async def mark_story_viewed(
     if not story:
         raise HTTPException(status_code=404, detail="Story not found")
     if story.user_id != current_user.id:
-        story.views_count = int(story.views_count or 0) + 1
+        existing = (
+            db.query(StoryView)
+            .filter(
+                StoryView.story_id == story.id,
+                StoryView.user_id == current_user.id,
+            )
+            .first()
+        )
+        if existing is None:
+            db.add(
+                StoryView(
+                    story_id=story.id,
+                    user_id=current_user.id,
+                )
+            )
+            db.flush()
+            _recount_views(db, story)
+            db.commit()
+            db.refresh(story)
+        else:
+            existing.viewed_at = datetime.utcnow()
+            db.commit()
+    return _to_response(story, db, viewer_id=current_user.id)
+
+
+@router.get("/{story_id}/viewers", response_model=StoryViewersResponse)
+async def list_story_viewers(
+    story_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+    limit: int = 100,
+):
+    story = (
+        db.query(Story)
+        .filter(
+            Story.id == story_id,
+            Story.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if story.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the author can see viewers")
+
+    limit = min(max(limit, 1), 200)
+    views = (
+        db.query(StoryView)
+        .options(joinedload(StoryView.user))
+        .filter(StoryView.story_id == story.id)
+        .order_by(StoryView.viewed_at.desc())
+        .limit(limit)
+        .all()
+    )
+    reaction_by_user = {
+        row.user_id: row.emoji
+        for row in db.query(StoryReaction)
+        .filter(StoryReaction.story_id == story.id)
+        .all()
+    }
+    items = [
+        StoryViewerItem(
+            user=_author_response(view.user),
+            viewed_at=view.viewed_at.isoformat(),
+            reaction=reaction_by_user.get(view.user_id),
+        )
+        for view in views
+        if view.user is not None
+    ]
+    return StoryViewersResponse(
+        views_count=int(story.views_count or 0),
+        items=items,
+    )
+
+
+@router.post("/{story_id}/reactions", response_model=StoryResponse)
+async def set_story_reaction(
+    story_id: int,
+    payload: StoryReactionRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    story = _active_story_query(db).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    if story.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot react to your own story")
+
+    emoji = (payload.emoji or "").strip()
+    if not emoji or len(emoji) > 16:
+        raise HTTPException(status_code=400, detail="Invalid emoji")
+
+    existing = (
+        db.query(StoryReaction)
+        .filter(
+            StoryReaction.story_id == story.id,
+            StoryReaction.user_id == current_user.id,
+        )
+        .first()
+    )
+    if existing:
+        if existing.emoji == emoji:
+            db.delete(existing)
+        else:
+            existing.emoji = emoji
+    else:
+        db.add(
+            StoryReaction(
+                story_id=story.id,
+                user_id=current_user.id,
+                emoji=emoji,
+            )
+        )
+    db.commit()
+    db.refresh(story)
+    return _to_response(story, db, viewer_id=current_user.id)
+
+
+@router.delete("/{story_id}/reactions", response_model=StoryResponse)
+async def clear_story_reaction(
+    story_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    story = _active_story_query(db).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    row = (
+        db.query(StoryReaction)
+        .filter(
+            StoryReaction.story_id == story.id,
+            StoryReaction.user_id == current_user.id,
+        )
+        .first()
+    )
+    if row:
+        db.delete(row)
         db.commit()
         db.refresh(story)
-    return _to_response(story)
+    return _to_response(story, db, viewer_id=current_user.id)
 
 
 @router.delete("/{story_id}", status_code=status.HTTP_204_NO_CONTENT)

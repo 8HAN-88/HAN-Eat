@@ -1,32 +1,49 @@
 import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../../services/auth_service.dart';
 import '../../../services/server_config.dart';
+import '../data/story_models.dart';
 import '../data/story_service.dart';
 
 /// Один элемент сторис
 class StoryItem {
-  final String id;
-  final String mediaUrl;
-  final String? authorName;
-  final String? authorAvatar;
-  final Duration duration;
-  final bool isVideo;
-
   StoryItem({
     required this.id,
     required this.mediaUrl,
+    required this.authorId,
     this.authorName,
     this.authorAvatar,
     this.duration = const Duration(seconds: 5),
     this.isVideo = false,
+    this.viewsCount = 0,
+    this.myReaction,
+    this.reactions = const [],
   });
+
+  final String id;
+  final String mediaUrl;
+  final int authorId;
+  final String? authorName;
+  final String? authorAvatar;
+  final Duration duration;
+  final bool isVideo;
+  int viewsCount;
+  String? myReaction;
+  List<StoryReactionSummary> reactions;
+
+  bool get isOwn {
+    final me = AuthService.instance.currentUser;
+    return me != null && me.id == authorId;
+  }
 }
 
 /// Полноценный просмотрщик сторис (как в Telegram/Instagram)
-/// Поддерживает фото + видео, прогресс-бары, автопереход, паузу, свайп.
+/// Поддерживает фото + видео, прогресс-бары, автопереход, паузу, свайп,
+/// реакции и список просмотров для своих сторис.
 class StoryViewerScreen extends StatefulWidget {
   const StoryViewerScreen({
     super.key,
@@ -43,12 +60,15 @@ class StoryViewerScreen extends StatefulWidget {
 
 class _StoryViewerScreenState extends State<StoryViewerScreen>
     with SingleTickerProviderStateMixin {
+  static const _quickReactions = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
+
   late PageController _pageController;
   late int _currentIndex;
   VideoPlayerController? _videoController;
   Timer? _progressTimer;
   double _progress = 0.0;
   bool _isPaused = false;
+  bool _reacting = false;
 
   @override
   void initState() {
@@ -69,8 +89,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     _progress = 0.0;
     _progressTimer?.cancel();
     final storyId = int.tryParse(_currentStory.id);
-    if (storyId != null) {
-      unawaited(StoryService.markViewed(storyId));
+    if (storyId != null && !_currentStory.isOwn) {
+      unawaited(_markViewed(storyId));
     }
 
     if (_currentStory.isVideo) {
@@ -78,6 +98,20 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     } else {
       _startPhotoTimer();
     }
+  }
+
+  Future<void> _markViewed(int storyId) async {
+    try {
+      final updated = await StoryService.markViewed(storyId);
+      if (!mounted) return;
+      final idx = widget.stories.indexWhere((s) => s.id == '$storyId');
+      if (idx < 0) return;
+      setState(() {
+        widget.stories[idx].viewsCount = updated.viewsCount;
+        widget.stories[idx].myReaction = updated.myReaction;
+        widget.stories[idx].reactions = updated.reactions;
+      });
+    } catch (_) {}
   }
 
   Future<void> _initVideo() async {
@@ -89,7 +123,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     await _videoController!.initialize();
     await _videoController!.play();
 
-    final duration = _videoController!.value.duration;
     _videoController!.addListener(_onVideoProgress);
 
     if (mounted) setState(() {});
@@ -101,7 +134,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     final value = _videoController!.value;
     if (value.duration.inMilliseconds == 0) return;
 
-    final progress = value.position.inMilliseconds / value.duration.inMilliseconds;
+    final progress =
+        value.position.inMilliseconds / value.duration.inMilliseconds;
 
     setState(() {
       _progress = progress.clamp(0.0, 1.0);
@@ -172,6 +206,147 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     _startStory();
   }
 
+  Future<void> _react(String emoji) async {
+    if (_reacting || _currentStory.isOwn) return;
+    final storyId = int.tryParse(_currentStory.id);
+    if (storyId == null) return;
+    setState(() => _reacting = true);
+    _pause();
+    try {
+      final updated = await StoryService.setReaction(
+        storyId: storyId,
+        emoji: emoji,
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentStory.myReaction = updated.myReaction;
+        _currentStory.reactions = updated.reactions;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось отправить реакцию')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _reacting = false);
+        _resume();
+      }
+    }
+  }
+
+  Future<void> _openViewers() async {
+    if (!_currentStory.isOwn) return;
+    final storyId = int.tryParse(_currentStory.id);
+    if (storyId == null) return;
+    _pause();
+    try {
+      final page = await StoryService.fetchViewers(storyId);
+      if (!mounted) return;
+      setState(() => _currentStory.viewsCount = page.viewsCount);
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.grey.shade900,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (context) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Просмотры · ${page.viewsCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (page.items.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        'Пока никто не посмотрел',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.45,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: page.items.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: Colors.white12, height: 1),
+                        itemBuilder: (context, index) {
+                          final item = page.items[index];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundImage: item.user.avatarUrl == null
+                                  ? null
+                                  : CachedNetworkImageProvider(
+                                      ServerConfig.resolvePublisherAvatarUrl(
+                                        item.user.avatarUrl!,
+                                      ),
+                                    ),
+                              child: item.user.avatarUrl == null
+                                  ? Text(
+                                      item.user.name.isNotEmpty
+                                          ? item.user.name[0].toUpperCase()
+                                          : '?',
+                                    )
+                                  : null,
+                            ),
+                            title: Text(
+                              item.user.name,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            subtitle: Text(
+                              _formatViewedAt(item.viewedAt),
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                            trailing: item.reaction == null
+                                ? null
+                                : Text(
+                                    item.reaction!,
+                                    style: const TextStyle(fontSize: 22),
+                                  ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось загрузить просмотры')),
+      );
+    } finally {
+      if (mounted) _resume();
+    }
+  }
+
+  String _formatViewedAt(DateTime at) {
+    final local = at.toLocal();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
   @override
   void dispose() {
     _progressTimer?.cancel();
@@ -198,6 +373,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       );
     }
 
+    final story = _currentStory;
+    final reactionLabel = story.reactions.isEmpty
+        ? null
+        : story.reactions.map((r) => '${r.emoji}${r.count}').join(' ');
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
@@ -205,18 +385,15 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         onLongPressEnd: (_) => _resume(),
         child: Stack(
           children: [
-            // Основной контент
             PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
               itemCount: widget.stories.length,
               itemBuilder: (context, index) {
-                final story = widget.stories[index];
-                return _buildStoryContent(story);
+                final item = widget.stories[index];
+                return _buildStoryContent(item);
               },
             ),
-
-            // Прогресс-бары сверху
             Positioned(
               top: MediaQuery.of(context).padding.top + 8,
               left: 8,
@@ -248,31 +425,43 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 }),
               ),
             ),
-
-            // Автор
-            if (_currentStory.authorName != null)
+            if (story.authorName != null)
               Positioned(
                 top: MediaQuery.of(context).padding.top + 20,
                 left: 16,
+                right: 56,
                 child: Row(
                   children: [
-                    if (_currentStory.authorAvatar != null)
+                    if (story.authorAvatar != null)
                       CircleAvatar(
                         radius: 16,
                         backgroundImage: CachedNetworkImageProvider(
-                          ServerConfig.resolvePublisherAvatarUrl(_currentStory.authorAvatar!),
+                          ServerConfig.resolvePublisherAvatarUrl(
+                            story.authorAvatar!,
+                          ),
                         ),
                       ),
                     const SizedBox(width: 8),
-                    Text(
-                      _currentStory.authorName!,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    Expanded(
+                      child: Text(
+                        story.authorName!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    if (reactionLabel != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        reactionLabel,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
                   ],
                 ),
               ),
-
-            // Кнопка закрытия
             Positioned(
               top: MediaQuery.of(context).padding.top + 12,
               right: 12,
@@ -281,8 +470,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ),
-
-            // Зоны тапа (лево/право)
             Positioned.fill(
               child: Row(
                 children: [
@@ -301,10 +488,62 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ],
               ),
             ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              child: story.isOwn
+                  ? Center(
+                      child: TextButton.icon(
+                        onPressed: _openViewers,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: Colors.white24,
+                        ),
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        label: Text(
+                          story.viewsCount == 0
+                              ? 'Нет просмотров'
+                              : '${story.viewsCount} просмотр${_ruPlural(story.viewsCount)}',
+                        ),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        for (final emoji in _quickReactions)
+                          InkWell(
+                            onTap: _reacting ? null : () => _react(emoji),
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: story.myReaction == emoji
+                                    ? Colors.white24
+                                    : Colors.black38,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                emoji,
+                                style: const TextStyle(fontSize: 22),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  String _ruPlural(int n) {
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    if (mod10 == 1 && mod100 != 11) return '';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'а';
+    return 'ов';
   }
 
   Widget _buildStoryContent(StoryItem story) {
@@ -323,7 +562,8 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       return CachedNetworkImage(
         imageUrl: url,
         fit: BoxFit.contain,
-        placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+        placeholder: (_, __) =>
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
         errorWidget: (_, __, ___) => const Center(
           child: Icon(Icons.broken_image, color: Colors.white54, size: 64),
         ),
