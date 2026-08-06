@@ -2,39 +2,6 @@ import 'package:flutter/material.dart';
 
 /// Русские тексты подписок (messenger / HanWe).
 class SubscriptionCopy {
-  // —— Soft paywall (legacy AiScanExhaustedPaywall widget) ——
-  static const aiScanExhaustedTitle = 'Лимит AI на сегодня закончился';
-  static const aiScanExhaustedSubtitle =
-      'Оформите HanWe AI, чтобы пользоваться AI без ограничений.';
-
-  static const aiScanPlusExhaustedTitle = 'AI временно недоступен';
-  static const aiScanPlusExhaustedSubtitle =
-      'Новые AI-запросы скоро снова будут доступны. '
-      'Пока можно пользоваться чатами, лентой и каналами.';
-
-  static const List<SubscriptionBenefitItem> aiScanBenefits = [
-    SubscriptionBenefitItem(
-      icon: Icons.auto_awesome_outlined,
-      text: 'Больше AI-подсказок в приложении',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.offline_bolt_outlined,
-      text: 'Сохранённые посты офлайн',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.dynamic_feed_outlined,
-      text: 'Расширенные рекомендации в ленте',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.bolt_outlined,
-      text: 'Быстрее работает AI',
-    ),
-    SubscriptionBenefitItem(
-      icon: Icons.block_outlined,
-      text: 'Без рекламы (когда появится)',
-    ),
-  ];
-
   static const paywallCta = 'Оформить подписку';
   static const paywallLater = 'Позже';
 
@@ -130,11 +97,4 @@ class SubscriptionCopy {
     'Приоритетная поддержка',
     'Максимальный доступ ко всем функциям',
   ];
-}
-
-class SubscriptionBenefitItem {
-  const SubscriptionBenefitItem({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
 }
