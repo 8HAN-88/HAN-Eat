@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/recipe/recipe_nutrition_input.dart';
+import '../../kitchen/domain/recipe_nutrition_input.dart';
 import '../../../models/post_model.dart';
 import '../../../services/api_service.dart';
 import '../../../services/feed_cache_service.dart';
 import '../../../services/post_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/url_validator.dart';
-import '../../../widgets/recipe_nutrition_form_section.dart';
-import '../../../widgets/recipe_origin_country_field.dart';
+import '../../kitchen/presentation/widgets/recipe_nutrition_form_section.dart';
+import '../../kitchen/presentation/widgets/recipe_origin_country_field.dart';
 import '../../../widgets/create_poll_form_section.dart';
 import '../../../widgets/app_empty_state.dart';
 

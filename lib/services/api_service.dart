@@ -4,12 +4,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../models/analysis_mode.dart';
-import '../models/analysis_result.dart';
+import '../features/kitchen/data/models/analysis_mode.dart';
+import '../features/kitchen/data/models/analysis_result.dart';
 import '../models/community_video.dart';
 import '../models/post_model.dart';
-import '../models/recipe.dart';
-import '../models/search_history_entry.dart';
+import '../features/kitchen/data/models/recipe.dart';
+import '../features/kitchen/data/models/search_history_entry.dart';
 
 import '../features/bots/data/bot_models.dart';
 import '../features/monetization/data/donation_models.dart';

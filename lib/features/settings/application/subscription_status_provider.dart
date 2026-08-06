@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/subscription/recipe_nutrition_access.dart';
+import '../../kitchen/domain/recipe_nutrition_access.dart';
 import '../../../services/subscription_service.dart';
 import '../../../services/subscription_status_cache.dart';
 

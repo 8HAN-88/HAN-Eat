@@ -8,7 +8,7 @@ import '../../../services/user_service.dart';
 import '../../../services/auth_service.dart';
 import '../../auth/sign_out_helper.dart';
 import '../../../utils/api_error_parser.dart';
-import '../../../widgets/ai_scan_credits_tile.dart';
+import '../../kitchen/presentation/widgets/ai_scan_credits_tile.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../../widgets/phone/profile_phone_tile.dart';
 import '../../../widgets/account/profile_email_tile.dart';

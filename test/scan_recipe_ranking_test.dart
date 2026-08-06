@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:han_eat/features/menu/scan_recipe_ranking.dart';
-import 'package:han_eat/models/recipe.dart';
+import 'package:han_eat/features/kitchen/menu/scan_recipe_ranking.dart';
+import 'package:han_eat/features/kitchen/data/models/recipe.dart';
 
 Recipe _spoon(int id, String title) => Recipe(
       id: id,

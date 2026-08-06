@@ -8,7 +8,7 @@ import '../core/storage/hive_bootstrap.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
 import '../models/post_model.dart';
-import '../models/recipe.dart';
+import '../features/kitchen/data/models/recipe.dart';
 import '../utils/api_error_parser.dart';
 import 'feed_cache_service.dart';
 

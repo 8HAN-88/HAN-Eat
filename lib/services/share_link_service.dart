@@ -1,5 +1,5 @@
 import '../models/post_model.dart';
-import '../models/recipe.dart';
+import '../features/kitchen/data/models/recipe.dart';
 
 class ShareLinkService {
   static const webOrigin = 'https://haneat.app';

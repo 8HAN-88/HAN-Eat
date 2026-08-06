@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:han_eat/models/shopping_item.dart';
-import 'package:han_eat/services/shopping_service.dart';
+import 'package:han_eat/features/kitchen/data/models/shopping_item.dart';
+import 'package:han_eat/features/kitchen/data/services/shopping_service.dart';
 
 void main() {
   late Directory tmpDir;

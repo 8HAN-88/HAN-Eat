@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:han_eat/data/mock_recipes.dart';
-import 'package:han_eat/models/recipe_model.dart';
-import 'package:han_eat/services/recipe_service.dart';
+import 'package:han_eat/features/kitchen/data/mock_recipes.dart';
+import 'package:han_eat/features/kitchen/data/models/recipe_model.dart';
+import 'package:han_eat/features/kitchen/data/services/recipe_service.dart';
 
 void main() {
   late Directory tmpDir;
