@@ -1234,8 +1234,6 @@ class ChannelDetail extends Channel {
   final List<String>? tags;
   final String? rules;
   final bool? autoPublishToFeed;
-  final bool? autoPublishToMenu;
-  final String? recipeVisibilityMode;
   final bool? allowComments;
   final bool? allowLikes;
   final bool? allowReposts;
@@ -1274,8 +1272,6 @@ class ChannelDetail extends Channel {
     this.tags,
     this.rules,
     this.autoPublishToFeed,
-    this.autoPublishToMenu,
-    this.recipeVisibilityMode,
     this.allowComments,
     this.allowLikes,
     this.allowReposts,
@@ -1314,8 +1310,6 @@ class ChannelDetail extends Channel {
           json['tags'] != null ? List<String>.from(json['tags'] as List) : null,
       rules: json['rules'] as String?,
       autoPublishToFeed: json['auto_publish_to_feed'] as bool?,
-      autoPublishToMenu: json['auto_publish_to_menu'] as bool?,
-      recipeVisibilityMode: json['recipe_visibility_mode'] as String?,
       allowComments: json['allow_comments'] as bool?,
       allowLikes: json['allow_likes'] as bool?,
       allowReposts: json['allow_reposts'] as bool?,
@@ -1372,8 +1366,6 @@ class ChannelDetail extends Channel {
       'tags': tags,
       'rules': rules,
       'auto_publish_to_feed': autoPublishToFeed,
-      'auto_publish_to_menu': autoPublishToMenu,
-      'recipe_visibility_mode': recipeVisibilityMode,
       'allow_comments': allowComments,
       'allow_likes': allowLikes,
       'allow_reposts': allowReposts,
