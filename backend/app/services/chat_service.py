@@ -3384,7 +3384,11 @@ class ChatService:
         reply_to_message_id: Optional[int] = None,
         client_message_id: Optional[str] = None,
         inline_keyboard_json: Optional[str] = None,
+        effect_id: Optional[str] = None,
+        topic_id: Optional[int] = None,
     ) -> ScheduledMessage:
+        from app.services.message_effect_service import normalize_effect_id
+
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         conv = (
             self.db.query(Conversation)
@@ -3415,6 +3419,8 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
+        effect = normalize_effect_id(effect_id)
+        resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 
         scheduled = ScheduledMessage(
             conversation_id=conversation_id,
@@ -3433,6 +3439,8 @@ class ChatService:
                 media_group_id, msg_type
             ),
             has_spoiler=bool(has_spoiler) and msg_type in ("image", "video"),
+            effect_id=effect,
+            topic_id=resolved_topic_id,
             target_user_id=target_user_id,
             status="pending",
         )
@@ -3613,6 +3621,8 @@ class ChatService:
                     ),
                     media_group_id=getattr(item, "media_group_id", None),
                     has_spoiler=bool(getattr(item, "has_spoiler", False)),
+                    effect_id=getattr(item, "effect_id", None),
+                    topic_id=getattr(item, "topic_id", None),
                 )
                 # Paid-DM fee charged inside send_message (before notify).
                 item.status = "sent"

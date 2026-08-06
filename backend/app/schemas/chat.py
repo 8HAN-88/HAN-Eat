@@ -273,6 +273,8 @@ class ScheduleMessageRequest(BaseModel):
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = Field(default=None, max_length=64)
     has_spoiler: bool = False
+    effect_id: Optional[str] = Field(default=None, max_length=32)
+    topic_id: Optional[int] = None
 
 
 class ScheduledMessageResponse(BaseModel):
@@ -289,6 +291,8 @@ class ScheduledMessageResponse(BaseModel):
     disable_webpage_preview: bool = False
     media_group_id: Optional[str] = None
     has_spoiler: bool = False
+    effect_id: Optional[str] = None
+    topic_id: Optional[int] = None
     status: str
     created_at: datetime
 

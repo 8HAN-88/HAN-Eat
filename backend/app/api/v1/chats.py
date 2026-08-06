@@ -214,6 +214,8 @@ def _scheduled_message_response(item: ScheduledMessage) -> ScheduledMessageRespo
         ),
         media_group_id=getattr(item, "media_group_id", None),
         has_spoiler=bool(getattr(item, "has_spoiler", False)),
+        effect_id=getattr(item, "effect_id", None),
+        topic_id=getattr(item, "topic_id", None),
         status=item.status,
         created_at=item.created_at,
     )
@@ -2183,6 +2185,8 @@ async def schedule_message(
             if inline_keyboard_payload
             else None,
             send_at=body.send_at,
+            effect_id=body.effect_id,
+            topic_id=body.topic_id,
         )
         db.commit()
         db.refresh(item)
@@ -2198,6 +2202,10 @@ async def schedule_message(
             "invalid_reply",
             "invalid_send_at",
             "when_online_direct_only",
+            "effect_id_invalid",
+            "topic_closed",
+            "topic_not_found",
+            "not_a_forum",
         ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
         if code == "user_blocked":
