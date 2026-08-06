@@ -91,9 +91,13 @@ class _FeedStoriesStripState extends State<FeedStoriesStrip> {
   StoryItem _toViewerItem(StoryDto story) => StoryItem(
         id: '${story.id}',
         mediaUrl: story.mediaUrl,
+        authorId: story.author.id,
         authorName: story.author.name,
         authorAvatar: story.author.avatarUrl,
         isVideo: story.isVideo,
+        viewsCount: story.viewsCount,
+        myReaction: story.myReaction,
+        reactions: story.reactions,
         duration: story.isVideo
             ? const Duration(seconds: 30)
             : const Duration(seconds: 5),

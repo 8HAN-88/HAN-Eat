@@ -47,7 +47,7 @@ from app.models.paid_features import (
     StarTransaction,
     UserStarGift,
 )
-from app.models.story import Story
+from app.models.story import Story, StoryReaction, StoryView
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.sticker import (
     StickerPack,
@@ -71,6 +71,8 @@ __all__ = [
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest",
     "PaidMessageUnlock", "PaidMessageException", "StarGift", "UserStarGift",
     "StarGiveaway", "StarGiveawayParticipant", "StarInvoice", "Story",
+    "StoryView", "StoryReaction",
+
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
