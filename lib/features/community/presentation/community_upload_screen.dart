@@ -42,8 +42,8 @@ class _CommunityUploadScreenState
   
   // Категории для видео Reels
   static const List<String> _videoCategories = [
-    'ЗОЖ',
-    'Рецепты',
+    'Новости',
+    'Образ жизни',
     'Красота',
     'Юмор',
     'Образование',
@@ -272,7 +272,7 @@ class _CommunityUploadScreenState
               maxLines: 4,
               decoration: const InputDecoration(
                 labelText: 'Описание',
-                hintText: 'Расскажите о рецепте, ингредиентах и лайфхаках',
+                hintText: 'Кратко опишите видео и о чём оно',
               ),
             ),
             const SizedBox(height: 12),

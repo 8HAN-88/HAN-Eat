@@ -82,7 +82,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   String get _screenTitle => widget.scope?.title ?? 'Поиск';
 
   String get _searchHint =>
-      widget.scope?.hint ?? 'Посты, люди, рилсы, рецепты…';
+      widget.scope?.hint ?? 'Посты, люди, рилсы, каналы…';
 
   bool get _channelsOnlyMode => widget.scope == SearchScope.channels;
 
@@ -736,15 +736,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   onSelected: (selected) {
                     setState(
                         () => _selectedPostType = selected ? 'photo' : null);
-                    _performSearch();
-                  },
-                ),
-                FilterChip(
-                  label: const Text('Рецепты'),
-                  selected: _selectedPostType == 'recipe',
-                  onSelected: (selected) {
-                    setState(
-                        () => _selectedPostType = selected ? 'recipe' : null);
                     _performSearch();
                   },
                 ),

@@ -231,7 +231,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         const SizedBox(height: 20),
         _InstructionStep(
           number: 1,
-          text: 'Откройте письмо «Сброс пароля — HAN Eat» (проверьте «Спам»).',
+          text: 'Откройте письмо «Сброс пароля — HanWe» (проверьте «Спам»).',
         ),
         const SizedBox(height: 10),
         _InstructionStep(

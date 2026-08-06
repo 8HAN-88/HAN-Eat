@@ -6408,7 +6408,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         const SnackBar(
           content: Text(
             'Нужен доступ к контактам. '
-            'Настройки → HAN Eat → Контакты → разрешить изменения.',
+            'Настройки → HanWe → Контакты → разрешить изменения.',
           ),
         ),
       );
@@ -7541,7 +7541,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       collected.sort((a, b) => a.createdAt.compareTo(b.createdAt));
       final fmt = DateFormat('yyyy-MM-dd HH:mm');
       final buf = StringBuffer()
-        ..writeln('HAN Eat — экспорт чата')
+        ..writeln('HanWe — экспорт чата')
         ..writeln(_conversation.displayTitle)
         ..writeln('Сообщений: ${collected.length}')
         ..writeln('---');

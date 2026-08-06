@@ -270,7 +270,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                     controller: _nameController,
                     decoration: const InputDecoration(
                       labelText: 'Название канала',
-                      hintText: 'Например: Веганские рецепты',
+                      hintText: 'Например: Новости и обзоры',
                       prefixIcon: Icon(Icons.tag),
                     ),
                     onChanged: (_) => _updateSlug(),
@@ -418,7 +418,7 @@ class _CreateChannelScreenState extends ConsumerState<CreateChannelScreen> {
                         icon: Icons.lock_outline_rounded,
                         title: 'Приватный канал',
                         subtitle:
-                            'Рецепты доступны только здесь и не попадают в общий Menu.',
+                            'Посты и медиа видны только подписчикам этого канала.',
                         iconColor: Theme.of(context).colorScheme.secondary,
                       ),
                     ),

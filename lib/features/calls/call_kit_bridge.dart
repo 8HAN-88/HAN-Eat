@@ -49,7 +49,7 @@ class CallKitBridge {
     final params = CallKitParams(
       id: uuidForCallId(callId),
       nameCaller: callerName,
-      appName: 'HAN Eat',
+      appName: 'HanWe',
       avatar: avatarUrl,
       handle: callerName,
       type: media == 'video' ? 1 : 0,
@@ -130,7 +130,7 @@ class CallKitBridge {
     final params = CallKitParams(
       id: uuidForCallId(callId),
       nameCaller: peerName,
-      appName: 'HAN Eat',
+      appName: 'HanWe',
       handle: peerName,
       type: media == 'video' ? 1 : 0,
       extra: <String, dynamic>{

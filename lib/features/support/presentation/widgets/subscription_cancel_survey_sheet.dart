@@ -267,13 +267,13 @@ class _SubscriptionCancelSurveySheetState
                       const SizedBox(height: 12),
                       SurveySectionCard(
                         title: 'Что нам стоит доработать?',
-                        subtitle: 'Необязательно — ваш отзыв поможет улучшить HAN Eat',
+                        subtitle: 'Необязательно — ваш отзыв поможет улучшить HanWe',
                         icon: Icons.edit_note_outlined,
                         child: TextField(
                           controller: _improvementController,
                           decoration: const InputDecoration(
                             hintText:
-                                'Например: больше рецептов, удобнее план питания…',
+                                'Например: удобнее чаты, больше функций для каналов…',
                             border: OutlineInputBorder(),
                             alignLabelWithHint: true,
                           ),

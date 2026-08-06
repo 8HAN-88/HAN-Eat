@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/share/system_share.dart';
 import 'auth_service.dart';
 
-/// Приглашение друзей в HAN Eat (ссылка + SMS / системный шаринг).
+/// Приглашение друзей в HanWe (ссылка + SMS / системный шаринг).
 class AppInviteService {
   AppInviteService._();
 
@@ -53,7 +53,7 @@ class AppInviteService {
     final who = inviter != null && inviter.isNotEmpty ? inviter : 'Я';
     final link = webInviteUrl(ref: ref);
     return '${_greeting(contactName)}\n'
-        '$who приглашает вас в HAN Eat — рецепты, лента и чаты.\n\n'
+        '$who приглашает вас в HanWe — чаты, лента и каналы.\n\n'
         '$link';
   }
 
@@ -69,7 +69,7 @@ class AppInviteService {
         contactName: contactName,
         inviterName: user?.name,
       ),
-      subject: 'Приглашение в HAN Eat',
+      subject: 'Приглашение в HanWe',
       sharePositionOrigin: shareOrigin,
     );
   }

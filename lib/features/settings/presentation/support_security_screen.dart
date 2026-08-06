@@ -80,7 +80,7 @@ class SupportSecurityScreen extends StatelessWidget {
                         title: const Text('Безопасность данных'),
                         content: const SingleChildScrollView(
                           child: Text(
-                            'HAN Eat использует:\n\n'
+                            'HanWe использует:\n\n'
                             '• HTTPS при передаче данных\n'
                             '• JWT-авторизацию на наших серверах\n'
                             '• Хранение данных в защищённой базе (PostgreSQL)\n'
@@ -120,7 +120,7 @@ class SupportSecurityScreen extends StatelessWidget {
                             'Правила сообщества:\n\n'
                             '• Запрещён оскорбительный контент и спам\n'
                             '• Уважайте других пользователей\n'
-                            '• Контент должен быть связан с кулинарией\n\n'
+                            '• Не публикуйте незаконный или вредоносный контент\n\n'
                             'Нарушение правил может привести к ограничению аккаунта.',
                           ),
                         ),
@@ -198,13 +198,13 @@ class SupportSecurityScreen extends StatelessWidget {
               onTap: () {
                 showAboutDialog(
                   context: context,
-                  applicationName: 'H.A.N. Eat',
+                  applicationName: 'HanWe',
                   applicationVersion:
                       kIsWeb && WebAppUpdateService.embeddedBuild.isNotEmpty
                           ? '1.0.0 (${WebAppUpdateService.embeddedBuild})'
                           : '1.0.0',
                   applicationLegalese:
-                      '© H.A.N. Eat. Рецепты, план питания и сообщество.',
+                      '© HanWe. Чаты, лента, каналы и звонки.',
                 );
               },
             ),

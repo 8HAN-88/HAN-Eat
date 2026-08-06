@@ -36,7 +36,6 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
   Object? _channelLoadError;
   bool _isLoading = true;
   bool _isJoining = false;
-  bool _hasRecipes = false;
   TabController? _tabController;
 
   /// Локально, как переключатель «звук» в Telegram (UI + будущий API).
@@ -65,14 +64,7 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
         widget.channelId,
         forceRefresh: true,
       );
-      final recipeProbe = await ChannelService.getChannelPosts(
-        channelId: widget.channelId,
-        limit: 1,
-        offset: 0,
-        postType: 'recipe',
-      );
       if (!mounted) return;
-      final hasRecipes = recipeProbe.total > 0;
       var notificationsEnabled = true;
       if (channel.channelNotificationsEnabled != null) {
         notificationsEnabled = channel.channelNotificationsEnabled!;
@@ -88,12 +80,11 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
       }
       _tabController?.dispose();
       _tabController = TabController(
-        length: hasRecipes ? 3 : 2,
+        length: 2,
         vsync: this,
       );
       setState(() {
         _channel = channel;
-        _hasRecipes = hasRecipes;
         _notificationsMuted = !notificationsEnabled;
         _isLoading = false;
         _channelLoadError = null;
@@ -611,10 +602,9 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
                   Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
-              tabs: [
-                const Tab(text: 'Медиа'),
-                if (_hasRecipes) const Tab(text: 'Рецепты'),
-                const Tab(text: 'О канале'),
+              tabs: const [
+                Tab(text: 'Медиа'),
+                Tab(text: 'О канале'),
               ],
             ),
           ),
@@ -628,12 +618,6 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
               controller: _tabController!,
               children: [
                 ChannelMediaList(channelId: widget.channelId),
-                if (_hasRecipes)
-                  ChannelPostsList(
-                    channelId: widget.channelId,
-                    channel: c,
-                    postType: 'recipe',
-                  ),
                 ChannelAboutTab(channel: c, omitDescription: true),
               ],
             ),

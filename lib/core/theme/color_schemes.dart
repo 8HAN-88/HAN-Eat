@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Telegram-like structure with HAN Eat brand orange as the main accent.
+  // Telegram-like structure with HanWe brand orange as the main accent.
   static const primary = Color(0xFFFF6B35);
   static const primaryDark = Color(0xFFE85A2B);
   static const primaryLight = Color(0xFFFF9D7A);

@@ -16,7 +16,7 @@ class PhoneContactMatch {
   }
 }
 
-/// Контакт из телефона, которого ещё нет в HAN Eat.
+/// Контакт из телефона, которого ещё нет в HanWe.
 class PhoneContactInvite {
   const PhoneContactInvite({
     required this.displayName,
@@ -27,7 +27,7 @@ class PhoneContactInvite {
   final String phoneE164;
 }
 
-/// Одна строка телефонной книги: всегда видна локально, опционально найдена в HAN Eat.
+/// Одна строка телефонной книги: всегда видна локально, опционально найдена в HanWe.
 class PhoneBookContact {
   const PhoneBookContact({
     required this.displayName,

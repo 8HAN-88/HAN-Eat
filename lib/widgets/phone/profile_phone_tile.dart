@@ -23,7 +23,7 @@ Future<bool> showLinkPhoneDialog(BuildContext context) async {
             children: [
               Text(
                 'Укажите номер в международном формате. Друзья из телефонной книги '
-                'смогут найти вас в HAN Eat.',
+                'смогут найти вас в HanWe.',
                 style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(ctx).colorScheme.onSurfaceVariant,
                     ),

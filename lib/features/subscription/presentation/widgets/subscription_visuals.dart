@@ -4,7 +4,7 @@ import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/theme/color_schemes.dart';
 import '../../subscription_copy.dart';
 
-/// Мягкий градиент бренда HAN Eat.
+/// Мягкий градиент бренда HanWe.
 BoxDecoration subscriptionBrandGradientDecoration({
   BorderRadius? radius,
   double opacity = 1,

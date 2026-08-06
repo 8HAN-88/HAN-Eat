@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-/// Temporary no-op stand-ins so legacy recipe composer code still typechecks
+import '../../app/app_router.dart';
+
+/// Temporary stand-ins so legacy recipe composer code still typechecks
 /// after kitchen removal. Recipe mode is disabled in social UI.
 
 typedef ChannelRecipeVisibilityMode = String;
@@ -106,4 +109,7 @@ class RecipeNutritionFormSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => const SizedBox.shrink();
 }
 
-Future<void> showCreatorRecipeUpsellSheet(BuildContext context) async {}
+/// Opens Creator subscription when a Creator-gated action is tapped.
+Future<void> showCreatorRecipeUpsellSheet(BuildContext context) async {
+  await context.push(SubscriptionRoute.pathWithProduct('creator'));
+}

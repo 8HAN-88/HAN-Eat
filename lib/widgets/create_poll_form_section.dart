@@ -30,7 +30,7 @@ class CreatePollFormSection extends StatelessWidget {
           controller: questionController,
           decoration: const InputDecoration(
             labelText: 'Вопрос',
-            hintText: 'Например: Какой рецепт готовим на ужин?',
+            hintText: 'Например: Куда идём в выходные?',
             border: OutlineInputBorder(),
           ),
           maxLength: 300,

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../core/platform/pwa_install.dart';
 
-/// Баннер «Установить HAN Eat» для PWA (Chrome / iOS Safari).
+/// Баннер «Установить HanWe» для PWA (Chrome / iOS Safari).
 class PwaInstallBanner extends StatefulWidget {
   const PwaInstallBanner({super.key});
 
@@ -65,7 +65,7 @@ class _PwaInstallBannerState extends State<PwaInstallBanner> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Установите HAN Eat',
+                      'Установите HanWe',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                             color: scheme.onSurface,
                             fontWeight: FontWeight.w600,
