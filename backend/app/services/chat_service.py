@@ -1329,7 +1329,9 @@ class ChatService:
         conv.is_forum = bool(enabled)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if conv.is_forum and not was:
+            # Re-enable keeps existing topics/message topic_ids; ensure General.
             self.ensure_general_topic(conversation_id, actor_id)
+        # Disable only flips the flag — topics stay dormant for a later re-enable.
         return conv
 
     def ensure_general_topic(
@@ -1369,13 +1371,18 @@ class ChatService:
         if not bool(getattr(conv, "is_forum", False)):
             return []
         self.ensure_general_topic(conversation_id, user_id)
+        show_closed = bool(include_closed) and self._can_change_group_info(
+            conversation_id, user_id
+        )
         q = self.db.query(ForumTopic).filter(
             ForumTopic.conversation_id == conversation_id
         )
-        if not include_closed:
+        if not show_closed:
             q = q.filter(ForumTopic.closed_at.is_(None))
         return q.order_by(
-            ForumTopic.is_general.desc(), ForumTopic.created_at.asc()
+            ForumTopic.is_general.desc(),
+            ForumTopic.closed_at.is_(None).desc(),
+            ForumTopic.created_at.asc(),
         ).all()
 
     def create_forum_topic(

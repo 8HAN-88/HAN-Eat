@@ -1568,8 +1568,13 @@ class ChatService {
 
   static Future<List<ChatForumTopic>> listForumTopics({
     required int conversationId,
+    bool includeClosed = false,
   }) async {
-    final uri = Uri.parse('$_base/chats/$conversationId/topics');
+    final uri = Uri.parse('$_base/chats/$conversationId/topics').replace(
+      queryParameters: {
+        if (includeClosed) 'include_closed': 'true',
+      },
+    );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось загрузить темы');
     final data = jsonDecode(response.body) as Map<String, dynamic>;

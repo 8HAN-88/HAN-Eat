@@ -282,6 +282,29 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   Future<void> _toggleIsForum() async {
     if (!_canChangeInfo) return;
     final next = !_conversation.isForum;
+    if (!next) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Выключить темы?'),
+          content: const Text(
+            'Группа снова станет обычным чатом. Темы и история сохранятся '
+            'и вернутся, если включить темы снова.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Выключить'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
     setState(() => _busy = true);
     try {
       final conv = await ChatService.setGroupIsForum(
@@ -299,7 +322,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
           content: Text(
             next
                 ? 'Темы включены — в чате появится General и новые темы'
-                : 'Темы выключены',
+                : 'Темы выключены — данные тем сохранены',
           ),
         ),
       );
