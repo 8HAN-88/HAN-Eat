@@ -432,6 +432,24 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
     );
   }
 
+  String _invoiceStatusLabel(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Оплачен';
+      case 'pending':
+      case 'open':
+        return 'Ожидает оплаты';
+      case 'cancelled':
+        return 'Отменён';
+      case 'refunded':
+        return 'Возврат';
+      case 'expired':
+        return 'Истёк';
+      default:
+        return status;
+    }
+  }
+
   Future<void> _listStarsInvoices() async {
     try {
       final invoices = await PaidFeaturesService.listBotInvoices(widget.botId);
@@ -467,6 +485,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                 const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final inv = invoices[index];
+                              final statusLabel = _invoiceStatusLabel(inv.status);
+                              final canRefund = inv.status == 'paid';
                               return ListTile(
                                 title: Text(
                                   inv.title,
@@ -474,12 +494,17 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 subtitle: Text(
-                                  '#${inv.id} · ${inv.status} · ${inv.amountStars} ★',
+                                  '#${inv.id} · $statusLabel · ${inv.amountStars} ★'
+                                  '${canRefund ? ' · возврат на экране счёта' : ''}',
                                   style: TextStyle(
                                     color: scheme.onSurfaceVariant,
                                   ),
                                 ),
-                                trailing: const Icon(Icons.chevron_right),
+                                trailing: Icon(
+                                  canRefund
+                                      ? Icons.replay_rounded
+                                      : Icons.chevron_right,
+                                ),
                                 onTap: () {
                                   Navigator.pop(ctx);
                                   context.push(
@@ -819,7 +844,8 @@ class _BotDetailScreenState extends State<BotDetailScreen> {
                                   _BotFatherTile(
                                     icon: Icons.receipt_long_outlined,
                                     title: 'Stars Invoices',
-                                    subtitle: 'История и возвраты',
+                                    subtitle:
+                                        'История; возврат — в карточке счёта',
                                     onTap: _listStarsInvoices,
                                   ),
                                   _BotFatherTile(

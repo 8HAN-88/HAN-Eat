@@ -2364,11 +2364,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_openMiniAppFromInline(result));
       return;
     }
-    _controller.text = result.payload;
+    // Как в Telegram: выбор inline-результата сразу отправляет payload.
+    final payload = result.payload.trim();
+    if (payload.isEmpty) return;
+    _controller.text = payload;
     _controller.selection = TextSelection.fromPosition(
       TextPosition(offset: _controller.text.length),
     );
-    // Можно сразу отправить или оставить для редактирования
+    unawaited(_sendText());
   }
 
   Future<void> _openMiniAppFromInline(InlineResult result) async {
@@ -14462,7 +14465,8 @@ class _Bubble extends StatelessWidget {
                   for (final btn in row)
                     OutlinedButton(
                       onPressed: onInlineButtonTap == null ||
-                              ((btn.callbackData == null ||
+                              (!btn.isWebApp &&
+                                  (btn.callbackData == null ||
                                       btn.callbackData!.trim().isEmpty) &&
                                   (btn.url == null || btn.url!.trim().isEmpty))
                           ? null
@@ -14483,6 +14487,14 @@ class _Bubble extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(btn.text),
+                          if (btn.isWebApp) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.open_in_browser_rounded,
+                              size: 14,
+                              color: fg.withValues(alpha: 0.7),
+                            ),
+                          ],
                           if (btn.callbackData != null &&
                               callbackLoadingData.contains(
                                   '${message.id}:${btn.callbackData}'))
