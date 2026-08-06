@@ -1,9 +1,8 @@
 """
 Модель команд бота (BotFather)
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -16,8 +15,10 @@ class BotCommand(Base):
     description = Column(String(256), nullable=False)
     response_text = Column(String(2000), nullable=True)
     inline_buttons_json = Column(String(4000), nullable=True)
+    reply_buttons_json = Column(String(4000), nullable=True)
+    reply_keyboard_one_time = Column(Boolean, default=False, nullable=False)
+    reply_keyboard_resize = Column(Boolean, default=True, nullable=False)
+    reply_keyboard_placeholder = Column(String(64), nullable=True)
+    remove_reply_keyboard = Column(Boolean, default=False, nullable=False)
 
     created_at = Column(DateTime, server_default=func.now())
-
-    # Relationship (optional, for convenience)
-    # bot = relationship("User", back_populates="bot_commands")

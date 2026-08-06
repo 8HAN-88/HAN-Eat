@@ -154,6 +154,10 @@ class ConversationResponse(BaseModel):
     am_i_send_restricted_until: Optional[datetime] = None
     am_i_send_restriction_reason: Optional[str] = None
     peer_blocked_by_me: bool = False
+    reply_keyboard: Optional[List[List[dict]]] = None
+    reply_keyboard_one_time: bool = False
+    reply_keyboard_resize: bool = True
+    reply_keyboard_placeholder: Optional[str] = None
 
     class Config:
         from_attributes = True

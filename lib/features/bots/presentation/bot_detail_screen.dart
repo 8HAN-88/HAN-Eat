@@ -1606,6 +1606,9 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
           description: result.description,
           responseText: result.responseText,
           inlineButtonRows: result.inlineButtonRows,
+          replyButtonRows: result.replyButtonRows,
+          replyKeyboardOneTime: result.replyKeyboardOneTime,
+          removeReplyKeyboard: result.removeReplyKeyboard,
         ),
       );
       await _reload();
@@ -1632,6 +1635,9 @@ class _BotCommandsScreenState extends State<_BotCommandsScreen> {
           description: result.description,
           responseText: result.responseText,
           inlineButtonRows: result.inlineButtonRows,
+          replyButtonRows: result.replyButtonRows,
+          replyKeyboardOneTime: result.replyKeyboardOneTime,
+          removeReplyKeyboard: result.removeReplyKeyboard,
         ),
       );
       await _reload();
@@ -1854,6 +1860,9 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
   final _descController = TextEditingController();
   final _responseController = TextEditingController();
   final _buttonsController = TextEditingController();
+  final _replyButtonsController = TextEditingController();
+  bool _replyOneTime = false;
+  bool _removeReplyKeyboard = false;
   static final RegExp _commandRegExp = RegExp(r'^[a-zA-Z0-9_]{1,32}$');
 
   @override
@@ -1866,6 +1875,10 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
     _descController.text = initial.description;
     _responseController.text = initial.responseText ?? '';
     _buttonsController.text = _serializeButtonRows(initial.inlineButtonRows);
+    _replyButtonsController.text =
+        _serializeReplyButtonRows(initial.replyButtonRows);
+    _replyOneTime = initial.replyKeyboardOneTime;
+    _removeReplyKeyboard = initial.removeReplyKeyboard;
   }
 
   @override
@@ -1875,6 +1888,7 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
     _descController.dispose();
     _responseController.dispose();
     _buttonsController.dispose();
+    _replyButtonsController.dispose();
     super.dispose();
   }
 
@@ -1930,6 +1944,32 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
                   ),
                 ),
               ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _replyButtonsController,
+              decoration: const InputDecoration(
+                labelText: 'Reply-клавиатура (над полем ввода)',
+                hintText: 'Да | Нет\nПозже',
+                helperText:
+                    'Кнопки в ряду через «|», новый ряд — с новой строки',
+              ),
+              minLines: 2,
+              maxLines: 6,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Одноразовая клавиатура'),
+              subtitle: const Text('Скрыть после ответа пользователя'),
+              value: _replyOneTime,
+              onChanged: (v) => setState(() => _replyOneTime = v),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Убрать reply-клавиатуру'),
+              subtitle: const Text('Команда скроет текущую клавиатуру'),
+              value: _removeReplyKeyboard,
+              onChanged: (v) => setState(() => _removeReplyKeyboard = v),
+            ),
           ],
         ),
       ),
@@ -1966,6 +2006,10 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
                     ? null
                     : _responseController.text.trim(),
                 inlineButtonRows: parsedButtons.rows,
+                replyButtonRows:
+                    _parseReplyButtonRows(_replyButtonsController.text),
+                replyKeyboardOneTime: _replyOneTime,
+                removeReplyKeyboard: _removeReplyKeyboard,
               ),
             );
           },
@@ -1973,6 +2017,26 @@ class _AddCommandDialogState extends State<_AddCommandDialog> {
         ),
       ],
     );
+  }
+
+  List<List<String>> _parseReplyButtonRows(String source) {
+    final rows = <List<String>>[];
+    for (final line in source.split('\n')) {
+      final texts = line
+          .split('|')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .take(12)
+          .toList();
+      if (texts.isNotEmpty) rows.add(texts);
+      if (rows.length >= 8) break;
+    }
+    return rows;
+  }
+
+  String _serializeReplyButtonRows(List<List<String>> rows) {
+    if (rows.isEmpty) return '';
+    return rows.map((row) => row.join(' | ')).join('\n');
   }
 
   _ButtonsParseResult _parseInlineButtonRowsWithDiagnostics(String source) {
@@ -2115,10 +2179,16 @@ class _CommandResult {
   final String description;
   final String? responseText;
   final List<List<BotInlineButton>> inlineButtonRows;
+  final List<List<String>> replyButtonRows;
+  final bool replyKeyboardOneTime;
+  final bool removeReplyKeyboard;
   _CommandResult({
     required this.command,
     required this.description,
     this.responseText,
     this.inlineButtonRows = const [],
+    this.replyButtonRows = const [],
+    this.replyKeyboardOneTime = false,
+    this.removeReplyKeyboard = false,
   });
 }

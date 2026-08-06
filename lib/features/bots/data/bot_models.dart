@@ -65,12 +65,22 @@ class BotCommandCreate {
   final String description;
   final String? responseText;
   final List<List<BotInlineButton>> inlineButtonRows;
+  final List<List<String>> replyButtonRows;
+  final bool replyKeyboardOneTime;
+  final bool replyKeyboardResize;
+  final String? replyKeyboardPlaceholder;
+  final bool removeReplyKeyboard;
 
   BotCommandCreate({
     required this.command,
     required this.description,
     this.responseText,
     this.inlineButtonRows = const [],
+    this.replyButtonRows = const [],
+    this.replyKeyboardOneTime = false,
+    this.replyKeyboardResize = true,
+    this.replyKeyboardPlaceholder,
+    this.removeReplyKeyboard = false,
   });
 
   List<BotInlineButton> get inlineButtons =>
@@ -85,6 +95,17 @@ class BotCommandCreate {
           'inline_button_rows': inlineButtonRows
               .map((row) => row.map((e) => e.toJson()).toList())
               .toList(),
+        if (replyButtonRows.isNotEmpty)
+          'reply_button_rows': replyButtonRows
+              .map((row) => row.map((text) => {'text': text}).toList())
+              .toList(),
+        'reply_keyboard_one_time': replyKeyboardOneTime,
+        'reply_keyboard_resize': replyKeyboardResize,
+        if (replyKeyboardPlaceholder != null &&
+            replyKeyboardPlaceholder!.trim().isNotEmpty)
+          'reply_keyboard_placeholder': replyKeyboardPlaceholder!.trim(),
+        'remove_reply_keyboard': removeReplyKeyboard,
+        if (replyButtonRows.isEmpty) 'clear_reply_buttons': true,
       };
 }
 

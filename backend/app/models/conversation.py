@@ -88,6 +88,11 @@ class ConversationMember(Base):
     bubble_accent = Column(String(32), nullable=True)
     # Cursor for unread reactions on my messages (Telegram ❤ badge).
     reactions_seen_at = Column(DateTime, nullable=True)
+    # Bot ReplyKeyboard state (Telegram-like, above composer).
+    reply_keyboard_json = Column(String(4000), nullable=True)
+    reply_keyboard_one_time = Column(Boolean, default=False, nullable=False)
+    reply_keyboard_resize = Column(Boolean, default=True, nullable=False)
+    reply_keyboard_placeholder = Column(String(64), nullable=True)
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
