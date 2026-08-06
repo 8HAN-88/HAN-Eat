@@ -1364,6 +1364,8 @@ class ScheduledChatMessage {
     this.silent = false,
     this.disableWebpagePreview = false,
     this.mediaGroupId,
+    this.effectId,
+    this.topicId,
     required this.status,
     required this.createdAt,
   });
@@ -1380,12 +1382,15 @@ class ScheduledChatMessage {
   final bool silent;
   final bool disableWebpagePreview;
   final String? mediaGroupId;
+  final String? effectId;
+  final int? topicId;
   final String status;
   final DateTime createdAt;
 
   factory ScheduledChatMessage.fromJson(Map<String, dynamic> json) {
     final replyRaw = json['reply_to_message_id'];
     final groupRaw = json['media_group_id'] as String?;
+    final effectRaw = (json['effect_id'] as String?)?.trim();
     return ScheduledChatMessage(
       id: _parseInt(json['id']),
       conversationId: _parseInt(json['conversation_id']),
@@ -1401,6 +1406,8 @@ class ScheduledChatMessage {
           json['disable_webpage_preview'] as bool? ?? false,
       mediaGroupId:
           (groupRaw == null || groupRaw.trim().isEmpty) ? null : groupRaw.trim(),
+      effectId: (effectRaw == null || effectRaw.isEmpty) ? null : effectRaw,
+      topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
       status: json['status'] as String? ?? 'pending',
       createdAt: _parseDate(json['created_at']),
     );

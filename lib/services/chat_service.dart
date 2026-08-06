@@ -805,6 +805,8 @@ class ChatService {
     bool disableWebpagePreview = false,
     int? replyToMessageId,
     String? clientMessageId,
+    String? effectId,
+    int? topicId,
   }) async {
     return scheduleMessage(
       conversationId: conversationId,
@@ -816,6 +818,8 @@ class ChatService {
       disableWebpagePreview: disableWebpagePreview,
       replyToMessageId: replyToMessageId,
       clientMessageId: clientMessageId,
+      effectId: effectId,
+      topicId: topicId,
     );
   }
 
@@ -836,6 +840,8 @@ class ChatService {
     String? pollDescription,
     List<String>? pollOptions,
     Map<String, dynamic>? pollSettings,
+    String? effectId,
+    int? topicId,
   }) {
     return _scheduleMessage(
       conversationId: conversationId,
@@ -854,6 +860,8 @@ class ChatService {
       pollDescription: pollDescription,
       pollOptions: pollOptions,
       pollSettings: pollSettings,
+      effectId: effectId,
+      topicId: topicId,
     );
   }
 
@@ -1195,6 +1203,8 @@ class ChatService {
     String? pollDescription,
     List<String>? pollOptions,
     Map<String, dynamic>? pollSettings,
+    String? effectId,
+    int? topicId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages/scheduled');
     final response = await _post(
@@ -1218,6 +1228,8 @@ class ChatService {
         if (mediaGroupId != null && mediaGroupId.isNotEmpty)
           'media_group_id': mediaGroupId,
         if (hasSpoiler) 'has_spoiler': true,
+        if (effectId != null && effectId.isNotEmpty) 'effect_id': effectId,
+        if (topicId != null) 'topic_id': topicId,
       }),
     );
     _ensureOk(response, 'Не удалось запланировать сообщение');

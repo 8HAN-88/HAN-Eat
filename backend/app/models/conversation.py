@@ -270,6 +270,12 @@ class ScheduledMessage(Base):
     disable_webpage_preview = Column(Boolean, nullable=False, default=False)
     media_group_id = Column(String(64), nullable=True)
     has_spoiler = Column(Boolean, nullable=False, default=False)
+    # Telegram-like send effect applied when the scheduled message is dispatched.
+    effect_id = Column(String(32), nullable=True)
+    # Forum topic for groups with Topics enabled.
+    topic_id = Column(
+        Integer, ForeignKey("forum_topics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     target_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(16), nullable=False, default="pending", index=True)
     sent_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)

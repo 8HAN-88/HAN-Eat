@@ -7567,6 +7567,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         silent: silent,
         replyToMessageId: _replyTo?.id,
         clientMessageId: clientMessageId,
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() => _replyTo = null);
@@ -10512,13 +10513,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   void _showScheduledSnack(ScheduledChatMessage item) {
     final when = DateFormat('dd.MM HH:mm').format(item.sendAt);
-    final base = item.sendWhenOnline
+    var base = item.sendWhenOnline
         ? 'Сообщение будет отправлено, когда собеседник онлайн'
         : 'Сообщение запланировано на $when';
+    if (item.silent) base = '$base (без звука)';
+    final effect = (item.effectId ?? '').trim();
+    if (effect.isNotEmpty) base = '$base · эффект $effect';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(item.silent ? '$base (без звука)' : base),
-      ),
+      SnackBar(content: Text(base)),
     );
   }
 
@@ -10533,6 +10535,37 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             const ListTile(
               title: Text('Эффект сообщения'),
               subtitle: Text('Анимация при отправке и у получателя'),
+            ),
+            for (final effect in _messageEffects)
+              ListTile(
+                leading: Icon(effect.$3),
+                title: Text(effect.$2),
+                onTap: () => Navigator.pop(ctx, effect.$1),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Returns empty string for "no effect", null if cancelled.
+  Future<String?> _pickOptionalMessageEffect() async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Эффект при отправке'),
+              subtitle: Text('Можно отложить с анимацией'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.not_interested_outlined),
+              title: const Text('Без эффекта'),
+              onTap: () => Navigator.pop(ctx, ''),
             ),
             for (final effect in _messageEffects)
               ListTile(
@@ -10594,26 +10627,82 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (mode == 'effect') {
       final effectId = await _pickMessageEffect();
       if (effectId == null || !mounted) return;
-      await _sendText(effectId: effectId);
+      final sendMode = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.send_rounded),
+                title: const Text('Отправить сейчас'),
+                onTap: () => Navigator.pop(ctx, 'now'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Отложить с эффектом'),
+                onTap: () => Navigator.pop(ctx, 'schedule'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.schedule_send_outlined),
+                title: const Text('Отложить без звука'),
+                onTap: () => Navigator.pop(ctx, 'schedule_silent'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+      if (sendMode == null || !mounted) return;
+      if (sendMode == 'now') {
+        await _sendText(effectId: effectId);
+        return;
+      }
+      final delivery = await _pickScheduleDelivery();
+      if (delivery == null || !mounted) return;
+      await _scheduleTextPayload(
+        text: text,
+        delivery: delivery,
+        silent: _scheduleSilent(sendMode),
+        effectId: effectId,
+      );
       return;
     }
 
     final delivery = await _pickScheduleDelivery();
     if (delivery == null || !mounted) return;
+    final effectChoice = await _pickOptionalMessageEffect();
+    if (effectChoice == null || !mounted) return;
+    await _scheduleTextPayload(
+      text: text,
+      delivery: delivery,
+      silent: _scheduleSilent(mode),
+      effectId: effectChoice.isEmpty ? null : effectChoice,
+    );
+  }
+
+  Future<void> _scheduleTextPayload({
+    required String text,
+    required ({DateTime sendAt, bool sendWhenOnline}) delivery,
+    bool silent = false,
+    String? effectId,
+  }) async {
     final firstUrl = extractFirstHttpUrl(text);
     final disablePreview = firstUrl != null &&
         firstUrl == _composerLinkPreviewDismissedUrl;
-
     try {
       final item = await ChatService.scheduleText(
         conversationId: widget.conversationId,
         content: text,
         sendAt: delivery.sendAt,
         sendWhenOnline: delivery.sendWhenOnline,
-        silent: _scheduleSilent(mode),
+        silent: silent,
         disableWebpagePreview: disablePreview,
         replyToMessageId: _replyTo?.id,
         clientMessageId: const Uuid().v4(),
+        effectId: effectId,
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() {
@@ -10654,6 +10743,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pollDescription: poll?.description,
         pollOptions: poll?.options.map((o) => o.text).toList(),
         pollSettings: poll?.settings.toJson(),
+        effectId: item.effectId,
+        topicId: item.topicId ?? _activeTopicIdForSend,
       );
     } catch (_) {}
   }
@@ -10784,6 +10875,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     final replyId = item.replyToMessageId;
     final media = item.mediaUrl?.trim();
+    final topicId = item.topicId ?? _activeTopicIdForSend;
     try {
       switch (item.type) {
         case 'image':
@@ -10795,7 +10887,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             caption: item.content,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'video':
@@ -10807,7 +10899,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             caption: item.content,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'video_note':
@@ -10819,7 +10911,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             durationSec: int.tryParse(item.content.trim()) ?? 1,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'voice':
@@ -10831,7 +10923,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             durationSec: int.tryParse(item.content.trim()) ?? 1,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'file':
@@ -10844,7 +10936,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             fileName:
                 item.content.trim().isEmpty ? 'file' : item.content.trim(),
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'sticker':
@@ -10856,7 +10948,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             mediaUrl: media,
             emoji: item.content,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'location':
@@ -10864,7 +10956,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             content: item.content,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         case 'poll':
@@ -10879,7 +10971,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             options: poll.options.map((o) => o.text).toList(),
             settings: poll.settings.toJson(),
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            topicId: topicId,
           );
           break;
         default:
@@ -10887,7 +10979,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             conversationId: widget.conversationId,
             content: item.content,
             replyToMessageId: replyId,
-            topicId: _activeTopicIdForSend,
+            effectId: item.effectId,
+            topicId: topicId,
           );
       }
     } catch (e) {
@@ -11455,6 +11548,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           hasSpoiler: hasSpoiler,
           replyToMessageId: i == 0 ? _replyTo?.id : null,
           clientMessageId: const Uuid().v4(),
+          topicId: _activeTopicIdForSend,
         );
       }
       if (!mounted) return;
@@ -11690,6 +11784,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           silent: _scheduleSilent(mode),
           replyToMessageId: _replyTo?.id,
           clientMessageId: const Uuid().v4(),
+          topicId: _activeTopicIdForSend,
         );
         if (!mounted) return;
         setState(() => _replyTo = null);
@@ -11812,6 +11907,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           pollDescription: draft.description,
           pollOptions: draft.options,
           pollSettings: draft.settings.toJson(),
+          topicId: _activeTopicIdForSend,
         );
         if (!mounted) return;
         setState(() => _replyTo = null);
@@ -11876,6 +11972,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           silent: _scheduleSilent(mode),
           replyToMessageId: _replyTo?.id,
           clientMessageId: const Uuid().v4(),
+          topicId: _activeTopicIdForSend,
         );
         if (!mounted) return;
         setState(() => _replyTo = null);
@@ -12345,6 +12442,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         silent: silent,
         replyToMessageId: replyToId ?? _replyTo?.id,
         clientMessageId: const Uuid().v4(),
+        topicId: _activeTopicIdForSend,
       );
       if (!mounted) return;
       setState(() => _replyTo = null);
