@@ -5,18 +5,18 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="description" content="HAN Eat — рецепты, лента, каналы и meal plan">
+  <meta name="description" content="HanWe — чаты, лента, каналы и общение">
   <meta name="theme-color" content="#0F1319">
   <meta name="han-eat-build" content="__HAN_BUILD_ID__">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="HAN Eat">
+  <meta name="apple-mobile-web-app-title" content="HanWe">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-180.png">
   <link rel="apple-touch-icon" sizes="192x192" href="icons/Icon-192.png">
   <link rel="apple-touch-icon" href="icons/Icon-180.png">
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>HAN Eat</title>
+  <title>HanWe</title>
   <link rel="manifest" href="manifest.json">
   <style>
     :root {
@@ -198,7 +198,7 @@
       try {
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.register = function () {
-            return Promise.reject(new Error('HAN Eat: service worker disabled'));
+            return Promise.reject(new Error('HanWe: service worker disabled'));
           };
           // Do not bulk-delete Cache Storage on every open — Safari iOS can hang
           // (black→white→"server stopped responding"). Only unregister SW quietly.
@@ -217,7 +217,7 @@
 
   <div id="boot-splash">
     <div class="spinner"></div>
-    <div style="font-weight:700;font-size:18px">HAN Eat</div>
+    <div style="font-weight:700;font-size:18px">HanWe</div>
     <div id="boot-splash-sub" style="margin-top:10px;color:#9AA3B2;font-size:14px">Загружаем приложение…</div>
   </div>
 
@@ -225,7 +225,7 @@
       <!-- Обычный экран загрузки — сразу открываем приложение. -->
     <div id="continue-loading">
       <div class="spinner"></div>
-      <div style="font-weight:700;font-size:18px">HAN Eat</div>
+      <div style="font-weight:700;font-size:18px">HanWe</div>
       <div id="continue-loading-sub" style="margin-top:10px;color:#9AA3B2;font-size:14px">Открываем…</div>
     </div>
     <!-- Только если не удалось открыть. -->
@@ -242,7 +242,7 @@
   <div id="auth-gate">
     <div class="auth-card">
       <h1 class="brand">HAN <span>Eat</span></h1>
-      <p class="subtitle" id="auth-subtitle">Войдите, чтобы открыть ленту и рецепты</p>
+      <p class="subtitle" id="auth-subtitle">Войдите, чтобы открыть чаты и ленту</p>
       <div id="auth-error" class="error" role="alert"></div>
 
       <form id="login-form">
@@ -265,7 +265,7 @@
         <span id="switch-text">Нет аккаунта?</span>
         <a id="switch-mode">Зарегистрироваться</a>
       </div>
-      <p class="hint">Войдите — и откроется лента с рецептами.</p>
+      <p class="hint">Войдите — и откроются чаты и лента.</p>
     </div>
   </div>
 
@@ -411,7 +411,7 @@
         document.getElementById('auth-submit').textContent = isReg ? 'Создать аккаунт' : 'Войти';
         document.getElementById('auth-subtitle').textContent = isReg
           ? 'Создайте аккаунт — дальше откроется приложение'
-          : 'Войдите, чтобы открыть ленту и рецепты';
+          : 'Войдите, чтобы открыть чаты и ленту';
         document.getElementById('switch-text').textContent = isReg ? 'Уже есть аккаунт?' : 'Нет аккаунта?';
         document.getElementById('switch-mode').textContent = isReg ? 'Войти' : 'Зарегистрироваться';
         clearError();

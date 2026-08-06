@@ -338,11 +338,7 @@ class _NewPostCardState extends State<NewPostCard>
 
   /// Local/catalog Spoonacular cards reuse the recipe id as [PostModel.id].
   /// Real feed/channel posts get an independent posts.id from the API.
-  bool get _likesViaPostApi {
-    if (!_isSpoonacularRecipePost) return true;
-    final spoonId = _spoonacularRecipeIdFromPost;
-    return widget.post.id > 0 && widget.post.id != spoonId;
-  }
+  bool get _likesViaPostApi => true;
 
   Future<void> _openLink(String url) async {
     final uri = Uri.tryParse(url);
@@ -378,23 +374,10 @@ class _NewPostCardState extends State<NewPostCard>
 
   Future<void> _hydrateSpoonacularCommentsCount() async {}
 
-  Future<void> _openRecipeFromPost() async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Каталог рецептов больше недоступен')),
-    );
-  }
 
   Future<void> _toggleLike() async {
     if (_isLiking) return;
 
-    if (!_likesViaPostApi) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Каталог рецептов больше недоступен')),
-      );
-      return;
-    }
 
     setState(() {
       _isLiking = true;
@@ -1743,10 +1726,6 @@ class _NewPostCardState extends State<NewPostCard>
     if (!mounted) return;
     setState(() => _isOpeningComments = true);
     try {
-      if (_isSpoonacularRecipePost) {
-        await _openRecipeFromPost();
-        return;
-      }
       FeedAnalyticsService.openDetail(
         widget.post,
         source: 'post_card',
@@ -1993,77 +1972,6 @@ class _NewPostCardState extends State<NewPostCard>
         // Для обычных постов пока просто ничего не делаем (можно добавить роут позже)
       }
 
-      // Обработчик клика для рецепта - открываем рецепт
-      void onRecipeTap() {
-        final body = post.body;
-        if (body == null) {
-          return;
-        }
-
-        try {
-          String? imageUrl = _extractRecipeImageUrl(body);
-
-          if (imageUrl == null || imageUrl.isEmpty) {
-            final media = body['media'] as List<dynamic>?;
-            if (media != null && media.isNotEmpty) {
-              try {
-                final firstImage = media.firstWhere(
-                  (m) => m['type'] == 'image',
-                ) as Map<String, dynamic>?;
-                imageUrl = firstImage?['url'] as String?;
-              } catch (_) {}
-            }
-          }
-
-          int recipeId = post.id;
-
-          if (body['spoonacular_recipe_id'] != null) {
-            final spoonacularId = body['spoonacular_recipe_id'];
-            final extractedId = spoonacularId is int
-                ? spoonacularId
-                : int.tryParse(spoonacularId.toString());
-            if (extractedId != null && extractedId != 0) {
-              recipeId = extractedId;
-            }
-          }
-
-          if (recipeId == 0) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Не удалось открыть рецепт'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
-            return;
-          }
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Каталог рецептов больше недоступен')),
-            );
-          }
-          return;
-        } catch (e, stackTrace) {
-          if (kDebugMode) {
-            debugPrint('Recipe open failed: $e\n$stackTrace');
-          }
-
-          // Показываем ошибку пользователю
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  userVisibleError(e, fallback: 'Не удалось открыть рецепт'),
-                ),
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        }
-      }
-
       // Извлекаем URL изображений и применяем прокси для Spoonacular
       final imageUrls = images
           .map((img) => img['url'] as String?)
@@ -2073,7 +1981,6 @@ class _NewPostCardState extends State<NewPostCard>
           .toList();
 
       if (imageUrls.isNotEmpty) {
-        final isRecipe = post.type == 'recipe';
         final screenWidth = MediaQuery.of(context).size.width;
         final reelHeight = screenWidth * 16 / 9;
         return TelegramPhotoGrid(
@@ -2081,9 +1988,8 @@ class _NewPostCardState extends State<NewPostCard>
           maxHeight: reelHeight,
           singleAspectRatio: 9 / 16,
           borderRadius: BorderRadius.circular(18),
-          onTap: isRecipe ? onRecipeTap : null,
           onDoubleTap: _handleDoubleTapLike,
-          enableFullscreen: !isRecipe,
+          enableFullscreen: true,
         );
       }
     }

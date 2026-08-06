@@ -63,7 +63,6 @@ class _ChannelPostDetailScreenState
   /// Оригинал для поста «репост в канал» (обёртка в body.repost_original_post_id).
   PostModel? _originalPost;
   bool _isLoading = true;
-  bool _recipeScreenOpened = false;
 
   PostModel get _displayPost => _originalPost ?? _post!;
 
@@ -192,30 +191,6 @@ class _ChannelPostDetailScreenState
           title: 'Пост не найден',
           subtitle: 'Возможно, он удалён или недоступен',
         ),
-      );
-    }
-
-    // Если пост (или оригинал репоста в канал) — рецепт, открываем экран рецепта
-    if (_displayPost.type == 'recipe') {
-      // Открываем экран рецепта сразу после загрузки (только один раз)
-      if (!_recipeScreenOpened) {
-        _recipeScreenOpened = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _openRecipeScreen();
-          }
-        });
-      }
-      // Показываем экран загрузки пока рецепт открывается
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Рецепт'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ),
-        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -499,12 +474,6 @@ class _ChannelPostDetailScreenState
     );
   }
 
-  void _openRecipeScreen() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Каталог рецептов больше недоступен')),
-    );
-  }
 
   String? _getImageUrl() {
     final body = _displayPost.body;

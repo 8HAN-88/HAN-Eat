@@ -1,18 +1,18 @@
 {
     "id": "https://haneat.app/",
-    "name": "HAN Eat",
-    "short_name": "HAN Eat",
+    "name": "HanWe",
+    "short_name": "HanWe",
     "start_url": "/?v=__HAN_BUILD_ID__",
     "scope": "/",
     "display": "standalone",
     "display_override": ["standalone", "minimal-ui"],
     "background_color": "#000000",
     "theme_color": "#0F1319",
-    "description": "Рецепты, лента, каналы и план питания",
+    "description": "Чаты, лента, каналы и общение",
     "lang": "ru",
     "dir": "ltr",
     "orientation": "portrait-primary",
-    "categories": ["food", "lifestyle", "social"],
+    "categories": ["social", "communication"],
     "prefer_related_applications": false,
     "icons": [
         {

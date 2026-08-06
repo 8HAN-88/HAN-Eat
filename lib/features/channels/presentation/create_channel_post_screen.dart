@@ -1817,12 +1817,6 @@ class _CreateChannelPostScreenState
               isSelected: _isPollMode,
               onTap: () => _setContentType(_isPollMode ? 'text' : 'poll'),
             ),
-            _PostTypeChip(
-              label: 'Рецепт',
-              icon: Icons.restaurant_menu,
-              isSelected: _isRecipeMode,
-              onTap: () => _setContentType(_isRecipeMode ? 'text' : 'recipe'),
-            ),
           ],
         ),
         const SizedBox(height: 16),

@@ -15,7 +15,6 @@ import '../../feed/presentation/new_post_card.dart';
 import '../../saved/presentation/saved_posts_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:han_eat/app/app_router.dart';
-import 'package:han_eat/core/app/app_variant.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
 import 'package:han_eat/services/chat_service.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
@@ -98,11 +97,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   bool _tabControllerReady = false;
 
   void _syncTabController({int? profileUserId}) {
-    final includeRecipes = AppVariant.current.isKitchen;
-    final count = 1 +
-        (includeRecipes ? 1 : 0) +
-        1 +
-        (_isOwnProfileView(profileUserId: profileUserId) ? 1 : 0);
+    final count = 2 + (_isOwnProfileView(profileUserId: profileUserId) ? 1 : 0);
     if (_tabControllerReady && _tabCount == count) return;
 
     final oldIndex =
@@ -435,19 +430,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final user = _profile!.user;
     final stats = _profile!.stats;
     final isOwnProfile = _isOwnProfileView(profileUserId: user.id);
-    final includeRecipes = AppVariant.current.isKitchen;
     final tabs = <Tab>[
       const Tab(text: 'Общее'),
-      if (includeRecipes) const Tab(text: 'Рецепты'),
       const Tab(text: 'Рилсы'),
       if (isOwnProfile) const Tab(text: 'Сохранённые'),
     ];
     final tabViews = <Widget>[
       _buildLazyTab(0, _buildAllTab),
-      if (includeRecipes) _buildLazyTab(1, _buildRecipesTab),
-      _buildLazyTab(includeRecipes ? 2 : 1, _buildReelsTab),
-      if (isOwnProfile)
-        _buildLazyTab(includeRecipes ? 3 : 2, _buildFavoritesTab),
+      _buildLazyTab(1, _buildReelsTab),
+      if (isOwnProfile) _buildLazyTab(2, _buildFavoritesTab),
     ];
 
     return Scaffold(
@@ -742,10 +733,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  Widget _buildRecipesTab() {
-    return _postsList(postType: 'recipe');
-  }
-
   Widget _buildReelsTab() {
     return _postsList(postType: 'reel');
   }
@@ -788,7 +775,7 @@ class _PostsListWidgetState extends State<_PostsListWidget> {
 
   List<PostModel> _visibleProfilePosts(List<PostModel> posts) {
     return posts.where((post) {
-      if (AppVariant.current.isSocial && post.type == 'recipe') return false;
+      if (post.type == 'recipe') return false;
       return !PostPublisherDisplay.isChannel(post);
     }).toList();
   }

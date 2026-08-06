@@ -15,7 +15,6 @@ import '../application/channels_list_refresh_provider.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_avatar.dart';
 import '../../settings/application/subscription_status_provider.dart';
-import '../../subscription/subscription_copy.dart';
 import '../../../widgets/app_empty_state.dart';
 
 const _permissionLabels = <String, (String, String)>{
@@ -705,68 +704,6 @@ class _ChannelManagementScreenState
     );
   }
 
-  Widget _buildRecipeVisibilityModeSection() {
-    final hasCreator =
-        ref.watch(subscriptionStatusProvider).asData?.value?.hasCreator ??
-            false;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Text(
-          SubscriptionCopy.channelVisibilityModeTitle,
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        const SizedBox(height: 8),
-        _visibilityModeTile(
-          value: 'public',
-          title: SubscriptionCopy.channelVisibilityModePublic,
-          subtitle: SubscriptionCopy.channelVisibilityModePublicHint,
-          enabled: hasCreator || _recipeVisibilityMode == 'public',
-        ),
-        _visibilityModeTile(
-          value: 'private',
-          title: SubscriptionCopy.channelVisibilityModePrivate,
-          subtitle: SubscriptionCopy.channelVisibilityModePrivateHint,
-          enabled: hasCreator,
-        ),
-        _visibilityModeTile(
-          value: 'mixed',
-          title: SubscriptionCopy.channelVisibilityModeMixed,
-          subtitle: SubscriptionCopy.channelVisibilityModeMixedHint,
-          enabled: hasCreator,
-        ),
-        if (!hasCreator)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Режимы приватности и смешанный режим — в тарифе Creator или Pro.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _visibilityModeTile({
-    required String value,
-    required String title,
-    required String subtitle,
-    required bool enabled,
-  }) {
-    return RadioListTile<String>(
-      value: value,
-      groupValue: _recipeVisibilityMode,
-      onChanged: enabled
-          ? (v) {
-              if (v != null) setState(() => _recipeVisibilityMode = v);
-            }
-          : null,
-      title: Text(title),
-      subtitle: Text(subtitle),
-    );
-  }
 
   Widget _buildSettingsTab() {
     return ListView(
@@ -783,7 +720,6 @@ class _ChannelManagementScreenState
           value: _autoPublishToFeed,
           onChanged: (value) => setState(() => _autoPublishToFeed = value),
         ),
-        _buildRecipeVisibilityModeSection(),
         SwitchListTile(
           title: const Text('Автоматически публиковать рилсы'),
           subtitle: const Text('Короткие видео сразу попадают в раздел Reels'),

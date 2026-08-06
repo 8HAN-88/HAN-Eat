@@ -167,7 +167,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
       debugPrint('❌ Ошибка при построении HanEatApp: $e');
       debugPrint('Stack trace: $stackTrace');
       return MaterialApp(
-        title: 'HAN Eat',
+        title: 'HanWe',
         home: Scaffold(
           body: Center(
             child: Column(
@@ -177,7 +177,7 @@ class _HanEatAppState extends ConsumerState<HanEatApp>
                 const SizedBox(height: 16),
                 const Text(
                   'Не удалось запустить приложение. '
-                  'Перезапустите или переустановите HAN Eat.',
+                  'Перезапустите или переустановите HanWe.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
