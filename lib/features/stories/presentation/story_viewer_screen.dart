@@ -2,10 +2,15 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
 
@@ -17,6 +22,7 @@ class StoryItem {
     required this.authorId,
     this.authorName,
     this.authorAvatar,
+    this.thumbnailUrl,
     this.duration = const Duration(seconds: 5),
     this.isVideo = false,
     this.viewsCount = 0,
@@ -29,6 +35,7 @@ class StoryItem {
   final int authorId;
   final String? authorName;
   final String? authorAvatar;
+  final String? thumbnailUrl;
   final Duration duration;
   final bool isVideo;
   int viewsCount;
@@ -64,11 +71,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   late PageController _pageController;
   late int _currentIndex;
+  final _replyController = TextEditingController();
+  final _replyFocus = FocusNode();
   VideoPlayerController? _videoController;
   Timer? _progressTimer;
   double _progress = 0.0;
   bool _isPaused = false;
   bool _reacting = false;
+  bool _replySending = false;
 
   @override
   void initState() {
@@ -347,11 +357,62 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     return '$hh:$mm';
   }
 
+  Future<void> _sendStoryReply() async {
+    if (_replySending || _currentStory.isOwn) return;
+    final text = _replyController.text.trim();
+    if (text.isEmpty) return;
+    final storyId = int.tryParse(_currentStory.id);
+    if (storyId == null) return;
+
+    setState(() => _replySending = true);
+    _pause();
+    try {
+      final conv = await ChatService.openDirectChat(_currentStory.authorId);
+      final payload = ChatStoryReplyPayload(
+        storyId: storyId,
+        text: text,
+        authorId: _currentStory.authorId,
+        authorName: _currentStory.authorName,
+        mediaUrl: _currentStory.mediaUrl,
+        mediaType: _currentStory.isVideo ? 'video' : 'image',
+        thumbnailUrl: _currentStory.thumbnailUrl,
+      );
+      await ChatService.sendStoryReply(
+        conversationId: conv.id,
+        content: payload.encode(),
+        mediaUrl: _currentStory.thumbnailUrl ?? _currentStory.mediaUrl,
+      );
+      if (!mounted) return;
+      _replyController.clear();
+      _replyFocus.unfocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ответ отправлен в личные сообщения')),
+      );
+      Navigator.of(context).pop();
+      if (!mounted) return;
+      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userVisibleError(e, fallback: 'Не удалось отправить ответ'),
+          ),
+        ),
+      );
+      _resume();
+    } finally {
+      if (mounted) setState(() => _replySending = false);
+    }
+  }
+
   @override
   void dispose() {
     _progressTimer?.cancel();
     _videoController?.dispose();
     _pageController.dispose();
+    _replyController.dispose();
+    _replyFocus.dispose();
     super.dispose();
   }
 
@@ -491,7 +552,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             Positioned(
               left: 12,
               right: 12,
-              bottom: MediaQuery.of(context).padding.bottom + 16,
+              bottom: MediaQuery.of(context).padding.bottom + 12,
               child: story.isOwn
                   ? Center(
                       child: TextButton.icon(
@@ -508,27 +569,84 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                         ),
                       ),
                     )
-                  : Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (final emoji in _quickReactions)
-                          InkWell(
-                            onTap: _reacting ? null : () => _react(emoji),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: story.myReaction == emoji
-                                    ? Colors.white24
-                                    : Colors.black38,
-                                shape: BoxShape.circle,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            for (final emoji in _quickReactions)
+                              InkWell(
+                                onTap: _reacting ? null : () => _react(emoji),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: story.myReaction == emoji
+                                        ? Colors.white24
+                                        : Colors.black38,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 22),
+                                  ),
+                                ),
                               ),
-                              child: Text(
-                                emoji,
-                                style: const TextStyle(fontSize: 22),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _replyController,
+                                focusNode: _replyFocus,
+                                enabled: !_replySending,
+                                style: const TextStyle(color: Colors.white),
+                                cursorColor: Colors.white,
+                                textInputAction: TextInputAction.send,
+                                onTap: _pause,
+                                onSubmitted: (_) => unawaited(_sendStoryReply()),
+                                decoration: InputDecoration(
+                                  hintText: 'Ответить…',
+                                  hintStyle: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.black45,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(22),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            IconButton.filled(
+                              onPressed:
+                                  _replySending ? null : () => unawaited(_sendStoryReply()),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white24,
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: _replySending
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send_rounded),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
             ),

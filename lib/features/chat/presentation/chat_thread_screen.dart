@@ -84,6 +84,7 @@ import '../application/chat_recent_gifs_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
+import 'widgets/chat_story_reply_bubble.dart';
 import '../application/live_location_session.dart';
 import 'widgets/chat_message_readers_sheet.dart';
 import 'widgets/chat_message_reactors_sheet.dart';
@@ -2700,6 +2701,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         ChatLocationPayload.tryParse(msg.content) != null) {
       final loc = ChatLocationPayload.tryParse(msg.content);
       return loc?.previewText ?? '📍 Геопозиция';
+    }
+    if (msg.type == 'story_reply' ||
+        ChatStoryReplyPayload.tryParse(msg.content) != null) {
+      final reply = ChatStoryReplyPayload.tryParse(msg.content);
+      return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
@@ -7019,7 +7025,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
-      return '📍 Геопозиция';
+      final loc = ChatLocationPayload.tryParse(msg.content);
+      return loc?.previewText ?? '📍 Геопозиция';
+    }
+    if (msg.type == 'story_reply' ||
+        ChatStoryReplyPayload.tryParse(msg.content) != null) {
+      final reply = ChatStoryReplyPayload.tryParse(msg.content);
+      return reply?.previewText ?? '🖼 Ответ на сторис';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
@@ -14946,6 +14958,21 @@ class _Bubble extends StatelessWidget {
           onShowVoters: onShowPollVoters,
           onAddOption: onAddPollOption,
         ),
+      );
+    } else if (message.type == 'story_reply' ||
+        ChatStoryReplyPayload.tryParse(message.content) != null) {
+      final storyReply = ChatStoryReplyPayload.tryParse(message.content);
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: storyReply == null
+            ? Text('🖼 Ответ на сторис', style: TextStyle(color: fg))
+            : ChatStoryReplyBubble(
+                payload: storyReply,
+                foregroundColor: fg,
+                accentColor: scheme.primary,
+                backgroundColor: quoteBg,
+              ),
       );
     } else if (message.type == 'location' ||
         ChatLocationPayload.tryParse(message.content) != null) {

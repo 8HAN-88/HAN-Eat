@@ -981,6 +981,23 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendStoryReply({
+    required int conversationId,
+    required String content,
+    String? mediaUrl,
+    String? clientMessageId,
+    bool silent = false,
+  }) async {
+    return _send(
+      conversationId: conversationId,
+      type: 'story_reply',
+      content: content,
+      mediaUrl: mediaUrl,
+      clientMessageId: clientMessageId,
+      silent: silent,
+    );
+  }
+
   static Future<ChatMessage> sendPoll({
     required int conversationId,
     required String question,
