@@ -576,6 +576,10 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   }
   if (msg.type == 'location' ||
       ChatLocationPayload.tryParse(msg.content) != null) {
+    final loc = ChatLocationPayload.tryParse(msg.content);
+    if (loc == null) return 'Геопозиция';
+    if (loc.isLiveActive) return 'Трансляция геопозиции';
+    if (loc.isLive) return 'Геопозиция (завершена)';
     return 'Геопозиция';
   }
   if (msg.type == 'file') {

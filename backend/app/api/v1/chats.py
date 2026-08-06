@@ -87,6 +87,8 @@ from app.schemas.chat import (
     SendMessageRequest,
     ChatPollAddOptionRequest,
     ChatPollVoteRequest,
+    LiveLocationStartRequest,
+    LiveLocationUpdateRequest,
     CallbackQueryRequest,
     TypingActivityRequest,
 )
@@ -2381,6 +2383,233 @@ async def callback_query(
         sender,
         db=db,
     )
+
+
+def _live_location_message_response(
+    *,
+    db: Session,
+    svc: ChatService,
+    conversation_id: int,
+    msg,
+    current_user: User,
+) -> MessageResponse:
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
+    return _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        reactions=reactions,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/live-location",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_live_location(
+    conversation_id: int,
+    body: LiveLocationStartRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_location_service import build_live_location_content
+
+    try:
+        content = build_live_location_content(
+            latitude=body.latitude,
+            longitude=body.longitude,
+            period_seconds=body.period_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    svc = ChatService(db)
+    try:
+        msg, _created = svc.send_message(
+            conversation_id=conversation_id,
+            sender_id=current_user.id,
+            msg_type="location",
+            content=content,
+            reply_to_message_id=body.reply_to_message_id,
+            client_message_id=body.client_message_id,
+            silent=body.silent,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+
+    response = _live_location_message_response(
+        db=db,
+        svc=svc,
+        conversation_id=conversation_id,
+        msg=msg,
+        current_user=current_user,
+    )
+    _emit(
+        conversation_id,
+        {"type": "message.new", "message": response.model_dump(mode="json")},
+    )
+    return response
+
+
+@router.patch(
+    "/chats/{conversation_id}/messages/{message_id}/live-location",
+    response_model=MessageResponse,
+)
+async def update_live_location(
+    conversation_id: int,
+    message_id: int,
+    body: LiveLocationUpdateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.conversation import Message
+    from app.services.chat_location_service import update_live_location_content
+
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    msg = (
+        db.query(Message)
+        .filter(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    if msg.sender_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only sender can update")
+    if msg.type != "location":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_live_location")
+
+    try:
+        msg.content = update_live_location_content(
+            msg.content or "",
+            latitude=body.latitude,
+            longitude=body.longitude,
+        )
+        msg.edited_at = datetime.utcnow()
+        db.commit()
+        db.refresh(msg)
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        status_code = (
+            status.HTTP_429_TOO_MANY_REQUESTS
+            if code == "live_location_rate_limited"
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code, code) from exc
+
+    response = _live_location_message_response(
+        db=db,
+        svc=svc,
+        conversation_id=conversation_id,
+        msg=msg,
+        current_user=current_user,
+    )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/live-location/stop",
+    response_model=MessageResponse,
+)
+async def stop_live_location(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.conversation import Message
+    from app.services.chat_location_service import stop_live_location_content
+
+    svc = ChatService(db)
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+
+    msg = (
+        db.query(Message)
+        .filter(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    if msg.sender_id != current_user.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only sender can stop")
+    if msg.type != "location":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_live_location")
+
+    try:
+        msg.content = stop_live_location_content(msg.content or "")
+        msg.edited_at = datetime.utcnow()
+        db.commit()
+        db.refresh(msg)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    response = _live_location_message_response(
+        db=db,
+        svc=svc,
+        conversation_id=conversation_id,
+        msg=msg,
+        current_user=current_user,
+    )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
 
 
 @router.post(

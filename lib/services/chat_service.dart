@@ -676,6 +676,72 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> startLiveLocation({
+    required int conversationId,
+    required double latitude,
+    required double longitude,
+    required int periodSeconds,
+    int? replyToMessageId,
+    String? clientMessageId,
+    bool silent = false,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/messages/live-location');
+    final response = await _post(
+      uri,
+      retries: 1,
+      timeout: _sendTimeout,
+      bypassRateLimitGate: true,
+      body: jsonEncode({
+        'latitude': latitude,
+        'longitude': longitude,
+        'period_seconds': periodSeconds,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
+        'silent': silent,
+      }),
+    );
+    _ensureOk(response, 'Не удалось начать трансляцию геопозиции');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> updateLiveLocation({
+    required int conversationId,
+    required int messageId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/live-location',
+    );
+    final response = await _patch(
+      uri,
+      body: jsonEncode({
+        'latitude': latitude,
+        'longitude': longitude,
+      }),
+    );
+    _ensureOk(response, 'Не удалось обновить геопозицию');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> stopLiveLocation({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/live-location/stop',
+    );
+    final response = await _post(uri, body: '{}');
+    _ensureOk(response, 'Не удалось остановить трансляцию');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatMessage> forwardMessage({
     required int targetConversationId,
     required int sourceConversationId,

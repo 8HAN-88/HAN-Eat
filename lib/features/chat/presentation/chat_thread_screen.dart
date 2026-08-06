@@ -84,6 +84,7 @@ import '../application/chat_recent_gifs_store.dart';
 import 'widgets/chat_attach_sheet.dart';
 import 'widgets/chat_contact_bubble.dart';
 import 'widgets/chat_location_bubble.dart';
+import '../application/live_location_session.dart';
 import 'widgets/chat_message_readers_sheet.dart';
 import 'widgets/chat_message_reactors_sheet.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
@@ -2697,7 +2698,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (msg.type == 'location' ||
         ChatLocationPayload.tryParse(msg.content) != null) {
-      return '📍 Геопозиция';
+      final loc = ChatLocationPayload.tryParse(msg.content);
+      return loc?.previewText ?? '📍 Геопозиция';
     }
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
@@ -8249,6 +8251,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onRevealSpoiler: interactive && msg.hasSpoiler
           ? () => setState(() => _revealedSpoilerIds.add(msg.id))
           : null,
+      onStopLiveLocation: interactive && msg.isMine
+          ? () => unawaited(_stopLiveLocation(msg))
+          : null,
       onFileTap: interactive && msg.type == 'file' && msg.mediaUrl != null
           ? () => _openFileUrl(msg.mediaUrl!)
           : null,
@@ -10494,7 +10499,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final name = item.content.trim();
       return name.isEmpty ? '📎 Файл' : '📎 $name';
     }
-    if (item.type == 'location') return '📍 Геопозиция';
+    if (item.type == 'location') {
+      final loc = ChatLocationPayload.tryParse(item.content);
+      return loc?.previewText ?? '📍 Геопозиция';
+    }
     final text = item.content.trim();
     return text.isEmpty ? item.type.toUpperCase() : text;
   }
@@ -10892,6 +10900,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await _sendCurrentLocation(
           latitude: selection.latitude,
           longitude: selection.longitude,
+          livePeriodSeconds: selection.livePeriodSeconds,
         );
       case ChatAttachResult.videoNote:
         await _recordAndSendVideoNote();
@@ -11190,6 +11199,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendCurrentLocation({
     double? latitude,
     double? longitude,
+    int? livePeriodSeconds,
   }) async {
     try {
       DeviceLatLng? pos;
@@ -11211,6 +11221,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
+
+      final isLive = livePeriodSeconds != null && livePeriodSeconds > 0;
+      if (isLive) {
+        final mode = await _askSendOrSchedule();
+        if (mode == null || !mounted) return;
+        if (_isScheduleMode(mode)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Трансляцию геопозиции нельзя отложить'),
+            ),
+          );
+          return;
+        }
+        final msg = await ChatService.startLiveLocation(
+          conversationId: widget.conversationId,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          periodSeconds: livePeriodSeconds,
+          replyToMessageId: _replyTo?.id,
+          silent: mode == 'silent',
+        );
+        final parsed = ChatLocationPayload.tryParse(msg.content);
+        final expires = parsed?.expiresAt;
+        if (expires != null) {
+          LiveLocationSession.start(
+            conversationId: widget.conversationId,
+            messageId: msg.id,
+            expiresAt: expires,
+          );
+        }
+        setState(() => _replyTo = null);
+        AppHaptics.selection();
+        await _pollNew();
+        return;
+      }
+
       final content = ChatLocationPayload.encode(
         latitude: pos.latitude,
         longitude: pos.longitude,
@@ -11244,6 +11290,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       setState(() => _replyTo = null);
       AppHaptics.selection();
+      await _pollNew();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _stopLiveLocation(ChatMessage message) async {
+    try {
+      final session = LiveLocationSession.activeFor(message.id);
+      if (session != null) {
+        await session.stopRemote();
+      } else {
+        await ChatService.stopLiveLocation(
+          conversationId: widget.conversationId,
+          messageId: message.id,
+        );
+      }
       await _pollNew();
     } catch (e) {
       if (!mounted) return;
@@ -14122,6 +14188,7 @@ class _Bubble extends StatelessWidget {
     this.giftActionBusy = false,
     this.spoilerRevealed = false,
     this.onRevealSpoiler,
+    this.onStopLiveLocation,
   });
 
   final ChatMessage message;
@@ -14135,6 +14202,7 @@ class _Bubble extends StatelessWidget {
   final bool giftActionBusy;
   final bool spoilerRevealed;
   final VoidCallback? onRevealSpoiler;
+  final VoidCallback? onStopLiveLocation;
   /// Still sending to server (Telegram clock icon).
   final bool isPending;
   /// Send failed (tap to retry).
@@ -14892,6 +14960,8 @@ class _Bubble extends StatelessWidget {
                 foregroundColor: fg,
                 accentColor: scheme.primary,
                 backgroundColor: quoteBg,
+                isMine: mine,
+                onStopLive: onStopLiveLocation,
               ),
       );
     } else if (ChatContactPayload.tryParse(message.content)

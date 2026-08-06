@@ -77,6 +77,7 @@ class ChatAttachSelection {
     this.stickerEmoji,
     this.latitude,
     this.longitude,
+    this.livePeriodSeconds,
   });
 
   final ChatAttachResult kind;
@@ -93,6 +94,7 @@ class ChatAttachSelection {
   final String? stickerEmoji;
   final double? latitude;
   final double? longitude;
+  final int? livePeriodSeconds;
 
   factory ChatAttachSelection.gallery(List<XFile> files) =>
       ChatAttachSelection._(
@@ -158,11 +160,13 @@ class ChatAttachSelection {
   factory ChatAttachSelection.location({
     double? latitude,
     double? longitude,
+    int? livePeriodSeconds,
   }) =>
       ChatAttachSelection._(
         kind: ChatAttachResult.location,
         latitude: latitude,
         longitude: longitude,
+        livePeriodSeconds: livePeriodSeconds,
       );
 
   factory ChatAttachSelection.videoNote() =>
@@ -1187,8 +1191,12 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.location:
         return _LocationPickPanel(
           scrollController: scrollController,
-          onSend: (lat, lng) => _close(
-            ChatAttachSelection.location(latitude: lat, longitude: lng),
+          onSend: (lat, lng, {int? livePeriodSeconds}) => _close(
+            ChatAttachSelection.location(
+              latitude: lat,
+              longitude: lng,
+              livePeriodSeconds: livePeriodSeconds,
+            ),
           ),
           isDark: isDark,
         );
@@ -1637,7 +1645,11 @@ class _LocationPickPanel extends StatefulWidget {
   });
 
   final ScrollController scrollController;
-  final void Function(double latitude, double longitude) onSend;
+  final void Function(
+    double latitude,
+    double longitude, {
+    int? livePeriodSeconds,
+  }) onSend;
   final bool isDark;
 
   @override
@@ -1645,9 +1657,16 @@ class _LocationPickPanel extends StatefulWidget {
 }
 
 class _LocationPickPanelState extends State<_LocationPickPanel> {
+  static const _livePeriods = <(int, String)>[
+    (900, '15 мин'),
+    (3600, '1 час'),
+    (28800, '8 часов'),
+  ];
+
   bool _loading = true;
   String? _error;
   DeviceLatLng? _position;
+  int _livePeriodSeconds = 900;
 
   @override
   void initState() {
@@ -1780,6 +1799,37 @@ class _LocationPickPanelState extends State<_LocationPickPanel> {
             onPressed: () => widget.onSend(pos!.latitude, pos.longitude),
             icon: const Icon(Icons.send_rounded),
             label: const Text('Отправить'),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Транслировать геопозицию',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in _livePeriods)
+                ChoiceChip(
+                  label: Text(entry.$2),
+                  selected: _livePeriodSeconds == entry.$1,
+                  onSelected: (_) =>
+                      setState(() => _livePeriodSeconds = entry.$1),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => widget.onSend(
+              pos!.latitude,
+              pos.longitude,
+              livePeriodSeconds: _livePeriodSeconds,
+            ),
+            icon: const Icon(Icons.my_location_outlined),
+            label: const Text('Начать трансляцию'),
           ),
         ] else ...[
           Icon(
