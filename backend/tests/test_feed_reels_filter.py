@@ -30,14 +30,11 @@ def test_apply_feed_type_filter_photos_filters_type():
     assert str(clause) == str(Post.type == "photo")
 
 
-def test_apply_feed_type_filter_recipes_filters_type():
-    from app.models.post import Post
-
+def test_apply_feed_type_filter_recipes_is_noop_legacy():
+    """Legacy kitchen feed_type=recipes no longer filters — messenger shows all."""
     query = MagicMock()
-    FeedService._apply_feed_type_filter(query, "recipes")
-    query.filter.assert_called_once()
-    clause = query.filter.call_args[0][0]
-    assert str(clause) == str(Post.type == "recipe")
+    assert FeedService._apply_feed_type_filter(query, "recipes") is query
+    query.filter.assert_not_called()
 
 
 def test_diversity_guard_limits_repeated_authors_in_recommendations():

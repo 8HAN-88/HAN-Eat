@@ -12,14 +12,6 @@ class MediaItem(BaseModel):
     upload_id: Optional[str] = None
 
 
-class RecipeStep(BaseModel):
-    number: int
-    text: str
-    step: Optional[str] = None  # Дублируем для совместимости
-    image_url: Optional[str] = None
-    image: Optional[str] = None  # Дублируем для совместимости с фронтендом
-
-
 class PollCreate(BaseModel):
     question: str
     options: List[str]  # 2–10 вариантов
@@ -31,11 +23,9 @@ class LinkCreate(BaseModel):
 
 
 class CreatePostRequest(BaseModel):
-    type: str  # photo | recipe | reel | text | poll | link
+    type: str  # photo | reel | text | poll | link | recipe(legacy)
     title: Optional[str] = None
     description: Optional[str] = None
-    ingredients: Optional[List[str]] = None  # для рецептов
-    steps: Optional[List[RecipeStep]] = None  # для рецептов
     media: Optional[List[MediaItem]] = None
     publish_to: Optional[List[str]] = None  # ['feed', 'community:5']
     visibility: Optional[str] = "public"  # public | followers | private
@@ -44,18 +34,7 @@ class CreatePostRequest(BaseModel):
     # Для обратной совместимости
     community_id: Optional[int] = None
     publish_to_reels: Optional[bool] = None
-    
-    # Для рецептов
-    prep_time_min: Optional[int] = None
-    cook_time_min: Optional[int] = None
-    servings: Optional[int] = None
-    calories: Optional[int] = None
-    protein_g: Optional[float] = None
-    carbs_g: Optional[float] = None
-    fat_g: Optional[float] = None
-    fiber_g: Optional[float] = None
-    origin_country_code: Optional[str] = None  # ISO 3166-1 alpha-2, кухня/страна блюда
-    origin_country_name: Optional[str] = None
+
     scheduled_publish_at: Optional[datetime] = None
     poll: Optional[PollCreate] = None
     link: Optional[LinkCreate] = None
@@ -71,24 +50,11 @@ class PollVoteRequest(BaseModel):
 class UpdatePostRequest(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    ingredients: Optional[List[str]] = None  # для рецептов
-    steps: Optional[List[RecipeStep]] = None  # для рецептов
     media: Optional[List[MediaItem]] = None
     tags: Optional[List[str]] = None
-    visibility: Optional[str] = None  # public | private (рецепты)
+    visibility: Optional[str] = None  # public | private | followers
     link: Optional[LinkCreate] = None
-    
-    # Для рецептов
-    prep_time_min: Optional[int] = None
-    cook_time_min: Optional[int] = None
-    servings: Optional[int] = None
-    calories: Optional[int] = None
-    protein_g: Optional[float] = None
-    carbs_g: Optional[float] = None
-    fat_g: Optional[float] = None
-    fiber_g: Optional[float] = None
-    origin_country_code: Optional[str] = None
-    origin_country_name: Optional[str] = None
+
     poll: Optional[PollCreate] = None
     is_paid: Optional[bool] = None
     price_stars: Optional[int] = None

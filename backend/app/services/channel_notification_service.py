@@ -81,11 +81,7 @@ def send_channel_post_notification(
     title = f"Новый пост в канале {channel.name}"
     body = post_title or "Новый пост"
 
-    if post_type == "recipe":
-        notification_type = "channel_recipe"
-        title = f"Новый рецепт в канале {channel.name}"
-        body = post_title or "Новый рецепт"
-    elif post_type == "reel":
+    if post_type == "reel":
         notification_type = "channel_video"
         title = f"Новое видео в канале {channel.name}"
         body = post_title or "Новое видео"

@@ -13,7 +13,6 @@ class CreateChannelRequest(BaseModel):
     cover_url: Optional[str] = None
     avatar_url: Optional[str] = None
     is_public: bool = True
-    recipe_visibility_mode: str = "mixed"  # public | private | mixed
     category: Optional[str] = None  # Категория канала (итальянская, азиатская, веган и т.д.)
     tags: Optional[List[str]] = None  # Теги канала (#выпечка, #здоровое)
     auto_publish_reels: bool = True
@@ -31,9 +30,7 @@ class UpdateChannelRequest(BaseModel):
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     rules: Optional[str] = None  # Правила канала
-    recipe_visibility_mode: Optional[str] = None
     auto_publish_to_feed: Optional[bool] = None
-    auto_publish_to_menu: Optional[bool] = None
     auto_publish_reels: Optional[bool] = None
     allow_comments: Optional[bool] = None
     allow_likes: Optional[bool] = None

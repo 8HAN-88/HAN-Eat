@@ -41,35 +41,6 @@ async def create_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Post not found"
         )
-    
-    # Для recipe-постов: одна оценка от пользователя на пост.
-    # Повторная оценка обновляет существующую.
-    if post.type == "recipe" and request.rating is not None and request.parent_id is None:
-        existing = db.query(Comment).filter(
-            Comment.post_id == post_id,
-            Comment.user_id == current_user.id,
-            Comment.deleted_at.is_(None),
-            Comment.parent_id.is_(None),
-            Comment.rating.isnot(None),
-        ).order_by(Comment.created_at.desc()).first()
-        if existing:
-            existing.rating = request.rating
-            if text_value:
-                existing.text = text_value
-            db.commit()
-            db.refresh(existing)
-            return CommentResponse(
-                id=existing.id,
-                post_id=existing.post_id,
-                user_id=existing.user_id,
-                text=existing.text,
-                rating=existing.rating,
-                parent_id=existing.parent_id,
-                created_at=existing.created_at,
-                author_name=current_user.name,
-                author_avatar=current_user.avatar_url,
-            )
-
     from app.services.anti_spam_service import AntiSpamService
 
     ok, spam_msg = AntiSpamService(db).check_can_create_comment(current_user)
@@ -83,7 +54,7 @@ async def create_comment(
     comment = Comment(
         post_id=post_id,
         user_id=current_user.id,
-        text=text_value or "Оценка рецепта",
+        text=text_value or "Оценка",
         rating=request.rating,
         parent_id=request.parent_id,
     )

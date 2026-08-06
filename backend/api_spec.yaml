@@ -242,19 +242,11 @@ components:
       properties:
         type:
           type: string
-          enum: [photo, recipe, reel, text]
+          enum: [photo, reel, text, poll, link]
         title:
           type: string
         description:
           type: string
-        ingredients:
-          type: array
-          items:
-            type: string
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/RecipeStep'
         media:
           type: array
           items:
@@ -266,17 +258,6 @@ components:
         visibility:
           type: string
           enum: [public, followers, private]
-
-    RecipeStep:
-      type: object
-      properties:
-        number:
-          type: integer
-        text:
-          type: string
-        image_url:
-          type: string
-          nullable: true
 
     MediaItem:
       type: object

@@ -197,32 +197,6 @@ async def create_post(
     else:
         body = None
 
-    # Формируем body для рецептов
-    if request.type == "recipe":
-        from app.services.recipe_body_nutrition import apply_nutrition_to_recipe_body
-        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
-
-        body = {
-            "ingredients": request.ingredients or [],
-            "steps": [step.model_dump() for step in (request.steps or [])],
-            "prep_time_min": request.prep_time_min,
-            "cook_time_min": request.cook_time_min,
-            "servings": request.servings,
-        }
-        apply_nutrition_to_recipe_body(
-            body,
-            calories=request.calories,
-            protein_g=request.protein_g,
-            carbs_g=request.carbs_g,
-            fat_g=request.fat_g,
-            fiber_g=request.fiber_g,
-        )
-        apply_origin_country_to_recipe_body(
-            body,
-            origin_country_code=request.origin_country_code,
-            origin_country_name=request.origin_country_name,
-        )
-    
     # Обрабатываем медиа
     media_items = []
     if request.media:
@@ -238,8 +212,7 @@ async def create_post(
         if body is None:
             body = {}
         body["media"] = media_items
-    
-    channel_for_visibility = None
+
     channel_obj = None
 
     if request.channel_id:
@@ -262,7 +235,6 @@ async def create_post(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для публикации в канале",
             )
-        channel_for_visibility = channel_obj
         channel_obj.posts_count = (channel_obj.posts_count or 0) + 1
 
     publish_to = request.publish_to
@@ -299,19 +271,6 @@ async def create_post(
         **paid_fields,
     )
 
-    if request.type == "recipe":
-        from app.services.subscription_service import SubscriptionService
-        from app.services.recipe_visibility_service import (
-            resolve_recipe_visibility,
-            sync_recipe_index_flags,
-        )
-
-        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
-        post.visibility = resolve_recipe_visibility(
-            request.visibility, channel_for_visibility, has_creator
-        )
-        sync_recipe_index_flags(post)
-    
     from app.services.anti_spam_service import AntiSpamService
     from app.services.moderation_apply import run_post_moderation
     from datetime import datetime
@@ -546,8 +505,6 @@ async def update_post(
     db: Session = Depends(get_db),
 ):
     """Обновить пост автора (в т.ч. link-пост в ленте профиля)."""
-    from app.services.recipe_body_nutrition import apply_nutrition_to_recipe_body
-
     post = (
         db.query(Post)
         .filter(Post.id == post_id, Post.deleted_at.is_(None))
@@ -583,37 +540,6 @@ async def update_post(
         post.is_paid = paid_fields["is_paid"]
         post.price_stars = paid_fields["price_stars"]
         post.preview_mode = paid_fields["preview_mode"]
-
-    if post.type == "recipe":
-        body = post.body or {}
-        if request.ingredients is not None:
-            body["ingredients"] = request.ingredients
-        if request.steps is not None:
-            body["steps"] = [step.model_dump() for step in request.steps]
-        if request.prep_time_min is not None:
-            body["prep_time_min"] = request.prep_time_min
-        if request.cook_time_min is not None:
-            body["cook_time_min"] = request.cook_time_min
-        if request.servings is not None:
-            body["servings"] = request.servings
-        apply_nutrition_to_recipe_body(
-            body,
-            calories=request.calories,
-            protein_g=request.protein_g,
-            carbs_g=request.carbs_g,
-            fat_g=request.fat_g,
-            fiber_g=request.fiber_g,
-        )
-        from app.services.recipe_origin_country import apply_origin_country_to_recipe_body
-
-        if request.origin_country_code is not None:
-            apply_origin_country_to_recipe_body(
-                body,
-                origin_country_code=request.origin_country_code,
-                origin_country_name=request.origin_country_name,
-                clear_if_empty=request.origin_country_code == "",
-            )
-        post.body = body
 
     if request.media is not None:
         body = post.body or {}
