@@ -43,7 +43,6 @@ class FeedService {
     String feedType = 'all',
     bool followingOnly = false,
     FeedSortMode sortMode = FeedSortMode.personalized,
-    bool? includeRecipes,
   }) async {
     try {
       var token = await AuthService.getAccessTokenForApi();
@@ -51,13 +50,13 @@ class FeedService {
         throw AuthService.tokenUnavailableException();
       }
 
-      final shouldIncludeRecipes = feedType == 'recipes' ||
-          (includeRecipes ?? false);
+      // Messenger: legacy recipe posts are normal posts — always include them.
+      final resolvedFeedType = feedType == 'recipes' ? 'all' : feedType;
       final uri = Uri.parse('$baseUrl/feed').replace(queryParameters: {
         if (cursor != null) 'cursor': cursor,
         'limit': limit.toString(),
-        'feed_type': feedType,
-        'include_recipes': shouldIncludeRecipes.toString(),
+        'feed_type': resolvedFeedType,
+        'include_recipes': 'true',
         'following_only': followingOnly.toString(),
         'sort_by': _toBackendSortBy(sortMode),
       });

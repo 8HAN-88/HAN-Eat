@@ -2,7 +2,6 @@
 enum SearchScope {
   main,
   channels,
-  menu,
   /// Чаты: люди и каталог каналов (кнопка поиска в разделе «Чаты»).
   chats,
 }
@@ -14,11 +13,10 @@ SearchScope? searchScopeFromQuery(String? raw) {
       return SearchScope.main;
     case 'channels':
       return SearchScope.channels;
-    case 'menu':
-      return SearchScope.menu;
     case 'chats':
       return SearchScope.chats;
-    // Старые значения из предыдущей версии → общий поиск ленты.
+    // Legacy kitchen / old feed scopes → общий поиск ленты.
+    case 'menu':
     case 'subscriptions':
     case 'recommendations':
     case 'reels':
@@ -50,8 +48,6 @@ extension SearchScopeLabels on SearchScope {
         return 'Поиск';
       case SearchScope.channels:
         return 'Поиск каналов';
-      case SearchScope.menu:
-        return 'Поиск';
       case SearchScope.chats:
         return 'Поиск';
     }
@@ -63,8 +59,6 @@ extension SearchScopeLabels on SearchScope {
         return 'Посты, люди, рилсы…';
       case SearchScope.channels:
         return 'Название или описание канала…';
-      case SearchScope.menu:
-        return 'Посты, люди, рилсы…';
       case SearchScope.chats:
         return 'Имя, @username или название канала…';
     }

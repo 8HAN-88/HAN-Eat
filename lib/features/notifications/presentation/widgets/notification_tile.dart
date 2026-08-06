@@ -478,7 +478,7 @@ class _PostThumbnail extends StatelessWidget {
     IconData icon;
     switch (type) {
       case 'recipe':
-        icon = Icons.restaurant_menu_rounded;
+        icon = Icons.article_outlined;
         break;
       case 'reel':
         icon = Icons.play_circle_outline_rounded;

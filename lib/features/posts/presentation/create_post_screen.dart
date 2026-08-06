@@ -269,9 +269,6 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   }
 
   void _preparePlainComposerForMediaSelection() {
-    if (_selectedType == 'recipe') {
-      
-    }
     _clearLinkDraft();
     _selectedType = 'text';
   }

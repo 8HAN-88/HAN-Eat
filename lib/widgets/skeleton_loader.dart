@@ -3,8 +3,8 @@ import 'package:shimmer/shimmer.dart';
 
 import '../core/theme/app_tokens.dart';
 
-class RecipeCardSkeleton extends StatelessWidget {
-  const RecipeCardSkeleton({super.key});
+class PostCardSkeleton extends StatelessWidget {
+  const PostCardSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +148,7 @@ class ListSkeletonLoader extends StatelessWidget {
       padding: AppInsets.screen,
       itemCount: itemCount,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, __) => const RecipeCardSkeleton(),
+      itemBuilder: (_, __) => const PostCardSkeleton(),
     );
   }
 }
