@@ -32,7 +32,6 @@ import '../features/meal_plan/presentation/meal_plan_screen.dart';
 import '../features/meal_plan/presentation/ai_meal_plan_screen.dart';
 import '../features/meal_plan/presentation/meal_plan_analytics_screen.dart';
 import '../features/meal_plan/presentation/meal_plan_nutrition_settings_screen.dart';
-import '../features/history/presentation/history_screen.dart';
 import '../features/meal_plan/presentation/meal_plan_survey_flow_screen.dart';
 import '../features/shopping/shopping_page.dart';
 import '../features/categories/presentation/categories_screen.dart';
@@ -528,12 +527,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: MealPlanNutritionSettingsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: MealPlanNutritionSettingsScreen()),
-      ),
-      GoRoute(
-        path: HistoryRoute.path,
-        name: HistoryRoute.name,
-        pageBuilder: (context, state) =>
-            const MaterialPage(child: HistoryScreen()),
       ),
       // Результат сканирования блюда (фото → питательность и рецепты)
       GoRoute(
@@ -1424,11 +1417,6 @@ class _RouterRecoveryScreenState extends State<_RouterRecoveryScreen> {
       ),
     );
   }
-}
-
-class HistoryRoute {
-  static const path = '/history';
-  static const name = 'history';
 }
 
 class MenuRoute {
