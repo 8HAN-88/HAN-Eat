@@ -16,14 +16,6 @@ String shrinkSpoonacularImageUrl(
   );
 }
 
-/// URL для сетки карточек (баланс скорости и чёткости на Retina).
-String getRecipeCardImageUrl(String raw) =>
-    getRecipeImageUrl(raw, spoonacularDimensions: '240x150');
-
-/// URL для полноэкранного просмотра.
-String getRecipeDetailImageUrl(String raw) =>
-    getRecipeImageUrl(raw, spoonacularDimensions: '556x370');
-
 /// Кандидаты URL для полноэкранного просмотра: оригинал, medium и fallback.
 List<String> getFullscreenImageUrlCandidates(String raw) {
   final trimmed = raw.trim();

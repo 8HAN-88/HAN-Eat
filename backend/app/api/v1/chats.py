@@ -2820,7 +2820,7 @@ async def translate_chat_text(
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
     target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
-    from app.api.v1.recipes import translate_text
+    from app.services.text_translation import translate_text
 
     translated = translate_text(text, target)
     return TranslateTextResponse(

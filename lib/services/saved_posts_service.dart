@@ -27,13 +27,9 @@ class SavedPostsService {
   static String get baseUrl => '${ApiService.baseUrl}/api/v1';
   
   static const String _boxName = 'saved_posts';
-  static const String _recipesBoxName = 'saved_recipes_v1';
-  static const String _detailsBoxName = 'recipe_details_v1';
   static const String _pendingBoxName = 'saved_pending_ops_v1';
   static const String _metaKeyLastSync = 'last_sync_ms';
   static Box<String>? _box;
-  static Box<String>? _recipesBox;
-  static Box<String>? _detailsBox;
   static Box<String>? _pendingBox;
   static bool _isInitialized = false;
   static DateTime? lastSyncTime;
@@ -44,9 +40,14 @@ class SavedPostsService {
     if (_isInitialized) return;
     await ensureHiveReady();
     _box = await Hive.openBox<String>(_boxName);
-    _recipesBox = await Hive.openBox<String>(_recipesBoxName);
-    _detailsBox = await Hive.openBox<String>(_detailsBoxName);
     _pendingBox = await Hive.openBox<String>(_pendingBoxName);
+    // Drop legacy kitchen Hive boxes if they still exist on device.
+    try {
+      await Hive.deleteBoxFromDisk('saved_recipes_v1');
+    } catch (_) {}
+    try {
+      await Hive.deleteBoxFromDisk('recipe_details_v1');
+    } catch (_) {}
     final syncMs = _box?.get(_metaKeyLastSync);
     if (syncMs is String) {
       final ms = int.tryParse(syncMs);
@@ -505,8 +506,6 @@ class SavedPostsService {
   static Future<void> clearLocalCache() async {
     await init();
     await _box?.clear();
-    await _recipesBox?.clear();
-    await _detailsBox?.clear();
     await _pendingBox?.clear();
     lastSyncTime = null;
     lastLoadFromCache = false;

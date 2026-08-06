@@ -37,15 +37,7 @@ def collect_production_issues() -> list[str]:
                 issues.append("Redis работает в stub mode — realtime/cache/locks/video queue недоступны")
         except Exception as e:
             issues.append(f"Redis readiness check failed: {e}")
-    try:
-        from app.api.v1.recipes import TRANSLATOR_AVAILABLE
-
-        if not TRANSLATOR_AVAILABLE:
-            issues.append(
-                "deep-translator не установлен — перевод рецептов для AI не работает"
-            )
-    except Exception:
-        issues.append("модуль recipes недоступен для проверки перевода")
+    # Kitchen recipe translator is no longer a production requirement (messenger).
     return issues
 
 

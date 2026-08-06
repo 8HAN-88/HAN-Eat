@@ -17,8 +17,6 @@ flutter test \
   test/url_validator_test.dart \
   test/api_error_parser_test.dart \
   test/feed_load_helper_test.dart \
-  test/shopping_service_test.dart \
-  test/favorites_service_test.dart
 
 echo ""
 echo "== Flutter analyze (feed/posts/chats) =="

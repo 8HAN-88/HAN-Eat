@@ -1887,68 +1887,17 @@ async def get_channels_feed(
     }
 
 
-@router.get("/{channel_id}/recipes")
-async def get_channel_recipes(
-    channel_id: int,
-    limit: int = Query(20, ge=1, le=50),
-    offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
-):
-    """Получить только рецепты канала"""
-    channel = db.query(Channel).filter(Channel.id == channel_id).first()
-    if not channel:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Channel not found"
-        )
-    
-    _require_can_view_posts(db, channel, current_user)
+@router.get("/{channel_id}/recipes", status_code=status.HTTP_410_GONE)
+async def get_channel_recipes_retired(channel_id: int):
+    """Channel recipe listing retired — HanWe is a messenger."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "detail": "Kitchen features were removed. HanWe is a messenger.",
+            "code": "kitchen_retired",
+        },
+    )
 
-    from app.models.like import Like
-    from app.models.comment import Comment
-    from app.schemas.post import PostResponse
-    
-    posts = db.query(Post).filter(
-        Post.channel_id == channel_id,
-        Post.type == "recipe",
-        Post.status == "published",
-        Post.deleted_at.is_(None)
-    ).order_by(Post.published_at.desc()).limit(limit).offset(offset).all()
-    
-    posts_data = []
-    for post in posts:
-        likes_count = db.query(func.count(Like.id)).filter(Like.post_id == post.id).scalar() or 0
-        comments_count = db.query(func.count(Comment.id)).filter(
-            Comment.post_id == post.id,
-            Comment.deleted_at.is_(None)
-        ).scalar() or 0
-        
-        is_liked = False
-        if current_user:
-            is_liked = db.query(Like).filter(
-                Like.user_id == current_user.id,
-                Like.post_id == post.id
-            ).first() is not None
-        
-        posts_data.append({
-            **PostResponse.model_validate(post).model_dump(),
-            "likes_count": likes_count,
-            "comments_count": comments_count,
-            "is_liked": is_liked,
-        })
-    
-    total = db.query(func.count(Post.id)).filter(
-        Post.channel_id == channel_id,
-        Post.type == "recipe",
-        Post.status == "published",
-        Post.deleted_at.is_(None)
-    ).scalar() or 0
-    
-    return {
-        "posts": posts_data,
-        "total": total,
-    }
 
 
 @router.put("/{channel_id}/members/{user_id}/role", response_model=ChannelMemberResponse)

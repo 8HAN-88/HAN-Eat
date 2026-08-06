@@ -55,7 +55,7 @@ def _localize_one_card(
     full: bool,
     titles_only: bool = False,
 ) -> Dict[str, Any]:
-    from app.api.v1.recipes import translate_list, translate_steps, translate_text
+    from app.services.text_translation import translate_list, translate_steps, translate_text
 
     out = dict(card)
     title = out.get("title") or ""

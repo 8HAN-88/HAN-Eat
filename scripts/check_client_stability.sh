@@ -29,8 +29,6 @@ fi
 echo ""
 echo "-- Flutter tests (local services) --"
 if flutter test \
-  test/favorites_service_test.dart \
-  test/shopping_service_test.dart \
   test/feed_load_helper_test.dart; then
   ok "unit tests"
 else
@@ -63,9 +61,6 @@ if flutter analyze \
   lib/core/storage/hive_bootstrap.dart \
   lib/core/app_stability_guard.dart \
   lib/widgets/services_ready_gate.dart \
-  lib/services/shopping_service.dart \
-  lib/services/favorites_service.dart \
-  lib/services/meal_plan_service.dart \
   lib/core/theme/app_typography.dart; then
   ok "analyze"
 else
