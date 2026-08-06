@@ -7,9 +7,15 @@ echo "== health =="
 curl -sf "$BASE/health" | head -c 80
 echo ""
 
-echo "== ai-scan limits =="
-curl -sf "$BASE/api/v1/ai-scan/limits"
+echo "== ai-scan retired (expect 410) =="
+code=$(curl -s -o /tmp/ai_scan.json -w "%{http_code}" "$BASE/api/v1/ai-scan/limits")
+echo "HTTP $code"
+head -c 160 /tmp/ai_scan.json 2>/dev/null || true
 echo ""
+if [ "$code" != "410" ]; then
+  echo "expected HTTP 410 for retired kitchen endpoint" >&2
+  exit 1
+fi
 
 echo "== payments prices RU =="
 curl -sf "$BASE/api/v1/payments/prices?country=RU" | head -c 200
