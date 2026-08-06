@@ -595,6 +595,18 @@ class CallService:
         member_ids = [uid for (uid,) in members]
         if host_id not in member_ids:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        from app.services.chat_service import ChatService
+
+        if not ChatService(self.db).can_manage_group_video_chats(
+            conversation_id, host_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "GROUP_CALL_FORBIDDEN",
+                    "message": "Нет права управлять групповыми звонками",
+                },
+            )
         # Host + up to MAX-1 others (invite first N by membership order).
         others = [uid for uid in member_ids if uid != host_id][: MAX_GROUP_CALL_PARTICIPANTS - 1]
         if not others:

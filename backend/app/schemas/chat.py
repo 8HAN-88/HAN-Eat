@@ -16,6 +16,11 @@ class ChatUserBrief(BaseModel):
     is_group_creator: bool = False
     can_manage_members: bool = False
     can_manage_posting_permissions: bool = False
+    can_change_info: bool = False
+    can_delete_messages: bool = False
+    can_pin_messages: bool = False
+    can_invite_users: bool = False
+    can_manage_video_chats: bool = False
     send_restricted: bool = False
     send_restricted_until: Optional[datetime] = None
     send_restriction_reason: Optional[str] = None
@@ -139,6 +144,11 @@ class ConversationResponse(BaseModel):
     am_i_group_admin: bool = False
     am_i_can_manage_members: bool = False
     am_i_can_manage_posting_permissions: bool = False
+    am_i_can_change_info: bool = False
+    am_i_can_delete_messages: bool = False
+    am_i_can_pin_messages: bool = False
+    am_i_can_invite_users: bool = False
+    am_i_can_manage_video_chats: bool = False
     am_i_send_restricted: bool = False
     am_i_send_restricted_until: Optional[datetime] = None
     am_i_send_restriction_reason: Optional[str] = None
@@ -397,6 +407,11 @@ class GroupMemberAdminRequest(BaseModel):
 class GroupMemberPermissionsRequest(BaseModel):
     can_manage_members: bool = False
     can_manage_posting_permissions: bool = False
+    can_change_info: bool = False
+    can_delete_messages: bool = False
+    can_pin_messages: bool = False
+    can_invite_users: bool = False
+    can_manage_video_chats: bool = False
 
 
 class GroupMemberSendRestrictionRequest(BaseModel):

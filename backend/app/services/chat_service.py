@@ -286,6 +286,23 @@ class ChatService:
                 "can_manage_posting_permissions": bool(
                     member_by_user_id[i].can_manage_posting_permissions
                 ),
+                "can_change_info": bool(
+                    getattr(member_by_user_id[i], "can_change_info", False)
+                ),
+                "can_delete_messages": bool(
+                    getattr(member_by_user_id[i], "can_delete_messages", False)
+                ),
+                "can_pin_messages": bool(
+                    getattr(member_by_user_id[i], "can_pin_messages", False)
+                ),
+                "can_invite_users": bool(
+                    getattr(member_by_user_id[i], "can_invite_users", False)
+                ),
+                "can_manage_video_chats": bool(
+                    getattr(
+                        member_by_user_id[i], "can_manage_video_chats", False
+                    )
+                ),
                 "send_restricted": bool(
                     member_by_user_id[i].send_restricted
                     and (
@@ -323,13 +340,19 @@ class ChatService:
         self.db.flush()
         all_ids = others | {creator_id}
         for uid in all_ids:
+            is_creator = uid == creator_id
             self.db.add(
                 ConversationMember(
                     conversation_id=conv.id,
                     user_id=uid,
-                    is_admin=(uid == creator_id),
-                    can_manage_members=(uid == creator_id),
-                    can_manage_posting_permissions=(uid == creator_id),
+                    is_admin=is_creator,
+                    can_manage_members=is_creator,
+                    can_manage_posting_permissions=is_creator,
+                    can_change_info=is_creator,
+                    can_delete_messages=is_creator,
+                    can_pin_messages=is_creator,
+                    can_invite_users=is_creator,
+                    can_manage_video_chats=is_creator,
                 )
             )
         self.db.flush()
@@ -354,12 +377,22 @@ class ChatService:
         member = self._get_member_record(conversation_id, user_id)
         return bool(member and member.is_admin)
 
-    def _can_manage_group_members(self, conversation_id: int, user_id: int) -> bool:
+    def _has_group_admin_right(
+        self, conversation_id: int, user_id: int, right: str
+    ) -> bool:
+        """Creator always has every right; admins need the matching flag."""
         conv = self._get_group_or_error(conversation_id)
         if conv.created_by_user_id == user_id:
             return True
         member = self._get_member_record(conversation_id, user_id)
-        return bool(member and member.is_admin and member.can_manage_members)
+        if not member or not member.is_admin:
+            return False
+        return bool(getattr(member, right, False))
+
+    def _can_manage_group_members(self, conversation_id: int, user_id: int) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_manage_members"
+        )
 
     def group_member_manager_user_ids(self, conversation_id: int) -> List[int]:
         conv = self._get_group_or_error(conversation_id)
@@ -380,13 +413,51 @@ class ChatService:
     def _can_manage_group_posting_permissions(
         self, conversation_id: int, user_id: int
     ) -> bool:
-        conv = self._get_group_or_error(conversation_id)
-        if conv.created_by_user_id == user_id:
-            return True
-        member = self._get_member_record(conversation_id, user_id)
-        return bool(
-            member and member.is_admin and member.can_manage_posting_permissions
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_manage_posting_permissions"
         )
+
+    def _can_change_group_info(self, conversation_id: int, user_id: int) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_change_info"
+        )
+
+    def _can_delete_group_messages(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_delete_messages"
+        )
+
+    def _can_pin_group_messages(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_pin_messages"
+        )
+
+    def _can_invite_group_users(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_invite_users"
+        )
+
+    def _can_manage_group_video_chats(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        return self._has_group_admin_right(
+            conversation_id, user_id, "can_manage_video_chats"
+        )
+
+    def can_manage_group_video_chats(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        """Public helper for CallService / API layers."""
+        try:
+            return self._can_manage_group_video_chats(conversation_id, user_id)
+        except ValueError:
+            return False
 
     def _is_member_send_restricted(
         self, conversation_id: int, user_id: int
@@ -1224,7 +1295,7 @@ class ChatService:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        if not self._can_manage_group_posting_permissions(conversation_id, user_id):
+        if not self._can_change_group_info(conversation_id, user_id):
             raise ValueError("forbidden")
         clean = title.strip()
         if not clean:
@@ -1368,7 +1439,7 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        if not self._can_manage_group_posting_permissions(conversation_id, actor_id):
+        if not self._can_change_group_info(conversation_id, actor_id):
             raise ValueError("forbidden")
         url = (avatar_url or "").strip()
         conv.avatar_url = url or None
@@ -1378,7 +1449,7 @@ class ChatService:
     def add_group_members(
         self, conversation_id: int, actor_id: int, user_ids: List[int]
     ) -> int:
-        if not self._can_manage_group_members(conversation_id, actor_id):
+        if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
         self._get_group_or_error(conversation_id)
         added = 0
@@ -1404,7 +1475,7 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        if not self._can_manage_group_members(conversation_id, actor_id):
+        if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         self._cleanup_expired_invite_links(conversation_id)
@@ -1450,7 +1521,7 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        if not self._can_manage_group_members(conversation_id, actor_id):
+        if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         expires_naive = None
@@ -1489,7 +1560,7 @@ class ChatService:
     ) -> List[GroupInviteLink]:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
-        if not self._can_manage_group_members(conversation_id, actor_id):
+        if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
         self._get_group_or_error(conversation_id)
         self._cleanup_expired_invite_links(conversation_id)
@@ -1513,7 +1584,7 @@ class ChatService:
         if not self._is_member(conversation_id, actor_id):
             raise ValueError("forbidden")
         conv = self._get_group_or_error(conversation_id)
-        if not self._can_manage_group_members(conversation_id, actor_id):
+        if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
         row = (
             self.db.query(GroupInviteLink)
@@ -1891,12 +1962,16 @@ class ChatService:
         if not member:
             raise ValueError("not_found")
         member.is_admin = bool(is_admin)
-        if not is_admin:
-            member.can_manage_members = False
-            member.can_manage_posting_permissions = False
-        else:
-            member.can_manage_members = True
-            member.can_manage_posting_permissions = True
+        for attr in (
+            "can_manage_members",
+            "can_manage_posting_permissions",
+            "can_change_info",
+            "can_delete_messages",
+            "can_pin_messages",
+            "can_invite_users",
+            "can_manage_video_chats",
+        ):
+            setattr(member, attr, bool(is_admin))
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return member
 
@@ -1908,6 +1983,11 @@ class ChatService:
         *,
         can_manage_members: bool,
         can_manage_posting_permissions: bool,
+        can_change_info: bool = False,
+        can_delete_messages: bool = False,
+        can_pin_messages: bool = False,
+        can_invite_users: bool = False,
+        can_manage_video_chats: bool = False,
     ) -> ConversationMember:
         conv = self._get_group_or_error(conversation_id)
         if not self._is_member(conversation_id, actor_id):
@@ -1922,7 +2002,14 @@ class ChatService:
         if not member.is_admin:
             raise ValueError("target_not_admin")
         member.can_manage_members = bool(can_manage_members)
-        member.can_manage_posting_permissions = bool(can_manage_posting_permissions)
+        member.can_manage_posting_permissions = bool(
+            can_manage_posting_permissions
+        )
+        member.can_change_info = bool(can_change_info)
+        member.can_delete_messages = bool(can_delete_messages)
+        member.can_pin_messages = bool(can_pin_messages)
+        member.can_invite_users = bool(can_invite_users)
+        member.can_manage_video_chats = bool(can_manage_video_chats)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return member
 
@@ -3347,7 +3434,7 @@ class ChatService:
         if normalized not in ("me", "all"):
             raise ValueError("bad_scope")
 
-        # Anyone can hide for themselves; only sender can delete for everyone.
+        # Anyone can hide for themselves.
         if normalized == "me":
             existing = (
                 self.db.query(MessageHide)
@@ -3363,26 +3450,35 @@ class ChatService:
                 )
             return "me"
 
-        if msg.sender_id != user_id:
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        is_admin_delete = bool(
+            conv
+            and conv.type == "group"
+            and self._can_delete_group_messages(conversation_id, user_id)
+        )
+        if msg.sender_id != user_id and not is_admin_delete:
             raise ValueError("forbidden")
-        created = msg.created_at
-        if created is not None:
-            created_aware = created
-            if created_aware.tzinfo is None:
-                created_aware = created_aware.replace(tzinfo=timezone.utc)
-            age = datetime.now(timezone.utc) - created_aware.astimezone(timezone.utc)
-            if age.total_seconds() > 48 * 3600:
-                raise ValueError("too_old")
+        # Sender: 48h window. Group admins with delete right: no age limit.
+        if not is_admin_delete:
+            created = msg.created_at
+            if created is not None:
+                created_aware = created
+                if created_aware.tzinfo is None:
+                    created_aware = created_aware.replace(tzinfo=timezone.utc)
+                age = datetime.now(timezone.utc) - created_aware.astimezone(
+                    timezone.utc
+                )
+                if age.total_seconds() > 48 * 3600:
+                    raise ValueError("too_old")
         msg.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
         (
             self.db.query(ConversationPinnedMessage)
             .filter(ConversationPinnedMessage.message_id == message_id)
             .delete(synchronize_session=False)
-        )
-        conv = (
-            self.db.query(Conversation)
-            .filter(Conversation.id == conversation_id)
-            .first()
         )
         if conv:
             self._sync_legacy_pinned_slot(conv)
@@ -3629,6 +3725,11 @@ class ChatService:
         )
         if not conv:
             raise ValueError("not_found")
+        # Groups: pin requires admin right. Direct/saved: any member.
+        if conv.type == "group" and not self._can_pin_group_messages(
+            conversation_id, user_id
+        ):
+            raise ValueError("forbidden")
         if not pinned:
             if message_id is None:
                 # Clear all pins (legacy unpin without id).

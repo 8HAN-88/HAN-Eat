@@ -59,11 +59,20 @@ def _user(db, user_id: int) -> User:
 
 
 def _group(db, *uids: int) -> Conversation:
-    conv = Conversation(type="group", title="G")
+    creator = uids[0] if uids else None
+    conv = Conversation(type="group", title="G", created_by_user_id=creator)
     db.add(conv)
     db.flush()
     for uid in uids:
-        db.add(ConversationMember(conversation_id=conv.id, user_id=uid))
+        is_creator = uid == creator
+        db.add(
+            ConversationMember(
+                conversation_id=conv.id,
+                user_id=uid,
+                is_admin=is_creator,
+                can_manage_video_chats=is_creator,
+            )
+        )
     db.flush()
     return conv
 

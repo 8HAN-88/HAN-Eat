@@ -1506,6 +1506,11 @@ class ChatService {
     required int userId,
     required bool canManageMembers,
     required bool canManagePostingPermissions,
+    bool canChangeInfo = false,
+    bool canDeleteMessages = false,
+    bool canPinMessages = false,
+    bool canInviteUsers = false,
+    bool canManageVideoChats = false,
   }) async {
     final uri = Uri.parse(
       '$_base/chats/$conversationId/members/$userId/permissions',
@@ -1515,6 +1520,11 @@ class ChatService {
       body: jsonEncode({
         'can_manage_members': canManageMembers,
         'can_manage_posting_permissions': canManagePostingPermissions,
+        'can_change_info': canChangeInfo,
+        'can_delete_messages': canDeleteMessages,
+        'can_pin_messages': canPinMessages,
+        'can_invite_users': canInviteUsers,
+        'can_manage_video_chats': canManageVideoChats,
       }),
     );
     _ensureOk(response, 'Не удалось обновить права модератора');

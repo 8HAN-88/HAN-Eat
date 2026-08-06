@@ -37,6 +37,11 @@ class ChatUserBrief {
     this.isGroupCreator = false,
     this.canManageMembers = false,
     this.canManagePostingPermissions = false,
+    this.canChangeInfo = false,
+    this.canDeleteMessages = false,
+    this.canPinMessages = false,
+    this.canInviteUsers = false,
+    this.canManageVideoChats = false,
     this.sendRestricted = false,
     this.sendRestrictedUntil,
     this.sendRestrictionReason,
@@ -53,6 +58,11 @@ class ChatUserBrief {
   final bool isGroupCreator;
   final bool canManageMembers;
   final bool canManagePostingPermissions;
+  final bool canChangeInfo;
+  final bool canDeleteMessages;
+  final bool canPinMessages;
+  final bool canInviteUsers;
+  final bool canManageVideoChats;
   final bool sendRestricted;
   final DateTime? sendRestrictedUntil;
   final String? sendRestrictionReason;
@@ -90,6 +100,11 @@ class ChatUserBrief {
       canManageMembers: json['can_manage_members'] as bool? ?? false,
       canManagePostingPermissions:
           json['can_manage_posting_permissions'] as bool? ?? false,
+      canChangeInfo: json['can_change_info'] as bool? ?? false,
+      canDeleteMessages: json['can_delete_messages'] as bool? ?? false,
+      canPinMessages: json['can_pin_messages'] as bool? ?? false,
+      canInviteUsers: json['can_invite_users'] as bool? ?? false,
+      canManageVideoChats: json['can_manage_video_chats'] as bool? ?? false,
       sendRestricted: json['send_restricted'] as bool? ?? false,
       sendRestrictedUntil: json['send_restricted_until'] is String
           ? DateTime.tryParse(json['send_restricted_until'] as String)
@@ -118,6 +133,11 @@ class ChatUserBrief {
       isGroupCreator: isGroupCreator,
       canManageMembers: canManageMembers,
       canManagePostingPermissions: canManagePostingPermissions,
+      canChangeInfo: canChangeInfo,
+      canDeleteMessages: canDeleteMessages,
+      canPinMessages: canPinMessages,
+      canInviteUsers: canInviteUsers,
+      canManageVideoChats: canManageVideoChats,
       sendRestricted: sendRestricted,
       sendRestrictedUntil: sendRestrictedUntil,
       sendRestrictionReason: sendRestrictionReason,
@@ -496,6 +516,11 @@ class ChatConversation {
     this.amIGroupAdmin = false,
     this.amICanManageMembers = false,
     this.amICanManagePostingPermissions = false,
+    this.amICanChangeInfo = false,
+    this.amICanDeleteMessages = false,
+    this.amICanPinMessages = false,
+    this.amICanInviteUsers = false,
+    this.amICanManageVideoChats = false,
     this.amISendRestricted = false,
     this.amISendRestrictedUntil,
     this.amISendRestrictionReason,
@@ -534,6 +559,11 @@ class ChatConversation {
   final bool amIGroupAdmin;
   final bool amICanManageMembers;
   final bool amICanManagePostingPermissions;
+  final bool amICanChangeInfo;
+  final bool amICanDeleteMessages;
+  final bool amICanPinMessages;
+  final bool amICanInviteUsers;
+  final bool amICanManageVideoChats;
   final bool amISendRestricted;
   final DateTime? amISendRestrictedUntil;
   final String? amISendRestrictionReason;
@@ -628,6 +658,12 @@ class ChatConversation {
       amICanManageMembers: json['am_i_can_manage_members'] as bool? ?? false,
       amICanManagePostingPermissions:
           json['am_i_can_manage_posting_permissions'] as bool? ?? false,
+      amICanChangeInfo: json['am_i_can_change_info'] as bool? ?? false,
+      amICanDeleteMessages: json['am_i_can_delete_messages'] as bool? ?? false,
+      amICanPinMessages: json['am_i_can_pin_messages'] as bool? ?? false,
+      amICanInviteUsers: json['am_i_can_invite_users'] as bool? ?? false,
+      amICanManageVideoChats:
+          json['am_i_can_manage_video_chats'] as bool? ?? false,
       amISendRestricted: json['am_i_send_restricted'] as bool? ?? false,
       amISendRestrictedUntil: json['am_i_send_restricted_until'] is String
           ? DateTime.tryParse(json['am_i_send_restricted_until'] as String)
@@ -669,6 +705,11 @@ class ChatConversation {
     bool? amIGroupAdmin,
     bool? amICanManageMembers,
     bool? amICanManagePostingPermissions,
+    bool? amICanChangeInfo,
+    bool? amICanDeleteMessages,
+    bool? amICanPinMessages,
+    bool? amICanInviteUsers,
+    bool? amICanManageVideoChats,
     bool? amISendRestricted,
     DateTime? amISendRestrictedUntil,
     String? amISendRestrictionReason,
@@ -718,6 +759,13 @@ class ChatConversation {
       amICanManageMembers: amICanManageMembers ?? this.amICanManageMembers,
       amICanManagePostingPermissions:
           amICanManagePostingPermissions ?? this.amICanManagePostingPermissions,
+      amICanChangeInfo: amICanChangeInfo ?? this.amICanChangeInfo,
+      amICanDeleteMessages:
+          amICanDeleteMessages ?? this.amICanDeleteMessages,
+      amICanPinMessages: amICanPinMessages ?? this.amICanPinMessages,
+      amICanInviteUsers: amICanInviteUsers ?? this.amICanInviteUsers,
+      amICanManageVideoChats:
+          amICanManageVideoChats ?? this.amICanManageVideoChats,
       amISendRestricted: amISendRestricted ?? this.amISendRestricted,
       amISendRestrictedUntil:
           amISendRestrictedUntil ?? this.amISendRestrictedUntil,
