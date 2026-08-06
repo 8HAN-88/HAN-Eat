@@ -11,13 +11,14 @@ from sqlalchemy import and_, func, or_
 
 from app.api.dependencies import get_current_user_required
 from app.core.database import get_db
+from app.models.close_friend import CloseFriend
 from app.models.follower import Follower
 from app.models.story import Story, StoryReaction, StoryView
 from app.models.user import User
 
 router = APIRouter(prefix="/stories", tags=["Stories"])
 
-_VALID_VISIBILITY = frozenset({"public", "followers", "private"})
+_VALID_VISIBILITY = frozenset({"public", "followers", "close_friends", "private"})
 
 
 class StoryCreateRequest(BaseModel):
@@ -25,7 +26,10 @@ class StoryCreateRequest(BaseModel):
     thumbnail_url: Optional[str] = Field(None, max_length=2000)
     media_type: str = Field(..., pattern="^(image|video)$")
     caption: Optional[str] = Field(None, max_length=500)
-    visibility: str = Field("public", pattern="^(public|followers|private)$")
+    visibility: str = Field(
+        "public",
+        pattern="^(public|followers|close_friends|private)$",
+    )
 
 
 class StoryAuthorResponse(BaseModel):
@@ -166,8 +170,18 @@ def _following_ids(db: Session, user_id: int) -> list[int]:
     return [int(row[0]) for row in rows]
 
 
+def _close_friend_owner_ids(db: Session, viewer_id: int) -> list[int]:
+    """Owners who listed viewer as a close friend."""
+    rows = (
+        db.query(CloseFriend.user_id)
+        .filter(CloseFriend.friend_user_id == viewer_id)
+        .all()
+    )
+    return [int(row[0]) for row in rows]
+
+
 def can_view_story(story: Story, viewer: User, db: Session) -> bool:
-    """Telegram-like story privacy: public / followers / private."""
+    """Telegram-like story privacy: public / followers / close_friends / private."""
     if story.user_id == viewer.id:
         return True
     visibility = (story.visibility or "public").strip().lower()
@@ -181,6 +195,16 @@ def can_view_story(story: Story, viewer: User, db: Session) -> bool:
             .filter(
                 Follower.follower_id == viewer.id,
                 Follower.followee_id == story.user_id,
+            )
+            .first()
+        )
+        return row is not None
+    if visibility == "close_friends":
+        row = (
+            db.query(CloseFriend.id)
+            .filter(
+                CloseFriend.user_id == story.user_id,
+                CloseFriend.friend_user_id == viewer.id,
             )
             .first()
         )
@@ -202,12 +226,17 @@ async def list_active_stories(
     """Активные сторис, видимые текущему пользователю (privacy-aware)."""
     limit = min(max(limit, 1), 200)
     following = _following_ids(db, current_user.id)
+    close_owners = _close_friend_owner_ids(db, current_user.id)
     visibility_filter = or_(
         Story.user_id == current_user.id,
         Story.visibility == "public",
         and_(
             Story.visibility == "followers",
             Story.user_id.in_(following if following else [-1]),
+        ),
+        and_(
+            Story.visibility == "close_friends",
+            Story.user_id.in_(close_owners if close_owners else [-1]),
         ),
     )
     stories = (

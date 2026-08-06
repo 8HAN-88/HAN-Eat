@@ -150,6 +150,16 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(TwoFactorSetupRoute.path),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.favorite_outline),
+                  title: const Text('Близкие друзья'),
+                  subtitle: const Text(
+                    'Кто видит сторис «Близкие друзья»',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(CloseFriendsRoute.path),
+                ),
               ],
             ),
           ),

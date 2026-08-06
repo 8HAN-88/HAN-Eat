@@ -49,6 +49,7 @@ from app.models.paid_features import (
     UserStarGift,
 )
 from app.models.story import Story, StoryReaction, StoryView
+from app.models.close_friend import CloseFriend
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.sticker import (
     StickerPack,
@@ -72,7 +73,7 @@ __all__ = [
     "PaidChannelSubscription", "PostBoost", "CreatorPayoutRequest",
     "PaidMessageUnlock", "PaidMessageException", "StarGift", "UserStarGift",
     "StarGiveaway", "StarGiveawayParticipant", "StarInvoice", "Story",
-    "StoryView", "StoryReaction",
+    "StoryView", "StoryReaction", "CloseFriend",
 
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory",

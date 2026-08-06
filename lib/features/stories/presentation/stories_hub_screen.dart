@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../services/server_config.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
@@ -89,6 +91,11 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
       appBar: AppBar(
         title: const Text('Моменты'),
         actions: [
+          IconButton(
+            tooltip: 'Близкие друзья',
+            icon: const Icon(Icons.favorite_outline),
+            onPressed: () => context.push(CloseFriendsRoute.path),
+          ),
           IconButton(
             tooltip: 'Создать сторис',
             icon: const Icon(Icons.add_circle_outline),
