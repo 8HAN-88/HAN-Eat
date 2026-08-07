@@ -11988,6 +11988,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         composed.files,
         caption: composed.caption,
         hasSpoiler: composed.hasSpoiler,
+        silent: composed.silent,
       );
       return;
     }
@@ -11995,6 +11996,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       composed.files,
       caption: composed.caption,
       hasSpoiler: composed.hasSpoiler,
+      silent: composed.silent,
       isPaid: composed.isPaid,
       priceStars: composed.priceStars,
     );
@@ -12004,6 +12006,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     List<XFile> files, {
     String caption = '',
     bool hasSpoiler = false,
+    bool silent = false,
   }) async {
     if (files.isEmpty) return;
     final delivery = await _pickScheduleDelivery();
@@ -12050,6 +12053,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           mediaUrl: ServerConfig.resolveMediaUrl(url),
           sendAt: delivery.sendAt,
           sendWhenOnline: delivery.sendWhenOnline,
+          silent: silent,
           mediaGroupId: mediaGroupId,
           hasSpoiler: hasSpoiler,
           replyToMessageId: i == 0 ? _replyTo?.id : null,
@@ -12079,6 +12083,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     List<XFile> files, {
     String caption = '',
     bool hasSpoiler = false,
+    bool silent = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -12115,6 +12120,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
           hasSpoiler: hasSpoiler,
+          silent: silent,
           isPaid: isPaid,
           priceStars: priceStars,
         );
@@ -12124,6 +12130,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           caption: itemCaption,
           mediaGroupId: mediaGroupId,
           hasSpoiler: hasSpoiler,
+          silent: silent,
           isPaid: isPaid,
           priceStars: priceStars,
         );
@@ -12764,6 +12771,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String caption = '',
     String? mediaGroupId,
     bool hasSpoiler = false,
+    bool silent = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -12791,6 +12799,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       totalBytes: totalBytes,
       previewBytes: previewBytes,
       payloadBytes: previewBytes,
+      silent: silent,
       mediaGroupId: mediaGroupId,
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
@@ -12806,6 +12815,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String caption = '',
     String? mediaGroupId,
     bool hasSpoiler = false,
+    bool silent = false,
     bool isPaid = false,
     int priceStars = 0,
   }) async {
@@ -12823,6 +12833,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyToId ?? _replyTo?.id,
       caption: caption,
       totalBytes: totalBytes,
+      silent: silent,
       mediaGroupId: mediaGroupId,
       hasSpoiler: hasSpoiler,
       isPaid: isPaid,
