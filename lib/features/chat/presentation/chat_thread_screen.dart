@@ -7489,28 +7489,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _blockPeer() async {
     final peer = _conversation.peer;
     if (peer == null) return;
+    var deleteHistory = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Заблокировать?'),
-        content: Text(
-          '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Заблокировать?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+              ),
+              const SizedBox(height: 12),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: deleteHistory,
+                onChanged: (v) => setLocal(() => deleteHistory = v ?? false),
+                title: const Text('Удалить историю переписки'),
+                subtitle: const Text(
+                  'Чат исчезнет из списка, сообщения будут скрыты у вас',
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Заблокировать'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Заблокировать'),
-          ),
-        ],
       ),
     );
     if (ok != true || !mounted) return;
     try {
       await ChatService.blockUser(peer.id);
+      if (deleteHistory) {
+        await ChatService.clearHistory(
+          conversationId: widget.conversationId,
+        );
+        await ChatService.deleteConversation(
+          conversationId: widget.conversationId,
+        );
+        unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+        unawaited(ChatCacheService.clearDraft(widget.conversationId));
+        unawaited(
+          ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+        );
+        try {
+          ProviderScope.containerOf(context)
+              .read(chatsHubRefreshProvider.notifier)
+              .state++;
+        } catch (_) {}
+        if (!mounted) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _conversation = _conversation.copyWith(peerBlockedByMe: true);
