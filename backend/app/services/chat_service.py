@@ -4283,7 +4283,14 @@ class ChatService:
         member.last_read_message_id = prev_id
         return member.last_read_message_id
 
-    def delete_conversation(self, conversation_id: int, user_id: int) -> None:
+    def delete_conversation(
+        self,
+        conversation_id: int,
+        user_id: int,
+        *,
+        also_for_peer: bool = False,
+    ) -> Optional[int]:
+        """Leave/delete a chat. Returns peer_user_id when also deleted for DM peer."""
         conv = (
             self.db.query(Conversation)
             .filter(Conversation.id == conversation_id)
@@ -4294,8 +4301,10 @@ class ChatService:
         if conv.type == "saved":
             raise ValueError("cannot_delete_saved")
         if conv.type == "group":
+            if also_for_peer:
+                raise ValueError("also_for_peer_direct_only")
             self.leave_group(conversation_id, user_id)
-            return
+            return None
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         member = (
@@ -4308,10 +4317,26 @@ class ChatService:
         )
         if not member:
             raise ValueError("not_found")
+        peer_id: Optional[int] = None
+        if also_for_peer:
+            if conv.type != "direct":
+                raise ValueError("also_for_peer_direct_only")
+            peer_id = self.peer_user_id(conv, user_id)
+            peer_member = self._get_member_record(conversation_id, peer_id)
+            if peer_member is not None:
+                self.db.delete(peer_member)
+            else:
+                peer_id = None
         self.db.delete(member)
         self.db.flush()
         if self._member_count(conversation_id) == 0:
+            # Break pinned_message FK before CASCADE delete of messages.
+            conv.pinned_message_id = None
+            conv.pinned_at = None
+            conv.pinned_by_user_id = None
+            self.db.flush()
             self.db.delete(conv)
+        return peer_id
 
     def total_unread(self, user_id: int) -> int:
         return (

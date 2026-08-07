@@ -1328,8 +1328,13 @@ class ChatService {
     _ensureOk(response, 'Не удалось пометить непрочитанным');
   }
 
-  static Future<void> deleteConversation({required int conversationId}) async {
-    final uri = Uri.parse('$_base/chats/$conversationId');
+  static Future<void> deleteConversation({
+    required int conversationId,
+    bool alsoForPeer = false,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId').replace(
+      queryParameters: alsoForPeer ? {'also_for_peer': 'true'} : null,
+    );
     final response = await _delete(uri);
     _ensureOk(response, 'Не удалось удалить чат');
   }
