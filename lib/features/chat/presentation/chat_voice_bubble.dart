@@ -9,7 +9,7 @@ import '../../../services/server_config.dart';
 import '../application/chat_voice_playback_coordinator.dart';
 import '../widgets/chat_voice_waveform.dart';
 
-/// Пузырь голосового сообщения с waveform, scrub и скоростью 1×/1.5×/2×.
+/// Пузырь голосового сообщения с waveform, scrub и скоростью 0.5×/1×/1.5×/2×.
 class ChatVoiceBubble extends StatefulWidget {
   const ChatVoiceBubble({
     super.key,
@@ -32,7 +32,8 @@ class ChatVoiceBubble extends StatefulWidget {
 }
 
 class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
-  static const _speeds = <double>[1.0, 1.5, 2.0];
+  // Telegram order: start at 1×, then faster, then slow.
+  static const _speeds = <double>[1.0, 1.5, 2.0, 0.5];
 
   final _player = AudioPlayer();
   final Object _playbackToken = Object();
@@ -71,6 +72,7 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
 
   String get _speedLabel {
     final s = _speed;
+    if (s == 0.5) return '0.5×';
     if (s == 1.0) return '1×';
     if (s == 1.5) return '1.5×';
     return '2×';

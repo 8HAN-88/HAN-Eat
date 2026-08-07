@@ -65,6 +65,7 @@ import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_auto_delete.dart';
+import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
 import '../application/chats_hub_refresh_provider.dart';
@@ -115,6 +116,7 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
     this.initialPeer,
     this.initialJumpMessageId,
     this.initialDraftText,
+    this.initialPrivateReply,
   });
 
   final int conversationId;
@@ -122,6 +124,7 @@ class ChatThreadLoaderScreen extends ConsumerStatefulWidget {
   final ChatUserBrief? initialPeer;
   final int? initialJumpMessageId;
   final String? initialDraftText;
+  final ChatPrivateReplyQuote? initialPrivateReply;
 
   @override
   ConsumerState<ChatThreadLoaderScreen> createState() =>
@@ -206,6 +209,7 @@ class _ChatThreadLoaderScreenState
         conversation: _conversation!,
         initialJumpMessageId: widget.initialJumpMessageId,
         initialDraftText: widget.initialDraftText,
+        initialPrivateReply: widget.initialPrivateReply,
       ),
     );
   }
@@ -217,11 +221,13 @@ class ChatThreadScreen extends StatefulWidget {
     required this.conversation,
     this.initialJumpMessageId,
     this.initialDraftText,
+    this.initialPrivateReply,
   });
 
   final ChatConversation conversation;
   final int? initialJumpMessageId;
   final String? initialDraftText;
+  final ChatPrivateReplyQuote? initialPrivateReply;
 
   int get conversationId => conversation.id;
 
@@ -306,6 +312,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   ValueListenable<bool>? _deviceOnlineListenable;
   ChatStreamService? _stream;
   ChatMessage? _replyTo;
+  ChatPrivateReplyQuote? _privateReply;
   bool _appPaused = false;
   bool _sseConnected = false;
   bool _peerTyping = false;
@@ -596,6 +603,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _replyKeyboard = null;
     }
     _pendingInitialJumpMessageId = widget.initialJumpMessageId;
+    _privateReply = widget.initialPrivateReply;
     _pinned = widget.conversation.pinned;
     _muted = widget.conversation.muted;
     ActiveChatSession.instance.setOpen(widget.conversationId);
@@ -5513,23 +5521,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      String? draft;
-      if (quoteFrom != null) {
+      ChatPrivateReplyQuote? privateReply;
+      if (quoteFrom != null && quoteFrom.id > 0) {
         final who = (quoteFrom.senderName?.trim().isNotEmpty == true)
             ? quoteFrom.senderName!.trim()
-            : 'Участник';
-        final body = _copyableText(quoteFrom).trim();
-        if (body.isNotEmpty) {
-          final clipped =
-              body.length > 180 ? '${body.substring(0, 180)}…' : body;
-          draft = '«$who: $clipped»\n\n';
-        }
+            : (_senderNames[quoteFrom.senderId] ?? 'Участник');
+        final body = _messagePreview(quoteFrom).trim();
+        privateReply = ChatPrivateReplyQuote(
+          sourceConversationId: widget.conversationId,
+          sourceMessageId: quoteFrom.id,
+          author: who,
+          preview: body.isEmpty ? 'Сообщение' : body,
+          sourceChatTitle: _conversation.displayTitle,
+        );
       }
       await context.push(
         ChatThreadRoute.pathFor(conv),
         extra: ChatThreadOpenArgs(
           conversation: conv,
-          initialDraftText: draft,
+          initialPrivateReply: privateReply,
         ),
       );
     } catch (e) {
@@ -8226,6 +8236,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final msg = selected.first;
     setState(() {
       _replyTo = msg;
+      _privateReply = null;
       _editingMessage = null;
       _selectionMode = false;
       _selectedMessageIds.clear();
@@ -8356,6 +8367,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'reply':
         setState(() {
           _replyTo = msg;
+          _privateReply = null;
           _editingMessage = null;
         });
         _scheduleDraftSave();
@@ -9585,7 +9597,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     const composerRow = 56.0;
     const bannerRow = 52.0;
     var reserve = bottom + keyboard + composerRow + 12;
-    if (_replyTo != null) reserve += bannerRow;
+    if (_replyTo != null || _privateReply != null) reserve += bannerRow;
     if (_editingMessage != null) reserve += bannerRow;
     if (_composerLinkPreviewUrl != null && _editingMessage == null) {
       reserve += 72;
@@ -9957,6 +9969,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String author,
     required String preview,
     required VoidCallback onClose,
+    VoidCallback? onTap,
   }) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
@@ -9977,32 +9990,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: scheme.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      height: 1.15,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
                     ),
-                  ),
-                  Text(
-                    preview,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 13,
-                      height: 1.2,
+                    Text(
+                      preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontSize: 13,
+                        height: 1.2,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             IconButton(
@@ -10649,10 +10666,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    final replyId = _replyTo?.id;
+    final privateQuote = _privateReply;
+    final sendText = privateQuote != null
+        ? composeTextWithPrivateReply(text, privateQuote)
+        : text;
+    final replyId = privateQuote != null ? null : _replyTo?.id;
     final uid = AuthService.instance.currentUser?.id ?? 0;
     final clientMessageId = const Uuid().v4();
-    final firstUrl = extractFirstHttpUrl(text);
+    final firstUrl = extractFirstHttpUrl(sendText);
     final disablePreview = firstUrl != null &&
         firstUrl == _composerLinkPreviewDismissedUrl;
     _controller.clear();
@@ -10663,7 +10684,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       conversationId: widget.conversationId,
       senderId: uid,
       type: 'text',
-      content: text,
+      content: sendText,
       createdAt: DateTime.now(),
       isMine: true,
       replyToMessageId: replyId,
@@ -10671,7 +10692,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       topicId: topicId,
     );
     final pending = _PendingTextSend(
-      text: text,
+      text: sendText,
       replyToMessageId: replyId,
       clientMessageId: clientMessageId,
       tempId: tempId,
@@ -10683,6 +10704,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() {
       _messages.add(optimistic);
       _replyTo = null;
+      _privateReply = null;
       _composerLinkPreviewUrl = null;
       _composerLinkPreviewDismissedUrl = null;
       _textOutboundQueue.add(pending);
@@ -14286,7 +14308,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 ),
                         ),
                         _animatedVisibility(
-                          visible: _replyTo != null,
+                          visible: _privateReply != null,
+                          keyName: 'private-reply-banner',
+                          child: _privateReply == null
+                              ? const SizedBox.shrink()
+                              : _telegramReplyStrip(
+                                  author: _privateReply!.stripAuthor,
+                                  preview: _privateReply!.preview,
+                                  onTap: () {
+                                    final q = _privateReply;
+                                    if (q == null) return;
+                                    unawaited(
+                                      _openForwardedOriginal(
+                                        conversationId: q.sourceConversationId,
+                                        messageId: q.sourceMessageId,
+                                      ),
+                                    );
+                                  },
+                                  onClose: () {
+                                    setState(() => _privateReply = null);
+                                  },
+                                ),
+                        ),
+                        _animatedVisibility(
+                          visible: _replyTo != null && _privateReply == null,
                           keyName: 'reply-banner',
                           child: _replyTo == null
                               ? const SizedBox.shrink()
