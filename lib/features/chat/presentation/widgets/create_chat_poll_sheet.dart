@@ -52,6 +52,9 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
     allowChangeVote: true,
   );
 
+  /// Controller index of the correct quiz answer (Telegram: single).
+  int? _correctControllerIndex;
+
   @override
   void dispose() {
     _questionController.dispose();
@@ -69,7 +72,16 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
         .map((c) => c.text.trim())
         .where((s) => s.isNotEmpty)
         .toList();
-    return opts.length >= 2;
+    if (opts.length < 2) return false;
+    if (_settings.quizMode) {
+      final correct = resolveQuizCorrectIndices(
+        rawOptionTexts:
+            _optionControllers.map((c) => c.text).toList(growable: false),
+        correctControllerIndex: _correctControllerIndex,
+      );
+      if (correct.isEmpty) return false;
+    }
+    return true;
   }
 
   int get _remainingOptions =>
@@ -84,22 +96,52 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
     if (_optionControllers.length <= 2) return;
     setState(() {
       _optionControllers.removeAt(index).dispose();
+      if (_correctControllerIndex != null) {
+        if (_correctControllerIndex == index) {
+          _correctControllerIndex = null;
+        } else if (_correctControllerIndex! > index) {
+          _correctControllerIndex = _correctControllerIndex! - 1;
+        }
+      }
+    });
+  }
+
+  void _setQuizMode(bool enabled) {
+    setState(() {
+      if (enabled) {
+        _settings = _settings.copyWith(
+          quizMode: true,
+          multipleChoice: false,
+          allowAddOptions: false,
+          allowChangeVote: false,
+        );
+      } else {
+        _settings = _settings.copyWith(
+          quizMode: false,
+          correctOptionIndices: const [],
+        );
+        _correctControllerIndex = null;
+      }
     });
   }
 
   void _send() {
     if (!_canSend) return;
-    final options = _optionControllers
-        .map((c) => c.text.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final raw = _optionControllers.map((c) => c.text).toList(growable: false);
+    final options = raw.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    final correct = _settings.quizMode
+        ? resolveQuizCorrectIndices(
+            rawOptionTexts: raw,
+            correctControllerIndex: _correctControllerIndex,
+          )
+        : const <int>[];
     Navigator.pop(
       context,
       ChatPollDraft(
         question: _questionController.text.trim(),
         description: _descriptionController.text.trim(),
         options: options,
-        settings: _settings,
+        settings: _settings.copyWith(correctOptionIndices: correct),
       ),
     );
   }
@@ -161,7 +203,9 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                           ),
                           _PollTextField(
                             controller: _descriptionController,
-                            hint: 'Описание (необязательно)',
+                            hint: _settings.quizMode
+                                ? 'Пояснение после ответа (необязательно)'
+                                : 'Описание (необязательно)',
                             trailing: Icon(
                               Icons.attach_file,
                               size: 20,
@@ -188,14 +232,38 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                               ),
                             _PollTextField(
                               controller: _optionControllers[i],
-                              hint: 'Ответ',
-                              trailing: _optionControllers.length > 2
-                                  ? IconButton(
+                              hint: _settings.quizMode
+                                  ? 'Ответ ${i + 1}'
+                                  : 'Ответ',
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_settings.quizMode)
+                                    IconButton(
+                                      tooltip: 'Правильный ответ',
+                                      icon: Icon(
+                                        _correctControllerIndex == i
+                                            ? Icons.check_circle
+                                            : Icons.radio_button_unchecked,
+                                        size: 22,
+                                        color: _correctControllerIndex == i
+                                            ? const Color(0xFF34C759)
+                                            : theme.colorScheme
+                                                .onSurfaceVariant,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _correctControllerIndex = i,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  if (_optionControllers.length > 2)
+                                    IconButton(
                                       icon: const Icon(Icons.close, size: 18),
                                       onPressed: () => _removeOption(i),
                                       visualDensity: VisualDensity.compact,
-                                    )
-                                  : null,
+                                    ),
+                                ],
+                              ),
                               onChanged: (_) => setState(() {}),
                             ),
                           ],
@@ -261,46 +329,61 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                           ),
                           _settingDivider(theme),
                           _PollSettingTile(
-                            icon: Icons.fact_check_outlined,
-                            iconColor: const Color(0xFFFF9500),
-                            title: 'Несколько ответов',
-                            subtitle:
-                                'Участники могут выбрать более одного варианта',
-                            value: _settings.multipleChoice,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                multipleChoice: v,
+                            icon: Icons.check_circle_outline,
+                            iconColor: const Color(0xFF34C759),
+                            title: 'Викторина',
+                            subtitle: _settings.quizMode
+                                ? (_correctControllerIndex == null
+                                    ? 'Отметьте правильный вариант галочкой у ответа'
+                                    : 'Правильный ответ выбран')
+                                : 'Один правильный ответ; участники видят результат после голосования',
+                            value: _settings.quizMode,
+                            onChanged: _setQuizMode,
+                          ),
+                          if (!_settings.quizMode) ...[
+                            _settingDivider(theme),
+                            _PollSettingTile(
+                              icon: Icons.fact_check_outlined,
+                              iconColor: const Color(0xFFFF9500),
+                              title: 'Несколько ответов',
+                              subtitle:
+                                  'Участники могут выбрать более одного варианта',
+                              value: _settings.multipleChoice,
+                              onChanged: (v) => setState(
+                                () => _settings = _settings.copyWith(
+                                  multipleChoice: v,
+                                ),
                               ),
                             ),
-                          ),
-                          _settingDivider(theme),
-                          _PollSettingTile(
-                            icon: Icons.add_circle_outline,
-                            iconColor: const Color(0xFF64D2FF),
-                            title: 'Добавление вариантов',
-                            subtitle:
-                                'Участники могут предлагать новые варианты',
-                            value: _settings.allowAddOptions,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                allowAddOptions: v,
+                            _settingDivider(theme),
+                            _PollSettingTile(
+                              icon: Icons.add_circle_outline,
+                              iconColor: const Color(0xFF64D2FF),
+                              title: 'Добавление вариантов',
+                              subtitle:
+                                  'Участники могут предлагать новые варианты',
+                              value: _settings.allowAddOptions,
+                              onChanged: (v) => setState(
+                                () => _settings = _settings.copyWith(
+                                  allowAddOptions: v,
+                                ),
                               ),
                             ),
-                          ),
-                          _settingDivider(theme),
-                          _PollSettingTile(
-                            icon: Icons.change_circle_outlined,
-                            iconColor: const Color(0xFFBF5AF2),
-                            title: 'Изменение ответа',
-                            subtitle:
-                                'Участники могут изменить выбранный ответ',
-                            value: _settings.allowChangeVote,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                allowChangeVote: v,
+                            _settingDivider(theme),
+                            _PollSettingTile(
+                              icon: Icons.change_circle_outlined,
+                              iconColor: const Color(0xFFBF5AF2),
+                              title: 'Изменение ответа',
+                              subtitle:
+                                  'Участники могут изменить выбранный ответ',
+                              value: _settings.allowChangeVote,
+                              onChanged: (v) => setState(
+                                () => _settings = _settings.copyWith(
+                                  allowChangeVote: v,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                           _settingDivider(theme),
                           _PollSettingTile(
                             icon: Icons.shuffle,
@@ -312,20 +395,6 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             onChanged: (v) => setState(
                               () => _settings = _settings.copyWith(
                                 randomOrder: v,
-                              ),
-                            ),
-                          ),
-                          _settingDivider(theme),
-                          _PollSettingTile(
-                            icon: Icons.check_circle_outline,
-                            iconColor: const Color(0xFF34C759),
-                            title: 'Правильный ответ',
-                            subtitle:
-                                'Отметьте один или несколько правильных вариантов',
-                            value: _settings.quizMode,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                quizMode: v,
                               ),
                             ),
                           ),

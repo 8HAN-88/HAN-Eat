@@ -126,6 +126,27 @@ def build_poll_content(
     if settings:
         merged_settings.update({k: v for k, v in settings.items() if k in merged_settings})
 
+    if bool(merged_settings.get("quiz_mode")):
+        # Telegram quizzes are single-choice with one correct answer.
+        merged_settings["multiple_choice"] = False
+        merged_settings["allow_add_options"] = False
+        merged_settings["allow_change_vote"] = False
+        raw_correct = merged_settings.get("correct_option_indices") or []
+        if not isinstance(raw_correct, list):
+            raise ValueError("poll_quiz_correct_required")
+        correct = []
+        for item in raw_correct:
+            try:
+                idx = int(item)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= idx < len(opts) and idx not in correct:
+                correct.append(idx)
+        if not correct:
+            raise ValueError("poll_quiz_correct_required")
+        # Keep a single correct index for quiz mode.
+        merged_settings["correct_option_indices"] = [correct[0]]
+
     closes_at = None
     if merged_settings.get("time_limit_enabled"):
         hours = int(merged_settings.get("duration_hours") or 24)
