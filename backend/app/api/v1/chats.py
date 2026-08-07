@@ -17,6 +17,7 @@ from app.schemas.chat import (
     AddContactRequest,
     AddGroupMembersRequest,
     ArchiveChatRequest,
+    ClearHistoryRequest,
     ContactListResponse,
     ContactResponse,
     ConversationDraftListResponse,
@@ -3684,20 +3685,66 @@ async def delete_conversation(
 @router.post("/chats/{conversation_id}/clear-history")
 async def clear_chat_history(
     conversation_id: int,
+    body: Optional[ClearHistoryRequest] = Body(default=None),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
+    also_for_peer = bool(body.also_for_peer) if body is not None else False
     try:
-        cleared_to = svc.clear_history(conversation_id, current_user.id)
+        cleared_to, peer_id = svc.clear_history(
+            conversation_id,
+            current_user.id,
+            also_for_peer=also_for_peer,
+        )
         db.commit()
     except ValueError as e:
         db.rollback()
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "also_for_peer_direct_only":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "also_for_peer is only available in direct chats",
+            )
+        if code == "not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
         raise
-    return {"ok": True, "cleared_before_id": cleared_to}
+    # Multi-device + optional peer wipe (Telegram "Also delete for …").
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.history_cleared",
+            "conversation_id": conversation_id,
+            "cleared_before_id": cleared_to,
+            "also_for_peer": also_for_peer,
+        },
+    )
+    if peer_id is not None:
+        publish_user_event(
+            peer_id,
+            {
+                "event": "chat.history_cleared",
+                "conversation_id": conversation_id,
+                "cleared_before_id": cleared_to,
+                "also_for_peer": True,
+            },
+        )
+    _emit(
+        conversation_id,
+        {
+            "type": "conversation.history_cleared",
+            "user_id": current_user.id,
+            "cleared_before_id": cleared_to,
+            "also_for_peer": also_for_peer,
+        },
+    )
+    return {
+        "ok": True,
+        "cleared_before_id": cleared_to,
+        "also_for_peer": also_for_peer,
+    }
 
 
 @router.get("/users/{peer_user_id}/common-groups")

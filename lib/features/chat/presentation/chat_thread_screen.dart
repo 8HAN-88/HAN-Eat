@@ -632,6 +632,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _applyAutoDeleteSeconds(event.autoDeleteSeconds!);
         return;
       }
+      if (event.event == 'chat.history_cleared' &&
+          event.conversationId == widget.conversationId) {
+        _applyHistoryClearedLocally();
+        return;
+      }
       if ((event.event == 'chat.mute' ||
               event.event == 'chat.pin' ||
               event.event == 'chat.archive') &&
@@ -2601,6 +2606,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final seconds = raw is int ? raw : int.tryParse('$raw');
       if (seconds == null) return;
       _applyAutoDeleteSeconds(seconds);
+      return;
+    }
+    if (type == 'conversation.history_cleared') {
+      final alsoForPeer = event['also_for_peer'] == true;
+      final rawUid = event['user_id'];
+      final uid = rawUid is int ? rawUid : int.tryParse('$rawUid');
+      final myId = AuthService.instance.currentUser?.id;
+      if (alsoForPeer || (uid != null && uid == myId)) {
+        _applyHistoryClearedLocally();
+      }
       return;
     }
     if (type == 'typing') {
@@ -5756,48 +5771,70 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _clearChatHistory() async {
     if (_conversation.isSaved) return;
+    final isDirect = !_conversation.isGroup && !_conversation.isSaved;
+    final peerName = _conversation.peer?.displayName.trim();
+    var alsoForPeer = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Очистить историю?'),
-        content: const Text(
-          'Сообщения исчезнут только у вас. Собеседники продолжат видеть переписку.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Очистить историю?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isDirect
+                    ? (alsoForPeer
+                        ? 'Переписка будет удалена у вас и у собеседника.'
+                        : 'Сообщения исчезнут только у вас. Собеседник продолжит видеть переписку.')
+                    : 'Сообщения исчезнут только у вас. Участники продолжат видеть переписку.',
+              ),
+              if (isDirect) ...[
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: alsoForPeer,
+                  onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
+                  title: Text(
+                    (peerName != null && peerName.isNotEmpty)
+                        ? 'Также удалить у $peerName'
+                        : 'Также удалить у собеседника',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Очистить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Очистить'),
-          ),
-        ],
       ),
     );
     if (ok != true || !mounted) return;
     try {
-      await ChatService.clearHistory(conversationId: widget.conversationId);
-      if (!mounted) return;
-      setState(() {
-        _messages.clear();
-        _setPinnedMessages(const []);
-        _selectedMessageIds.clear();
-        _selectionMode = false;
-        _hasMore = false;
-      });
-      unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
-      unawaited(ChatCacheService.clearDraft(widget.conversationId));
-      unawaited(
-        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+      await ChatService.clearHistory(
+        conversationId: widget.conversationId,
+        alsoForPeer: isDirect && alsoForPeer,
       );
-      try {
-        ProviderScope.containerOf(context)
-            .read(chatsHubRefreshProvider.notifier)
-            .state++;
-      } catch (_) {}
+      if (!mounted) return;
+      _applyHistoryClearedLocally();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('История очищена')),
+        SnackBar(
+          content: Text(
+            isDirect && alsoForPeer
+                ? 'История очищена у обоих'
+                : 'История очищена',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -5805,6 +5842,27 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         SnackBar(content: Text(userVisibleError(e))),
       );
     }
+  }
+
+  void _applyHistoryClearedLocally() {
+    if (!mounted) return;
+    setState(() {
+      _messages.clear();
+      _setPinnedMessages(const []);
+      _selectedMessageIds.clear();
+      _selectionMode = false;
+      _hasMore = false;
+    });
+    unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+    unawaited(ChatCacheService.clearDraft(widget.conversationId));
+    unawaited(
+      ChatService.deleteCloudDraft(conversationId: widget.conversationId),
+    );
+    try {
+      ProviderScope.containerOf(context)
+          .read(chatsHubRefreshProvider.notifier)
+          .state++;
+    } catch (_) {}
   }
 
   ChatUserBrief? _userBriefForSender(ChatMessage msg) {
