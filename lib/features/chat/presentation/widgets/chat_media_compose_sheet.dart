@@ -25,6 +25,7 @@ class ChatMediaComposeResult {
     required this.caption,
     this.schedule = false,
     this.hasSpoiler = false,
+    this.silent = false,
     this.isPaid = false,
     this.priceStars = 0,
   });
@@ -33,6 +34,7 @@ class ChatMediaComposeResult {
   final String caption;
   final bool schedule;
   final bool hasSpoiler;
+  final bool silent;
   final bool isPaid;
   final int priceStars;
 }
@@ -54,6 +56,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
   final Map<int, Uint8List?> _previews = {};
   int _index = 0;
   bool _hasSpoiler = false;
+  bool _silent = false;
   bool _isPaid = false;
 
   @override
@@ -107,6 +110,7 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
       caption: _caption.text.trim(),
       schedule: schedule,
       hasSpoiler: _hasSpoiler,
+      silent: _silent,
       isPaid: _isPaid && price > 0 && !schedule,
       priceStars: _isPaid ? price : 0,
     );
@@ -248,6 +252,19 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                   ),
                   value: _hasSpoiler,
                   onChanged: (v) => setState(() => _hasSpoiler = v),
+                ),
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  secondary: Icon(
+                    Icons.notifications_off_outlined,
+                    color: scheme.secondary,
+                  ),
+                  title: const Text('Без звука'),
+                  subtitle: const Text(
+                    'Сообщение доставится без push-уведомления',
+                  ),
+                  value: _silent,
+                  onChanged: (v) => setState(() => _silent = v),
                 ),
                 SwitchListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
