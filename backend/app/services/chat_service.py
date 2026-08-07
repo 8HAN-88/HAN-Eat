@@ -3409,6 +3409,90 @@ class ChatService:
                 },
             )
 
+    def _message_preview_text(self, msg: Message) -> str:
+        msg_type = msg.type or "text"
+        content = msg.content or ""
+        if msg_type == "voice":
+            return "🎤 Голосовое"
+        if msg_type == "image":
+            return "📷 Фото"
+        if msg_type == "file":
+            name = content.strip() if content else "Файл"
+            return f"📎 {name[:80]}"
+        if msg_type == "video":
+            return "🎬 Видео"
+        if msg_type == "video_note":
+            return "⭕ Видеосообщение"
+        if msg_type == "sticker":
+            return "🧩 Стикер"
+        if msg_type == "location":
+            return "📍 Геопозиция"
+        if msg_type == "poll":
+            from app.services.chat_poll_service import poll_preview_text
+
+            return poll_preview_text(content)
+        return content[:120] if content else "Сообщение"
+
+    def notify_pinned_message(
+        self,
+        *,
+        conversation_id: int,
+        actor_id: int,
+        message_id: int,
+    ) -> int:
+        """Push/inbox peers about a newly pinned message (Telegram notify)."""
+        members = (
+            self.db.query(ConversationMember)
+            .filter(ConversationMember.conversation_id == conversation_id)
+            .all()
+        )
+        actor = self.db.query(User).filter(User.id == actor_id).first()
+        actor_name = (
+            (actor.name or actor.username or "Пользователь")
+            if actor
+            else "Пользователь"
+        )
+        msg = (
+            self.db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+            )
+            .first()
+        )
+        preview = self._message_preview_text(msg) if msg else "Сообщение"
+        body = f"📌 {preview}"
+        notif = NotificationService(self.db)
+        sent = 0
+        for m in members:
+            if m.user_id == actor_id:
+                continue
+            is_muted = self._expire_mute_if_needed(m)
+            mode = self._normalize_notify_mode(
+                getattr(m, "notify_mode", None),
+                muted=is_muted,
+            )
+            if mode == "none" or mode == "mentions" or is_muted:
+                continue
+            notif.create_notification(
+                user_id=m.user_id,
+                type="message",
+                title=actor_name,
+                body=body,
+                entity_type="conversation",
+                entity_id=conversation_id,
+                actor_id=actor_id,
+                data={
+                    "conversation_id": conversation_id,
+                    "message_id": message_id,
+                    "route": "chat",
+                    "action": "pin",
+                },
+            )
+            sent += 1
+        return sent
+
     def schedule_message(
         self,
         *,

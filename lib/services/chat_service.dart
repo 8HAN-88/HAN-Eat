@@ -611,11 +611,18 @@ class ChatService {
     required int conversationId,
     required int messageId,
     bool pinned = true,
+    bool notify = false,
   }) async {
     final uri = Uri.parse(
       '$_base/chats/$conversationId/messages/$messageId/pin',
     );
-    final response = await _post(uri, body: jsonEncode({'pinned': pinned}));
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'pinned': pinned,
+        if (pinned) 'notify': notify,
+      }),
+    );
     _ensureOk(
         response, pinned ? 'Не удалось закрепить' : 'Не удалось открепить');
   }

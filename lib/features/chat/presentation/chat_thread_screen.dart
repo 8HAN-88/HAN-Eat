@@ -4907,11 +4907,46 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _togglePinMessage(ChatMessage msg) async {
     final isPinned = _isMessagePinned(msg.id);
+    var notifyMembers = false;
+    if (!isPinned && _conversation.isGroup) {
+      var notify = true; // Telegram default: notify members when pinning.
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Закрепить сообщение?'),
+            content: CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: notify,
+              onChanged: (v) => setLocal(() => notify = v ?? false),
+              title: const Text('Уведомить участников'),
+              subtitle: const Text(
+                'Участники получат уведомление о закреплении',
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Закрепить'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (ok != true || !mounted) return;
+      notifyMembers = notify;
+    }
     try {
       await ChatService.pinMessage(
         conversationId: widget.conversationId,
         messageId: msg.id,
         pinned: !isPinned,
+        notify: notifyMembers,
       );
       if (!mounted) return;
       setState(() {
