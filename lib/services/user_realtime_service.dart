@@ -33,6 +33,7 @@ class UserRealtimeEvent {
     this.muted,
     this.mutedUntil,
     this.notifyMode,
+    this.autoDeleteSeconds,
     this.callId,
     this.callerId,
     this.calleeId,
@@ -65,6 +66,8 @@ class UserRealtimeEvent {
   final bool? muted;
   final DateTime? mutedUntil;
   final String? notifyMode;
+  /// Shared conversation TTL (`chat.auto_delete`).
+  final int? autoDeleteSeconds;
   /// 1:1 WebRTC call signaling (`call.*` events).
   final int? callId;
   final int? callerId;
@@ -124,6 +127,7 @@ class UserRealtimeEvent {
       muted: json['muted'] is bool ? json['muted'] as bool : null,
       mutedUntil: asDate(json['muted_until']),
       notifyMode: (json['notify_mode'] as String?)?.trim(),
+      autoDeleteSeconds: asInt(json['auto_delete_seconds']),
       callId: asInt(json['call_id']),
       callerId: asInt(json['caller_id']),
       calleeId: asInt(json['callee_id']),

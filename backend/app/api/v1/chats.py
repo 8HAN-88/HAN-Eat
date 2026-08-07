@@ -3905,6 +3905,7 @@ async def update_group_chat(
 ):
     svc = ChatService(db)
     notes = []
+    auto_delete_fanout: Optional[int] = None
     try:
         if (
             body.title is None
@@ -4054,6 +4055,9 @@ async def update_group_chat(
                 current_user.id,
                 body.auto_delete_seconds,
             )
+            auto_delete_fanout = int(
+                getattr(conv, "auto_delete_seconds", 0) or 0
+            )
             if conv.type == "group":
                 notes.append(
                     svc.create_group_system_note(
@@ -4062,8 +4066,8 @@ async def update_group_chat(
                         "🛡 Auto-delete: "
                         + (
                             "disabled."
-                            if int(body.auto_delete_seconds) <= 0
-                            else f"messages older than {int(body.auto_delete_seconds)} sec."
+                            if auto_delete_fanout <= 0
+                            else f"messages older than {auto_delete_fanout} sec."
                         ),
                     )
                 )
@@ -4091,6 +4095,29 @@ async def update_group_chat(
         )
     if notes:
         _notify_chat_inbox(db, conversation_id, current_user.id)
+    if auto_delete_fanout is not None:
+        # Peers + multi-device: sync TTL setting without waiting for reload.
+        _emit(
+            conversation_id,
+            {
+                "type": "conversation.auto_delete",
+                "auto_delete_seconds": auto_delete_fanout,
+            },
+        )
+        member_ids = (
+            db.query(ConversationMember.user_id)
+            .filter(ConversationMember.conversation_id == conversation_id)
+            .all()
+        )
+        for (user_id,) in member_ids:
+            publish_user_event(
+                user_id,
+                {
+                    "event": "chat.auto_delete",
+                    "conversation_id": conversation_id,
+                    "auto_delete_seconds": auto_delete_fanout,
+                },
+            )
     return item
 
 
