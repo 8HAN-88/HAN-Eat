@@ -226,6 +226,26 @@ String chatPollPreviewText(ChatPollMessage poll) {
   return '📊 $q';
 }
 
+/// Maps a quiz "correct" controller index onto compacted non-empty option indices.
+List<int> resolveQuizCorrectIndices({
+  required List<String> rawOptionTexts,
+  required int? correctControllerIndex,
+}) {
+  if (correctControllerIndex == null) return const [];
+  if (correctControllerIndex < 0 ||
+      correctControllerIndex >= rawOptionTexts.length) {
+    return const [];
+  }
+  var optionIndex = 0;
+  for (var i = 0; i < rawOptionTexts.length; i++) {
+    final text = rawOptionTexts[i].trim();
+    if (text.isEmpty) continue;
+    if (i == correctControllerIndex) return [optionIndex];
+    optionIndex++;
+  }
+  return const [];
+}
+
 class ChatPollVoter {
   const ChatPollVoter({
     required this.id,

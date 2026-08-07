@@ -80,6 +80,35 @@ def test_build_poll_content_rejects_single_option():
         build_poll_content("Q?", ["only one"])
 
 
+def test_build_poll_quiz_requires_correct_option():
+    with pytest.raises(ValueError, match="poll_quiz_correct_required"):
+        build_poll_content(
+            "Столица?",
+            ["Париж", "Лондон"],
+            settings={"quiz_mode": True, "correct_option_indices": []},
+        )
+
+
+def test_build_poll_quiz_forces_single_choice_and_correct():
+    raw = build_poll_content(
+        "Столица?",
+        ["Париж", "Лондон"],
+        settings={
+            "quiz_mode": True,
+            "correct_option_indices": [0],
+            "multiple_choice": True,
+            "allow_add_options": True,
+            "allow_change_vote": True,
+        },
+    )
+    settings = json.loads(raw)["poll"]["settings"]
+    assert settings["quiz_mode"] is True
+    assert settings["correct_option_indices"] == [0]
+    assert settings["multiple_choice"] is False
+    assert settings["allow_add_options"] is False
+    assert settings["allow_change_vote"] is False
+
+
 def test_poll_preview_text():
     raw = build_poll_content("Где ужинаем?", ["Дома", "Вне"])
     assert poll_preview_text(raw) == "📊 Где ужинаем?"
