@@ -380,9 +380,28 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Личные чаты'),
+                  subtitle: const Text('Все диалоги один-на-один'),
                   value: _filters.direct,
                   onChanged: (v) =>
                       setState(() => _filters = _filters.copyWith(direct: v)),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Контакты'),
+                  subtitle: const Text('Личные чаты с людьми из контактов'),
+                  value: _filters.contacts,
+                  onChanged: (v) => setState(
+                    () => _filters = _filters.copyWith(contacts: v),
+                  ),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Не контакты'),
+                  subtitle: const Text('Личные чаты с людьми вне контактов'),
+                  value: _filters.nonContacts,
+                  onChanged: (v) => setState(
+                    () => _filters = _filters.copyWith(nonContacts: v),
+                  ),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -419,7 +438,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Без ботов'),
-                  subtitle: const Text('Только личные чаты с ботами'),
+                  subtitle: const Text('Скрыть личные чаты с ботами'),
                   value: _filters.excludeBots,
                   onChanged: (v) => setState(
                     () => _filters = _filters.copyWith(excludeBots: v),
