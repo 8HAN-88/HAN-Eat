@@ -225,6 +225,8 @@ class TypingActivityRequest(BaseModel):
 
 class PinMessageRequest(BaseModel):
     pinned: bool = True
+    # Telegram "Notify all members" when pinning (groups; ignored on unpin).
+    notify: bool = False
 
 
 class SendMessageRequest(BaseModel):

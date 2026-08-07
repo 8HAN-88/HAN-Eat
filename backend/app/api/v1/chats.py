@@ -3317,6 +3317,7 @@ async def pin_message(
     pinned_payloads = [
         _message_payload(m) for m in pinned_msgs if m is not None
     ]
+    notify = bool(body.pinned and body.notify)
     if body.pinned:
         pinned = next((m for m in pinned_msgs if m.id == message_id), None)
         _emit(
@@ -3326,8 +3327,18 @@ async def pin_message(
                 "message_id": message_id,
                 "message": _message_payload(pinned) if pinned else None,
                 "pinned_messages": pinned_payloads,
+                "notify": notify,
+                "pinned_by_user_id": current_user.id,
             },
         )
+        if notify:
+            svc.notify_pinned_message(
+                conversation_id=conversation_id,
+                actor_id=current_user.id,
+                message_id=message_id,
+            )
+            db.commit()
+            _notify_chat_inbox(db, conversation_id, current_user.id)
     else:
         _emit(
             conversation_id,
@@ -3343,6 +3354,7 @@ async def pin_message(
         "pinned": body.pinned,
         "message_id": message_id,
         "pinned_count": len(pinned_msgs),
+        "notify": notify,
     }
 
 
