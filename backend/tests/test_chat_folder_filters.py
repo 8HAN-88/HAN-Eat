@@ -1,4 +1,4 @@
-"""Chat folder filter normalization (contacts / non_contacts)."""
+"""Chat folder filter normalization (contacts / non_contacts / bots)."""
 import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -12,6 +12,7 @@ def test_normalize_filters_contacts_flags():
             "groups": 1,
             "contacts": True,
             "non_contacts": "yes",
+            "bots": True,
             "direct": False,
             "exclude_bots": True,
             "unknown": True,
@@ -23,6 +24,7 @@ def test_normalize_filters_contacts_flags():
         "direct": False,
         "contacts": True,
         "non_contacts": True,
+        "bots": True,
         "unread_only": False,
         "exclude_muted": False,
         "exclude_archived": False,
@@ -37,3 +39,4 @@ def test_normalize_filters_private_alias_and_empty():
     assert aliased["direct"] is True
     assert aliased["contacts"] is False
     assert aliased["non_contacts"] is False
+    assert aliased["bots"] is False

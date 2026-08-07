@@ -274,14 +274,16 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (!explicit) {
         if (filters.isEmpty) return false;
         if (filters.hasTypeFilter) {
-          final isDirectPerson = !chat.isGroup && !(chat.peer?.isBot ?? false);
+          final isBotDm = !chat.isGroup && (chat.peer?.isBot ?? false);
+          final isDirectPerson = !chat.isGroup && !isBotDm;
           final peerId = chat.peer?.id;
           final inContacts =
               peerId != null && _contactUserIds.contains(peerId);
           final typeOk = (filters.groups && chat.isGroup) ||
               (filters.direct && !chat.isGroup) ||
               (filters.contacts && isDirectPerson && inContacts) ||
-              (filters.nonContacts && isDirectPerson && !inContacts);
+              (filters.nonContacts && isDirectPerson && !inContacts) ||
+              (filters.bots && isBotDm);
           if (!typeOk) return false;
         } else if (!filters.unreadOnly && !filters.hasExcludeFilter) {
           return false;

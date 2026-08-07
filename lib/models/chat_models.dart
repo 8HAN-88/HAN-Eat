@@ -1126,6 +1126,7 @@ class ChatFolderFilters {
     this.direct = false,
     this.contacts = false,
     this.nonContacts = false,
+    this.bots = false,
     this.unreadOnly = false,
     this.excludeMuted = false,
     this.excludeArchived = false,
@@ -1140,6 +1141,8 @@ class ChatFolderFilters {
   final bool contacts;
   /// Direct chats with people not in Contacts (not bots).
   final bool nonContacts;
+  /// Direct chats with bots.
+  final bool bots;
   final bool unreadOnly;
   final bool excludeMuted;
   final bool excludeArchived;
@@ -1151,13 +1154,14 @@ class ChatFolderFilters {
       !direct &&
       !contacts &&
       !nonContacts &&
+      !bots &&
       !unreadOnly &&
       !excludeMuted &&
       !excludeArchived &&
       !excludeBots;
 
   bool get hasTypeFilter =>
-      groups || channels || direct || contacts || nonContacts;
+      groups || channels || direct || contacts || nonContacts || bots;
 
   bool get hasExcludeFilter =>
       excludeMuted || excludeArchived || excludeBots;
@@ -1168,6 +1172,7 @@ class ChatFolderFilters {
     bool? direct,
     bool? contacts,
     bool? nonContacts,
+    bool? bots,
     bool? unreadOnly,
     bool? excludeMuted,
     bool? excludeArchived,
@@ -1179,6 +1184,7 @@ class ChatFolderFilters {
       direct: direct ?? this.direct,
       contacts: contacts ?? this.contacts,
       nonContacts: nonContacts ?? this.nonContacts,
+      bots: bots ?? this.bots,
       unreadOnly: unreadOnly ?? this.unreadOnly,
       excludeMuted: excludeMuted ?? this.excludeMuted,
       excludeArchived: excludeArchived ?? this.excludeArchived,
@@ -1196,6 +1202,7 @@ class ChatFolderFilters {
           false,
       contacts: json['contacts'] as bool? ?? false,
       nonContacts: json['non_contacts'] as bool? ?? false,
+      bots: json['bots'] as bool? ?? false,
       unreadOnly: json['unread_only'] as bool? ?? false,
       excludeMuted: json['exclude_muted'] as bool? ?? false,
       excludeArchived: json['exclude_archived'] as bool? ?? false,
@@ -1209,6 +1216,7 @@ class ChatFolderFilters {
         'direct': direct,
         'contacts': contacts,
         'non_contacts': nonContacts,
+        'bots': bots,
         'unread_only': unreadOnly,
         'exclude_muted': excludeMuted,
         'exclude_archived': excludeArchived,
