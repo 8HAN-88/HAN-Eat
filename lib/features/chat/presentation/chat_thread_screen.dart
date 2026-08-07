@@ -64,6 +64,7 @@ import '../../../widgets/chat_bubble_accent.dart';
 import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
+import '../application/chat_auto_delete.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
 import '../application/chats_hub_refresh_provider.dart';
@@ -495,6 +496,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? _focusedMessageId;
   Timer? _focusedMessageTimer;
   Timer? _slowModeCountdownTimer;
+  Timer? _autoDeleteTicker;
   Timer? _pendingMediaAutoRetryTimer;
   Timer? _manualReadyRetryTimer;
   Timer? _muteUnmuteTimer;
@@ -617,12 +619,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     _load(refresh: true);
     _startPolling();
+    _syncAutoDeleteTicker();
     // Fallback poll; primary presence updates come via user.presence SSE.
     _presenceTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (!_appPaused) _refreshConversation();
     });
     _presenceSub = UserRealtimeService.instance.events.listen((event) {
       if (!mounted) return;
+      if (event.event == 'chat.auto_delete' &&
+          event.conversationId == widget.conversationId &&
+          event.autoDeleteSeconds != null) {
+        _applyAutoDeleteSeconds(event.autoDeleteSeconds!);
+        return;
+      }
       if ((event.event == 'chat.mute' ||
               event.event == 'chat.pin' ||
               event.event == 'chat.archive') &&
@@ -1504,6 +1513,54 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _slowModeLockUntil = null;
     }
     _syncSlowModeCountdownTimer();
+  }
+
+  void _applyAutoDeleteSeconds(int seconds) {
+    final safe = seconds < 0 ? 0 : seconds;
+    if (_conversation.autoDeleteSeconds == safe) {
+      _syncAutoDeleteTicker();
+      return;
+    }
+    setState(() {
+      _conversation = _conversation.copyWith(autoDeleteSeconds: safe);
+      _purgeExpiredAutoDeleteMessages(inSetState: true);
+    });
+    _syncAutoDeleteTicker();
+  }
+
+  void _purgeExpiredAutoDeleteMessages({bool inSetState = false}) {
+    final ttl = _conversation.autoDeleteSeconds;
+    if (ttl <= 0) return;
+    final now = DateTime.now();
+    final before = _messages.length;
+    _messages.removeWhere(
+      (m) => isMessageAutoDeleted(m.createdAt, ttl, now: now),
+    );
+    if (_messages.length == before) return;
+    if (!inSetState && mounted) {
+      setState(() {});
+    }
+  }
+
+  void _syncAutoDeleteTicker() {
+    final ttl = _conversation.autoDeleteSeconds;
+    if (ttl <= 0) {
+      _autoDeleteTicker?.cancel();
+      _autoDeleteTicker = null;
+      return;
+    }
+    if (_autoDeleteTicker != null) return;
+    _autoDeleteTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _appPaused) return;
+      if (_conversation.autoDeleteSeconds <= 0) {
+        _autoDeleteTicker?.cancel();
+        _autoDeleteTicker = null;
+        return;
+      }
+      setState(() {
+        _purgeExpiredAutoDeleteMessages(inSetState: true);
+      });
+    });
   }
 
   Future<void> _showPostingLimitsInfo({
@@ -2537,6 +2594,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _messages.removeWhere((m) => m.id == messageId);
         _removePinnedMessageId(messageId);
       });
+      return;
+    }
+    if (type == 'conversation.auto_delete') {
+      final raw = event['auto_delete_seconds'];
+      final seconds = raw is int ? raw : int.tryParse('$raw');
+      if (seconds == null) return;
+      _applyAutoDeleteSeconds(seconds);
       return;
     }
     if (type == 'typing') {
@@ -5285,6 +5349,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _floatingDateHideTimer?.cancel();
     _pollTimer?.cancel();
     _presenceTimer?.cancel();
+    _autoDeleteTicker?.cancel();
     _typingDebounce?.cancel();
     _stopRecordingPresence();
     for (final t in _typingUserTimers.values) {
@@ -5789,8 +5854,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _senderNames = names;
         _groupMembers = members;
         _bubbleAccent = ChatBubbleAccent.fromId(conv.bubbleAccent);
+        _purgeExpiredAutoDeleteMessages(inSetState: true);
       });
       _reconcileSlowModeCooldownWithConversation();
+      _syncAutoDeleteTicker();
       unawaited(_syncMuteSchedule());
       unawaited(_hydrateWallpaperFromConversation());
       unawaited(_loadBotCommands());
@@ -7421,6 +7488,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_pollNew());
       _onConnectionRestored();
       _reconcileManualReadyRetrySchedule();
+      _purgeExpiredAutoDeleteMessages();
+      _syncAutoDeleteTicker();
     }
   }
 
@@ -7992,7 +8061,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         seconds: picked,
       );
       if (!mounted) return;
-      setState(() => _conversation = conv);
+      setState(() {
+        _conversation = conv;
+        _purgeExpiredAutoDeleteMessages(inSetState: true);
+      });
+      _syncAutoDeleteTicker();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -8649,6 +8722,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       scheme: scheme,
       isPending: isPending,
       isFailed: isFailed,
+      autoDeleteSeconds: _conversation.autoDeleteSeconds,
       highlightQuery: searching ? _threadSearchQuery : null,
       isActiveSearchMatch: isActiveSearchMatch,
       replyQuote: replyQuote,
@@ -8876,6 +8950,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (_conversation.autoDeleteSeconds > 0) ...[
+                        Icon(
+                          Icons.timer_outlined,
+                          size: 10.5,
+                          color: fg.withValues(alpha: 0.62),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          formatAutoDeleteRemaining(
+                            anchor.createdAt,
+                            _conversation.autoDeleteSeconds,
+                          ),
+                          style: TextStyle(
+                            color: fg.withValues(alpha: 0.62),
+                            fontSize: 10.5,
+                            height: 1.08,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                       Text(
                         formatChatMessageTime(anchor.createdAt),
                         style: TextStyle(
@@ -14864,6 +14958,7 @@ class _Bubble extends StatelessWidget {
     required this.scheme,
     this.isPending = false,
     this.isFailed = false,
+    this.autoDeleteSeconds = 0,
     this.highlightQuery,
     this.isActiveSearchMatch = false,
     this.replyQuote,
@@ -14927,6 +15022,8 @@ class _Bubble extends StatelessWidget {
   final bool isPending;
   /// Send failed (tap to retry).
   final bool isFailed;
+  /// Conversation TTL; when > 0 show remaining countdown in meta.
+  final int autoDeleteSeconds;
   final String? highlightQuery;
   final bool isActiveSearchMatch;
   final String? replyQuote;
@@ -14967,6 +15064,7 @@ class _Bubble extends StatelessWidget {
     var width = 42.0; // time
     if (message.isEdited) width += 28;
     if (isConversationPinned) width += 16;
+    if (autoDeleteSeconds > 0) width += 36;
     if (mine) width += 16; // single/double check mark area
     if (mine && message.readCount > 0) width += 22;
     return width;
@@ -15024,6 +15122,9 @@ class _Bubble extends StatelessWidget {
           : fg.withValues(alpha: 0.45);
     }
 
+    final ttlLabel = autoDeleteSeconds > 0
+        ? formatAutoDeleteRemaining(message.createdAt, autoDeleteSeconds)
+        : '';
     final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -15035,6 +15136,19 @@ class _Bubble extends StatelessWidget {
                 onMedia ? Colors.white.withValues(alpha: 0.9) : scheme.primary,
           ),
           const SizedBox(width: 3),
+        ],
+        if (ttlLabel.isNotEmpty) ...[
+          Icon(
+            Icons.timer_outlined,
+            size: 10.5,
+            color: timeColor,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            ttlLabel,
+            style: TextStyle(color: timeColor, fontSize: 10.5, height: 1.08),
+          ),
+          const SizedBox(width: 4),
         ],
         Text(
           formatChatMessageTime(message.createdAt),

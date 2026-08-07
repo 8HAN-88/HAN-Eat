@@ -405,6 +405,13 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
             unreadCount: (n != null && n > 0) ? n : 1,
           );
           break;
+        case 'chat.auto_delete':
+          if (event.autoDeleteSeconds != null) {
+            chat = chat.copyWith(
+              autoDeleteSeconds: event.autoDeleteSeconds,
+            );
+          }
+          break;
       }
       if (event.event == 'chat.archive' && event.archived == true) {
         _entries.removeWhere(
@@ -555,7 +562,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (event.event == 'chat.archive' ||
           event.event == 'chat.pin' ||
           event.event == 'chat.mute' ||
-          event.event == 'chat.unread') {
+          event.event == 'chat.unread' ||
+          event.event == 'chat.auto_delete') {
         final cid = event.conversationId;
         if (cid == null) return;
         _applyPersonalChatStateEvent(event);
