@@ -65,6 +65,7 @@ import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_auto_delete.dart';
+import '../application/chat_mentions.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -474,6 +475,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _showJumpToBottom = false;
   bool _jumpFabTargetsUnread = false;
   int _newMessagesBelow = 0;
+  /// Session queue for cycling unread @mentions (survives mark-read badge clear).
+  List<int> _unreadMentionQueue = const [];
+  int _unreadMentionCursor = 0;
   int? _replySwipeMsgId;
   double _replySwipeDx = 0;
   String? _floatingDateLabel;
@@ -4256,17 +4260,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (!_scroll.hasClients || _selectionMode) return;
     final nearBottom = _isNearBottom();
     if (nearBottom) {
-      if (_showJumpToBottom || _jumpFabTargetsUnread) {
+      if (_showJumpToBottom ||
+          _jumpFabTargetsUnread ||
+          _unreadMentionQueue.isNotEmpty) {
         setState(() {
           _showJumpToBottom = false;
           _jumpFabTargetsUnread = false;
           _newMessagesBelow = 0;
+          _clearUnreadMentionQueue();
         });
       }
       // Telegram: mark read when the user actually reaches the bottom.
       _scheduleMarkRead();
     } else {
-      final targetsUnread = _shouldJumpToFirstUnread();
+      final targetsUnread =
+          _shouldJumpToFirstUnread() || _hasMentionJumpTargets;
       if (!_showJumpToBottom || _jumpFabTargetsUnread != targetsUnread) {
         setState(() {
           _showJumpToBottom = true;
@@ -4513,45 +4521,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _messageMentionsMe(ChatMessage msg) {
-    if (msg.isMine) return false;
-    final content = msg.content;
-    if (content.isEmpty) return false;
     final me = AuthService.instance.currentUser;
     if (me == null) return false;
-    if (RegExp(r'(?<!\w)@id' + RegExp.escape('${me.id}') + r'\b')
-        .hasMatch(content)) {
-      return true;
-    }
-    if (RegExp(r'(?<!\w)@all\b', caseSensitive: false).hasMatch(content)) {
-      return true;
-    }
-    final uname = me.username?.trim().toLowerCase();
-    if (uname != null && uname.isNotEmpty) {
-      final handle = uname.startsWith('@') ? uname.substring(1) : uname;
-      if (handle.isNotEmpty &&
-          RegExp(
-            r'(?<!\w)@' + RegExp.escape(handle) + r'\b',
-            caseSensitive: false,
-          ).hasMatch(content)) {
-        return true;
-      }
-    }
-    if (_conversation.amIGroupAdmin &&
-        RegExp(r'(?<!\w)@admins?\b', caseSensitive: false).hasMatch(content)) {
-      return true;
-    }
-    return false;
+    return messageContentMentionsUser(
+      content: msg.content,
+      isMine: msg.isMine,
+      userId: me.id,
+      username: me.username,
+      amIGroupAdmin: _conversation.amIGroupAdmin,
+    );
+  }
+
+  int get _remainingMentionJumps =>
+      remainingMentionJumps(_unreadMentionQueue, _unreadMentionCursor);
+
+  bool get _hasMentionJumpTargets => _remainingMentionJumps > 0;
+
+  List<int> _collectUnreadMentionIds({int? fromMessageId}) {
+    final me = AuthService.instance.currentUser;
+    if (me == null || _messages.isEmpty) return const [];
+    final startId =
+        fromMessageId ?? _unreadDividerBeforeId ?? _firstUnreadMessageId();
+    return collectMentionMessageIds(
+      messages: [
+        for (final m in _messages)
+          (id: m.id, content: m.content, isMine: m.isMine),
+      ],
+      fromMessageId: startId,
+      userId: me.id,
+      username: me.username,
+      amIGroupAdmin: _conversation.amIGroupAdmin,
+    );
+  }
+
+  void _seedUnreadMentionQueue({int? fromMessageId}) {
+    final ids = _collectUnreadMentionIds(fromMessageId: fromMessageId);
+    _unreadMentionQueue = ids;
+    _unreadMentionCursor = 0;
+  }
+
+  void _clearUnreadMentionQueue() {
+    _unreadMentionQueue = const [];
+    _unreadMentionCursor = 0;
   }
 
   int? _firstUnreadMentionMessageId() {
-    final firstUnread = _firstUnreadMessageId();
-    if (firstUnread == null || _messages.isEmpty) return null;
-    final start = _messages.indexWhere((m) => m.id == firstUnread);
-    if (start < 0) return null;
-    for (var i = start; i < _messages.length; i++) {
-      if (_messageMentionsMe(_messages[i])) return _messages[i].id;
+    if (_hasMentionJumpTargets) {
+      return _unreadMentionQueue[_unreadMentionCursor];
     }
-    return null;
+    final ids = _collectUnreadMentionIds();
+    return ids.isEmpty ? null : ids.first;
   }
 
   int? _firstUnreadReactionMessageId() {
@@ -4573,14 +4592,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
+        _seedUnreadMentionQueue(fromMessageId: firstUnread);
         final mentionId = _firstUnreadMentionMessageId();
         final reactionId =
             mentionId == null ? _firstUnreadReactionMessageId() : null;
+        // First mention is shown on open; next FAB tap advances further.
+        if (mentionId != null && _unreadMentionQueue.isNotEmpty) {
+          _unreadMentionCursor = 1;
+        }
         setState(() => _unreadDividerBeforeId = firstUnread);
         _scrollToMessage(mentionId ?? reactionId ?? firstUnread);
         final idx = _messages.indexWhere((m) => m.id == firstUnread);
         final below = idx >= 0 ? _messages.length - idx - 1 : 0;
-        if (below > 0) {
+        if (below > 0 || _hasMentionJumpTargets) {
           setState(() {
             _newMessagesBelow = below;
             _showJumpToBottom = true;
@@ -4658,6 +4682,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _newMessagesBelow = 0;
       _suppressMarkRead = false;
       _unreadDividerBeforeId = null;
+      _clearUnreadMentionQueue();
     });
     _scheduleMarkRead();
   }
@@ -4684,11 +4709,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _onJumpFabTap() {
+    // Telegram: @ FAB cycles through unread mentions even after mark-read.
+    if (_unreadMentionQueue.isEmpty &&
+        (_conversation.unreadMentionsCount > 0 ||
+            _unreadDividerBeforeId != null)) {
+      _seedUnreadMentionQueue();
+    }
+    if (_hasMentionJumpTargets) {
+      final id = _unreadMentionQueue[_unreadMentionCursor];
+      setState(() {
+        _unreadMentionCursor += 1;
+        _showJumpToBottom = true;
+        _jumpFabTargetsUnread = true;
+      });
+      _scrollToMessage(id);
+      _focusMessageTemporarily(id);
+      return;
+    }
     if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
-      final mentionId = _firstUnreadMentionMessageId();
-      final reactionId =
-          mentionId == null ? _firstUnreadReactionMessageId() : null;
-      final id = mentionId ?? reactionId ?? _unreadDividerBeforeId!;
+      final reactionId = _firstUnreadReactionMessageId();
+      final id = reactionId ?? _unreadDividerBeforeId!;
       _scrollToMessage(id);
       _focusMessageTemporarily(id);
       return;
@@ -14231,13 +14271,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     height: 42,
                                     child: Icon(
                                       _jumpFabTargetsUnread &&
-                                              _conversation.unreadMentionsCount >
-                                                  0
+                                              (_hasMentionJumpTargets ||
+                                                  _conversation
+                                                          .unreadMentionsCount >
+                                                      0)
                                           ? Icons.alternate_email_rounded
                                           : ((_jumpFabTargetsUnread ||
                                                       _conversation
                                                               .unreadReactionsCount >
                                                           0) &&
+                                                  !_hasMentionJumpTargets &&
                                                   _conversation
                                                           .unreadMentionsCount <=
                                                       0 &&
@@ -14259,6 +14302,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               if (_newMessagesBelow > 0 ||
                                   (_jumpFabTargetsUnread &&
                                       _conversation.unreadCount > 0) ||
+                                  _hasMentionJumpTargets ||
                                   _conversation.unreadReactionsCount > 0)
                                 Positioned(
                                   top: -6,
@@ -14266,16 +14310,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   right: 0,
                                   child: Center(
                                     child: TelegramUnreadBadge(
-                                      count: _jumpFabTargetsUnread
-                                          ? math.max(
-                                              _conversation.unreadCount,
-                                              _newMessagesBelow,
-                                            )
-                                          : _newMessagesBelow,
+                                      count: _hasMentionJumpTargets
+                                          ? _remainingMentionJumps
+                                          : (_jumpFabTargetsUnread
+                                              ? math.max(
+                                                  _conversation.unreadCount,
+                                                  _newMessagesBelow,
+                                                )
+                                              : _newMessagesBelow),
                                       hasMention: _jumpFabTargetsUnread &&
-                                          _conversation.unreadMentionsCount >
-                                              0,
-                                      hasReaction:
+                                          (_hasMentionJumpTargets ||
+                                              _conversation
+                                                      .unreadMentionsCount >
+                                                  0),
+                                      hasReaction: !_hasMentionJumpTargets &&
                                           _conversation.unreadMentionsCount <=
                                               0 &&
                                           _conversation.unreadReactionsCount >
