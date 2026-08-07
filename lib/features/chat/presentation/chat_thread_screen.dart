@@ -645,6 +645,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _applyHistoryClearedLocally();
         return;
       }
+      if (event.event == 'chat.deleted' &&
+          event.conversationId == widget.conversationId) {
+        unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+        unawaited(ChatCacheService.clearDraft(widget.conversationId));
+        try {
+          ProviderScope.containerOf(context)
+              .read(chatsHubRefreshProvider.notifier)
+              .state++;
+        } catch (_) {}
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+        return;
+      }
       if ((event.event == 'chat.mute' ||
               event.event == 'chat.pin' ||
               event.event == 'chat.archive') &&
@@ -6110,36 +6124,64 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     if (_chatExitActionRunning) return;
+    final isDirect = !_conversation.isGroup && !_conversation.isSaved;
+    final peerName = _conversation.peer?.displayName.trim();
+    var alsoForPeer = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить чат?'),
-        content: Text(
-          _conversation.isGroup
-              ? 'Вы выйдете из «${_conversation.displayTitle}».'
-              : 'Чат исчезнет из списка. При новом сообщении диалог можно начать снова.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Удалить чат?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                alsoForPeer
+                    ? 'Чат будет удалён у вас и у собеседника.'
+                    : 'Чат исчезнет из списка. При новом сообщении диалог можно начать снова.',
+              ),
+              if (isDirect) ...[
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: alsoForPeer,
+                  onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
+                  title: Text(
+                    (peerName != null && peerName.isNotEmpty)
+                        ? 'Также удалить у $peerName'
+                        : 'Также удалить у собеседника',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Удалить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Удалить'),
-          ),
-        ],
       ),
     );
     if (ok != true || !mounted) return;
     setState(() => _chatExitActionRunning = true);
     try {
       await ChatService.deleteConversation(
-          conversationId: widget.conversationId);
+        conversationId: widget.conversationId,
+        alsoForPeer: isDirect && alsoForPeer,
+      );
       unawaited(ChatCacheService.clearDraft(widget.conversationId));
       unawaited(
         ChatService.deleteCloudDraft(conversationId: widget.conversationId),
       );
+      unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
       try {
         ProviderScope.containerOf(context)
             .read(chatsHubRefreshProvider.notifier)

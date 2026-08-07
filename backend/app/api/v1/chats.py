@@ -3660,12 +3660,17 @@ async def mark_unread(
 @router.delete("/chats/{conversation_id}")
 async def delete_conversation(
     conversation_id: int,
+    also_for_peer: bool = Query(False),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
     try:
-        svc.delete_conversation(conversation_id, current_user.id)
+        peer_id = svc.delete_conversation(
+            conversation_id,
+            current_user.id,
+            also_for_peer=bool(also_for_peer),
+        )
         db.commit()
     except ValueError as e:
         db.rollback()
@@ -3678,8 +3683,34 @@ async def delete_conversation(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Cannot delete saved messages chat"
             )
+        if code == "also_for_peer_direct_only":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "also_for_peer is only available in direct chats",
+            )
         raise
-    return {"ok": True}
+    # Multi-device + optional peer: drop chat from inbox immediately.
+    publish_user_event(
+        current_user.id,
+        {
+            "event": "chat.deleted",
+            "conversation_id": conversation_id,
+            "also_for_peer": bool(also_for_peer and peer_id is not None),
+        },
+    )
+    if peer_id is not None:
+        publish_user_event(
+            peer_id,
+            {
+                "event": "chat.deleted",
+                "conversation_id": conversation_id,
+                "also_for_peer": True,
+            },
+        )
+    return {
+        "ok": True,
+        "also_for_peer": bool(also_for_peer and peer_id is not None),
+    }
 
 
 @router.post("/chats/{conversation_id}/clear-history")

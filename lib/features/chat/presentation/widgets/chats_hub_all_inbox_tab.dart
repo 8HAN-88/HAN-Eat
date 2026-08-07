@@ -575,6 +575,20 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         }
         return;
       }
+      if (event.event == 'chat.deleted') {
+        final cid = event.conversationId;
+        if (cid == null) return;
+        setState(() {
+          _entries.removeWhere(
+            (e) => e is ChatInboxEntry && e.chat.id == cid,
+          );
+          if (_savedChat?.id == cid) _savedChat = null;
+        });
+        unawaited(ChatCacheService.clearDraft(cid));
+        unawaited(ChatCacheService.saveThread(cid, const []));
+        ref.read(shellChatBadgeRefreshProvider.notifier).state++;
+        return;
+      }
 
       if (!ShellTabVisibility.chatsActive || _loading) return;
       if (event.event == 'chat.inbox' ||
@@ -1489,25 +1503,52 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   Future<void> _deleteChatFromHub(ChatConversation chat) async {
     if (_hubActionChatId != null) return;
     setState(() => _hubActionChatId = chat.id);
+    final isDirect = !chat.isGroup && !chat.isSaved;
+    final peerName = chat.peer?.displayName.trim();
+    var alsoForPeer = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(chat.isGroup ? 'Выйти из группы?' : 'Удалить чат?'),
-        content: Text(
-          chat.isGroup
-              ? 'Вы выйдете из «${chat.displayTitle}». История останется у других участников.'
-              : 'Чат «${chat.displayTitle}» исчезнет из списка. При новом сообщении диалог можно начать снова.',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(chat.isGroup ? 'Выйти из группы?' : 'Удалить чат?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                chat.isGroup
+                    ? 'Вы выйдете из «${chat.displayTitle}». История останется у других участников.'
+                    : (alsoForPeer
+                        ? 'Чат «${chat.displayTitle}» будет удалён у вас и у собеседника.'
+                        : 'Чат «${chat.displayTitle}» исчезнет из списка. При новом сообщении диалог можно начать снова.'),
+              ),
+              if (isDirect) ...[
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: alsoForPeer,
+                  onChanged: (v) => setLocal(() => alsoForPeer = v ?? false),
+                  title: Text(
+                    (peerName != null && peerName.isNotEmpty)
+                        ? 'Также удалить у $peerName'
+                        : 'Также удалить у собеседника',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(chat.isGroup ? 'Выйти' : 'Удалить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(chat.isGroup ? 'Выйти' : 'Удалить'),
-          ),
-        ],
       ),
     );
     if (ok != true || !mounted) {
@@ -1515,9 +1556,18 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       return;
     }
     try {
-      await ChatService.deleteConversation(conversationId: chat.id);
+      await ChatService.deleteConversation(
+        conversationId: chat.id,
+        alsoForPeer: isDirect && alsoForPeer,
+      );
       unawaited(ChatCacheService.clearDraft(chat.id));
+      unawaited(ChatCacheService.saveThread(chat.id, const []));
       if (!mounted) return;
+      setState(() {
+        _entries.removeWhere(
+          (e) => e is ChatInboxEntry && e.chat.id == chat.id,
+        );
+      });
       await _load(silent: true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1525,7 +1575,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           content: Text(
             chat.isGroup
                 ? 'Вы вышли из «${chat.displayTitle}»'
-                : '«${chat.displayTitle}» удалён',
+                : (alsoForPeer
+                    ? '«${chat.displayTitle}» удалён у обоих'
+                    : '«${chat.displayTitle}» удалён'),
           ),
         ),
       );
