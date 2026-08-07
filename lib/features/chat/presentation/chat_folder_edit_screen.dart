@@ -405,6 +405,19 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
+                  title: const Text('Боты'),
+                  subtitle: const Text('Личные чаты с ботами'),
+                  value: _filters.bots,
+                  onChanged: (v) => setState(() {
+                    _filters = _filters.copyWith(
+                      bots: v,
+                      // Include and exclude bots conflict — prefer include.
+                      excludeBots: v ? false : _filters.excludeBots,
+                    );
+                  }),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: const Text('Каналы'),
                   value: _filters.channels,
                   onChanged: (v) => setState(
@@ -440,9 +453,12 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                   title: const Text('Без ботов'),
                   subtitle: const Text('Скрыть личные чаты с ботами'),
                   value: _filters.excludeBots,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(excludeBots: v),
-                  ),
+                  onChanged: (v) => setState(() {
+                    _filters = _filters.copyWith(
+                      excludeBots: v,
+                      bots: v ? false : _filters.bots,
+                    );
+                  }),
                 ),
                 const SizedBox(height: 16),
                 Row(
