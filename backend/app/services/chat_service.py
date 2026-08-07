@@ -4476,6 +4476,9 @@ class ChatService:
             "groups": bool(filters.get("groups")),
             "channels": bool(filters.get("channels")),
             "direct": bool(filters.get("direct") or filters.get("private")),
+            # Telegram-like private chat subsets (people only; bots stay separate).
+            "contacts": bool(filters.get("contacts")),
+            "non_contacts": bool(filters.get("non_contacts")),
             "unread_only": bool(filters.get("unread_only")),
             "exclude_muted": bool(filters.get("exclude_muted")),
             "exclude_archived": bool(filters.get("exclude_archived")),

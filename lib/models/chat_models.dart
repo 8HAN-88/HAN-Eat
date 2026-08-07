@@ -1124,6 +1124,8 @@ class ChatFolderFilters {
     this.groups = false,
     this.channels = false,
     this.direct = false,
+    this.contacts = false,
+    this.nonContacts = false,
     this.unreadOnly = false,
     this.excludeMuted = false,
     this.excludeArchived = false,
@@ -1134,6 +1136,10 @@ class ChatFolderFilters {
   final bool channels;
   /// Private / direct chats (Telegram "Личные чаты").
   final bool direct;
+  /// Direct chats with people from Contacts (not bots).
+  final bool contacts;
+  /// Direct chats with people not in Contacts (not bots).
+  final bool nonContacts;
   final bool unreadOnly;
   final bool excludeMuted;
   final bool excludeArchived;
@@ -1143,12 +1149,15 @@ class ChatFolderFilters {
       !groups &&
       !channels &&
       !direct &&
+      !contacts &&
+      !nonContacts &&
       !unreadOnly &&
       !excludeMuted &&
       !excludeArchived &&
       !excludeBots;
 
-  bool get hasTypeFilter => groups || channels || direct;
+  bool get hasTypeFilter =>
+      groups || channels || direct || contacts || nonContacts;
 
   bool get hasExcludeFilter =>
       excludeMuted || excludeArchived || excludeBots;
@@ -1157,6 +1166,8 @@ class ChatFolderFilters {
     bool? groups,
     bool? channels,
     bool? direct,
+    bool? contacts,
+    bool? nonContacts,
     bool? unreadOnly,
     bool? excludeMuted,
     bool? excludeArchived,
@@ -1166,6 +1177,8 @@ class ChatFolderFilters {
       groups: groups ?? this.groups,
       channels: channels ?? this.channels,
       direct: direct ?? this.direct,
+      contacts: contacts ?? this.contacts,
+      nonContacts: nonContacts ?? this.nonContacts,
       unreadOnly: unreadOnly ?? this.unreadOnly,
       excludeMuted: excludeMuted ?? this.excludeMuted,
       excludeArchived: excludeArchived ?? this.excludeArchived,
@@ -1181,6 +1194,8 @@ class ChatFolderFilters {
       direct: json['direct'] as bool? ??
           json['private'] as bool? ??
           false,
+      contacts: json['contacts'] as bool? ?? false,
+      nonContacts: json['non_contacts'] as bool? ?? false,
       unreadOnly: json['unread_only'] as bool? ?? false,
       excludeMuted: json['exclude_muted'] as bool? ?? false,
       excludeArchived: json['exclude_archived'] as bool? ?? false,
@@ -1192,6 +1207,8 @@ class ChatFolderFilters {
         'groups': groups,
         'channels': channels,
         'direct': direct,
+        'contacts': contacts,
+        'non_contacts': nonContacts,
         'unread_only': unreadOnly,
         'exclude_muted': excludeMuted,
         'exclude_archived': excludeArchived,

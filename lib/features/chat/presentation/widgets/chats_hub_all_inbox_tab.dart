@@ -73,6 +73,8 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   bool _appPaused = false;
   List<ChatFolder> _folders = [];
   int? _selectedFolderId;
+  /// Peer user ids from the Contacts list (for folder contacts/non_contacts).
+  Set<int> _contactUserIds = {};
   bool _showGesturesHint = false;
   bool _servingFromCache = false;
   Map<int, ChatDraft> _drafts = {};
@@ -89,10 +91,16 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
 
   Future<void> _loadFolders() async {
     try {
-      final folders = await ChatFolderStore.listFolders();
+      final results = await Future.wait([
+        ChatFolderStore.listFolders(),
+        ChatService.listContacts().catchError((_) => <ChatContact>[]),
+      ]);
       if (!mounted) return;
+      final folders = results[0] as List<ChatFolder>;
+      final contacts = results[1] as List<ChatContact>;
       setState(() {
         _folders = folders;
+        _contactUserIds = {for (final c in contacts) c.user.id};
         if (_selectedFolderId != null &&
             !folders.any((f) => f.id == _selectedFolderId)) {
           _selectedFolderId = null;
@@ -266,8 +274,14 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       if (!explicit) {
         if (filters.isEmpty) return false;
         if (filters.hasTypeFilter) {
+          final isDirectPerson = !chat.isGroup && !(chat.peer?.isBot ?? false);
+          final peerId = chat.peer?.id;
+          final inContacts =
+              peerId != null && _contactUserIds.contains(peerId);
           final typeOk = (filters.groups && chat.isGroup) ||
-              (filters.direct && !chat.isGroup);
+              (filters.direct && !chat.isGroup) ||
+              (filters.contacts && isDirectPerson && inContacts) ||
+              (filters.nonContacts && isDirectPerson && !inContacts);
           if (!typeOk) return false;
         } else if (!filters.unreadOnly && !filters.hasExcludeFilter) {
           return false;
