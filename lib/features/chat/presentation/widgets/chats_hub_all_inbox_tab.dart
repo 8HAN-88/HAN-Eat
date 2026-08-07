@@ -1677,24 +1677,45 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
   Future<void> _toggleBlockFromHub(ChatConversation chat) async {
     final peer = chat.peer;
     if (peer == null || _hubActionChatId != null) return;
+    var deleteHistory = false;
     if (!chat.peerBlockedByMe) {
       final ok = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Заблокировать?'),
-          content: Text(
-            '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Заблокировать?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${peer.displayName} не сможет писать вам и видеть ваш профиль в чатах.',
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: deleteHistory,
+                  onChanged: (v) =>
+                      setLocal(() => deleteHistory = v ?? false),
+                  title: const Text('Удалить историю переписки'),
+                  subtitle: const Text(
+                    'Чат исчезнет из списка, сообщения будут скрыты у вас',
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Заблокировать'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Заблокировать'),
-            ),
-          ],
         ),
       );
       if (ok != true || !mounted) return;
@@ -1705,8 +1726,21 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         await ChatService.unblockUser(peer.id);
       } else {
         await ChatService.blockUser(peer.id);
+        if (deleteHistory) {
+          await ChatService.clearHistory(conversationId: chat.id);
+          await ChatService.deleteConversation(conversationId: chat.id);
+          unawaited(ChatCacheService.saveThread(chat.id, const []));
+          unawaited(ChatCacheService.clearDraft(chat.id));
+        }
       }
       if (!mounted) return;
+      if (deleteHistory) {
+        setState(() {
+          _entries.removeWhere(
+            (e) => e is ChatInboxEntry && e.chat.id == chat.id,
+          );
+        });
+      }
       await _load(silent: true);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1714,7 +1748,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           content: Text(
             chat.peerBlockedByMe
                 ? '${peer.displayName} разблокирован'
-                : '${peer.displayName} заблокирован',
+                : (deleteHistory
+                    ? '${peer.displayName} заблокирован, история удалена'
+                    : '${peer.displayName} заблокирован'),
           ),
         ),
       );
