@@ -68,6 +68,7 @@ import '../features/reels/presentation/reels_feed_screen.dart';
 import '../features/reels/presentation/reels_fullscreen_screen.dart';
 import '../features/chat/presentation/chats_hub_screen.dart';
 import '../features/chat/presentation/chat_invite_join_screen.dart';
+import '../features/chat/application/chat_private_reply.dart';
 import '../features/chat/presentation/chat_thread_screen.dart';
 import '../features/chat/presentation/username_deep_link_screen.dart';
 import '../features/bots/presentation/bot_detail_screen.dart';
@@ -1066,6 +1067,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialJumpMessageId:
                   openArgs?.jumpToMessageId ?? jumpFromQuery,
               initialDraftText: openArgs?.initialDraftText,
+              initialPrivateReply: openArgs?.initialPrivateReply,
             ),
           );
         },
@@ -1285,12 +1287,15 @@ class ChatThreadOpenArgs {
     this.peer,
     this.jumpToMessageId,
     this.initialDraftText,
+    this.initialPrivateReply,
   });
 
   final ChatConversation? conversation;
   final ChatUserBrief? peer;
   final int? jumpToMessageId;
   final String? initialDraftText;
+  /// Telegram-like "Reply privately" quote strip when opening a DM.
+  final ChatPrivateReplyQuote? initialPrivateReply;
 }
 
 /// Вкладка «Профиль» в нижней навигации (хаб, не путать с [ProfileRoute] ленты профиля).
