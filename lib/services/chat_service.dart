@@ -1341,9 +1341,15 @@ class ChatService {
     return 0;
   }
 
-  static Future<int> clearHistory({required int conversationId}) async {
+  static Future<int> clearHistory({
+    required int conversationId,
+    bool alsoForPeer = false,
+  }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/clear-history');
-    final response = await _post(uri);
+    final response = await _post(
+      uri,
+      body: jsonEncode({'also_for_peer': alsoForPeer}),
+    );
     _ensureOk(response, 'Не удалось очистить историю');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return _asInt(data['cleared_before_id']);

@@ -2427,13 +2427,39 @@ class ChatService:
         value = getattr(member, "history_cleared_before_id", None)
         return int(value) if value else None
 
-    def clear_history(self, conversation_id: int, user_id: int) -> int:
-        """Hide all current messages for this user (Telegram clear history)."""
+    def clear_history(
+        self,
+        conversation_id: int,
+        user_id: int,
+        *,
+        also_for_peer: bool = False,
+    ) -> tuple[int, Optional[int]]:
+        """Hide all current messages for this user (Telegram clear history).
+
+        Returns (cleared_before_id, peer_user_id_if_also_cleared).
+        `also_for_peer` applies the same cursor to the DM peer only.
+        """
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
         member = self._get_member_record(conversation_id, user_id)
         if member is None:
             raise ValueError("forbidden")
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if not conv:
+            raise ValueError("not_found")
+        peer_cleared_id: Optional[int] = None
+        if also_for_peer:
+            if conv.type != "direct":
+                raise ValueError("also_for_peer_direct_only")
+            peer_id = self.peer_user_id(conv, user_id)
+            peer_member = self._get_member_record(conversation_id, peer_id)
+            if peer_member is None:
+                raise ValueError("forbidden")
+            peer_cleared_id = peer_id
         max_id = (
             self.db.query(func.max(Message.id))
             .filter(
@@ -2445,7 +2471,16 @@ class ChatService:
         cleared_to = int(max_id or 0)
         member.history_cleared_before_id = cleared_to
         member.last_read_message_id = cleared_to or member.last_read_message_id
-        return cleared_to
+        if peer_cleared_id is not None:
+            peer_member = self._get_member_record(
+                conversation_id, peer_cleared_id
+            )
+            if peer_member is not None:
+                peer_member.history_cleared_before_id = cleared_to
+                peer_member.last_read_message_id = (
+                    cleared_to or peer_member.last_read_message_id
+                )
+        return cleared_to, peer_cleared_id
 
     def list_common_groups(
         self, viewer_id: int, peer_id: int, *, limit: int = 50

@@ -357,6 +357,12 @@ class ArchiveChatRequest(BaseModel):
     archived: bool = True
 
 
+class ClearHistoryRequest(BaseModel):
+    """Telegram-like clear history. `also_for_peer` is DM-only."""
+
+    also_for_peer: bool = False
+
+
 class ConversationMembersResponse(BaseModel):
     items: List[ChatUserBrief]
 
