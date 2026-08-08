@@ -15,6 +15,7 @@ class UserResponse(BaseModel):
     bio: Optional[str] = None
     is_private: bool
     show_last_seen: bool = True
+    last_seen_privacy: str = "everybody"
     show_read_receipts: bool = True
     paid_message_stars: int = 0
     created_at: datetime
@@ -50,6 +51,15 @@ class UserResponse(BaseModel):
             )
             if result.totp_enabled != enabled:
                 updates["totp_enabled"] = enabled
+        if hasattr(data, "last_seen_privacy") or hasattr(data, "show_last_seen"):
+            from app.services.last_seen_privacy import resolve_last_seen_privacy
+
+            privacy = resolve_last_seen_privacy(data)
+            if result.last_seen_privacy != privacy:
+                updates["last_seen_privacy"] = privacy
+            show = privacy != "nobody"
+            if result.show_last_seen != show:
+                updates["show_last_seen"] = show
         if hasattr(data, "email"):
             from app.services.legal_consent_service import consent_required
 
@@ -102,6 +112,10 @@ class UpdateUserRequest(BaseModel):
     bio: Optional[str] = None
     is_private: Optional[bool] = None
     show_last_seen: Optional[bool] = None
+    last_seen_privacy: Optional[str] = Field(
+        default=None,
+        description="everybody | contacts | nobody",
+    )
     show_read_receipts: Optional[bool] = None
     paid_message_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     avatar_url: Optional[str] = None

@@ -64,6 +64,8 @@ class User(Base):
     last_seen_at = Column(DateTime, nullable=True)
     # When False, last_seen_at is hidden from other users in chat payloads.
     show_last_seen = Column(Boolean, default=True, nullable=False)
+    # Telegram-like tiers: everybody | contacts | nobody (show_last_seen kept in sync).
+    last_seen_privacy = Column(String(20), default="everybody", nullable=False)
     # When False, read receipts (blue ticks / message.read) are hidden mutually.
     show_read_receipts = Column(Boolean, default=True, nullable=False)
     # Telegram-like: charge this many Stars per incoming DM (0 = free).

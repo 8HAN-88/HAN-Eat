@@ -307,6 +307,8 @@ def _enqueue_bot_webhook(
 def _brief(
     user: User,
     *,
+    viewer_id: Optional[int] = None,
+    db: Optional[Session] = None,
     is_group_admin: bool = False,
     is_group_creator: bool = False,
     can_manage_members: bool = False,
@@ -320,8 +322,10 @@ def _brief(
     send_restricted_until: Optional[datetime] = None,
     send_restriction_reason: Optional[str] = None,
 ) -> ChatUserBrief:
+    from app.services.last_seen_privacy import can_viewer_see_last_seen
+
     last_seen = user.last_seen_at
-    if not bool(getattr(user, "show_last_seen", True)):
+    if not can_viewer_see_last_seen(db, user, viewer_id):
         last_seen = None
     return ChatUserBrief(
         id=user.id,
@@ -772,7 +776,7 @@ def _conversation_response(
     return ConversationResponse(
         id=conv.id,
         type=conv.type,
-        peer=_brief(peer) if peer else None,
+        peer=_brief(peer, viewer_id=current_user.id, db=db) if peer else None,
         title=conv.title if conv.type in ("group", "saved") else None,
         avatar_url=getattr(conv, "avatar_url", None)
         if conv.type == "group"
@@ -780,7 +784,9 @@ def _conversation_response(
         member_count=row.get("member_count", 0),
         pending_join_requests_count=pending_join_requests_count,
         members_preview=[
-            _brief(u) for u in row.get("members_preview", []) if u
+            _brief(u, viewer_id=current_user.id, db=db)
+            for u in row.get("members_preview", [])
+            if u
         ],
         last_message=last_resp,
         unread_count=row.get("unread_count", 0),
@@ -1440,6 +1446,8 @@ async def list_chat_members(
         items=[
             _brief(
                 m["user"],
+                viewer_id=current_user.id,
+                db=db,
                 is_group_admin=m.get("is_group_admin", False),
                 is_group_creator=m.get("is_group_creator", False),
                 can_manage_members=m.get("can_manage_members", False),
@@ -3609,7 +3617,12 @@ async def list_message_readers(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
     return MessageReadersResponse(
-        items=[MessageReaderItem(user=_brief(u)) for u in users],
+        items=[
+            MessageReaderItem(
+                user=_brief(u, viewer_id=current_user.id, db=db)
+            )
+            for u in users
+        ],
         reader_count=len(users),
         other_member_count=other_count,
     )
@@ -3640,7 +3653,7 @@ async def list_message_reactions(
         items=[
             MessageReactionUserItem(
                 emoji=reaction_emoji,
-                user=_brief(user),
+                user=_brief(user, viewer_id=current_user.id, db=db),
                 stars_amount=stars_amount,
             )
             for reaction_emoji, user, stars_amount in rows

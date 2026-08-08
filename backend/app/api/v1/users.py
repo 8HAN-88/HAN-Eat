@@ -125,8 +125,15 @@ async def ping_presence(
     db.commit()
 
     # Fan out presence to peers of direct chats (respect last-seen privacy).
-    show_seen = bool(getattr(current_user, "show_last_seen", True))
-    if show_seen:
+    from app.models.conversation import Contact
+    from app.services.last_seen_privacy import (
+        PRIVACY_CONTACTS,
+        PRIVACY_NOBODY,
+        resolve_last_seen_privacy,
+    )
+
+    privacy = resolve_last_seen_privacy(current_user)
+    if privacy != PRIVACY_NOBODY:
         my_direct_ids = [
             cid
             for (cid,) in db.query(ConversationMember.conversation_id)
@@ -151,6 +158,17 @@ async def ping_presence(
                 .distinct()
                 .all()
             ]
+            if privacy == PRIVACY_CONTACTS and peer_ids:
+                contact_ids = {
+                    cid
+                    for (cid,) in db.query(Contact.contact_user_id)
+                    .filter(
+                        Contact.owner_user_id == current_user.id,
+                        Contact.contact_user_id.in_(peer_ids),
+                    )
+                    .all()
+                }
+                peer_ids = [uid for uid in peer_ids if uid in contact_ids]
             payload = {
                 "event": "user.presence",
                 "user_id": current_user.id,
@@ -366,8 +384,20 @@ async def update_user_profile(
         current_user.bio = request.bio
     if request.is_private is not None:
         current_user.is_private = request.is_private
-    if request.show_last_seen is not None:
-        current_user.show_last_seen = bool(request.show_last_seen)
+    if request.last_seen_privacy is not None or request.show_last_seen is not None:
+        from app.services.last_seen_privacy import apply_last_seen_privacy_update
+
+        try:
+            apply_last_seen_privacy_update(
+                current_user,
+                last_seen_privacy=request.last_seen_privacy,
+                show_last_seen=request.show_last_seen,
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="last_seen_privacy must be one of: everybody, contacts, nobody",
+            )
     if request.show_read_receipts is not None:
         current_user.show_read_receipts = bool(request.show_read_receipts)
     if request.paid_message_stars is not None:
@@ -837,6 +867,7 @@ async def list_blocked_users(
     db: Session = Depends(get_db),
 ):
     from app.schemas.chat import ChatUserBrief
+    from app.services.last_seen_privacy import can_viewer_see_last_seen
 
     svc = ChatService(db)
     users = svc.list_blocked_users(current_user.id)
@@ -849,7 +880,7 @@ async def list_blocked_users(
                 avatar_url=getattr(u, "avatar_url", None),
                 last_seen_at=(
                     getattr(u, "last_seen_at", None)
-                    if bool(getattr(u, "show_last_seen", True))
+                    if can_viewer_see_last_seen(db, u, current_user.id)
                     else None
                 ),
                 is_bot=bool(getattr(u, "is_bot", False)),
