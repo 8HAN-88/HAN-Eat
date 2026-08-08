@@ -1758,25 +1758,57 @@ async def list_chat_media(
     )
 
 
+def _parse_search_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Use YYYY-MM-DD",
+        ) from exc
+    if end_of_day:
+        return parsed.replace(hour=23, minute=59, second=59)
+    return parsed
+
+
 @router.get("/chats/messages/search", response_model=MessageSearchResponse)
 async def search_messages_global(
-    q: str = Query(..., min_length=2),
+    q: Optional[str] = Query(None),
     type: Optional[str] = Query(
         None,
         pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
     sender_id: Optional[int] = Query(None, ge=1),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    term = (q or "").strip()
+    date_from_obj = _parse_search_date(date_from)
+    date_to_obj = _parse_search_date(date_to, end_of_day=True)
+    if len(term) < 2 and date_from_obj is None and date_to_obj is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Provide q (min 2 chars) and/or date_from/date_to",
+        )
+    if 0 < len(term) < 2:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="q must be at least 2 characters",
+        )
     svc = ChatService(db)
     try:
         hits = svc.search_messages(
             current_user.id,
-            q,
+            term,
             msg_type=type,
             sender_id=sender_id,
+            date_from=date_from_obj,
+            date_to=date_to_obj,
             limit=limit,
         )
     except ValueError:
@@ -1790,24 +1822,41 @@ async def search_messages_global(
 )
 async def search_messages_in_chat(
     conversation_id: int,
-    q: str = Query(..., min_length=2),
+    q: Optional[str] = Query(None),
     type: Optional[str] = Query(
         None,
         pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
     ),
     sender_id: Optional[int] = Query(None, ge=1),
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(40, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    term = (q or "").strip()
+    date_from_obj = _parse_search_date(date_from)
+    date_to_obj = _parse_search_date(date_to, end_of_day=True)
+    if len(term) < 2 and date_from_obj is None and date_to_obj is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Provide q (min 2 chars) and/or date_from/date_to",
+        )
+    if 0 < len(term) < 2:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="q must be at least 2 characters",
+        )
     svc = ChatService(db)
     try:
         hits = svc.search_messages(
             current_user.id,
-            q,
+            term,
             conversation_id=conversation_id,
             msg_type=type,
             sender_id=sender_id,
+            date_from=date_from_obj,
+            date_to=date_to_obj,
             limit=limit,
         )
     except ValueError:

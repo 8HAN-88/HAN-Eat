@@ -2170,26 +2170,35 @@ class ChatService {
     int? conversationId,
     String? type,
     int? senderId,
+    DateTime? dateFrom,
+    DateTime? dateTo,
     int limit = 40,
   }) async {
     final q = query.trim();
-    if (q.length < 2) return const [];
+    String? fmt(DateTime? d) {
+      if (d == null) return null;
+      final local = DateTime(d.year, d.month, d.day);
+      String pad(int n) => n.toString().padLeft(2, '0');
+      return '${local.year}-${pad(local.month)}-${pad(local.day)}';
+    }
+
+    final fromKey = fmt(dateFrom);
+    final toKey = fmt(dateTo);
+    if (q.length < 2 && fromKey == null && toKey == null) return const [];
+    final params = <String, String>{
+      if (q.length >= 2) 'q': q,
+      if (type != null && type.isNotEmpty) 'type': type,
+      if (senderId != null) 'sender_id': '$senderId',
+      if (fromKey != null) 'date_from': fromKey,
+      if (toKey != null) 'date_to': toKey,
+      'limit': '$limit',
+    };
     final uri = conversationId == null
         ? Uri.parse('$_base/chats/messages/search').replace(
-            queryParameters: {
-              'q': q,
-              if (type != null && type.isNotEmpty) 'type': type,
-              if (senderId != null) 'sender_id': '$senderId',
-              'limit': '$limit',
-            },
+            queryParameters: params,
           )
         : Uri.parse('$_base/chats/$conversationId/messages/search').replace(
-            queryParameters: {
-              'q': q,
-              if (type != null && type.isNotEmpty) 'type': type,
-              if (senderId != null) 'sender_id': '$senderId',
-              'limit': '$limit',
-            },
+            queryParameters: params,
           );
     final response = await _get(uri);
     _ensureOk(response, 'Не удалось выполнить поиск по сообщениям');

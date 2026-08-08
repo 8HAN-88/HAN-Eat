@@ -67,6 +67,7 @@ import '../application/active_chat_session.dart';
 import '../application/chat_auto_delete.dart';
 import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
+import '../application/chat_search_date.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -363,6 +364,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   String _threadSearchQuery = '';
   _ThreadSearchFilter _threadSearchFilter = _ThreadSearchFilter.all;
   int? _threadSearchSenderId;
+  DateTime? _threadSearchDate;
   int _searchMatchIndex = 0;
   bool _searchAutoloading = false;
   int _searchBackfillLoads = 0;
@@ -6469,6 +6471,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _threadSearchQuery = '';
         _threadSearchFilter = _ThreadSearchFilter.all;
         _threadSearchSenderId = null;
+        _threadSearchDate = null;
         _searchMatchIndex = 0;
         _serverSearchHits = const [];
         _threadSearchController.clear();
@@ -6495,6 +6498,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _messageMatchesFilter(ChatMessage msg) {
     if (_threadSearchSenderId != null &&
         msg.senderId != _threadSearchSenderId) {
+      return false;
+    }
+    if (!messageMatchesSearchDate(msg.createdAt, _threadSearchDate)) {
       return false;
     }
     switch (_threadSearchFilter) {
@@ -6547,12 +6553,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool get _threadSearchHasCriteria {
     return _threadSearchQuery.trim().isNotEmpty ||
         _threadSearchFilter != _ThreadSearchFilter.all ||
-        _threadSearchSenderId != null;
+        _threadSearchSenderId != null ||
+        _threadSearchDate != null;
   }
 
   bool _serverHitMatchesFilters(ChatMessage msg) {
     if (_threadSearchSenderId != null &&
         msg.senderId != _threadSearchSenderId) {
+      return false;
+    }
+    if (!messageMatchesSearchDate(msg.createdAt, _threadSearchDate)) {
       return false;
     }
     return _messageMatchesFilter(msg);
@@ -6595,6 +6605,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final q = query.trim();
     final filter = _threadSearchFilter;
     final senderId = _threadSearchSenderId;
+    final dateDay = _threadSearchDate;
     final seq = ++_serverSearchSeq;
 
     // Filter-only media/files/links: full history via media API.
@@ -6611,8 +6622,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _ => const <String>[],
       };
       if (kinds.isEmpty) {
-        if (_serverSearchHits.isNotEmpty && mounted) {
-          setState(() => _serverSearchHits = const []);
+        if (dateDay == null) {
+          if (_serverSearchHits.isNotEmpty && mounted) {
+            setState(() => _serverSearchHits = const []);
+          }
+          return;
+        }
+        try {
+          final hits = await ChatService.searchMessages(
+            query: '',
+            conversationId: widget.conversationId,
+            type: _searchTypeForFilter(filter),
+            senderId: senderId,
+            dateFrom: dateDay,
+            dateTo: dateDay,
+            limit: 60,
+          );
+          if (!mounted || seq != _serverSearchSeq) return;
+          setState(() {
+            _serverSearchHits = [for (final hit in hits) hit.message];
+            if (_searchMatchIndex >= _searchMatchIds.length) {
+              _searchMatchIndex = 0;
+            }
+          });
+          _scrollToCurrentSearchMatch();
+        } catch (_) {
+          // Keep local matches if server search fails.
         }
         return;
       }
@@ -6628,6 +6663,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
           if (!mounted || seq != _serverSearchSeq) return;
           for (final msg in page.items) {
+            if (!messageMatchesSearchDate(msg.createdAt, dateDay)) continue;
             if (seen.add(msg.id)) merged.add(msg);
           }
         }
@@ -6652,6 +6688,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         type: _searchTypeForFilter(filter),
         senderId: senderId,
+        dateFrom: dateDay,
+        dateTo: dateDay,
         limit: 60,
       );
       if (!mounted || seq != _serverSearchSeq) return;
@@ -6694,7 +6732,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final normalized = value.trim().toLowerCase();
     final hasCriteria = normalized.isNotEmpty ||
         _threadSearchFilter != _ThreadSearchFilter.all ||
-        _threadSearchSenderId != null;
+        _threadSearchSenderId != null ||
+        _threadSearchDate != null;
     setState(() {
       _searchBackfillSeq++;
       _threadSearchQuery = value;
@@ -6713,6 +6752,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           normalized,
           _threadSearchFilter,
           _threadSearchSenderId,
+          _threadSearchDate,
         ),
       );
     }
@@ -6723,7 +6763,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final normalized = _threadSearchQuery.trim().toLowerCase();
     final hasCriteria = normalized.isNotEmpty ||
         value != _ThreadSearchFilter.all ||
-        _threadSearchSenderId != null;
+        _threadSearchSenderId != null ||
+        _threadSearchDate != null;
     setState(() {
       _searchBackfillSeq++;
       _threadSearchFilter = value;
@@ -6742,6 +6783,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           normalized,
           value,
           _threadSearchSenderId,
+          _threadSearchDate,
         ),
       );
     }
@@ -6827,7 +6869,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final normalized = _threadSearchQuery.trim().toLowerCase();
     final hasCriteria = normalized.isNotEmpty ||
         _threadSearchFilter != _ThreadSearchFilter.all ||
-        senderId != null;
+        senderId != null ||
+        _threadSearchDate != null;
     setState(() {
       _searchBackfillSeq++;
       _threadSearchSenderId = senderId;
@@ -6846,6 +6889,67 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           normalized,
           _threadSearchFilter,
           senderId,
+          _threadSearchDate,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickThreadSearchDate() async {
+    final now = DateTime.now();
+    final oldest = _messages.isNotEmpty
+        ? _dateOnly(_messages.first.createdAt)
+        : now.subtract(const Duration(days: 3650));
+    final firstDate =
+        oldest.isBefore(now) ? oldest : now.subtract(const Duration(days: 3650));
+    final lastDate = _dateOnly(now);
+    final initialCandidate = _threadSearchDate ??
+        (_messages.isNotEmpty
+            ? _dateOnly(_messages.last.createdAt)
+            : lastDate);
+    final initialDate = initialCandidate.isAfter(lastDate)
+        ? lastDate
+        : initialCandidate.isBefore(firstDate)
+            ? firstDate
+            : initialCandidate;
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDate: initialDate,
+      helpText: 'Фильтр по дате',
+    );
+    if (picked == null || !mounted) return;
+    _onThreadSearchDateChanged(_dateOnly(picked));
+  }
+
+  void _onThreadSearchDateChanged(DateTime? day) {
+    final next = day == null ? null : _dateOnly(day);
+    if (_threadSearchDate == next) return;
+    final normalized = _threadSearchQuery.trim().toLowerCase();
+    final hasCriteria = normalized.isNotEmpty ||
+        _threadSearchFilter != _ThreadSearchFilter.all ||
+        _threadSearchSenderId != null ||
+        next != null;
+    setState(() {
+      _searchBackfillSeq++;
+      _threadSearchDate = next;
+      _searchMatchIndex = 0;
+      _searchBackfillLoads = 0;
+      if (!hasCriteria) {
+        _searchAutoloading = false;
+        _serverSearchHits = const [];
+      }
+    });
+    _scrollToCurrentSearchMatch();
+    if (hasCriteria) {
+      unawaited(_runServerThreadSearch(_threadSearchQuery));
+      unawaited(
+        _backfillSearchFromHistory(
+          normalized,
+          _threadSearchFilter,
+          _threadSearchSenderId,
+          next,
         ),
       );
     }
@@ -6893,6 +6997,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     String normalizedQuery,
     _ThreadSearchFilter filter,
     int? senderId,
+    DateTime? dateDay,
   ) async {
     if (_searchMatchIds.isNotEmpty || !_hasMore) return;
     final seq = _searchBackfillSeq;
@@ -6909,6 +7014,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _threadSearchQuery.trim().toLowerCase() == normalizedQuery &&
         _threadSearchFilter == filter &&
         _threadSearchSenderId == senderId &&
+        _threadSearchDate == dateDay &&
         _searchMatchIds.isEmpty &&
         _hasMore) {
       if (_loading || _loadingMore) {
@@ -6926,6 +7032,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_threadSearchQuery.trim().toLowerCase() == normalizedQuery &&
         _threadSearchFilter == filter &&
         _threadSearchSenderId == senderId &&
+        _threadSearchDate == dateDay &&
         _searchMatchIds.isNotEmpty) {
       _scrollToCurrentSearchMatch();
     }
@@ -6954,6 +7061,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final myId = AuthService.instance.currentUser?.id;
     if (myId != null && senderId == myId) return 'Я';
     return _senderNames[senderId] ?? 'Пользователь';
+  }
+
+  String _searchDateLabel() {
+    final day = _threadSearchDate;
+    if (day == null) return 'Дата';
+    return searchDateChipLabel(day);
   }
 
   List<ChatMessage> get _visibleMessages {
@@ -13569,6 +13682,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                   VisualDensity.compact,
                                             ),
                                           ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 6,
+                                          ),
+                                          child: FilterChip(
+                                            avatar: Icon(
+                                              _threadSearchDate == null
+                                                  ? Icons.calendar_today_outlined
+                                                  : Icons.calendar_today,
+                                              size: 16,
+                                              color: _threadSearchDate == null
+                                                  ? chipLabelColor
+                                                  : chipSelectedLabelColor,
+                                            ),
+                                            label: Text(_searchDateLabel()),
+                                            selected: _threadSearchDate != null,
+                                            onSelected: (_) =>
+                                                unawaited(_pickThreadSearchDate()),
+                                            onDeleted: _threadSearchDate == null
+                                                ? null
+                                                : () =>
+                                                    _onThreadSearchDateChanged(
+                                                      null,
+                                                    ),
+                                            deleteIcon: const Icon(
+                                              Icons.close,
+                                              size: 16,
+                                            ),
+                                            shape: StadiumBorder(
+                                              side: BorderSide(
+                                                color: _threadSearchDate != null
+                                                    ? chipSelectedColor
+                                                    : chipBorderColor,
+                                              ),
+                                            ),
+                                            backgroundColor: Colors.transparent,
+                                            selectedColor: chipSelectedColor,
+                                            labelStyle: TextStyle(
+                                              color: _threadSearchDate != null
+                                                  ? chipSelectedLabelColor
+                                                  : chipLabelColor,
+                                              fontWeight:
+                                                  _threadSearchDate != null
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w500,
+                                            ),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
