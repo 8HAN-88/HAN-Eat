@@ -27,6 +27,7 @@ import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
 import '../../../navigation/application/shell_tab_visibility.dart';
 import '../../application/chat_realtime_signals.dart';
 import '../../application/chats_hub_refresh_provider.dart';
+import '../../application/join_requests_bulk.dart';
 import '../../widgets/inbox_slidable_tile.dart';
 import '../chat_archived_screen.dart';
 import '../chat_folder_edit_screen.dart';
@@ -1137,6 +1138,49 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     }
   }
 
+  Future<void> _reviewAllJoinInbox({required bool approve}) async {
+    final items = List<ChatJoinRequestsInboxItem>.from(_joinRequestsInbox);
+    if (items.isEmpty) return;
+    if (!approve) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Отклонить все заявки?'),
+          content: Text('Будет отклонено: ${items.length}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Отклонить все'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final result = await reviewJoinRequestsBulk<ChatJoinRequestsInboxItem>(
+      items: items,
+      review: (item) => ChatService.reviewGroupJoinRequest(
+        conversationId: item.conversation.id,
+        requestId: item.id,
+        approve: approve,
+      ),
+    );
+    if (!mounted) return;
+    await _load(silent: true);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          joinRequestsBulkSnackMessage(approve: approve, result: result),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAllJoinRequestsInbox() async {
     if (_joinRequestsInbox.isEmpty) return;
     await showModalBottomSheet<void>(
@@ -1151,10 +1195,32 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Text(
-                    'Заявки в модерацию (${_joinRequestsInbox.length})',
-                    style: Theme.of(ctx).textTheme.titleMedium,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Заявки в модерацию (${_joinRequestsInbox.length})',
+                          style: Theme.of(ctx).textTheme.titleMedium,
+                        ),
+                      ),
+                      if (_joinRequestsInbox.length > 1) ...[
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _reviewAllJoinInbox(approve: false);
+                          },
+                          child: const Text('Отклонить все'),
+                        ),
+                        FilledButton(
+                          onPressed: () async {
+                            Navigator.pop(ctx);
+                            await _reviewAllJoinInbox(approve: true);
+                          },
+                          child: const Text('Принять все'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 Expanded(

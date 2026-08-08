@@ -14,6 +14,7 @@ import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../../widgets/app_avatar.dart';
+import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
 import 'chat_media_gallery_screen.dart';
 import 'widgets/chat_mute_duration_sheet.dart';
@@ -1528,119 +1529,10 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          Future<List<ChatGroupJoinRequest>> load() =>
-              ChatService.listGroupJoinRequests(
-                _conversation.id,
-                status: 'pending',
-              );
-          return FutureBuilder<List<ChatGroupJoinRequest>>(
-            future: load(),
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const SafeArea(
-                  child: SizedBox(
-                    height: 260,
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                );
-              }
-              if (snap.hasError) {
-                return SafeArea(
-                  child: SizedBox(
-                    height: 260,
-                    child: Center(child: Text(userVisibleError(snap.error!))),
-                  ),
-                );
-              }
-              final items = snap.data ?? const <ChatGroupJoinRequest>[];
-              return SafeArea(
-                child: SizedBox(
-                  height: 440,
-                  child: items.isEmpty
-                      ? const Center(child: Text('Нет активных заявок'))
-                      : ListView.builder(
-                          itemCount: items.length,
-                          itemBuilder: (context, index) {
-                            final row = items[index];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                child: Text(
-                                  row.user.displayName.characters.first
-                                      .toUpperCase(),
-                                ),
-                              ),
-                              title: Text(row.user.displayName),
-                              subtitle: Text(
-                                'Запрос от ${row.requestedAt.day.toString().padLeft(2, '0')}.${row.requestedAt.month.toString().padLeft(2, '0')}.${row.requestedAt.year}',
-                              ),
-                              trailing: Wrap(
-                                spacing: 6,
-                                children: [
-                                  TextButton(
-                                    onPressed: () async {
-                                      try {
-                                        await ChatService
-                                            .reviewGroupJoinRequest(
-                                          conversationId: _conversation.id,
-                                          requestId: row.id,
-                                          approve: false,
-                                        );
-                                        setModalState(() {});
-                                        if (mounted) {
-                                          await _load();
-                                        }
-                                      } catch (e) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content:
-                                                  Text(userVisibleError(e)),
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    child: const Text('Отклонить'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () async {
-                                      try {
-                                        await ChatService
-                                            .reviewGroupJoinRequest(
-                                          conversationId: _conversation.id,
-                                          requestId: row.id,
-                                          approve: true,
-                                        );
-                                        setModalState(() {});
-                                        if (mounted) {
-                                          await _load();
-                                        }
-                                      } catch (e) {
-                                        if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content:
-                                                  Text(userVisibleError(e)),
-                                            ),
-                                          );
-                                        }
-                                      }
-                                    },
-                                    child: const Text('Принять'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              );
-            },
-          );
+      builder: (ctx) => _GroupJoinRequestsSheet(
+        conversationId: _conversation.id,
+        onChanged: () {
+          if (mounted) unawaited(_load());
         },
       ),
     );
@@ -2134,6 +2026,206 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _GroupJoinRequestsSheet extends StatefulWidget {
+  const _GroupJoinRequestsSheet({
+    required this.conversationId,
+    required this.onChanged,
+  });
+
+  final int conversationId;
+  final VoidCallback onChanged;
+
+  @override
+  State<_GroupJoinRequestsSheet> createState() =>
+      _GroupJoinRequestsSheetState();
+}
+
+class _GroupJoinRequestsSheetState extends State<_GroupJoinRequestsSheet> {
+  List<ChatGroupJoinRequest>? _items;
+  Object? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_reload());
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _error = null;
+      _items = null;
+    });
+    try {
+      final rows = await ChatService.listGroupJoinRequests(
+        widget.conversationId,
+        status: 'pending',
+      );
+      if (!mounted) return;
+      setState(() => _items = rows);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e);
+    }
+  }
+
+  Future<void> _reviewOne(ChatGroupJoinRequest row, {required bool approve}) async {
+    try {
+      await ChatService.reviewGroupJoinRequest(
+        conversationId: widget.conversationId,
+        requestId: row.id,
+        approve: approve,
+      );
+      if (!mounted) return;
+      setState(() {
+        _items = [...?_items]..removeWhere((r) => r.id == row.id);
+      });
+      widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _reviewAll({required bool approve}) async {
+    final items = List<ChatGroupJoinRequest>.from(_items ?? const []);
+    if (items.isEmpty || _busy) return;
+    if (!approve) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Отклонить все заявки?'),
+          content: Text('Будет отклонено: ${items.length}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Отклонить все'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    setState(() => _busy = true);
+    final result = await reviewJoinRequestsBulk<ChatGroupJoinRequest>(
+      items: items,
+      review: (row) => ChatService.reviewGroupJoinRequest(
+        conversationId: widget.conversationId,
+        requestId: row.id,
+        approve: approve,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    widget.onChanged();
+    await _reload();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          joinRequestsBulkSnackMessage(approve: approve, result: result),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    return SafeArea(
+      child: SizedBox(
+        height: 440,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      items == null
+                          ? 'Заявки'
+                          : 'Заявки (${items.length})',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (items != null && items.length > 1) ...[
+                    TextButton(
+                      onPressed: _busy ? null : () => _reviewAll(approve: false),
+                      child: const Text('Отклонить все'),
+                    ),
+                    FilledButton(
+                      onPressed: _busy ? null : () => _reviewAll(approve: true),
+                      child: const Text('Принять все'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (_busy) const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: _error != null
+                  ? Center(child: Text(userVisibleError(_error!)))
+                  : items == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : items.isEmpty
+                          ? const Center(child: Text('Нет активных заявок'))
+                          : ListView.builder(
+                              itemCount: items.length,
+                              itemBuilder: (context, index) {
+                                final row = items[index];
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    child: Text(
+                                      row.user.displayName.characters.first
+                                          .toUpperCase(),
+                                    ),
+                                  ),
+                                  title: Text(row.user.displayName),
+                                  subtitle: Text(
+                                    'Запрос от ${row.requestedAt.day.toString().padLeft(2, '0')}.${row.requestedAt.month.toString().padLeft(2, '0')}.${row.requestedAt.year}',
+                                  ),
+                                  trailing: Wrap(
+                                    spacing: 6,
+                                    children: [
+                                      TextButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : () => _reviewOne(
+                                                  row,
+                                                  approve: false,
+                                                ),
+                                        child: const Text('Отклонить'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : () => _reviewOne(
+                                                  row,
+                                                  approve: true,
+                                                ),
+                                        child: const Text('Принять'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
