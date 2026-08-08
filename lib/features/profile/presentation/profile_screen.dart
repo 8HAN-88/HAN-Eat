@@ -633,9 +633,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           children: [
                             for (final g in _profileGifts.take(12))
                               Tooltip(
-                                message: g.serialLabel.isNotEmpty
-                                    ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
-                                    : '${g.title} · ${g.stars} ★',
+                                message: () {
+                                  final base = g.serialLabel.isNotEmpty
+                                      ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
+                                      : '${g.title} · ${g.stars} ★';
+                                  return g.isAnonymous
+                                      ? '$base · от Анонима'
+                                      : base;
+                                }(),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

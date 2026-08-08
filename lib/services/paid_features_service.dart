@@ -298,6 +298,7 @@ class PaidFeaturesService {
     required int giftId,
     required int conversationId,
     String? message,
+    bool hideName = false,
     String? idempotencyKey,
   }) async {
     final response = await http.post(
@@ -307,6 +308,7 @@ class PaidFeaturesService {
         'conversation_id': conversationId,
         if (message != null && message.trim().isNotEmpty)
           'message': message.trim(),
+        if (hideName) 'hide_name': true,
         if (idempotencyKey != null && idempotencyKey.isNotEmpty)
           'idempotency_key': idempotencyKey,
       }),
@@ -508,6 +510,21 @@ class PaidFeaturesService {
       );
     }
     _throwForResponse(response, 'Не удалось завершить розыгрыш');
+  }
+
+  static Future<StarGiveawayWinnersResult> listGiveawayWinners(
+    int giveawayId,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/giveaways/$giveawayId/winners'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return StarGiveawayWinnersResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось загрузить победителей');
   }
 
   static Future<StarInvoice> createBotInvoice(
@@ -860,6 +877,7 @@ class UserStarGift {
     this.note,
     this.isDisplayed = true,
     this.isCollectible = false,
+    this.isAnonymous = false,
     this.serial,
     this.transferredFromUserId,
     this.upgradeStars = 0,
@@ -882,6 +900,7 @@ class UserStarGift {
   final String status;
   final bool isDisplayed;
   final bool isCollectible;
+  final bool isAnonymous;
   final int? serial;
   final int? transferredFromUserId;
   final int upgradeStars;
@@ -921,6 +940,7 @@ class UserStarGift {
         status: json['status'] as String? ?? 'held',
         isDisplayed: json['is_displayed'] as bool? ?? true,
         isCollectible: json['is_collectible'] as bool? ?? false,
+        isAnonymous: json['is_anonymous'] as bool? ?? false,
         serial: json['serial'] as int?,
         transferredFromUserId: json['transferred_from_user_id'] as int?,
         upgradeStars: json['upgrade_stars'] as int? ?? 0,
@@ -1065,6 +1085,66 @@ class StarGiveaway {
         joinedByMe: json['joined_by_me'] as bool? ?? false,
         isWinner: json['is_winner'] as bool? ?? false,
       );
+}
+
+class StarGiveawayWinner {
+  const StarGiveawayWinner({
+    required this.userId,
+    required this.name,
+    required this.prizeStars,
+    this.username,
+    this.avatarUrl,
+  });
+
+  final int userId;
+  final String name;
+  final String? username;
+  final String? avatarUrl;
+  final int prizeStars;
+
+  String get displayName {
+    final u = username?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    return name;
+  }
+
+  factory StarGiveawayWinner.fromJson(Map<String, dynamic> json) =>
+      StarGiveawayWinner(
+        userId: json['user_id'] as int? ?? 0,
+        name: json['name'] as String? ?? 'User',
+        username: json['username'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
+        prizeStars: json['prize_stars'] as int? ?? 0,
+      );
+}
+
+class StarGiveawayWinnersResult {
+  const StarGiveawayWinnersResult({
+    required this.giveawayId,
+    required this.status,
+    required this.prizeStars,
+    required this.winnersCount,
+    required this.winners,
+  });
+
+  final int giveawayId;
+  final String status;
+  final int prizeStars;
+  final int winnersCount;
+  final List<StarGiveawayWinner> winners;
+
+  factory StarGiveawayWinnersResult.fromJson(Map<String, dynamic> json) {
+    final raw = json['winners'] as List<dynamic>? ?? const [];
+    return StarGiveawayWinnersResult(
+      giveawayId: json['giveaway_id'] as int? ?? 0,
+      status: json['status'] as String? ?? '',
+      prizeStars: json['prize_stars'] as int? ?? 0,
+      winnersCount: json['winners_count'] as int? ?? 0,
+      winners: raw
+          .map((e) => StarGiveawayWinner.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false),
+    );
+  }
 }
 
 class StarInvoice {

@@ -272,6 +272,106 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
     }
   }
 
+  Future<void> _showWinners(StarGiveaway g) async {
+    setState(() => _busy.add(g.id));
+    try {
+      final result = await PaidFeaturesService.listGiveawayWinners(g.id);
+      if (!mounted) return;
+      setState(() => _busy.remove(g.id));
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) {
+          final scheme = Theme.of(ctx).colorScheme;
+          final bottom = MediaQuery.paddingOf(ctx).bottom;
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Победители',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${result.prizeStars} ★ каждому · ${result.winners.length} из ${result.winnersCount}',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 12),
+                  if (result.winners.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(
+                        result.status == 'completed'
+                            ? 'Победителей нет — никто не участвовал.'
+                            : 'Розыгрыш ещё не завершён.',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: result.winners.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, i) {
+                          final w = result.winners[i];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundImage: w.avatarUrl != null &&
+                                      w.avatarUrl!.trim().isNotEmpty
+                                  ? NetworkImage(w.avatarUrl!)
+                                  : null,
+                              child: w.avatarUrl == null ||
+                                      w.avatarUrl!.trim().isEmpty
+                                  ? Text(
+                                      w.name.trim().isNotEmpty
+                                          ? w.name.trim()[0].toUpperCase()
+                                          : '?',
+                                    )
+                                  : null,
+                            ),
+                            title: Text(
+                              w.name,
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            subtitle: w.username != null &&
+                                    w.username!.trim().isNotEmpty
+                                ? Text('@${w.username!.replaceFirst('@', '')}')
+                                : null,
+                            trailing: Text(
+                              '+${w.prizeStars} ★',
+                              style: TextStyle(
+                                color: scheme.secondary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(g.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -411,6 +511,13 @@ class _ChannelGiveawaysScreenState extends State<ChannelGiveawaysScreen> {
                         child: const Text('Отменить'),
                       ),
                     ],
+                    if (g.status == 'completed')
+                      OutlinedButton.icon(
+                        onPressed:
+                            busy ? null : () => unawaited(_showWinners(g)),
+                        icon: const Icon(Icons.emoji_events_outlined, size: 18),
+                        label: const Text('Победители'),
+                      ),
                   ],
                 ),
               ],
