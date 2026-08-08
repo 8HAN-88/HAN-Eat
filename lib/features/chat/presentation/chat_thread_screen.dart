@@ -7604,71 +7604,111 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _tipPeerWithStars() async {
     final peer = _conversation.peer;
     if (peer == null) return;
+    const presets = <int>[1, 5, 10, 50, 100, 250];
     final amountController = TextEditingController(text: '50');
     final messageController = TextEditingController();
+    var selectedPreset = 50;
     final payload = await showDialog<({int amount, String? message})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Отправить звёзды ${peer.displayName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Количество звёзд',
-                hintText: 'например, 50',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('Отправить звёзды ${peer.displayName}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Как в Telegram: звёзды появятся сообщением в чате.',
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
               ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final n in presets)
+                    ChoiceChip(
+                      label: Text('$n ★'),
+                      selected: selectedPreset == n,
+                      onSelected: (_) {
+                        setLocal(() {
+                          selectedPreset = n;
+                          amountController.text = '$n';
+                        });
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Количество звёзд',
+                  hintText: 'например, 50',
+                ),
+                onChanged: (v) {
+                  final n = int.tryParse(v.trim());
+                  setLocal(() {
+                    selectedPreset = (n != null && presets.contains(n)) ? n : -1;
+                  });
+                },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: messageController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Сообщение (опционально)',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: messageController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Сообщение (опционально)',
-              ),
+            FilledButton(
+              onPressed: () {
+                final amount = int.tryParse(amountController.text.trim()) ?? 0;
+                if (amount <= 0) return;
+                Navigator.pop(
+                  ctx,
+                  (
+                    amount: amount,
+                    message: messageController.text.trim().isEmpty
+                        ? null
+                        : messageController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('Отправить'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final amount = int.tryParse(amountController.text.trim()) ?? 0;
-              if (amount <= 0) return;
-              Navigator.pop(
-                ctx,
-                (
-                  amount: amount,
-                  message: messageController.text.trim().isEmpty
-                      ? null
-                      : messageController.text.trim(),
-                ),
-              );
-            },
-            child: const Text('Отправить'),
-          ),
-        ],
       ),
     );
     amountController.dispose();
     messageController.dispose();
     if (payload == null) return;
     try {
-      final balance = await PaidFeaturesService.donate(
+      final result = await PaidFeaturesService.donate(
         recipientId: peer.id,
         amountStars: payload.amount,
         message: payload.message,
       );
       if (!mounted) return;
+      if (result.messageId != null) {
+        await _pollNew();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Отправлено ${payload.amount} звёзд. Баланс: $balance',
+            'Отправлено ${payload.amount} ★. Баланс: ${result.balance}',
           ),
         ),
       );
@@ -16257,6 +16297,53 @@ class _Bubble extends StatelessWidget {
                 Text(
                   shortData,
                   style: TextStyle(color: fg.withValues(alpha: 0.85)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    } else if (message.type == 'stars_tip') {
+      Map<String, dynamic>? tip;
+      try {
+        final decoded = jsonDecode(message.content);
+        if (decoded is Map<String, dynamic>) tip = decoded;
+      } catch (_) {}
+      final amount = tip?['amount'] as int? ??
+          (tip?['amount'] is num ? (tip!['amount'] as num).toInt() : 0);
+      final note = tip?['message'] as String?;
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: quoteBg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 36)),
+              const SizedBox(height: 6),
+              Text(
+                mine ? 'Вы отправили звёзды' : 'Вам отправили звёзды',
+                style: TextStyle(color: fg, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '$amount ★',
+                style: TextStyle(
+                  color: scheme.secondary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              if (note != null && note.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  note.trim(),
+                  style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],
             ],

@@ -62,6 +62,8 @@ class ChatHubTile extends StatelessWidget {
         return Icons.emoji_emotions_outlined;
       case 'gift':
         return Icons.card_giftcard_rounded;
+      case 'stars_tip':
+        return Icons.star_rounded;
       case 'story_reply':
         return Icons.auto_awesome_rounded;
       case 'location':
@@ -577,6 +579,10 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
     final emoji = _giftEmojiFromContent(msg.content);
     return emoji == null ? 'Подарок' : 'Подарок $emoji';
   }
+  if (msg.type == 'stars_tip') {
+    final amount = _starsTipAmountFromContent(msg.content);
+    return amount == null ? 'Звёзды' : '$amount ★';
+  }
   if (msg.type == 'story_reply' ||
       ChatStoryReplyPayload.tryParse(msg.content) != null) {
     final reply = ChatStoryReplyPayload.tryParse(msg.content);
@@ -618,6 +624,20 @@ String? _giftEmojiFromContent(String content) {
     if (data is Map && data['emoji'] is String) {
       final emoji = (data['emoji'] as String).trim();
       return emoji.isEmpty ? null : emoji;
+    }
+  } catch (_) {}
+  return null;
+}
+
+int? _starsTipAmountFromContent(String content) {
+  final raw = content.trim();
+  if (!raw.startsWith('{')) return null;
+  try {
+    final data = jsonDecode(raw);
+    if (data is Map) {
+      final amount = data['amount'];
+      if (amount is int) return amount;
+      if (amount is num) return amount.toInt();
     }
   } catch (_) {}
   return null;

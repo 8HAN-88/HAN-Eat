@@ -591,14 +591,16 @@ class _NewPostCardState extends State<NewPostCard>
 
     setState(() => _isSendingDonation = true);
     try {
-      final balance = await PaidFeaturesService.donate(
+      final result = await PaidFeaturesService.donate(
         recipientId: _displayPost.userId,
         amountStars: amount,
         message: messageController.text,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Донат отправлен. Баланс: $balance ★')),
+        SnackBar(
+          content: Text('Донат отправлен. Баланс: ${result.balance} ★'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
