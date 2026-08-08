@@ -9,6 +9,7 @@ import '../core/share/system_share.dart';
 import '../services/server_config.dart';
 import 'api_error_parser.dart';
 import 'file_helper.dart';
+import 'media_share_caption.dart';
 
 /// Download / share chat media with Telegram-like actions.
 class MediaDownloadHelper {
@@ -56,15 +57,18 @@ class MediaDownloadHelper {
     BuildContext context, {
     required String rawUrl,
     String? subject,
+    String? caption,
   }) async {
     final url = resolveUrl(rawUrl);
     if (url.isEmpty) return;
+    final shareCaption = normalizeMediaShareCaption(caption);
     try {
       if (kIsWeb) {
+        final text = shareCaption == null ? url : '$shareCaption\n$url';
         await SystemShare.shareText(
           context,
-          text: url,
-          subject: subject,
+          text: text,
+          subject: subject ?? shareCaption,
           webSnackBarText: 'Ссылка скопирована',
         );
         return;
@@ -79,7 +83,8 @@ class MediaDownloadHelper {
       if (!context.mounted) return;
       await Share.shareXFiles(
         [XFile(path, name: name)],
-        subject: subject ?? name,
+        text: shareCaption,
+        subject: subject ?? shareCaption ?? name,
         sharePositionOrigin: SystemShare.defaultShareOrigin(context),
       );
     } catch (e) {
@@ -95,12 +100,16 @@ class MediaDownloadHelper {
   }
 
   /// Save/download: open URL on web; native share sheet so user can Save Image.
+  ///
+  /// When [caption] is set it is attached to the share/save sheet (Telegram-like).
   static Future<void> saveMedia(
     BuildContext context, {
     required String rawUrl,
+    String? caption,
   }) async {
     final url = resolveUrl(rawUrl);
     if (url.isEmpty) return;
+    final shareCaption = normalizeMediaShareCaption(caption);
     try {
       if (kIsWeb) {
         final uri = Uri.tryParse(url);
@@ -119,8 +128,8 @@ class MediaDownloadHelper {
       if (!context.mounted) return;
       await Share.shareXFiles(
         [XFile(path, name: name)],
-        text: 'Сохранить медиа',
-        subject: name,
+        text: shareCaption ?? 'Сохранить медиа',
+        subject: shareCaption ?? name,
         sharePositionOrigin: SystemShare.defaultShareOrigin(context),
       );
     } catch (e) {

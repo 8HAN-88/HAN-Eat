@@ -9,6 +9,8 @@ import '../utils/media_download_helper.dart';
 /// Полноэкранный просмотрщик изображений с возможностью листания (как в Telegram)
 class FullscreenImageViewer extends StatefulWidget {
   final List<String> imageUrls;
+  /// Optional captions aligned with [imageUrls] (Telegram save/share with caption).
+  final List<String?>? captions;
   final int initialIndex;
   final String? heroTag;
   /// When false (protect content), hide save/share actions.
@@ -17,6 +19,7 @@ class FullscreenImageViewer extends StatefulWidget {
   const FullscreenImageViewer({
     super.key,
     required this.imageUrls,
+    this.captions,
     this.initialIndex = 0,
     this.heroTag,
     this.allowSaveShare = true,
@@ -52,18 +55,34 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer> {
 
   String _currentRawUrl() => widget.imageUrls[_currentIndex].trim();
 
+  String? _currentCaption() {
+    final caps = widget.captions;
+    if (caps == null || _currentIndex < 0 || _currentIndex >= caps.length) {
+      return null;
+    }
+    return caps[_currentIndex];
+  }
+
   Future<void> _shareCurrent() async {
     if (!widget.allowSaveShare) return;
     final raw = _currentRawUrl();
     if (raw.isEmpty) return;
-    await MediaDownloadHelper.shareMedia(context, rawUrl: raw);
+    await MediaDownloadHelper.shareMedia(
+      context,
+      rawUrl: raw,
+      caption: _currentCaption(),
+    );
   }
 
   Future<void> _saveCurrent() async {
     if (!widget.allowSaveShare) return;
     final raw = _currentRawUrl();
     if (raw.isEmpty) return;
-    await MediaDownloadHelper.saveMedia(context, rawUrl: raw);
+    await MediaDownloadHelper.saveMedia(
+      context,
+      rawUrl: raw,
+      caption: _currentCaption(),
+    );
   }
 
   @override
@@ -348,6 +367,7 @@ class _FullscreenMediaImageState extends State<_FullscreenMediaImage> {
 void showFullscreenImageViewer(
   BuildContext context, {
   required List<String> imageUrls,
+  List<String?>? captions,
   int initialIndex = 0,
   String? heroTag,
   bool allowSaveShare = true,
@@ -356,6 +376,7 @@ void showFullscreenImageViewer(
     MaterialPageRoute(
       builder: (context) => FullscreenImageViewer(
         imageUrls: imageUrls,
+        captions: captions,
         initialIndex: initialIndex,
         heroTag: heroTag,
         allowSaveShare: allowSaveShare,
