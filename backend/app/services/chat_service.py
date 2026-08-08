@@ -2681,10 +2681,13 @@ class ChatService:
         conversation_id: Optional[int] = None,
         msg_type: Optional[str] = None,
         sender_id: Optional[int] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
         limit: int = 40,
     ) -> List[dict]:
         term = (query or "").strip()
-        if len(term) < 2:
+        has_date = date_from is not None or date_to is not None
+        if len(term) < 2 and not has_date:
             return []
 
         member_conv_ids = [
@@ -2708,23 +2711,31 @@ class ChatService:
             .filter(MessageHide.user_id == user_id)
             .subquery()
         )
-        q = (
-            self.db.query(Message)
-            .filter(
-                Message.deleted_at.is_(None),
-                Message.conversation_id.in_(conv_ids),
-                ~Message.id.in_(hidden_subq),
+        filters = [
+            Message.deleted_at.is_(None),
+            Message.conversation_id.in_(conv_ids),
+            ~Message.id.in_(hidden_subq),
+        ]
+        if len(term) >= 2:
+            filters.append(
                 or_(
                     Message.content.ilike(f"%{term}%"),
                     Message.media_url.ilike(f"%{term}%"),
-                ),
+                )
             )
+        q = (
+            self.db.query(Message)
+            .filter(*filters)
             .order_by(Message.id.desc())
         )
         if msg_type:
             q = q.filter(Message.type == msg_type)
         if sender_id is not None:
             q = q.filter(Message.sender_id == int(sender_id))
+        if date_from is not None:
+            q = q.filter(Message.created_at >= date_from)
+        if date_to is not None:
+            q = q.filter(Message.created_at <= date_to)
 
         rows = q.limit(limit).all()
         if not rows:
@@ -2748,7 +2759,10 @@ class ChatService:
         lower_term = term.lower()
         for msg in rows:
             text = msg.content or ""
-            idx = text.lower().find(lower_term)
+            if lower_term:
+                idx = text.lower().find(lower_term)
+            else:
+                idx = -1
             if idx >= 0:
                 start = max(0, idx - 40)
                 end = min(len(text), idx + len(term) + 70)
