@@ -74,6 +74,7 @@ class MessageResponse(BaseModel):
     reactions: List["MessageReactionSummary"] = []
     effect_id: Optional[str] = None
     topic_id: Optional[int] = None
+    is_anonymous: bool = False
 
     class Config:
         from_attributes = True
@@ -253,6 +254,8 @@ class SendMessageRequest(BaseModel):
     # Telegram-like send effect: confetti | fireworks | hearts | celebration | thumbs_up
     effect_id: Optional[str] = Field(default=None, max_length=32)
     topic_id: Optional[int] = None
+    # Group admins may post as the group title.
+    anonymous: bool = False
 
 
 class ScheduleMessageRequest(BaseModel):

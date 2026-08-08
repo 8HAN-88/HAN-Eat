@@ -660,6 +660,7 @@ class ChatService {
     bool disableWebpagePreview = false,
     String? effectId,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -671,6 +672,7 @@ class ChatService {
       disableWebpagePreview: disableWebpagePreview,
       effectId: effectId,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -681,6 +683,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -690,6 +693,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -880,6 +884,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -890,6 +895,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -905,6 +911,7 @@ class ChatService {
     bool isPaid = false,
     int priceStars = 0,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -919,6 +926,7 @@ class ChatService {
       isPaid: isPaid,
       priceStars: priceStars,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -932,6 +940,7 @@ class ChatService {
     bool isPaid = false,
     int priceStars = 0,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -944,6 +953,7 @@ class ChatService {
       isPaid: isPaid,
       priceStars: priceStars,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -959,6 +969,7 @@ class ChatService {
     bool isPaid = false,
     int priceStars = 0,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -973,6 +984,7 @@ class ChatService {
       isPaid: isPaid,
       priceStars: priceStars,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -984,6 +996,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -994,6 +1007,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -1005,6 +1019,7 @@ class ChatService {
     String? clientMessageId,
     bool silent = false,
     int? topicId,
+    bool anonymous = false,
   }) async {
     return _send(
       conversationId: conversationId,
@@ -1015,6 +1030,7 @@ class ChatService {
       clientMessageId: clientMessageId,
       silent: silent,
       topicId: topicId,
+      anonymous: anonymous,
     );
   }
 
@@ -1162,6 +1178,7 @@ class ChatService {
     int priceStars = 0,
     String? effectId,
     int? topicId,
+    bool anonymous = false,
   }) async {
     // Fire immediately — never await a global rate-limit pause.
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
@@ -1185,6 +1202,7 @@ class ChatService {
         if (isPaid && priceStars > 0) 'price_stars': priceStars,
         if (effectId != null && effectId.isNotEmpty) 'effect_id': effectId,
         if (topicId != null) 'topic_id': topicId,
+        if (anonymous) 'anonymous': true,
       }),
     );
     _ensureOk(response, 'Не удалось отправить сообщение');

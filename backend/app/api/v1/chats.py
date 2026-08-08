@@ -643,11 +643,32 @@ def _message_response(
             purchased = False
         if not purchased:
             media_url = None
+    from app.services.anonymous_admin import resolve_anonymous_sender_display
+
+    is_anonymous = bool(getattr(msg, "is_anonymous", False))
+    viewer_is_admin = False
+    if (
+        is_anonymous
+        and conv is not None
+        and conv.type == "group"
+        and svc is not None
+    ):
+        viewer_is_admin = bool(
+            conv.created_by_user_id == current_user_id
+            or svc._is_group_admin(conv.id, current_user_id)
+        )
+    display_name, anon_flag = resolve_anonymous_sender_display(
+        is_anonymous=is_anonymous,
+        group_title=getattr(conv, "title", None) if conv is not None else None,
+        real_sender_name=_sender_name(sender),
+        viewer_is_sender=is_mine,
+        viewer_is_admin=viewer_is_admin,
+    )
     return MessageResponse(
         id=msg.id,
         conversation_id=msg.conversation_id,
         sender_id=msg.sender_id,
-        sender_name=_sender_name(sender),
+        sender_name=display_name,
         type=msg.type,
         content=content,
         media_url=media_url,
@@ -674,6 +695,7 @@ def _message_response(
         reactions=reactions or [],
         effect_id=getattr(msg, "effect_id", None),
         topic_id=getattr(msg, "topic_id", None),
+        is_anonymous=anon_flag,
     )
 
 
@@ -1935,6 +1957,7 @@ async def send_message(
             price_stars=price_stars,
             effect_id=body.effect_id,
             topic_id=body.topic_id,
+            is_anonymous=bool(body.anonymous),
         )
         # Paid-DM fee is charged inside send_message (before notify).
         db.commit()
@@ -1975,6 +1998,8 @@ async def send_message(
         code = str(e)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "anonymous_not_allowed":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code in (
             "empty_message",
             "missing_media",

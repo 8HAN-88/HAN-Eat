@@ -65,6 +65,7 @@ import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_auto_delete.dart';
+import '../application/anonymous_admin.dart';
 import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
 import '../application/chat_search_date.dart';
@@ -484,6 +485,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Session queue for cycling unread reactions (survives mark-read badge clear).
   List<int> _unreadReactionQueue = const [];
   int _unreadReactionCursor = 0;
+  /// Group admins: post as the group title (Telegram anonymous admin).
+  bool _sendAnonymously = false;
+
+  bool get _effectiveSendAnonymous =>
+      _sendAnonymously &&
+      canSendAnonymously(
+        isGroup: _conversation.isGroup,
+        amIGroupAdmin: _conversation.amIGroupAdmin,
+      );
   int? _replySwipeMsgId;
   double _replySwipeDx = 0;
   String? _floatingDateLabel;
@@ -1955,6 +1965,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
             topicId: pending.topicId,
+            anonymous: pending.anonymous,
           );
           if (_chatIsGifMediaUrl(mediaUrl)) {
             unawaited(ChatRecentGifsStore.remember(mediaUrl));
@@ -1972,6 +1983,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
             topicId: pending.topicId,
+            anonymous: pending.anonymous,
           );
         case _PendingMediaKind.file:
           msg = await ChatService.sendFile(
@@ -1984,6 +1996,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             isPaid: pending.isPaid,
             priceStars: pending.priceStars,
             topicId: pending.topicId,
+            anonymous: pending.anonymous,
           );
         case _PendingMediaKind.voice:
           msg = await ChatService.sendVoice(
@@ -1994,6 +2007,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             clientMessageId: pending.clientMessageId,
             silent: pending.silent,
             topicId: pending.topicId,
+            anonymous: pending.anonymous,
           );
       }
       if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
@@ -6043,13 +6057,31 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return ChatUserBrief(id: msg.senderId, name: '?');
   }
 
+  bool _canRevealAnonymousSender(ChatMessage msg) {
+    if (!msg.isAnonymous) return true;
+    if (msg.isMine) return true;
+    return _conversation.amIGroupAdmin;
+  }
+
   Widget _incomingMessageAvatar(ChatMessage msg) {
     final user = _userBriefForSender(msg);
+    final reveal = _canRevealAnonymousSender(msg);
+    final displayName = msg.isAnonymous
+        ? (msg.senderName ?? _conversation.title ?? 'Группа')
+        : (user?.displayName ?? '?');
     return AppUserAvatar(
       radius: 15,
-      imageUrl: user?.avatarUrl,
-      displayName: user?.displayName ?? '?',
-      onTap: () => _openUserProfile(msg.senderId),
+      imageUrl: msg.isAnonymous && !reveal ? _conversation.avatarUrl : user?.avatarUrl,
+      displayName: displayName,
+      onTap: () {
+        if (msg.isAnonymous && !reveal) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Анонимный админ')),
+          );
+          return;
+        }
+        _openUserProfile(msg.senderId);
+      },
     );
   }
 
@@ -8169,6 +8201,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         totalBytes: totalBytes,
         silent: mode == 'silent',
         topicId: _activeTopicIdForSend,
+        anonymous: _effectiveSendAnonymous,
       ));
     } finally {
       _voiceSending = false;
@@ -10719,6 +10752,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             disableWebpagePreview: pending.disableWebpagePreview,
             effectId: pending.effectId,
             topicId: pending.topicId,
+            anonymous: pending.anonymous,
           );
           if (!mounted) return;
           _textOutboundQueue.removeAt(0);
@@ -11014,10 +11048,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _controller.clear();
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final topicId = _activeTopicIdForSend;
+    final sendAnon = _effectiveSendAnonymous;
     final optimistic = ChatMessage(
       id: tempId,
       conversationId: widget.conversationId,
       senderId: uid,
+      senderName: sendAnon
+          ? resolveAnonymousSenderLabel(
+              isAnonymous: true,
+              groupTitle: _conversation.title,
+              realSenderName: AuthService.instance.currentUser?.name,
+              viewerIsSender: true,
+              viewerIsAdmin: true,
+            )
+          : null,
       type: 'text',
       content: sendText,
       createdAt: DateTime.now(),
@@ -11025,6 +11069,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       replyToMessageId: replyId,
       disableWebpagePreview: disablePreview,
       topicId: topicId,
+      isAnonymous: sendAnon,
     );
     final pending = _PendingTextSend(
       text: sendText,
@@ -11035,6 +11080,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       disableWebpagePreview: disablePreview,
       effectId: effectId,
       topicId: topicId,
+      anonymous: sendAnon,
     );
     setState(() {
       _messages.add(optimistic);
@@ -12991,6 +13037,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isPaid: isPaid,
       priceStars: priceStars,
       topicId: _activeTopicIdForSend,
+      anonymous: _effectiveSendAnonymous,
     ));
   }
 
@@ -13025,6 +13072,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isPaid: isPaid,
       priceStars: priceStars,
       topicId: _activeTopicIdForSend,
+      anonymous: _effectiveSendAnonymous,
     ));
   }
 
@@ -13106,6 +13154,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       totalBytes: totalBytes,
       silent: mode == 'silent',
       topicId: _activeTopicIdForSend,
+      anonymous: _effectiveSendAnonymous,
     ));
   }
 
@@ -14853,6 +14902,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                               ],
                             ),
                           ),
+                        if (canSendAnonymously(
+                              isGroup: _conversation.isGroup,
+                              amIGroupAdmin: _conversation.amIGroupAdmin,
+                            ) &&
+                            !_recording)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FilterChip(
+                                avatar: Icon(
+                                  _sendAnonymously
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  _sendAnonymously
+                                      ? 'Анонимно как группа'
+                                      : 'От своего имени',
+                                ),
+                                selected: _sendAnonymously,
+                                onSelected: (v) =>
+                                    setState(() => _sendAnonymously = v),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ),
                         SafeArea(
                           top: false,
                           child: Padding(
@@ -15389,6 +15466,7 @@ class _PendingMediaSend {
     this.isPaid = false,
     this.priceStars = 0,
     this.topicId,
+    this.anonymous = false,
   });
 
   final int tempId;
@@ -15409,6 +15487,7 @@ class _PendingMediaSend {
   final bool isPaid;
   final int priceStars;
   final int? topicId;
+  final bool anonymous;
   String? uploadedMediaUrl;
   int attempts = 0;
   int? lastRetryAfterSeconds;
@@ -15425,6 +15504,7 @@ class _PendingTextSend {
     this.disableWebpagePreview = false,
     this.effectId,
     this.topicId,
+    this.anonymous = false,
   });
 
   final String text;
@@ -15435,6 +15515,7 @@ class _PendingTextSend {
   final bool disableWebpagePreview;
   final String? effectId;
   final int? topicId;
+  final bool anonymous;
   int attempts = 0;
   int? lastRetryAfterSeconds;
   DateTime? lastLimitedAt;

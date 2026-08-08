@@ -302,6 +302,7 @@ class ChatMessage {
     this.replyKeyboard,
     this.effectId,
     this.topicId,
+    this.isAnonymous = false,
   });
 
   final int id;
@@ -340,6 +341,8 @@ class ChatMessage {
   final String? effectId;
   /// Forum topic id (null = General / pre-forum).
   final int? topicId;
+  /// Group admin posted as the group (Telegram anonymous admin).
+  final bool isAnonymous;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -431,6 +434,7 @@ class ChatMessage {
           ? null
           : (json['effect_id'] as String?)?.trim(),
       topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
+      isAnonymous: json['is_anonymous'] as bool? ?? false,
     );
   }
 
@@ -452,6 +456,7 @@ class ChatMessage {
     ChatReplyKeyboard? replyKeyboard,
     String? effectId,
     int? topicId,
+    bool? isAnonymous,
   }) {
     return ChatMessage(
       id: id,
@@ -484,6 +489,7 @@ class ChatMessage {
       replyKeyboard: replyKeyboard ?? this.replyKeyboard,
       effectId: effectId ?? this.effectId,
       topicId: topicId ?? this.topicId,
+      isAnonymous: isAnonymous ?? this.isAnonymous,
     );
   }
 }

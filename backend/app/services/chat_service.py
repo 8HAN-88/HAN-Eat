@@ -2984,6 +2984,7 @@ class ChatService:
         price_stars: int = 0,
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
+        is_anonymous: bool = False,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -2998,6 +2999,7 @@ class ChatService:
             if existing:
                 return existing, False
 
+        from app.services.anonymous_admin import can_send_anonymously
         from app.services.message_effect_service import normalize_effect_id
 
         effect = normalize_effect_id(effect_id)
@@ -3011,6 +3013,14 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
+        anonymous = bool(is_anonymous)
+        if anonymous:
+            is_group = bool(conv and conv.type == "group")
+            is_admin = bool(
+                is_group and self._is_group_admin(conversation_id, sender_id)
+            )
+            if not can_send_anonymously(is_group=is_group, is_admin=is_admin):
+                raise ValueError("anonymous_not_allowed")
         group_id = self._normalize_media_group_id(media_group_id, msg_type)
         paid = bool(is_paid) and msg_type in ("image", "video", "file")
         stars = max(0, int(price_stars or 0)) if paid else 0
@@ -3032,6 +3042,7 @@ class ChatService:
             price_stars=stars,
             effect_id=effect,
             topic_id=resolved_topic_id,
+            is_anonymous=anonymous,
         )
         self.db.add(msg)
 

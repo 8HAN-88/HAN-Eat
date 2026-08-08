@@ -248,6 +248,8 @@ class Message(Base):
     topic_id = Column(
         Integer, ForeignKey("forum_topics.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Group admin posts as the group (Telegram anonymous admin).
+    is_anonymous = Column(Boolean, default=False, nullable=False)
 
 
 class ScheduledMessage(Base):
