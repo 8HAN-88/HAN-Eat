@@ -8018,6 +8018,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       } catch (_) {}
       return '🎁 Подарок';
     }
+    if (msg.type == 'stars_tip') {
+      try {
+        final data = jsonDecode(msg.content);
+        if (data is Map) {
+          final amount = data['amount'];
+          if (amount is int) return '⭐ $amount ★';
+          if (amount is num) return '⭐ ${amount.toInt()} ★';
+        }
+      } catch (_) {}
+      return '⭐ Звёзды';
+    }
     if (msg.type == 'image') {
       return msg.isLockedPaidMedia ? '🔒 Платное фото' : '📷 Фото';
     }
