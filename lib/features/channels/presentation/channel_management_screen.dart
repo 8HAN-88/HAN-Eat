@@ -14,6 +14,7 @@ import '../../../app/app_router.dart';
 import '../application/channels_list_refresh_provider.dart';
 import '../../../core/layout/long_label_tab_bar.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../chat/application/join_requests_bulk.dart';
 import '../../settings/application/subscription_status_provider.dart';
 import '../../../widgets/app_empty_state.dart';
 
@@ -220,6 +221,57 @@ class _ChannelManagementScreenState
         );
       }
     }
+  }
+
+  Future<void> _reviewAllJoinRequests({required bool approve}) async {
+    final items = List<ChannelJoinRequest>.from(_joinRequests);
+    if (items.isEmpty) return;
+    if (!approve) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Отклонить все заявки?'),
+          content: Text('Будет отклонено: ${items.length}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Отклонить все'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final result = await reviewJoinRequestsBulk<ChannelJoinRequest>(
+      items: items,
+      review: (request) => approve
+          ? ChannelService.approveChannelJoinRequest(
+              widget.channelId,
+              request.userId,
+            )
+          : ChannelService.rejectChannelJoinRequest(
+              widget.channelId,
+              request.userId,
+            ),
+    );
+    if (!mounted) return;
+    await _loadJoinRequests();
+    if (approve) {
+      await _loadMembers();
+      await _loadChannel();
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          joinRequestsBulkSnackMessage(approve: approve, result: result),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadMembers() async {
@@ -839,9 +891,25 @@ class _ChannelManagementScreenState
       padding: const EdgeInsets.all(16),
       children: [
         if (canManageJoinRequests && _joinRequests.isNotEmpty) ...[
-          Text(
-            'Заявки на подписку (${_joinRequests.length})',
-            style: Theme.of(context).textTheme.titleLarge,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Заявки на подписку (${_joinRequests.length})',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              if (_joinRequests.length > 1) ...[
+                TextButton(
+                  onPressed: () => _reviewAllJoinRequests(approve: false),
+                  child: const Text('Отклонить все'),
+                ),
+                FilledButton(
+                  onPressed: () => _reviewAllJoinRequests(approve: true),
+                  child: const Text('Принять все'),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 8),
           ..._joinRequests.map((request) {
