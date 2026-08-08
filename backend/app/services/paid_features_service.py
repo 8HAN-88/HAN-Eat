@@ -928,6 +928,7 @@ class PaidFeaturesService:
         gift_id: int,
         conversation_id: int,
         message: Optional[str] = None,
+        hide_name: bool = False,
         idempotency_key: Optional[str] = None,
     ) -> Message:
         gift = (
@@ -1037,6 +1038,7 @@ class PaidFeaturesService:
             gift.sold_count = int(gift.sold_count or 0) + 1
         # Telegram-like: Stars sit in the gift until the recipient converts
         # (collectibles cannot be converted — kept as unique items).
+        anonymous = bool(hide_name)
         owned = UserStarGift(
             owner_id=recipient_id,
             sender_id=sender_id,
@@ -1050,6 +1052,7 @@ class PaidFeaturesService:
             status="kept" if is_collectible else "held",
             is_displayed=True,
             is_collectible=is_collectible,
+            is_anonymous=anonymous,
             serial=serial,
         )
         self.db.add(owned)
@@ -1065,6 +1068,7 @@ class PaidFeaturesService:
                 "message": note or None,
                 "status": owned.status,
                 "is_collectible": is_collectible,
+                "is_anonymous": anonymous,
                 "serial": serial,
                 "total_supply": getattr(gift, "total_supply", None),
             },
@@ -1790,6 +1794,25 @@ class PaidFeaturesService:
         giveaway.completed_at = datetime.utcnow()
         self.db.flush()
         return giveaway
+
+    def list_giveaway_winners(
+        self, giveaway_id: int
+    ) -> tuple[StarGiveaway, list[tuple[StarGiveawayParticipant, User]]]:
+        """Return (giveaway, [(participant, user), ...]) for winners."""
+        giveaway = self.get_giveaway(giveaway_id)
+        if giveaway.status != "completed":
+            return giveaway, []
+        rows = (
+            self.db.query(StarGiveawayParticipant, User)
+            .join(User, User.id == StarGiveawayParticipant.user_id)
+            .filter(
+                StarGiveawayParticipant.giveaway_id == giveaway_id,
+                StarGiveawayParticipant.is_winner.is_(True),
+            )
+            .order_by(StarGiveawayParticipant.id.asc())
+            .all()
+        )
+        return giveaway, rows
 
     def create_star_invoice(
         self,

@@ -7374,50 +7374,70 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final gift = await showStarGiftPickerSheet(context);
     if (gift == null || !mounted) return;
     final noteController = TextEditingController();
-    final note = await showDialog<String?>(
+    var hideName = false;
+    final confirmed = await showDialog<({String note, bool hideName})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${gift.emoji} ${gift.title}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (gift.isLimited)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  gift.remaining != null
-                      ? 'Лимитированный · осталось ${gift.remaining}'
-                      : 'Лимитированный подарок',
-                  style: TextStyle(
-                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('${gift.emoji} ${gift.title}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (gift.isLimited)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    gift.remaining != null
+                        ? 'Лимитированный · осталось ${gift.remaining}'
+                        : 'Лимитированный подарок',
+                    style: TextStyle(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
+              TextField(
+                controller: noteController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Сообщение (опционально)',
+                ),
               ),
-            TextField(
-              controller: noteController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Сообщение (опционально)',
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Скрыть моё имя'),
+                subtitle: Text(
+                  'На профиле получателя подарок будет без отправителя',
+                  style: TextStyle(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+                value: hideName,
+                onChanged: (v) => setLocal(() => hideName = v),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                ctx,
+                (note: noteController.text.trim(), hideName: hideName),
+              ),
+              child: Text('Отправить · ${gift.stars} ★'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, noteController.text.trim()),
-            child: Text('Отправить · ${gift.stars} ★'),
-          ),
-        ],
       ),
     );
     noteController.dispose();
-    if (note == null || !mounted) return;
+    if (confirmed == null || !mounted) return;
     setState(() => _sendingStarGift = true);
     final idem =
         'flutter:gift:${widget.conversationId}:${gift.id}:${const Uuid().v4()}';
@@ -7425,13 +7445,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await PaidFeaturesService.sendGift(
         giftId: gift.id,
         conversationId: widget.conversationId,
-        message: note.isEmpty ? null : note,
+        message: confirmed.note.isEmpty ? null : confirmed.note,
+        hideName: confirmed.hideName,
         idempotencyKey: idem,
       );
       if (!mounted) return;
       await _pollNew();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Подарок ${gift.emoji} отправлен')),
+        SnackBar(
+          content: Text(
+            confirmed.hideName
+                ? 'Подарок ${gift.emoji} отправлен анонимно'
+                : 'Подарок ${gift.emoji} отправлен',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -16248,6 +16275,7 @@ class _Bubble extends StatelessWidget {
       final note = gift?['message'] as String?;
       final status = gift?['status'] as String? ?? 'held';
       final isCollectible = gift?['is_collectible'] == true;
+      final isAnonymousGift = gift?['is_anonymous'] == true;
       final serial = gift?['serial'];
       final totalSupply = gift?['total_supply'];
       final serialText = isCollectible && serial != null
@@ -16277,6 +16305,15 @@ class _Bubble extends StatelessWidget {
                 title,
                 style: TextStyle(color: fg, fontWeight: FontWeight.w800),
               ),
+              if (isAnonymousGift)
+                Text(
+                  'Имя скрыто',
+                  style: TextStyle(
+                    color: fg.withValues(alpha: 0.75),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
               if (serialText != null)
                 Text(
                   'Collectible $serialText',

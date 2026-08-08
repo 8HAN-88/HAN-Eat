@@ -191,6 +191,8 @@ class UserStarGift(Base):
     status = Column(String(24), nullable=False, default="held", index=True)
     is_displayed = Column(Boolean, nullable=False, default=True, index=True)
     is_collectible = Column(Boolean, nullable=False, default=False, index=True)
+    # Telegram "Hide my name": sender hidden on the public profile gift wall.
+    is_anonymous = Column(Boolean, nullable=False, default=False, index=True)
     serial = Column(Integer, nullable=True, index=True)
     transferred_from_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True

@@ -320,6 +320,15 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                             '${gift.stars} ★ · $statusLabel',
                             style: TextStyle(color: scheme.onSurfaceVariant),
                           ),
+                          if (gift.isAnonymous)
+                            Text(
+                              'Отправитель скрыл имя',
+                              style: TextStyle(
+                                color: scheme.secondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
                         ],
                       ),
                     ),

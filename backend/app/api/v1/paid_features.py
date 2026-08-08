@@ -36,6 +36,8 @@ from app.schemas.paid_features import (
     StarGiftItem,
     StarGiftsResponse,
     StarGiveawayItem,
+    StarGiveawayWinnerItem,
+    StarGiveawayWinnersResponse,
     StarGiveawaysResponse,
     StarInvoiceItem,
     StarInvoicesResponse,
@@ -415,7 +417,12 @@ def _catalog_gift_item(gift) -> StarGiftItem:
     return item
 
 
-def _owned_gift_item(db: Session, gift) -> UserStarGiftItem:
+def _owned_gift_item(
+    db: Session,
+    gift,
+    *,
+    redact_anonymous_sender: bool = False,
+) -> UserStarGiftItem:
     from app.models.paid_features import StarGift
 
     item = UserStarGiftItem.model_validate(gift)
@@ -427,6 +434,9 @@ def _owned_gift_item(db: Session, gift) -> UserStarGiftItem:
             item.total_supply = getattr(catalog, "total_supply", None)
             if item.transfer_stars <= 0 and bool(getattr(gift, "is_collectible", False)):
                 item.transfer_stars = max(25, int(gift.stars) // 10)
+    # Public profile wall: Telegram hides the sender when "Hide my name" was used.
+    if redact_anonymous_sender and bool(getattr(gift, "is_anonymous", False)):
+        item.sender_id = None
     return item
 
 
@@ -463,6 +473,7 @@ async def send_star_gift(
         gift_id=gift_id,
         conversation_id=request.conversation_id,
         message=request.message,
+        hide_name=bool(request.hide_name),
         idempotency_key=request.idempotency_key,
     )
     stars = int(gift.stars) if gift else 0
@@ -551,7 +562,12 @@ async def list_user_displayed_gifts(
 ):
     service = PaidFeaturesService(db)
     gifts = service.list_user_star_gifts(user_id, displayed_only=True, limit=40)
-    return UserStarGiftsResponse(gifts=[_owned_gift_item(db, g) for g in gifts])
+    # Always redact anonymous senders on the public profile wall.
+    return UserStarGiftsResponse(
+        gifts=[
+            _owned_gift_item(db, g, redact_anonymous_sender=True) for g in gifts
+        ]
+    )
 
 
 @router.post(
@@ -808,6 +824,39 @@ async def finalize_giveaway_now(
     db.commit()
     db.refresh(giveaway)
     return _giveaway_item(service, giveaway, current_user.id)
+
+
+@router.get(
+    "/giveaways/{giveaway_id}/winners",
+    response_model=StarGiveawayWinnersResponse,
+)
+async def list_giveaway_winners(
+    giveaway_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    """Public winners list after a Stars giveaway completes (Telegram-like)."""
+    service = PaidFeaturesService(db)
+    giveaway, rows = service.list_giveaway_winners(giveaway_id)
+    prize = int(giveaway.prize_stars)
+    winners = [
+        StarGiveawayWinnerItem(
+            user_id=user.id,
+            name=user.name or f"User {user.id}",
+            username=user.username,
+            avatar_url=user.avatar_url,
+            prize_stars=prize,
+        )
+        for _participant, user in rows
+        if user.deleted_at is None
+    ]
+    return StarGiveawayWinnersResponse(
+        giveaway_id=giveaway.id,
+        status=giveaway.status,
+        prize_stars=prize,
+        winners_count=int(giveaway.winners_count),
+        winners=winners,
+    )
 
 
 def _invoice_item(db: Session, invoice) -> StarInvoiceItem:

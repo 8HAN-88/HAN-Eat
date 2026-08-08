@@ -61,6 +61,7 @@ def db_session():
                 bot_webhook_last_ok_at DATETIME,
                 created_by_user_id INTEGER,
                 show_last_seen BOOLEAN DEFAULT 1,
+                last_seen_privacy VARCHAR(20) DEFAULT 'everybody',
                 show_read_receipts BOOLEAN DEFAULT 1,
                 paid_message_stars INTEGER DEFAULT 0,
                 trust_score FLOAT DEFAULT 0.5,
@@ -75,6 +76,9 @@ def db_session():
                 phone_hash VARCHAR(64),
                 phone_e164 VARCHAR(20),
                 phone_linked_at DATETIME,
+                totp_secret VARCHAR(64),
+                totp_enabled BOOLEAN DEFAULT 0,
+                totp_enabled_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME
@@ -566,6 +570,14 @@ def test_giveaway_join_finalize_and_cancel(db_session):
     assert len(winners) == 1
     assert service.star_balance(winners[0].user_id) == 50
 
+    listed_giveaway, winner_rows = service.list_giveaway_winners(giveaway.id)
+    assert listed_giveaway.id == giveaway.id
+    assert listed_giveaway.status == "completed"
+    assert len(winner_rows) == 1
+    participant, user = winner_rows[0]
+    assert participant.is_winner is True
+    assert user.id == winners[0].user_id
+
     # Fresh giveaway + cancel refunds escrow.
     service.add_stars(1, 50, tx_type="purchase")
     g2 = service.create_star_giveaway(
@@ -591,6 +603,29 @@ def test_giveaway_requires_membership(db_session):
     with pytest.raises(HTTPException) as exc:
         service.join_star_giveaway(2, giveaway.id)
     assert exc.value.status_code == 403
+
+
+def test_giveaway_winners_empty_until_completed(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    _add_paid_channel(db_session, channel_id=100, owner_id=1, monthly_price_stars=0)
+    _add_member(db_session, 100, 2)
+    service = PaidFeaturesService(db_session)
+    service.add_stars(1, 100, tx_type="purchase")
+    giveaway = service.create_star_giveaway(
+        1, 100, prize_stars=25, winners_count=1, duration_hours=3
+    )
+    service.join_star_giveaway(2, giveaway.id)
+    db_session.flush()
+    active, rows = service.list_giveaway_winners(giveaway.id)
+    assert active.status == "active"
+    assert rows == []
+    service.finalize_star_giveaway(giveaway.id)
+    db_session.flush()
+    done, winners = service.list_giveaway_winners(giveaway.id)
+    assert done.status == "completed"
+    assert len(winners) == 1
+    assert winners[0][1].id == 2
 
 
 def test_star_invoice_pay_and_expire(db_session):

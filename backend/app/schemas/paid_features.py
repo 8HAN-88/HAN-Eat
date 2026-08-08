@@ -172,6 +172,8 @@ class StarGiftsResponse(BaseModel):
 class SendStarGiftRequest(BaseModel):
     conversation_id: int
     message: Optional[str] = Field(default=None, max_length=500)
+    # Telegram "Hide my name" — hide sender on the recipient's public gift wall.
+    hide_name: bool = False
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
 
@@ -198,6 +200,7 @@ class UserStarGiftItem(BaseModel):
     status: str
     is_displayed: bool = True
     is_collectible: bool = False
+    is_anonymous: bool = False
     serial: Optional[int] = None
     transferred_from_user_id: Optional[int] = None
     converted_at: Optional[datetime] = None
@@ -257,6 +260,22 @@ class StarGiveawayItem(BaseModel):
 
 class StarGiveawaysResponse(BaseModel):
     giveaways: List[StarGiveawayItem]
+
+
+class StarGiveawayWinnerItem(BaseModel):
+    user_id: int
+    name: str
+    username: Optional[str] = None
+    avatar_url: Optional[str] = None
+    prize_stars: int
+
+
+class StarGiveawayWinnersResponse(BaseModel):
+    giveaway_id: int
+    status: str
+    prize_stars: int
+    winners_count: int
+    winners: List[StarGiveawayWinnerItem]
 
 
 class CreateStarInvoiceRequest(BaseModel):

@@ -287,6 +287,7 @@ def test_send_star_gift_direct(db_session):
     assert len(held) == 1
     assert held[0].status == "held"
     assert held[0].stars == 25
+    assert held[0].is_anonymous is False
 
     converted = svc.convert_user_star_gift(2, held[0].id)
     db_session.commit()
@@ -295,6 +296,51 @@ def test_send_star_gift_direct(db_session):
     assert svc.creator_balance(2).available_stars == 25
     assert svc.list_user_star_gifts(2) == []
     assert svc.list_user_star_gifts(2, include_converted=True)[0].status == "converted"
+
+
+def test_send_anonymous_star_gift_hides_name_on_wall(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)
+    db_session.add(
+        StarGift(
+            slug="cake",
+            title="Торт",
+            emoji="🎂",
+            stars=30,
+            is_active=True,
+            sort_order=1,
+        )
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    gift = svc.list_star_gifts()[0]
+    msg = svc.send_star_gift(
+        1,
+        gift_id=gift.id,
+        conversation_id=conv.id,
+        hide_name=True,
+        message="secret",
+    )
+    db_session.commit()
+    assert '"is_anonymous": true' in msg.content or '"is_anonymous":true' in msg.content
+    # Chat message still has the real sender (Telegram: hide name on profile wall).
+    assert msg.sender_id == 1
+    owned = svc.list_user_star_gifts(2)[0]
+    assert owned.is_anonymous is True
+    assert owned.sender_id == 1
+    kept = svc.keep_user_star_gift(2, owned.id)
+    db_session.commit()
+    assert kept.is_anonymous is True
+    displayed = svc.list_user_star_gifts(2, displayed_only=True)
+    assert len(displayed) == 1
+    assert displayed[0].is_anonymous is True
 
 
 def test_keep_star_gift_shows_on_profile(db_session):
