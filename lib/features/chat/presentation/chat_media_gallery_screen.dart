@@ -278,9 +278,17 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
     }
     if (url == null || url.isEmpty) return;
     if (action == 'save') {
-      await MediaDownloadHelper.saveMedia(context, rawUrl: url);
+      await MediaDownloadHelper.saveMedia(
+        context,
+        rawUrl: url,
+        caption: msg.content,
+      );
     } else if (action == 'share') {
-      await MediaDownloadHelper.shareMedia(context, rawUrl: url);
+      await MediaDownloadHelper.shareMedia(
+        context,
+        rawUrl: url,
+        caption: msg.content,
+      );
     }
   }
 
@@ -293,6 +301,8 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
         .toList(growable: false);
     final imageUrls =
         imageItems.map((m) => m.mediaUrl!).toList(growable: false);
+    final imageCaptions =
+        imageItems.map((m) => m.content).toList(growable: false);
     final count = _filter == _MediaFilter.links ? links.length : items.length;
 
     return Scaffold(
@@ -506,6 +516,7 @@ class _ChatMediaGalleryScreenState extends State<ChatMediaGalleryScreen> {
                                             builder: (_) =>
                                                 FullscreenImageViewer(
                                               imageUrls: imageUrls,
+                                              captions: imageCaptions,
                                               initialIndex: imageIndex,
                                               allowSaveShare: _allowSaveShare,
                                             ),

@@ -11971,19 +11971,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _openImage(String url) {
-    final urls = _messages
+    final imageMsgs = _messages
         .where(
           (m) =>
               (m.type == 'image' || _canOpenStickerInImageViewer(m)) &&
               (m.mediaUrl?.isNotEmpty ?? false),
         )
-        .map((m) => m.mediaUrl!)
         .toList(growable: false);
+    final urls = imageMsgs.map((m) => m.mediaUrl!).toList(growable: false);
+    final captions = imageMsgs.map((m) => m.content).toList(growable: false);
     final index = urls.indexOf(url);
     Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => FullscreenImageViewer(
           imageUrls: urls.isEmpty ? [url] : urls,
+          captions: urls.isEmpty ? null : captions,
           initialIndex: index >= 0 ? index : 0,
           allowSaveShare: !_conversation.protectContent,
         ),
@@ -12008,10 +12010,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _openVideo(String url) async {
+    String? caption;
+    for (final m in _messages) {
+      if ((m.type == 'video' || m.type == 'video_note') &&
+          m.mediaUrl == url) {
+        caption = m.content;
+        break;
+      }
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => _ChatVideoPlayerPage(
           videoUrl: url,
+          caption: caption,
           allowSaveShare: !_conversation.protectContent,
         ),
       ),
@@ -16787,10 +16798,12 @@ class _Bubble extends StatelessWidget {
 class _ChatVideoPlayerPage extends StatefulWidget {
   const _ChatVideoPlayerPage({
     required this.videoUrl,
+    this.caption,
     this.allowSaveShare = true,
   });
 
   final String videoUrl;
+  final String? caption;
   final bool allowSaveShare;
 
   @override
@@ -16864,6 +16877,7 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
                 MediaDownloadHelper.saveMedia(
                   context,
                   rawUrl: widget.videoUrl,
+                  caption: widget.caption,
                 ),
               ),
             ),
@@ -16874,6 +16888,7 @@ class _ChatVideoPlayerPageState extends State<_ChatVideoPlayerPage> {
                 MediaDownloadHelper.shareMedia(
                   context,
                   rawUrl: widget.videoUrl,
+                  caption: widget.caption,
                 ),
               ),
             ),
