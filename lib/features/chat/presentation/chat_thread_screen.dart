@@ -12198,6 +12198,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         emoji: (emoji ?? '').trim(),
         replyToMessageId: _replyTo?.id,
         topicId: _activeTopicIdForSend,
+        anonymous: _effectiveSendAnonymous,
       );
       _controller.clear();
       setState(() => _replyTo = null);
