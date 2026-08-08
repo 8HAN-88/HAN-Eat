@@ -2,12 +2,100 @@ import 'package:flutter/material.dart';
 
 import '../../../../services/paid_features_service.dart';
 
+class StarGiftSendDraft {
+  const StarGiftSendDraft({
+    required this.gift,
+    this.message,
+    this.hideName = false,
+  });
+
+  final StarGift gift;
+  final String? message;
+  final bool hideName;
+}
+
 Future<StarGift?> showStarGiftPickerSheet(BuildContext context) {
   return showModalBottomSheet<StarGift>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (ctx) => const _StarGiftPickerSheet(),
+  );
+}
+
+/// Picker + note / hide-my-name confirm (Telegram send-gift flow).
+Future<StarGiftSendDraft?> showStarGiftSendFlow(BuildContext context) async {
+  final gift = await showStarGiftPickerSheet(context);
+  if (gift == null || !context.mounted) return null;
+  final noteController = TextEditingController();
+  var hideName = false;
+  final confirmed = await showDialog<({String note, bool hideName})>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        title: Text('${gift.emoji} ${gift.title}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (gift.isLimited)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  gift.remaining != null
+                      ? 'Лимитированный · осталось ${gift.remaining}'
+                      : 'Лимитированный подарок',
+                  style: TextStyle(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            TextField(
+              controller: noteController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Сообщение (опционально)',
+              ),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Скрыть моё имя'),
+              subtitle: Text(
+                'На профиле получателя подарок будет без отправителя',
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
+              value: hideName,
+              onChanged: (v) => setLocal(() => hideName = v),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              ctx,
+              (note: noteController.text.trim(), hideName: hideName),
+            ),
+            child: Text('Отправить · ${gift.stars} ★'),
+          ),
+        ],
+      ),
+    ),
+  );
+  noteController.dispose();
+  if (confirmed == null) return null;
+  return StarGiftSendDraft(
+    gift: gift,
+    message: confirmed.note.isEmpty ? null : confirmed.note,
+    hideName: confirmed.hideName,
   );
 }
 
