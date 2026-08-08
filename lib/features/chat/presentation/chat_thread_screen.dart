@@ -66,6 +66,7 @@ import '../../../widgets/telegram_ui.dart';
 import '../application/active_chat_session.dart';
 import '../application/chat_auto_delete.dart';
 import '../application/chat_mentions.dart';
+import '../application/chat_reaction_jumps.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -478,6 +479,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Session queue for cycling unread @mentions (survives mark-read badge clear).
   List<int> _unreadMentionQueue = const [];
   int _unreadMentionCursor = 0;
+  /// Session queue for cycling unread reactions (survives mark-read badge clear).
+  List<int> _unreadReactionQueue = const [];
+  int _unreadReactionCursor = 0;
   int? _replySwipeMsgId;
   double _replySwipeDx = 0;
   String? _floatingDateLabel;
@@ -4262,19 +4266,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (nearBottom) {
       if (_showJumpToBottom ||
           _jumpFabTargetsUnread ||
-          _unreadMentionQueue.isNotEmpty) {
+          _unreadMentionQueue.isNotEmpty ||
+          _unreadReactionQueue.isNotEmpty) {
         setState(() {
           _showJumpToBottom = false;
           _jumpFabTargetsUnread = false;
           _newMessagesBelow = 0;
           _clearUnreadMentionQueue();
+          _clearUnreadReactionQueue();
         });
       }
       // Telegram: mark read when the user actually reaches the bottom.
       _scheduleMarkRead();
     } else {
-      final targetsUnread =
-          _shouldJumpToFirstUnread() || _hasMentionJumpTargets;
+      final targetsUnread = _shouldJumpToFirstUnread() ||
+          _hasMentionJumpTargets ||
+          _hasReactionJumpTargets;
       if (!_showJumpToBottom || _jumpFabTargetsUnread != targetsUnread) {
         setState(() {
           _showJumpToBottom = true;
@@ -4537,6 +4544,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   bool get _hasMentionJumpTargets => _remainingMentionJumps > 0;
 
+  int get _remainingReactionJumps =>
+      remainingReactionJumps(_unreadReactionQueue, _unreadReactionCursor);
+
+  bool get _hasReactionJumpTargets => _remainingReactionJumps > 0;
+
   List<int> _collectUnreadMentionIds({int? fromMessageId}) {
     final me = AuthService.instance.currentUser;
     if (me == null || _messages.isEmpty) return const [];
@@ -4573,14 +4585,41 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return ids.isEmpty ? null : ids.first;
   }
 
+  List<int> _collectUnreadReactionIds({int? fromMessageId}) {
+    if (_messages.isEmpty) return const [];
+    return collectReactionMessageIds(
+      messages: [
+        for (final m in _messages)
+          (
+            id: m.id,
+            isMine: m.isMine,
+            hasReactions: m.reactions.isNotEmpty,
+          ),
+      ],
+      fromMessageId: fromMessageId,
+    );
+  }
+
+  void _seedUnreadReactionQueue({int? fromMessageId}) {
+    final ids = _collectUnreadReactionIds(fromMessageId: fromMessageId);
+    _unreadReactionQueue = ids;
+    _unreadReactionCursor = 0;
+  }
+
+  void _clearUnreadReactionQueue() {
+    _unreadReactionQueue = const [];
+    _unreadReactionCursor = 0;
+  }
+
   int? _firstUnreadReactionMessageId() {
+    if (_hasReactionJumpTargets) {
+      return _unreadReactionQueue[_unreadReactionCursor];
+    }
     if (_conversation.unreadReactionsCount <= 0 || _messages.isEmpty) {
       return null;
     }
-    for (final msg in _messages) {
-      if (msg.isMine && msg.reactions.isNotEmpty) return msg.id;
-    }
-    return null;
+    final ids = _collectUnreadReactionIds();
+    return ids.isEmpty ? null : ids.first;
   }
 
   void _scrollAfterInitialLoad() {
@@ -4593,18 +4632,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final firstUnread = _firstUnreadMessageId();
       if (firstUnread != null) {
         _seedUnreadMentionQueue(fromMessageId: firstUnread);
+        if (_conversation.unreadReactionsCount > 0) {
+          _seedUnreadReactionQueue();
+        }
         final mentionId = _firstUnreadMentionMessageId();
         final reactionId =
             mentionId == null ? _firstUnreadReactionMessageId() : null;
-        // First mention is shown on open; next FAB tap advances further.
+        // First mention/reaction is shown on open; next FAB tap advances further.
         if (mentionId != null && _unreadMentionQueue.isNotEmpty) {
           _unreadMentionCursor = 1;
+        } else if (reactionId != null && _unreadReactionQueue.isNotEmpty) {
+          _unreadReactionCursor = 1;
         }
         setState(() => _unreadDividerBeforeId = firstUnread);
         _scrollToMessage(mentionId ?? reactionId ?? firstUnread);
         final idx = _messages.indexWhere((m) => m.id == firstUnread);
         final below = idx >= 0 ? _messages.length - idx - 1 : 0;
-        if (below > 0 || _hasMentionJumpTargets) {
+        if (below > 0 ||
+            _hasMentionJumpTargets ||
+            _hasReactionJumpTargets) {
           setState(() {
             _newMessagesBelow = below;
             _showJumpToBottom = true;
@@ -4612,13 +4658,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           });
         }
       } else {
+        if (_conversation.unreadReactionsCount > 0) {
+          _seedUnreadReactionQueue();
+        }
         final reactionId = _firstUnreadReactionMessageId();
         if (reactionId != null) {
+          // First reaction is shown on open; next FAB tap advances further.
+          if (_unreadReactionQueue.isNotEmpty) {
+            _unreadReactionCursor = 1;
+          }
           _scrollToMessage(reactionId);
           _focusMessageTemporarily(reactionId);
           setState(() {
             _showJumpToBottom = true;
-            _jumpFabTargetsUnread = false;
+            _jumpFabTargetsUnread = _hasReactionJumpTargets;
           });
         } else {
           _scrollToBottom();
@@ -4683,6 +4736,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _suppressMarkRead = false;
       _unreadDividerBeforeId = null;
       _clearUnreadMentionQueue();
+      _clearUnreadReactionQueue();
     });
     _scheduleMarkRead();
   }
@@ -4726,20 +4780,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _focusMessageTemporarily(id);
       return;
     }
-    if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
-      final reactionId = _firstUnreadReactionMessageId();
-      final id = reactionId ?? _unreadDividerBeforeId!;
+    // Telegram: ❤ FAB cycles through unread reactions even after mark-read.
+    if (_unreadReactionQueue.isEmpty &&
+        _conversation.unreadReactionsCount > 0) {
+      _seedUnreadReactionQueue();
+    }
+    if (_hasReactionJumpTargets) {
+      final id = _unreadReactionQueue[_unreadReactionCursor];
+      setState(() {
+        _unreadReactionCursor += 1;
+        _showJumpToBottom = true;
+        _jumpFabTargetsUnread =
+            _hasReactionJumpTargets || _unreadDividerBeforeId != null;
+      });
       _scrollToMessage(id);
       _focusMessageTemporarily(id);
       return;
     }
-    if (_conversation.unreadReactionsCount > 0) {
-      final reactionId = _firstUnreadReactionMessageId();
-      if (reactionId != null) {
-        _scrollToMessage(reactionId);
-        _focusMessageTemporarily(reactionId);
-        return;
-      }
+    if (_jumpFabTargetsUnread && _unreadDividerBeforeId != null) {
+      final id = _unreadDividerBeforeId!;
+      _scrollToMessage(id);
+      _focusMessageTemporarily(id);
+      return;
     }
     _jumpToBottomAndMarkRead();
   }
@@ -14281,20 +14343,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     width: 42,
                                     height: 42,
                                     child: Icon(
-                                      _jumpFabTargetsUnread &&
-                                              (_hasMentionJumpTargets ||
+                                      _hasMentionJumpTargets ||
+                                              (_jumpFabTargetsUnread &&
                                                   _conversation
                                                           .unreadMentionsCount >
                                                       0)
                                           ? Icons.alternate_email_rounded
-                                          : ((_jumpFabTargetsUnread ||
-                                                      _conversation
-                                                              .unreadReactionsCount >
-                                                          0) &&
-                                                  !_hasMentionJumpTargets &&
-                                                  _conversation
-                                                          .unreadMentionsCount <=
-                                                      0 &&
+                                          : (_hasReactionJumpTargets ||
                                                   _conversation
                                                           .unreadReactionsCount >
                                                       0
@@ -14314,6 +14369,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   (_jumpFabTargetsUnread &&
                                       _conversation.unreadCount > 0) ||
                                   _hasMentionJumpTargets ||
+                                  _hasReactionJumpTargets ||
                                   _conversation.unreadReactionsCount > 0)
                                 Positioned(
                                   top: -6,
@@ -14323,22 +14379,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     child: TelegramUnreadBadge(
                                       count: _hasMentionJumpTargets
                                           ? _remainingMentionJumps
-                                          : (_jumpFabTargetsUnread
-                                              ? math.max(
-                                                  _conversation.unreadCount,
-                                                  _newMessagesBelow,
-                                                )
-                                              : _newMessagesBelow),
-                                      hasMention: _jumpFabTargetsUnread &&
-                                          (_hasMentionJumpTargets ||
+                                          : (_hasReactionJumpTargets
+                                              ? _remainingReactionJumps
+                                              : (_jumpFabTargetsUnread
+                                                  ? math.max(
+                                                      _conversation.unreadCount,
+                                                      _newMessagesBelow,
+                                                    )
+                                                  : _newMessagesBelow)),
+                                      hasMention: _hasMentionJumpTargets ||
+                                          (_jumpFabTargetsUnread &&
                                               _conversation
                                                       .unreadMentionsCount >
                                                   0),
                                       hasReaction: !_hasMentionJumpTargets &&
-                                          _conversation.unreadMentionsCount <=
-                                              0 &&
-                                          _conversation.unreadReactionsCount >
-                                              0,
+                                          (_hasReactionJumpTargets ||
+                                              _conversation
+                                                      .unreadReactionsCount >
+                                                  0),
                                     ),
                                   ),
                                 ),
