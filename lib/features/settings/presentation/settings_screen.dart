@@ -15,6 +15,7 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../application/last_seen_privacy.dart';
 import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
 
@@ -31,7 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isAdmin = false;
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
-  bool _showLastSeen = true;
+  String _lastSeenPrivacy = lastSeenPrivacyEverybody;
   bool _showReadReceipts = true;
   int _paidMessageStars = 0;
   bool _privacyBusy = false;
@@ -110,7 +111,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           AuthService.instance.currentUser ?? await AuthService.getCurrentUser();
       if (!mounted || user == null) return;
       setState(() {
-        _showLastSeen = user.showLastSeen;
+        _lastSeenPrivacy = normalizeLastSeenPrivacy(
+          user.lastSeenPrivacy,
+          showLastSeen: user.showLastSeen,
+        );
         _showReadReceipts = user.showReadReceipts;
         _paidMessageStars = user.paidMessageStars;
       });
@@ -147,24 +151,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleShowLastSeen(bool enabled) async {
+  Future<void> _pickLastSeenPrivacy() async {
     if (_privacyBusy) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Кто видит время в сети',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final value in lastSeenPrivacyValues)
+                ListTile(
+                  title: Text(lastSeenPrivacyLabel(value)),
+                  subtitle: Text(
+                    switch (value) {
+                      lastSeenPrivacyContacts =>
+                        'Только люди из ваших контактов',
+                      lastSeenPrivacyNobody =>
+                        'Статус «в сети» и last seen скрыты',
+                      _ => 'Все пользователи HanWe',
+                    },
+                  ),
+                  trailing: _lastSeenPrivacy == value
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _lastSeenPrivacy) return;
+    final previous = _lastSeenPrivacy;
     setState(() {
-      _showLastSeen = enabled;
+      _lastSeenPrivacy = selected;
       _privacyBusy = true;
     });
     try {
-      final updated = await UserService.updateProfile(showLastSeen: enabled);
+      final updated =
+          await UserService.updateProfile(lastSeenPrivacy: selected);
       await AuthService.persistUpdatedUser(updated);
       if (!mounted) return;
       setState(() {
-        _showLastSeen = updated.showLastSeen;
+        _lastSeenPrivacy = normalizeLastSeenPrivacy(
+          updated.lastSeenPrivacy,
+          showLastSeen: updated.showLastSeen,
+        );
         _privacyBusy = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _showLastSeen = !enabled;
+        _lastSeenPrivacy = previous;
         _privacyBusy = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -378,14 +426,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  SwitchListTile(
-                    secondary: const Icon(Icons.visibility_outlined),
-                    title: const Text('Показывать время в сети'),
-                    subtitle: const Text(
-                      'Другие не увидят ваш last seen, если выключить',
-                    ),
-                    value: _showLastSeen,
-                    onChanged: _privacyBusy ? null : _toggleShowLastSeen,
+                  ListTile(
+                    leading: const Icon(Icons.visibility_outlined),
+                    title: const Text('Время в сети'),
+                    subtitle: Text(lastSeenPrivacyLabel(_lastSeenPrivacy)),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: _privacyBusy ? null : _pickLastSeenPrivacy,
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

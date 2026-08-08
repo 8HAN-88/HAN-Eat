@@ -1245,6 +1245,8 @@ class User {
   final String? bio;
   final bool isPrivate;
   final bool showLastSeen;
+  /// everybody | contacts | nobody
+  final String lastSeenPrivacy;
   final bool showReadReceipts;
   final int paidMessageStars;
   final bool isAdmin;
@@ -1271,6 +1273,7 @@ class User {
     this.bio,
     required this.isPrivate,
     this.showLastSeen = true,
+    this.lastSeenPrivacy = 'everybody',
     this.showReadReceipts = true,
     this.paidMessageStars = 0,
     this.isAdmin = false,
@@ -1295,6 +1298,14 @@ class User {
       bio: json['bio'] as String?,
       isPrivate: json['is_private'] as bool? ?? false,
       showLastSeen: json['show_last_seen'] as bool? ?? true,
+      lastSeenPrivacy: () {
+        final raw = (json['last_seen_privacy'] as String?)?.trim().toLowerCase();
+        if (raw == 'everybody' || raw == 'contacts' || raw == 'nobody') {
+          return raw!;
+        }
+        final show = json['show_last_seen'] as bool? ?? true;
+        return show ? 'everybody' : 'nobody';
+      }(),
       showReadReceipts: json['show_read_receipts'] as bool? ?? true,
       paidMessageStars: (json['paid_message_stars'] as num?)?.toInt() ?? 0,
       isAdmin: json['is_admin'] as bool? ?? false,
@@ -1320,6 +1331,7 @@ class User {
       'bio': bio,
       'is_private': isPrivate,
       'show_last_seen': showLastSeen,
+      'last_seen_privacy': lastSeenPrivacy,
       'show_read_receipts': showReadReceipts,
       'paid_message_stars': paidMessageStars,
       'is_admin': isAdmin,
@@ -1346,6 +1358,7 @@ class User {
     bool? phoneLinked,
     String? phone,
     bool? showLastSeen,
+    String? lastSeenPrivacy,
     bool? showReadReceipts,
     int? paidMessageStars,
     bool clearPhone = false,
@@ -1359,6 +1372,7 @@ class User {
       bio: bio,
       isPrivate: isPrivate,
       showLastSeen: showLastSeen ?? this.showLastSeen,
+      lastSeenPrivacy: lastSeenPrivacy ?? this.lastSeenPrivacy,
       showReadReceipts: showReadReceipts ?? this.showReadReceipts,
       paidMessageStars: paidMessageStars ?? this.paidMessageStars,
       isAdmin: isAdmin,

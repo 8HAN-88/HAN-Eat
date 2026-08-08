@@ -430,6 +430,7 @@ class UserService {
     String? bio,
     bool? isPrivate,
     bool? showLastSeen,
+    String? lastSeenPrivacy,
     bool? showReadReceipts,
     int? paidMessageStars,
     String? avatarUrl,
@@ -441,7 +442,9 @@ class UserService {
       if (name != null) 'name': name,
       if (bio != null) 'bio': bio,
       if (isPrivate != null) 'is_private': isPrivate,
-      if (showLastSeen != null) 'show_last_seen': showLastSeen,
+      if (lastSeenPrivacy != null) 'last_seen_privacy': lastSeenPrivacy,
+      if (showLastSeen != null && lastSeenPrivacy == null)
+        'show_last_seen': showLastSeen,
       if (showReadReceipts != null) 'show_read_receipts': showReadReceipts,
       if (paidMessageStars != null) 'paid_message_stars': paidMessageStars,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
@@ -546,6 +549,7 @@ class UserProfile {
       'bio': json['bio'],
       'is_private': json['is_private'],
       'show_last_seen': json['show_last_seen'],
+      'last_seen_privacy': json['last_seen_privacy'],
       'show_read_receipts': json['show_read_receipts'],
       'created_at': json['created_at'],
     };
