@@ -1,4 +1,4 @@
-/// Telegram-like last-seen visibility tiers.
+// Telegram-like last-seen visibility tiers.
 
 const String lastSeenPrivacyEverybody = 'everybody';
 const String lastSeenPrivacyContacts = 'contacts';
