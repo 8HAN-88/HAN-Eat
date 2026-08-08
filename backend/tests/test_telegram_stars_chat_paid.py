@@ -369,6 +369,58 @@ def test_send_star_gift_direct(db_session):
     assert svc.list_user_star_gifts(2, include_converted=True)[0].status == "converted"
 
 
+def test_owned_gift_item_includes_sender_and_redacts_anonymous(db_session):
+    from app.api.v1.paid_features import _owned_gift_item
+
+    sender = _user(db_session, 1)
+    sender.username = "alice"
+    sender.name = "Alice"
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)
+    db_session.add(
+        StarGift(
+            slug="balloon",
+            title="Шарик",
+            emoji="🎈",
+            stars=20,
+            is_active=True,
+            sort_order=1,
+        )
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    gift = svc.list_star_gifts()[0]
+    svc.send_star_gift(1, gift_id=gift.id, conversation_id=conv.id)
+    svc.send_star_gift(
+        1, gift_id=gift.id, conversation_id=conv.id, hide_name=True
+    )
+    db_session.commit()
+    owned = svc.list_user_star_gifts(2)
+    assert len(owned) == 2
+    public = next(g for g in owned if not g.is_anonymous)
+    anon = next(g for g in owned if g.is_anonymous)
+
+    public_item = _owned_gift_item(db_session, public, redact_anonymous_sender=True)
+    assert public_item.sender_id == 1
+    assert public_item.sender_name == "Alice"
+    assert public_item.sender_username == "alice"
+
+    anon_item = _owned_gift_item(db_session, anon, redact_anonymous_sender=True)
+    assert anon_item.is_anonymous is True
+    assert anon_item.sender_id is None
+    assert anon_item.sender_name is None
+
+    inventory_item = _owned_gift_item(db_session, anon, redact_anonymous_sender=False)
+    assert inventory_item.sender_id == 1
+    assert inventory_item.sender_name == "Alice"
+
+
 def test_send_anonymous_star_gift_hides_name_on_wall(db_session):
     _user(db_session, 1)
     _user(db_session, 2)

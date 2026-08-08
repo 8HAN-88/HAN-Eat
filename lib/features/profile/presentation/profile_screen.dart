@@ -18,12 +18,15 @@ import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
 import 'package:han_eat/services/chat_service.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
+import 'package:han_eat/widgets/stars_pay_helper.dart';
+import 'package:uuid/uuid.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
 import 'package:han_eat/widgets/app_empty_state.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/widgets/telegram_ui.dart';
 import '../../content/create_content_actions.dart';
+import '../../chat/presentation/widgets/star_gift_picker_sheet.dart';
 import '../../../utils/post_publisher_display.dart';
 
 /// Минимальный профиль из данных [AuthService], пока не пришёл ответ API.
@@ -72,6 +75,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
   bool _isFollowing = false;
   bool _isFollowActionRunning = false;
   bool _isOpeningChat = false;
+  bool _isSendingGift = false;
+  bool _isSendingTip = false;
   final Set<int> _loadedTabs = {0};
   late final void Function(User?) _onSessionChanged;
   int? _postsListEpoch;
@@ -334,6 +339,141 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     } finally {
       if (mounted) setState(() => _isOpeningChat = false);
     }
+  }
+
+  Future<void> _sendGiftFromProfile(User user) async {
+    if (_isSendingGift) return;
+    final draft = await showStarGiftSendFlow(context);
+    if (draft == null || !mounted) return;
+    setState(() => _isSendingGift = true);
+    try {
+      final conv = await ChatService.openDirectChat(user.id);
+      final idem =
+          'flutter:profile-gift:${user.id}:${draft.gift.id}:${const Uuid().v4()}';
+      await PaidFeaturesService.sendGift(
+        giftId: draft.gift.id,
+        conversationId: conv.id,
+        message: draft.message,
+        hideName: draft.hideName,
+        idempotencyKey: idem,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            draft.hideName
+                ? 'Подарок ${draft.gift.emoji} отправлен анонимно'
+                : 'Подарок ${draft.gift.emoji} отправлен',
+          ),
+        ),
+      );
+      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _isSendingGift = false);
+    }
+  }
+
+  Future<void> _sendStarsFromProfile(User user) async {
+    if (_isSendingTip) return;
+    final draft = await pickStarsTipDraft(
+      context,
+      title: 'Отправить звёзды ${user.name}',
+      subtitle: 'Звёзды появятся сообщением в личке, как в Telegram.',
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _isSendingTip = true);
+    try {
+      final result = await PaidFeaturesService.donate(
+        recipientId: user.id,
+        amountStars: draft.amount,
+        message: draft.message,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Отправлено ${draft.amount} ★. Баланс: ${result.balance}',
+          ),
+        ),
+      );
+      if (result.conversationId != null) {
+        final conv = await ChatService.openDirectChat(user.id);
+        if (!mounted) return;
+        context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _isSendingTip = false);
+    }
+  }
+
+  Future<void> _showProfileGiftDetails(UserStarGift gift) async {
+    final scheme = Theme.of(context).colorScheme;
+    final sender = gift.senderLabel;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        final bottom = MediaQuery.paddingOf(ctx).bottom;
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(gift.emoji, style: const TextStyle(fontSize: 48)),
+                const SizedBox(height: 8),
+                Text(
+                  gift.title,
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                if (gift.serialLabel.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    gift.serialLabel,
+                    style: TextStyle(
+                      color: scheme.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  '${gift.stars} ★',
+                  style: TextStyle(
+                    color: scheme.secondary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+                if (sender.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'От $sender',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+                if (gift.note != null && gift.note!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    gift.note!.trim(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _toggleFollow() async {
@@ -602,45 +742,52 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
               ],
               if (_profileGifts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
-                InkWell(
-                  onTap: isOwnProfile
-                      ? () => context.push(StarGiftsInventoryRoute.path)
-                      : null,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: scheme.secondaryContainer.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.secondaryContainer.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      InkWell(
+                        onTap: isOwnProfile
+                            ? () => context.push(StarGiftsInventoryRoute.path)
+                            : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Text(
                           isOwnProfile ? 'Подарки' : 'Подарки профиля',
                           style: textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            for (final g in _profileGifts.take(12))
-                              Tooltip(
-                                message: () {
-                                  final base = g.serialLabel.isNotEmpty
-                                      ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
-                                      : '${g.title} · ${g.stars} ★';
-                                  return g.isAnonymous
-                                      ? '$base · от Анонима'
-                                      : base;
-                                }(),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final g in _profileGifts.take(12))
+                            Tooltip(
+                              message: () {
+                                final base = g.serialLabel.isNotEmpty
+                                    ? '${g.title} ${g.serialLabel} · ${g.stars} ★'
+                                    : '${g.title} · ${g.stars} ★';
+                                final sender = g.senderLabel;
+                                return sender.isEmpty
+                                    ? base
+                                    : '$base · от $sender';
+                              }(),
+                              child: InkWell(
+                                onTap: () => unawaited(
+                                  _showProfileGiftDetails(g),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -659,17 +806,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                   ],
                                 ),
                               ),
-                            if (_profileGifts.length > 12)
-                              Text(
-                                '+${_profileGifts.length - 12}',
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                            ),
+                          if (_profileGifts.length > 12)
+                            Text(
+                              '+${_profileGifts.length - 12}',
+                              style: textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
-                          ],
-                        ),
-                      ],
-                    ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -686,7 +833,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              if (!isOwnProfile)
+              if (!isOwnProfile) ...[
                 Row(
                   children: [
                     Expanded(
@@ -708,6 +855,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     ),
                   ],
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSendingGift
+                            ? null
+                            : () => unawaited(_sendGiftFromProfile(user)),
+                        icon: const Icon(Icons.card_giftcard_rounded, size: 18),
+                        label: const Text('Подарок'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSendingTip
+                            ? null
+                            : () => unawaited(_sendStarsFromProfile(user)),
+                        icon: const Icon(Icons.star_rounded, size: 18),
+                        label: const Text('Звёзды'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

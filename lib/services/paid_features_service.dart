@@ -895,6 +895,8 @@ class UserStarGift {
     required this.emoji,
     required this.status,
     this.senderId,
+    this.senderName,
+    this.senderUsername,
     this.giftId,
     this.messageId,
     this.note,
@@ -913,6 +915,8 @@ class UserStarGift {
   final int id;
   final int ownerId;
   final int? senderId;
+  final String? senderName;
+  final String? senderUsername;
   final int? giftId;
   final int? messageId;
   final int stars;
@@ -931,6 +935,16 @@ class UserStarGift {
   final int? totalSupply;
   final DateTime? convertedAt;
   final DateTime? createdAt;
+
+  String get senderLabel {
+    if (isAnonymous && senderId == null) return 'Аноним';
+    final u = senderUsername?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    final n = senderName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    if (isAnonymous) return 'Аноним';
+    return '';
+  }
 
   bool get canConvert =>
       !isCollectible && (status == 'held' || status == 'kept');
@@ -953,6 +967,8 @@ class UserStarGift {
         id: json['id'] as int? ?? 0,
         ownerId: json['owner_id'] as int? ?? 0,
         senderId: json['sender_id'] as int?,
+        senderName: json['sender_name'] as String?,
+        senderUsername: json['sender_username'] as String?,
         giftId: json['gift_id'] as int?,
         messageId: json['message_id'] as int?,
         stars: json['stars'] as int? ?? 0,

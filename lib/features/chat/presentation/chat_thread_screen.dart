@@ -7371,73 +7371,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _sendStarGift() async {
     final peer = _conversation.peer;
     if (peer == null || _sendingStarGift) return;
-    final gift = await showStarGiftPickerSheet(context);
-    if (gift == null || !mounted) return;
-    final noteController = TextEditingController();
-    var hideName = false;
-    final confirmed = await showDialog<({String note, bool hideName})>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text('${gift.emoji} ${gift.title}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (gift.isLimited)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    gift.remaining != null
-                        ? 'Лимитированный · осталось ${gift.remaining}'
-                        : 'Лимитированный подарок',
-                    style: TextStyle(
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              TextField(
-                controller: noteController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Сообщение (опционально)',
-                ),
-              ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Скрыть моё имя'),
-                subtitle: Text(
-                  'На профиле получателя подарок будет без отправителя',
-                  style: TextStyle(
-                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-                value: hideName,
-                onChanged: (v) => setLocal(() => hideName = v),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(
-                ctx,
-                (note: noteController.text.trim(), hideName: hideName),
-              ),
-              child: Text('Отправить · ${gift.stars} ★'),
-            ),
-          ],
-        ),
-      ),
-    );
-    noteController.dispose();
-    if (confirmed == null || !mounted) return;
+    final draft = await showStarGiftSendFlow(context);
+    if (draft == null || !mounted) return;
+    final gift = draft.gift;
     setState(() => _sendingStarGift = true);
     final idem =
         'flutter:gift:${widget.conversationId}:${gift.id}:${const Uuid().v4()}';
@@ -7445,8 +7381,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await PaidFeaturesService.sendGift(
         giftId: gift.id,
         conversationId: widget.conversationId,
-        message: confirmed.note.isEmpty ? null : confirmed.note,
-        hideName: confirmed.hideName,
+        message: draft.message,
+        hideName: draft.hideName,
         idempotencyKey: idem,
       );
       if (!mounted) return;
@@ -7454,7 +7390,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            confirmed.hideName
+            draft.hideName
                 ? 'Подарок ${gift.emoji} отправлен анонимно'
                 : 'Подарок ${gift.emoji} отправлен',
           ),
@@ -7604,97 +7540,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   Future<void> _tipPeerWithStars() async {
     final peer = _conversation.peer;
     if (peer == null) return;
-    const presets = <int>[1, 5, 10, 50, 100, 250];
-    final amountController = TextEditingController(text: '50');
-    final messageController = TextEditingController();
-    var selectedPreset = 50;
-    final payload = await showDialog<({int amount, String? message})>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text('Отправить звёзды ${peer.displayName}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Как в Telegram: звёзды появятся сообщением в чате.',
-                style: TextStyle(
-                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final n in presets)
-                    ChoiceChip(
-                      label: Text('$n ★'),
-                      selected: selectedPreset == n,
-                      onSelected: (_) {
-                        setLocal(() {
-                          selectedPreset = n;
-                          amountController.text = '$n';
-                        });
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Количество звёзд',
-                  hintText: 'например, 50',
-                ),
-                onChanged: (v) {
-                  final n = int.tryParse(v.trim());
-                  setLocal(() {
-                    selectedPreset = (n != null && presets.contains(n)) ? n : -1;
-                  });
-                },
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: messageController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Сообщение (опционально)',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Отмена'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final amount = int.tryParse(amountController.text.trim()) ?? 0;
-                if (amount <= 0) return;
-                Navigator.pop(
-                  ctx,
-                  (
-                    amount: amount,
-                    message: messageController.text.trim().isEmpty
-                        ? null
-                        : messageController.text.trim(),
-                  ),
-                );
-              },
-              child: const Text('Отправить'),
-            ),
-          ],
-        ),
-      ),
+    final payload = await pickStarsTipDraft(
+      context,
+      title: 'Отправить звёзды ${peer.displayName}',
+      subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
     );
-    amountController.dispose();
-    messageController.dispose();
-    if (payload == null) return;
+    if (payload == null || !mounted) return;
     try {
       final result = await PaidFeaturesService.donate(
         recipientId: peer.id,

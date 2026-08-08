@@ -174,6 +174,116 @@ Future<int?> pickPaidMessageStars(
   );
 }
 
+class StarsTipDraft {
+  const StarsTipDraft({
+    required this.amount,
+    this.message,
+  });
+
+  final int amount;
+  final String? message;
+}
+
+/// Telegram-like Stars tip amount + optional note (presets + custom).
+Future<StarsTipDraft?> pickStarsTipDraft(
+  BuildContext context, {
+  String title = 'Отправить звёзды',
+  String? subtitle,
+}) async {
+  const presets = <int>[1, 5, 10, 50, 100, 250];
+  final amountController = TextEditingController(text: '50');
+  final messageController = TextEditingController();
+  var selectedPreset = 50;
+  final result = await showDialog<StarsTipDraft>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+              Text(
+                subtitle.trim(),
+                style: TextStyle(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final n in presets)
+                  ChoiceChip(
+                    label: Text('$n ★'),
+                    selected: selectedPreset == n,
+                    onSelected: (_) {
+                      setLocal(() {
+                        selectedPreset = n;
+                        amountController.text = '$n';
+                      });
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Количество звёзд',
+                hintText: 'например, 50',
+              ),
+              onChanged: (v) {
+                final n = int.tryParse(v.trim());
+                setLocal(() {
+                  selectedPreset = (n != null && presets.contains(n)) ? n : -1;
+                });
+              },
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: messageController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Сообщение (опционально)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(amountController.text.trim()) ?? 0;
+              if (amount <= 0) return;
+              final note = messageController.text.trim();
+              Navigator.pop(
+                ctx,
+                StarsTipDraft(
+                  amount: amount,
+                  message: note.isEmpty ? null : note,
+                ),
+              );
+            },
+            child: const Text('Отправить'),
+          ),
+        ],
+      ),
+    ),
+  );
+  amountController.dispose();
+  messageController.dispose();
+  return result;
+}
+
 /// Telegram-like paid reaction amount picker (1 / 5 / 10 / 50 / 100 ★).
 Future<int?> pickPaidReactionStars(BuildContext context) async {
   const presets = <int>[1, 5, 10, 50, 100];

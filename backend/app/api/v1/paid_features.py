@@ -491,6 +491,17 @@ def _owned_gift_item(
     # Public profile wall: Telegram hides the sender when "Hide my name" was used.
     if redact_anonymous_sender and bool(getattr(gift, "is_anonymous", False)):
         item.sender_id = None
+        item.sender_name = None
+        item.sender_username = None
+    elif gift.sender_id:
+        sender = (
+            db.query(User)
+            .filter(User.id == gift.sender_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if sender is not None:
+            item.sender_name = sender.name
+            item.sender_username = sender.username
     return item
 
 

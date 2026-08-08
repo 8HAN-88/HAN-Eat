@@ -192,6 +192,8 @@ class UserStarGiftItem(BaseModel):
     id: int
     owner_id: int
     sender_id: Optional[int] = None
+    sender_name: Optional[str] = None
+    sender_username: Optional[str] = None
     gift_id: Optional[int] = None
     message_id: Optional[int] = None
     stars: int
