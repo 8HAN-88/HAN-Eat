@@ -73,7 +73,7 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось купить контент');
   }
 
-  static Future<int> donate({
+  static Future<DonateStarsResult> donate({
     required int recipientId,
     required int amountStars,
     String? message,
@@ -88,8 +88,9 @@ class PaidFeaturesService {
       }),
     );
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['balance'] as int? ?? 0;
+      return DonateStarsResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
     }
     _throwForResponse(response, 'Не удалось отправить донат');
   }
@@ -657,6 +658,28 @@ class StarsBalance {
         balance: json['balance'] as int? ?? 0,
         creatorAvailableStars: json['creator_available_stars'] as int? ?? 0,
         creatorPendingStars: json['creator_pending_stars'] as int? ?? 0,
+      );
+}
+
+class DonateStarsResult {
+  const DonateStarsResult({
+    required this.transactionId,
+    required this.balance,
+    this.messageId,
+    this.conversationId,
+  });
+
+  final int transactionId;
+  final int balance;
+  final int? messageId;
+  final int? conversationId;
+
+  factory DonateStarsResult.fromJson(Map<String, dynamic> json) =>
+      DonateStarsResult(
+        transactionId: json['transaction_id'] as int? ?? 0,
+        balance: json['balance'] as int? ?? 0,
+        messageId: json['message_id'] as int?,
+        conversationId: json['conversation_id'] as int?,
       );
 }
 

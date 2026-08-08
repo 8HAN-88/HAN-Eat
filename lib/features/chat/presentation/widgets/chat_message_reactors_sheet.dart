@@ -92,20 +92,34 @@ class _ChatMessageReactorsSheetState extends State<_ChatMessageReactorsSheet> {
 
   List<ChatMessageReactionUser> get _visible {
     final filter = _filterEmoji;
-    if (filter == null || filter.isEmpty) return _items;
-    return _items.where((e) => e.emoji == filter).toList();
+    final base = (filter == null || filter.isEmpty)
+        ? _items
+        : _items.where((e) => e.emoji == filter).toList();
+    // Paid reactions: keep top ★ senders first (API already sorts; keep UI stable).
+    final sorted = [...base]..sort((a, b) {
+        final byStars = b.starsAmount.compareTo(a.starsAmount);
+        if (byStars != 0) return byStars;
+        return a.user.displayName.compareTo(b.user.displayName);
+      });
+    return sorted;
   }
+
+  int get _starsTotal =>
+      _items.fold<int>(0, (sum, e) => sum + (e.starsAmount > 0 ? e.starsAmount : 0));
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final tabs = _emojiTabs;
     final visible = _visible;
+    final starsTotal = _starsTotal;
     final subtitle = _loading
         ? 'Загрузка…'
         : (_items.isEmpty
             ? 'Пока нет реакций'
-            : 'Реакций: ${_items.length}');
+            : (starsTotal > 0
+                ? 'Реакций: ${_items.length} · $starsTotal ★'
+                : 'Реакций: ${_items.length}'));
 
     return SafeArea(
       child: DraggableScrollableSheet(

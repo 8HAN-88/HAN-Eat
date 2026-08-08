@@ -4021,12 +4021,19 @@ class ChatService:
                 MessageReaction.message_id == message_id,
                 User.deleted_at.is_(None),
             )
-            .order_by(MessageReaction.created_at.asc(), MessageReaction.id.asc())
         )
         clean = (emoji or "").strip()
         if clean:
             query = query.filter(MessageReaction.emoji == clean)
         rows = query.all()
+        # Telegram paid reactions: top senders first by ★, then earliest.
+        rows.sort(
+            key=lambda pair: (
+                -int(getattr(pair[0], "stars_amount", 0) or 0),
+                pair[0].created_at or datetime.min,
+                int(pair[0].id or 0),
+            )
+        )
         return [
             (row.emoji, user, int(getattr(row, "stars_amount", 0) or 0))
             for row, user in rows

@@ -41,6 +41,8 @@ class DonateStarsRequest(BaseModel):
 class DonateStarsResponse(BaseModel):
     transaction_id: int
     balance: int
+    message_id: Optional[int] = None
+    conversation_id: Optional[int] = None
 
 
 class SubscribeChannelRequest(BaseModel):

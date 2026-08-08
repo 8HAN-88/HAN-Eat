@@ -291,12 +291,22 @@ class PaidFeaturesService:
         self.db.flush()
         return purchase
 
-    def donate(self, sender_id: int, recipient_id: int, amount: int, *, message: Optional[str] = None) -> StarTransaction:
+    def donate(
+        self,
+        sender_id: int,
+        recipient_id: int,
+        amount: int,
+        *,
+        message: Optional[str] = None,
+        create_chat_message: bool = True,
+    ) -> tuple[StarTransaction, Optional[Message]]:
+        """Send Stars tip. Optionally posts a Telegram-like tip bubble in the DM."""
         if sender_id == recipient_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
         recipient_exists = self.db.query(User.id).filter(User.id == recipient_id, User.deleted_at.is_(None)).first()
         if not recipient_exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient not found")
+        note = (message or "").strip() or None
         tx = self._spend_stars(
             sender_id,
             amount,
@@ -304,7 +314,7 @@ class PaidFeaturesService:
             reference_type="user",
             reference_id=recipient_id,
             counterparty_user_id=recipient_id,
-            meta={"message": message} if message else None,
+            meta={"message": note} if note else None,
         )
         self._credit_creator(
             recipient_id,
@@ -313,9 +323,55 @@ class PaidFeaturesService:
             reference_type="user",
             reference_id=sender_id,
             counterparty_user_id=sender_id,
-            meta={"message": message} if message else None,
+            meta={"message": note} if note else None,
         )
-        return tx
+        tip_msg: Optional[Message] = None
+        if create_chat_message:
+            tip_msg = self._create_stars_tip_message(
+                sender_id,
+                recipient_id,
+                amount=amount,
+                note=note,
+            )
+        return tx, tip_msg
+
+    def _create_stars_tip_message(
+        self,
+        sender_id: int,
+        recipient_id: int,
+        *,
+        amount: int,
+        note: Optional[str],
+    ) -> Optional[Message]:
+        """Best-effort tip bubble in the direct chat (skip if blocked / unavailable)."""
+        import json as _json
+
+        from app.services.chat_service import ChatService
+
+        try:
+            conv = ChatService(self.db).get_or_create_direct(sender_id, recipient_id)
+        except ValueError:
+            return None
+        except Exception:
+            return None
+        tip_msg = Message(
+            conversation_id=conv.id,
+            sender_id=sender_id,
+            type="stars_tip",
+            content=_json.dumps(
+                {
+                    "amount": int(amount),
+                    "message": note,
+                },
+                ensure_ascii=False,
+            ),
+            media_url=None,
+        )
+        self.db.add(tip_msg)
+        self.db.flush()
+        conv.updated_at = datetime.utcnow()
+        self.db.flush()
+        return tip_msg
 
     def subscribe_channel(
         self,

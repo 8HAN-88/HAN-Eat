@@ -120,6 +120,52 @@ async def purchase_paid_content(
     )
 
 
+def _publish_tip_message(db: Session, msg, *, sender_id: int) -> None:
+    """Fan out a Stars tip bubble like other chat messages."""
+    from app.models.conversation import ConversationMember
+    from app.services.chat_event_bus import publish as publish_chat_event
+    from app.services.user_event_bus import publish_user_event
+
+    payload = {
+        "id": msg.id,
+        "conversation_id": msg.conversation_id,
+        "sender_id": msg.sender_id,
+        "type": msg.type,
+        "content": msg.content,
+        "media_url": msg.media_url,
+        "reply_to_message_id": msg.reply_to_message_id,
+        "forward_from_user_id": None,
+        "forward_from_name": None,
+        "forwarded_from_message_id": None,
+        "forwarded_from_conversation_id": None,
+        "inline_keyboard": None,
+        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "edited_at": None,
+        "disable_webpage_preview": False,
+        "media_group_id": None,
+        "is_paid": False,
+        "price_stars": 0,
+        "purchased": True,
+        "reactions": [],
+    }
+    publish_chat_event(
+        msg.conversation_id,
+        {"type": "message.new", "message": payload},
+    )
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == msg.conversation_id)
+        .all()
+    )
+    for (user_id,) in member_ids:
+        if user_id == sender_id:
+            continue
+        publish_user_event(
+            user_id,
+            {"event": "chat.inbox", "conversation_id": msg.conversation_id},
+        )
+
+
 @router.post("/stars/donate", response_model=DonateStarsResponse)
 async def donate_stars(
     request: DonateStarsRequest,
@@ -129,7 +175,7 @@ async def donate_stars(
     if request.recipient_id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot donate to yourself")
     service = PaidFeaturesService(db)
-    tx = service.donate(
+    tx, tip_msg = service.donate(
         current_user.id,
         request.recipient_id,
         request.amount_stars,
@@ -148,7 +194,15 @@ async def donate_stars(
         )
     )
     db.commit()
-    return DonateStarsResponse(transaction_id=tx.id, balance=service.star_balance(current_user.id))
+    if tip_msg is not None:
+        db.refresh(tip_msg)
+        _publish_tip_message(db, tip_msg, sender_id=current_user.id)
+    return DonateStarsResponse(
+        transaction_id=tx.id,
+        balance=service.star_balance(current_user.id),
+        message_id=tip_msg.id if tip_msg is not None else None,
+        conversation_id=tip_msg.conversation_id if tip_msg is not None else None,
+    )
 
 
 @router.post("/channels/{channel_id}/subscribe", response_model=SubscribeChannelResponse)

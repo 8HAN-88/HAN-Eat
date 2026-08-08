@@ -11,7 +11,12 @@ import os
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from app.core.database import Base
-from app.models.conversation import Conversation, ConversationMember, Message
+from app.models.conversation import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageReaction,
+)
 from app.models.notification import Notification
 from app.models.paid_features import (
     CreatorBalance,
@@ -39,6 +44,7 @@ def db_session():
         Conversation.__table__,
         ConversationMember.__table__,
         Message.__table__,
+        MessageReaction.__table__,
         StarTransaction.__table__,
         CreatorBalance.__table__,
         PaidMessageUnlock.__table__,
@@ -237,6 +243,71 @@ def test_charge_paid_message_fee_once_per_album(db_session):
     assert first.id == second.id
     assert svc.star_balance(2) == 90
     assert svc.creator_balance(1).available_stars == 10
+
+
+def test_message_reaction_users_sort_by_stars(db_session):
+    from app.services.chat_service import ChatService
+
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    # User 3 is not a member but we still store their reaction row for sort coverage
+    # via direct insert after temporarily adding them.
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=3))
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=1,
+        type="text",
+        content="hi",
+    )
+    db_session.add(msg)
+    db_session.flush()
+    db_session.add(
+        MessageReaction(
+            message_id=msg.id, user_id=2, emoji="🔥", stars_amount=5
+        )
+    )
+    db_session.add(
+        MessageReaction(
+            message_id=msg.id, user_id=3, emoji="🔥", stars_amount=50
+        )
+    )
+    db_session.commit()
+
+    rows = ChatService(db_session).message_reaction_users(conv.id, msg.id, 1)
+    assert [stars for _emoji, _user, stars in rows] == [50, 5]
+    assert [user.id for _emoji, user, _stars in rows] == [3, 2]
+
+
+def test_donate_creates_stars_tip_message(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    tx, tip = svc.donate(1, 2, 40, message="thanks")
+    db_session.commit()
+    assert tx is not None
+    assert tip is not None
+    assert tip.type == "stars_tip"
+    assert tip.sender_id == 1
+    assert '"amount": 40' in tip.content or '"amount":40' in tip.content
+    assert "thanks" in tip.content
+    assert svc.star_balance(1) == 60
+    assert svc.creator_balance(2).available_stars == 40
+    # Direct chat members exist for the tip bubble.
+    members = (
+        db_session.query(ConversationMember)
+        .filter(ConversationMember.conversation_id == tip.conversation_id)
+        .all()
+    )
+    assert {m.user_id for m in members} == {1, 2}
 
 
 def test_send_star_gift_direct(db_session):

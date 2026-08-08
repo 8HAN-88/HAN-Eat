@@ -72,11 +72,12 @@ async def create_donation(
         if not post or post.user_id != payload.recipient_id:
             raise HTTPException(status_code=400, detail="Invalid post")
 
+    from app.api.v1.paid_features import _publish_tip_message
     from app.services.paid_features_service import PaidFeaturesService
 
     service = PaidFeaturesService(db)
     # Списываем ★ и зачисляем автору (как /paid/stars/donate).
-    service.donate(
+    _tx, tip_msg = service.donate(
         current_user.id,
         payload.recipient_id,
         payload.amount_stars,
@@ -95,6 +96,9 @@ async def create_donation(
     db.add(donation)
     db.commit()
     db.refresh(donation)
+    if tip_msg is not None:
+        db.refresh(tip_msg)
+        _publish_tip_message(db, tip_msg, sender_id=current_user.id)
 
     return DonationResponse(
         id=donation.id,
