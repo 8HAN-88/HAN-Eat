@@ -84,6 +84,7 @@ class ChatCacheService {
   static const _draftPrefix = 'chat_draft_v1_';
   static const _draftV2Prefix = 'chat_draft_v2_';
   static const _failedTextPrefix = 'chat_failed_text_v1_';
+  static const _readyOutboxPrefix = 'chat_ready_outbox_v1_';
 
   static List<ChatConversation>? _memoryConversations;
   static final Map<int, ChatDraft> _memoryDrafts = {};
@@ -238,6 +239,38 @@ class ChatCacheService {
     } catch (_) {
       return const [];
     }
+  }
+
+  static Future<List<Map<String, dynamic>>> loadReadyOutbox(
+    int conversationId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('$_readyOutboxPrefix$conversationId');
+      if (raw == null || raw.isEmpty) return const [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return [
+        for (final item in list)
+          if (item is Map<String, dynamic>) item,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static Future<void> saveReadyOutbox(
+    int conversationId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_readyOutboxPrefix$conversationId';
+      if (items.isEmpty) {
+        await prefs.remove(key);
+      } else {
+        await prefs.setString(key, jsonEncode(items));
+      }
+    } catch (_) {}
   }
 
   static Future<void> saveFailedTextSends(

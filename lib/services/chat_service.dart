@@ -1060,14 +1060,16 @@ class ChatService {
     String description = '',
     Map<String, dynamic>? settings,
     int? replyToMessageId,
+    String? clientMessageId,
     bool silent = false,
     int? topicId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages');
     final response = await _post(
       uri,
-      retries: 0,
+      retries: 1,
       timeout: _sendTimeout,
+      bypassRateLimitGate: true,
       body: jsonEncode({
         'type': 'poll',
         'poll_question': question,
@@ -1075,6 +1077,7 @@ class ChatService {
         'poll_options': options,
         if (settings != null) 'poll_settings': settings,
         if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
         if (silent) 'silent': true,
         if (topicId != null) 'topic_id': topicId,
       }),

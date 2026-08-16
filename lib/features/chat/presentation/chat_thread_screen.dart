@@ -70,6 +70,7 @@ import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
+import '../application/chat_ready_outgoing.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -287,6 +288,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final List<_PendingTextSend> _textOutboundQueue = [];
   bool _textDrainActive = false;
   final Set<String> _inFlightTextClientIds = {};
+  final List<ChatReadyOutgoing> _readyOutboundQueue = [];
+  final Map<int, ChatReadyOutgoing> _failedReadySends = {};
+  final Set<String> _inFlightReadyClientIds = {};
   final List<_PendingMediaSend> _mediaOutboundQueue = [];
   bool _mediaDrainActive = false;
   _PendingMediaSend? _pendingMediaRetry;
@@ -635,6 +639,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _controller.addListener(_onInputChanged);
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
+      await _restoreReadyOutbox();
       await _restoreMediaOutbox();
     }));
     unawaited(_loadSlowModeUiPrefs());
@@ -860,6 +865,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (_textOutboundQueue.isNotEmpty) {
       _kickTextOutbound();
+    }
+    if (_failedReadySends.isNotEmpty) {
+      final failed = _failedReadySends.values.toList(growable: false);
+      _failedReadySends.clear();
+      for (final pending in failed) {
+        pending.attempts = 0;
+        _readyOutboundQueue.add(pending);
+      }
+      unawaited(_persistReadySends());
+      if (mounted) setState(() {});
+    }
+    if (_readyOutboundQueue.isNotEmpty) {
+      _kickReadyOutbound();
     }
     if (_mediaOutboundQueue.isNotEmpty) {
       unawaited(_drainMediaOutboundQueue());
@@ -1433,7 +1451,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _activeFailedTextAutoRetryCount;
 
   bool get _hasFailedPendingItems =>
-      _pendingMediaRetry != null || _failedTextSends.isNotEmpty;
+      _pendingMediaRetry != null ||
+      _failedTextSends.isNotEmpty ||
+      _failedReadySends.isNotEmpty;
 
   int get _autoRetrySlowCount =>
       (_pendingMediaAutoRetryRemainingSeconds > 0 &&
@@ -2050,7 +2070,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _pollTimer?.cancel();
     final interval = _sseConnected
         ? const Duration(seconds: 8)
-        : const Duration(seconds: 3);
+        : const Duration(seconds: 2);
     if (!_appPaused) {
       unawaited(_pollNew());
     }
@@ -2202,6 +2222,167 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       refreshChatsHub(ref);
     } catch (_) {}
+  }
+
+  Future<void> _persistReadySends() {
+    final seen = <String>{};
+    final items = <Map<String, dynamic>>[];
+    for (final pending in _readyOutboundQueue) {
+      if (!seen.add(pending.clientMessageId)) continue;
+      items.add({...pending.toJson(), 'queued': true});
+    }
+    for (final pending in _failedReadySends.values) {
+      if (!seen.add(pending.clientMessageId)) continue;
+      items.add({...pending.toJson(), 'queued': false});
+    }
+    return ChatCacheService.saveReadyOutbox(widget.conversationId, items);
+  }
+
+  Future<void> _restoreReadyOutbox() async {
+    final rows = await ChatCacheService.loadReadyOutbox(widget.conversationId);
+    if (rows.isEmpty || !mounted) return;
+    final uid = AuthService.instance.currentUser?.id ?? 0;
+    final queued = <ChatReadyOutgoing>[];
+    final failed = <int, ChatReadyOutgoing>{};
+    final bubbles = <ChatMessage>[];
+    final known = {
+      for (final pending in _readyOutboundQueue) pending.clientMessageId,
+      for (final pending in _failedReadySends.values) pending.clientMessageId,
+    };
+    for (final row in rows) {
+      final pending = ChatReadyOutgoing.fromJson(row);
+      if (pending.clientMessageId.isEmpty || pending.tempId >= 0) continue;
+      if (known.contains(pending.clientMessageId)) continue;
+      known.add(pending.clientMessageId);
+      if (row['queued'] == true) {
+        queued.add(pending);
+      } else {
+        failed[pending.tempId] = pending;
+      }
+      if (!_messages.any((m) =>
+          m.id == pending.tempId ||
+          ((m.clientMessageId ?? '').isNotEmpty &&
+              m.clientMessageId == pending.clientMessageId))) {
+        bubbles.add(
+          ChatMessage(
+            id: pending.tempId,
+            conversationId: widget.conversationId,
+            senderId: uid,
+            type: pending.type,
+            content: pending.content,
+            mediaUrl: pending.mediaUrl,
+            createdAt: DateTime.now(),
+            isMine: true,
+            replyToMessageId: pending.replyToMessageId,
+            topicId: pending.topicId,
+            isAnonymous: pending.anonymous,
+            clientMessageId: pending.clientMessageId,
+          ),
+        );
+      }
+    }
+    if (queued.isEmpty && failed.isEmpty) return;
+    setState(() {
+      _readyOutboundQueue.addAll(queued);
+      _failedReadySends.addAll(failed);
+      _messages.addAll(bubbles);
+      _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    });
+    if (queued.isNotEmpty) _kickReadyOutbound();
+  }
+
+  void _enqueueReadyOutgoing(ChatReadyOutgoing pending) {
+    final uid = AuthService.instance.currentUser?.id ?? 0;
+    final optimistic = ChatMessage(
+      id: pending.tempId,
+      conversationId: widget.conversationId,
+      senderId: uid,
+      type: pending.type,
+      content: pending.content,
+      mediaUrl: pending.mediaUrl,
+      createdAt: DateTime.now(),
+      isMine: true,
+      replyToMessageId: pending.replyToMessageId,
+      topicId: pending.topicId,
+      isAnonymous: pending.anonymous,
+      clientMessageId: pending.clientMessageId,
+    );
+    setState(() {
+      _messages.add(optimistic);
+      _replyTo = null;
+      _readyOutboundQueue.add(pending);
+    });
+    unawaited(_persistReadySends());
+    unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    _rememberOutgoingForHub(optimistic);
+    _scrollToBottom();
+    AppHaptics.selection();
+    unawaited(_kickReadyOutbound());
+  }
+
+  void _kickReadyOutbound() {
+    for (final pending in List<ChatReadyOutgoing>.from(_readyOutboundQueue)) {
+      if (_inFlightReadyClientIds.contains(pending.clientMessageId)) continue;
+      unawaited(_flushReadyOutgoing(pending));
+    }
+  }
+
+  Future<void> _retryFailedReady(int tempId) async {
+    final pending = _failedReadySends.remove(tempId);
+    if (pending == null) return;
+    pending.attempts = 0;
+    setState(() => _readyOutboundQueue.add(pending));
+    unawaited(_persistReadySends());
+    _kickReadyOutbound();
+  }
+
+  Future<void> _flushReadyOutgoing(ChatReadyOutgoing pending) async {
+    if (_inFlightReadyClientIds.contains(pending.clientMessageId)) return;
+    _inFlightReadyClientIds.add(pending.clientMessageId);
+    try {
+      while (true) {
+        try {
+          final msg = await sendChatReadyOutgoing(
+            conversationId: widget.conversationId,
+            pending: pending,
+          );
+          _readyOutboundQueue.removeWhere(
+            (p) => p.clientMessageId == pending.clientMessageId,
+          );
+          _failedReadySends.remove(pending.tempId);
+          unawaited(_persistReadySends());
+          _rememberOutgoingForHub(msg, refreshHub: true);
+          if (!mounted) return;
+          setState(() {
+            _integrateMessage(msg, removeTempId: pending.tempId);
+          });
+          _scrollToBottom();
+          unawaited(
+            ChatCacheService.saveThread(widget.conversationId, _messages),
+          );
+          return;
+        } catch (e) {
+          pending.attempts++;
+          if (_isRetryableSendError(e) && pending.attempts < 3) {
+            await Future<void>.delayed(
+              Duration(milliseconds: pending.attempts == 1 ? 200 : 500),
+            );
+            continue;
+          }
+          _readyOutboundQueue.removeWhere(
+            (p) => p.clientMessageId == pending.clientMessageId,
+          );
+          _failedReadySends[pending.tempId] = pending;
+          unawaited(_persistReadySends());
+          if (!mounted) return;
+          setState(() {});
+          showErrorSnackBar(context, e);
+          return;
+        }
+      }
+    } finally {
+      _inFlightReadyClientIds.remove(pending.clientMessageId);
+    }
   }
 
   void _restartPolling() {
@@ -3251,9 +3432,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     if (removeTempId != null) {
       final removedFailedText = _failedTextSends.remove(removeTempId) != null;
+      final removedFailedReady = _failedReadySends.remove(removeTempId) != null;
       _removePendingMediaByTempId(removeTempId);
       if (removedFailedText) {
         unawaited(_persistFailedTextSends());
+      }
+      if (removedFailedReady) {
+        unawaited(_persistReadySends());
       }
     }
     final result = integrateIncomingChatMessage(
@@ -3513,6 +3698,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             remainingSeconds: _remainingRetryDelayForText(pending),
             isMedia: false,
             action: () => _retryFailedText(pending.tempId),
+          ),
+        for (final pending in _failedReadySends.values)
+          _ManualRetryTask(
+            remainingSeconds: null,
+            isMedia: false,
+            action: () => _retryFailedReady(pending.tempId),
           ),
       ],
       (item) => item.remainingSeconds,
@@ -3871,7 +4062,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final mediaCount = _pendingMediaRetry != null ? 1 : 0;
     final failedTextIds = _failedTextSends.keys.toList(growable: false);
-    if (mediaCount == 0 && failedTextIds.isEmpty) return;
+    final failedReadyIds = _failedReadySends.keys.toList(growable: false);
+    if (mediaCount == 0 && failedTextIds.isEmpty && failedReadyIds.isEmpty) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -3908,9 +4102,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final failedMediaTempId = _pendingMediaRetry?.tempId;
       _pendingMediaRetry = null;
       _failedTextSends.removeWhere((_, __) => true);
+      _failedReadySends.removeWhere((_, __) => true);
       _messages.removeWhere(
         (m) =>
             failedTextIds.contains(m.id) ||
+            failedReadyIds.contains(m.id) ||
             (failedMediaTempId != null && m.id == failedMediaTempId),
       );
       if (failedMediaTempId != null) {
@@ -3918,6 +4114,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
     });
     unawaited(_persistFailedTextSends());
+    unawaited(_persistReadySends());
     unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     await _showClearedFailedItemsSnackbar(
       textCount: failedTextIds.length,
@@ -5646,6 +5843,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     _failedTextAutoRetryTimers.clear();
     unawaited(_persistFailedTextSends());
+    unawaited(_persistReadySends());
     unawaited(
       ChatCacheService.saveDraft(
         widget.conversationId,
@@ -7172,6 +7370,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return _messages
           .where((m) =>
               _failedTextSends.containsKey(m.id) ||
+              _failedReadySends.containsKey(m.id) ||
               (failedMediaTempId != null && m.id == failedMediaTempId))
           .toList(growable: false);
     }
@@ -7179,7 +7378,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   int get _failedPendingItemsCount =>
-      _failedTextSends.length + (_pendingMediaRetry != null ? 1 : 0);
+      _failedTextSends.length +
+      _failedReadySends.length +
+      (_pendingMediaRetry != null ? 1 : 0);
 
   bool _canClusterMessages(ChatMessage a, ChatMessage b) {
     if (a.senderId != b.senderId || a.isMine != b.isMine) return false;
@@ -9146,6 +9347,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final isFailed = msg.isMine &&
         (_failedTextSends.containsKey(msg.id) ||
+            _failedReadySends.containsKey(msg.id) ||
             (_pendingMediaRetry?.tempId == msg.id));
     // Temp ids (< 0) that are not failed = still sending (Telegram clock).
     final isPending = msg.isMine && msg.id < 0 && !isFailed;
@@ -9330,6 +9532,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final isPending = mine && anchor.id < 0;
     final isFailed = mine &&
         (_failedTextSends.containsKey(anchor.id) ||
+            _failedReadySends.containsKey(anchor.id) ||
             _pendingMediaRetry?.tempId == anchor.id);
     final status = mine
         ? _outgoingStatusVisual(
@@ -10524,8 +10727,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           };
           final keepTempIds = <int>{
             ..._failedTextSends.keys,
+            ..._failedReadySends.keys,
             ..._pendingMediaByTempId.keys,
             ..._textOutboundQueue.map((p) => p.tempId),
+            ..._readyOutboundQueue.map((p) => p.tempId),
           };
           final previous = List<ChatMessage>.from(_messages);
           final merged = result.items.map((incoming) {
@@ -12215,49 +12420,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendGifByUrl(String mediaUrl) async {
-    try {
-      final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
-      await ChatService.sendImage(
-        conversationId: widget.conversationId,
+    final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
+    unawaited(ChatRecentGifsStore.remember(resolved));
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'image',
+        content: '',
         mediaUrl: resolved,
-        caption: '',
-        replyToMessageId: _replyTo?.id,
-        topicId: _activeTopicIdForSend,
-      );
-      unawaited(ChatRecentGifsStore.remember(resolved));
-      if (!mounted) return;
-      setState(() => _replyTo = null);
-      unawaited(_load(refresh: true));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
-  }
-
-  Future<void> _sendStickerByUrl(String mediaUrl, {String? emoji}) async {
-    // Stickers send immediately (Telegram); schedule via attach-sheet long path
-    // would interrupt the picker UX.
-    try {
-      await ChatService.sendSticker(
-        conversationId: widget.conversationId,
-        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
-        emoji: (emoji ?? '').trim(),
         replyToMessageId: _replyTo?.id,
         topicId: _activeTopicIdForSend,
         anonymous: _effectiveSendAnonymous,
-      );
-      _controller.clear();
-      setState(() => _replyTo = null);
-      AppHaptics.selection();
-      await _pollNew();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
+  }
+
+  Future<void> _sendStickerByUrl(String mediaUrl, {String? emoji}) async {
+    _controller.clear();
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'sticker',
+        content: (emoji ?? '').trim(),
+        mediaUrl: ServerConfig.resolveMediaUrl(mediaUrl),
+        replyToMessageId: _replyTo?.id,
+        topicId: _activeTopicIdForSend,
+        anonymous: _effectiveSendAnonymous,
+      ),
+    );
   }
 
   Future<void> _composeAndSendGallery(List<XFile> files) async {
@@ -12472,18 +12664,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (url == null || url.isEmpty) {
         throw Exception('Не удалось загрузить видео');
       }
-      _setUploadProgress(0.95, status: 'Отправка…');
-      await ChatService.sendVideoNote(
-        conversationId: widget.conversationId,
-        mediaUrl: ServerConfig.resolveMediaUrl(url),
-        durationSec: durationSec,
-        replyToMessageId: _replyTo?.id,
-        topicId: _activeTopicIdForSend,
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _uploadProgress = null;
+        });
+      }
+      _enqueueReadyOutgoing(
+        ChatReadyOutgoing(
+          tempId: _newLocalTempId(),
+          clientMessageId: const Uuid().v4(),
+          type: 'video_note',
+          content: '${durationSec < 1 ? 1 : durationSec}',
+          mediaUrl: ServerConfig.resolveMediaUrl(url),
+          replyToMessageId: _replyTo?.id,
+          topicId: _activeTopicIdForSend,
+          anonymous: _effectiveSendAnonymous,
+          durationSec: durationSec,
+        ),
       );
-      if (!mounted) return;
-      setState(() => _replyTo = null);
-      AppHaptics.selection();
-      await _pollNew();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -12586,16 +12785,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         unawaited(_refreshScheduledPendingCount());
         return;
       }
-      await ChatService.sendLocation(
-        conversationId: widget.conversationId,
-        content: content,
-        replyToMessageId: _replyTo?.id,
-        silent: mode == 'silent',
-        topicId: _activeTopicIdForSend,
+      _enqueueReadyOutgoing(
+        ChatReadyOutgoing(
+          tempId: _newLocalTempId(),
+          clientMessageId: const Uuid().v4(),
+          type: 'location',
+          content: content,
+          replyToMessageId: _replyTo?.id,
+          silent: mode == 'silent',
+          topicId: _activeTopicIdForSend,
+          anonymous: _effectiveSendAnonymous,
+        ),
       );
-      setState(() => _replyTo = null);
-      AppHaptics.selection();
-      await _pollNew();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -12650,27 +12851,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendContactText(String text) async {
-    _beginSending(status: 'Отправка контакта…');
-    try {
-      final msg = await ChatService.sendText(
-        conversationId: widget.conversationId,
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'text',
         content: text,
         replyToMessageId: _replyTo?.id,
         topicId: _activeTopicIdForSend,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить контакт');
-    }
+        anonymous: _effectiveSendAnonymous,
+      ),
+    );
   }
 
   Future<void> _createAndSendPoll() async {
@@ -12717,31 +12908,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    _beginSending(status: 'Отправка опроса…');
-    try {
-      final msg = await ChatService.sendPoll(
-        conversationId: widget.conversationId,
-        question: draft.question,
-        description: draft.description,
-        options: draft.options,
-        settings: draft.settings.toJson(),
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'poll',
+        content: optimisticPollContent(
+          question: draft.question,
+          description: draft.description,
+          options: draft.options,
+          settings: draft.settings.toJson(),
+        ),
         replyToMessageId: _replyTo?.id,
         silent: mode == 'silent',
         topicId: _activeTopicIdForSend,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить опрос');
-    }
+        pollQuestion: draft.question,
+        pollDescription: draft.description,
+        pollOptions: draft.options,
+        pollSettings: draft.settings.toJson(),
+      ),
+    );
   }
 
   Future<void> _resendStoredFile({
@@ -12782,29 +12968,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    _beginSending(status: 'Отправка…');
-    try {
-      final msg = await ChatService.sendFile(
-        conversationId: widget.conversationId,
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'file',
+        content: name,
         mediaUrl: resolved,
         fileName: name,
         replyToMessageId: _replyTo?.id,
         silent: mode == 'silent',
         topicId: _activeTopicIdForSend,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(msg);
-        _replyTo = null;
-      });
-      _endSending();
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (!mounted) return;
-      _endSending();
-      showErrorSnackBar(context, e, fallback: 'Не удалось отправить файл');
-    }
+        anonymous: _effectiveSendAnonymous,
+      ),
+    );
   }
 
   Future<void> _votePoll(ChatMessage msg, int optionIndex) async {
@@ -14114,6 +14291,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       _selectedMessageIds.contains(msg.id);
                                   final failed =
                                       _failedTextSends.containsKey(msg.id) ||
+                                          _failedReadySends.containsKey(msg.id) ||
                                           _pendingMediaRetry?.tempId == msg.id;
                                   final cluster = messageClusters[msgIndex];
                                   final showDateSeparator =
@@ -14216,6 +14394,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                         ? () {
                                                                             if (_failedTextSends.containsKey(msg.id)) {
                                                                               unawaited(_retryFailedText(msg.id));
+                                                                            } else if (_failedReadySends.containsKey(msg.id)) {
+                                                                              unawaited(_retryFailedReady(msg.id));
                                                                             } else if (_pendingMediaRetry?.tempId == msg.id) {
                                                                               unawaited(_retryPendingMedia());
                                                                             }
