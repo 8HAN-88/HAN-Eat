@@ -71,6 +71,7 @@ import '../application/chat_reaction_jumps.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
 import '../application/chat_ready_outgoing.dart';
+import '../application/chat_thread_prefetch.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -356,6 +357,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int _serverSearchSeq = 0;
   Duration _recordDuration = Duration.zero;
   int _messageLoadSeq = 0;
+  bool _consumedPrefetchPage = false;
   Timer? _recordTimer;
   StreamSubscription<Amplitude>? _amplitudeSub;
   Timer? _markReadDebounce;
@@ -2358,6 +2360,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _failedReadySends.remove(pending.tempId);
           unawaited(_persistReadySends());
           _rememberOutgoingForHub(msg, refreshHub: true);
+          if (pending.type == 'live_location' && msg.id > 0) {
+            final parsed = ChatLocationPayload.tryParse(msg.content);
+            final expires = parsed?.expiresAt;
+            if (expires != null) {
+              LiveLocationSession.start(
+                conversationId: widget.conversationId,
+                messageId: msg.id,
+                expiresAt: expires,
+              );
+            }
+          }
           if (!mounted) return;
           setState(() {
             _integrateMessage(msg, removeTempId: pending.tempId);
@@ -5989,6 +6002,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           sourceChatTitle: _conversation.displayTitle,
         );
       }
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       await context.push(
         ChatThreadRoute.pathFor(conv),
         extra: ChatThreadOpenArgs(
@@ -6087,6 +6101,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       final conv = await ChatService.getConversation(conversationId);
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       await context.push(
         ChatThreadRoute.pathFor(conv),
         extra: ChatThreadOpenArgs(
@@ -6217,6 +6232,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.pop(ctx);
+                    unawaited(ChatThreadPrefetch.warm(g.id));
                     context.push(ChatThreadRoute.pathForId(g.id));
                   },
                 );
@@ -7676,7 +7692,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         idempotencyKey: idem,
       );
       if (!mounted) return;
-      await _pollNew();
+      unawaited(_pollNew());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -7844,7 +7860,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (!mounted) return;
       if (result.messageId != null) {
-        await _pollNew();
+        unawaited(_pollNew());
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -10736,11 +10752,40 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       setState(() => _loadingMore = true);
     }
     try {
-      final result = await ChatService.listMessages(
-        conversationId: widget.conversationId,
-        cursor: refresh ? null : _nextCursor,
-        topicId: _activeTopicIdForSend,
-      );
+      late final ({
+        List<ChatMessage> items,
+        bool hasMore,
+        int? nextCursor,
+        ChatMessage? pinnedMessage,
+        List<ChatMessage> pinnedMessages,
+      }) result;
+      final reusePrefetch = refresh &&
+          _activeTopicIdForSend == null &&
+          !_consumedPrefetchPage;
+      if (reusePrefetch) {
+        final page = await ChatThreadPrefetch.page(widget.conversationId);
+        if (page != null) {
+          result = (
+            items: page.items,
+            hasMore: page.hasMore,
+            nextCursor: page.nextCursor,
+            pinnedMessage: page.pinnedMessage,
+            pinnedMessages: page.pinnedMessages,
+          );
+        } else {
+          result = await ChatService.listMessages(
+            conversationId: widget.conversationId,
+            topicId: _activeTopicIdForSend,
+          );
+        }
+        _consumedPrefetchPage = true;
+      } else {
+        result = await ChatService.listMessages(
+          conversationId: widget.conversationId,
+          cursor: refresh ? null : _nextCursor,
+          topicId: _activeTopicIdForSend,
+        );
+      }
       if (!mounted || seq != _messageLoadSeq) return;
       setState(() {
         if (refresh) {
@@ -10748,14 +10793,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             for (final m in _messages)
               if (m.type == 'poll' && (m.poll?.isClosed ?? false)) m.id: m,
           };
+          final previous = List<ChatMessage>.from(_messages);
           final keepTempIds = <int>{
             ..._failedTextSends.keys,
             ..._failedReadySends.keys,
             ..._pendingMediaByTempId.keys,
             ..._textOutboundQueue.map((p) => p.tempId),
             ..._readyOutboundQueue.map((p) => p.tempId),
+            for (final local in previous)
+              if (local.id < 0) local.id,
           };
-          final previous = List<ChatMessage>.from(_messages);
           final merged = result.items.map((incoming) {
             final local = closedPolls[incoming.id];
             if (local == null) return incoming;
@@ -12694,26 +12741,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
           return;
         }
-        final msg = await ChatService.startLiveLocation(
-          conversationId: widget.conversationId,
-          latitude: pos.latitude,
-          longitude: pos.longitude,
-          periodSeconds: livePeriodSeconds,
-          replyToMessageId: _replyTo?.id,
-          silent: mode == 'silent',
+        final expires = DateTime.now().toUtc().add(
+          Duration(seconds: livePeriodSeconds),
         );
-        final parsed = ChatLocationPayload.tryParse(msg.content);
-        final expires = parsed?.expiresAt;
-        if (expires != null) {
-          LiveLocationSession.start(
-            conversationId: widget.conversationId,
-            messageId: msg.id,
-            expiresAt: expires,
-          );
-        }
-        setState(() => _replyTo = null);
-        AppHaptics.selection();
-        await _pollNew();
+        _enqueueReadyOutgoing(
+          ChatReadyOutgoing(
+            tempId: _newLocalTempId(),
+            clientMessageId: const Uuid().v4(),
+            type: 'live_location',
+            content: ChatLocationPayload.encode(
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+              isLive: true,
+              periodSeconds: livePeriodSeconds,
+              expiresAt: expires,
+              updatedAt: DateTime.now().toUtc(),
+            ),
+            replyToMessageId: _replyTo?.id,
+            silent: mode == 'silent',
+            durationSec: livePeriodSeconds,
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+          ),
+        );
         return;
       }
 
@@ -12774,7 +12824,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           messageId: message.id,
         );
       }
-      await _pollNew();
+      unawaited(_pollNew());
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

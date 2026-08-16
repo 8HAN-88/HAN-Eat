@@ -1267,6 +1267,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                         ),
                         onTap: () {
                           Navigator.pop(ctx);
+                          unawaited(ChatThreadPrefetch.warm(item.conversation.id));
                           context.push(
                             ChatThreadRoute.pathFor(item.conversation),
                             extra: item.conversation,
@@ -2100,10 +2101,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                                 ),
                               ],
                             ),
-                            onTap: () => context.push(
-                              ChatThreadRoute.pathFor(item.conversation),
-                              extra: item.conversation,
-                            ),
+                            onTap: () {
+                              unawaited(
+                                ChatThreadPrefetch.warm(item.conversation.id),
+                              );
+                              context.push(
+                                ChatThreadRoute.pathFor(item.conversation),
+                                extra: item.conversation,
+                              );
+                            },
                           );
                         }),
                         if (_joinRequestsInbox.length > 3)

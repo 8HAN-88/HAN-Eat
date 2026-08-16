@@ -9,6 +9,7 @@ import '../../../core/haptics/app_haptics.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
+import '../../chat/application/chat_thread_prefetch.dart';
 import '../../../services/notification_cache_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/user_realtime_service.dart';
@@ -258,6 +259,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     try {
       final conv = await ChatService.openDirectChat(actor.id);
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
@@ -355,6 +357,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           id: actorId ?? 0,
           name: notification.actor?.name ?? notification.title,
         );
+        unawaited(ChatThreadPrefetch.warm(conversationId));
         context.push(
           ChatThreadRoute.pathForId(conversationId),
           extra: peer,

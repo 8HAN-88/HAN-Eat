@@ -105,6 +105,27 @@ void main() {
       expect(out.map((m) => m.id), [1, -3]);
     });
 
+    test('keeps story-reply temp already painted before outbox restore', () {
+      final pending = ChatMessage(
+        id: -8,
+        conversationId: 1,
+        senderId: 7,
+        type: 'story_reply',
+        content: '{"story_id":1,"text":"hi","author_id":2}',
+        createdAt: DateTime(2026, 8, 16, 12),
+        isMine: true,
+        clientMessageId: 'story-1',
+      );
+      final server = _msg(id: 1, content: 'old', isMine: false);
+      final out = preserveOptimisticOutgoing(
+        previous: [server, pending],
+        serverItems: [server],
+        keepTempIds: {-8},
+        isDuplicate: _dup,
+      );
+      expect(out.map((m) => m.id), [1, -8]);
+    });
+
     test('keeps just-sent confirmed message missing from stale snapshot', () {
       final sent = _msg(id: 42, content: 'now', clientMessageId: 'n');
       final server = _msg(id: 10, content: 'old', isMine: false);

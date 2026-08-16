@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
 import 'package:han_eat/services/chat_service.dart';
+import '../../chat/application/chat_thread_prefetch.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
 import 'package:uuid/uuid.dart';
@@ -325,6 +326,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     try {
       final conv = await ChatService.openDirectChat(user.id);
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.push(
         ChatThreadRoute.pathFor(conv),
         extra: conv,
@@ -367,6 +369,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
           ),
         ),
       );
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
@@ -402,6 +405,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
       if (result.conversationId != null) {
         final conv = await ChatService.openDirectChat(user.id);
         if (!mounted) return;
+        unawaited(ChatThreadPrefetch.warm(conv.id));
         context.push(ChatThreadRoute.pathFor(conv), extra: conv);
       }
     } catch (e) {

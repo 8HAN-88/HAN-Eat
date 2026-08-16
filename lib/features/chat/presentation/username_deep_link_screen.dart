@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../application/chat_thread_prefetch.dart';
 
 /// Resolves `/u/:username` (or `@username` deep links) into a DM thread.
 class UsernameDeepLinkScreen extends StatefulWidget {
@@ -39,6 +42,7 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
       }
       final chat = await ChatService.openDirectChat(user.id);
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(chat.id));
       context.go(ChatThreadRoute.pathForId(chat.id));
     } catch (e) {
       if (!mounted) return;

@@ -61,4 +61,37 @@ void main() {
     expect(voice.type, 'voice');
     expect(voice.durationSec, 3);
   });
+
+  test('ready outgoing json keeps story reply and live location', () {
+    final story = ChatReadyOutgoing.fromJson(
+      ChatReadyOutgoing(
+        tempId: -8,
+        clientMessageId: 'story-1',
+        type: 'story_reply',
+        content: '{"story_id":1,"text":"hi","author_id":2}',
+        mediaUrl: 'https://cdn.example/s.jpg',
+      ).toJson(),
+    );
+    expect(story.type, 'story_reply');
+    expect(story.mediaUrl, 'https://cdn.example/s.jpg');
+    final live = ChatReadyOutgoing.fromJson(
+      ChatReadyOutgoing(
+        tempId: -9,
+        clientMessageId: 'live-1',
+        type: 'live_location',
+        content: '📍 Геопозиция',
+        durationSec: 900,
+        latitude: 55.75,
+        longitude: 37.61,
+      ).toJson(),
+    );
+    expect(live.type, 'live_location');
+    expect(live.durationSec, 900);
+    expect(live.latitude, 55.75);
+    expect(live.longitude, 37.61);
+  });
+
+  test('new ready temp ids are local (negative)', () {
+    expect(newReadyOutgoingTempId(), lessThan(0));
+  });
 }

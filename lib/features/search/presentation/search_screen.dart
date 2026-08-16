@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:han_eat/services/search_service.dart';
 import 'package:han_eat/services/chat_service.dart';
+import '../../chat/application/chat_thread_prefetch.dart';
 import 'package:han_eat/services/channel_service.dart';
 import 'package:han_eat/services/global_search_cache.dart';
 import 'package:han_eat/services/server_config.dart';
@@ -422,6 +423,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     try {
       final conv = await ChatService.openDirectChat(user.id);
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
@@ -1232,13 +1234,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
       ),
-      onTap: () => context.push(
-        ChatThreadRoute.pathFor(hit.conversation),
-        extra: ChatThreadOpenArgs(
-          conversation: hit.conversation,
-          jumpToMessageId: hit.message.id,
-        ),
-      ),
+      onTap: () {
+        unawaited(ChatThreadPrefetch.warm(hit.conversation.id));
+        context.push(
+          ChatThreadRoute.pathFor(hit.conversation),
+          extra: ChatThreadOpenArgs(
+            conversation: hit.conversation,
+            jumpToMessageId: hit.message.id,
+          ),
+        );
+      },
     );
   }
 
