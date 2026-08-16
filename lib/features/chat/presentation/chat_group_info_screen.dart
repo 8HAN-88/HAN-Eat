@@ -14,6 +14,7 @@ import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
 import '../../../widgets/app_avatar.dart';
+import '../application/chat_inbox_optimistic.dart';
 import '../application/join_requests_bulk.dart';
 import 'chat_group_moderation_log_screen.dart';
 import 'chat_media_gallery_screen.dart';
@@ -190,6 +191,33 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     }
   }
 
+  void _applyConversation(ChatConversation next) {
+    setState(() {
+      _conversation = next;
+      _busy = false;
+    });
+    widget.onConversationChanged?.call(next);
+  }
+
+  Future<void> _commitConversation({
+    required ChatConversation optimistic,
+    required Future<ChatConversation> Function() request,
+  }) async {
+    final previous = _conversation;
+    _applyConversation(optimistic);
+    try {
+      final conv = await request();
+      if (!mounted) return;
+      _applyConversation(conv);
+    } catch (e) {
+      if (!mounted) return;
+      _applyConversation(previous);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _toggleMute() async {
     final choice = await showChatMuteDurationSheet(
       context,
@@ -198,86 +226,53 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       currentNotifyMode: _conversation.notifyMode,
     );
     if (choice == null || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final muted = !choice.unmute;
-      await ChatService.setMuted(
+    final muted = !choice.unmute;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(choice.snackLabel)),
+    );
+    await _commitConversation(
+      optimistic: ChatInboxOptimistic.applyMute(
+        _conversation,
+        muted: muted,
+        until: choice.until,
+        notifyMode: choice.notifyMode,
+      ),
+      request: () => ChatService.setMuted(
         conversationId: _conversation.id,
         muted: muted,
         mutedUntil: muted ? choice.until : null,
         notifyMode: choice.notifyMode,
-      );
-      if (!mounted) return;
-      final updated = _conversation.copyWith(
-        muted: muted,
-        mutedUntil: choice.until,
-        clearMutedUntil: !muted || choice.until == null,
-        notifyMode: choice.notifyMode,
-      );
-      setState(() {
-        _conversation = updated;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(updated);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(choice.snackLabel)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ).then((_) => ChatInboxOptimistic.applyMute(
+            _conversation,
+            muted: muted,
+            until: choice.until,
+            notifyMode: choice.notifyMode,
+          )),
+    );
   }
 
   Future<void> _toggleOnlyAdminsCanPost() async {
     if (!_canManagePostingPermissions) return;
     final next = !_conversation.onlyAdminsCanPost;
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupOnlyAdminsCanPost(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(onlyAdminsCanPost: next),
+      request: () => ChatService.setGroupOnlyAdminsCanPost(
         conversationId: _conversation.id,
         onlyAdminsCanPost: next,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _toggleProtectContent() async {
     if (!_canManagePostingPermissions) return;
     final next = !_conversation.protectContent;
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupProtectContent(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(protectContent: next),
+      request: () => ChatService.setGroupProtectContent(
         conversationId: _conversation.id,
         enabled: next,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _toggleIsForum() async {
@@ -306,58 +301,34 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       );
       if (ok != true || !mounted) return;
     }
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupIsForum(
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          next
+              ? 'Темы включены — в чате появится General и новые темы'
+              : 'Темы выключены — данные тем сохранены',
+        ),
+      ),
+    );
+    await _commitConversation(
+      optimistic: _conversation.copyWith(isForum: next),
+      request: () => ChatService.setGroupIsForum(
         conversationId: _conversation.id,
         enabled: next,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            next
-                ? 'Темы включены — в чате появится General и новые темы'
-                : 'Темы выключены — данные тем сохранены',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _toggleJoinByRequestEnabled() async {
     if (!_canManageMembers) return;
     final next = !_conversation.joinByRequestEnabled;
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupJoinByRequestEnabled(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(joinByRequestEnabled: next),
+      request: () => ChatService.setGroupJoinByRequestEnabled(
         conversationId: _conversation.id,
         enabled: next,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   String _slowModeLabel(int value) {
@@ -412,25 +383,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         !mounted) {
       return;
     }
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setAutoDeleteSeconds(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(autoDeleteSeconds: picked),
+      request: () => ChatService.setAutoDeleteSeconds(
         conversationId: _conversation.id,
         seconds: picked,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _configureSlowMode() async {
@@ -469,25 +428,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     if (picked == null || picked == _conversation.slowModeSeconds || !mounted) {
       return;
     }
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupSlowModeSeconds(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(slowModeSeconds: picked),
+      request: () => ChatService.setGroupSlowModeSeconds(
         conversationId: _conversation.id,
         seconds: picked,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _configureAntiFloodLimit() async {
@@ -529,25 +476,13 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
         !mounted) {
       return;
     }
-    setState(() => _busy = true);
-    try {
-      final conv = await ChatService.setGroupAntiFloodLimit(
+    await _commitConversation(
+      optimistic: _conversation.copyWith(antiFloodMaxMessagesPerMinute: picked),
+      request: () => ChatService.setGroupAntiFloodLimit(
         conversationId: _conversation.id,
         maxMessagesPerMinute: picked,
-      );
-      if (!mounted) return;
-      setState(() {
-        _conversation = conv;
-        _busy = false;
-      });
-      widget.onConversationChanged?.call(conv);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+      ),
+    );
   }
 
   Future<void> _addMembers() async {
@@ -1569,19 +1504,18 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      await ChatService.leaveGroup(conversationId: _conversation.id);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      widget.onLeftGroup?.call();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _busy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    }
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    widget.onLeftGroup?.call();
+    unawaited(() async {
+      try {
+        await ChatService.leaveGroup(conversationId: _conversation.id);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }());
   }
 
   @override

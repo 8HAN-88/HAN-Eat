@@ -3333,6 +3333,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     controller.dispose();
     if (title == null || title.isEmpty || !mounted) return;
+    final temp = ChatForumTopic(
+      id: -DateTime.now().millisecondsSinceEpoch,
+      conversationId: widget.conversationId,
+      title: title,
+      createdAt: DateTime.now(),
+    );
+    setState(() => _forumTopics = [..._forumTopics, temp]);
     try {
       final topic = await ChatService.createForumTopic(
         conversationId: widget.conversationId,
@@ -3340,12 +3347,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (!mounted) return;
       setState(() {
-        _forumTopics = [..._forumTopics, topic];
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id == temp.id) topic else t,
+        ];
         _selectedTopicId = topic.id;
       });
-      await _load(refresh: true);
+      unawaited(_load(refresh: true));
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id != temp.id) t,
+        ];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3380,6 +3396,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     controller.dispose();
     if (title == null || title.isEmpty || !mounted) return;
     if (title == topic.title) return;
+    setState(() {
+      _forumTopics = [
+        for (final t in _forumTopics)
+          if (t.id == topic.id) t.copyWith(title: title) else t,
+      ];
+    });
     try {
       final updated = await ChatService.updateForumTopic(
         conversationId: widget.conversationId,
@@ -3395,6 +3417,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       });
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id == topic.id) topic else t,
+        ];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -3402,6 +3430,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _setForumTopicClosed(ChatForumTopic topic, bool closed) async {
+    setState(() {
+      _forumTopics = [
+        for (final t in _forumTopics)
+          if (t.id == topic.id) t.copyWith(closed: closed) else t,
+      ];
+    });
     try {
       final updated = await ChatService.updateForumTopic(
         conversationId: widget.conversationId,
@@ -3435,6 +3469,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _forumTopics = [
+          for (final t in _forumTopics)
+            if (t.id == topic.id) topic else t,
+        ];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -12325,13 +12365,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     icon: const Icon(Icons.send_rounded),
                                     tooltip: 'Отправить сейчас',
                                     onPressed: () async {
+                                      setModalState(
+                                        () => items.removeWhere(
+                                          (e) => e.id == item.id,
+                                        ),
+                                      );
                                       try {
                                         await _sendScheduledMessageNow(item);
-                                        setModalState(
-                                          () => items.removeWhere(
-                                            (e) => e.id == item.id,
-                                          ),
-                                        );
                                         if (!mounted) return;
                                         unawaited(_load(refresh: true));
                                         ScaffoldMessenger.of(context)
@@ -12380,6 +12420,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                         final next =
                                             await _editScheduledText(item);
                                         if (next == null) return;
+                                        setModalState(() {
+                                          final idx = items.indexWhere(
+                                            (e) => e.id == item.id,
+                                          );
+                                          if (idx >= 0) {
+                                            items[idx] =
+                                                items[idx].copyWith(content: next);
+                                          }
+                                        });
                                         try {
                                           final updated = await ChatService
                                               .rescheduleMessage(
@@ -12395,6 +12444,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             if (idx >= 0) items[idx] = updated;
                                           });
                                         } catch (e) {
+                                          setModalState(() {
+                                            final idx = items.indexWhere(
+                                              (e) => e.id == item.id,
+                                            );
+                                            if (idx >= 0) items[idx] = item;
+                                          });
                                           if (!mounted) return;
                                           showErrorSnackBar(
                                             context,
@@ -12431,6 +12486,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                           );
                                           return;
                                         }
+                                        setModalState(() {
+                                          final idx = items.indexWhere(
+                                            (e) => e.id == item.id,
+                                          );
+                                          if (idx >= 0) {
+                                            items[idx] = items[idx]
+                                                .copyWith(sendAt: nextSendAt);
+                                          }
+                                        });
                                         try {
                                           final updated = await ChatService
                                               .rescheduleMessage(
@@ -12446,6 +12510,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                             if (idx >= 0) items[idx] = updated;
                                           });
                                         } catch (e) {
+                                          setModalState(() {
+                                            final idx = items.indexWhere(
+                                              (e) => e.id == item.id,
+                                            );
+                                            if (idx >= 0) items[idx] = item;
+                                          });
                                           if (!mounted) return;
                                           showErrorSnackBar(
                                             context,
@@ -12460,17 +12530,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                     icon: const Icon(Icons.delete_outline),
                                     tooltip: 'Отменить',
                                     onPressed: () async {
+                                      setModalState(
+                                        () => items.removeWhere(
+                                            (e) => e.id == item.id),
+                                      );
                                       try {
                                         await ChatService
                                             .cancelScheduledMessage(
                                           conversationId: widget.conversationId,
                                           scheduledMessageId: item.id,
                                         );
-                                        setModalState(
-                                          () => items.removeWhere(
-                                              (e) => e.id == item.id),
-                                        );
                                       } catch (e) {
+                                        setModalState(() => items.add(item));
                                         if (!mounted) return;
                                         showErrorSnackBar(
                                           context,
