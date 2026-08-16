@@ -23,8 +23,10 @@ void main() {
       ],
       emoji: '👍',
     );
-    expect(next.single.emoji, '🔥');
-    expect(next.single.reactedByMe, isFalse);
+    expect(next.map((r) => '${r.emoji}:${r.count}:${r.reactedByMe}'), [
+      '👍:1:false',
+      '🔥:1:false',
+    ]);
   });
 
   test('switching emoji moves my reaction', () {
