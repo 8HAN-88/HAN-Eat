@@ -82,6 +82,7 @@ def test_send_text_keeps_client_message_id(db_session):
         msg_type="text",
         content="hello",
         client_message_id="flutter:instant-1",
+        notify=False,
     )
     assert is_new is True
     assert msg.client_message_id == "flutter:instant-1"
@@ -91,6 +92,7 @@ def test_send_text_keeps_client_message_id(db_session):
         msg_type="text",
         content="hello",
         client_message_id="flutter:instant-1",
+        notify=False,
     )
     assert created is False
     assert again.id == msg.id
