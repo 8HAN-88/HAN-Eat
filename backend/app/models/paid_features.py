@@ -197,6 +197,11 @@ class UserStarGift(Base):
     transferred_from_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Telegram unique-gift resale: listed_stars > 0 means for sale.
+    listed_stars = Column(Integer, nullable=True, index=True)
+    listed_at = Column(DateTime, nullable=True)
+    # Telegram "Wear": one collectible shown next to the owner's name.
+    is_worn = Column(Boolean, nullable=False, default=False, index=True)
     converted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 

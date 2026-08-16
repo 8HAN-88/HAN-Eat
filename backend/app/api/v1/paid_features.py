@@ -36,7 +36,9 @@ from app.schemas.paid_features import (
     ConvertUserStarGiftResponse,
     SendStarGiftRequest,
     SendStarGiftResponse,
+    ListStarGiftForSaleRequest,
     SetUserStarGiftDisplayRequest,
+    SetUserStarGiftWornRequest,
     TransferUserStarGiftRequest,
     StarGiftItem,
     StarGiftsResponse,
@@ -523,6 +525,15 @@ def _owned_gift_item(
         if sender is not None:
             item.sender_name = sender.name
             item.sender_username = sender.username
+    if int(getattr(gift, "listed_stars", 0) or 0) > 0:
+        seller = (
+            db.query(User)
+            .filter(User.id == gift.owner_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if seller is not None:
+            item.seller_name = seller.name
+            item.seller_username = seller.username
     return item
 
 
@@ -812,6 +823,156 @@ async def set_my_star_gift_display(
     )
     db.commit()
     db.refresh(gift)
+    return _owned_gift_item(db, gift)
+
+
+def _publish_gift_notice(
+    db: Session,
+    notice,
+    *,
+    actor_user_id: int,
+    to_user_id: int,
+    user_gift_id: Optional[int] = None,
+) -> None:
+    from app.models.conversation import ConversationMember
+    from app.services.chat_event_bus import publish as publish_chat_event
+    from app.services.user_event_bus import publish_user_event
+
+    payload = {
+        "id": notice.id,
+        "conversation_id": notice.conversation_id,
+        "sender_id": notice.sender_id,
+        "type": notice.type,
+        "content": notice.content,
+        "media_url": notice.media_url,
+        "reply_to_message_id": notice.reply_to_message_id,
+        "forward_from_user_id": None,
+        "forward_from_name": None,
+        "forwarded_from_message_id": None,
+        "forwarded_from_conversation_id": None,
+        "inline_keyboard": None,
+        "created_at": notice.created_at.isoformat() if notice.created_at else None,
+        "edited_at": None,
+        "disable_webpage_preview": False,
+        "media_group_id": None,
+        "is_paid": False,
+        "price_stars": 0,
+        "purchased": True,
+        "reactions": [],
+    }
+    publish_chat_event(
+        notice.conversation_id,
+        {"type": "message.new", "message": payload},
+    )
+    member_ids = (
+        db.query(ConversationMember.user_id)
+        .filter(ConversationMember.conversation_id == notice.conversation_id)
+        .all()
+    )
+    for (user_id,) in member_ids:
+        if user_id == actor_user_id:
+            continue
+        publish_user_event(
+            user_id,
+            {"event": "chat.inbox", "conversation_id": notice.conversation_id},
+        )
+    publish_user_event(
+        to_user_id,
+        {
+            "event": "gift.received",
+            "user_gift_id": user_gift_id,
+            "from_user_id": actor_user_id,
+        },
+    )
+
+
+@router.get("/gifts/marketplace", response_model=UserStarGiftsResponse)
+async def list_gift_marketplace(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    del current_user
+    service = PaidFeaturesService(db)
+    gifts = service.list_marketplace_star_gifts(limit=limit)
+    return UserStarGiftsResponse(gifts=[_owned_gift_item(db, g) for g in gifts])
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/list",
+    response_model=UserStarGiftItem,
+)
+async def list_my_star_gift_for_sale(
+    user_gift_id: int,
+    request: ListStarGiftForSaleRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.list_star_gift_for_sale(
+        current_user.id, user_gift_id, listed_stars=request.listed_stars
+    )
+    db.commit()
+    db.refresh(gift)
+    return _owned_gift_item(db, gift)
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/unlist",
+    response_model=UserStarGiftItem,
+)
+async def unlist_my_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.unlist_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    return _owned_gift_item(db, gift)
+
+
+@router.post(
+    "/gifts/inventory/{user_gift_id}/wear",
+    response_model=UserStarGiftItem,
+)
+async def wear_my_star_gift(
+    user_gift_id: int,
+    request: SetUserStarGiftWornRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.set_user_star_gift_worn(
+        current_user.id, user_gift_id, worn=request.worn
+    )
+    db.commit()
+    db.refresh(gift)
+    return _owned_gift_item(db, gift)
+
+
+@router.post(
+    "/gifts/marketplace/{user_gift_id}/buy",
+    response_model=UserStarGiftItem,
+)
+async def buy_listed_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift, notice = service.buy_listed_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    db.refresh(notice)
+    _publish_gift_notice(
+        db,
+        notice,
+        actor_user_id=int(notice.sender_id or 0),
+        to_user_id=current_user.id,
+        user_gift_id=gift.id,
+    )
     return _owned_gift_item(db, gift)
 
 

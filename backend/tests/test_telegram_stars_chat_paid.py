@@ -606,6 +606,63 @@ def test_upgrade_and_transfer_gift_fee(db_session):
         assert '"status": "transferred"' in old.content or '"status":"transferred"' in old.content
 
 
+def test_marketplace_list_buy_and_wear(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _user(db_session, 3)
+    _credit(db_session, 1, 200)
+    _credit(db_session, 2, 100)
+    _credit(db_session, 3, 500)
+    catalog = StarGift(
+        slug="crown",
+        title="Корона",
+        emoji="👑",
+        stars=50,
+        is_active=True,
+        sort_order=1,
+        upgrade_stars=40,
+        transfer_stars=15,
+    )
+    db_session.add(catalog)
+    conv = _direct_conv(db_session, 1, 2)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv.id)
+    owned = svc.list_user_star_gifts(2)[0]
+    upgraded = svc.upgrade_user_star_gift(2, owned.id)
+    db_session.commit()
+
+    listed = svc.list_star_gift_for_sale(2, upgraded.id, listed_stars=120)
+    assert listed.listed_stars == 120
+    assert svc.list_marketplace_star_gifts()[0].id == listed.id
+
+    with pytest.raises(HTTPException) as listed_block:
+        svc.transfer_user_star_gift(2, listed.id, to_user_id=3)
+    assert listed_block.value.status_code == 400
+
+    worn = svc.set_user_star_gift_worn(2, listed.id, worn=True)
+    assert worn.is_worn is True
+
+    bought, notice = svc.buy_listed_star_gift(3, listed.id)
+    db_session.commit()
+    assert bought.owner_id == 3
+    assert bought.listed_stars is None
+    assert bought.is_worn is False
+    assert bought.transferred_from_user_id == 2
+    assert notice.type == "gift"
+    assert svc.list_marketplace_star_gifts() == []
+    assert svc.list_user_star_gifts(2) == []
+    assert svc.list_user_star_gifts(3)[0].id == bought.id
+    # 120 listed, 5% fee = 6, seller gets 114. Buyer 500-120=380. Seller had 60 after upgrade.
+    assert svc.star_balance(3) == 380
+    assert svc.star_balance(2) == 60 + 114
+    assert svc.resale_fee_stars(120) == 6
+
+    worn_again = svc.set_user_star_gift_worn(3, bought.id, worn=True)
+    assert worn_again.is_worn is True
+
+
 def test_transfer_rejects_non_collectible(db_session):
     _user(db_session, 1)
     _user(db_session, 2)

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/app_router.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
@@ -220,10 +222,166 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     }
   }
 
+  Future<void> _sell(UserStarGift gift) async {
+    if (_busy.contains(gift.id) || !gift.canSell) return;
+    final controller = TextEditingController(
+      text: '${gift.listedStars ?? gift.stars}',
+    );
+    final next = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Выставить на витрину'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Цена в ★',
+            hintText: 'Например: 250',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final price = int.tryParse(controller.text.trim()) ?? 0;
+              Navigator.pop(ctx, price);
+            },
+            child: const Text('Выставить'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (next == null || !mounted) return;
+    if (next < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите цену от 1 ★')),
+      );
+      return;
+    }
+    setState(() => _busy.add(gift.id));
+    try {
+      final updated = await PaidFeaturesService.listGiftForSale(
+        gift.id,
+        listedStars: next,
+      );
+      if (!mounted) return;
+      setState(() {
+        _gifts = _gifts
+            .map((g) => g.id == updated.id ? updated : g)
+            .toList(growable: false);
+        _busy.remove(gift.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('На витрине за $next ★')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(gift.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _unlist(UserStarGift gift) async {
+    if (_busy.contains(gift.id) || !gift.isListed) return;
+    setState(() => _busy.add(gift.id));
+    try {
+      final updated = await PaidFeaturesService.unlistGift(gift.id);
+      if (!mounted) return;
+      setState(() {
+        _gifts = _gifts
+            .map((g) => g.id == updated.id ? updated : g)
+            .toList(growable: false);
+        _busy.remove(gift.id);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(gift.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _wear(UserStarGift gift) async {
+    if (_busy.contains(gift.id) || !gift.canWear) return;
+    final nextWorn = !gift.isWorn;
+    setState(() => _busy.add(gift.id));
+    try {
+      final updated = await PaidFeaturesService.setGiftWorn(
+        gift.id,
+        worn: nextWorn,
+      );
+      if (!mounted) return;
+      setState(() {
+        _gifts = _gifts
+            .map((g) {
+              if (g.id == updated.id) return updated;
+              if (nextWorn && g.isWorn) {
+                return UserStarGift(
+                  id: g.id,
+                  ownerId: g.ownerId,
+                  stars: g.stars,
+                  slug: g.slug,
+                  title: g.title,
+                  emoji: g.emoji,
+                  status: g.status,
+                  senderId: g.senderId,
+                  senderName: g.senderName,
+                  senderUsername: g.senderUsername,
+                  giftId: g.giftId,
+                  messageId: g.messageId,
+                  note: g.note,
+                  isDisplayed: g.isDisplayed,
+                  isCollectible: g.isCollectible,
+                  isAnonymous: g.isAnonymous,
+                  serial: g.serial,
+                  transferredFromUserId: g.transferredFromUserId,
+                  listedStars: g.listedStars,
+                  listedAt: g.listedAt,
+                  isWorn: false,
+                  sellerName: g.sellerName,
+                  sellerUsername: g.sellerUsername,
+                  upgradeStars: g.upgradeStars,
+                  transferStars: g.transferStars,
+                  totalSupply: g.totalSupply,
+                  convertedAt: g.convertedAt,
+                  createdAt: g.createdAt,
+                );
+              }
+              return g;
+            })
+            .toList(growable: false);
+        _busy.remove(gift.id);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(gift.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Мои подарки')),
+      appBar: AppBar(
+        title: const Text('Мои подарки'),
+        actions: [
+          IconButton(
+            tooltip: 'Витрина',
+            onPressed: () => context.push(StarGiftsMarketplaceRoute.path),
+            icon: const Icon(Icons.storefront_outlined),
+          ),
+        ],
+      ),
       body: AppGradientBackground(
         child: RefreshIndicator(
           onRefresh: _load,
@@ -293,11 +451,13 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
         final gift = _gifts[index];
         final busy = _busy.contains(gift.id);
         final scheme = Theme.of(context).colorScheme;
-        final statusLabel = gift.isCollectible
-            ? (gift.serialLabel.isNotEmpty
-                ? 'Коллекционный ${gift.serialLabel}'
-                : 'Коллекционный')
-            : (gift.status == 'kept' ? 'В профиле' : 'Ожидает решения');
+        final statusLabel = gift.isListed
+            ? 'На витрине · ${gift.listedStars} ★'
+            : gift.isCollectible
+                ? (gift.serialLabel.isNotEmpty
+                    ? 'Коллекционный ${gift.serialLabel}'
+                    : 'Коллекционный')
+                : (gift.status == 'kept' ? 'В профиле' : 'Ожидает решения');
         return Card(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -381,6 +541,21 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                               ? 'Передать · ${gift.transferStars} ★'
                               : 'Передать',
                         ),
+                      ),
+                    if (gift.canSell && !gift.isListed)
+                      OutlinedButton(
+                        onPressed: busy ? null : () => unawaited(_sell(gift)),
+                        child: const Text('Продать'),
+                      ),
+                    if (gift.isListed)
+                      OutlinedButton(
+                        onPressed: busy ? null : () => unawaited(_unlist(gift)),
+                        child: const Text('Снять с витрины'),
+                      ),
+                    if (gift.canWear)
+                      OutlinedButton(
+                        onPressed: busy ? null : () => unawaited(_wear(gift)),
+                        child: Text(gift.isWorn ? 'Снять с профиля' : 'Надеть'),
                       ),
                     OutlinedButton(
                       onPressed:

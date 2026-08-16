@@ -431,9 +431,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     }
   }
 
+  Future<void> _buyProfileGift(UserStarGift gift) async {
+    final price = gift.listedStars ?? 0;
+    if (price <= 0) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Купить ${gift.title}',
+      body: gift.serialLabel.isNotEmpty
+          ? '${gift.emoji} ${gift.serialLabel}'
+          : gift.emoji,
+      amountStars: price,
+      confirmLabel: 'Купить',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await PaidFeaturesService.buyListedGift(gift.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${gift.emoji} ${gift.title} теперь ваш')),
+      );
+      unawaited(_loadProfileGifts());
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
+    }
+  }
+
   Future<void> _showProfileGiftDetails(UserStarGift gift) async {
     final scheme = Theme.of(context).colorScheme;
     final sender = gift.senderLabel;
+    final me = AuthService.instance.currentUser?.id;
+    final canBuy = gift.isListed && me != null && me != gift.ownerId;
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -485,6 +513,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     gift.note!.trim(),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+                if (gift.isListed) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'В продаже · ${gift.listedStars} ★',
+                    style: TextStyle(
+                      color: scheme.secondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                if (canBuy) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        unawaited(_buyProfileGift(gift));
+                      },
+                      child: Text('Купить · ${gift.listedStars} ★'),
+                    ),
                   ),
                 ],
               ],
@@ -716,14 +767,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                user.name,
-                textAlign: TextAlign.center,
-                style: textTheme.headlineSmall?.copyWith(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.7,
-                ),
+              Builder(
+                builder: (context) {
+                  UserStarGift? worn;
+                  for (final g in _profileGifts) {
+                    if (g.isWorn) {
+                      worn = g;
+                      break;
+                    }
+                  }
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          user.name,
+                          textAlign: TextAlign.center,
+                          style: textTheme.headlineSmall?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.7,
+                          ),
+                        ),
+                      ),
+                      if (worn != null) ...[
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: worn.serialLabel.isNotEmpty
+                              ? '${worn.title} ${worn.serialLabel}'
+                              : worn.title,
+                          child: Text(
+                            worn.emoji,
+                            style: const TextStyle(fontSize: 28),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
               if (user.username != null) ...[
                 const SizedBox(height: AppSpacing.sm),
@@ -814,7 +895,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                                       g.emoji,
                                       style: const TextStyle(fontSize: 22),
                                     ),
-                                    if (g.serial != null)
+                                    if (g.isListed)
+                                      Text(
+                                        '${g.listedStars} ★',
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color: scheme.secondary,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      )
+                                    else if (g.serial != null)
                                       Text(
                                         '#${g.serial}',
                                         style: textTheme.labelSmall?.copyWith(

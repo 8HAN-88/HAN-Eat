@@ -1174,6 +1174,11 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Collectible gifts cannot be converted to Stars",
             )
+        if int(getattr(gift, "listed_stars", 0) or 0) > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Take the gift off sale before converting",
+            )
         if gift.status not in ("held", "kept"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be converted"
@@ -1236,6 +1241,11 @@ class PaidFeaturesService:
             )
         if bool(getattr(owned, "is_collectible", False)):
             return owned
+        if int(getattr(owned, "listed_stars", 0) or 0) > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Take the gift off sale before upgrading",
+            )
         if not owned.gift_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Gift catalog entry missing"
@@ -1331,6 +1341,11 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only collectible gifts can be transferred",
             )
+        if int(getattr(owned, "listed_stars", 0) or 0) > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Take the gift off sale before transferring",
+            )
         fee = 0
         total_supply = None
         if owned.gift_id:
@@ -1415,6 +1430,240 @@ class PaidFeaturesService:
         conv.updated_at = datetime.utcnow()
         self.db.flush()
         return owned, notice
+
+    @staticmethod
+    def resale_fee_stars(price: int) -> int:
+        """Telegram-like marketplace commission: 5%, waived under 20 ★."""
+        price = max(0, int(price or 0))
+        if price < 20:
+            return 0
+        return max(1, price * 5 // 100)
+
+    def _clear_gift_listing(self, gift: UserStarGift) -> None:
+        gift.listed_stars = None
+        gift.listed_at = None
+
+    def list_marketplace_star_gifts(self, *, limit: int = 50) -> list[UserStarGift]:
+        limit = max(1, min(int(limit or 50), 100))
+        return (
+            self.db.query(UserStarGift)
+            .filter(
+                UserStarGift.listed_stars.isnot(None),
+                UserStarGift.listed_stars > 0,
+                UserStarGift.status.in_(("held", "kept")),
+                UserStarGift.is_collectible.is_(True),
+            )
+            .order_by(UserStarGift.listed_at.desc(), UserStarGift.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def list_star_gift_for_sale(
+        self, owner_id: int, user_gift_id: int, *, listed_stars: int
+    ) -> UserStarGift:
+        price = int(listed_stars)
+        if price < 1 or price > 100000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid listing price"
+            )
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be listed"
+            )
+        if not bool(getattr(gift, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only collectible gifts can be listed",
+            )
+        gift.listed_stars = price
+        gift.listed_at = datetime.utcnow()
+        self.db.flush()
+        return gift
+
+    def unlist_star_gift(self, owner_id: int, user_gift_id: int) -> UserStarGift:
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        self._clear_gift_listing(gift)
+        self.db.flush()
+        return gift
+
+    def set_user_star_gift_worn(
+        self, owner_id: int, user_gift_id: int, *, worn: bool
+    ) -> UserStarGift:
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id, UserStarGift.owner_id == owner_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be worn"
+            )
+        if worn and not bool(getattr(gift, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only collectible gifts can be worn",
+            )
+        if worn:
+            (
+                self.db.query(UserStarGift)
+                .filter(
+                    UserStarGift.owner_id == owner_id,
+                    UserStarGift.id != gift.id,
+                    UserStarGift.is_worn.is_(True),
+                )
+                .update({"is_worn": False}, synchronize_session=False)
+            )
+            gift.is_worn = True
+            gift.is_displayed = True
+        else:
+            gift.is_worn = False
+        self.db.flush()
+        return gift
+
+    def buy_listed_star_gift(
+        self, buyer_id: int, user_gift_id: int
+    ) -> tuple[UserStarGift, Message]:
+        """Buy a listed collectible. Buyer pays listed price; seller gets price − fee."""
+        import json as _json
+        import secrets
+
+        from app.services.chat_service import ChatService
+
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        seller_id = int(gift.owner_id)
+        if seller_id == buyer_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot buy your own gift"
+            )
+        price = int(getattr(gift, "listed_stars", 0) or 0)
+        if price <= 0 or gift.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Gift is not for sale"
+            )
+        if not bool(getattr(gift, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only collectible gifts can be bought",
+            )
+        buyer = (
+            self.db.query(User)
+            .filter(User.id == buyer_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not buyer:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        fee = self.resale_fee_stars(price)
+        seller_credit = price - fee
+        self._spend_stars(
+            buyer_id,
+            price,
+            tx_type="gift_resale",
+            reference_type="user_gift",
+            reference_id=gift.id,
+            counterparty_user_id=seller_id,
+            idempotency_key=f"gift_resale:{gift.id}:{buyer_id}:{secrets.token_hex(8)}",
+            meta={"seller_id": seller_id, "serial": gift.serial, "fee": fee},
+        )
+        if seller_credit > 0:
+            self.add_stars(
+                seller_id,
+                seller_credit,
+                tx_type="gift_resale_received",
+                idempotency_key=f"gift_resale_recv:{gift.id}:{seller_id}:{buyer_id}:{secrets.token_hex(8)}",
+                meta={"buyer_id": buyer_id, "user_gift_id": gift.id, "fee": fee},
+            )
+            balance = self.creator_balance(seller_id)
+            balance.available_stars = int(balance.available_stars or 0) + seller_credit
+        total_supply = None
+        if gift.gift_id:
+            catalog = self.db.query(StarGift).filter(StarGift.id == gift.gift_id).first()
+            if catalog is not None:
+                total_supply = getattr(catalog, "total_supply", None)
+        self._patch_gift_message_status(
+            gift,
+            status="sold",
+            extra={
+                "is_collectible": True,
+                "serial": gift.serial,
+                "sold_to_user_id": buyer_id,
+                "listed_stars": price,
+            },
+        )
+        try:
+            conv = ChatService(self.db).get_or_create_direct(seller_id, buyer_id)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "user_blocked":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked"
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot open chat"
+            ) from exc
+
+        notice = Message(
+            conversation_id=conv.id,
+            sender_id=seller_id,
+            type="gift",
+            content="{}",
+            media_url=None,
+        )
+        self.db.add(notice)
+        self.db.flush()
+
+        gift.transferred_from_user_id = seller_id
+        gift.owner_id = buyer_id
+        gift.status = "kept"
+        gift.is_displayed = True
+        gift.is_worn = False
+        gift.message_id = notice.id
+        self._clear_gift_listing(gift)
+        notice.content = _json.dumps(
+            {
+                "gift_id": gift.gift_id,
+                "user_gift_id": gift.id,
+                "slug": gift.slug,
+                "title": gift.title,
+                "emoji": gift.emoji,
+                "stars": gift.stars,
+                "message": None,
+                "status": "kept",
+                "is_collectible": True,
+                "serial": gift.serial,
+                "total_supply": total_supply,
+                "transferred_from_user_id": seller_id,
+                "purchased_stars": price,
+            },
+            ensure_ascii=False,
+        )
+        conv.updated_at = datetime.utcnow()
+        self.db.flush()
+        return gift, notice
 
     def cancel_star_invoice(self, actor_user_id: int, invoice_id: int) -> StarInvoice:
         invoice = (
