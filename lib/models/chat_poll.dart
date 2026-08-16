@@ -390,6 +390,50 @@ String applyOptimisticPollVoteToContent(String content, int optionIndex) {
   }
 }
 
+/// Instant local option so the row appears before the server answers.
+String applyOptimisticPollOptionToContent(String content, String text) {
+  final label = text.trim();
+  if (content.trim().isEmpty || label.isEmpty) return content;
+  try {
+    final data = jsonDecode(content);
+    if (data is! Map<String, dynamic>) return content;
+    final poll = data['poll'];
+    if (poll is! Map<String, dynamic>) return content;
+    if (poll['is_closed'] == true) return content;
+    final optionsRaw = poll['options'];
+    if (optionsRaw is! List) return content;
+    final options = <Map<String, dynamic>>[];
+    var maxIndex = -1;
+    for (final raw in optionsRaw) {
+      if (raw is! Map) continue;
+      final option = Map<String, dynamic>.from(raw);
+      options.add(option);
+      final index = (option['index'] as num?)?.toInt() ?? -1;
+      if (index > maxIndex) maxIndex = index;
+    }
+    options.add({
+      'index': maxIndex + 1,
+      'text': label,
+      'votes': 0,
+      'percentage': 0,
+    });
+    var total = 0;
+    for (final option in options) {
+      total += (option['votes'] as num?)?.toInt() ?? 0;
+    }
+    for (final option in options) {
+      final votes = (option['votes'] as num?)?.toInt() ?? 0;
+      option['percentage'] = total <= 0 ? 0 : (votes * 100 / total);
+    }
+    poll['options'] = options;
+    poll['total_votes'] = total;
+    data['poll'] = poll;
+    return jsonEncode(data);
+  } catch (_) {
+    return content;
+  }
+}
+
 /// Патчит `is_closed` в JSON-содержимом опроса.
 String patchChatPollClosedInContent(String content, {required bool isClosed}) {
   if (content.trim().isEmpty) return content;

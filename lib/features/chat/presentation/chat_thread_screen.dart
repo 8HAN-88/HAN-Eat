@@ -71,6 +71,7 @@ import '../application/chat_reaction_jumps.dart';
 import '../application/chat_reaction_optimistic.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
+import '../application/chat_inbox_optimistic.dart';
 import '../application/chat_open_direct.dart';
 import '../application/chat_ready_outgoing.dart';
 import '../application/chat_thread_prefetch.dart';
@@ -7560,30 +7561,34 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _bumpChatsHub() {
+    try {
+      ProviderScope.containerOf(context)
+          .read(chatsHubRefreshProvider.notifier)
+          .state++;
+    } catch (_) {}
+  }
+
   Future<void> _markUnread() async {
     _markReadDebounce?.cancel();
+    final previous = _conversation;
+    setState(() {
+      _suppressMarkRead = true;
+      _conversation = ChatInboxOptimistic.applyUnread(_conversation);
+    });
+    _bumpChatsHub();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Чат помечен непрочитанным')),
+    );
     try {
       await ChatService.markUnread(conversationId: widget.conversationId);
-      if (!mounted) return;
-      setState(() => _suppressMarkRead = true);
-      try {
-        final conv = await ChatService.getConversation(widget.conversationId);
-        if (mounted) {
-          setState(() => _conversation = conv);
-          _reconcileSlowModeCooldownWithConversation();
-        }
-      } catch (_) {}
-      try {
-        ProviderScope.containerOf(context)
-            .read(chatsHubRefreshProvider.notifier)
-            .state++;
-      } catch (_) {}
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Чат помечен непрочитанным')),
-      );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _suppressMarkRead = false;
+        _conversation = previous;
+      });
+      _bumpChatsHub();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -7592,20 +7597,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _togglePin() async {
     final next = !_pinned;
+    setState(() {
+      _pinned = next;
+      _conversation = ChatInboxOptimistic.applyPin(_conversation, pinned: next);
+    });
+    _bumpChatsHub();
     try {
       await ChatService.setPinned(
         conversationId: widget.conversationId,
         pinned: next,
       );
-      if (!mounted) return;
-      setState(() => _pinned = next);
-      try {
-        ProviderScope.containerOf(context)
-            .read(chatsHubRefreshProvider.notifier)
-            .state++;
-      } catch (_) {}
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _pinned = !next;
+        _conversation =
+            ChatInboxOptimistic.applyPin(_conversation, pinned: !next);
+      });
+      _bumpChatsHub();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -7641,28 +7650,52 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     DateTime? until,
     String notifyMode = 'mentions',
   }) async {
-    final mode = muted ? notifyMode : 'all';
-    await ChatService.setMuted(
-      conversationId: widget.conversationId,
-      muted: muted,
-      mutedUntil: muted ? until : null,
-      notifyMode: mode,
-    );
-    await ChatThreadUiPrefs.setMuteUntil(
-      widget.conversationId,
-      muted ? until : null,
-    );
     if (!mounted) return;
+    final mode = muted ? notifyMode : 'all';
+    final previousMuted = _muted;
+    final previousConv = _conversation;
     setState(() {
       _muted = muted;
-      _conversation = _conversation.copyWith(
+      _conversation = ChatInboxOptimistic.applyMute(
+        _conversation,
         muted: muted,
-        mutedUntil: until,
-        clearMutedUntil: !muted || until == null,
+        until: until,
         notifyMode: mode,
       );
     });
-    await _syncMuteSchedule();
+    unawaited(
+      ChatThreadUiPrefs.setMuteUntil(
+        widget.conversationId,
+        muted ? until : null,
+      ),
+    );
+    _bumpChatsHub();
+    try {
+      await ChatService.setMuted(
+        conversationId: widget.conversationId,
+        muted: muted,
+        mutedUntil: muted ? until : null,
+        notifyMode: mode,
+      );
+      if (!mounted) return;
+      await _syncMuteSchedule();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _muted = previousMuted;
+        _conversation = previousConv;
+      });
+      unawaited(
+        ChatThreadUiPrefs.setMuteUntil(
+          widget.conversationId,
+          previousConv.mutedUntil,
+        ),
+      );
+      _bumpChatsHub();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
   }
 
   Future<void> _toggleMute() async {
@@ -7673,30 +7706,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       currentNotifyMode: _conversation.notifyMode,
     );
     if (choice == null || !mounted) return;
-    try {
-      if (choice.unmute) {
-        await _applyMuted(false);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(choice.snackLabel)),
-        );
-        return;
-      }
-      await _applyMuted(
-        true,
-        until: choice.until,
-        notifyMode: choice.notifyMode,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(choice.snackLabel)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+    if (choice.unmute) {
+      unawaited(_applyMuted(false));
+    } else {
+      unawaited(
+        _applyMuted(
+          true,
+          until: choice.until,
+          notifyMode: choice.notifyMode,
+        ),
       );
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(choice.snackLabel)),
+    );
   }
 
   Future<void> _saveContactToPhone(ChatContactPayload contact) async {
@@ -7861,15 +7884,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (ok != true || !mounted) return;
     setState(() => _giftActionMessageIds.add(msg.id));
+    _patchLocalGiftStatus(msg, 'converted');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('+$stars ★ на балансе')),
+    );
     try {
       await PaidFeaturesService.convertGift(giftId);
-      if (!mounted) return;
-      _patchLocalGiftStatus(msg, 'converted');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('+$stars ★ на балансе')),
-      );
     } catch (e) {
       if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == msg.id);
+      if (idx >= 0) setState(() => _messages[idx] = msg);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -7884,15 +7908,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final giftId = _userGiftIdFromMessage(msg);
     if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
     setState(() => _giftActionMessageIds.add(msg.id));
+    _patchLocalGiftStatus(msg, 'kept');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Подарок сохранён в профиле')),
+    );
     try {
       await PaidFeaturesService.keepGift(giftId);
-      if (!mounted) return;
-      _patchLocalGiftStatus(msg, 'kept');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Подарок сохранён в профиле')),
-      );
     } catch (e) {
       if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == msg.id);
+      if (idx >= 0) setState(() => _messages[idx] = msg);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -13230,6 +13255,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       controller.dispose();
     }
     if (text == null || text.isEmpty || !mounted) return;
+    final previous = msg;
+    final optimistic = msg.copyWith(
+      content: applyOptimisticPollOptionToContent(msg.content, text),
+    );
+    setState(() {
+      final i = _messages.indexWhere((m) => m.id == msg.id);
+      if (i >= 0) _messages[i] = optimistic;
+      if (_isMessagePinned(optimistic.id)) _replacePinnedMessage(optimistic);
+    });
     try {
       final updated = await ChatService.addPollOption(
         conversationId: widget.conversationId,
@@ -13245,6 +13279,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (mounted) {
+        setState(() {
+          final i = _messages.indexWhere((m) => m.id == previous.id);
+          if (i >= 0) _messages[i] = previous;
+          if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
+        });
         showErrorSnackBar(context, e, fallback: 'Не удалось добавить вариант');
       }
     }

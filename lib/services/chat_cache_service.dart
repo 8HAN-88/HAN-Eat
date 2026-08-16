@@ -150,6 +150,26 @@ class ChatCacheService {
     await saveConversations(next);
   }
 
+  static Future<void> dropConversation(int conversationId) async {
+    if (conversationId <= 0) return;
+    final current = _memoryConversations ?? await loadConversations();
+    if (current == null || current.isEmpty) return;
+    final next = current.where((c) => c.id != conversationId).toList();
+    if (next.length == current.length) return;
+    _memoryConversations = next;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (next.isEmpty) {
+        await prefs.remove(_conversationsKey);
+      } else {
+        final encoded = jsonEncode(
+          next.map(_conversationToJson).toList(growable: false),
+        );
+        await prefs.setString(_conversationsKey, encoded);
+      }
+    } catch (_) {}
+  }
+
   static List<ChatMessage>? peekThread(int conversationId) {
     final cached = _memoryThreads[conversationId];
     if (cached == null || cached.isEmpty) return null;
