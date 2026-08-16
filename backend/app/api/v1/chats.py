@@ -1,17 +1,26 @@
 """API личных чатов и контактов."""
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user_required
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.chat import (
     AddContactRequest,
@@ -114,6 +123,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.bot_webhook_queue_service import enqueue_webhook_task
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> None:
@@ -267,6 +277,101 @@ def _notify_chat_inbox(
                 "conversation_id": conversation_id,
             },
         )
+
+
+def _after_live_message_sent(
+    *,
+    conversation_id: int,
+    sender_id: int,
+    message_id: int,
+    content: str,
+    msg_type: str,
+    silent: bool,
+) -> None:
+    """FCM + bot replies after the live message is already committed and emitted."""
+    db = SessionLocal()
+    try:
+        msg = (
+            db.query(Message)
+            .filter(
+                Message.id == message_id,
+                Message.conversation_id == conversation_id,
+            )
+            .first()
+        )
+        if msg is None:
+            return
+        svc = ChatService(db)
+        if not silent:
+            svc._notify_new_message(
+                msg,
+                sender_id=sender_id,
+                msg_type=msg_type,
+                content=content,
+                silent=False,
+            )
+        from app.services.bot_handler import process_message_for_bot
+
+        bot_reply = process_message_for_bot(
+            db, conversation_id, sender_id, content
+        )
+        webhook_touched = _enqueue_bot_webhook(
+            db,
+            conversation_id=conversation_id,
+            update_type="message.new",
+            payload={
+                "conversation_id": conversation_id,
+                "from_user_id": sender_id,
+                "message": _message_payload(msg),
+            },
+        )
+        if bot_reply:
+            _emit(
+                conversation_id,
+                {"type": "message.new", "message": _message_payload(bot_reply)},
+            )
+            _notify_chat_inbox(db, conversation_id, bot_reply.sender_id)
+            webhook_touched = _enqueue_bot_webhook(
+                db,
+                conversation_id=conversation_id,
+                update_type="message.bot_reply",
+                payload={
+                    "conversation_id": conversation_id,
+                    "from_user_id": sender_id,
+                    "message": _message_payload(bot_reply),
+                },
+            ) or webhook_touched
+        if webhook_touched or not silent:
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "after_live_message_sent failed conversation=%s message=%s",
+            conversation_id,
+            message_id,
+        )
+    finally:
+        db.close()
+
+
+async def _run_after_live_message_sent(
+    *,
+    conversation_id: int,
+    sender_id: int,
+    message_id: int,
+    content: str,
+    msg_type: str,
+    silent: bool,
+) -> None:
+    await asyncio.to_thread(
+        _after_live_message_sent,
+        conversation_id=conversation_id,
+        sender_id=sender_id,
+        message_id=message_id,
+        content=content,
+        msg_type=msg_type,
+        silent=silent,
+    )
 
 
 def _find_chat_bot(db: Session, conversation_id: int) -> Optional[User]:
@@ -1900,13 +2005,13 @@ async def search_messages_in_chat(
 async def send_message(
     conversation_id: int,
     body: SendMessageRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
     svc = ChatService(db)
     content = body.content
     inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
-    webhook_touched = False
     if body.type == "poll":
         from app.services.chat_poll_service import build_poll_content
 
@@ -1960,8 +2065,10 @@ async def send_message(
             effect_id=body.effect_id,
             topic_id=body.topic_id,
             is_anonymous=bool(body.anonymous),
+            notify=False,
         )
-        # Paid-DM fee is charged inside send_message (before notify).
+        # Persist first. Push/FCM and bots run after WS emit so the first
+        # tap is not rolled back by a slow/hanging notification call.
         db.commit()
         db.refresh(msg)
 
@@ -1973,28 +2080,8 @@ async def send_message(
             conversation_id=conversation_id,
             user_id=current_user.id,
         )
-
-        # === Встроенный обработчик ботов ===
-        from app.services.bot_handler import process_message_for_bot
-        bot_reply = process_message_for_bot(db, conversation_id, current_user.id, content)
-        if bot_reply or cleared_kb:
+        if cleared_kb:
             db.commit()
-        if bot_reply:
-            db.refresh(bot_reply)
-            _emit(
-                conversation_id,
-                {"type": "message.new", "message": _message_payload(bot_reply)},
-            )
-            webhook_touched = _enqueue_bot_webhook(
-                db,
-                conversation_id=conversation_id,
-                update_type="message.bot_reply",
-                payload={
-                    "conversation_id": conversation_id,
-                    "from_user_id": current_user.id,
-                    "message": _message_payload(bot_reply),
-                },
-            ) or webhook_touched
     except ValueError as e:
         db.rollback()
         code = str(e)
@@ -2067,18 +2154,15 @@ async def send_message(
             {"type": "message.new", "message": _message_payload(msg)},
         )
         _notify_chat_inbox(db, conversation_id, current_user.id)
-        webhook_touched = _enqueue_bot_webhook(
-            db,
+        background_tasks.add_task(
+            _run_after_live_message_sent,
             conversation_id=conversation_id,
-            update_type="message.new",
-            payload={
-                "conversation_id": conversation_id,
-                "from_user_id": current_user.id,
-                "message": _message_payload(msg),
-            },
-        ) or webhook_touched
-    if webhook_touched:
-        db.commit()
+            sender_id=current_user.id,
+            message_id=msg.id,
+            content=content,
+            msg_type=body.type,
+            silent=bool(body.silent),
+        )
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)
@@ -2573,6 +2657,7 @@ def _live_location_message_response(
 async def start_live_location(
     conversation_id: int,
     body: LiveLocationStartRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2589,7 +2674,7 @@ async def start_live_location(
 
     svc = ChatService(db)
     try:
-        msg, _created = svc.send_message(
+        msg, created = svc.send_message(
             conversation_id=conversation_id,
             sender_id=current_user.id,
             msg_type="location",
@@ -2597,8 +2682,12 @@ async def start_live_location(
             reply_to_message_id=body.reply_to_message_id,
             client_message_id=body.client_message_id,
             silent=body.silent,
+            notify=False,
         )
+        db.commit()
+        db.refresh(msg)
     except ValueError as exc:
+        db.rollback()
         code = str(exc)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
 
@@ -2609,10 +2698,21 @@ async def start_live_location(
         msg=msg,
         current_user=current_user,
     )
-    _emit(
-        conversation_id,
-        {"type": "message.new", "message": response.model_dump(mode="json")},
-    )
+    if created:
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": response.model_dump(mode="json")},
+        )
+        _notify_chat_inbox(db, conversation_id, current_user.id)
+        background_tasks.add_task(
+            _run_after_live_message_sent,
+            conversation_id=conversation_id,
+            sender_id=current_user.id,
+            message_id=msg.id,
+            content=content,
+            msg_type="location",
+            silent=bool(body.silent),
+        )
     return response
 
 

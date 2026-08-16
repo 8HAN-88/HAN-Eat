@@ -110,6 +110,24 @@ def test_send_text_with_effect(db_session):
     assert msg.effect_id == "hearts"
 
 
+def test_send_text_can_skip_inline_notify(db_session):
+    conv = _setup_direct(db_session)
+    svc = ChatService(db_session)
+    msg, is_new = svc.send_message(
+        conversation_id=conv.id,
+        sender_id=1,
+        msg_type="text",
+        content="fast",
+        client_message_id="flutter:no-notify",
+        notify=False,
+    )
+    assert is_new is True
+    assert msg.id > 0
+    from app.models.notification import Notification
+
+    assert not any(isinstance(obj, Notification) for obj in db_session.new)
+
+
 def test_send_rejects_unknown_effect(db_session):
     conv = _setup_direct(db_session)
     svc = ChatService(db_session)

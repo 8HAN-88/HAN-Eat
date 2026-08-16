@@ -2016,6 +2016,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (_cancelledPendingMediaClientIds.contains(pending.clientMessageId)) {
         throw _CancelledPendingMediaException();
       }
+      _rememberOutgoingForHub(msg, refreshHub: true);
       if (!mounted) return;
       setState(() {
         _integrateMessage(msg, removeTempId: pending.tempId);
@@ -2075,8 +2076,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         await ChatCacheService.loadFailedTextSends(widget.conversationId);
     if (rows.isEmpty || !mounted) return;
     final uid = AuthService.instance.currentUser?.id ?? 0;
-    final restored = <int, _PendingTextSend>{};
+    final restoredFailed = <int, _PendingTextSend>{};
+    final restoredQueued = <_PendingTextSend>[];
     final restoredMessages = <ChatMessage>[];
+    final knownClientIds = {
+      for (final pending in _textOutboundQueue) pending.clientMessageId,
+      for (final pending in _failedTextSends.values) pending.clientMessageId,
+    };
     for (final row in rows) {
       final text = row['text'] as String? ?? '';
       final clientMessageId = row['client_message_id'] as String? ?? '';
@@ -2084,12 +2090,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (text.trim().isEmpty || clientMessageId.isEmpty || tempId >= 0) {
         continue;
       }
+      if (knownClientIds.contains(clientMessageId)) continue;
       final replyRaw = row['reply_to_message_id'];
+      final topicRaw = row['topic_id'];
       final pending = _PendingTextSend(
         text: text,
         clientMessageId: clientMessageId,
         tempId: tempId,
         replyToMessageId: replyRaw is int ? replyRaw : null,
+        silent: row['silent'] == true,
+        disableWebpagePreview: row['disable_webpage_preview'] == true,
+        effectId: row['effect_id'] as String?,
+        topicId: topicRaw is int ? topicRaw : null,
+        anonymous: row['anonymous'] == true,
       );
       pending.attempts = row['attempts'] as int? ?? 0;
       pending.lastRetryAfterSeconds =
@@ -2097,8 +2110,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       pending.lastLimitedAt = DateTime.tryParse(
         row['last_limited_at'] as String? ?? '',
       );
-      restored[tempId] = pending;
-      if (!_messages.any((m) => m.id == tempId)) {
+      if (row['queued'] == true) {
+        restoredQueued.add(pending);
+      } else {
+        restoredFailed[tempId] = pending;
+      }
+      knownClientIds.add(clientMessageId);
+      if (!_messages.any((m) =>
+          m.id == tempId ||
+          ((m.clientMessageId ?? '').isNotEmpty &&
+              m.clientMessageId == clientMessageId))) {
         restoredMessages.add(
           ChatMessage(
             id: tempId,
@@ -2111,37 +2132,76 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 DateTime.now(),
             isMine: true,
             isRead: false,
+            clientMessageId: clientMessageId,
+            topicId: pending.topicId,
+            isAnonymous: pending.anonymous,
           ),
         );
       }
     }
-    if (restored.isEmpty) return;
+    if (restoredFailed.isEmpty && restoredQueued.isEmpty) return;
     setState(() {
-      _failedTextSends.addAll(restored);
+      _failedTextSends.addAll(restoredFailed);
+      _textOutboundQueue.addAll(restoredQueued);
       _messages.addAll(restoredMessages);
       _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     });
     _syncSlowModeCountdownTimer();
+    if (restoredQueued.isNotEmpty) {
+      _kickTextOutbound();
+    }
+  }
+
+  Map<String, dynamic> _pendingTextToJson(
+    _PendingTextSend pending, {
+    required bool queued,
+  }) {
+    return {
+      'text': pending.text,
+      'client_message_id': pending.clientMessageId,
+      'temp_id': pending.tempId,
+      'reply_to_message_id': pending.replyToMessageId,
+      'attempts': pending.attempts,
+      'last_retry_after_seconds': pending.lastRetryAfterSeconds,
+      'last_limited_at': pending.lastLimitedAt?.toUtc().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'queued': queued,
+      'silent': pending.silent,
+      'disable_webpage_preview': pending.disableWebpagePreview,
+      if (pending.effectId != null) 'effect_id': pending.effectId,
+      if (pending.topicId != null) 'topic_id': pending.topicId,
+      'anonymous': pending.anonymous,
+    };
   }
 
   Future<void> _persistFailedTextSends() {
+    final seen = <String>{};
+    final items = <Map<String, dynamic>>[];
+    for (final pending in _textOutboundQueue) {
+      if (!seen.add(pending.clientMessageId)) continue;
+      items.add(_pendingTextToJson(pending, queued: true));
+    }
+    for (final pending in _failedTextSends.values) {
+      if (!seen.add(pending.clientMessageId)) continue;
+      items.add(_pendingTextToJson(pending, queued: false));
+    }
     return ChatCacheService.saveFailedTextSends(
       widget.conversationId,
-      _failedTextSends.values
-          .map(
-            (p) => {
-              'text': p.text,
-              'client_message_id': p.clientMessageId,
-              'temp_id': p.tempId,
-              'reply_to_message_id': p.replyToMessageId,
-              'attempts': p.attempts,
-              'last_retry_after_seconds': p.lastRetryAfterSeconds,
-              'last_limited_at': p.lastLimitedAt?.toUtc().toIso8601String(),
-              'created_at': DateTime.now().toUtc().toIso8601String(),
-            },
-          )
-          .toList(growable: false),
+      items,
     );
+  }
+
+  void _rememberOutgoingForHub(ChatMessage msg, {bool refreshHub = false}) {
+    unawaited(
+      ChatCacheService.patchConversationLastMessage(
+        conversationId: widget.conversationId,
+        lastMessage: msg,
+      ),
+    );
+    if (!refreshHub) return;
+    try {
+      refreshChatsHub(ref);
+    } catch (_) {}
   }
 
   void _restartPolling() {
@@ -5585,6 +5645,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       t.cancel();
     }
     _failedTextAutoRetryTimers.clear();
+    unawaited(_persistFailedTextSends());
     unawaited(
       ChatCacheService.saveDraft(
         widget.conversationId,
@@ -10439,7 +10500,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final seq = ++_messageLoadSeq;
     if (refresh) {
       setState(() {
-        _loading = true;
+        // Keep cached/optimistic bubbles on screen — don't flash a spinner.
+        if (_messages.isEmpty) {
+          _loading = true;
+        }
         _loadError = null;
       });
     } else {
@@ -10706,10 +10770,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             topicId: pending.topicId,
             anonymous: pending.anonymous,
           );
-          if (!mounted) return;
           _textOutboundQueue.removeWhere(
             (p) => p.clientMessageId == pending.clientMessageId,
           );
+          _failedTextSends.remove(pending.tempId);
+          unawaited(_persistFailedTextSends());
+          _rememberOutgoingForHub(msg, refreshHub: true);
+          if (!mounted) return;
           setState(() {
             _clearFailedTextAutoRetry(pending.tempId);
             _integrateMessage(msg, removeTempId: pending.tempId);
@@ -10733,7 +10800,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
           return;
         } catch (e) {
-          if (!mounted) return;
           final err = e.toString().toLowerCase();
           if (err.contains('group_slow_mode')) {
             _textOutboundQueue.removeWhere(
@@ -10744,8 +10810,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             pending.lastRetryAfterSeconds =
                 (retryAfter ?? _conversation.slowModeSeconds).clamp(1, 3600);
             pending.lastLimitedAt = DateTime.now().toUtc();
+            _failedTextSends[pending.tempId] = pending;
+            unawaited(_persistFailedTextSends());
+            if (!mounted) return;
             setState(() {
-              _failedTextSends[pending.tempId] = pending;
               _activateSlowModeCooldownForSeconds(retryAfter ?? 0);
             });
             _scheduleFailedTextAutoRetry(
@@ -10753,7 +10821,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               retryAfterSeconds: retryAfter ?? _conversation.slowModeSeconds,
               reason: 'slow',
             );
-            unawaited(_persistFailedTextSends());
             if (!_autoRetryOnLimitsEnabled && mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -10777,8 +10844,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             final wait = (retryAfter != null && retryAfter > 0)
                 ? ' Подождите ${_formatSlowModeCountdown(retryAfter)}.'
                 : '';
+            _failedTextSends[pending.tempId] = pending;
+            unawaited(_persistFailedTextSends());
+            if (!mounted) return;
             setState(() {
-              _failedTextSends[pending.tempId] = pending;
               _activateFloodCooldownForSeconds(retryAfter ?? 0);
             });
             _scheduleFailedTextAutoRetry(
@@ -10786,7 +10855,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               retryAfterSeconds: retryAfter ?? 60,
               reason: 'flood',
             );
-            unawaited(_persistFailedTextSends());
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Лимит сообщений в минуту достигнут.$wait'),
@@ -10814,10 +10882,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           );
           pending.lastRetryAfterSeconds = null;
           pending.lastLimitedAt = null;
-          setState(() {
-            _failedTextSends[pending.tempId] = pending;
-          });
+          _failedTextSends[pending.tempId] = pending;
           unawaited(_persistFailedTextSends());
+          if (!mounted) return;
+          setState(() {});
           if (isStarsRequiredError(e)) {
             await showStarsRequiredSnack(context, e);
           } else {
@@ -11067,6 +11135,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _composerLinkPreviewDismissedUrl = null;
       _textOutboundQueue.add(pending);
     });
+    unawaited(_persistFailedTextSends());
+    unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    _rememberOutgoingForHub(optimistic);
     _scrollToBottom();
     unawaited(_kickTextOutbound());
   }
