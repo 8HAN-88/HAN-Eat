@@ -146,6 +146,31 @@ class ChatCacheService {
     }
   }
 
+  static Future<void> patchConversationLastMessage({
+    required int conversationId,
+    required ChatMessage lastMessage,
+  }) async {
+    final current = _memoryConversations ?? await loadConversations();
+    if (current == null || current.isEmpty) return;
+    final next = <ChatConversation>[];
+    var found = false;
+    for (final chat in current) {
+      if (chat.id == conversationId) {
+        next.add(
+          chat.copyWith(
+            lastMessage: lastMessage,
+            updatedAt: lastMessage.createdAt,
+          ),
+        );
+        found = true;
+      } else {
+        next.add(chat);
+      }
+    }
+    if (!found) return;
+    await saveConversations(next);
+  }
+
   static Future<void> saveConversations(List<ChatConversation> items) async {
     if (items.isEmpty) return;
     _memoryConversations = List<ChatConversation>.from(items);

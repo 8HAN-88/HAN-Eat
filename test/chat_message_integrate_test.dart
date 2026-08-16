@@ -119,4 +119,20 @@ void main() {
       expect(out.map((m) => m.id), [10, 42]);
     });
   });
+
+  test('conversation copyWith updates last message preview', () {
+    final chat = ChatConversation(
+      id: 7,
+      type: 'direct',
+      updatedAt: DateTime(2026, 8, 1),
+      lastMessage: _msg(id: 1, content: 'old'),
+    );
+    final next = chat.copyWith(
+      lastMessage: _msg(id: 2, content: 'now'),
+      updatedAt: DateTime(2026, 8, 16),
+    );
+    expect(next.lastMessage?.content, 'now');
+    expect(next.updatedAt, DateTime(2026, 8, 16));
+    expect(chat.lastMessage?.content, 'old');
+  });
 }

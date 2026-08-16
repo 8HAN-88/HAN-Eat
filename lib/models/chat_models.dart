@@ -815,6 +815,8 @@ class ChatConversation {
     bool? peerBlockedByMe,
     ChatReplyKeyboard? replyKeyboard,
     bool clearReplyKeyboard = false,
+    ChatMessage? lastMessage,
+    DateTime? updatedAt,
   }) {
     return ChatConversation(
       id: id,
@@ -826,12 +828,12 @@ class ChatConversation {
       pendingJoinRequestsCount:
           pendingJoinRequestsCount ?? this.pendingJoinRequestsCount,
       membersPreview: membersPreview ?? this.membersPreview,
-      lastMessage: lastMessage,
+      lastMessage: lastMessage ?? this.lastMessage,
       unreadCount: unreadCount ?? this.unreadCount,
       unreadMentionsCount: unreadMentionsCount ?? this.unreadMentionsCount,
       unreadReactionsCount:
           unreadReactionsCount ?? this.unreadReactionsCount,
-      updatedAt: updatedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       pinned: pinned ?? this.pinned,
       archived: archived ?? this.archived,
       muted: muted ?? this.muted,

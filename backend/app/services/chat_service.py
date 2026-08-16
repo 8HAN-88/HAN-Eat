@@ -2985,6 +2985,7 @@ class ChatService:
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
         is_anonymous: bool = False,
+        notify: bool = True,
     ) -> tuple[Message, bool]:
         if client_message_id:
             existing = (
@@ -3063,13 +3064,16 @@ class ChatService:
             is_new=True,
             conv=conv,
         )
-        self._notify_new_message(
-            msg,
-            sender_id=sender_id,
-            msg_type=msg_type,
-            content=content,
-            silent=bool(silent),
-        )
+        # Push/FCM is optional: live HTTP send emits WS first, then notifies
+        # in a background session so the first tap is not blocked by FCM.
+        if notify:
+            self._notify_new_message(
+                msg,
+                sender_id=sender_id,
+                msg_type=msg_type,
+                content=content,
+                silent=bool(silent),
+            )
         return msg, True
 
     def _charge_direct_paid_message_fee(
