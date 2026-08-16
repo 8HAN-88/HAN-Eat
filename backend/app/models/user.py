@@ -70,6 +70,8 @@ class User(Base):
     show_read_receipts = Column(Boolean, default=True, nullable=False)
     # Telegram-like: charge this many Stars per incoming DM (0 = free).
     paid_message_stars = Column(Integer, default=0, nullable=False)
+    # TON wallet for creator Stars cash-out (Fragment-like).
+    ton_address = Column(String(128), nullable=True)
     phone_hash = Column(String(64), nullable=True, unique=True, index=True)
     phone_e164 = Column(String(20), nullable=True)
     phone_linked_at = Column(DateTime, nullable=True)

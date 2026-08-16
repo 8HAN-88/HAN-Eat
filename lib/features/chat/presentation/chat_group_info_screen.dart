@@ -10,6 +10,8 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/chat_service.dart';
 import '../../../services/media_upload_service.dart';
+import '../../../services/paid_features_service.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
@@ -59,6 +61,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   late ChatConversation _conversation;
   List<ChatUserBrief> _members = [];
   bool _loading = true;
+  GroupPaidSettings? _paid;
   bool _busy = false;
   Object? _error;
 
@@ -89,10 +92,15 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     try {
       final conv = await ChatService.getConversation(_conversation.id);
       final members = await ChatService.listMembers(_conversation.id);
+      GroupPaidSettings? paid;
+      try {
+        paid = await PaidFeaturesService.getGroupPaidSettings(_conversation.id);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _conversation = conv;
         _members = members;
+        _paid = paid;
         _loading = false;
       });
       widget.onConversationChanged?.call(conv);
@@ -249,6 +257,102 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
             notifyMode: choice.notifyMode,
           )),
     );
+  }
+
+  Future<void> _editGroupPaid() async {
+    if (!_canChangeInfo || _busy) return;
+    final current = _paid;
+    final priceController = TextEditingController(
+      text: '${current?.monthlyPriceStars ?? 50}',
+    );
+    var isPaid = current?.isPaid ?? false;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + bottom),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Платная группа',
+                    style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Подписка за ★'),
+                    value: isPaid,
+                    onChanged: (v) => setLocal(() => isPaid = v),
+                  ),
+                  if (isPaid)
+                    TextField(
+                      controller: priceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '★ в месяц',
+                      ),
+                    ),
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Сохранить'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    final price = int.tryParse(priceController.text.trim()) ?? 0;
+    priceController.dispose();
+    if (ok != true || !mounted) return;
+    try {
+      final next = await PaidFeaturesService.setGroupPaidSettings(
+        _conversation.id,
+        isPaid: isPaid,
+        monthlyPriceStars: price,
+      );
+      if (!mounted) return;
+      setState(() => _paid = next);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _subscribeGroup() async {
+    final paid = _paid;
+    if (paid == null || !paid.isPaid || paid.subscribed) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Подписка на группу',
+      body: 'Доступ на 30 дней. С баланса спишется ${paid.monthlyPriceStars} ★.',
+      amountStars: paid.monthlyPriceStars,
+      confirmLabel: 'Оплатить',
+    );
+    if (!ok || !mounted) return;
+    try {
+      final next = await PaidFeaturesService.subscribeGroup(_conversation.id);
+      if (!mounted) return;
+      setState(() => _paid = next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Подписка оформлена')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showStarsRequiredSnack(context, e);
+    }
   }
 
   Future<void> _toggleOnlyAdminsCanPost() async {
@@ -1686,6 +1790,34 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               ? null
                               : (_) => _toggleIsForum(),
                         ),
+                        if (_canChangeInfo)
+                          ListTile(
+                            leading: const Icon(Icons.workspace_premium_outlined),
+                            title: const Text('Платная группа'),
+                            subtitle: Text(
+                              _paid?.isPaid == true
+                                  ? '${_paid!.monthlyPriceStars} ★ / мес'
+                                  : 'Бесплатный вход',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: _busy ? null : _editGroupPaid,
+                          )
+                        else if (_paid?.isPaid == true)
+                          ListTile(
+                            leading: const Icon(Icons.workspace_premium_outlined),
+                            title: const Text('Подписка ★'),
+                            subtitle: Text(
+                              _paid!.subscribed
+                                  ? 'Активна'
+                                  : '${_paid!.monthlyPriceStars} ★ / мес',
+                            ),
+                            trailing: _paid!.subscribed
+                                ? const Icon(Icons.check_circle_outline)
+                                : FilledButton(
+                                    onPressed: _busy ? null : _subscribeGroup,
+                                    child: const Text('Оплатить'),
+                                  ),
+                          ),
                         ListTile(
                           leading: const Icon(Icons.auto_delete_outlined),
                           title: const Text('Автоудаление'),

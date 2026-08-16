@@ -231,13 +231,18 @@ class PaidFeaturesService {
   static Future<CreatorPayoutRequest> requestCreatorPayout({
     required int amountStars,
     String? note,
+    String method = 'rub',
+    String? tonAddress,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/payouts/request'),
       headers: await _headers(),
       body: jsonEncode({
         'amount_stars': amountStars,
+        'method': method,
         if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        if (tonAddress != null && tonAddress.trim().isNotEmpty)
+          'ton_address': tonAddress.trim(),
       }),
     );
     if (response.statusCode == 200) {
@@ -246,6 +251,99 @@ class PaidFeaturesService {
       );
     }
     _throwForResponse(response, 'Не удалось запросить выплату');
+  }
+
+  static Future<String?> getTonAddress() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/me/ton-address'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['ton_address'] as String?;
+    }
+    _throwForResponse(response, 'Не удалось загрузить TON-адрес');
+  }
+
+  static Future<String?> setTonAddress(String? address) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/paid/me/ton-address'),
+      headers: await _headers(),
+      body: jsonEncode({'ton_address': address}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['ton_address'] as String?;
+    }
+    _throwForResponse(response, 'Не удалось сохранить TON-адрес');
+  }
+
+  static Future<List<UserStarGift>> reorderGifts(List<int> giftIds) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/reorder'),
+      headers: await _headers(),
+      body: jsonEncode({'gift_ids': giftIds}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final gifts = data['gifts'] as List<dynamic>? ?? const [];
+      return gifts
+          .map((e) => UserStarGift.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось сохранить порядок');
+  }
+
+  static Future<GroupPaidSettings> getGroupPaidSettings(int conversationId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/groups/$conversationId/subscription'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return GroupPaidSettings.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось загрузить оплату группы');
+  }
+
+  static Future<GroupPaidSettings> setGroupPaidSettings(
+    int conversationId, {
+    required bool isPaid,
+    required int monthlyPriceStars,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/groups/$conversationId/settings'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'is_paid': isPaid,
+        'monthly_price_stars': monthlyPriceStars,
+      }),
+    );
+    if (response.statusCode == 200) {
+      return GroupPaidSettings.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось сохранить оплату группы');
+  }
+
+  static Future<GroupPaidSettings> subscribeGroup(
+    int conversationId, {
+    int months = 1,
+    bool autoRenew = false,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/groups/$conversationId/subscribe'),
+      headers: await _headers(),
+      body: jsonEncode({'months': months, 'auto_renew': autoRenew}),
+    );
+    if (response.statusCode == 200) {
+      return GroupPaidSettings.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось оплатить группу');
   }
 
   static Future<List<CreatorPayoutRequest>> getMyPayoutRequests({
@@ -937,6 +1035,8 @@ class CreatorPayoutRequest {
     required this.amountRub,
     required this.status,
     this.note,
+    this.method = 'rub',
+    this.tonAddress,
     this.createdAt,
   });
 
@@ -946,6 +1046,8 @@ class CreatorPayoutRequest {
   final double amountRub;
   final String status;
   final String? note;
+  final String method;
+  final String? tonAddress;
   final DateTime? createdAt;
 
   factory CreatorPayoutRequest.fromJson(Map<String, dynamic> json) =>
@@ -956,7 +1058,37 @@ class CreatorPayoutRequest {
         amountRub: (json['amount_rub'] as num?)?.toDouble() ?? 0,
         status: json['status'] as String? ?? 'pending',
         note: json['note'] as String?,
+        method: json['method'] as String? ?? 'rub',
+        tonAddress: json['ton_address'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+      );
+}
+
+class GroupPaidSettings {
+  const GroupPaidSettings({
+    required this.conversationId,
+    required this.isPaid,
+    required this.monthlyPriceStars,
+    this.subscribed = false,
+    this.expiresAt,
+    this.autoRenew = false,
+  });
+
+  final int conversationId;
+  final bool isPaid;
+  final int monthlyPriceStars;
+  final bool subscribed;
+  final DateTime? expiresAt;
+  final bool autoRenew;
+
+  factory GroupPaidSettings.fromJson(Map<String, dynamic> json) =>
+      GroupPaidSettings(
+        conversationId: json['conversation_id'] as int? ?? 0,
+        isPaid: json['is_paid'] as bool? ?? false,
+        monthlyPriceStars: json['monthly_price_stars'] as int? ?? 0,
+        subscribed: json['subscribed'] as bool? ?? false,
+        expiresAt: DateTime.tryParse(json['expires_at'] as String? ?? ''),
+        autoRenew: json['auto_renew'] as bool? ?? false,
       );
 }
 
@@ -1096,6 +1228,7 @@ class UserStarGift {
     this.listedStars,
     this.listedAt,
     this.isWorn = false,
+    this.displayOrder = 0,
     this.sellerName,
     this.sellerUsername,
     this.upgradeStars = 0,
@@ -1126,6 +1259,7 @@ class UserStarGift {
   final int? listedStars;
   final DateTime? listedAt;
   final bool isWorn;
+  final int displayOrder;
   final String? sellerName;
   final String? sellerUsername;
   final int upgradeStars;
@@ -1199,6 +1333,7 @@ class UserStarGift {
         listedStars: json['listed_stars'] as int?,
         listedAt: DateTime.tryParse(json['listed_at'] as String? ?? ''),
         isWorn: json['is_worn'] as bool? ?? false,
+        displayOrder: json['display_order'] as int? ?? 0,
         sellerName: json['seller_name'] as String?,
         sellerUsername: json['seller_username'] as String?,
         upgradeStars: json['upgrade_stars'] as int? ?? 0,

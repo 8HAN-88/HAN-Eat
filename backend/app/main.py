@@ -214,6 +214,7 @@ async def _background_maintenance_loop() -> None:
     from app.services.post_publish_service import publish_due_scheduled_posts
     from app.services.paid_features_service import (
         expire_due_channel_subscriptions,
+        expire_due_group_subscriptions,
         expire_due_post_boosts,
         expire_due_star_invoices,
         finalize_due_star_giveaways,
@@ -229,6 +230,7 @@ async def _background_maintenance_loop() -> None:
             published = publish_due_scheduled_posts(db)
             expired_boosts = expire_due_post_boosts(db)
             expired_channel_subs = expire_due_channel_subscriptions(db)
+            expire_due_group_subscriptions(db)
             finished_giveaways = finalize_due_star_giveaways(db)
             expired_invoices = expire_due_star_invoices(db)
             SubscriptionMaintenanceService(db).run()

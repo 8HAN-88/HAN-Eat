@@ -15,6 +15,7 @@ from app.models.paid_features import (
     CreatorPayoutRequest,
     CreatorBalance,
     PaidChannelSubscription,
+    PaidGroupSubscription,
     PaidContentPurchase,
     PaidMessageException,
     PaidMessageUnlock,
@@ -514,6 +515,202 @@ class PaidFeaturesService:
         self.db.flush()
         return sub
 
+    def set_group_paid_settings(
+        self,
+        actor_user_id: int,
+        conversation_id: int,
+        *,
+        is_paid: bool,
+        monthly_price_stars: int,
+    ) -> Conversation:
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id, Conversation.type == "group")
+            .first()
+        )
+        if not conv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == actor_user_id,
+            )
+            .first()
+        )
+        is_owner = conv.created_by_user_id == actor_user_id
+        if not is_owner and not (member and member.is_admin and member.can_change_info):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not group admin")
+        price = max(0, int(monthly_price_stars or 0))
+        if is_paid and (price < 10 or price > 100_000):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Monthly price must be between 10 and 100000 stars",
+            )
+        conv.is_paid = bool(is_paid) and price > 0
+        conv.monthly_price_stars = price if conv.is_paid else 0
+        self.db.flush()
+        return conv
+
+    def get_group_subscription(
+        self, user_id: int, conversation_id: int
+    ) -> Optional[PaidGroupSubscription]:
+        return (
+            self.db.query(PaidGroupSubscription)
+            .filter(
+                PaidGroupSubscription.user_id == user_id,
+                PaidGroupSubscription.conversation_id == conversation_id,
+            )
+            .first()
+        )
+
+    def has_active_group_subscription(self, user_id: int, conversation_id: int) -> bool:
+        now = datetime.utcnow()
+        sub = self.get_group_subscription(user_id, conversation_id)
+        return bool(
+            sub
+            and sub.status == "active"
+            and sub.expires_at
+            and sub.expires_at > now
+        )
+
+    def assert_can_join_paid_group(self, user_id: int, conv: Conversation) -> None:
+        if not bool(getattr(conv, "is_paid", False)):
+            return
+        price = int(getattr(conv, "monthly_price_stars", 0) or 0)
+        if price <= 0:
+            return
+        if conv.created_by_user_id == user_id:
+            return
+        if self.has_active_group_subscription(user_id, conv.id):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "group_paid_required",
+                "conversation_id": conv.id,
+                "monthly_price_stars": price,
+                "title": conv.title,
+            },
+        )
+
+    def subscribe_group(
+        self,
+        user_id: int,
+        conversation_id: int,
+        *,
+        months: int = 1,
+        auto_renew: bool = False,
+    ) -> PaidGroupSubscription:
+        if months < 1 or months > 12:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Months must be between 1 and 12",
+            )
+        conv = (
+            self.db.query(Conversation)
+            .filter(Conversation.id == conversation_id, Conversation.type == "group")
+            .first()
+        )
+        if not conv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+        if conv.created_by_user_id == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Owner already has access"
+            )
+        price = int(getattr(conv, "monthly_price_stars", 0) or 0) * months
+        if not getattr(conv, "is_paid", False) or price <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Group is not paid"
+            )
+        owner_id = int(conv.created_by_user_id or 0)
+        now = datetime.utcnow()
+        existing = self.get_group_subscription(user_id, conversation_id)
+        self._spend_stars(
+            user_id,
+            price,
+            tx_type="group_subscription",
+            reference_type="conversation",
+            reference_id=conversation_id,
+            counterparty_user_id=owner_id or None,
+        )
+        expires_base = (
+            existing.expires_at
+            if existing and existing.expires_at and existing.expires_at > now
+            else now
+        )
+        expires_at = expires_base + timedelta(days=30 * months)
+        if existing:
+            existing.amount_stars = price
+            existing.status = "active"
+            existing.expires_at = expires_at
+            existing.auto_renew = auto_renew
+            sub = existing
+        else:
+            sub = PaidGroupSubscription(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                amount_stars=price,
+                expires_at=expires_at,
+                auto_renew=auto_renew,
+            )
+            self.db.add(sub)
+        if owner_id:
+            self._credit_creator(
+                owner_id,
+                price,
+                tx_type="group_subscription_received",
+                reference_type="conversation",
+                reference_id=conversation_id,
+                counterparty_user_id=user_id,
+            )
+        member = (
+            self.db.query(ConversationMember)
+            .filter(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.user_id == user_id,
+            )
+            .first()
+        )
+        if member is None:
+            self.db.add(ConversationMember(conversation_id=conversation_id, user_id=user_id))
+        self.db.flush()
+        return sub
+
+    def set_ton_address(self, user_id: int, ton_address: Optional[str]) -> User:
+        user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        clean = (ton_address or "").strip()
+        if not clean:
+            user.ton_address = None
+            self.db.flush()
+            return user
+        if len(clean) < 10 or len(clean) > 128:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid TON address"
+            )
+        user.ton_address = clean
+        self.db.flush()
+        return user
+
+    def reorder_user_star_gifts(self, owner_id: int, gift_ids: list[int]) -> list[UserStarGift]:
+        ids = [int(x) for x in gift_ids if int(x) > 0]
+        if not ids:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty order")
+        gifts = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.owner_id == owner_id, UserStarGift.id.in_(ids))
+            .all()
+        )
+        by_id = {g.id: g for g in gifts}
+        if len(by_id) != len(set(ids)):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        for index, gift_id in enumerate(ids):
+            by_id[gift_id].display_order = index
+        self.db.flush()
+        return self.list_user_star_gifts(owner_id)
+
     def list_paid_message_exceptions(self, owner_id: int) -> list[User]:
         rows = (
             self.db.query(User)
@@ -636,6 +833,8 @@ class PaidFeaturesService:
         amount_stars: int,
         *,
         note: Optional[str] = None,
+        method: str = "rub",
+        ton_address: Optional[str] = None,
         stars_to_rub_rate: float = 0.8,
     ) -> CreatorPayoutRequest:
         if amount_stars <= 0:
@@ -657,6 +856,20 @@ class PaidFeaturesService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Not enough spendable stars to cash out",
             )
+        kind = (method or "rub").strip().lower()
+        if kind not in ("rub", "ton"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payout method"
+            )
+        dest = (ton_address or "").strip()
+        if kind == "ton":
+            user = self.db.query(User).filter(User.id == user_id).first()
+            dest = dest or (getattr(user, "ton_address", None) or "").strip()
+            if len(dest) < 10:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="TON address required",
+                )
         amount_rub = round(float(amount_stars) * float(stars_to_rub_rate), 2)
         payout = CreatorPayoutRequest(
             creator_user_id=user_id,
@@ -664,6 +877,8 @@ class PaidFeaturesService:
             amount_rub=amount_rub,
             status="pending",
             note=(note or "").strip() or None,
+            method=kind,
+            ton_address=dest or None,
         )
         self.db.add(payout)
         self.db.flush()
@@ -1153,7 +1368,11 @@ class PaidFeaturesService:
         elif not include_converted:
             q = q.filter(UserStarGift.status.in_(("held", "kept")))
         return (
-            q.order_by(UserStarGift.created_at.desc(), UserStarGift.id.desc())
+            q.order_by(
+                UserStarGift.display_order.asc(),
+                UserStarGift.created_at.desc(),
+                UserStarGift.id.desc(),
+            )
             .limit(limit)
             .all()
         )
@@ -2682,6 +2901,55 @@ def expire_due_channel_subscriptions(db: Session) -> int:
         _revoke_paid_channel_membership(
             db, user_id=sub.user_id, channel_id=sub.channel_id
         )
+        changed += 1
+    return changed
+
+
+def expire_due_group_subscriptions(db: Session) -> int:
+    now = datetime.utcnow()
+    due = (
+        db.query(PaidGroupSubscription)
+        .filter(
+            PaidGroupSubscription.status == "active",
+            PaidGroupSubscription.expires_at.isnot(None),
+            PaidGroupSubscription.expires_at <= now,
+        )
+        .limit(100)
+        .all()
+    )
+    if not due:
+        return 0
+    service = PaidFeaturesService(db)
+    changed = 0
+    for sub in due:
+        renewed = False
+        if sub.auto_renew:
+            try:
+                service.subscribe_group(
+                    sub.user_id,
+                    sub.conversation_id,
+                    months=1,
+                    auto_renew=True,
+                )
+                renewed = True
+                changed += 1
+            except Exception:
+                renewed = False
+        if renewed:
+            continue
+        sub.status = "expired"
+        conv = db.query(Conversation).filter(Conversation.id == sub.conversation_id).first()
+        if conv and conv.created_by_user_id != sub.user_id:
+            member = (
+                db.query(ConversationMember)
+                .filter(
+                    ConversationMember.conversation_id == sub.conversation_id,
+                    ConversationMember.user_id == sub.user_id,
+                )
+                .first()
+            )
+            if member is not None and not member.is_admin:
+                db.delete(member)
         changed += 1
     return changed
 

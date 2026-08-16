@@ -9,12 +9,14 @@ class ApiClientException implements Exception {
     this.statusCode,
     this.code,
     this.retryAfterSeconds,
+    this.details,
   });
 
   final int? statusCode;
   final String? code;
   final int? retryAfterSeconds;
   final String message;
+  final Map<String, dynamic>? details;
 
   bool get isContentBlocked => code == 'CONTENT_BLOCKED';
   bool get isRateLimited => statusCode == 429;
@@ -49,6 +51,13 @@ String parseApiErrorMessage(
     final code = detail['code'] as String?;
     if (code == 'STARS_REQUIRED') {
       return 'Недостаточно звёзд';
+    }
+    if (code == 'group_paid_required') {
+      final price = detail['monthly_price_stars'];
+      if (price is num && price > 0) {
+        return 'Чтобы вступить, оформите подписку за $price ★ / мес';
+      }
+      return 'Чтобы вступить, оформите платную подписку на группу';
     }
     if (code == 'paid_media_locked') {
       return 'Сначала откройте платное медиа, чтобы переслать';
@@ -110,6 +119,9 @@ ApiClientException apiExceptionFromResponse(
     code: parseApiErrorCode(detail),
     retryAfterSeconds: parseApiRetryAfterSeconds(detail),
     message: parseApiErrorMessage(detail, fallback: fallback),
+    details: detail is Map<String, dynamic>
+        ? Map<String, dynamic>.from(detail)
+        : (detail is Map ? Map<String, dynamic>.from(detail) : null),
   );
 }
 

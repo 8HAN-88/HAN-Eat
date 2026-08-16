@@ -22,6 +22,12 @@ from app.schemas.paid_features import (
     DonateStarsResponse,
     CreatorPayoutRequestCreate,
     CreatorPayoutResponse,
+    GroupPaidSettingsResponse,
+    ReorderUserStarGiftsRequest,
+    SetGroupPaidSettingsRequest,
+    SetTonAddressRequest,
+    SubscribeGroupRequest,
+    TonAddressResponse,
     CreatorPayoutReviewRequest,
     PaidMessageExceptionItem,
     PayStarInvoiceResponse,
@@ -410,6 +416,8 @@ async def request_creator_payout(
         current_user.id,
         request.amount_stars,
         note=request.note,
+        method=request.method,
+        ton_address=request.ton_address,
     )
     db.commit()
     db.refresh(payout)
@@ -1372,4 +1380,112 @@ async def review_suggested_post(
     db.commit()
     db.refresh(row)
     return _suggested_post_item(db, row)
+
+
+@router.get("/me/ton-address", response_model=TonAddressResponse)
+async def get_my_ton_address(
+    current_user: User = Depends(get_current_user_required),
+):
+    return TonAddressResponse(ton_address=getattr(current_user, "ton_address", None))
+
+
+@router.patch("/me/ton-address", response_model=TonAddressResponse)
+async def set_my_ton_address(
+    request: SetTonAddressRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    user = service.set_ton_address(current_user.id, request.ton_address)
+    db.commit()
+    return TonAddressResponse(ton_address=user.ton_address)
+
+
+@router.post("/gifts/inventory/reorder", response_model=UserStarGiftsResponse)
+async def reorder_my_star_gifts(
+    request: ReorderUserStarGiftsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gifts = service.reorder_user_star_gifts(current_user.id, request.gift_ids)
+    db.commit()
+    return UserStarGiftsResponse(gifts=[_owned_gift_item(db, g) for g in gifts])
+
+
+def _group_paid_settings(service: PaidFeaturesService, user_id: int, conv) -> GroupPaidSettingsResponse:
+    sub = service.get_group_subscription(user_id, conv.id)
+    now = datetime.utcnow()
+    active = bool(
+        sub
+        and sub.status == "active"
+        and sub.expires_at
+        and sub.expires_at > now
+    )
+    return GroupPaidSettingsResponse(
+        conversation_id=conv.id,
+        is_paid=bool(getattr(conv, "is_paid", False)),
+        monthly_price_stars=int(getattr(conv, "monthly_price_stars", 0) or 0),
+        subscribed=active or conv.created_by_user_id == user_id,
+        expires_at=sub.expires_at if sub else None,
+        auto_renew=bool(sub.auto_renew) if sub else False,
+    )
+
+
+@router.get("/groups/{conversation_id}/subscription", response_model=GroupPaidSettingsResponse)
+async def get_group_paid_settings(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.models.conversation import Conversation
+
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.type == "group")
+        .first()
+    )
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    return _group_paid_settings(PaidFeaturesService(db), current_user.id, conv)
+
+
+@router.post("/groups/{conversation_id}/settings", response_model=GroupPaidSettingsResponse)
+async def set_group_paid_settings(
+    conversation_id: int,
+    request: SetGroupPaidSettingsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    conv = service.set_group_paid_settings(
+        current_user.id,
+        conversation_id,
+        is_paid=request.is_paid,
+        monthly_price_stars=request.monthly_price_stars,
+    )
+    db.commit()
+    db.refresh(conv)
+    return _group_paid_settings(service, current_user.id, conv)
+
+
+@router.post("/groups/{conversation_id}/subscribe", response_model=GroupPaidSettingsResponse)
+async def subscribe_paid_group(
+    conversation_id: int,
+    request: SubscribeGroupRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    service.subscribe_group(
+        current_user.id,
+        conversation_id,
+        months=request.months,
+        auto_renew=request.auto_renew,
+    )
+    db.commit()
+    from app.models.conversation import Conversation
+
+    conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    return _group_paid_settings(service, current_user.id, conv)
 
