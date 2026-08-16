@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../application/chat_open_direct.dart';
 
 /// Resolves `/u/:username` (or `@username` deep links) into a DM thread.
 class UsernameDeepLinkScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
         setState(() => _error = 'Пользователь @$handle не найден');
         return;
       }
-      final chat = await ChatService.openDirectChat(user.id);
+      final chat = await ChatOpenDirect.resolveAndWarm(user.id);
       if (!mounted) return;
       context.go(ChatThreadRoute.pathForId(chat.id));
     } catch (e) {

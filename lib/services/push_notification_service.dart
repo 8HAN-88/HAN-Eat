@@ -14,6 +14,7 @@ import '../app/router_keys.dart';
 import '../models/chat_models.dart';
 import '../features/calls/presentation/call_coordinator.dart';
 import '../features/chat/application/chat_realtime_signals.dart';
+import '../features/chat/application/chat_thread_prefetch.dart';
 import '../features/chat/application/chats_hub_refresh_provider.dart';
 import '../features/navigation/application/shell_chat_badge_refresh_provider.dart';
 import '../features/notifications/application/unread_notifications_provider.dart';
@@ -112,6 +113,7 @@ class PushNotificationService {
           id: actorId ?? 0,
           name: data['title']?.toString(),
         );
+        unawaited(ChatThreadPrefetch.warm(conversationId));
         router.push(
           ChatThreadRoute.pathForId(conversationId),
           extra: peer,

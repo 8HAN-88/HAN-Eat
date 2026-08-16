@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -5,6 +7,7 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../application/chat_thread_prefetch.dart';
 
 class ChatCreateGroupScreen extends StatefulWidget {
   const ChatCreateGroupScreen({super.key});
@@ -85,6 +88,7 @@ class _ChatCreateGroupScreenState extends State<ChatCreateGroupScreen> {
         memberIds: _selected.keys.toList(),
       );
       if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.pushReplacement(
         ChatThreadRoute.pathFor(conv),
         extra: conv,

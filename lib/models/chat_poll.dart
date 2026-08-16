@@ -320,6 +320,120 @@ class ChatPollVotersResult {
   }
 }
 
+/// Instant local vote so the bar moves before the server answers.
+String applyOptimisticPollVoteToContent(String content, int optionIndex) {
+  if (content.trim().isEmpty || optionIndex < 0) return content;
+  try {
+    final data = jsonDecode(content);
+    if (data is! Map<String, dynamic>) return content;
+    final poll = data['poll'];
+    if (poll is! Map<String, dynamic>) return content;
+    if (poll['is_closed'] == true) return content;
+    final settings = poll['settings'] is Map
+        ? Map<String, dynamic>.from(poll['settings'] as Map)
+        : <String, dynamic>{};
+    final multiple = settings['multiple_choice'] == true;
+    final optionsRaw = poll['options'];
+    if (optionsRaw is! List) return content;
+    final options = <Map<String, dynamic>>[];
+    for (final raw in optionsRaw) {
+      if (raw is! Map) continue;
+      options.add(Map<String, dynamic>.from(raw));
+    }
+    Map<String, dynamic>? optionByIndex(int index) {
+      for (final option in options) {
+        if ((option['index'] as num?)?.toInt() == index) return option;
+      }
+      if (index < options.length) return options[index];
+      return null;
+    }
+
+    final chosen = optionByIndex(optionIndex);
+    if (chosen == null) return content;
+
+    final voted = <int>[];
+    final rawVoted = poll['voted_option_indices'];
+    if (rawVoted is List) {
+      for (final item in rawVoted) {
+        if (item is num) voted.add(item.toInt());
+      }
+    }
+    if (voted.contains(optionIndex)) return content;
+
+    if (!multiple) {
+      for (final prev in List<int>.from(voted)) {
+        final option = optionByIndex(prev);
+        if (option == null) continue;
+        final votes = (option['votes'] as num?)?.toInt() ?? 0;
+        option['votes'] = votes > 0 ? votes - 1 : 0;
+      }
+      voted.clear();
+    }
+    voted.add(optionIndex);
+    chosen['votes'] = ((chosen['votes'] as num?)?.toInt() ?? 0) + 1;
+
+    var total = 0;
+    for (final option in options) {
+      total += (option['votes'] as num?)?.toInt() ?? 0;
+    }
+    for (final option in options) {
+      final votes = (option['votes'] as num?)?.toInt() ?? 0;
+      option['percentage'] = total <= 0 ? 0 : (votes * 100 / total);
+    }
+    poll['options'] = options;
+    poll['voted_option_indices'] = voted;
+    poll['total_votes'] = total;
+    data['poll'] = poll;
+    return jsonEncode(data);
+  } catch (_) {
+    return content;
+  }
+}
+
+/// Instant local option so the row appears before the server answers.
+String applyOptimisticPollOptionToContent(String content, String text) {
+  final label = text.trim();
+  if (content.trim().isEmpty || label.isEmpty) return content;
+  try {
+    final data = jsonDecode(content);
+    if (data is! Map<String, dynamic>) return content;
+    final poll = data['poll'];
+    if (poll is! Map<String, dynamic>) return content;
+    if (poll['is_closed'] == true) return content;
+    final optionsRaw = poll['options'];
+    if (optionsRaw is! List) return content;
+    final options = <Map<String, dynamic>>[];
+    var maxIndex = -1;
+    for (final raw in optionsRaw) {
+      if (raw is! Map) continue;
+      final option = Map<String, dynamic>.from(raw);
+      options.add(option);
+      final index = (option['index'] as num?)?.toInt() ?? -1;
+      if (index > maxIndex) maxIndex = index;
+    }
+    options.add({
+      'index': maxIndex + 1,
+      'text': label,
+      'votes': 0,
+      'percentage': 0,
+    });
+    var total = 0;
+    for (final option in options) {
+      total += (option['votes'] as num?)?.toInt() ?? 0;
+    }
+    for (final option in options) {
+      final votes = (option['votes'] as num?)?.toInt() ?? 0;
+      option['percentage'] = total <= 0 ? 0 : (votes * 100 / total);
+    }
+    poll['options'] = options;
+    poll['total_votes'] = total;
+    data['poll'] = poll;
+    return jsonEncode(data);
+  } catch (_) {
+    return content;
+  }
+}
+
 /// Патчит `is_closed` в JSON-содержимом опроса.
 String patchChatPollClosedInContent(String content, {required bool isClosed}) {
   if (content.trim().isEmpty) return content;

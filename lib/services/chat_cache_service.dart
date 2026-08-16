@@ -105,6 +105,71 @@ class ChatCacheService {
     return null;
   }
 
+  static ChatConversation? peekSavedChat() {
+    final cached = _memoryConversations;
+    if (cached == null) return null;
+    for (final chat in cached) {
+      if (chat.isSaved) return chat;
+    }
+    return null;
+  }
+
+  static Future<List<ChatConversation>> conversationsForPicker() async {
+    final memory = peekConversations();
+    if (memory != null && memory.isNotEmpty) return memory;
+    final disk = await loadConversations();
+    if (disk != null && disk.isNotEmpty) return disk;
+    return const [];
+  }
+
+  static ChatConversation? peekDirectWithUser(int userId) {
+    if (userId <= 0) return null;
+    final cached = _memoryConversations;
+    if (cached == null) return null;
+    for (final chat in cached) {
+      if (chat.isGroup || chat.isSaved) continue;
+      if (chat.peer?.id == userId) return chat;
+    }
+    return null;
+  }
+
+  static Future<void> upsertConversation(ChatConversation chat) async {
+    if (chat.id <= 0) return;
+    final current = _memoryConversations ?? await loadConversations() ?? [];
+    final next = <ChatConversation>[];
+    var found = false;
+    for (final item in current) {
+      if (item.id == chat.id) {
+        next.add(chat);
+        found = true;
+      } else {
+        next.add(item);
+      }
+    }
+    if (!found) next.insert(0, chat);
+    await saveConversations(next);
+  }
+
+  static Future<void> dropConversation(int conversationId) async {
+    if (conversationId <= 0) return;
+    final current = _memoryConversations ?? await loadConversations();
+    if (current == null || current.isEmpty) return;
+    final next = current.where((c) => c.id != conversationId).toList();
+    if (next.length == current.length) return;
+    _memoryConversations = next;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (next.isEmpty) {
+        await prefs.remove(_conversationsKey);
+      } else {
+        final encoded = jsonEncode(
+          next.map(_conversationToJson).toList(growable: false),
+        );
+        await prefs.setString(_conversationsKey, encoded);
+      }
+    } catch (_) {}
+  }
+
   static List<ChatMessage>? peekThread(int conversationId) {
     final cached = _memoryThreads[conversationId];
     if (cached == null || cached.isEmpty) return null;

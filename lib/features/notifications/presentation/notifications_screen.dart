@@ -8,7 +8,8 @@ import '../../../app/app_router.dart';
 import '../../../core/haptics/app_haptics.dart';
 import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../models/chat_models.dart';
-import '../../../services/chat_service.dart';
+import '../../chat/application/chat_open_direct.dart';
+import '../../chat/application/chat_thread_prefetch.dart';
 import '../../../services/notification_cache_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/user_realtime_service.dart';
@@ -256,7 +257,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final actor = group.primary.actor;
     if (actor == null) return;
     try {
-      final conv = await ChatService.openDirectChat(actor.id);
+      final conv = await ChatOpenDirect.resolveAndWarm(actor.id);
       if (!mounted) return;
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
@@ -355,6 +356,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           id: actorId ?? 0,
           name: notification.actor?.name ?? notification.title,
         );
+        unawaited(ChatThreadPrefetch.warm(conversationId));
         context.push(
           ChatThreadRoute.pathForId(conversationId),
           extra: peer,

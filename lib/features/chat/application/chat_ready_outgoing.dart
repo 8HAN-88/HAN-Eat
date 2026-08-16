@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import '../../../models/chat_models.dart';
-import '../../../models/chat_poll.dart';
+import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_service.dart';
 
 /// Already-ready outgoing payload (sticker, GIF, location, contact, poll…).
@@ -23,6 +23,8 @@ class ChatReadyOutgoing {
     this.pollSettings,
     this.fileName,
     this.durationSec,
+    this.latitude,
+    this.longitude,
   });
 
   final int tempId;
@@ -40,6 +42,8 @@ class ChatReadyOutgoing {
   final Map<String, dynamic>? pollSettings;
   final String? fileName;
   final int? durationSec;
+  final double? latitude;
+  final double? longitude;
   int attempts = 0;
 
   Map<String, dynamic> toJson() => {
@@ -58,6 +62,8 @@ class ChatReadyOutgoing {
         if (pollSettings != null) 'poll_settings': pollSettings,
         if (fileName != null) 'file_name': fileName,
         if (durationSec != null) 'duration_sec': durationSec,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
         'attempts': attempts,
       };
 
@@ -66,6 +72,12 @@ class ChatReadyOutgoing {
       if (raw is int) return raw;
       if (raw is num) return raw.toInt();
       return int.tryParse('$raw');
+    }
+
+    double? asDouble(Object? raw) {
+      if (raw is double) return raw;
+      if (raw is num) return raw.toDouble();
+      return double.tryParse('$raw');
     }
 
     final optionsRaw = json['poll_options'];
@@ -89,6 +101,8 @@ class ChatReadyOutgoing {
           : null,
       fileName: json['file_name'] as String?,
       durationSec: asInt(json['duration_sec']),
+      latitude: asDouble(json['latitude']),
+      longitude: asDouble(json['longitude']),
     );
     pending.attempts = json['attempts'] as int? ?? 0;
     return pending;
@@ -199,6 +213,25 @@ Future<ChatMessage> sendChatReadyOutgoing({
         topicId: pending.topicId,
         anonymous: pending.anonymous,
       );
+    case 'live_location':
+      return ChatService.startLiveLocation(
+        conversationId: conversationId,
+        latitude: pending.latitude ?? 0,
+        longitude: pending.longitude ?? 0,
+        periodSeconds: pending.durationSec ?? 900,
+        replyToMessageId: pending.replyToMessageId,
+        clientMessageId: pending.clientMessageId,
+        silent: pending.silent,
+      );
+    case 'story_reply':
+      return ChatService.sendStoryReply(
+        conversationId: conversationId,
+        content: pending.content,
+        mediaUrl: pending.mediaUrl,
+        clientMessageId: pending.clientMessageId,
+        silent: pending.silent,
+        topicId: pending.topicId,
+      );
     case 'poll':
       return ChatService.sendPoll(
         conversationId: conversationId,
@@ -222,4 +255,42 @@ Future<ChatMessage> sendChatReadyOutgoing({
         anonymous: pending.anonymous,
       );
   }
+}
+
+int newReadyOutgoingTempId() => -DateTime.now().microsecondsSinceEpoch;
+
+/// Persist a ready outgoing so the thread can paint + flush after navigation.
+Future<void> persistReadyOutgoing({
+  required int conversationId,
+  required ChatReadyOutgoing pending,
+  required ChatMessage optimistic,
+}) async {
+  final existing = await ChatCacheService.loadReadyOutbox(conversationId);
+  final alreadyQueued = existing.any(
+    (row) => row['client_message_id'] == pending.clientMessageId,
+  );
+  if (!alreadyQueued) {
+    await ChatCacheService.saveReadyOutbox(conversationId, [
+      ...existing,
+      {...pending.toJson(), 'queued': true},
+    ]);
+  }
+  final cached = await ChatCacheService.loadThread(conversationId) ??
+      const <ChatMessage>[];
+  final hasBubble = cached.any(
+    (m) =>
+        m.id == pending.tempId ||
+        ((m.clientMessageId ?? '').isNotEmpty &&
+            m.clientMessageId == pending.clientMessageId),
+  );
+  if (!hasBubble) {
+    await ChatCacheService.saveThread(
+      conversationId,
+      [...cached, optimistic],
+    );
+  }
+  await ChatCacheService.patchConversationLastMessage(
+    conversationId: conversationId,
+    lastMessage: optimistic,
+  );
 }

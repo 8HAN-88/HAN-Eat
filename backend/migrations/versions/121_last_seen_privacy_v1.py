@@ -43,18 +43,34 @@ def upgrade() -> None:
         )
     # Backfill from legacy show_last_seen when present.
     if _column_exists("users", "show_last_seen"):
-        op.execute(
-            sa.text(
-                "UPDATE users SET last_seen_privacy = 'nobody' "
-                "WHERE show_last_seen = false OR show_last_seen = 0"
+        # Postgres boolean cannot be compared to 0/1; SQLite stores 0/1.
+        dialect = op.get_bind().dialect.name
+        if dialect == "postgresql":
+            op.execute(
+                sa.text(
+                    "UPDATE users SET last_seen_privacy = 'nobody' "
+                    "WHERE show_last_seen IS NOT TRUE"
+                )
             )
-        )
-        op.execute(
-            sa.text(
-                "UPDATE users SET last_seen_privacy = 'everybody' "
-                "WHERE show_last_seen = true OR show_last_seen = 1"
+            op.execute(
+                sa.text(
+                    "UPDATE users SET last_seen_privacy = 'everybody' "
+                    "WHERE show_last_seen IS TRUE"
+                )
             )
-        )
+        else:
+            op.execute(
+                sa.text(
+                    "UPDATE users SET last_seen_privacy = 'nobody' "
+                    "WHERE show_last_seen = 0 OR show_last_seen = false"
+                )
+            )
+            op.execute(
+                sa.text(
+                    "UPDATE users SET last_seen_privacy = 'everybody' "
+                    "WHERE show_last_seen = 1 OR show_last_seen = true"
+                )
+            )
 
 
 def downgrade() -> None:

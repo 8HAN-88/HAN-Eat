@@ -9,7 +9,9 @@ export 'chat_poll.dart'
         ChatPollVotersResult,
         parseChatPollFromContent,
         chatPollPreviewText,
-        patchChatPollClosedInContent;
+        patchChatPollClosedInContent,
+        applyOptimisticPollVoteToContent,
+        applyOptimisticPollOptionToContent;
 
 int _parseInt(dynamic v) {
   if (v is int) return v;

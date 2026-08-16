@@ -67,6 +67,7 @@ class ChatHubTile extends StatelessWidget {
       case 'story_reply':
         return Icons.auto_awesome_rounded;
       case 'location':
+      case 'live_location':
         return Icons.location_on_rounded;
       case 'file':
         return Icons.insert_drive_file_outlined;

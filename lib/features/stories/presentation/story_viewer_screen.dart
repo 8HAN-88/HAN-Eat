@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:uuid/uuid.dart';
+
 import '../../../app/app_router.dart';
+import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../chat/application/chat_open_direct.dart';
+import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
@@ -367,7 +371,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     setState(() => _replySending = true);
     _pause();
     try {
-      final conv = await ChatService.openDirectChat(_currentStory.authorId);
+      final conv = await ChatOpenDirect.resolveAndWarm(_currentStory.authorId);
       final payload = ChatStoryReplyPayload(
         storyId: storyId,
         text: text,
@@ -377,10 +381,28 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         mediaType: _currentStory.isVideo ? 'video' : 'image',
         thumbnailUrl: _currentStory.thumbnailUrl,
       );
-      await ChatService.sendStoryReply(
-        conversationId: conv.id,
+      final pending = ChatReadyOutgoing(
+        tempId: newReadyOutgoingTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'story_reply',
         content: payload.encode(),
         mediaUrl: _currentStory.thumbnailUrl ?? _currentStory.mediaUrl,
+      );
+      final uid = AuthService.instance.currentUser?.id ?? 0;
+      await persistReadyOutgoing(
+        conversationId: conv.id,
+        pending: pending,
+        optimistic: ChatMessage(
+          id: pending.tempId,
+          conversationId: conv.id,
+          senderId: uid,
+          type: 'story_reply',
+          content: pending.content,
+          mediaUrl: pending.mediaUrl,
+          createdAt: DateTime.now(),
+          isMine: true,
+          clientMessageId: pending.clientMessageId,
+        ),
       );
       if (!mounted) return;
       _replyController.clear();

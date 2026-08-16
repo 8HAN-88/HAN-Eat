@@ -28,6 +28,74 @@ void main() {
     expect(label, contains('ч'));
   });
 
+  test('applyOptimisticPollVoteToContent marks vote and updates counts', () {
+    final raw = jsonEncode({
+      'poll': {
+        'question': 'Обед?',
+        'options': [
+          {'index': 0, 'text': 'Пицца', 'votes': 1, 'percentage': 100},
+          {'index': 1, 'text': 'Суши', 'votes': 0, 'percentage': 0},
+        ],
+        'settings': {'multiple_choice': false},
+        'is_closed': false,
+        'total_votes': 1,
+        'voted_option_indices': <int>[],
+      },
+    });
+    final next = applyOptimisticPollVoteToContent(raw, 1);
+    final poll = parseChatPollFromContent(next)!;
+    expect(poll.votedOptionIndices, [1]);
+    expect(poll.totalVotes, 2);
+    expect(poll.options[1].votes, 1);
+  });
+
+  test('applyOptimisticPollVoteToContent is a no-op when already voted', () {
+    final raw = jsonEncode({
+      'poll': {
+        'question': 'Обед?',
+        'options': [
+          {'index': 0, 'text': 'Пицца', 'votes': 1, 'percentage': 100},
+        ],
+        'is_closed': false,
+        'voted_option_indices': [0],
+        'total_votes': 1,
+      },
+    });
+    expect(applyOptimisticPollVoteToContent(raw, 0), raw);
+  });
+
+  test('applyOptimisticPollOptionToContent appends a zero-vote row', () {
+    final raw = jsonEncode({
+      'poll': {
+        'question': 'Обед?',
+        'options': [
+          {'index': 0, 'text': 'Пицца', 'votes': 2, 'percentage': 100},
+        ],
+        'is_closed': false,
+        'total_votes': 2,
+      },
+    });
+    final next = applyOptimisticPollOptionToContent(raw, 'Суши');
+    final poll = parseChatPollFromContent(next)!;
+    expect(poll.options.map((o) => o.text), ['Пицца', 'Суши']);
+    expect(poll.options.last.index, 1);
+    expect(poll.options.last.votes, 0);
+    expect(poll.totalVotes, 2);
+  });
+
+  test('applyOptimisticPollOptionToContent is a no-op when closed', () {
+    final raw = jsonEncode({
+      'poll': {
+        'question': 'Обед?',
+        'options': [
+          {'index': 0, 'text': 'Пицца'},
+        ],
+        'is_closed': true,
+      },
+    });
+    expect(applyOptimisticPollOptionToContent(raw, 'Суши'), raw);
+  });
+
   test('patchChatPollClosedInContent sets is_closed flag', () {
     final raw = jsonEncode({
       'poll': {
