@@ -169,7 +169,9 @@ class _ChatThreadLoaderScreenState
       );
       _openedFromStub = true;
     }
-    unawaited(ChatThreadPrefetch.warm(widget.conversationId));
+    if (widget.conversationId > 0) {
+      unawaited(ChatThreadPrefetch.warm(widget.conversationId));
+    }
     unawaited(_hydrateConversation());
   }
 
@@ -202,7 +204,12 @@ class _ChatThreadLoaderScreenState
       }
     }
     try {
-      final conv = await ChatService.getConversation(widget.conversationId);
+      final peerId = widget.initialPeer?.id ??
+          widget.initialConversation?.peer?.id ??
+          _conversation?.peer?.id;
+      final conv = (widget.conversationId <= 0 && peerId != null && peerId > 0)
+          ? await ChatOpenDirect.resolve(peerId)
+          : await ChatService.getConversation(widget.conversationId);
       if (!mounted) return;
       setState(() {
         _conversation = conv;
@@ -211,6 +218,9 @@ class _ChatThreadLoaderScreenState
         _error = null;
       });
       unawaited(ChatCacheService.upsertConversation(conv));
+      if (conv.id > 0) {
+        unawaited(ChatThreadPrefetch.warm(conv.id));
+      }
     } catch (e) {
       if (!mounted) return;
       if (_openedFromStub) {
@@ -702,7 +712,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (_conversation.isForum) {
       unawaited(_loadForumTopics(selectGeneralIfNeeded: true));
     }
-    _load(refresh: true);
+    if (widget.conversationId > 0) {
+      _load(refresh: true);
+    } else {
+      _loading = false;
+    }
     _startPolling();
     _syncAutoDeleteTicker();
     // Fallback poll; primary presence updates come via user.presence SSE.
@@ -850,7 +864,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     };
     _deviceOnlineListenable = FeedSyncService.onlineListenable;
     _deviceOnlineListenable!.addListener(_deviceOnlineListener!);
-    _stream = ChatStreamService(
+    if (widget.conversationId > 0) {
+      _stream = ChatStreamService(
       conversationId: widget.conversationId,
       onEvent: _onStreamEvent,
       onConnected: () {
@@ -872,6 +887,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       },
     )..connect();
     _refreshConversation();
+    }
     _reconcileSlowModeCooldownWithConversation();
     if (kIsWeb) {
       registerWebPageVisibilityListener(
@@ -884,7 +900,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   @override
   void didUpdateWidget(covariant ChatThreadScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.conversation.id != _conversation.id) return;
+    if (widget.conversation.id != _conversation.id) {
+      if (_conversation.id <= 0 && widget.conversation.id > 0) {
+        _adoptResolvedConversation(widget.conversation);
+      }
+      return;
+    }
     final next = widget.conversation;
     if (identical(next, _conversation)) return;
     final nextLooksStub = next.peer == null &&
@@ -899,6 +920,45 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _muted = next.muted;
     });
     _reconcileSlowModeCooldownWithConversation();
+  }
+
+  void _adoptResolvedConversation(ChatConversation next) {
+    _conversation = next;
+    _pinned = next.pinned;
+    _muted = next.muted;
+    ActiveChatSession.instance.setOpen(next.id);
+    unawaited(ChatThreadPrefetch.warm(next.id));
+    _stream?.disconnect();
+    _stream = ChatStreamService(
+      conversationId: next.id,
+      onEvent: _onStreamEvent,
+      onConnected: () {
+        if (!mounted) return;
+        setState(() {
+          _sseConnected = true;
+          _pollFailureCount = 0;
+        });
+        _restartPolling();
+        unawaited(_pollNew());
+        _onConnectionRestored();
+        _scheduleMarkDelivered();
+      },
+      onDisconnected: () {
+        if (!mounted) return;
+        setState(() => _sseConnected = false);
+        _restartPolling();
+        unawaited(_pollNew());
+      },
+    )..connect();
+    unawaited(_loadCachedMessages().then((_) async {
+      await _restoreFailedTextSends();
+      await _restoreReadyOutbox();
+      await _restoreMediaOutbox();
+    }));
+    _load(refresh: true);
+    _refreshConversation();
+    _kickTextOutbound();
+    if (mounted) setState(() {});
   }
 
   void _onWebTabHidden() {
@@ -1640,6 +1700,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   void _activateFloodCooldownForSeconds(int seconds) {
+    if (!_conversation.isGroup) return;
     final safe = seconds <= 0 ? 60 : seconds;
     _floodCooldownTotalSeconds = safe;
     _floodLockUntil = DateTime.now().add(Duration(seconds: safe));
@@ -6063,9 +6124,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(userId);
+      final conv = await ChatOpenDirect.openNow(
+        userId,
+        peer: ChatUserBrief(
+          id: userId,
+          name: _senderNames[userId],
+        ),
+      );
       if (!mounted) return;
-      if (conv.id == widget.conversationId) {
+      if (conv.id == widget.conversationId ||
+          (conv.peer?.id == userId &&
+              !_conversation.isGroup &&
+              _conversation.peer?.id == userId)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Вы уже в этом чате')),
         );
@@ -6471,6 +6541,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _refreshConversation() async {
+    if (widget.conversationId <= 0) return;
     try {
       final conv = await ChatService.getConversation(widget.conversationId);
       Map<int, String> names = _senderNames;
@@ -7938,13 +8009,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       confirmLabel: 'Открыть',
     );
     if (!ok || !mounted) return;
-    setState(() => _unlockingMessageIds.add(msg.id));
+    final previous = msg;
+    setState(() {
+      _unlockingMessageIds.add(msg.id);
+      final i = _messages.indexWhere((m) => m.id == msg.id);
+      if (i >= 0) {
+        _messages[i] = msg.copyWith(purchased: true);
+      }
+    });
     try {
       await PaidFeaturesService.purchaseMessage(msg.id);
       if (!mounted) return;
-      await _load(refresh: true);
+      unawaited(_pollNew());
+      unawaited(_load(refresh: true));
     } catch (e) {
       if (!mounted) return;
+      final i = _messages.indexWhere((m) => m.id == previous.id);
+      if (i >= 0) setState(() => _messages[i] = previous);
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) {
@@ -10850,6 +10931,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _load({required bool refresh}) async {
+    if (widget.conversationId <= 0) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     if (!refresh && (_loading || _loadingMore || !_hasMore)) return;
     final seq = ++_messageLoadSeq;
     if (refresh) {
@@ -10982,6 +11067,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pollNew() async {
+    if (widget.conversationId <= 0) return;
     if (_appPaused || _pollInFlight) return;
     final lastId = _lastServerMessageId();
     if (lastId == null) return;
@@ -11130,6 +11216,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       (_slowModeEnabledForCurrentUser || _isAnyCooldownActive);
 
   void _kickTextOutbound() {
+    if (widget.conversationId <= 0) return;
     if (_serializeTextSends) {
       unawaited(_drainTextOutboundQueue());
       return;
@@ -13344,28 +13431,30 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final key = '${msg.id}:$data';
     if (_callbackInFlightKeys.contains(key)) return;
     setState(() => _callbackInFlightKeys.add(key));
-    try {
-      final botReply = await ChatService.sendInlineCallback(
-        conversationId: widget.conversationId,
-        messageId: msg.id,
-        data: data,
-      );
-      if (!mounted) return;
-      setState(() {
-        _integrateMessage(botReply);
-      });
-      _scrollToBottom();
-      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
-    } catch (e) {
-      if (mounted) {
-        showErrorSnackBar(context, e,
-            fallback: 'Не удалось выполнить действие');
+    unawaited(() async {
+      try {
+        final botReply = await ChatService.sendInlineCallback(
+          conversationId: widget.conversationId,
+          messageId: msg.id,
+          data: data,
+        );
+        if (!mounted) return;
+        setState(() {
+          _integrateMessage(botReply);
+        });
+        _scrollToBottom();
+        unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      } catch (e) {
+        if (mounted) {
+          showErrorSnackBar(context, e,
+              fallback: 'Не удалось выполнить действие');
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _callbackInFlightKeys.remove(key));
+        }
       }
-    } finally {
-      if (mounted) {
-        setState(() => _callbackInFlightKeys.remove(key));
-      }
-    }
+    }());
   }
 
   bool _looksLikeVideoFile(XFile file) {

@@ -9,6 +9,49 @@ import 'chat_thread_prefetch.dart';
 class ChatOpenDirect {
   ChatOpenDirect._();
 
+  static final Map<int, Future<ChatConversation>> _inflight = {};
+
+  static int stubIdForPeer(int userId) => userId > 0 ? -userId : 0;
+
+  static bool isStubId(int conversationId) => conversationId <= 0;
+
+  static ChatConversation stubForPeer(ChatUserBrief peer) {
+    return ChatConversation(
+      id: stubIdForPeer(peer.id),
+      type: 'direct',
+      peer: peer,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  static ChatConversation? peekOrStub(
+    int userId, {
+    ChatUserBrief? peer,
+  }) {
+    final cached = peek(userId);
+    if (cached != null) return cached;
+    if (peer != null && peer.id == userId && userId > 0) {
+      return stubForPeer(peer);
+    }
+    return null;
+  }
+
+  /// Cache or a local stub so the thread can paint before POST /chats/direct.
+  static Future<ChatConversation> openNow(
+    int userId, {
+    ChatUserBrief? peer,
+  }) async {
+    final instant = peekOrStub(userId, peer: peer);
+    if (instant != null) {
+      if (instant.id > 0) {
+        unawaited(ChatThreadPrefetch.warm(instant.id));
+      }
+      unawaited(_refresh(userId));
+      return instant;
+    }
+    return resolveAndWarm(userId);
+  }
+
   static ChatConversation? peekAmong(
     Iterable<ChatConversation> chats,
     int userId,
@@ -59,9 +102,15 @@ class ChatOpenDirect {
     return conv;
   }
 
-  static Future<ChatConversation> _refresh(int userId) async {
-    final conv = await ChatService.openDirectChat(userId);
-    await ChatCacheService.upsertConversation(conv);
-    return conv;
+  static Future<ChatConversation> _refresh(int userId) {
+    return _inflight.putIfAbsent(userId, () async {
+      try {
+        final conv = await ChatService.openDirectChat(userId);
+        await ChatCacheService.upsertConversation(conv);
+        return conv;
+      } finally {
+        _inflight.remove(userId);
+      }
+    });
   }
 }

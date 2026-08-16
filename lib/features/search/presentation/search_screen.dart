@@ -422,7 +422,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Future<void> _openPersonChat(ChatUserSearchItem user) async {
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
+      final conv = await ChatOpenDirect.openNow(user.id, peer: user.brief);
       if (!mounted) return;
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
