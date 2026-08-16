@@ -342,6 +342,7 @@ enum WalletFilter {
             type == 'gift' ||
             type == 'gift_upgrade' ||
             type == 'gift_transfer_fee' ||
+            type == 'gift_resale' ||
             type == 'giveaway_escrow' ||
             type == 'invoice_payment' ||
             type == 'invoice_refund_debit' ||
@@ -359,6 +360,7 @@ enum WalletFilter {
                 type == 'paid_reaction_received' ||
                 type == 'gift_received' ||
                 type == 'gift_converted' ||
+                type == 'gift_resale_received' ||
                 type == 'giveaway_prize' ||
                 type == 'giveaway_refund' ||
                 type == 'invoice_received' ||

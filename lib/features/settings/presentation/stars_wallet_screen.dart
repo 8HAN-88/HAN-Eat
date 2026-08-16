@@ -155,8 +155,19 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
                     child: TelegramActionRow(
                       icon: Icons.card_giftcard_rounded,
                       title: 'Мои подарки',
-                      subtitle: 'Оставить в профиле или конвертировать в ★',
+                      subtitle: 'Оставить, надеть, продать или конвертировать',
                       onTap: () => context.push(StarGiftsInventoryRoute.path),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TelegramGroupedSurface(
+                    margin: EdgeInsets.zero,
+                    child: TelegramActionRow(
+                      icon: Icons.storefront_outlined,
+                      title: 'Витрина подарков',
+                      subtitle: 'Коллекционные подарки на продажу',
+                      onTap: () => context.push(StarGiftsMarketplaceRoute.path),
                       trailing: const Icon(Icons.chevron_right_rounded),
                     ),
                   ),
@@ -276,6 +287,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Улучшение подарка';
       case 'gift_transfer_fee':
         return 'Комиссия передачи подарка';
+      case 'gift_resale':
+        return 'Покупка подарка на витрине';
+      case 'gift_resale_received':
+        return 'Продажа подарка';
       case 'giveaway_escrow':
         return 'Розыгрыш (эскроу)';
       case 'giveaway_prize':

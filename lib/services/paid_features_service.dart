@@ -438,6 +438,81 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось улучшить подарок');
   }
 
+  static Future<List<UserStarGift>> listMarketplaceGifts({int limit = 50}) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/gifts/marketplace?limit=$limit'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final gifts = data['gifts'] as List<dynamic>? ?? const [];
+      return gifts
+          .map((e) => UserStarGift.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить витрину');
+  }
+
+  static Future<UserStarGift> listGiftForSale(
+    int userGiftId, {
+    required int listedStars,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/list'),
+      headers: await _headers(),
+      body: jsonEncode({'listed_stars': listedStars}),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось выставить подарок');
+  }
+
+  static Future<UserStarGift> unlistGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/unlist'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось снять подарок с витрины');
+  }
+
+  static Future<UserStarGift> setGiftWorn(
+    int userGiftId, {
+    required bool worn,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/wear'),
+      headers: await _headers(),
+      body: jsonEncode({'worn': worn}),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось надеть подарок');
+  }
+
+  static Future<UserStarGift> buyListedGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/marketplace/$userGiftId/buy'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось купить подарок');
+  }
+
   static Future<UserStarGift> transferGift(
     int userGiftId, {
     required int toUserId,
@@ -1018,6 +1093,11 @@ class UserStarGift {
     this.isAnonymous = false,
     this.serial,
     this.transferredFromUserId,
+    this.listedStars,
+    this.listedAt,
+    this.isWorn = false,
+    this.sellerName,
+    this.sellerUsername,
     this.upgradeStars = 0,
     this.transferStars = 0,
     this.totalSupply,
@@ -1043,6 +1123,11 @@ class UserStarGift {
   final bool isAnonymous;
   final int? serial;
   final int? transferredFromUserId;
+  final int? listedStars;
+  final DateTime? listedAt;
+  final bool isWorn;
+  final String? sellerName;
+  final String? sellerUsername;
   final int upgradeStars;
   final int transferStars;
   final int? totalSupply;
@@ -1067,8 +1152,24 @@ class UserStarGift {
       upgradeStars > 0 &&
       (status == 'held' || status == 'kept');
 
+  bool get isListed => (listedStars ?? 0) > 0;
+
   bool get canTransfer =>
+      isCollectible && !isListed && (status == 'held' || status == 'kept');
+
+  bool get canSell =>
       isCollectible && (status == 'held' || status == 'kept');
+
+  bool get canWear =>
+      isCollectible && (status == 'held' || status == 'kept');
+
+  String get sellerLabel {
+    final u = sellerUsername?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    final n = sellerName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    return '';
+  }
 
   String get serialLabel {
     if (!isCollectible || serial == null) return '';
@@ -1095,6 +1196,11 @@ class UserStarGift {
         isAnonymous: json['is_anonymous'] as bool? ?? false,
         serial: json['serial'] as int?,
         transferredFromUserId: json['transferred_from_user_id'] as int?,
+        listedStars: json['listed_stars'] as int?,
+        listedAt: DateTime.tryParse(json['listed_at'] as String? ?? ''),
+        isWorn: json['is_worn'] as bool? ?? false,
+        sellerName: json['seller_name'] as String?,
+        sellerUsername: json['seller_username'] as String?,
         upgradeStars: json['upgrade_stars'] as int? ?? 0,
         transferStars: json['transfer_stars'] as int? ?? 0,
         totalSupply: json['total_supply'] as int?,

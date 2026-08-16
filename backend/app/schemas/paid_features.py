@@ -207,11 +207,16 @@ class UserStarGiftItem(BaseModel):
     is_anonymous: bool = False
     serial: Optional[int] = None
     transferred_from_user_id: Optional[int] = None
+    listed_stars: Optional[int] = None
+    listed_at: Optional[datetime] = None
+    is_worn: bool = False
     converted_at: Optional[datetime] = None
     created_at: datetime
     upgrade_stars: int = 0
     transfer_stars: int = 0
     total_supply: Optional[int] = None
+    seller_name: Optional[str] = None
+    seller_username: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -227,6 +232,14 @@ class SetUserStarGiftDisplayRequest(BaseModel):
 
 class TransferUserStarGiftRequest(BaseModel):
     to_user_id: int = Field(gt=0)
+
+
+class ListStarGiftForSaleRequest(BaseModel):
+    listed_stars: int = Field(ge=1, le=100000)
+
+
+class SetUserStarGiftWornRequest(BaseModel):
+    worn: bool
 
 
 class ConvertUserStarGiftResponse(BaseModel):

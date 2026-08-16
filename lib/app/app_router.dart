@@ -13,6 +13,7 @@ import '../features/settings/presentation/profile_auth_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/star_gifts_inventory_screen.dart';
+import '../features/settings/presentation/star_gifts_marketplace_screen.dart';
 import '../features/settings/presentation/star_invoice_pay_screen.dart';
 import '../features/settings/presentation/creator_revenue_screen.dart';
 import '../features/channels/presentation/channel_giveaways_screen.dart';
@@ -460,6 +461,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: StarGiftsInventoryRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: StarGiftsInventoryScreen()),
+      ),
+      GoRoute(
+        path: StarGiftsMarketplaceRoute.path,
+        name: StarGiftsMarketplaceRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: StarGiftsMarketplaceScreen()),
       ),
       GoRoute(
         path: StarInvoicePayRoute.path,
@@ -1419,6 +1426,11 @@ class StarsWalletRoute {
 class StarGiftsInventoryRoute {
   static const path = '/paid/gifts';
   static const name = 'star_gifts_inventory';
+}
+
+class StarGiftsMarketplaceRoute {
+  static const path = '/paid/gifts/marketplace';
+  static const name = 'star_gifts_marketplace';
 }
 
 class StarInvoicePayRoute {
