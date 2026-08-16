@@ -8034,6 +8034,118 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  bool _withinStarsRefundWindow(DateTime createdAt) {
+    return DateTime.now().toUtc().difference(createdAt.toUtc()) <=
+        const Duration(hours: 48);
+  }
+
+  bool _giftStatusAllowsRefund(ChatMessage msg) {
+    try {
+      final decoded = jsonDecode(msg.content);
+      if (decoded is Map<String, dynamic>) {
+        final status = decoded['status'] as String? ?? 'held';
+        return status == 'held' || status == 'kept';
+      }
+    } catch (_) {}
+    return true;
+  }
+
+  Future<void> _refundSentGift(ChatMessage msg) async {
+    final giftId = _userGiftIdFromMessage(msg);
+    if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
+    if (!_giftStatusAllowsRefund(msg)) return;
+    final stars = () {
+      try {
+        final decoded = jsonDecode(msg.content);
+        if (decoded is Map<String, dynamic>) {
+          return (decoded['stars'] as num?)?.toInt() ?? 0;
+        }
+      } catch (_) {}
+      return 0;
+    }();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Вернуть подарок'),
+        content: Text(
+          'Вернуть $stars ★ на баланс? Получатель больше не увидит подарок. Можно в течение 48 часов.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Вернуть $stars ★'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _giftActionMessageIds.add(msg.id));
+    _patchLocalGiftStatus(msg, 'refunded');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('+$stars ★ возвращены')),
+    );
+    try {
+      await PaidFeaturesService.refundGift(giftId);
+    } catch (e) {
+      if (!mounted) return;
+      final idx = _messages.indexWhere((m) => m.id == msg.id);
+      if (idx >= 0) setState(() => _messages[idx] = msg);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _giftActionMessageIds.remove(msg.id));
+      }
+    }
+  }
+
+  Future<void> _refundPaidMedia(ChatMessage msg) async {
+    if (!msg.isMine || !msg.isPaid || msg.id <= 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Вернуть оплату'),
+        content: const Text(
+          'Звёзды вернутся покупателям, доступ к медиа закроется. Можно в течение 48 часов после покупки.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Вернуть'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final result = await PaidFeaturesService.refundPaidMedia(msg.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.refunded == 1
+                ? 'Оплата возвращена'
+                : 'Возвращено покупок: ${result.refunded}',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _keepReceivedGift(ChatMessage msg) async {
     final giftId = _userGiftIdFromMessage(msg);
     if (giftId == null || _giftActionMessageIds.contains(msg.id)) return;
@@ -9258,6 +9370,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'select':
         _enterSelectionMode(msg);
         break;
+      case 'refund_media':
+        unawaited(_refundPaidMedia(msg));
+        break;
     }
   }
 
@@ -9682,6 +9797,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               msg.type == 'gift' &&
               _userGiftIdFromMessage(msg) != null
           ? () => unawaited(_keepReceivedGift(msg))
+          : null,
+      onRefundGift: interactive &&
+              msg.isMine &&
+              msg.type == 'gift' &&
+              _userGiftIdFromMessage(msg) != null &&
+              !_giftMessageIsCollectible(msg) &&
+              _giftStatusAllowsRefund(msg) &&
+              _withinStarsRefundWindow(msg.createdAt)
+          ? () => unawaited(_refundSentGift(msg))
           : null,
       giftActionBusy: _giftActionMessageIds.contains(msg.id),
       spoilerRevealed: _revealedSpoilerIds.contains(msg.id),
@@ -10571,6 +10695,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canForward: !protectContent,
       canTranslate: copyable,
       canReport: !msg.isMine && msg.id > 0,
+      canRefundPaidMedia: msg.isMine &&
+          msg.id > 0 &&
+          msg.isPaid &&
+          msg.priceStars > 0 &&
+          _withinStarsRefundWindow(msg.createdAt),
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -16200,6 +16329,7 @@ class _Bubble extends StatelessWidget {
     this.onPaidReaction,
     this.onConvertGift,
     this.onKeepGift,
+    this.onRefundGift,
     this.giftActionBusy = false,
     this.spoilerRevealed = false,
     this.onRevealSpoiler,
@@ -16214,6 +16344,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onPaidReaction;
   final VoidCallback? onConvertGift;
   final VoidCallback? onKeepGift;
+  final VoidCallback? onRefundGift;
   final bool giftActionBusy;
   final bool spoilerRevealed;
   final VoidCallback? onRevealSpoiler;
@@ -16908,8 +17039,13 @@ class _Bubble extends StatelessWidget {
       final canAct = !mine &&
           status != 'transferred' &&
           status != 'converted' &&
+          status != 'refunded' &&
           (status == 'held' || status == 'kept') &&
           (onConvertGift != null || onKeepGift != null);
+      final canRefund = mine &&
+          onRefundGift != null &&
+          !isCollectible &&
+          (status == 'held' || status == 'kept');
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
@@ -16952,9 +17088,11 @@ class _Bubble extends StatelessWidget {
                     ? 'Конвертирован · $stars ★'
                     : status == 'transferred'
                         ? 'Передан · $stars ★'
-                        : status == 'kept'
-                            ? 'В профиле · $stars ★'
-                            : '$stars ★',
+                        : status == 'refunded'
+                            ? 'Возвращён · $stars ★'
+                            : status == 'kept'
+                                ? 'В профиле · $stars ★'
+                                : '$stars ★',
                 style: TextStyle(
                   color: scheme.secondary,
                   fontWeight: FontWeight.w700,
@@ -16967,7 +17105,7 @@ class _Bubble extends StatelessWidget {
                   style: TextStyle(color: fg.withValues(alpha: 0.8)),
                 ),
               ],
-              if (canAct) ...[
+              if (canAct || canRefund) ...[
                 const SizedBox(height: 10),
                 if (giftActionBusy)
                   const SizedBox(
@@ -16989,6 +17127,11 @@ class _Bubble extends StatelessWidget {
                         FilledButton(
                           onPressed: onConvertGift,
                           child: Text('В ★ · $stars'),
+                        ),
+                      if (canRefund)
+                        OutlinedButton(
+                          onPressed: onRefundGift,
+                          child: const Text('Вернуть'),
                         ),
                     ],
                   ),

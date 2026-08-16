@@ -14,6 +14,8 @@ from app.schemas.paid_features import (
     BoostPostRequest,
     BoostPostResponse,
     ChannelSubscriptionInfo,
+    ChannelSuggestedPostItem,
+    ChannelSuggestedPostsResponse,
     CreateStarGiveawayRequest,
     CreateStarInvoiceRequest,
     DonateStarsRequest,
@@ -23,7 +25,10 @@ from app.schemas.paid_features import (
     CreatorPayoutReviewRequest,
     PaidMessageExceptionItem,
     PayStarInvoiceResponse,
+    RefundPaidMediaResponse,
     RefundStarInvoiceResponse,
+    ReviewSuggestedPostRequest,
+    SuggestChannelPostRequest,
     PurchaseMessageRequest,
     PurchaseMessageResponse,
     PurchasePostRequest,
@@ -462,6 +467,22 @@ async def purchase_paid_message(
     )
 
 
+@router.post("/messages/{message_id}/refund", response_model=RefundPaidMediaResponse)
+async def refund_paid_message(
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    refunded = service.refund_paid_media(current_user.id, message_id)
+    db.commit()
+    return RefundPaidMediaResponse(
+        message_id=message_id,
+        refunded=refunded,
+        balance=service.star_balance(current_user.id),
+    )
+
+
 def _catalog_gift_item(gift) -> StarGiftItem:
     item = StarGiftItem.model_validate(gift)
     supply = getattr(gift, "total_supply", None)
@@ -671,6 +692,22 @@ async def keep_my_star_gift(
 
 
 @router.post(
+    "/gifts/inventory/{user_gift_id}/refund",
+    response_model=UserStarGiftItem,
+)
+async def refund_my_sent_star_gift(
+    user_gift_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    gift = service.refund_star_gift(current_user.id, user_gift_id)
+    db.commit()
+    db.refresh(gift)
+    return _owned_gift_item(db, gift)
+
+
+@router.post(
     "/gifts/inventory/{user_gift_id}/upgrade",
     response_model=ConvertUserStarGiftResponse,
 )
@@ -815,6 +852,8 @@ async def create_channel_giveaway(
         winners_count=request.winners_count,
         duration_hours=request.duration_hours,
         title=request.title,
+        prize_type=request.prize_type,
+        premium_months=request.premium_months,
     )
     db.commit()
     db.refresh(giveaway)
@@ -1098,4 +1137,78 @@ async def refund_star_invoice(
         invoice=_invoice_item(db, invoice),
         balance=service.star_balance(current_user.id),
     )
+
+
+def _suggested_post_item(db: Session, row) -> ChannelSuggestedPostItem:
+    item = ChannelSuggestedPostItem.model_validate(row)
+    author = (
+        db.query(User)
+        .filter(User.id == row.author_id, User.deleted_at.is_(None))
+        .first()
+    )
+    if author is not None:
+        item.author_name = author.name
+        item.author_username = author.username
+    return item
+
+
+@router.post(
+    "/channels/{channel_id}/suggested-posts",
+    response_model=ChannelSuggestedPostItem,
+)
+async def suggest_channel_post(
+    channel_id: int,
+    request: SuggestChannelPostRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    row = service.suggest_channel_post(
+        current_user.id,
+        channel_id,
+        text=request.text,
+        amount_stars=request.amount_stars,
+        media_url=request.media_url,
+    )
+    db.commit()
+    db.refresh(row)
+    return _suggested_post_item(db, row)
+
+
+@router.get(
+    "/channels/{channel_id}/suggested-posts",
+    response_model=ChannelSuggestedPostsResponse,
+)
+async def list_channel_suggested_posts(
+    channel_id: int,
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    rows = service.list_channel_suggested_posts(
+        current_user.id, channel_id, status_filter=status
+    )
+    return ChannelSuggestedPostsResponse(
+        posts=[_suggested_post_item(db, row) for row in rows]
+    )
+
+
+@router.post(
+    "/suggested-posts/{suggestion_id}/review",
+    response_model=ChannelSuggestedPostItem,
+)
+async def review_suggested_post(
+    suggestion_id: int,
+    request: ReviewSuggestedPostRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    service = PaidFeaturesService(db)
+    row = service.review_suggested_post(
+        current_user.id, suggestion_id, approve=request.approve
+    )
+    db.commit()
+    db.refresh(row)
+    return _suggested_post_item(db, row)
 

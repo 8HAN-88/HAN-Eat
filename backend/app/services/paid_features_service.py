@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.community import Channel
 from app.models.conversation import Conversation, ConversationMember, Message
 from app.models.paid_features import (
+    ChannelSuggestedPost,
     CreatorPayoutRequest,
     CreatorBalance,
     PaidChannelSubscription,
@@ -1512,6 +1513,143 @@ class PaidFeaturesService:
         self.db.flush()
         return invoice
 
+    _REFUND_WINDOW = timedelta(hours=48)
+    PREMIUM_STARS_PER_MONTH = 250
+
+    def refund_paid_media(self, actor_user_id: int, message_id: int) -> int:
+        """Author refunds all completed unlocks for a paid media message/album."""
+        message = (
+            self.db.query(Message)
+            .filter(Message.id == message_id, Message.deleted_at.is_(None))
+            .first()
+        )
+        if not message:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        if message.sender_id != actor_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not media author")
+        if not getattr(message, "is_paid", False):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message is not paid")
+        group_id = (getattr(message, "media_group_id", None) or "").strip()
+        message_ids = [message.id]
+        if group_id:
+            message_ids = [
+                int(row[0])
+                for row in self.db.query(Message.id)
+                .filter(
+                    Message.conversation_id == message.conversation_id,
+                    Message.media_group_id == group_id,
+                    Message.deleted_at.is_(None),
+                    Message.is_paid.is_(True),
+                )
+                .all()
+            ] or [message.id]
+        unlocks = (
+            self.db.query(PaidMessageUnlock)
+            .filter(
+                PaidMessageUnlock.message_id.in_(message_ids),
+                PaidMessageUnlock.status == "completed",
+                PaidMessageUnlock.amount_stars > 0,
+            )
+            .with_for_update()
+            .all()
+        )
+        if not unlocks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to refund"
+            )
+        now = datetime.utcnow()
+        refunded = 0
+        for unlock in unlocks:
+            created = unlock.created_at or now
+            if now - created > self._REFUND_WINDOW:
+                continue
+            amount = int(unlock.amount_stars)
+            if amount <= 0:
+                unlock.status = "refunded"
+                continue
+            self._spend_stars(
+                actor_user_id,
+                amount,
+                tx_type="paid_media_refund_debit",
+                reference_type="message",
+                reference_id=unlock.message_id,
+                counterparty_user_id=unlock.user_id,
+                idempotency_key=f"paid_media_refund_debit:{unlock.id}",
+            )
+            balance = self.creator_balance(actor_user_id)
+            balance.available_stars = max(0, int(balance.available_stars or 0) - amount)
+            self.add_stars(
+                unlock.user_id,
+                amount,
+                tx_type="paid_media_refund",
+                idempotency_key=f"paid_media_refund:{unlock.id}",
+                meta={"message_id": unlock.message_id, "author_id": actor_user_id},
+            )
+            unlock.status = "refunded"
+            refunded += 1
+        if refunded <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refund window expired",
+            )
+        self.db.flush()
+        return refunded
+
+    def refund_star_gift(self, actor_user_id: int, user_gift_id: int) -> UserStarGift:
+        """Sender refunds an unconverted gift within 48 hours (Telegram-like)."""
+        gift = (
+            self.db.query(UserStarGift)
+            .filter(UserStarGift.id == user_gift_id)
+            .with_for_update()
+            .first()
+        )
+        if not gift:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found")
+        if gift.sender_id != actor_user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not gift sender")
+        if gift.status == "refunded":
+            return gift
+        if gift.status not in ("held", "kept"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Gift cannot be refunded"
+            )
+        if bool(getattr(gift, "is_collectible", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Collectible gifts cannot be refunded",
+            )
+        created = gift.created_at or datetime.utcnow()
+        if datetime.utcnow() - created > self._REFUND_WINDOW:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Refund window expired"
+            )
+        amount = int(gift.stars)
+        self.add_stars(
+            actor_user_id,
+            amount,
+            tx_type="gift_refund",
+            idempotency_key=f"gift_refund:{gift.id}",
+            meta={"user_gift_id": gift.id, "owner_id": gift.owner_id},
+        )
+        gift.status = "refunded"
+        gift.is_displayed = False
+        self._patch_gift_message_status(gift, status="refunded")
+        self.db.flush()
+        return gift
+
+    def _grant_premium_months(self, user_id: int, months: int) -> None:
+        user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+        if not user or months <= 0:
+            return
+        now = datetime.utcnow()
+        current = getattr(user, "subscription_expires_at", None)
+        start = current if current and current > now else now
+        if (getattr(user, "subscription_type", None) or "free") == "free":
+            user.subscription_type = "pro"
+        user.subscription_status = "active"
+        user.subscription_expires_at = start + timedelta(days=30 * int(months))
+        user.subscription_auto_renew = False
+
     def set_user_star_gift_displayed(
         self, owner_id: int, user_gift_id: int, *, displayed: bool
     ) -> UserStarGift:
@@ -1636,12 +1774,27 @@ class PaidFeaturesService:
         user_id: int,
         channel_id: int,
         *,
-        prize_stars: int,
+        prize_stars: int = 0,
         winners_count: int,
         duration_hours: int,
         title: Optional[str] = None,
+        prize_type: str = "stars",
+        premium_months: int = 0,
     ) -> StarGiveaway:
-        if prize_stars < 1 or prize_stars > 100_000:
+        kind = (prize_type or "stars").strip().lower()
+        if kind not in ("stars", "premium"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid prize type"
+            )
+        months = int(premium_months or 0)
+        if kind == "premium":
+            if months not in (1, 3, 6, 12):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Premium months must be 1, 3, 6 or 12",
+                )
+            prize_stars = self.PREMIUM_STARS_PER_MONTH * months
+        elif prize_stars < 1 or prize_stars > 100_000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Prize must be between 1 and 100000 stars",
@@ -1682,6 +1835,8 @@ class PaidFeaturesService:
             require_membership=True,
             participants_count=0,
             title=(title or "").strip()[:160] or None,
+            prize_type=kind,
+            premium_months=months if kind == "premium" else 0,
         )
         self.db.add(giveaway)
         self.db.flush()
@@ -1826,16 +1981,21 @@ class PaidFeaturesService:
         winners_n = min(int(giveaway.winners_count), len(participants))
         winners = random.sample(participants, winners_n) if winners_n else []
         prize = int(giveaway.prize_stars)
+        prize_kind = getattr(giveaway, "prize_type", "stars") or "stars"
+        months = int(getattr(giveaway, "premium_months", 0) or 0)
         paid_out = 0
         for winner in winners:
             winner.is_winner = True
-            self.add_stars(
-                winner.user_id,
-                prize,
-                tx_type="giveaway_prize",
-                idempotency_key=f"giveaway_prize:{giveaway.id}:{winner.user_id}",
-                meta={"giveaway_id": giveaway.id, "channel_id": giveaway.channel_id},
-            )
+            if prize_kind == "premium" and months > 0:
+                self._grant_premium_months(winner.user_id, months)
+            else:
+                self.add_stars(
+                    winner.user_id,
+                    prize,
+                    tx_type="giveaway_prize",
+                    idempotency_key=f"giveaway_prize:{giveaway.id}:{winner.user_id}",
+                    meta={"giveaway_id": giveaway.id, "channel_id": giveaway.channel_id},
+                )
             paid_out += prize
         refund = int(giveaway.total_escrow_stars or 0) - paid_out
         if refund > 0:
@@ -1869,6 +2029,166 @@ class PaidFeaturesService:
             .all()
         )
         return giveaway, rows
+
+    def suggest_channel_post(
+        self,
+        user_id: int,
+        channel_id: int,
+        *,
+        text: str,
+        amount_stars: int,
+        media_url: Optional[str] = None,
+    ) -> ChannelSuggestedPost:
+        clean = (text or "").strip()
+        if not clean:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text required")
+        if amount_stars < 10 or amount_stars > 100_000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amount must be between 10 and 100000 stars",
+            )
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        if int(getattr(channel, "admin_user_id", 0) or 0) == user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel owner cannot suggest to self",
+            )
+        row = ChannelSuggestedPost(
+            channel_id=channel_id,
+            author_id=user_id,
+            text=clean[:2000],
+            media_url=(media_url or "").strip()[:1024] or None,
+            amount_stars=int(amount_stars),
+            status="pending",
+        )
+        self.db.add(row)
+        self.db.flush()
+        self._spend_stars(
+            user_id,
+            int(amount_stars),
+            tx_type="suggested_post",
+            reference_type="suggested_post",
+            reference_id=row.id,
+            counterparty_user_id=int(channel.admin_user_id or 0) or None,
+            idempotency_key=f"suggested_post:{row.id}",
+            meta={"channel_id": channel_id},
+        )
+        self.db.flush()
+        return row
+
+    def list_channel_suggested_posts(
+        self,
+        user_id: int,
+        channel_id: int,
+        *,
+        status_filter: Optional[str] = None,
+        limit: int = 40,
+    ) -> list[ChannelSuggestedPost]:
+        from app.models.community_member import ChannelMember
+        from app.services.channel_membership_service import (
+            MEMBER_STATUS_ACTIVE,
+            is_channel_owner,
+        )
+
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+        user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        is_manager = is_channel_owner(channel, user)
+        if not is_manager:
+            member = (
+                self.db.query(ChannelMember)
+                .filter(
+                    ChannelMember.channel_id == channel_id,
+                    ChannelMember.user_id == user_id,
+                    ChannelMember.status == MEMBER_STATUS_ACTIVE,
+                    ChannelMember.role.in_(("owner", "admin")),
+                )
+                .first()
+            )
+            is_manager = member is not None
+        limit = max(1, min(int(limit or 40), 80))
+        q = self.db.query(ChannelSuggestedPost).filter(
+            ChannelSuggestedPost.channel_id == channel_id
+        )
+        if not is_manager:
+            q = q.filter(ChannelSuggestedPost.author_id == user_id)
+        if status_filter:
+            q = q.filter(ChannelSuggestedPost.status == status_filter.strip().lower())
+        return (
+            q.order_by(ChannelSuggestedPost.created_at.desc(), ChannelSuggestedPost.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def review_suggested_post(
+        self, user_id: int, suggestion_id: int, *, approve: bool
+    ) -> ChannelSuggestedPost:
+        row = (
+            self.db.query(ChannelSuggestedPost)
+            .filter(ChannelSuggestedPost.id == suggestion_id)
+            .with_for_update()
+            .first()
+        )
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Suggestion not found")
+        channel = self._channel_manage_access(user_id, row.channel_id)
+        if row.status != "pending":
+            return row
+        if approve:
+            body = None
+            if row.media_url:
+                body = {"media": [{"type": "image", "url": row.media_url}]}
+            import json as _json
+            from sqlalchemy import text as sa_text
+
+            inserted = self.db.execute(
+                sa_text(
+                    "INSERT INTO posts (user_id, channel_id, type, description, body, "
+                    "status, visibility, published_at) VALUES (:user_id, :channel_id, "
+                    ":type, :description, :body, :status, :visibility, :published_at) "
+                    "RETURNING id"
+                ),
+                {
+                    "user_id": user_id,
+                    "channel_id": row.channel_id,
+                    "type": "photo" if row.media_url else "text",
+                    "description": row.text,
+                    "body": _json.dumps(body) if body else None,
+                    "status": "published",
+                    "visibility": "public",
+                    "published_at": datetime.utcnow(),
+                },
+            )
+            post_id = int(inserted.scalar_one())
+            channel.posts_count = int(channel.posts_count or 0) + 1
+            self.db.flush()
+            row.post_id = post_id
+            row.status = "accepted"
+            self._credit_creator(
+                user_id,
+                int(row.amount_stars),
+                tx_type="suggested_post_received",
+                reference_type="suggested_post",
+                reference_id=row.id,
+                counterparty_user_id=row.author_id,
+                meta={"channel_id": row.channel_id, "post_id": post_id},
+            )
+        else:
+            self.add_stars(
+                row.author_id,
+                int(row.amount_stars),
+                tx_type="suggested_post_refund",
+                idempotency_key=f"suggested_post_refund:{row.id}",
+                meta={"channel_id": row.channel_id},
+            )
+            row.status = "rejected"
+        self.db.flush()
+        return row
 
     def create_star_invoice(
         self,

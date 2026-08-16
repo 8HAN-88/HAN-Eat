@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.community import Channel
 from app.models.paid_features import PaidContentPurchase, PostBoost, StarGiveawayParticipant
 from app.models.post import Post
+from app.models.user import User
 from app.services.paid_features_service import (
     PaidFeaturesService,
     expire_due_channel_subscriptions,
@@ -262,6 +263,8 @@ def db_session():
                 require_membership BOOLEAN NOT NULL DEFAULT 1,
                 participants_count INTEGER NOT NULL DEFAULT 0,
                 title VARCHAR(160),
+                prize_type VARCHAR(16) NOT NULL DEFAULT 'stars',
+                premium_months INTEGER NOT NULL DEFAULT 0,
                 completed_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
@@ -276,6 +279,21 @@ def db_session():
                 is_winner BOOLEAN NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 UNIQUE(giveaway_id, user_id)
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE channel_suggested_posts (
+                id INTEGER PRIMARY KEY,
+                channel_id INTEGER NOT NULL,
+                author_id INTEGER NOT NULL,
+                text VARCHAR(2000) NOT NULL,
+                media_url VARCHAR(1024),
+                amount_stars INTEGER NOT NULL,
+                status VARCHAR(24) NOT NULL DEFAULT 'pending',
+                post_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
             """
         )
@@ -744,3 +762,82 @@ def test_star_invoice_list_and_refund(db_session):
     with pytest.raises(HTTPException) as pending_refund:
         service.refund_star_invoice(1, pending.id)
     assert pending_refund.value.status_code == 400
+
+
+def test_premium_giveaway_grants_pro(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    _add_paid_channel(db_session, channel_id=100, owner_id=1, monthly_price_stars=0)
+    _add_member(db_session, 100, 2)
+    service = PaidFeaturesService(db_session)
+    service.add_stars(1, 1000, tx_type="purchase")
+
+    giveaway = service.create_star_giveaway(
+        1,
+        100,
+        prize_type="premium",
+        premium_months=3,
+        winners_count=1,
+        duration_hours=1,
+        title="Pro",
+    )
+    db_session.flush()
+    assert giveaway.prize_type == "premium"
+    assert giveaway.premium_months == 3
+    assert giveaway.prize_stars == 250 * 3
+    assert service.star_balance(1) == 1000 - 750
+
+    service.join_star_giveaway(2, giveaway.id)
+    service.finalize_star_giveaway(giveaway.id)
+    db_session.flush()
+    assert giveaway.status == "completed"
+    winner = db_session.query(User).filter(User.id == 2).first()
+    assert winner.subscription_type == "pro"
+    assert winner.subscription_status == "active"
+    assert winner.subscription_expires_at is not None
+    assert service.star_balance(2) == 0
+
+
+def test_suggested_post_accept_and_reject(db_session):
+    _add_user(db_session, 1)
+    _add_user(db_session, 2)
+    _add_user(db_session, 3)
+    _add_paid_channel(db_session, channel_id=100, owner_id=1, monthly_price_stars=0)
+    service = PaidFeaturesService(db_session)
+    service.add_stars(2, 200, tx_type="purchase")
+    service.add_stars(3, 80, tx_type="purchase")
+
+    pending = service.suggest_channel_post(
+        2, 100, text="Hello channel", amount_stars=40
+    )
+    rejected = service.suggest_channel_post(
+        3, 100, text="Skip me", amount_stars=20
+    )
+    db_session.flush()
+    assert pending.status == "pending"
+    assert service.star_balance(2) == 160
+    assert service.star_balance(3) == 60
+
+    own = service.list_channel_suggested_posts(2, 100)
+    assert [row.id for row in own] == [pending.id]
+    admin_list = service.list_channel_suggested_posts(1, 100)
+    assert {row.id for row in admin_list} == {pending.id, rejected.id}
+
+    accepted = service.review_suggested_post(1, pending.id, approve=True)
+    db_session.flush()
+    assert accepted.status == "accepted"
+    assert accepted.post_id is not None
+    assert service.creator_balance(1).available_stars == 40
+    post = db_session.query(Post).filter(Post.id == accepted.post_id).first()
+    assert post is not None
+    assert post.description == "Hello channel"
+    assert post.channel_id == 100
+
+    declined = service.review_suggested_post(1, rejected.id, approve=False)
+    db_session.flush()
+    assert declined.status == "rejected"
+    assert service.star_balance(3) == 80
+
+    with pytest.raises(HTTPException) as owner_self:
+        service.suggest_channel_post(1, 100, text="own", amount_stars=10)
+    assert owner_self.value.status_code == 400

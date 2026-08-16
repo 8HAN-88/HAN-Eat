@@ -270,6 +270,8 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Подарок получен';
       case 'gift_converted':
         return 'Подарок → ★';
+      case 'gift_refund':
+        return 'Возврат подарка';
       case 'gift_upgrade':
         return 'Улучшение подарка';
       case 'gift_transfer_fee':
@@ -292,6 +294,16 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Платное медиа';
       case 'paid_media_sale':
         return 'Продажа медиа';
+      case 'paid_media_refund':
+        return 'Возврат за медиа';
+      case 'paid_media_refund_debit':
+        return 'Возврат медиа (списание)';
+      case 'suggested_post':
+        return 'Предложенный пост';
+      case 'suggested_post_received':
+        return 'Предложенный пост принят';
+      case 'suggested_post_refund':
+        return 'Возврат предложенного поста';
       case 'paid_message':
         return 'Плата за сообщение';
       case 'paid_message_received':

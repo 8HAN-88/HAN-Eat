@@ -16,6 +16,7 @@ import '../features/settings/presentation/star_gifts_inventory_screen.dart';
 import '../features/settings/presentation/star_invoice_pay_screen.dart';
 import '../features/settings/presentation/creator_revenue_screen.dart';
 import '../features/channels/presentation/channel_giveaways_screen.dart';
+import '../features/channels/presentation/channel_suggested_posts_screen.dart';
 import '../features/settings/presentation/stars_checkout_result_screen.dart';
 import '../features/settings/presentation/subscription_success_screen.dart';
 import '../features/settings/presentation/subscription_cancel_screen.dart';
@@ -482,6 +483,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               channelId: id,
               channelName: name,
               canManage: manage,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: ChannelSuggestedPostsRoute.path,
+        name: ChannelSuggestedPostsRoute.name,
+        pageBuilder: (context, state) {
+          final id =
+              int.tryParse(state.pathParameters['channelId'] ?? '') ?? 0;
+          final name = state.uri.queryParameters['name'] ?? 'Канал';
+          final manage = state.uri.queryParameters['manage'] == '1';
+          final owner = state.uri.queryParameters['owner'] == '1';
+          return MaterialPage(
+            child: ChannelSuggestedPostsScreen(
+              channelId: id,
+              channelName: name,
+              canManage: manage,
+              isOwner: owner,
             ),
           );
         },
@@ -1425,6 +1445,28 @@ class ChannelGiveawaysRoute {
         ? ''
         : '?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
     return '/channels/$channelId/giveaways$q';
+  }
+}
+
+class ChannelSuggestedPostsRoute {
+  static const path = '/channels/:channelId/suggested-posts';
+  static const name = 'channel_suggested_posts';
+
+  static String pathFor(
+    int channelId, {
+    String? name,
+    bool canManage = false,
+    bool isOwner = false,
+  }) {
+    final params = <String, String>{
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      if (canManage) 'manage': '1',
+      if (isOwner) 'owner': '1',
+    };
+    final q = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
+    return '/channels/$channelId/suggested-posts$q';
   }
 }
 

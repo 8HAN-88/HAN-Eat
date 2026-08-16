@@ -344,7 +344,9 @@ enum WalletFilter {
             type == 'gift_transfer_fee' ||
             type == 'giveaway_escrow' ||
             type == 'invoice_payment' ||
-            type == 'invoice_refund_debit';
+            type == 'invoice_refund_debit' ||
+            type == 'paid_media_refund_debit' ||
+            type == 'suggested_post';
       case WalletFilter.donations:
         return type == 'donation' || type == 'donation_received';
       case WalletFilter.income:
@@ -360,7 +362,11 @@ enum WalletFilter {
                 type == 'giveaway_prize' ||
                 type == 'giveaway_refund' ||
                 type == 'invoice_received' ||
-                type == 'invoice_refund');
+                type == 'invoice_refund' ||
+                type == 'gift_refund' ||
+                type == 'paid_media_refund' ||
+                type == 'suggested_post_received' ||
+                type == 'suggested_post_refund');
       case WalletFilter.boosts:
         return type == 'boost';
     }

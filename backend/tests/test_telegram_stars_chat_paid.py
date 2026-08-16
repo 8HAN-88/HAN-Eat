@@ -1,4 +1,6 @@
 """Tests for Telegram Stars chat paid features: paid media unlock, gifts, DM fee."""
+from datetime import datetime, timedelta
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine
@@ -729,3 +731,146 @@ def test_forward_paid_media_requires_unlock(db_session):
     assert int(forwarded.price_stars or 0) == 20
     assert forwarded.media_url == "https://example.com/paid.jpg"
     assert forwarded.media_group_id == msg.media_group_id
+
+
+def test_refund_paid_media(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 100)
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=1,
+        type="image",
+        content="",
+        media_url="https://example.com/a.jpg",
+        is_paid=True,
+        price_stars=40,
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.purchase_message(2, msg.id)
+    db_session.commit()
+    assert svc.star_balance(2) == 60
+    assert svc.creator_balance(1).available_stars == 40
+
+    refunded = svc.refund_paid_media(1, msg.id)
+    db_session.commit()
+    assert refunded == 1
+    assert svc.star_balance(2) == 100
+    assert svc.creator_balance(1).available_stars == 0
+    assert not svc.has_unlocked_message(2, msg)
+
+    with pytest.raises(HTTPException) as again:
+        svc.refund_paid_media(1, msg.id)
+    assert again.value.status_code == 400
+
+
+def test_refund_paid_media_window_expired(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 50)
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=1,
+        type="image",
+        content="",
+        media_url="https://example.com/old.jpg",
+        is_paid=True,
+        price_stars=20,
+    )
+    db_session.add(msg)
+    db_session.commit()
+    svc = PaidFeaturesService(db_session)
+    unlock = svc.purchase_message(2, msg.id)
+    unlock.created_at = datetime.utcnow() - timedelta(hours=49)
+    db_session.commit()
+    with pytest.raises(HTTPException) as exc:
+        svc.refund_paid_media(1, msg.id)
+    assert exc.value.status_code == 400
+    assert svc.has_unlocked_message(2, msg)
+
+
+def test_refund_star_gift(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 200)
+    db_session.add(
+        StarGift(
+            slug="rose-refund",
+            title="Роза",
+            emoji="🌹",
+            stars=25,
+            is_active=True,
+            sort_order=1,
+        )
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    gift = svc.list_star_gifts()[0]
+    svc.send_star_gift(1, gift_id=gift.id, conversation_id=conv.id)
+    db_session.commit()
+    held = svc.list_user_star_gifts(2)[0]
+    assert svc.star_balance(1) == 175
+
+    refunded = svc.refund_star_gift(1, held.id)
+    db_session.commit()
+    assert refunded.status == "refunded"
+    assert svc.star_balance(1) == 200
+    assert svc.list_user_star_gifts(2) == []
+
+    again = svc.refund_star_gift(1, held.id)
+    assert again.status == "refunded"
+    assert svc.star_balance(1) == 200
+
+
+def test_refund_collectible_gift_rejected(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 100)
+    db_session.add(
+        StarGift(
+            slug="nft-rose",
+            title="NFT",
+            emoji="💎",
+            stars=30,
+            is_active=True,
+            sort_order=1,
+        )
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    catalog = svc.list_star_gifts()[0]
+    svc.send_star_gift(1, gift_id=catalog.id, conversation_id=conv.id)
+    db_session.commit()
+    held = svc.list_user_star_gifts(2)[0]
+    held.is_collectible = True
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        svc.refund_star_gift(1, held.id)
+    assert exc.value.status_code == 400
+    assert svc.star_balance(1) == 70

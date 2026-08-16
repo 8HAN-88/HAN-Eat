@@ -134,6 +134,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     this.canForward = true,
     this.canTranslate = false,
     this.canReport = false,
+    this.canRefundPaidMedia = false,
     this.bottomComposerReserve = 88,
   });
 
@@ -153,6 +154,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool canForward;
   final bool canTranslate;
   final bool canReport;
+  final bool canRefundPaidMedia;
   final ValueChanged<String> onReaction;
   final ValueChanged<String> onAction;
   final VoidCallback onExpandReactions;
@@ -179,6 +181,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     bool canForward = true,
     bool canTranslate = false,
     bool canReport = false,
+    bool canRefundPaidMedia = false,
     double bottomComposerReserve = 88,
   }) {
     AppHaptics.medium();
@@ -210,6 +213,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         canForward: canForward,
         canTranslate: canTranslate,
         canReport: canReport,
+        canRefundPaidMedia: canRefundPaidMedia,
         bottomComposerReserve: bottomComposerReserve,
         onReaction: (emoji) {
           Navigator.pop(ctx);
@@ -341,6 +345,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
           action: 'report',
           icon: Icons.flag_outlined,
           label: 'Пожаловаться',
+        ),
+      if (widget.canRefundPaidMedia)
+        _MenuItem(
+          action: 'refund_media',
+          icon: Icons.currency_exchange_rounded,
+          label: 'Вернуть оплату',
         ),
       if (widget.canDelete)
         _MenuItem(
