@@ -75,6 +75,7 @@ class MessageResponse(BaseModel):
     effect_id: Optional[str] = None
     topic_id: Optional[int] = None
     is_anonymous: bool = False
+    client_message_id: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -371,6 +371,8 @@ class ChatCacheService {
       'disable_webpage_preview': m.disableWebpagePreview,
       if (m.mediaGroupId != null && m.mediaGroupId!.isNotEmpty)
         'media_group_id': m.mediaGroupId,
+      if (m.clientMessageId != null && m.clientMessageId!.isNotEmpty)
+        'client_message_id': m.clientMessageId,
       'reactions': m.reactions
           .map(
             (r) => {

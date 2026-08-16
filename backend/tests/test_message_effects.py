@@ -73,6 +73,29 @@ def test_normalize_effect_whitelist():
         normalize_effect_id("laser_unicorn")
 
 
+def test_send_text_keeps_client_message_id(db_session):
+    conv = _setup_direct(db_session)
+    svc = ChatService(db_session)
+    msg, is_new = svc.send_message(
+        conversation_id=conv.id,
+        sender_id=1,
+        msg_type="text",
+        content="hello",
+        client_message_id="flutter:instant-1",
+    )
+    assert is_new is True
+    assert msg.client_message_id == "flutter:instant-1"
+    again, created = svc.send_message(
+        conversation_id=conv.id,
+        sender_id=1,
+        msg_type="text",
+        content="hello",
+        client_message_id="flutter:instant-1",
+    )
+    assert created is False
+    assert again.id == msg.id
+
+
 def test_send_text_with_effect(db_session):
     conv = _setup_direct(db_session)
     svc = ChatService(db_session)
