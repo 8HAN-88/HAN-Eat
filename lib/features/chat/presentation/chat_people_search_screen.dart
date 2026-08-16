@@ -85,15 +85,40 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
   }
 
   Future<void> _toggleContact(ChatUserSearchItem user) async {
+    ChatUserSearchItem flipped(ChatUserSearchItem row, {required bool isContact}) {
+      return ChatUserSearchItem(
+        id: row.id,
+        name: row.name,
+        username: row.username,
+        avatarUrl: row.avatarUrl,
+        isContact: isContact,
+        phoneHash: row.phoneHash,
+      );
+    }
+
+    setState(() {
+      _results = [
+        for (final row in _results)
+          if (row.id == user.id)
+            flipped(row, isContact: !user.isContact)
+          else
+            row,
+      ];
+    });
     try {
       if (user.isContact) {
         await ChatService.removeContact(user.id);
       } else {
         await ChatService.addContact(user.id);
       }
-      await _search();
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _results = [
+          for (final row in _results)
+            if (row.id == user.id) user else row,
+        ];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

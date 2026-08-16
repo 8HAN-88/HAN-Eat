@@ -1456,6 +1456,30 @@ class ScheduledChatMessage {
       createdAt: _parseDate(json['created_at']),
     );
   }
+
+  ScheduledChatMessage copyWith({
+    String? content,
+    DateTime? sendAt,
+  }) {
+    return ScheduledChatMessage(
+      id: id,
+      conversationId: conversationId,
+      senderId: senderId,
+      type: type,
+      content: content ?? this.content,
+      mediaUrl: mediaUrl,
+      replyToMessageId: replyToMessageId,
+      sendAt: sendAt ?? this.sendAt,
+      sendWhenOnline: sendWhenOnline,
+      silent: silent,
+      disableWebpagePreview: disableWebpagePreview,
+      mediaGroupId: mediaGroupId,
+      effectId: effectId,
+      topicId: topicId,
+      status: status,
+      createdAt: createdAt,
+    );
+  }
 }
 
 class ChatForumTopic {

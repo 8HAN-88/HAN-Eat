@@ -7,7 +7,9 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
+import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_service.dart';
+import '../application/chat_inbox_optimistic.dart';
 import '../application/chat_thread_prefetch.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
@@ -302,15 +304,20 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   }
 
   Future<void> _unarchiveChat(ChatConversation chat) async {
+    setState(() => _chats.removeWhere((c) => c.id == chat.id));
+    unawaited(
+      ChatCacheService.upsertConversation(
+        ChatInboxOptimistic.applyArchive(chat, archived: false),
+      ),
+    );
     try {
       await ChatService.setArchived(
         conversationId: chat.id,
         archived: false,
       );
-      if (!mounted) return;
-      await _load();
     } catch (e) {
       if (!mounted) return;
+      setState(() => _chats.add(chat));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -318,12 +325,12 @@ class _ChatArchivedScreenState extends State<ChatArchivedScreen> {
   }
 
   Future<void> _unarchiveChannel(Channel channel) async {
+    setState(() => _channels.removeWhere((c) => c.id == channel.id));
     try {
       await ChannelSheetPrefs.setArchived(channel.id, false);
-      if (!mounted) return;
-      await _load();
     } catch (e) {
       if (!mounted) return;
+      setState(() => _channels.add(channel));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

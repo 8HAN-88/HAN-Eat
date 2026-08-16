@@ -1204,24 +1204,23 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
     ChatJoinRequestsInboxItem item, {
     required bool approve,
   }) async {
+    setState(() {
+      _joinRequestsInbox.removeWhere((e) => e.id == item.id);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(approve ? 'Заявка принята' : 'Заявка отклонена'),
+      ),
+    );
     try {
       await ChatService.reviewGroupJoinRequest(
         conversationId: item.conversation.id,
         requestId: item.id,
         approve: approve,
       );
-      if (!mounted) return;
-      await _load(silent: true);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            approve ? 'Заявка принята' : 'Заявка отклонена',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
+      setState(() => _joinRequestsInbox.add(item));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
