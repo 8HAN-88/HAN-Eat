@@ -22,9 +22,6 @@ ChatMessageIntegrateResult integrateIncomingChatMessage({
   required ChatMessage Function(ChatMessage local, ChatMessage incoming) merge,
 }) {
   final next = List<ChatMessage>.from(messages);
-  if (removeTempId != null) {
-    next.removeWhere((m) => m.id == removeTempId);
-  }
 
   final clientKey = (incoming.clientMessageId ?? '').trim();
   var matchIdx = -1;
@@ -42,9 +39,17 @@ ChatMessageIntegrateResult integrateIncomingChatMessage({
 
   if (matchIdx >= 0) {
     next[matchIdx] = merge(next[matchIdx], incoming);
+    if (removeTempId != null) {
+      next.removeWhere(
+        (m) => m.id == removeTempId && m.id != incoming.id,
+      );
+    }
     return ChatMessageIntegrateResult(messages: next, added: false);
   }
 
+  if (removeTempId != null) {
+    next.removeWhere((m) => m.id == removeTempId);
+  }
   next.add(incoming);
   return ChatMessageIntegrateResult(messages: next, added: true);
 }
