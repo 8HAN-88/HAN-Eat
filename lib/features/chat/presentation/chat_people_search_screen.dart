@@ -70,7 +70,7 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
 
   Future<void> _openChat(ChatUserSearchItem user) async {
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
+      final conv = await ChatOpenDirect.openNow(user.id, peer: user.brief);
       if (!mounted) return;
       context.pushReplacement(
         ChatThreadRoute.pathFor(conv),

@@ -17,6 +17,7 @@ import 'package:go_router/go_router.dart';
 import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
 import '../../chat/application/chat_open_direct.dart';
+import '../../../models/chat_models.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
 import 'package:uuid/uuid.dart';
@@ -319,11 +320,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     return builder();
   }
 
+  ChatUserBrief _briefFor(User user) => ChatUserBrief(
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+      );
+
   Future<void> _openChat(User user) async {
     if (_isOpeningChat) return;
     setState(() => _isOpeningChat = true);
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
+      final conv = await ChatOpenDirect.openNow(user.id, peer: _briefFor(user));
       if (!mounted) return;
       context.push(
         ChatThreadRoute.pathFor(conv),
@@ -347,16 +355,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     if (draft == null || !mounted) return;
     setState(() => _isSendingGift = true);
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
+      final conv = await ChatOpenDirect.openNow(user.id, peer: _briefFor(user));
       if (!mounted) return;
       final idem =
           'flutter:profile-gift:${user.id}:${draft.gift.id}:${const Uuid().v4()}';
       final messenger = ScaffoldMessenger.of(context);
       unawaited(() async {
         try {
+          final real = conv.id > 0
+              ? conv
+              : await ChatOpenDirect.resolve(user.id);
           await PaidFeaturesService.sendGift(
             giftId: draft.gift.id,
-            conversationId: conv.id,
+            conversationId: real.id,
             message: draft.message,
             hideName: draft.hideName,
             idempotencyKey: idem,
@@ -408,7 +419,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         ),
       );
       if (result.conversationId != null) {
-        final conv = await ChatOpenDirect.resolveAndWarm(user.id);
+        final conv = await ChatOpenDirect.openNow(user.id, peer: _briefFor(user));
         if (!mounted) return;
         context.push(ChatThreadRoute.pathFor(conv), extra: conv);
       }

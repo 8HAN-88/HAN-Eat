@@ -257,7 +257,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final actor = group.primary.actor;
     if (actor == null) return;
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(actor.id);
+      final conv = await ChatOpenDirect.openNow(
+        actor.id,
+        peer: ChatUserBrief(
+          id: actor.id,
+          name: actor.name,
+          username: actor.username,
+          avatarUrl: actor.avatarUrl,
+        ),
+      );
       if (!mounted) return;
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {

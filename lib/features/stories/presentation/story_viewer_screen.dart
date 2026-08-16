@@ -371,7 +371,14 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     setState(() => _replySending = true);
     _pause();
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(_currentStory.authorId);
+      final opened = await ChatOpenDirect.openNow(
+        _currentStory.authorId,
+        peer: ChatUserBrief(
+          id: _currentStory.authorId,
+          name: _currentStory.authorName,
+          avatarUrl: _currentStory.authorAvatar,
+        ),
+      );
       final payload = ChatStoryReplyPayload(
         storyId: storyId,
         text: text,
@@ -389,21 +396,32 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         mediaUrl: _currentStory.thumbnailUrl ?? _currentStory.mediaUrl,
       );
       final uid = AuthService.instance.currentUser?.id ?? 0;
-      await persistReadyOutgoing(
-        conversationId: conv.id,
-        pending: pending,
-        optimistic: ChatMessage(
-          id: pending.tempId,
-          conversationId: conv.id,
-          senderId: uid,
-          type: 'story_reply',
-          content: pending.content,
-          mediaUrl: pending.mediaUrl,
-          createdAt: DateTime.now(),
-          isMine: true,
-          clientMessageId: pending.clientMessageId,
-        ),
-      );
+      Future<void> persistTo(int conversationId) {
+        return persistReadyOutgoing(
+          conversationId: conversationId,
+          pending: pending,
+          optimistic: ChatMessage(
+            id: pending.tempId,
+            conversationId: conversationId,
+            senderId: uid,
+            type: 'story_reply',
+            content: pending.content,
+            mediaUrl: pending.mediaUrl,
+            createdAt: DateTime.now(),
+            isMine: true,
+            clientMessageId: pending.clientMessageId,
+          ),
+        );
+      }
+
+      if (opened.id > 0) {
+        await persistTo(opened.id);
+      } else {
+        unawaited(() async {
+          final real = await ChatOpenDirect.resolve(_currentStory.authorId);
+          await persistTo(real.id);
+        }());
+      }
       if (!mounted) return;
       _replyController.clear();
       _replyFocus.unfocus();
@@ -412,7 +430,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       );
       Navigator.of(context).pop();
       if (!mounted) return;
-      context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+      context.push(ChatThreadRoute.pathFor(opened), extra: opened);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

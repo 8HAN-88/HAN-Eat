@@ -42,6 +42,36 @@ void main() {
     expect(ChatOpenDirect.peekAmong(chats, 42), isNull);
   });
 
+  test('stubForPeer uses a negative id derived from the peer', () {
+    final stub = ChatOpenDirect.stubForPeer(
+      const ChatUserBrief(id: 42, name: 'Ann'),
+    );
+    expect(ChatOpenDirect.stubIdForPeer(42), -42);
+    expect(ChatOpenDirect.isStubId(stub.id), isTrue);
+    expect(stub.id, -42);
+    expect(stub.type, 'direct');
+    expect(stub.peer?.id, 42);
+    expect(stub.peer?.name, 'Ann');
+  });
+
+  test('peekOrStub returns a stub when the DM is not cached', () {
+    expect(
+      ChatOpenDirect.peekOrStub(
+        11,
+        peer: const ChatUserBrief(id: 11, name: 'Bo'),
+      )?.id,
+      -11,
+    );
+    expect(ChatOpenDirect.peekOrStub(11), isNull);
+    expect(
+      ChatOpenDirect.peekOrStub(
+        11,
+        peer: const ChatUserBrief(id: 99, name: 'Other'),
+      ),
+      isNull,
+    );
+  });
+
   test('peekSavedAmong finds the saved chat', () {
     final chats = [
       _dm(id: 2, peerId: 8),

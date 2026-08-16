@@ -371,7 +371,14 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
 
   Future<void> _openChatWithUser(int userId) async {
     try {
-      final conv = await ChatOpenDirect.resolveAndWarm(userId);
+      ChatUserBrief? peer;
+      for (final contact in _items) {
+        if (contact.user.id == userId) {
+          peer = contact.user;
+          break;
+        }
+      }
+      final conv = await ChatOpenDirect.openNow(userId, peer: peer);
       if (!context.mounted) return;
       await context.push(ChatThreadRoute.pathFor(conv), extra: conv);
       if (mounted) _fetchContacts();

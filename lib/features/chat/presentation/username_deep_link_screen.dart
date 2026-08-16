@@ -38,9 +38,9 @@ class _UsernameDeepLinkScreenState extends State<UsernameDeepLinkScreen> {
         setState(() => _error = 'Пользователь @$handle не найден');
         return;
       }
-      final chat = await ChatOpenDirect.resolveAndWarm(user.id);
+      final chat = await ChatOpenDirect.openNow(user.id, peer: user);
       if (!mounted) return;
-      context.go(ChatThreadRoute.pathForId(chat.id));
+      context.go(ChatThreadRoute.pathFor(chat), extra: chat);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = userVisibleError(e));
