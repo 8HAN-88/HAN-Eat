@@ -221,6 +221,9 @@ class StarGiveaway(Base):
     require_membership = Column(Boolean, nullable=False, default=True)
     participants_count = Column(Integer, nullable=False, default=0)
     title = Column(String(160), nullable=True)
+    # stars | premium (HanWe Pro, Telegram Premium analog)
+    prize_type = Column(String(16), nullable=False, default="stars")
+    premium_months = Column(Integer, nullable=False, default=0)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
@@ -267,5 +270,27 @@ class StarInvoice(Base):
     status = Column(String(24), nullable=False, default="pending", index=True)
     expires_at = Column(DateTime, nullable=True)
     paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+
+class ChannelSuggestedPost(Base):
+    """Telegram-like paid suggested post for a channel."""
+
+    __tablename__ = "channel_suggested_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(
+        Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    author_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    text = Column(String(2000), nullable=False)
+    media_url = Column(String(1024), nullable=True)
+    amount_stars = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default="pending", index=True)
+    post_id = Column(
+        Integer, ForeignKey("posts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 

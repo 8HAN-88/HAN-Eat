@@ -235,10 +235,12 @@ class ConvertUserStarGiftResponse(BaseModel):
 
 
 class CreateStarGiveawayRequest(BaseModel):
-    prize_stars: int = Field(ge=1, le=100000)
+    prize_stars: int = Field(default=0, ge=0, le=100000)
     winners_count: int = Field(default=1, ge=1, le=100)
     duration_hours: int = Field(default=24, ge=1, le=24 * 30)
     title: Optional[str] = Field(default=None, max_length=160)
+    prize_type: str = Field(default="stars")
+    premium_months: int = Field(default=0, ge=0, le=12)
 
 
 class StarGiveawayItem(BaseModel):
@@ -253,6 +255,8 @@ class StarGiveawayItem(BaseModel):
     require_membership: bool = True
     participants_count: int = 0
     title: Optional[str] = None
+    prize_type: str = "stars"
+    premium_months: int = 0
     completed_at: Optional[datetime] = None
     created_at: datetime
     joined_by_me: bool = False
@@ -322,4 +326,41 @@ class StarInvoicesResponse(BaseModel):
 class RefundStarInvoiceResponse(BaseModel):
     invoice: StarInvoiceItem
     balance: int
+
+
+class RefundPaidMediaResponse(BaseModel):
+    message_id: int
+    refunded: int
+    balance: int
+
+
+class SuggestChannelPostRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    amount_stars: int = Field(ge=10, le=100000)
+    media_url: Optional[str] = None
+
+
+class ReviewSuggestedPostRequest(BaseModel):
+    approve: bool
+
+
+class ChannelSuggestedPostItem(BaseModel):
+    id: int
+    channel_id: int
+    author_id: int
+    text: str
+    media_url: Optional[str] = None
+    amount_stars: int
+    status: str
+    post_id: Optional[int] = None
+    created_at: datetime
+    author_name: Optional[str] = None
+    author_username: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ChannelSuggestedPostsResponse(BaseModel):
+    posts: List[ChannelSuggestedPostItem]
 

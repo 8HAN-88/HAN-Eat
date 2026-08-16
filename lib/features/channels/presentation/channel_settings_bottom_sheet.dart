@@ -182,6 +182,27 @@ class _ChannelSettingsBottomSheetState
                 );
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.outgoing_mail),
+              title: const Text('Предложить пост'),
+              subtitle: Text(
+                widget.channel.isOwner || widget.channel.canManageChannelSettings
+                    ? 'Модерация предложенных постов за ★'
+                    : 'Отправить пост в канал за ★',
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                context.push(
+                  ChannelSuggestedPostsRoute.pathFor(
+                    widget.channelId,
+                    name: widget.channel.name,
+                    canManage: widget.channel.isOwner ||
+                        widget.channel.canManageChannelSettings,
+                    isOwner: widget.channel.isOwner,
+                  ),
+                );
+              },
+            ),
             const Divider(),
             // Настройки
             ListTile(

@@ -264,6 +264,19 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось загрузить выплаты');
   }
 
+  static Future<RefundPaidMediaResult> refundPaidMedia(int messageId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/messages/$messageId/refund'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return RefundPaidMediaResult.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось вернуть оплату');
+  }
+
   static Future<PurchaseMessageResult> purchaseMessage(int messageId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/messages/$messageId/purchase'),
@@ -369,6 +382,19 @@ class PaidFeaturesService {
     _throwForResponse(response, 'Не удалось конвертировать подарок');
   }
 
+  static Future<UserStarGift> refundGift(int userGiftId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/refund'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return UserStarGift.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось вернуть подарок');
+  }
+
   static Future<UserStarGift> keepGift(int userGiftId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/gifts/inventory/$userGiftId/keep'),
@@ -451,10 +477,12 @@ class PaidFeaturesService {
 
   static Future<StarGiveaway> createChannelGiveaway(
     int channelId, {
-    required int prizeStars,
+    int prizeStars = 0,
     int winnersCount = 1,
     int durationHours = 24,
     String? title,
+    String prizeType = 'stars',
+    int premiumMonths = 0,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/paid/channels/$channelId/giveaways'),
@@ -463,6 +491,8 @@ class PaidFeaturesService {
         'prize_stars': prizeStars,
         'winners_count': winnersCount,
         'duration_hours': durationHours,
+        'prize_type': prizeType,
+        'premium_months': premiumMonths,
         if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
       }),
     );
@@ -511,6 +541,70 @@ class PaidFeaturesService {
       );
     }
     _throwForResponse(response, 'Не удалось завершить розыгрыш');
+  }
+
+  static Future<ChannelSuggestedPost> suggestChannelPost(
+    int channelId, {
+    required String text,
+    required int amountStars,
+    String? mediaUrl,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/channels/$channelId/suggested-posts'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'text': text,
+        'amount_stars': amountStars,
+        if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          'media_url': mediaUrl.trim(),
+      }),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return ChannelSuggestedPost.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось предложить пост');
+  }
+
+  static Future<List<ChannelSuggestedPost>> listSuggestedPosts(
+    int channelId, {
+    String? status,
+  }) async {
+    final params = <String, String>{
+      if (status != null && status.isNotEmpty) 'status': status,
+    };
+    final response = await http.get(
+      Uri.parse('$baseUrl/paid/channels/$channelId/suggested-posts').replace(
+        queryParameters: params.isEmpty ? null : params,
+      ),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final items = data['posts'] as List<dynamic>? ?? const [];
+      return items
+          .map((e) => ChannelSuggestedPost.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    _throwForResponse(response, 'Не удалось загрузить предложения');
+  }
+
+  static Future<ChannelSuggestedPost> reviewSuggestedPost(
+    int suggestionId, {
+    required bool approve,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/paid/suggested-posts/$suggestionId/review'),
+      headers: await _headers(),
+      body: jsonEncode({'approve': approve}),
+    );
+    if (response.statusCode == 200) {
+      return ChannelSuggestedPost.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    }
+    _throwForResponse(response, 'Не удалось обработать предложение');
   }
 
   static Future<StarGiveawayWinnersResult> listGiveawayWinners(
@@ -788,6 +882,25 @@ class CreatorPayoutRequest {
         status: json['status'] as String? ?? 'pending',
         note: json['note'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+      );
+}
+
+class RefundPaidMediaResult {
+  const RefundPaidMediaResult({
+    required this.messageId,
+    required this.refunded,
+    required this.balance,
+  });
+
+  final int messageId;
+  final int refunded;
+  final int balance;
+
+  factory RefundPaidMediaResult.fromJson(Map<String, dynamic> json) =>
+      RefundPaidMediaResult(
+        messageId: json['message_id'] as int? ?? 0,
+        refunded: json['refunded'] as int? ?? 0,
+        balance: json['balance'] as int? ?? 0,
       );
 }
 
@@ -1086,6 +1199,8 @@ class StarGiveaway {
     this.createdAt,
     this.joinedByMe = false,
     this.isWinner = false,
+    this.prizeType = 'stars',
+    this.premiumMonths = 0,
   });
 
   final int id;
@@ -1103,8 +1218,11 @@ class StarGiveaway {
   final DateTime? createdAt;
   final bool joinedByMe;
   final bool isWinner;
+  final String prizeType;
+  final int premiumMonths;
 
   bool get isActive => status == 'active';
+  bool get isPremiumPrize => prizeType == 'premium' && premiumMonths > 0;
 
   factory StarGiveaway.fromJson(Map<String, dynamic> json) => StarGiveaway(
         id: json['id'] as int? ?? 0,
@@ -1123,6 +1241,59 @@ class StarGiveaway {
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
         joinedByMe: json['joined_by_me'] as bool? ?? false,
         isWinner: json['is_winner'] as bool? ?? false,
+        prizeType: json['prize_type'] as String? ?? 'stars',
+        premiumMonths: json['premium_months'] as int? ?? 0,
+      );
+}
+
+class ChannelSuggestedPost {
+  const ChannelSuggestedPost({
+    required this.id,
+    required this.channelId,
+    required this.authorId,
+    required this.text,
+    required this.amountStars,
+    required this.status,
+    this.mediaUrl,
+    this.postId,
+    this.createdAt,
+    this.authorName,
+    this.authorUsername,
+  });
+
+  final int id;
+  final int channelId;
+  final int authorId;
+  final String text;
+  final int amountStars;
+  final String status;
+  final String? mediaUrl;
+  final int? postId;
+  final DateTime? createdAt;
+  final String? authorName;
+  final String? authorUsername;
+
+  String get authorLabel {
+    final u = authorUsername?.trim();
+    if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
+    final n = authorName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    return 'Пользователь';
+  }
+
+  factory ChannelSuggestedPost.fromJson(Map<String, dynamic> json) =>
+      ChannelSuggestedPost(
+        id: json['id'] as int? ?? 0,
+        channelId: json['channel_id'] as int? ?? 0,
+        authorId: json['author_id'] as int? ?? 0,
+        text: json['text'] as String? ?? '',
+        amountStars: json['amount_stars'] as int? ?? 0,
+        status: json['status'] as String? ?? 'pending',
+        mediaUrl: json['media_url'] as String?,
+        postId: json['post_id'] as int?,
+        createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+        authorName: json['author_name'] as String?,
+        authorUsername: json['author_username'] as String?,
       );
 }
 
