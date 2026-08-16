@@ -167,6 +167,22 @@ class ChatLocationPayload {
     return lines.join('\n');
   }
 
+  /// Instant local stop so the live chip flips before the server answers.
+  static String patchStoppedInContent(String content) {
+    final payload = tryParse(content);
+    if (payload == null || !payload.isLive || payload.stopped) return content;
+    return encode(
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      label: payload.label,
+      isLive: true,
+      periodSeconds: payload.periodSeconds,
+      expiresAt: payload.expiresAt,
+      updatedAt: DateTime.now().toUtc(),
+      stopped: true,
+    );
+  }
+
   String get previewText {
     if (isLiveActive) return '📍 Трансляция геопозиции';
     if (isLive) return '📍 Геопозиция (завершена)';

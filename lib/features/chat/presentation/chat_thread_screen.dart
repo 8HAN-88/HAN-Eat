@@ -570,7 +570,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   /// Group: peer userId → last_read_message_id seen via SSE (for read_count).
   final Map<int, int> _peerGroupReadCursors = <int, int>{};
   bool _selectionMode = false;
-  bool _chatExitActionRunning = false;
   final _selectedMessageIds = <int>{};
   final _votingPollIds = <int>{};
   final _closingPollIds = <int>{};
@@ -6452,24 +6451,36 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
+    final previousMessages = List<ChatMessage>.from(_messages);
+    final previousPins = List<ChatMessage>.from(_pinnedMessages);
+    final previousHasMore = _hasMore;
+    _applyHistoryClearedLocally();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isDirect && alsoForPeer
+              ? 'История очищена у обоих'
+              : 'История очищена',
+        ),
+      ),
+    );
     try {
       await ChatService.clearHistory(
         conversationId: widget.conversationId,
         alsoForPeer: isDirect && alsoForPeer,
       );
-      if (!mounted) return;
-      _applyHistoryClearedLocally();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isDirect && alsoForPeer
-                ? 'История очищена у обоих'
-                : 'История очищена',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(previousMessages);
+        _setPinnedMessages(previousPins);
+        _hasMore = previousHasMore;
+      });
+      unawaited(
+        ChatCacheService.saveThread(widget.conversationId, previousMessages),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -6753,7 +6764,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       await _leaveGroup();
       return;
     }
-    if (_chatExitActionRunning) return;
     final isDirect = !_conversation.isGroup && !_conversation.isSaved;
     final peerName = _conversation.peer?.displayName.trim();
     var alsoForPeer = false;
@@ -6801,32 +6811,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() => _chatExitActionRunning = true);
-    try {
-      await ChatService.deleteConversation(
-        conversationId: widget.conversationId,
-        alsoForPeer: isDirect && alsoForPeer,
-      );
-      unawaited(ChatCacheService.clearDraft(widget.conversationId));
-      unawaited(
-        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
-      );
-      unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+    final messenger = ScaffoldMessenger.of(context);
+    _leaveThreadLocally(dropCache: true);
+    unawaited(() async {
       try {
-        ProviderScope.containerOf(context)
-            .read(chatsHubRefreshProvider.notifier)
-            .state++;
-      } catch (_) {}
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    } finally {
-      if (mounted) setState(() => _chatExitActionRunning = false);
-    }
+        await ChatService.deleteConversation(
+          conversationId: widget.conversationId,
+          alsoForPeer: isDirect && alsoForPeer,
+        );
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }());
   }
 
   Future<void> _openFileUrl(String url) async {
@@ -6847,20 +6845,42 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
-  Future<void> _archiveChat() async {
-    try {
-      await ChatService.setArchived(
-        conversationId: widget.conversationId,
-        archived: true,
+  void _leaveThreadLocally({required bool dropCache}) {
+    if (dropCache) {
+      unawaited(ChatCacheService.dropConversation(widget.conversationId));
+      unawaited(ChatCacheService.clearDraft(widget.conversationId));
+      unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
+      unawaited(
+        ChatService.deleteCloudDraft(conversationId: widget.conversationId),
       );
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
+    } else {
+      unawaited(
+        ChatCacheService.upsertConversation(
+          ChatInboxOptimistic.applyArchive(_conversation, archived: true),
+        ),
       );
     }
+    _bumpChatsHub();
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _archiveChat() async {
+    final messenger = ScaffoldMessenger.of(context);
+    _leaveThreadLocally(dropCache: false);
+    unawaited(() async {
+      try {
+        await ChatService.setArchived(
+          conversationId: widget.conversationId,
+          archived: true,
+        );
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }());
   }
 
   void _showMembers() {
@@ -7834,12 +7854,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _addHanContactFromBubble(int userId) async {
     if (userId <= 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Добавлено в контакты')),
+    );
     try {
       await ChatService.addContact(userId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Добавлено в контакты')),
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -8189,60 +8208,61 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
-    try {
-      await ChatService.blockUser(peer.id);
-      if (deleteHistory) {
-        await ChatService.clearHistory(
-          conversationId: widget.conversationId,
-        );
-        await ChatService.deleteConversation(
-          conversationId: widget.conversationId,
-        );
-        unawaited(ChatCacheService.saveThread(widget.conversationId, const []));
-        unawaited(ChatCacheService.clearDraft(widget.conversationId));
-        unawaited(
-          ChatService.deleteCloudDraft(conversationId: widget.conversationId),
-        );
-        try {
-          ProviderScope.containerOf(context)
-              .read(chatsHubRefreshProvider.notifier)
-              .state++;
-        } catch (_) {}
-        if (!mounted) return;
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
-        return;
-      }
-      if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (deleteHistory) {
+      _leaveThreadLocally(dropCache: true);
+    } else {
       setState(() {
-        _conversation = _conversation.copyWith(peerBlockedByMe: true);
+        _conversation = ChatInboxOptimistic.applyBlocked(
+          _conversation,
+          blocked: true,
+        );
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('${peer.displayName} заблокирован')),
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
     }
+    unawaited(() async {
+      try {
+        await ChatService.blockUser(peer.id);
+        if (deleteHistory) {
+          await ChatService.clearHistory(
+            conversationId: widget.conversationId,
+          );
+          await ChatService.deleteConversation(
+            conversationId: widget.conversationId,
+          );
+        }
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }());
   }
 
   Future<void> _unblockPeer() async {
     final peer = _conversation.peer;
     if (peer == null) return;
+    setState(() {
+      _conversation = ChatInboxOptimistic.applyBlocked(
+        _conversation,
+        blocked: false,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${peer.displayName} разблокирован')),
+    );
     try {
       await ChatService.unblockUser(peer.id);
-      if (!mounted) return;
-      setState(() {
-        _conversation = _conversation.copyWith(peerBlockedByMe: false);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${peer.displayName} разблокирован')),
-      );
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _conversation = ChatInboxOptimistic.applyBlocked(
+          _conversation,
+          blocked: true,
+        );
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -8282,7 +8302,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _leaveGroup() async {
-    if (_chatExitActionRunning) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -8302,19 +8321,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() => _chatExitActionRunning = true);
-    try {
-      await ChatService.leaveGroup(conversationId: widget.conversationId);
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
-    } finally {
-      if (mounted) setState(() => _chatExitActionRunning = false);
-    }
+    final messenger = ScaffoldMessenger.of(context);
+    _leaveThreadLocally(dropCache: true);
+    unawaited(() async {
+      try {
+        await ChatService.leaveGroup(conversationId: widget.conversationId);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(userVisibleError(e))),
+        );
+      }
+    }());
   }
 
   @override
@@ -8914,6 +8931,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         !mounted) {
       return;
     }
+    final previousSeconds = _conversation.autoDeleteSeconds;
+    _applyAutoDeleteSeconds(picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          picked <= 0
+              ? 'Автоудаление выключено'
+              : 'Автоудаление: ${_autoDeleteLabel(picked)}',
+        ),
+      ),
+    );
     try {
       final conv = await ChatService.setAutoDeleteSeconds(
         conversationId: widget.conversationId,
@@ -8925,17 +8953,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _purgeExpiredAutoDeleteMessages(inSetState: true);
       });
       _syncAutoDeleteTicker();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            picked <= 0
-                ? 'Автоудаление выключено'
-                : 'Автоудаление: ${_autoDeleteLabel(picked)}',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
+      _applyAutoDeleteSeconds(previousSeconds);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -13036,6 +13056,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _stopLiveLocation(ChatMessage message) async {
+    final previous = message;
+    final optimistic = message.copyWith(
+      content: ChatLocationPayload.patchStoppedInContent(message.content),
+    );
+    setState(() {
+      final i = _messages.indexWhere((m) => m.id == message.id);
+      if (i >= 0) _messages[i] = optimistic;
+      if (_isMessagePinned(optimistic.id)) _replacePinnedMessage(optimistic);
+    });
     try {
       final session = LiveLocationSession.activeFor(message.id);
       if (session != null) {
@@ -13049,6 +13078,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_pollNew());
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == previous.id);
+        if (i >= 0) _messages[i] = previous;
+        if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
