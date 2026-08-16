@@ -5433,6 +5433,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (ok != true || !mounted) return;
       notifyMembers = notify;
     }
+    setState(() {
+      if (isPinned) {
+        _removePinnedMessageId(msg.id);
+      } else {
+        _upsertPinnedMessage(msg);
+      }
+    });
     try {
       await ChatService.pinMessage(
         conversationId: widget.conversationId,
@@ -5440,16 +5447,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pinned: !isPinned,
         notify: notifyMembers,
       );
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         if (isPinned) {
-          _removePinnedMessageId(msg.id);
-        } else {
           _upsertPinnedMessage(msg);
+        } else {
+          _removePinnedMessageId(msg.id);
         }
       });
-    } catch (e) {
-      if (!mounted) return;
       final err = userVisibleError(e);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -5465,15 +5471,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _unpinAllMessages() async {
     if (_pinnedMessages.isEmpty) return;
+    final previous = List<ChatMessage>.from(_pinnedMessages);
+    setState(() => _setPinnedMessages(const []));
     try {
       await ChatService.clearPinnedMessages(
         conversationId: widget.conversationId,
       );
-      if (!mounted) return;
-      if (!mounted) return;
-      setState(() => _setPinnedMessages(const []));
     } catch (e) {
       if (!mounted) return;
+      setState(() => _setPinnedMessages(previous));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -7931,27 +7937,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       subtitle: 'Как в Telegram: звёзды появятся сообщением в чате.',
     );
     if (payload == null || !mounted) return;
-    try {
-      final result = await PaidFeaturesService.donate(
-        recipientId: peer.id,
-        amountStars: payload.amount,
-        message: payload.message,
-      );
-      if (!mounted) return;
-      if (result.messageId != null) {
-        unawaited(_pollNew());
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Отправлено ${payload.amount} ★')),
+    );
+    unawaited(() async {
+      try {
+        final result = await PaidFeaturesService.donate(
+          recipientId: peer.id,
+          amountStars: payload.amount,
+          message: payload.message,
+        );
+        if (mounted && result.messageId != null) {
+          unawaited(_pollNew());
+        }
+      } catch (e) {
+        if (!mounted) return;
+        await showStarsRequiredSnack(context, e);
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Отправлено ${payload.amount} ★. Баланс: ${result.balance}',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
-    }
+    }());
   }
 
   Future<void> _startVideoCall() async {
@@ -8687,11 +8691,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
     if (scope == null || !mounted) return;
 
-    for (final msg in selected) {
-      await _deleteMessage(msg, scope: scope);
-    }
-    if (!mounted) return;
     _exitSelectionMode();
+    for (final msg in selected) {
+      unawaited(_deleteMessage(msg, scope: scope));
+    }
   }
 
   void _copySelectedMessages() {
@@ -10771,19 +10774,39 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _deleteMessage(ChatMessage msg, {String scope = 'all'}) async {
+    if (msg.id <= 0) {
+      _discardFailedText(msg.id);
+      setState(() {
+        _messages.removeWhere((m) => m.id == msg.id);
+        _failedReadySends.remove(msg.id);
+        _readyOutboundQueue.removeWhere((p) => p.tempId == msg.id);
+      });
+      unawaited(_persistReadySends());
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      return;
+    }
+    final index = _messages.indexWhere((m) => m.id == msg.id);
+    final wasPinned = _isMessagePinned(msg.id);
+    setState(() {
+      _messages.removeWhere((m) => m.id == msg.id);
+      _removePinnedMessageId(msg.id);
+    });
+    unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     try {
       await ChatService.deleteMessage(
         conversationId: widget.conversationId,
         messageId: msg.id,
         scope: scope,
       );
-      if (!mounted) return;
-      setState(() {
-        _messages.removeWhere((m) => m.id == msg.id);
-        _removePinnedMessageId(msg.id);
-      });
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        if (!_messages.any((m) => m.id == msg.id)) {
+          final at = index < 0 ? _messages.length : index.clamp(0, _messages.length);
+          _messages.insert(at, msg);
+        }
+        if (wasPinned) _upsertPinnedMessage(msg);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -13137,7 +13160,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() => _closingPollIds.add(msg.id));
+    final previous = msg;
+    final optimistic = msg.copyWith(
+      content: patchChatPollClosedInContent(msg.content, isClosed: true),
+    );
+    setState(() {
+      _closingPollIds.add(msg.id);
+      final i = _messages.indexWhere((m) => m.id == msg.id);
+      if (i >= 0) _messages[i] = optimistic;
+      if (_isMessagePinned(msg.id)) _replacePinnedMessage(optimistic);
+    });
     try {
       final updated = await ChatService.closePoll(
         conversationId: widget.conversationId,
@@ -13152,6 +13184,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (mounted) {
+        setState(() {
+          final i = _messages.indexWhere((m) => m.id == previous.id);
+          if (i >= 0) _messages[i] = previous;
+          if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
+        });
         showErrorSnackBar(context, e, fallback: 'Не удалось закрыть опрос');
       }
     } finally {
