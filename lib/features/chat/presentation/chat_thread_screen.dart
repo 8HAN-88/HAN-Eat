@@ -70,6 +70,7 @@ import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
+import '../application/chat_open_direct.dart';
 import '../application/chat_ready_outgoing.dart';
 import '../application/chat_thread_prefetch.dart';
 import '../application/chat_private_reply.dart';
@@ -156,9 +157,7 @@ class _ChatThreadLoaderScreenState
         updatedAt: DateTime.now(),
       );
     }
-    if (_conversation == null) {
-      _conversation = ChatCacheService.peekConversation(widget.conversationId);
-    }
+    _conversation ??= ChatCacheService.peekConversation(widget.conversationId);
     if (_conversation == null) _resolveConversation();
   }
 
@@ -2227,8 +2226,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (!refreshHub) return;
+    ChatRealtimeSignals.instance.notifyNewMessage();
     try {
-      refreshChatsHub(ref);
+      ProviderScope.containerOf(context)
+          .read(chatsHubRefreshProvider.notifier)
+          .state++;
     } catch (_) {}
   }
 
@@ -2325,7 +2327,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _rememberOutgoingForHub(optimistic);
     _scrollToBottom();
     AppHaptics.selection();
-    unawaited(_kickReadyOutbound());
+    _kickReadyOutbound();
   }
 
   void _kickReadyOutbound() {
@@ -5980,7 +5982,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final conv = await ChatService.openDirectChat(userId);
+      final conv = await ChatOpenDirect.resolveAndWarm(userId);
       if (!mounted) return;
       if (conv.id == widget.conversationId) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -6002,7 +6004,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           sourceChatTitle: _conversation.displayTitle,
         );
       }
-      unawaited(ChatThreadPrefetch.warm(conv.id));
       await context.push(
         ChatThreadRoute.pathFor(conv),
         extra: ChatThreadOpenArgs(
@@ -6502,32 +6503,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (picked == null || !mounted) return;
       final dests = picked.targets;
-      var ok = 0;
-      Object? lastError;
       for (final chat in dests) {
-        try {
-          await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
-          ok += 1;
-        } catch (e) {
-          lastError = e;
-        }
-      }
-      if (!mounted) return;
-      if (ok == 0 && lastError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(lastError))),
-        );
-        return;
+        unawaited(() async {
+          try {
+            await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
+            unawaited(ChatThreadPrefetch.warm(chat.id));
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(userVisibleError(e))),
+            );
+          }
+        }());
       }
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
       final label = dests.length == 1
           ? '«${dests.first.displayTitle}»'
-          : '$ok из ${dests.length} чатов';
-      final suffix = lastError != null && ok < dests.length
-          ? ' (часть не удалось)'
-          : '';
+          : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$verb в $label$suffix')),
+        SnackBar(content: Text('$verb в $label')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -8880,26 +8874,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (picked == null || !mounted) return;
       final dests = picked.targets;
-      var sent = 0;
-      var total = 0;
-      Object? lastError;
       for (final chat in dests) {
         for (final msg in selected) {
-          total += 1;
-          try {
-            await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
-            sent += 1;
-          } catch (e) {
-            lastError = e;
-          }
+          unawaited(() async {
+            try {
+              await _sendForwardTo(chat, msg, asCopy: picked.asCopy);
+              unawaited(ChatThreadPrefetch.warm(chat.id));
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(userVisibleError(e))),
+              );
+            }
+          }());
         }
-      }
-      if (!mounted) return;
-      if (sent == 0 && lastError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(lastError))),
-        );
-        return;
       }
       _exitSelectionMode();
       final verb = picked.asCopy ? 'Скопировано' : 'Переслано';
@@ -8908,11 +8896,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           : '${dests.length} чатов';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            sent == total
-                ? '$verb ${selected.length} → $destLabel'
-                : '$verb $sent из $total → $destLabel',
-          ),
+          content: Text('$verb ${selected.length} → $destLabel'),
         ),
       );
     } catch (e) {
@@ -11414,7 +11398,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     _rememberOutgoingForHub(optimistic);
     _scrollToBottom();
-    unawaited(_kickTextOutbound());
+    _kickTextOutbound();
   }
 
   Future<DateTime?> _pickScheduleDateTime({DateTime? initialDateTime}) async {

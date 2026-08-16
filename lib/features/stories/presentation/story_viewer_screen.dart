@@ -10,11 +10,10 @@ import 'package:uuid/uuid.dart';
 import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/chat_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
-import '../../chat/application/chat_thread_prefetch.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
@@ -372,7 +371,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     setState(() => _replySending = true);
     _pause();
     try {
-      final conv = await ChatService.openDirectChat(_currentStory.authorId);
+      final conv = await ChatOpenDirect.resolveAndWarm(_currentStory.authorId);
       final payload = ChatStoryReplyPayload(
         storyId: storyId,
         text: text,
@@ -405,7 +404,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           clientMessageId: pending.clientMessageId,
         ),
       );
-      unawaited(ChatThreadPrefetch.warm(conv.id));
       if (!mounted) return;
       _replyController.clear();
       _replyFocus.unfocus();

@@ -14,7 +14,7 @@ import '../../../../services/api_reachability_service.dart';
 import '../../../../services/app_invite_service.dart';
 import '../../../../services/auth_service.dart';
 import '../../../../services/chat_service.dart';
-import '../../application/chat_thread_prefetch.dart';
+import '../../application/chat_open_direct.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/phone_link_prompt_store.dart';
 import '../../../../utils/api_error_parser.dart';
@@ -371,9 +371,8 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
 
   Future<void> _openChatWithUser(int userId) async {
     try {
-      final conv = await ChatService.openDirectChat(userId);
+      final conv = await ChatOpenDirect.resolveAndWarm(userId);
       if (!context.mounted) return;
-      unawaited(ChatThreadPrefetch.warm(conv.id));
       await context.push(ChatThreadRoute.pathFor(conv), extra: conv);
       if (mounted) _fetchContacts();
     } catch (e) {

@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/chat_service.dart';
-import '../application/chat_thread_prefetch.dart';
+import '../application/chat_open_direct.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 
@@ -70,9 +70,8 @@ class _ChatPeopleSearchScreenState extends State<ChatPeopleSearchScreen> {
 
   Future<void> _openChat(ChatUserSearchItem user) async {
     try {
-      final conv = await ChatService.openDirectChat(user.id);
+      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
       if (!mounted) return;
-      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.pushReplacement(
         ChatThreadRoute.pathFor(conv),
         extra: conv,

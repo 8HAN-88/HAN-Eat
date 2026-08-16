@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
 
 import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
+import '../features/chat/application/chat_ready_outgoing.dart';
+import '../features/chat/application/chat_thread_prefetch.dart';
+import '../models/chat_models.dart';
 import '../models/post_model.dart';
+import '../services/auth_service.dart';
 import '../services/channel_service.dart';
 import '../services/chat_service.dart';
 import '../services/repost_service.dart';
@@ -217,7 +224,33 @@ class _PostShareSheetState extends State<_PostShareSheet> {
       final shareText = widget.post.type == 'reel'
           ? ShareLinkService.reelShareText(widget.post)
           : ShareLinkService.postShareText(widget.post);
-      await ChatService.sendText(conversationId: picked.id, content: shareText);
+      final pending = ChatReadyOutgoing(
+        tempId: newReadyOutgoingTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'text',
+        content: shareText,
+      );
+      await persistReadyOutgoing(
+        conversationId: picked.id,
+        pending: pending,
+        optimistic: ChatMessage(
+          id: pending.tempId,
+          conversationId: picked.id,
+          senderId: AuthService.instance.currentUser?.id ?? 0,
+          type: 'text',
+          content: shareText,
+          createdAt: DateTime.now(),
+          isMine: true,
+          clientMessageId: pending.clientMessageId,
+        ),
+      );
+      unawaited(
+        sendChatReadyOutgoing(
+          conversationId: picked.id,
+          pending: pending,
+        ),
+      );
+      unawaited(ChatThreadPrefetch.warm(picked.id));
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(this.context).showSnackBar(

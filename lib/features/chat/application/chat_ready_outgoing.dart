@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import '../../../models/chat_models.dart';
-import '../../../models/chat_poll.dart';
 import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_service.dart';
 

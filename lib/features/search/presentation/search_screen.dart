@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:han_eat/services/search_service.dart';
 import 'package:han_eat/services/chat_service.dart';
+import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_thread_prefetch.dart';
 import 'package:han_eat/services/channel_service.dart';
 import 'package:han_eat/services/global_search_cache.dart';
@@ -421,9 +422,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Future<void> _openPersonChat(ChatUserSearchItem user) async {
     try {
-      final conv = await ChatService.openDirectChat(user.id);
+      final conv = await ChatOpenDirect.resolveAndWarm(user.id);
       if (!mounted) return;
-      unawaited(ChatThreadPrefetch.warm(conv.id));
       context.push(ChatThreadRoute.pathFor(conv), extra: conv);
     } catch (e) {
       if (!mounted) return;
