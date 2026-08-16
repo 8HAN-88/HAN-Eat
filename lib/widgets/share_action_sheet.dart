@@ -6,13 +6,13 @@ import 'package:uuid/uuid.dart';
 
 import '../core/theme/app_tokens.dart';
 import '../core/share/system_share.dart';
+import '../features/chat/application/chat_open_direct.dart';
 import '../features/chat/application/chat_ready_outgoing.dart';
 import '../features/chat/application/chat_thread_prefetch.dart';
 import '../models/chat_models.dart';
 import '../models/post_model.dart';
 import '../services/auth_service.dart';
 import '../services/channel_service.dart';
-import '../services/chat_service.dart';
 import '../services/repost_service.dart';
 import '../services/share_link_service.dart';
 import '../utils/api_error_parser.dart';
@@ -206,7 +206,7 @@ class _PostShareSheetState extends State<_PostShareSheet> {
     if (_sendingToChat) return;
     setState(() => _sendingToChat = true);
     try {
-      final chats = await ChatService.listConversations();
+      final chats = await ChatOpenDirect.listForPicker();
       if (!mounted) return;
       if (chats.isEmpty) {
         Navigator.pop(context);

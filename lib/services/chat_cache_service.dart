@@ -105,6 +105,23 @@ class ChatCacheService {
     return null;
   }
 
+  static ChatConversation? peekSavedChat() {
+    final cached = _memoryConversations;
+    if (cached == null) return null;
+    for (final chat in cached) {
+      if (chat.isSaved) return chat;
+    }
+    return null;
+  }
+
+  static Future<List<ChatConversation>> conversationsForPicker() async {
+    final memory = peekConversations();
+    if (memory != null && memory.isNotEmpty) return memory;
+    final disk = await loadConversations();
+    if (disk != null && disk.isNotEmpty) return disk;
+    return const [];
+  }
+
   static ChatConversation? peekDirectWithUser(int userId) {
     if (userId <= 0) return null;
     final cached = _memoryConversations;

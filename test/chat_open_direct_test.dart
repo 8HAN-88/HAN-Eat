@@ -41,4 +41,17 @@ void main() {
     ];
     expect(ChatOpenDirect.peekAmong(chats, 42), isNull);
   });
+
+  test('peekSavedAmong finds the saved chat', () {
+    final chats = [
+      _dm(id: 2, peerId: 8),
+      ChatConversation(
+        id: 5,
+        type: 'saved',
+        updatedAt: DateTime(2026, 8, 16, 12),
+      ),
+    ];
+    expect(ChatOpenDirect.peekSavedAmong(chats)?.id, 5);
+    expect(ChatOpenDirect.peekSavedAmong([_dm(id: 2, peerId: 8)]), isNull);
+  });
 }

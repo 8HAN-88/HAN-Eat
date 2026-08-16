@@ -36,6 +36,23 @@ class ChatOpenDirect {
     return _refresh(userId);
   }
 
+  static ChatConversation? peekSavedAmong(Iterable<ChatConversation> chats) {
+    for (final chat in chats) {
+      if (chat.isSaved) return chat;
+    }
+    return null;
+  }
+
+  static Future<List<ChatConversation>> listForPicker() async {
+    final cached = await ChatCacheService.conversationsForPicker();
+    if (cached.isNotEmpty) return cached;
+    final fresh = await ChatService.listConversations();
+    if (fresh.isNotEmpty) {
+      await ChatCacheService.saveConversations(fresh);
+    }
+    return fresh;
+  }
+
   static Future<ChatConversation> resolveAndWarm(int userId) async {
     final conv = await resolve(userId);
     unawaited(ChatThreadPrefetch.warm(conv.id));

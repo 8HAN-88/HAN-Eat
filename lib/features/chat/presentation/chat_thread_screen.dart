@@ -143,6 +143,7 @@ class _ChatThreadLoaderScreenState
     extends ConsumerState<ChatThreadLoaderScreen> {
   ChatConversation? _conversation;
   bool _loading = false;
+  bool _openedFromStub = false;
   Object? _error;
 
   @override
@@ -158,7 +159,16 @@ class _ChatThreadLoaderScreenState
       );
     }
     _conversation ??= ChatCacheService.peekConversation(widget.conversationId);
-    if (_conversation == null) _resolveConversation();
+    if (_conversation == null) {
+      _conversation = ChatConversation(
+        id: widget.conversationId,
+        type: 'direct',
+        updatedAt: DateTime.now(),
+      );
+      _openedFromStub = true;
+    }
+    unawaited(ChatThreadPrefetch.warm(widget.conversationId));
+    unawaited(_hydrateConversation());
   }
 
   Future<void> _resolveConversation() async {
@@ -166,19 +176,48 @@ class _ChatThreadLoaderScreenState
       _loading = true;
       _error = null;
     });
+    await _hydrateConversation();
+    if (mounted && _conversation == null) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _hydrateConversation() async {
+    if (_openedFromStub) {
+      final disk = await ChatCacheService.loadConversations();
+      if (disk != null) {
+        for (final chat in disk) {
+          if (chat.id != widget.conversationId) continue;
+          if (!mounted) return;
+          setState(() {
+            _conversation = chat;
+            _openedFromStub = false;
+            _loading = false;
+            _error = null;
+          });
+          break;
+        }
+      }
+    }
     try {
       final conv = await ChatService.getConversation(widget.conversationId);
       if (!mounted) return;
       setState(() {
         _conversation = conv;
+        _openedFromStub = false;
         _loading = false;
+        _error = null;
       });
+      unawaited(ChatCacheService.upsertConversation(conv));
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-      });
+      if (_openedFromStub) {
+        setState(() {
+          _error = e;
+          _conversation = null;
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -188,37 +227,37 @@ class _ChatThreadLoaderScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_conversation != null) {
+      return PopScope(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) _refreshHub();
+        },
+        child: ChatThreadScreen(
+          conversation: _conversation!,
+          initialJumpMessageId: widget.initialJumpMessageId,
+          initialDraftText: widget.initialDraftText,
+          initialPrivateReply: widget.initialPrivateReply,
+        ),
+      );
+    }
     if (_loading) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    if (_error != null || _conversation == null) {
-      return Scaffold(
-        appBar: AppBar(),
-        body: AppEmptyState(
-          icon: Icons.chat_bubble_outline,
-          title: 'Чат не найден',
-          subtitle: _error != null
-              ? userVisibleError(_error!)
-              : 'Нет доступа к диалогу',
-          action: FilledButton(
-            onPressed: _resolveConversation,
-            child: const Text('Повторить'),
-          ),
+    return Scaffold(
+      appBar: AppBar(),
+      body: AppEmptyState(
+        icon: Icons.chat_bubble_outline,
+        title: 'Чат не найден',
+        subtitle: _error != null
+            ? userVisibleError(_error!)
+            : 'Нет доступа к диалогу',
+        action: FilledButton(
+          onPressed: _resolveConversation,
+          child: const Text('Повторить'),
         ),
-      );
-    }
-    return PopScope(
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) _refreshHub();
-      },
-      child: ChatThreadScreen(
-        conversation: _conversation!,
-        initialJumpMessageId: widget.initialJumpMessageId,
-        initialDraftText: widget.initialDraftText,
-        initialPrivateReply: widget.initialPrivateReply,
       ),
     );
   }
@@ -838,6 +877,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         onHidden: _onWebTabHidden,
       );
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatThreadScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.conversation.id != _conversation.id) return;
+    final next = widget.conversation;
+    if (identical(next, _conversation)) return;
+    final nextLooksStub = next.peer == null &&
+        (next.title == null || next.title!.trim().isEmpty) &&
+        next.memberCount == 0;
+    final currentRicher = _conversation.peer != null ||
+        (_conversation.title?.trim().isNotEmpty ?? false);
+    if (nextLooksStub && currentRicher) return;
+    setState(() {
+      _conversation = next;
+      _pinned = next.pinned;
+      _muted = next.muted;
+    });
+    _reconcileSlowModeCooldownWithConversation();
   }
 
   void _onWebTabHidden() {
@@ -6484,7 +6543,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final chats = await ChatService.listConversations();
+      final chats = await ChatOpenDirect.listForPicker();
       if (!mounted) return;
       final targets =
           chats.where((c) => c.id != widget.conversationId).toList();
@@ -6561,7 +6620,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final saved = await ChatService.ensureSavedChat();
+      final saved = ChatCacheService.peekSavedChat() ??
+          await ChatService.ensureSavedChat();
       if (!mounted) return;
       if (saved.id == widget.conversationId) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -6569,12 +6629,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         );
         return;
       }
-      await ChatService.forwardMessage(
-        targetConversationId: saved.id,
-        sourceConversationId: widget.conversationId,
-        messageId: msg.id,
-      );
-      if (!mounted) return;
+      unawaited(() async {
+        try {
+          await ChatService.forwardMessage(
+            targetConversationId: saved.id,
+            sourceConversationId: widget.conversationId,
+            messageId: msg.id,
+          );
+          unawaited(ChatThreadPrefetch.warm(saved.id));
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userVisibleError(e))),
+          );
+        }
+      }());
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Добавлено в избранное')),
       );
@@ -8855,7 +8924,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final chats = await ChatService.listConversations();
+      final chats = await ChatOpenDirect.listForPicker();
       if (!mounted) return;
       final targets =
           chats.where((c) => c.id != widget.conversationId).toList();
@@ -8917,28 +8986,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return;
     }
     try {
-      final saved = await ChatService.ensureSavedChat();
+      final saved = ChatCacheService.peekSavedChat() ??
+          await ChatService.ensureSavedChat();
       if (!mounted) return;
-      var sent = 0;
       for (final msg in selected) {
-        try {
-          await ChatService.forwardMessage(
+        unawaited(
+          ChatService.forwardMessage(
             targetConversationId: saved.id,
             sourceConversationId: widget.conversationId,
             messageId: msg.id,
-          );
-          sent += 1;
-        } catch (_) {}
+          ),
+        );
       }
-      if (!mounted) return;
+      unawaited(ChatThreadPrefetch.warm(saved.id));
       _exitSelectionMode();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            sent == selected.length
-                ? 'В избранное: $sent'
-                : 'В избранное: $sent из ${selected.length}',
-          ),
+          content: Text('В избранное: ${selected.length}'),
         ),
       );
     } catch (e) {
@@ -11312,30 +11376,53 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
     final editing = _editingMessage;
     if (editing != null) {
-      setState(() => _sending = true);
+      final previous = editing;
       _controller.clear();
-      try {
-        final msg = await ChatService.editMessage(
-          conversationId: widget.conversationId,
-          messageId: editing.id,
-          content: text,
-        );
-        if (!mounted) return;
-        setState(() {
-          final idx = _messages.indexWhere((m) => m.id == msg.id);
-          if (idx >= 0) _messages[idx] = msg;
-          if (_isMessagePinned(msg.id)) _replacePinnedMessage(msg);
-          _editingMessage = null;
-          _sending = false;
-        });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _sending = false);
-        _controller.text = text;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userVisibleError(e))),
-        );
-      }
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == editing.id);
+        if (idx >= 0) {
+          _messages[idx] = editing.copyWith(
+            content: text,
+            editedAt: DateTime.now(),
+          );
+        }
+        if (_isMessagePinned(editing.id)) {
+          _replacePinnedMessage(
+            editing.copyWith(content: text, editedAt: DateTime.now()),
+          );
+        }
+        _editingMessage = null;
+      });
+      unawaited(() async {
+        try {
+          final msg = await ChatService.editMessage(
+            conversationId: widget.conversationId,
+            messageId: editing.id,
+            content: text,
+          );
+          if (!mounted) return;
+          setState(() {
+            final idx = _messages.indexWhere((m) => m.id == msg.id);
+            if (idx >= 0) _messages[idx] = msg;
+            if (_isMessagePinned(msg.id)) _replacePinnedMessage(msg);
+          });
+          unawaited(
+            ChatCacheService.saveThread(widget.conversationId, _messages),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          setState(() {
+            final idx = _messages.indexWhere((m) => m.id == previous.id);
+            if (idx >= 0) _messages[idx] = previous;
+            if (_isMessagePinned(previous.id)) _replacePinnedMessage(previous);
+            _editingMessage = previous;
+          });
+          _controller.text = text;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userVisibleError(e))),
+          );
+        }
+      }());
       return;
     }
     final privateQuote = _privateReply;
