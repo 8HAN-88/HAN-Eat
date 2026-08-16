@@ -26,6 +26,7 @@ import '../../../channels/application/channels_list_refresh_provider.dart';
 import '../../../navigation/application/shell_chat_badge_refresh_provider.dart';
 import '../../../navigation/application/shell_tab_visibility.dart';
 import '../../application/chat_realtime_signals.dart';
+import '../../application/chat_thread_prefetch.dart';
 import '../../application/chats_hub_refresh_provider.dart';
 import '../../application/join_requests_bulk.dart';
 import '../../widgets/inbox_slidable_tile.dart';
@@ -1098,6 +1099,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         if (!mounted) return;
         setState(() => _savedChat = conv);
       }
+      unawaited(ChatThreadPrefetch.warm(conv.id));
       await context.push(ChatThreadRoute.pathFor(conv), extra: conv);
       if (mounted) _load(silent: true);
     } catch (e) {
@@ -2163,6 +2165,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
                       draftHasReply: _drafts[chat.id]?.hasReply ?? false,
                       typingLabel: _typingLabelFor(chat.id),
                       onTap: () async {
+                        unawaited(ChatThreadPrefetch.warm(chat.id));
                         await context.push(
                           ChatThreadRoute.pathFor(chat),
                           extra: chat,

@@ -8,6 +8,7 @@ import '../../../models/chat_models.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/channel_sheet_prefs.dart';
 import '../../../services/chat_service.dart';
+import '../application/chat_thread_prefetch.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
 import '../../../services/user_realtime_service.dart';
 import '../../../utils/api_error_parser.dart';
@@ -713,6 +714,7 @@ class _ArchivedChatTile extends StatelessWidget {
                 onToggleSelect();
                 return;
               }
+              unawaited(ChatThreadPrefetch.warm(chat.id));
               await context.push(
                 ChatThreadRoute.pathFor(chat),
                 extra: chat,

@@ -155,6 +155,9 @@ class _ChatThreadLoaderScreenState
         updatedAt: DateTime.now(),
       );
     }
+    if (_conversation == null) {
+      _conversation = ChatCacheService.peekConversation(widget.conversationId);
+    }
     if (_conversation == null) _resolveConversation();
   }
 
@@ -637,6 +640,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _inputFocusNode.addListener(_onComposerFocusChanged);
     _scroll.addListener(_onScrollChanged);
     _controller.addListener(_onInputChanged);
+    final warm = ChatCacheService.peekThread(widget.conversationId);
+    if (warm != null && warm.isNotEmpty) {
+      _messages.addAll(warm);
+      _loading = false;
+    }
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
       await _restoreReadyOutbox();
@@ -1785,19 +1793,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       while (_mediaOutboundQueue.isNotEmpty && mounted) {
         if (_conversation.isGroup && _isAnyCooldownActive) {
           final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
-          if (_sending) {
-            _beginSending(
-              status: 'Пауза ${_formatSlowModeCountdown(wait)}…',
-            );
-          }
+          _setMediaComposerStatus(
+            'Пауза ${_formatSlowModeCountdown(wait)}…',
+          );
           await Future<void>.delayed(Duration(seconds: wait));
           if (!mounted) return;
           continue;
         }
         final pending = _mediaOutboundQueue.first;
-        if (!_sending) {
-          _beginSending(status: _mediaStatusLabel(pending));
-        }
+        _setMediaComposerStatus(_mediaStatusLabel(pending));
         try {
           await _deliverMediaPending(pending);
           _removeMediaFromQueue(pending.clientMessageId);
@@ -1805,23 +1809,25 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             setState(() => _pendingMediaRetry = null);
           }
           if (_mediaOutboundQueue.isEmpty) {
-            _endSending();
+            _clearMediaComposerProgress();
           } else if (mounted) {
-            _beginSending(status: _mediaStatusLabel(_mediaOutboundQueue.first));
+            _setMediaComposerStatus(
+              _mediaStatusLabel(_mediaOutboundQueue.first),
+            );
           }
           _scrollToBottom();
         } catch (e) {
           if (e is _CancelledPendingMediaException) {
             _removeMediaFromQueue(pending.clientMessageId);
             if (_mediaOutboundQueue.isEmpty) {
-              _endSending();
+              _clearMediaComposerProgress();
             }
             continue;
           }
           if (e is TimeoutException &&
               pending.kind == _PendingMediaKind.voice) {
             _removeMediaFromQueue(pending.clientMessageId);
-            _endSending();
+            _clearMediaComposerProgress();
             pending.lastRetryAfterSeconds = null;
             pending.lastLimitedAt = null;
             _rememberFailedMedia(pending);
@@ -1843,7 +1849,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 (retryAfter ?? _conversation.slowModeSeconds).clamp(1, 3600);
             pending.lastLimitedAt = DateTime.now().toUtc();
             _removeMediaFromQueue(pending.clientMessageId);
-            _endSending();
+            _clearMediaComposerProgress();
             _rememberFailedMedia(pending);
             if (mounted) {
               setState(() {
@@ -1864,7 +1870,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             pending.lastRetryAfterSeconds = (retryAfter ?? 60).clamp(1, 3600);
             pending.lastLimitedAt = DateTime.now().toUtc();
             _removeMediaFromQueue(pending.clientMessageId);
-            _endSending();
+            _clearMediaComposerProgress();
             _rememberFailedMedia(pending);
             if (mounted) {
               setState(() {
@@ -1894,7 +1900,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             continue;
           }
           _removeMediaFromQueue(pending.clientMessageId);
-          _endSending();
+          _clearMediaComposerProgress();
           pending.lastRetryAfterSeconds = null;
           pending.lastLimitedAt = null;
           _rememberFailedMedia(pending);
@@ -3566,6 +3572,24 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
+  void _setMediaComposerStatus(String status, {double? progress}) {
+    if (!mounted) return;
+    setState(() {
+      _sendingStatus = status;
+      if (progress != null) {
+        _uploadProgress = progress.clamp(0.0, 1.0);
+      }
+    });
+  }
+
+  void _clearMediaComposerProgress() {
+    if (!mounted) return;
+    setState(() {
+      _uploadProgress = null;
+      _sendingStatus = 'Отправка…';
+    });
+  }
+
   void _setUploadProgress(double value, {String? status}) {
     if (!mounted) return;
     setState(() {
@@ -4189,7 +4213,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _removePendingMediaByTempId(tempId, removeMessage: true);
     });
     if (_mediaOutboundQueue.isEmpty) {
-      _endSending();
+      _clearMediaComposerProgress();
     }
   }
 
@@ -10168,7 +10192,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       reserve += 72;
     }
     if (_recording) reserve += 96;
-    if (_sending) reserve += 40;
+    if (_sending || _uploadProgress != null) reserve += 40;
     return reserve;
   }
 
@@ -10435,9 +10459,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                       if (i > 0) const SizedBox(width: 6),
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _sending
-                              ? null
-                              : () => unawaited(_tapReplyKeyboardButton(row[i])),
+                          onPressed: () =>
+                              unawaited(_tapReplyKeyboardButton(row[i])),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: scheme.onSurface,
                             side: BorderSide(
@@ -10468,7 +10491,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _tapReplyKeyboardButton(String text) async {
     final label = text.trim();
-    if (label.isEmpty || _sending) return;
+    if (label.isEmpty) return;
     _controller.text = label;
     _controller.selection = TextSelection.collapsed(offset: label.length);
     if (_replyKeyboard?.oneTime == true) {
@@ -11856,117 +11879,55 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final replyId = item.replyToMessageId;
     final media = item.mediaUrl?.trim();
     final topicId = item.topicId ?? _activeTopicIdForSend;
-    try {
-      switch (item.type) {
-        case 'image':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendImage(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            caption: item.content,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'video':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendVideo(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            caption: item.content,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'video_note':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendVideoNote(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            durationSec: int.tryParse(item.content.trim()) ?? 1,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'voice':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendVoice(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            durationSec: int.tryParse(item.content.trim()) ?? 1,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'file':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendFile(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            fileName:
-                item.content.trim().isEmpty ? 'file' : item.content.trim(),
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'sticker':
-          if (media == null || media.isEmpty) {
-            throw Exception('Нет медиа для отправки');
-          }
-          await ChatService.sendSticker(
-            conversationId: widget.conversationId,
-            mediaUrl: media,
-            emoji: item.content,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'location':
-          await ChatService.sendLocation(
-            conversationId: widget.conversationId,
-            content: item.content,
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        case 'poll':
-          final poll = parseChatPollFromContent(item.content);
-          if (poll == null || poll.options.length < 2) {
-            throw Exception('Не удалось восстановить опрос');
-          }
-          await ChatService.sendPoll(
-            conversationId: widget.conversationId,
-            question: poll.question,
-            description: poll.description,
-            options: poll.options.map((o) => o.text).toList(),
-            settings: poll.settings.toJson(),
-            replyToMessageId: replyId,
-            topicId: topicId,
-          );
-          break;
-        default:
-          await ChatService.sendText(
-            conversationId: widget.conversationId,
-            content: item.content,
-            replyToMessageId: replyId,
-            effectId: item.effectId,
-            topicId: topicId,
-          );
-      }
-    } catch (e) {
+    final needsMedia = item.type == 'image' ||
+        item.type == 'video' ||
+        item.type == 'video_note' ||
+        item.type == 'voice' ||
+        item.type == 'file' ||
+        item.type == 'sticker';
+    if (needsMedia && (media == null || media.isEmpty)) {
       await _restoreScheduledAfterFailedSend(item);
-      rethrow;
+      throw Exception('Нет медиа для отправки');
     }
+    if (item.type == 'poll') {
+      final poll = parseChatPollFromContent(item.content);
+      if (poll == null || poll.options.length < 2) {
+        await _restoreScheduledAfterFailedSend(item);
+        throw Exception('Не удалось восстановить опрос');
+      }
+      _enqueueReadyOutgoing(
+        ChatReadyOutgoing(
+          tempId: _newLocalTempId(),
+          clientMessageId: const Uuid().v4(),
+          type: 'poll',
+          content: item.content,
+          replyToMessageId: replyId,
+          topicId: topicId,
+          pollQuestion: poll.question,
+          pollDescription: poll.description,
+          pollOptions: poll.options.map((o) => o.text).toList(),
+          pollSettings: poll.settings.toJson(),
+        ),
+      );
+      return;
+    }
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: item.type,
+        content: item.content,
+        mediaUrl: media,
+        fileName: item.type == 'file'
+            ? (item.content.trim().isEmpty ? 'file' : item.content.trim())
+            : null,
+        durationSec: (item.type == 'voice' || item.type == 'video_note')
+            ? (int.tryParse(item.content.trim()) ?? 1)
+            : null,
+        replyToMessageId: replyId,
+        topicId: topicId,
+      ),
+    );
   }
 
   String _scheduledPreview(ScheduledChatMessage item) {
@@ -12643,10 +12604,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       if (file == null || !mounted) return;
 
-      setState(() {
-        _sending = true;
-        _uploadProgress = 0.05;
-      });
+      _setUploadProgress(0.05, status: 'Загрузка…');
       final prepared = await _normalizeVideoFileForUpload(file);
       if (!mounted) return;
       final durationSec = await _probeVideoDurationSec(prepared);
@@ -12826,7 +12784,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _sendContact(ChatContact contact) async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final user = contact.user;
     await _sendContactText(
       ChatContactPayload.encode(
@@ -12841,7 +12799,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String displayName,
     required String phoneE164,
   }) async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     await _sendContactText(
       ChatContactPayload.encode(
         displayName: displayName,
@@ -12865,14 +12823,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _createAndSendPoll() async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final draft = await CreateChatPollSheet.show(context);
     if (!mounted || draft == null) return;
     await _sendPollDraft(draft);
   }
 
   Future<void> _sendPollDraft(ChatPollDraft draft) async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
     if (_isScheduleMode(mode)) {
@@ -12934,7 +12892,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     required String name,
     required String mediaUrl,
   }) async {
-    if (_sending || _recording) return;
+    if (_recording) return;
     final mode = await _askSendOrSchedule();
     if (mode == null || !mounted) return;
     final resolved = ServerConfig.resolveMediaUrl(mediaUrl);
@@ -14927,7 +14885,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                 ? null
                                 : _clearAllFailedPending,
                           ),
-                        if (_sending && _uploadProgress != null)
+                        if (_uploadProgress != null)
                           _uploadTickerBar(scheme),
                         if (_pendingMediaRetry != null &&
                             !_pendingMediaByTempId
@@ -15599,8 +15557,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                 ),
                                               ),
                                             ChatVoiceMicButton(
-                                              enabled:
-                                                  !_sending && canSendNow,
+                                              enabled: canSendNow,
                                               recording: _recording,
                                               locked: _voiceLocked,
                                               tapToRecord:

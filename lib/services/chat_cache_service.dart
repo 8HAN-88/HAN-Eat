@@ -88,11 +88,27 @@ class ChatCacheService {
 
   static List<ChatConversation>? _memoryConversations;
   static final Map<int, ChatDraft> _memoryDrafts = {};
+  static final Map<int, List<ChatMessage>> _memoryThreads = {};
 
   static List<ChatConversation>? peekConversations() {
     final cached = _memoryConversations;
     if (cached == null || cached.isEmpty) return null;
     return List<ChatConversation>.from(cached);
+  }
+
+  static ChatConversation? peekConversation(int conversationId) {
+    final cached = _memoryConversations;
+    if (cached == null) return null;
+    for (final chat in cached) {
+      if (chat.id == conversationId) return chat;
+    }
+    return null;
+  }
+
+  static List<ChatMessage>? peekThread(int conversationId) {
+    final cached = _memoryThreads[conversationId];
+    if (cached == null || cached.isEmpty) return null;
+    return List<ChatMessage>.from(cached);
   }
 
   /// Instant draft peek for hub list (Telegram "Черновик: …").
@@ -185,6 +201,8 @@ class ChatCacheService {
   }
 
   static Future<List<ChatMessage>?> loadThread(int conversationId) async {
+    final memory = peekThread(conversationId);
+    if (memory != null) return memory;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString('$_threadPrefix$conversationId');
@@ -197,7 +215,9 @@ class ChatCacheService {
           out.add(ChatMessage.fromJson(item));
         } catch (_) {}
       }
-      return out.isEmpty ? null : out;
+      if (out.isEmpty) return null;
+      _memoryThreads[conversationId] = List<ChatMessage>.from(out);
+      return out;
     } catch (_) {
       return null;
     }
@@ -207,6 +227,14 @@ class ChatCacheService {
     int conversationId,
     List<ChatMessage> messages,
   ) async {
+    if (messages.isEmpty) {
+      _memoryThreads.remove(conversationId);
+    } else {
+      final slice = messages.length > 80
+          ? messages.sublist(messages.length - 80)
+          : messages;
+      _memoryThreads[conversationId] = List<ChatMessage>.from(slice);
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = '$_threadPrefix$conversationId';
@@ -214,9 +242,7 @@ class ChatCacheService {
         await prefs.remove(key);
         return;
       }
-      final slice = messages.length > 80
-          ? messages.sublist(messages.length - 80)
-          : messages;
+      final slice = _memoryThreads[conversationId] ?? messages;
       final encoded = jsonEncode(
         slice.map(_messageToJson).toList(growable: false),
       );
