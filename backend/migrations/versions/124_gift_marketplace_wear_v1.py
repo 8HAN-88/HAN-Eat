@@ -1,7 +1,7 @@
 """Collectible gift resale marketplace + wear on profile.
 
 Revision ID: 124_gift_marketplace_wear_v1
-Revises: 123_anonymous_star_gifts_v1
+Revises: 125_paid_refunds_suggested_v1
 """
 
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "124_gift_marketplace_wear_v1"
-down_revision = "123_anonymous_star_gifts_v1"
+down_revision = "125_paid_refunds_suggested_v1"
 branch_labels = None
 depends_on = None
 
