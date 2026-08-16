@@ -390,20 +390,62 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
     }
   }
 
+  void _markPhoneBookContact(int userId, {required bool isContact}) {
+    _phoneBook = [
+      for (final entry in _phoneBook)
+        if (entry.matchedUser?.id == userId)
+          PhoneBookContact(
+            displayName: entry.displayName,
+            phoneE164: entry.phoneE164,
+            matchedUser: entry.matchedUser!.copyWith(isContact: isContact),
+          )
+        else
+          entry,
+    ];
+  }
+
   Future<void> _addHanEatContact(int userId) async {
     if (_contactActionUserId != null) return;
-    setState(() => _contactActionUserId = userId);
-    try {
-      await ChatService.addContact(userId);
-      if (!mounted) return;
-      AppHaptics.light();
+    ChatUserSearchItem? matched;
+    for (final entry in _phoneBook) {
+      if (entry.matchedUser?.id == userId) {
+        matched = entry.matchedUser;
+        break;
+      }
+    }
+    final previousItems = List<ChatContact>.from(_items);
+    final previousPhone = List<PhoneBookContact>.from(_phoneBook);
+    setState(() {
+      _contactActionUserId = userId;
+      _markPhoneBookContact(userId, isContact: true);
+      if (matched != null && !_items.any((c) => c.user.id == userId)) {
+        _items = [
+          ChatContact(
+            id: -userId,
+            user: matched.brief,
+            createdAt: DateTime.now(),
+          ),
+          ..._items,
+        ];
+      }
+    });
+    AppHaptics.light();
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Добавлено в контакты')),
       );
-      await _fetchContacts();
-      await _fetchPhoneContacts();
+    }
+    try {
+      await ChatService.addContact(userId);
+      if (!mounted) return;
+      unawaited(_fetchContacts());
+      unawaited(_fetchPhoneContacts());
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _items = previousItems;
+        _phoneBook = previousPhone;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -432,16 +474,24 @@ class _ChatsHubContactsTabState extends State<ChatsHubContactsTab> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() => _contactActionUserId = userId);
+    final previousItems = List<ChatContact>.from(_items);
+    final previousPhone = List<PhoneBookContact>.from(_phoneBook);
+    setState(() {
+      _contactActionUserId = userId;
+      _items = [for (final c in _items) if (c.user.id != userId) c];
+      _markPhoneBookContact(userId, isContact: false);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Контакт удалён')),
+    );
     try {
       await ChatService.removeContact(userId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Контакт удалён')),
-      );
-      await _fetchContacts();
     } catch (e) {
       if (!mounted) return;
+      setState(() {
+        _items = previousItems;
+        _phoneBook = previousPhone;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

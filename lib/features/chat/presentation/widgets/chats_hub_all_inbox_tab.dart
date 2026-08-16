@@ -1250,6 +1250,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       );
       if (ok != true || !mounted) return;
     }
+    setState(() => _joinRequestsInbox = []);
     final result = await reviewJoinRequestsBulk<ChatJoinRequestsInboxItem>(
       items: items,
       review: (item) => ChatService.reviewGroupJoinRequest(
@@ -1259,8 +1260,9 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       ),
     );
     if (!mounted) return;
-    await _load(silent: true);
-    if (!mounted) return;
+    if (result.failedItems.isNotEmpty) {
+      setState(() => _joinRequestsInbox = result.failedItems);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
