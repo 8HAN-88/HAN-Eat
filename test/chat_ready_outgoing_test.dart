@@ -35,4 +35,30 @@ void main() {
     expect(again.topicId, 4);
     expect(again.anonymous, isTrue);
   });
+
+  test('ready outgoing json keeps video and voice fields', () {
+    final video = ChatReadyOutgoing.fromJson(
+      ChatReadyOutgoing(
+        tempId: -3,
+        clientMessageId: 'vid-1',
+        type: 'video',
+        content: 'cap',
+        mediaUrl: 'https://cdn.example/v.mp4',
+      ).toJson(),
+    );
+    expect(video.type, 'video');
+    expect(video.mediaUrl, 'https://cdn.example/v.mp4');
+    final voice = ChatReadyOutgoing.fromJson(
+      ChatReadyOutgoing(
+        tempId: -4,
+        clientMessageId: 'voice-1',
+        type: 'voice',
+        content: '3',
+        mediaUrl: 'https://cdn.example/a.m4a',
+        durationSec: 3,
+      ).toJson(),
+    );
+    expect(voice.type, 'voice');
+    expect(voice.durationSec, 3);
+  });
 }

@@ -3211,6 +3211,7 @@ class ChatService:
             price_stars=src_price,
             media_group_id=getattr(src, "media_group_id", None),
             has_spoiler=bool(getattr(src, "has_spoiler", False)),
+            notify=False,
         )
         if as_copy:
             msg.forward_from_user_id = None

@@ -2197,6 +2197,7 @@ async def send_message(
 async def forward_message(
     conversation_id: int,
     body: ForwardMessageRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
@@ -2279,6 +2280,15 @@ async def forward_message(
         {"type": "message.new", "message": _message_payload(msg)},
     )
     _notify_chat_inbox(db, conversation_id, current_user.id)
+    background_tasks.add_task(
+        _run_after_live_message_sent,
+        conversation_id=conversation_id,
+        sender_id=current_user.id,
+        message_id=msg.id,
+        content=msg.content or "",
+        msg_type=msg.type or "text",
+        silent=False,
+    )
 
     conv = (
         db.query(Conversation)

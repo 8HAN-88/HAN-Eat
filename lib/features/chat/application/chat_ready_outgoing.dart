@@ -156,6 +156,28 @@ Future<ChatMessage> sendChatReadyOutgoing({
         topicId: pending.topicId,
         anonymous: pending.anonymous,
       );
+    case 'video':
+      return ChatService.sendVideo(
+        conversationId: conversationId,
+        mediaUrl: pending.mediaUrl ?? '',
+        caption: pending.content,
+        replyToMessageId: pending.replyToMessageId,
+        clientMessageId: pending.clientMessageId,
+        silent: pending.silent,
+        topicId: pending.topicId,
+        anonymous: pending.anonymous,
+      );
+    case 'voice':
+      return ChatService.sendVoice(
+        conversationId: conversationId,
+        mediaUrl: pending.mediaUrl ?? '',
+        durationSec: pending.durationSec ?? 1,
+        replyToMessageId: pending.replyToMessageId,
+        clientMessageId: pending.clientMessageId,
+        silent: pending.silent,
+        topicId: pending.topicId,
+        anonymous: pending.anonymous,
+      );
     case 'video_note':
       return ChatService.sendVideoNote(
         conversationId: conversationId,
