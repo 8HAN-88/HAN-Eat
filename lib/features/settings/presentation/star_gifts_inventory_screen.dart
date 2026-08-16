@@ -55,6 +55,37 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     }
   }
 
+  Future<void> _saveOrder() async {
+    if (_gifts.length < 2) return;
+    try {
+      final next = await PaidFeaturesService.reorderGifts(
+        _gifts.map((g) => g.id).toList(),
+      );
+      if (!mounted) return;
+      setState(() => _gifts = next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Порядок подарков сохранён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  void _moveGift(int index, int delta) {
+    final next = index + delta;
+    if (next < 0 || next >= _gifts.length) return;
+    setState(() {
+      final copy = [..._gifts];
+      final item = copy.removeAt(index);
+      copy.insert(next, item);
+      _gifts = copy;
+    });
+    unawaited(_saveOrder());
+  }
+
   Future<void> _convert(UserStarGift gift) async {
     if (_busy.contains(gift.id) || !gift.canConvert) return;
     final ok = await showDialog<bool>(
@@ -346,6 +377,7 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                   listedStars: g.listedStars,
                   listedAt: g.listedAt,
                   isWorn: false,
+                  displayOrder: g.displayOrder,
                   sellerName: g.sellerName,
                   sellerUsername: g.sellerUsername,
                   upgradeStars: g.upgradeStars,
@@ -375,6 +407,12 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
       appBar: AppBar(
         title: const Text('Мои подарки'),
         actions: [
+          if (_gifts.length > 1)
+            IconButton(
+              tooltip: 'Сохранить порядок',
+              onPressed: _saveOrder,
+              icon: const Icon(Icons.swap_vert_rounded),
+            ),
           IconButton(
             tooltip: 'Витрина',
             onPressed: () => context.push(StarGiftsMarketplaceRoute.path),
@@ -493,6 +531,24 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
                             ),
                         ],
                       ),
+                    ),
+                    Column(
+                      children: [
+                        IconButton(
+                          tooltip: 'Выше',
+                          onPressed: index == 0
+                              ? null
+                              : () => _moveGift(index, -1),
+                          icon: const Icon(Icons.keyboard_arrow_up_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Ниже',
+                          onPressed: index == _gifts.length - 1
+                              ? null
+                              : () => _moveGift(index, 1),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        ),
+                      ],
                     ),
                     if (gift.isDisplayed)
                       Icon(Icons.visibility_rounded, color: scheme.primary)

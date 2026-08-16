@@ -143,62 +143,111 @@ class _CreatorRevenueScreenState extends State<CreatorRevenueScreen> {
   Future<void> _requestPayout() async {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    final payload = await showDialog<({int amount, String? note})>(
+    final tonController = TextEditingController();
+    var method = 'rub';
+    try {
+      final saved = await PaidFeaturesService.getTonAddress();
+      if (saved != null) tonController.text = saved;
+    } catch (_) {}
+    if (!mounted) {
+      amountController.dispose();
+      noteController.dispose();
+      tonController.dispose();
+      return;
+    }
+    final payload = await showDialog<({int amount, String? note, String method, String? ton})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Запросить выплату'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Сумма в звёздах',
-                hintText: 'например, 500',
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Запросить выплату'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Сумма в звёздах',
+                  hintText: 'например, 500',
+                ),
               ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    selected: method == 'rub',
+                    label: const Text('RUB'),
+                    onSelected: (_) => setLocal(() => method = 'rub'),
+                  ),
+                  ChoiceChip(
+                    selected: method == 'ton',
+                    label: const Text('TON'),
+                    onSelected: (_) => setLocal(() => method = 'ton'),
+                  ),
+                ],
+              ),
+              if (method == 'ton') ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: tonController,
+                  decoration: const InputDecoration(
+                    labelText: 'TON-адрес',
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              TextField(
+                controller: noteController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Комментарий (опционально)',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Отмена'),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: noteController,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Комментарий (опционально)',
-              ),
+            FilledButton(
+              onPressed: () {
+                final amount = int.tryParse(amountController.text.trim()) ?? 0;
+                if (amount <= 0) return;
+                Navigator.pop(
+                  ctx,
+                  (
+                    amount: amount,
+                    note: noteController.text.trim().isEmpty
+                        ? null
+                        : noteController.text.trim(),
+                    method: method,
+                    ton: tonController.text.trim().isEmpty
+                        ? null
+                        : tonController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('Отправить'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final amount = int.tryParse(amountController.text.trim()) ?? 0;
-              if (amount <= 0) return;
-              Navigator.pop(
-                ctx,
-                (
-                  amount: amount,
-                  note: noteController.text.trim().isEmpty
-                      ? null
-                      : noteController.text.trim(),
-                ),
-              );
-            },
-            child: const Text('Отправить'),
-          ),
-        ],
       ),
     );
     amountController.dispose();
     noteController.dispose();
+    tonController.dispose();
     if (payload == null) return;
     try {
+      if (payload.method == 'ton' && payload.ton != null) {
+        await PaidFeaturesService.setTonAddress(payload.ton);
+      }
       final payout = await PaidFeaturesService.requestCreatorPayout(
         amountStars: payload.amount,
         note: payload.note,
+        method: payload.method,
+        tonAddress: payload.ton,
       );
       if (!mounted) return;
       setState(() => _payoutsFuture = _loadPayouts());

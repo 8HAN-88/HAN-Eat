@@ -65,6 +65,7 @@ def db_session():
                 last_seen_privacy VARCHAR(20) DEFAULT 'everybody',
                 show_read_receipts BOOLEAN DEFAULT 1,
                 paid_message_stars INTEGER DEFAULT 0,
+                ton_address VARCHAR(128),
                 trust_score FLOAT DEFAULT 0.5,
                 account_warnings INTEGER DEFAULT 0,
                 shadow_moderation BOOLEAN DEFAULT 0,
@@ -312,6 +313,23 @@ def db_session():
                 expires_at DATETIME,
                 paid_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE paid_group_subscriptions (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                conversation_id INTEGER NOT NULL,
+                amount_stars INTEGER NOT NULL,
+                status VARCHAR(24) NOT NULL DEFAULT 'active',
+                started_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                expires_at DATETIME,
+                auto_renew BOOLEAN NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at DATETIME,
+                UNIQUE(user_id, conversation_id)
             )
             """
         )

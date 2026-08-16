@@ -76,6 +76,33 @@ class PaidChannelSubscription(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class PaidGroupSubscription(Base):
+    __tablename__ = "paid_group_subscriptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "conversation_id", name="uq_paid_group_user_conversation"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount_stars = Column(Integer, nullable=False)
+    status = Column(String(24), nullable=False, default="active", index=True)
+    started_at = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    auto_renew = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class PostBoost(Base):
     __tablename__ = "post_boosts"
 
@@ -101,6 +128,8 @@ class CreatorPayoutRequest(Base):
     amount_rub = Column(Numeric(12, 2), nullable=False)
     status = Column(String(24), nullable=False, default="pending", index=True)  # pending|approved|rejected|paid
     note = Column(String(512), nullable=True)
+    method = Column(String(16), nullable=False, default="rub")  # rub | ton
+    ton_address = Column(String(128), nullable=True)
     reviewed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     reviewed_at = Column(DateTime, nullable=True)
     paid_at = Column(DateTime, nullable=True)
@@ -202,6 +231,7 @@ class UserStarGift(Base):
     listed_at = Column(DateTime, nullable=True)
     # Telegram "Wear": one collectible shown next to the owner's name.
     is_worn = Column(Boolean, nullable=False, default=False, index=True)
+    display_order = Column(Integer, nullable=False, default=0)
     converted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 

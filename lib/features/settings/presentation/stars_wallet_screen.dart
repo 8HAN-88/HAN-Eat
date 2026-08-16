@@ -329,6 +329,10 @@ class _StarsWalletScreenState extends State<StarsWalletScreen>
         return 'Платная реакция получена';
       case 'payout':
         return 'Выплата';
+      case 'group_subscription':
+        return 'Подписка на группу';
+      case 'group_subscription_received':
+        return 'Подписка на вашу группу';
       default:
         return type;
     }

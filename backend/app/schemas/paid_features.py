@@ -116,6 +116,8 @@ class StarTransactionResponse(BaseModel):
 class CreatorPayoutRequestCreate(BaseModel):
     amount_stars: int = Field(gt=0, le=10_000_000)
     note: Optional[str] = Field(default=None, max_length=512)
+    method: str = Field(default="rub")
+    ton_address: Optional[str] = Field(default=None, max_length=128)
 
 
 class CreatorPayoutReviewRequest(BaseModel):
@@ -130,6 +132,8 @@ class CreatorPayoutResponse(BaseModel):
     amount_rub: float
     status: str
     note: Optional[str] = None
+    method: str = "rub"
+    ton_address: Optional[str] = None
     reviewed_by_user_id: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     paid_at: Optional[datetime] = None
@@ -210,6 +214,7 @@ class UserStarGiftItem(BaseModel):
     listed_stars: Optional[int] = None
     listed_at: Optional[datetime] = None
     is_worn: bool = False
+    display_order: int = 0
     converted_at: Optional[datetime] = None
     created_at: datetime
     upgrade_stars: int = 0
@@ -376,4 +381,35 @@ class ChannelSuggestedPostItem(BaseModel):
 
 class ChannelSuggestedPostsResponse(BaseModel):
     posts: List[ChannelSuggestedPostItem]
+
+
+class SetTonAddressRequest(BaseModel):
+    ton_address: Optional[str] = Field(default=None, max_length=128)
+
+
+class TonAddressResponse(BaseModel):
+    ton_address: Optional[str] = None
+
+
+class ReorderUserStarGiftsRequest(BaseModel):
+    gift_ids: List[int]
+
+
+class SetGroupPaidSettingsRequest(BaseModel):
+    is_paid: bool
+    monthly_price_stars: int = Field(default=0, ge=0, le=100000)
+
+
+class GroupPaidSettingsResponse(BaseModel):
+    conversation_id: int
+    is_paid: bool
+    monthly_price_stars: int
+    subscribed: bool = False
+    expires_at: Optional[datetime] = None
+    auto_renew: bool = False
+
+
+class SubscribeGroupRequest(BaseModel):
+    months: int = Field(default=1, ge=1, le=12)
+    auto_renew: bool = False
 

@@ -1622,7 +1622,7 @@ class ChatService:
     ) -> int:
         if not self._can_invite_group_users(conversation_id, actor_id):
             raise ValueError("forbidden")
-        self._get_group_or_error(conversation_id)
+        conv = self._get_group_or_error(conversation_id)
         added = 0
         for uid in user_ids:
             if uid == actor_id:
@@ -1634,6 +1634,9 @@ class ChatService:
             self._get_user_or_404(uid)
             if self.has_block_between(actor_id, uid):
                 raise ValueError("user_blocked")
+            from app.services.paid_features_service import PaidFeaturesService
+
+            PaidFeaturesService(self.db).assert_can_join_paid_group(uid, conv)
             self.db.add(
                 ConversationMember(conversation_id=conversation_id, user_id=uid)
             )
@@ -1807,6 +1810,9 @@ class ChatService:
             raise ValueError("group_member_banned")
         if self._is_member(conv.id, user_id):
             return {"status": "joined", "conversation": conv}
+        from app.services.paid_features_service import PaidFeaturesService
+
+        PaidFeaturesService(self.db).assert_can_join_paid_group(user_id, conv)
         if conv.join_by_request_enabled:
             request = (
                 self.db.query(GroupJoinRequest)
@@ -1983,6 +1989,11 @@ class ChatService:
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         if approve:
+            from app.services.paid_features_service import PaidFeaturesService
+
+            PaidFeaturesService(self.db).assert_can_join_paid_group(
+                row.user_id, conv
+            )
             if not self._is_member(conversation_id, row.user_id):
                 self.db.add(
                     ConversationMember(

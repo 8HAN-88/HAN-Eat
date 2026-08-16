@@ -1527,6 +1527,9 @@ async def join_group_by_invite(
         db.commit()
         conv = result["conversation"]
         db.refresh(conv)
+    except HTTPException:
+        db.rollback()
+        raise
     except ValueError as e:
         db.rollback()
         code = str(e)
@@ -4542,6 +4545,9 @@ async def add_group_members(
             conversation_id, current_user.id, body.user_ids
         )
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except ValueError as e:
         db.rollback()
         code = str(e)
@@ -4920,6 +4926,9 @@ async def review_group_join_request(
             + ".",
         )
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except ValueError as e:
         db.rollback()
         code = str(e)

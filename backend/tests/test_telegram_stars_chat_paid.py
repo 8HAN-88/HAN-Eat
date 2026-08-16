@@ -23,6 +23,7 @@ from app.models.notification import Notification
 from app.models.paid_features import (
     CreatorBalance,
     CreatorPayoutRequest,
+    PaidGroupSubscription,
     PaidMessageException,
     PaidMessageUnlock,
     StarGift,
@@ -31,7 +32,10 @@ from app.models.paid_features import (
 )
 from app.models.user import User
 from app.models.user_block import UserBlock
-from app.services.paid_features_service import PaidFeaturesService
+from app.services.paid_features_service import (
+    PaidFeaturesService,
+    expire_due_group_subscriptions,
+)
 
 
 @pytest.fixture()
@@ -55,6 +59,7 @@ def db_session():
         UserStarGift.__table__,
         Notification.__table__,
         CreatorPayoutRequest.__table__,
+        PaidGroupSubscription.__table__,
         UserBlock.__table__,
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
@@ -931,3 +936,117 @@ def test_refund_collectible_gift_rejected(db_session):
         svc.refund_star_gift(1, held.id)
     assert exc.value.status_code == 400
     assert svc.star_balance(1) == 70
+
+
+def test_subscribe_paid_group_and_join_gate(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 200)
+    conv = Conversation(type="group", title="Club", created_by_user_id=1)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1, is_admin=True))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.set_group_paid_settings(1, conv.id, is_paid=True, monthly_price_stars=40)
+    db_session.commit()
+    assert conv.is_paid is True
+    assert conv.monthly_price_stars == 40
+
+    with pytest.raises(HTTPException) as gate:
+        svc.assert_can_join_paid_group(2, conv)
+    assert gate.value.status_code == 402
+
+    sub = svc.subscribe_group(2, conv.id, months=1)
+    db_session.commit()
+    assert sub.status == "active"
+    assert svc.star_balance(2) == 160
+    assert svc.creator_balance(1).available_stars == 40
+    svc.assert_can_join_paid_group(2, conv)
+    members = (
+        db_session.query(ConversationMember)
+        .filter(ConversationMember.conversation_id == conv.id)
+        .all()
+    )
+    assert {m.user_id for m in members} == {1, 2}
+
+
+def test_ton_payout_requires_address(db_session):
+    _user(db_session, 1)
+    _credit(db_session, 1, 100)
+    svc = PaidFeaturesService(db_session)
+    bal = svc.creator_balance(1)
+    bal.available_stars = 80
+    db_session.commit()
+
+    with pytest.raises(HTTPException) as missing:
+        svc.request_creator_payout(1, 20, method="ton")
+    assert missing.value.status_code == 400
+
+    svc.set_ton_address(1, "UQDTonWalletAddressExample0001")
+    payout = svc.request_creator_payout(1, 20, method="ton")
+    db_session.commit()
+    assert payout.method == "ton"
+    assert payout.ton_address.startswith("UQ")
+    assert svc.star_balance(1) == 80
+
+
+def test_reorder_user_star_gifts(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 1, 200)
+    db_session.add(
+        StarGift(slug="a", title="A", emoji="🌹", stars=10, is_active=True, sort_order=1)
+    )
+    db_session.add(
+        StarGift(slug="b", title="B", emoji="🎈", stars=10, is_active=True, sort_order=2)
+    )
+    conv = Conversation(type="direct", direct_user_low_id=1, direct_user_high_id=2)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1))
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=2))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    gifts = svc.list_star_gifts()
+    svc.send_star_gift(1, gift_id=gifts[0].id, conversation_id=conv.id)
+    svc.send_star_gift(1, gift_id=gifts[1].id, conversation_id=conv.id)
+    db_session.commit()
+    held = svc.list_user_star_gifts(2)
+    assert len(held) == 2
+    reversed_ids = [held[1].id, held[0].id]
+    ordered = svc.reorder_user_star_gifts(2, reversed_ids)
+    db_session.commit()
+    assert [g.id for g in ordered] == reversed_ids
+
+
+def test_expire_due_group_subscriptions_kicks_member(db_session):
+    _user(db_session, 1)
+    _user(db_session, 2)
+    _credit(db_session, 2, 80)
+    conv = Conversation(type="group", title="Club", created_by_user_id=1)
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add(ConversationMember(conversation_id=conv.id, user_id=1, is_admin=True))
+    db_session.commit()
+
+    svc = PaidFeaturesService(db_session)
+    svc.set_group_paid_settings(1, conv.id, is_paid=True, monthly_price_stars=20)
+    svc.subscribe_group(2, conv.id, months=1)
+    db_session.commit()
+    sub = svc.get_group_subscription(2, conv.id)
+    sub.expires_at = datetime.utcnow() - timedelta(minutes=1)
+    db_session.commit()
+
+    changed = expire_due_group_subscriptions(db_session)
+    db_session.commit()
+    assert changed == 1
+    assert svc.get_group_subscription(2, conv.id).status == "expired"
+    members = (
+        db_session.query(ConversationMember)
+        .filter(ConversationMember.conversation_id == conv.id)
+        .all()
+    )
+    assert {m.user_id for m in members} == {1}
