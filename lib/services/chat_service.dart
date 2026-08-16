@@ -2101,6 +2101,8 @@ class ChatService {
       effectId: msg.effectId,
       topicId: msg.topicId,
       hasSpoiler: msg.hasSpoiler,
+      isAnonymous: msg.isAnonymous,
+      clientMessageId: msg.clientMessageId,
     );
   }
 

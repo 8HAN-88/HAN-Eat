@@ -69,6 +69,7 @@ import '../application/anonymous_admin.dart';
 import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
 import '../application/chat_search_date.dart';
+import '../application/chat_message_integrate.dart';
 import '../application/chat_private_reply.dart';
 import '../application/chat_realtime_signals.dart';
 import '../application/chat_voice_playback_coordinator.dart';
@@ -285,6 +286,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Map<int, String> _failedTextAutoRetryReason = {};
   final List<_PendingTextSend> _textOutboundQueue = [];
   bool _textDrainActive = false;
+  final Set<String> _inFlightTextClientIds = {};
   final List<_PendingMediaSend> _mediaOutboundQueue = [];
   bool _mediaDrainActive = false;
   _PendingMediaSend? _pendingMediaRetry;
@@ -857,7 +859,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (mounted) setState(() {});
     }
     if (_textOutboundQueue.isNotEmpty) {
-      unawaited(_drainTextOutboundQueue());
+      _kickTextOutbound();
     }
     if (_mediaOutboundQueue.isNotEmpty) {
       unawaited(_drainMediaOutboundQueue());
@@ -1741,6 +1743,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       isPaid: pending.isPaid,
       priceStars: pending.priceStars,
       purchased: true,
+      clientMessageId: pending.clientMessageId,
     );
     setState(() {
       _pendingMediaByTempId[pending.tempId] = pending;
@@ -2045,8 +2048,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   void _startPolling() {
     _pollTimer?.cancel();
     final interval = _sseConnected
-        ? const Duration(seconds: 25)
-        : const Duration(seconds: 4);
+        ? const Duration(seconds: 8)
+        : const Duration(seconds: 3);
     if (!_appPaused) {
       unawaited(_pollNew());
     }
@@ -2787,6 +2790,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   bool _isDuplicateMessage(ChatMessage a, ChatMessage b) {
     if (a.id > 0 && b.id > 0 && a.id == b.id) return true;
+    final ca = (a.clientMessageId ?? '').trim();
+    final cb = (b.clientMessageId ?? '').trim();
+    if (ca.isNotEmpty && cb.isNotEmpty) return ca == cb;
     if (!a.isMine || !b.isMine) return false;
     if (a.conversationId != b.conversationId) return false;
     if (a.type != b.type) return false;
@@ -3184,45 +3190,43 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return false;
     }
     if (removeTempId != null) {
-      _messages.removeWhere((m) => m.id == removeTempId);
       final removedFailedText = _failedTextSends.remove(removeTempId) != null;
       _removePendingMediaByTempId(removeTempId);
       if (removedFailedText) {
         unawaited(_persistFailedTextSends());
       }
     }
-    _messages.removeWhere(
-      (m) =>
-          m.id < 0 &&
-          m.isMine &&
-          !_failedTextSends.containsKey(m.id) &&
-          !_pendingMediaByTempId.containsKey(m.id),
+    final result = integrateIncomingChatMessage(
+      messages: _messages,
+      incoming: msg,
+      removeTempId: removeTempId,
+      isDuplicate: _isDuplicateMessage,
+      merge: (prev, incoming) {
+        var next = incoming;
+        // WS fanout redacts paid media_url for everyone; don't wipe own media.
+        if (prev.isMine &&
+            prev.isPaid &&
+            (next.mediaUrl == null || next.mediaUrl!.isEmpty) &&
+            prev.mediaUrl != null &&
+            prev.mediaUrl!.isNotEmpty) {
+          next = next.copyWith(
+            mediaUrl: prev.mediaUrl,
+            purchased: true,
+            isPaid: prev.isPaid,
+            priceStars: prev.priceStars,
+          );
+        }
+        if ((next.clientMessageId == null || next.clientMessageId!.isEmpty) &&
+            (prev.clientMessageId ?? '').isNotEmpty) {
+          next = next.copyWith(clientMessageId: prev.clientMessageId);
+        }
+        return applyIncomingChatMessagePreservingLocalPoll(prev, next);
+      },
     );
-    final idx = _messages.indexWhere(
-      (m) => (m.id > 0 && m.id == msg.id) || _isDuplicateMessage(m, msg),
-    );
-    if (idx >= 0) {
-      final prev = _messages[idx];
-      var incoming = msg;
-      // WS fanout redacts paid media_url for everyone; don't wipe own media.
-      if (prev.isMine &&
-          prev.isPaid &&
-          (incoming.mediaUrl == null || incoming.mediaUrl!.isEmpty) &&
-          prev.mediaUrl != null &&
-          prev.mediaUrl!.isNotEmpty) {
-        incoming = incoming.copyWith(
-          mediaUrl: prev.mediaUrl,
-          purchased: true,
-          isPaid: prev.isPaid,
-          priceStars: prev.priceStars,
-        );
-      }
-      _messages[idx] =
-          applyIncomingChatMessagePreservingLocalPoll(prev, incoming);
-      return false;
-    }
-    _messages.add(msg);
-    return true;
+    _messages
+      ..clear()
+      ..addAll(result.messages);
+    return result.added;
   }
 
   String _pinnedPreview(ChatMessage msg) {
@@ -3335,7 +3339,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     pending.lastRetryAfterSeconds = null;
     pending.lastLimitedAt = null;
     setState(() => _textOutboundQueue.add(pending));
-    unawaited(_drainTextOutboundQueue());
+    _kickTextOutbound();
   }
 
   void _discardFailedText(int tempId) {
@@ -10454,17 +10458,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             for (final m in _messages)
               if (m.type == 'poll' && (m.poll?.isClosed ?? false)) m.id: m,
           };
+          final keepTempIds = <int>{
+            ..._failedTextSends.keys,
+            ..._pendingMediaByTempId.keys,
+            ..._textOutboundQueue.map((p) => p.tempId),
+          };
+          final previous = List<ChatMessage>.from(_messages);
+          final merged = result.items.map((incoming) {
+            final local = closedPolls[incoming.id];
+            if (local == null) return incoming;
+            return applyIncomingChatMessagePreservingLocalPoll(
+              local,
+              incoming,
+            );
+          }).toList();
           _messages
             ..clear()
             ..addAll(
-              result.items.map((incoming) {
-                final local = closedPolls[incoming.id];
-                if (local == null) return incoming;
-                return applyIncomingChatMessagePreservingLocalPoll(
-                  local,
-                  incoming,
-                );
-              }),
+              preserveOptimisticOutgoing(
+                previous: previous,
+                serverItems: merged,
+                keepTempIds: keepTempIds,
+                isDuplicate: _isDuplicateMessage,
+              ),
             );
           _setPinnedMessages(
             result.pinnedMessages.isNotEmpty
@@ -10515,7 +10531,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pollNew() async {
-    if (_loading || _appPaused || _pollInFlight) return;
+    if (_appPaused || _pollInFlight) return;
     final lastId = _lastServerMessageId();
     if (lastId == null) return;
     _pollInFlight = true;
@@ -10658,19 +10674,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     });
   }
 
-  Future<void> _drainTextOutboundQueue() async {
-    if (_textDrainActive) return;
-    _textDrainActive = true;
+  bool get _serializeTextSends =>
+      _conversation.isGroup &&
+      (_slowModeEnabledForCurrentUser || _isAnyCooldownActive);
+
+  void _kickTextOutbound() {
+    if (_serializeTextSends) {
+      unawaited(_drainTextOutboundQueue());
+      return;
+    }
+    for (final pending in List<_PendingTextSend>.from(_textOutboundQueue)) {
+      if (_inFlightTextClientIds.contains(pending.clientMessageId)) continue;
+      unawaited(_flushOneTextSend(pending));
+    }
+  }
+
+  Future<void> _flushOneTextSend(_PendingTextSend pending) async {
+    if (_inFlightTextClientIds.contains(pending.clientMessageId)) return;
+    _inFlightTextClientIds.add(pending.clientMessageId);
     try {
-      while (_textOutboundQueue.isNotEmpty && mounted) {
-        // Group slow-mode / flood only — never stall DMs on leftover timers.
-        if (_conversation.isGroup && _isAnyCooldownActive) {
-          final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
-          await Future<void>.delayed(Duration(seconds: wait));
-          if (!mounted) return;
-          continue;
-        }
-        final pending = _textOutboundQueue.first;
+      while (mounted) {
         try {
           final msg = await ChatService.sendText(
             conversationId: widget.conversationId,
@@ -10684,7 +10707,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             anonymous: pending.anonymous,
           );
           if (!mounted) return;
-          _textOutboundQueue.removeAt(0);
+          _textOutboundQueue.removeWhere(
+            (p) => p.clientMessageId == pending.clientMessageId,
+          );
           setState(() {
             _clearFailedTextAutoRetry(pending.tempId);
             _integrateMessage(msg, removeTempId: pending.tempId);
@@ -10706,11 +10731,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               conversationId: widget.conversationId,
             ),
           );
+          return;
         } catch (e) {
           if (!mounted) return;
           final err = e.toString().toLowerCase();
           if (err.contains('group_slow_mode')) {
-            _textOutboundQueue.removeAt(0);
+            _textOutboundQueue.removeWhere(
+              (p) => p.clientMessageId == pending.clientMessageId,
+            );
             final retryAfter =
                 e is ApiClientException ? e.retryAfterSeconds : null;
             pending.lastRetryAfterSeconds =
@@ -10736,10 +10764,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               );
             }
             showErrorSnackBar(context, e);
-            continue;
+            return;
           }
           if (err.contains('group_flood_limited')) {
-            _textOutboundQueue.removeAt(0);
+            _textOutboundQueue.removeWhere(
+              (p) => p.clientMessageId == pending.clientMessageId,
+            );
             final retryAfter =
                 e is ApiClientException ? e.retryAfterSeconds : null;
             pending.lastRetryAfterSeconds = (retryAfter ?? 60).clamp(1, 3600);
@@ -10771,16 +10801,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               );
             }
-            continue;
+            return;
           }
           pending.attempts++;
-          // Quick retries only (Telegram-like). Long sleeps made sends feel delayed.
           if (_isRetryableSendError(e) && pending.attempts < 3) {
             final waitMs = pending.attempts == 1 ? 200 : 500;
             await Future<void>.delayed(Duration(milliseconds: waitMs));
             continue;
           }
-          _textOutboundQueue.removeAt(0);
+          _textOutboundQueue.removeWhere(
+            (p) => p.clientMessageId == pending.clientMessageId,
+          );
           pending.lastRetryAfterSeconds = null;
           pending.lastLimitedAt = null;
           setState(() {
@@ -10792,7 +10823,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           } else {
             showErrorSnackBar(context, e);
           }
+          return;
         }
+      }
+    } finally {
+      _inFlightTextClientIds.remove(pending.clientMessageId);
+    }
+  }
+
+  Future<void> _drainTextOutboundQueue() async {
+    if (_textDrainActive) return;
+    _textDrainActive = true;
+    try {
+      while (_textOutboundQueue.isNotEmpty && mounted) {
+        // Group slow-mode / flood only — never stall DMs on leftover timers.
+        if (_conversation.isGroup && _isAnyCooldownActive) {
+          final wait = _activeCooldownRemainingSeconds.clamp(1, 120);
+          await Future<void>.delayed(Duration(seconds: wait));
+          if (!mounted) return;
+          continue;
+        }
+        final pending = _textOutboundQueue.first;
+        await _flushOneTextSend(pending);
       }
     } finally {
       _textDrainActive = false;
@@ -10909,11 +10961,6 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         return;
       }
     }
-    if (_messages.any(
-      (m) => m.isMine && m.id < 0 && m.content == text,
-    )) {
-      return;
-    }
     // Client cooldown only for real group slow-mode / flood — not DMs.
     if (_editingMessage == null &&
         _conversation.isGroup &&
@@ -10926,13 +10973,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }
       return;
     }
-    if (_failedTextSends.values.any((p) => p.text == text)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Сообщение не отправлено — нажмите «Повторить» ниже'),
-          ),
-        );
+    final failedSame = _failedTextSends.values
+        .where((p) => p.text == text)
+        .toList(growable: false);
+    if (failedSame.isNotEmpty) {
+      _controller.clear();
+      for (final pending in failedSame) {
+        unawaited(_retryFailedText(pending.tempId));
       }
       return;
     }
@@ -10999,6 +11046,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       disableWebpagePreview: disablePreview,
       topicId: topicId,
       isAnonymous: sendAnon,
+      clientMessageId: clientMessageId,
     );
     final pending = _PendingTextSend(
       text: sendText,
@@ -11020,7 +11068,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _textOutboundQueue.add(pending);
     });
     _scrollToBottom();
-    unawaited(_drainTextOutboundQueue());
+    unawaited(_kickTextOutbound());
   }
 
   Future<DateTime?> _pickScheduleDateTime({DateTime? initialDateTime}) async {

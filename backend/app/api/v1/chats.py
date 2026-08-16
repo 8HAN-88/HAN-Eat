@@ -191,6 +191,7 @@ def _message_payload(
         "reactions": reactions or [],
         "effect_id": getattr(msg, "effect_id", None),
         "topic_id": getattr(msg, "topic_id", None),
+        "client_message_id": getattr(msg, "client_message_id", None),
     }
     kb_update = getattr(msg, "_reply_keyboard_update", None)
     if isinstance(kb_update, dict):
@@ -696,6 +697,7 @@ def _message_response(
         effect_id=getattr(msg, "effect_id", None),
         topic_id=getattr(msg, "topic_id", None),
         is_anonymous=anon_flag,
+        client_message_id=getattr(msg, "client_message_id", None),
     )
 
 

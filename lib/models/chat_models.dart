@@ -303,6 +303,7 @@ class ChatMessage {
     this.effectId,
     this.topicId,
     this.isAnonymous = false,
+    this.clientMessageId,
   });
 
   final int id;
@@ -343,6 +344,8 @@ class ChatMessage {
   final int? topicId;
   /// Group admin posted as the group (Telegram anonymous admin).
   final bool isAnonymous;
+  /// Client idempotency key — matches optimistic bubble to the server row.
+  final String? clientMessageId;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -435,6 +438,10 @@ class ChatMessage {
           : (json['effect_id'] as String?)?.trim(),
       topicId: json['topic_id'] != null ? _parseInt(json['topic_id']) : null,
       isAnonymous: json['is_anonymous'] as bool? ?? false,
+      clientMessageId: (json['client_message_id'] as String?)?.trim().isEmpty ==
+              true
+          ? null
+          : (json['client_message_id'] as String?)?.trim(),
     );
   }
 
@@ -457,6 +464,7 @@ class ChatMessage {
     String? effectId,
     int? topicId,
     bool? isAnonymous,
+    String? clientMessageId,
   }) {
     return ChatMessage(
       id: id,
@@ -490,6 +498,7 @@ class ChatMessage {
       effectId: effectId ?? this.effectId,
       topicId: topicId ?? this.topicId,
       isAnonymous: isAnonymous ?? this.isAnonymous,
+      clientMessageId: clientMessageId ?? this.clientMessageId,
     );
   }
 }
