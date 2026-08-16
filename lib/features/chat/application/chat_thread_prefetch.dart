@@ -51,11 +51,11 @@ class ChatThreadPrefetch {
     if (cached != null) {
       return Future<ChatThreadPrefetchPage?>.value(cached);
     }
-    final future = _fetch(conversationId);
-    _inFlight[conversationId] = future;
-    return future.whenComplete(() {
+    final future = _fetch(conversationId).whenComplete(() {
       _inFlight.remove(conversationId);
     });
+    _inFlight[conversationId] = future;
+    return future;
   }
 
   static ChatThreadPrefetchPage? takeFresh(int conversationId) {
