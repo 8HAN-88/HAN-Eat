@@ -838,6 +838,15 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
         .toList(growable: false);
   }
 
+  void _warmTopThreads(Iterable<ChatConversation> chats, {int limit = 5}) {
+    var n = 0;
+    for (final chat in chats) {
+      if (chat.id <= 0) continue;
+      unawaited(ChatThreadPrefetch.warm(chat.id));
+      if (++n >= limit) break;
+    }
+  }
+
   Future<void> _load({bool silent = false}) async {
     final seq = ++_loadSeq;
     if (!silent) {
@@ -856,6 +865,7 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
           _error = null;
           _servingFromCache = true;
         });
+        _warmTopThreads(cachedRest);
       } else {
         setState(() {
           _loading = true;
@@ -1034,6 +1044,10 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       _loading = false;
       _servingFromCache = false;
     });
+    _warmTopThreads([
+      for (final entry in entries)
+        if (entry is ChatInboxEntry) entry.chat,
+    ]);
 
     unawaited(
       _loadRecommendedChannels(

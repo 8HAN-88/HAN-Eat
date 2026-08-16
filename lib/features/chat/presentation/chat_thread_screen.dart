@@ -68,6 +68,7 @@ import '../application/chat_auto_delete.dart';
 import '../application/anonymous_admin.dart';
 import '../application/chat_mentions.dart';
 import '../application/chat_reaction_jumps.dart';
+import '../application/chat_reaction_optimistic.dart';
 import '../application/chat_search_date.dart';
 import '../application/chat_message_integrate.dart';
 import '../application/chat_open_direct.dart';
@@ -5327,7 +5328,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _toggleReaction(ChatMessage msg, String emoji) async {
-    final existing = msg.reactions.where((r) => r.reactedByMe);
+    if (msg.id <= 0) return;
+    final previous = msg.reactions;
+    final optimistic = optimisticToggleReactions(
+      current: previous,
+      emoji: emoji,
+    );
+    _applyReactions(msg.id, optimistic);
+    final existing = previous.where((r) => r.reactedByMe);
     final myEmoji = existing.isEmpty ? null : existing.first.emoji;
     try {
       final reactions = myEmoji == emoji
@@ -5344,6 +5352,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _applyReactions(msg.id, reactions);
     } catch (e) {
       if (!mounted) return;
+      _applyReactions(msg.id, previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -5362,6 +5371,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       confirmLabel: 'Отправить',
     );
     if (!ok || !mounted) return;
+    final previous = msg.reactions;
+    _applyReactions(
+      msg.id,
+      optimisticToggleReactions(current: previous, emoji: '⭐'),
+    );
     setState(() => _sendingPaidReaction = true);
     final idem = 'flutter:react:${msg.id}:${const Uuid().v4()}';
     try {
@@ -5376,6 +5390,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       _applyReactions(msg.id, reactions);
     } catch (e) {
       if (!mounted) return;
+      _applyReactions(msg.id, previous);
       await showStarsRequiredSnack(context, e);
     } finally {
       if (mounted) setState(() => _sendingPaidReaction = false);
@@ -7746,31 +7761,32 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     setState(() => _sendingStarGift = true);
     final idem =
         'flutter:gift:${widget.conversationId}:${gift.id}:${const Uuid().v4()}';
-    try {
-      await PaidFeaturesService.sendGift(
-        giftId: gift.id,
-        conversationId: widget.conversationId,
-        message: draft.message,
-        hideName: draft.hideName,
-        idempotencyKey: idem,
-      );
-      if (!mounted) return;
-      unawaited(_pollNew());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            draft.hideName
-                ? 'Подарок ${gift.emoji} отправлен анонимно'
-                : 'Подарок ${gift.emoji} отправлен',
-          ),
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(() async {
+      try {
+        await PaidFeaturesService.sendGift(
+          giftId: gift.id,
+          conversationId: widget.conversationId,
+          message: draft.message,
+          hideName: draft.hideName,
+          idempotencyKey: idem,
+        );
+        if (mounted) unawaited(_pollNew());
+      } catch (e) {
+        if (mounted) await showStarsRequiredSnack(context, e);
+      } finally {
+        if (mounted) setState(() => _sendingStarGift = false);
+      }
+    }());
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          draft.hideName
+              ? 'Подарок ${gift.emoji} отправлен анонимно'
+              : 'Подарок ${gift.emoji} отправлен',
         ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      await showStarsRequiredSnack(context, e);
-    } finally {
-      if (mounted) setState(() => _sendingStarGift = false);
-    }
+      ),
+    );
   }
 
   int? _userGiftIdFromMessage(ChatMessage msg) {
@@ -13064,8 +13080,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _votePoll(ChatMessage msg, int optionIndex) async {
-    if (_votingPollIds.contains(msg.id)) return;
-    setState(() => _votingPollIds.add(msg.id));
+    if (msg.id <= 0 || _votingPollIds.contains(msg.id)) return;
+    final previous = msg;
+    final optimistic = msg.copyWith(
+      content: applyOptimisticPollVoteToContent(msg.content, optionIndex),
+    );
+    setState(() {
+      _votingPollIds.add(msg.id);
+      final i = _messages.indexWhere((m) => m.id == msg.id);
+      if (i >= 0) _messages[i] = optimistic;
+    });
     try {
       final updated = await ChatService.votePoll(
         conversationId: widget.conversationId,
@@ -13080,6 +13104,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
     } catch (e) {
       if (mounted) {
+        setState(() {
+          final i = _messages.indexWhere((m) => m.id == previous.id);
+          if (i >= 0) _messages[i] = previous;
+        });
         showErrorSnackBar(context, e, fallback: 'Не удалось проголосовать');
       }
     } finally {
