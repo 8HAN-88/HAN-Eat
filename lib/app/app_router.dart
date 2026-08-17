@@ -11,6 +11,10 @@ import '../features/navigation/presentation/root_shell.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/profile_auth_screen.dart';
 import '../features/settings/presentation/subscription_screen.dart';
+import '../features/subscription/presentation/flex_subscription_screen.dart';
+import '../features/subscription/presentation/flex_constructor_screen.dart';
+import '../features/subscription/presentation/flex_shop_screen.dart';
+import '../features/subscription/presentation/admin_flex_features_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/star_gifts_inventory_screen.dart';
 import '../features/settings/presentation/star_gifts_marketplace_screen.dart';
@@ -449,6 +453,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             child: SubscriptionScreen(initialProduct: product),
           );
         },
+      ),
+      GoRoute(
+        path: FlexSubscriptionRoute.path,
+        name: FlexSubscriptionRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: FlexSubscriptionScreen()),
+      ),
+      GoRoute(
+        path: FlexConstructorRoute.path,
+        name: FlexConstructorRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: FlexConstructorScreen()),
+      ),
+      GoRoute(
+        path: FlexShopRoute.path,
+        name: FlexShopRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: FlexShopScreen()),
+      ),
+      GoRoute(
+        path: AdminFlexFeaturesRoute.path,
+        name: AdminFlexFeaturesRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: AdminFlexFeaturesScreen()),
       ),
       GoRoute(
         path: StarsWalletRoute.path,
@@ -1416,6 +1444,26 @@ class SubscriptionRoute {
 
   static String pathWithProduct(String product) =>
       '$path?product=${Uri.encodeComponent(product)}';
+}
+
+class FlexSubscriptionRoute {
+  static const path = '/subscription/flex';
+  static const name = 'flex_subscription';
+}
+
+class FlexConstructorRoute {
+  static const path = '/subscription/flex/constructor';
+  static const name = 'flex_constructor';
+}
+
+class FlexShopRoute {
+  static const path = '/subscription/flex/shop';
+  static const name = 'flex_shop';
+}
+
+class AdminFlexFeaturesRoute {
+  static const path = '/admin/flex-features';
+  static const name = 'admin_flex_features';
 }
 
 class StarsWalletRoute {

@@ -181,11 +181,35 @@ class SubscriptionService:
 
     def has_ai_access(self, user_id: int) -> bool:
         tier, active = self.effective_tier(user_id)
-        return active and tier_includes_ai(tier)
+        if active and tier_includes_ai(tier):
+            return True
+        return self._flex_has_any(user_id, "ai")
 
     def has_creator_access(self, user_id: int) -> bool:
         tier, active = self.effective_tier(user_id)
-        return active and tier_includes_creator(tier)
+        if active and tier_includes_creator(tier):
+            return True
+        return self._flex_has_any(user_id, "creator")
+
+    def _flex_has_any(self, user_id: int, kind: str) -> bool:
+        try:
+            from app.services.flex_subscription_service import (
+                AI_FEATURE_SLUGS,
+                CREATOR_FEATURE_SLUGS,
+                PRO_FEATURE_SLUGS,
+                FlexSubscriptionService,
+            )
+
+            slugs = FlexSubscriptionService(self.db).unlocked_slugs(user_id)
+        except Exception:
+            return False
+        if kind == "ai":
+            return bool(slugs & AI_FEATURE_SLUGS)
+        if kind == "creator":
+            return bool(slugs & CREATOR_FEATURE_SLUGS)
+        if kind == "pro":
+            return bool(slugs & PRO_FEATURE_SLUGS)
+        return False
 
     def get_status_dict(self, user_id: int) -> Dict[str, Any]:
         user = self.db.query(User).filter(User.id == user_id).first()
@@ -242,6 +266,32 @@ class SubscriptionService:
             }
         else:
             payload["subscription"] = None
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            flex = FlexSubscriptionService(self.db)
+            if flex.is_flex_active(user_id):
+                slugs = flex.unlocked_slugs(user_id)
+                ents = dict(payload.get("entitlements") or {})
+                for slug in slugs:
+                    ents[slug] = True
+                if slugs:
+                    ents["premium_badge"] = True
+                    ents["ad_free"] = ents.get("ad_free") or ("ad_free" in slugs)
+                payload["entitlements"] = ents
+                payload["has_ai"] = bool(payload.get("has_ai")) or self.has_ai_access(user_id)
+                payload["has_creator"] = bool(payload.get("has_creator")) or self.has_creator_access(
+                    user_id
+                )
+                me = flex.me_payload(user_id)
+                payload["flex"] = {
+                    "active": True,
+                    "level": me.get("current_level"),
+                    "price_rub": me.get("price_rub"),
+                    "expires_at": me.get("expires_at"),
+                }
+        except Exception:
+            pass
         return payload
 
     def create_subscription(

@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs
+from app.api.v1 import auth, users, posts, feed, channels, communities, media, moderation, likes, comments, saved_posts, reposts, reports, analytics, notifications, subscriptions, support, search, payments, recipes, community_upload, creator, system, legal, chats, link_preview, realtime, paid_features, bots, bot_chats, donations, stories, miniapps, stickers, calls, gifs, flex_subscription
 import app.services.user_realtime_hooks  # noqa: F401 — регистрация after_commit hooks
 from app.middleware.monitoring import PerformanceMonitoringMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -88,6 +88,7 @@ app.include_router(stickers.router, prefix="/api/v1", tags=["Stickers"])
 app.include_router(gifs.router, prefix="/api/v1", tags=["GIFs"])
 app.include_router(link_preview.router, prefix="/api/v1", tags=["Link Preview"])
 app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["Subscriptions"])
+app.include_router(flex_subscription.router, prefix="/api/v1", tags=["Flex subscription"])
 app.include_router(support.router, prefix="/api/v1/support", tags=["Support"])
 app.include_router(search.router, prefix="/api/v1", tags=["Search"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
