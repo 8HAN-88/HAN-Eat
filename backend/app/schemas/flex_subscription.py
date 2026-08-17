@@ -38,14 +38,18 @@ class FlexFeatureItem(BaseModel):
 class FlexMeResponse(BaseModel):
     current_level: int
     price_rub: int
+    yearly_price_rub: int = 0
     next_level: Optional[int] = None
     next_price_rub: Optional[int] = None
     max_level: int
     base_price_rub: int
     step_price_rub: int
+    yearly_months: int = 10
+    plan: str = "monthly"
     active: bool
     auto_renew: bool = False
     pending_level: Optional[int] = None
+    pending_plan: Optional[str] = None
     pending_level_at: Optional[str] = None
     expires_at: Optional[str] = None
     next_feature: Optional[FlexFeatureItem] = None
@@ -61,6 +65,9 @@ class FlexShopResponse(BaseModel):
 class FlexPreviewResponse(BaseModel):
     level: int
     price_rub: int
+    period_price_rub: int = 0
+    plan: str = "monthly"
+    current_plan: str = "monthly"
     next_level: Optional[int] = None
     next_price_rub: Optional[int] = None
     features: List[FlexFeatureItem]
@@ -76,6 +83,7 @@ class FlexPreviewResponse(BaseModel):
     keep_expires: bool = False
     needs_payment: bool = True
     applies_at: Optional[str] = None
+    pending_plan: Optional[str] = None
 
 
 class FlexSlotIn(BaseModel):
@@ -94,6 +102,7 @@ class FlexMoveRequest(BaseModel):
 
 class FlexLevelRequest(BaseModel):
     level: int = Field(ge=1, le=10)
+    plan: str = "monthly"
 
 
 class FlexFeatureWrite(BaseModel):

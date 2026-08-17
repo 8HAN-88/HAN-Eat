@@ -354,8 +354,9 @@ class SubscriptionService:
                 user_id,
                 int(flex_level or 6),
                 payment_subscription_id=subscription.id,
-                months=1,
+                months=12 if plan == "yearly" else 1,
                 auto_renew=auto_renew,
+                plan=plan,
             )
             flex_row.expires_at = expires_at
         except Exception:
@@ -437,7 +438,19 @@ class SubscriptionService:
         provider = payment_provider or subscription.payment_provider or "tbank"
         now = datetime.utcnow()
         base = subscription.expires_at if subscription.expires_at and subscription.expires_at > now else now
-        if subscription.plan == "yearly":
+        dest_plan = subscription.plan or "monthly"
+        product_raw = (getattr(subscription, "product", None) or "flex").strip().lower()
+        if product_raw == "flex":
+            try:
+                from app.services.flex_subscription_service import FlexSubscriptionService
+
+                dest_plan = FlexSubscriptionService(self.db).effective_renewal_plan(
+                    subscription.user_id
+                )
+                subscription.plan = dest_plan
+            except Exception:
+                dest_plan = subscription.plan or "monthly"
+        if dest_plan == "yearly":
             subscription.expires_at = base + timedelta(days=365)
         else:
             subscription.expires_at = base + timedelta(days=30)
@@ -451,7 +464,6 @@ class SubscriptionService:
             subscription.receipt_url = receipt_url
 
         user = self.db.query(User).filter(User.id == subscription.user_id).first()
-        product_raw = (getattr(subscription, "product", None) or "flex").strip().lower()
         if user:
             user.subscription_type = "flex" if product_raw == "flex" else normalize_tier(product_raw)
             user.subscription_status = "active"
@@ -472,6 +484,7 @@ class SubscriptionService:
                     expires_at=subscription.expires_at,
                     auto_renew=bool(subscription.auto_renew),
                     payment_subscription_id=subscription.id,
+                    plan=subscription.plan,
                 )
             except Exception:
                 pass

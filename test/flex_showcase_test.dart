@@ -48,6 +48,9 @@ void main() {
     expect(me.priceForLevel(1), 39);
     expect(me.priceForLevel(6), 89);
     expect(me.priceForLevel(10), 129);
+    expect(me.priceForPlan(1, 'yearly'), 390);
+    expect(me.priceForPlan(6, 'yearly'), 890);
+    expect(me.periodLabel('yearly'), 'год');
   });
 
   test('featureAt and blockFor resolve ladder slots', () {

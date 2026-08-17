@@ -15,7 +15,12 @@ from app.schemas.flex_subscription import (
     FlexSaveLayoutRequest,
     FlexShopResponse,
 )
-from app.services.flex_subscription_service import FlexSubscriptionService, price_for_level
+from app.services.flex_subscription_service import (
+    FlexSubscriptionService,
+    normalize_plan,
+    price_for_level,
+    price_for_plan,
+)
 
 router = APIRouter(prefix="/flex", tags=["Flex subscription"])
 
@@ -46,7 +51,7 @@ def preview_flex(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    return _svc(db).preview_payload(current_user.id, request.level)
+    return _svc(db).preview_payload(current_user.id, request.level, request.plan)
 
 
 @router.post("/layout")
@@ -145,7 +150,11 @@ def admin_update_block(
 def flex_price(level: int):
     if level < 1 or level > 10:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Level must be 1–10")
-    return {"level": level, "price_rub": price_for_level(level)}
+    return {
+        "level": level,
+        "price_rub": price_for_level(level),
+        "yearly_price_rub": price_for_plan(level, "yearly"),
+    }
 
 
 @router.post("/checkout")
@@ -170,8 +179,9 @@ def create_flex_checkout(
             },
         )
     level = int(request.level)
+    plan = normalize_plan(request.plan)
     service = _svc(db)
-    quote = service.quote_level_change(current_user.id, level)
+    quote = service.quote_level_change(current_user.id, level, plan)
     if quote["kind"] == "same":
         service.clear_pending(current_user.id)
         db.commit()
@@ -179,16 +189,18 @@ def create_flex_checkout(
             "scheduled": False,
             "unchanged": True,
             "level": level,
+            "plan": plan,
             "kind": "same",
             "amount": 0,
             "url": None,
         }
     if quote["kind"] == "downgrade":
-        service.schedule_downgrade(current_user.id, level)
+        service.schedule_change(current_user.id, level, plan)
         db.commit()
         return {
             "scheduled": True,
             "pending_level": level,
+            "pending_plan": plan,
             "applies_at": quote.get("applies_at"),
             "kind": "downgrade",
             "amount": 0,
@@ -213,15 +225,20 @@ def create_flex_checkout(
     success_url = f"{settings.FRONTEND_URL}/subscription/success"
     fail_url = f"{settings.FRONTEND_URL}/subscription/cancel"
     monthly = int(quote["monthly_price"])
+    period_price = int(quote["period_price"])
     if quote["kind"] == "upgrade" and quote.get("keep_expires"):
+        suffix = f"{monthly} ₽/мес" if plan == "monthly" else f"{period_price} ₽/год"
         description = (
             f"Гибкая подписка · уровень {level}, доплата {int(amount)} ₽ "
-            f"(остаток периода, далее {monthly} ₽/мес)"
+            f"(остаток периода, далее {suffix})"
         )
+    elif plan == "yearly":
+        description = f"Гибкая подписка · уровень {level} ({period_price} ₽/год)"
     else:
         description = f"Гибкая подписка · уровень {level} ({monthly} ₽/мес)"
     extra = {
         "flex_level": str(level),
+        "plan": plan,
         "billing_kind": quote["kind"],
         "keep_expires": "1" if quote.get("keep_expires") else "0",
     }
@@ -234,7 +251,7 @@ def create_flex_checkout(
         result = tbank.create_payment(
             user_id=current_user.id,
             amount=amount,
-            plan="monthly",
+            plan=plan,
             description=description,
             success_url=success_url,
             fail_url=fail_url,
@@ -247,6 +264,7 @@ def create_flex_checkout(
             "provider": "sbp",
             "currency": "RUB",
             "level": level,
+            "plan": plan,
             "amount": amount,
         }
     if provider == "yookassa":
@@ -257,7 +275,7 @@ def create_flex_checkout(
             user_id=current_user.id,
             user_email=current_user.email,
             amount=amount,
-            plan="monthly",
+            plan=plan,
             description=description,
             return_url=success_url,
             product="flex",
@@ -269,6 +287,7 @@ def create_flex_checkout(
             "provider": "yookassa",
             "currency": "RUB",
             "level": level,
+            "plan": plan,
             "amount": amount,
         }
     raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments unavailable")

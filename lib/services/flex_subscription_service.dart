@@ -43,11 +43,11 @@ class FlexSubscriptionApi {
     _throw(response, 'Не удалось загрузить магазин функций');
   }
 
-  static Future<FlexPreview> preview(int level) async {
+  static Future<FlexPreview> preview(int level, {String plan = 'monthly'}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/preview'),
       headers: await _headers(),
-      body: jsonEncode({'level': level}),
+      body: jsonEncode({'level': level, 'plan': plan}),
     );
     if (response.statusCode == 200) {
       return FlexPreview.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -83,11 +83,11 @@ class FlexSubscriptionApi {
     _throw(response, 'Нельзя переместить функцию');
   }
 
-  static Future<FlexCheckoutResult> checkout(int level) async {
+  static Future<FlexCheckoutResult> checkout(int level, {String plan = 'monthly'}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/checkout'),
       headers: await _headers(),
-      body: jsonEncode({'level': level}),
+      body: jsonEncode({'level': level, 'plan': plan}),
     );
     if (response.statusCode != 200) {
       _throw(response, 'Не удалось создать оплату');
@@ -141,27 +141,33 @@ class FlexCheckoutResult {
     this.scheduled = false,
     this.unchanged = false,
     this.pendingLevel,
+    this.pendingPlan,
     this.appliesAt,
     this.kind,
     this.amount,
+    this.plan,
   });
 
   final String? url;
   final bool scheduled;
   final bool unchanged;
   final int? pendingLevel;
+  final String? pendingPlan;
   final String? appliesAt;
   final String? kind;
   final double? amount;
+  final String? plan;
 
   factory FlexCheckoutResult.fromJson(Map<String, dynamic> json) => FlexCheckoutResult(
         url: json['url'] as String?,
         scheduled: json['scheduled'] == true,
         unchanged: json['unchanged'] == true,
         pendingLevel: json['pending_level'] as int?,
+        pendingPlan: json['pending_plan'] as String?,
         appliesAt: json['applies_at'] as String?,
         kind: json['kind'] as String?,
         amount: (json['amount'] as num?)?.toDouble(),
+        plan: json['plan'] as String?,
       );
 }
 
@@ -279,6 +285,10 @@ class FlexMe {
     this.autoRenew = false,
     this.pendingLevel,
     this.pendingLevelAt,
+    this.pendingPlan,
+    this.plan = 'monthly',
+    this.yearlyMonths = 10,
+    this.yearlyPriceRub = 0,
   });
 
   final int currentLevel;
@@ -292,15 +302,30 @@ class FlexMe {
   final bool autoRenew;
   final int? pendingLevel;
   final String? pendingLevelAt;
+  final String? pendingPlan;
+  final String plan;
+  final int yearlyMonths;
+  final int yearlyPriceRub;
   final List<FlexFeature> levels;
   final List<FlexBlock> blocks;
   final int basePriceRub;
   final int stepPriceRub;
 
+  bool get isYearly => plan == 'yearly';
+
   int priceForLevel(int level) {
     final n = level < 1 ? 1 : (level > maxLevel ? maxLevel : level);
     return basePriceRub + (n - 1) * stepPriceRub;
   }
+
+  int priceForPlan(int level, [String? selected]) {
+    final monthly = priceForLevel(level);
+    if ((selected ?? plan) == 'yearly') return monthly * yearlyMonths;
+    return monthly;
+  }
+
+  String periodLabel([String? selected]) =>
+      (selected ?? plan) == 'yearly' ? 'год' : 'месяц';
 
   FlexFeature? featureAt(int level) {
     for (final item in levels) {
@@ -332,6 +357,10 @@ class FlexMe {
         autoRenew: json['auto_renew'] as bool? ?? false,
         pendingLevel: json['pending_level'] as int?,
         pendingLevelAt: json['pending_level_at'] as String?,
+        pendingPlan: json['pending_plan'] as String?,
+        plan: json['plan'] as String? ?? 'monthly',
+        yearlyMonths: json['yearly_months'] as int? ?? 10,
+        yearlyPriceRub: json['yearly_price_rub'] as int? ?? 0,
         levels: [
           for (final raw in (json['levels'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
@@ -374,6 +403,10 @@ class FlexPreview {
     this.remainingDays = 0,
     this.needsPayment = true,
     this.appliesAt,
+    this.plan = 'monthly',
+    this.currentPlan = 'monthly',
+    this.periodPriceRub = 0,
+    this.pendingPlan,
   });
 
   final int level;
@@ -391,6 +424,13 @@ class FlexPreview {
   final int remainingDays;
   final bool needsPayment;
   final String? appliesAt;
+  final String plan;
+  final String currentPlan;
+  final int periodPriceRub;
+  final String? pendingPlan;
+
+  bool get isYearly => plan == 'yearly';
+  int get displayPrice => periodPriceRub > 0 ? periodPriceRub : priceRub;
 
   factory FlexPreview.fromJson(Map<String, dynamic> json) => FlexPreview(
         level: json['level'] as int? ?? 1,
@@ -419,6 +459,10 @@ class FlexPreview {
         remainingDays: json['remaining_days'] as int? ?? 0,
         needsPayment: json['needs_payment'] as bool? ?? true,
         appliesAt: json['applies_at'] as String?,
+        plan: json['plan'] as String? ?? 'monthly',
+        currentPlan: json['current_plan'] as String? ?? 'monthly',
+        periodPriceRub: (json['period_price_rub'] as num?)?.toInt() ?? 0,
+        pendingPlan: json['pending_plan'] as String?,
       );
 }
 

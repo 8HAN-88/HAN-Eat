@@ -18,6 +18,7 @@ from app.services.flex_subscription_service import (
     FlexMoveError,
     FlexSubscriptionService,
     price_for_level,
+    price_for_plan,
 )
 from app.services.subscription_service import SubscriptionService
 
@@ -66,6 +67,9 @@ def test_price_formula():
     assert price_for_level(4) == 69
     assert price_for_level(5) == 79
     assert price_for_level(10) == 129
+    assert price_for_plan(1, "yearly") == 390
+    assert price_for_plan(6, "yearly") == 890
+    assert price_for_plan(10, "yearly") == 1290
 
 
 def test_catalog_seed_and_default_layout(db_session):
@@ -294,3 +298,93 @@ def test_expire_and_refund_deactivate_flex(db_session):
     billing.revoke_access_after_refund(sub2)
     db_session.commit()
     assert svc.is_flex_active(1) is False
+
+
+def test_yearly_new_purchase_sets_365_days(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    quote = svc.quote_level_change(1, 4, "yearly")
+    assert quote["kind"] == "new"
+    assert quote["period_price"] == 690
+    assert quote["amount_due"] == 690
+    before = datetime.utcnow()
+    svc.record_payment_subscription(
+        1,
+        level=4,
+        amount=690.0,
+        payment_provider="yookassa",
+        payment_id="pay-year-1",
+        plan="yearly",
+        auto_renew=True,
+    )
+    db_session.commit()
+    row = svc.get_flex(1)
+    assert row.plan == "yearly"
+    assert row.current_level == 4
+    assert row.expires_at is not None
+    delta = (row.expires_at - before).total_seconds() / 86400.0
+    assert 364 <= delta <= 366
+    me = svc.me_payload(1)
+    assert me["plan"] == "yearly"
+    assert me["yearly_price_rub"] == 690
+
+
+def test_monthly_to_yearly_uses_remaining_credit(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 4, plan="monthly")
+    row.expires_at = datetime.utcnow() + timedelta(days=15)
+    db_session.commit()
+    quote = svc.quote_level_change(1, 6, "yearly")
+    assert quote["kind"] == "upgrade"
+    assert quote["keep_expires"] is False
+    assert quote["credit_rub"] == 34.5
+    assert quote["amount_due"] == 855.5
+
+
+def test_yearly_level_upgrade_prorates_365(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 4, plan="yearly")
+    row.expires_at = datetime.utcnow() + timedelta(days=180)
+    db_session.commit()
+    quote = svc.quote_level_change(1, 6, "yearly")
+    assert quote["kind"] == "upgrade"
+    assert quote["keep_expires"] is True
+    assert quote["amount_due"] == 98.63
+    ends = row.expires_at
+    svc.record_payment_subscription(
+        1,
+        level=6,
+        amount=98.63,
+        payment_provider="yookassa",
+        payment_id="pay-year-up",
+        plan="yearly",
+        keep_expires=True,
+    )
+    db_session.commit()
+    fresh = svc.get_flex(1)
+    assert fresh.current_level == 6
+    assert fresh.plan == "yearly"
+    assert fresh.expires_at == ends
+
+
+def test_yearly_to_monthly_is_scheduled(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 6, plan="yearly")
+    ends = datetime.utcnow() + timedelta(days=80)
+    row.expires_at = ends
+    db_session.commit()
+    quote = svc.quote_level_change(1, 6, "monthly")
+    assert quote["kind"] == "downgrade"
+    assert quote["needs_payment"] is False
+    svc.schedule_change(1, 6, "monthly")
+    db_session.commit()
+    assert svc.current_level(1) == 6
+    assert svc.get_flex(1).plan == "yearly"
+    assert svc.effective_renewal_plan(1) == "monthly"
+    svc.apply_renewal_period(1, expires_at=ends + timedelta(days=30), auto_renew=True)
+    db_session.commit()
+    assert svc.get_flex(1).plan == "monthly"
+    assert svc.current_level(1) == 6
