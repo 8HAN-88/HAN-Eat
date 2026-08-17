@@ -352,18 +352,42 @@ async def create_checkout_session(
             detail="Product must be 'flex'",
         )
 
-    from app.services.flex_subscription_service import price_for_level
+    from app.services.flex_subscription_service import FlexSubscriptionService, price_for_level
 
     subscription_service = SubscriptionService(db)
     flex_level = int(request.flex_level or 1)
     flex_level = max(1, min(10, flex_level))
-    amount = float(price_for_level(flex_level))
+    flex_svc = FlexSubscriptionService(db)
+    quote = flex_svc.quote_level_change(current_user.id, flex_level)
+    if quote["kind"] == "same":
+        flex_svc.clear_pending(current_user.id)
+        db.commit()
+        return CheckoutSessionResponse(
+            payment_id=None,
+            url=request.success_url or f"{settings.FRONTEND_URL}/subscription/success",
+            customer_email=current_user.email,
+            provider="none",
+            currency="RUB",
+        )
+    if quote["kind"] == "downgrade":
+        flex_svc.schedule_downgrade(current_user.id, flex_level)
+        db.commit()
+        return CheckoutSessionResponse(
+            payment_id=None,
+            url=request.success_url or f"{settings.FRONTEND_URL}/subscription/success",
+            customer_email=current_user.email,
+            provider="none",
+            currency="RUB",
+        )
+    amount = float(quote["amount_due"])
     estimate = {
         "amount_due": amount,
-        "full_price": amount,
-        "is_upgrade": False,
-        "credit_rub": 0,
+        "full_price": float(quote["monthly_price"]),
+        "is_upgrade": quote["kind"] == "upgrade",
+        "credit_rub": quote.get("credit_rub") or 0,
         "from_tier": "flex",
+        "keep_expires": quote.get("keep_expires"),
+        "kind": quote["kind"],
     }
 
     try:
@@ -386,7 +410,11 @@ async def create_checkout_session(
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
-            metadata_extra = {"flex_level": str(flex_level)}
+            metadata_extra = {
+                "flex_level": str(flex_level),
+                "billing_kind": str(estimate.get("kind") or "new"),
+                "keep_expires": "1" if estimate.get("keep_expires") else "0",
+            }
             if estimate.get("is_upgrade"):
                 metadata_extra.update({
                     "is_upgrade": "1",
@@ -461,7 +489,11 @@ async def create_checkout_session(
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
-            metadata_extra = {"flex_level": str(flex_level)}
+            metadata_extra = {
+                "flex_level": str(flex_level),
+                "billing_kind": str(estimate.get("kind") or "new"),
+                "keep_expires": "1" if estimate.get("keep_expires") else "0",
+            }
             if estimate.get("is_upgrade"):
                 metadata_extra.update({
                     "is_upgrade": "1",

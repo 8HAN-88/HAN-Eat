@@ -21,6 +21,7 @@ BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
 MAX_LEVEL = 10
 MIN_LEVEL = 1
+PERIOD_DAYS = 30
 
 AI_FEATURE_SLUGS = frozenset(
     {"ai_recommendations", "ai_priority_speed", "offline_saved_posts"}
@@ -477,6 +478,145 @@ class FlexSubscriptionService:
             "needs_confirm": dest < current and bool(disabled),
         }
 
+    def remaining_days(self, user_id: int) -> float:
+        row = self.get_flex(user_id)
+        if not row or not row.expires_at:
+            return 0.0
+        return max(0.0, (row.expires_at - _now()).total_seconds() / 86400.0)
+
+    def effective_renewal_level(self, user_id: int) -> int:
+        row = self.get_flex(user_id)
+        if row and row.pending_level:
+            return max(MIN_LEVEL, min(MAX_LEVEL, int(row.pending_level)))
+        level = self.current_level(user_id)
+        if level >= MIN_LEVEL:
+            return level
+        if row and int(row.current_level or 0) >= MIN_LEVEL:
+            return max(MIN_LEVEL, min(MAX_LEVEL, int(row.current_level)))
+        return MIN_LEVEL
+
+    def quote_level_change(self, user_id: int, dest_level: int) -> dict[str, Any]:
+        dest = max(MIN_LEVEL, min(MAX_LEVEL, int(dest_level)))
+        dest_price = price_for_level(dest)
+        current = self.current_level(user_id)
+        row = self.get_flex(user_id)
+        expires = row.expires_at if row else None
+        rem = self.remaining_days(user_id) if self.is_flex_active(user_id) else 0.0
+        base = {
+            "current_level": current,
+            "dest_level": dest,
+            "monthly_price": dest_price,
+            "current_monthly_price": price_for_level(current) if current else 0,
+            "remaining_days": int(rem),
+            "expires_at": expires.isoformat() if expires else None,
+            "pending_level": int(row.pending_level) if row and row.pending_level else None,
+            "keep_expires": False,
+            "needs_payment": True,
+            "credit_rub": 0.0,
+            "amount_due": float(dest_price),
+            "kind": "new",
+        }
+        if not self.is_flex_active(user_id) or current < 1:
+            return base
+        if dest == current:
+            return {
+                **base,
+                "kind": "same",
+                "amount_due": 0.0,
+                "needs_payment": False,
+                "keep_expires": True,
+            }
+        if dest > current:
+            current_price = price_for_level(current)
+            if rem <= 0.5:
+                return {
+                    **base,
+                    "kind": "upgrade",
+                    "amount_due": float(dest_price),
+                    "keep_expires": False,
+                }
+            amount_due = max(round((dest_price - current_price) * rem / PERIOD_DAYS, 2), 1.0)
+            return {
+                **base,
+                "kind": "upgrade",
+                "amount_due": float(amount_due),
+                "credit_rub": round(current_price * rem / PERIOD_DAYS, 2),
+                "keep_expires": True,
+            }
+        return {
+            **base,
+            "kind": "downgrade",
+            "amount_due": 0.0,
+            "needs_payment": False,
+            "keep_expires": True,
+            "pending_level": dest,
+            "applies_at": expires.isoformat() if expires else None,
+        }
+
+    def schedule_downgrade(self, user_id: int, dest_level: int) -> UserFlexSubscription:
+        dest = max(MIN_LEVEL, min(MAX_LEVEL, int(dest_level)))
+        row = self.get_flex(user_id)
+        if row is None or not self.is_flex_active(user_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Нет активной подписки для понижения",
+            )
+        if dest >= int(row.current_level or 0):
+            return self.clear_pending(user_id)
+        row.pending_level = dest
+        row.pending_level_at = row.expires_at
+        self.db.flush()
+        return row
+
+    def clear_pending(self, user_id: int) -> Optional[UserFlexSubscription]:
+        row = self.get_flex(user_id)
+        if not row:
+            return None
+        row.pending_level = None
+        row.pending_level_at = None
+        self.db.flush()
+        return row
+
+    def set_auto_renew(self, user_id: int, enabled: bool) -> Optional[UserFlexSubscription]:
+        row = self.get_flex(user_id)
+        if not row:
+            return None
+        row.auto_renew = bool(enabled)
+        if not enabled:
+            row.pending_level = None
+            row.pending_level_at = None
+        self.db.flush()
+        return row
+
+    def deactivate(self, user_id: int) -> Optional[UserFlexSubscription]:
+        row = self.get_flex(user_id)
+        if not row:
+            return None
+        row.status = "inactive"
+        row.auto_renew = False
+        row.pending_level = None
+        row.pending_level_at = None
+        self.db.flush()
+        return row
+
+    def sync_user(self, user_id: int, *, auto_renew: Optional[bool] = None) -> None:
+        from app.models.user import User
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        row = self.get_flex(user_id)
+        if not user or not row:
+            return
+        active = self.is_flex_active(user_id)
+        user.subscription_type = "flex" if active else "free"
+        user.subscription_status = "active" if active else "expired"
+        user.subscription_expires_at = row.expires_at if active else None
+        if auto_renew is not None:
+            user.subscription_auto_renew = bool(auto_renew)
+            row.auto_renew = bool(auto_renew)
+        else:
+            user.subscription_auto_renew = bool(row.auto_renew)
+        self.db.flush()
+
     def activate(
         self,
         user_id: int,
@@ -485,23 +625,65 @@ class FlexSubscriptionService:
         payment_subscription_id: Optional[int] = None,
         months: int = 1,
         auto_renew: bool = False,
+        extend_period: bool = True,
     ) -> UserFlexSubscription:
         dest = max(MIN_LEVEL, min(MAX_LEVEL, int(level)))
         row = self.get_flex(user_id)
-        expires = _now() + timedelta(days=30 * max(1, months))
-        if row and row.expires_at and row.expires_at > _now() and row.status == "active":
-            expires = row.expires_at + timedelta(days=30 * max(1, months))
+        if row is None:
+            row = UserFlexSubscription(user_id=user_id)
+            self.db.add(row)
+        if extend_period or not row.expires_at or row.status != "active":
+            expires = _now() + timedelta(days=PERIOD_DAYS * max(1, months))
+            if (
+                extend_period
+                and row.expires_at
+                and row.expires_at > _now()
+                and row.status == "active"
+            ):
+                expires = row.expires_at + timedelta(days=PERIOD_DAYS * max(1, months))
+            row.expires_at = expires
+        row.current_level = dest
+        row.status = "active"
+        row.auto_renew = bool(auto_renew)
+        row.pending_level = None
+        row.pending_level_at = None
+        if payment_subscription_id:
+            row.payment_subscription_id = payment_subscription_id
+        self.db.flush()
+        return row
+
+    def apply_renewal_period(
+        self,
+        user_id: int,
+        *,
+        expires_at: datetime,
+        auto_renew: bool,
+        payment_subscription_id: Optional[int] = None,
+    ) -> UserFlexSubscription:
+        dest = self.effective_renewal_level(user_id)
+        row = self.get_flex(user_id)
         if row is None:
             row = UserFlexSubscription(user_id=user_id)
             self.db.add(row)
         row.current_level = dest
         row.status = "active"
-        row.expires_at = expires
+        row.expires_at = expires_at
         row.auto_renew = bool(auto_renew)
+        row.pending_level = None
+        row.pending_level_at = None
         if payment_subscription_id:
             row.payment_subscription_id = payment_subscription_id
         self.db.flush()
+        self.sync_user(user_id, auto_renew=auto_renew)
         return row
+
+    def _cancel_active_subscriptions(self, user_id: int) -> None:
+        for sub in self.db.query(Subscription).filter(
+            Subscription.user_id == user_id,
+            Subscription.status.in_(("active", "trial")),
+        ):
+            sub.status = "cancelled"
+            sub.cancelled_at = _now()
 
     def record_payment_subscription(
         self,
@@ -512,7 +694,20 @@ class FlexSubscriptionService:
         payment_provider: str,
         payment_id: str,
         receipt_url: Optional[str] = None,
+        auto_renew: bool = False,
+        keep_expires: Optional[bool] = None,
     ) -> Subscription:
+        quote = self.quote_level_change(user_id, level)
+        extend = True
+        if keep_expires is not None:
+            extend = not bool(keep_expires)
+        elif quote["kind"] == "upgrade" and quote.get("keep_expires"):
+            extend = False
+        self._cancel_active_subscriptions(user_id)
+        expires = _now() + timedelta(days=PERIOD_DAYS)
+        row = self.get_flex(user_id)
+        if not extend and row and row.expires_at and row.expires_at > _now():
+            expires = row.expires_at
         sub = Subscription(
             user_id=user_id,
             plan="monthly",
@@ -522,8 +717,8 @@ class FlexSubscriptionService:
             payment_provider_subscription_id=payment_id,
             amount=amount,
             currency="RUB",
-            expires_at=_now() + timedelta(days=30),
-            auto_renew=False,
+            expires_at=expires,
+            auto_renew=bool(auto_renew),
             receipt_url=receipt_url,
             refund_status="none",
         )
@@ -534,8 +729,13 @@ class FlexSubscriptionService:
             level,
             payment_subscription_id=sub.id,
             months=1,
-            auto_renew=False,
+            auto_renew=bool(auto_renew),
+            extend_period=extend,
         )
+        row = self.get_flex(user_id)
+        if row:
+            row.expires_at = expires
+        self.sync_user(user_id, auto_renew=auto_renew)
         return sub
 
     def me_payload(self, user_id: int) -> dict[str, Any]:
@@ -545,6 +745,7 @@ class FlexSubscriptionService:
         layout = self.resolved_layout(user_id)
         next_item = next((item for item in layout if int(item["level"]) == level + 1), None)
         unlocked = {item["feature"].slug for item in layout if int(item["level"]) <= level} if level else set()
+        row = self.get_flex(user_id)
         return {
             "current_level": level,
             "price_rub": price_for_level(level) if level else 0,
@@ -554,9 +755,16 @@ class FlexSubscriptionService:
             "base_price_rub": BASE_PRICE_RUB,
             "step_price_rub": LEVEL_STEP_RUB,
             "active": self.is_flex_active(user_id),
+            "auto_renew": bool(row.auto_renew) if row else False,
+            "pending_level": int(row.pending_level) if row and row.pending_level else None,
+            "pending_level_at": (
+                row.pending_level_at.isoformat()
+                if row and row.pending_level_at
+                else None
+            ),
             "expires_at": (
-                self.get_flex(user_id).expires_at.isoformat()
-                if self.get_flex(user_id) and self.get_flex(user_id).expires_at
+                row.expires_at.isoformat()
+                if row and row.expires_at
                 else None
             ),
             "next_feature": self._feature_item(next_item["feature"], next_item["level"], unlocked)
@@ -593,6 +801,7 @@ class FlexSubscriptionService:
     def preview_payload(self, user_id: int, level: int) -> dict[str, Any]:
         dest = max(MIN_LEVEL, min(MAX_LEVEL, int(level)))
         change = self.preview_level_change(user_id, dest)
+        quote = self.quote_level_change(user_id, dest)
         layout = self.resolved_layout(user_id)
         unlocked_now = {i["feature"].slug for i in layout if int(i["level"]) <= dest}
         return {
@@ -614,8 +823,15 @@ class FlexSubscriptionService:
             else None,
             "disabled": [self._feature_item(f, dest + 1, set()) for f in change["disabled"]],
             "added": [self._feature_item(f, dest, unlocked_now) for f in change["added"]],
-            "needs_confirm": change["needs_confirm"],
+            "needs_confirm": change["needs_confirm"] or quote["kind"] == "downgrade",
             "delta_rub": change["delta_rub"],
+            "kind": quote["kind"],
+            "amount_due": quote["amount_due"],
+            "credit_rub": quote["credit_rub"],
+            "remaining_days": quote["remaining_days"],
+            "keep_expires": quote["keep_expires"],
+            "needs_payment": quote["needs_payment"],
+            "applies_at": quote.get("applies_at") or quote.get("expires_at"),
         }
 
     def create_feature(self, data: dict[str, Any]) -> SubscriptionFeature:

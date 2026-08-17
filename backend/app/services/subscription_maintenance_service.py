@@ -67,6 +67,14 @@ class SubscriptionMaintenanceService:
                     user.subscription_status = "expired"
                     user.subscription_expires_at = None
                     user.subscription_auto_renew = False
+                    try:
+                        from app.services.flex_subscription_service import (
+                            FlexSubscriptionService,
+                        )
+
+                        FlexSubscriptionService(self.db).deactivate(user.id)
+                    except Exception:
+                        pass
                     expired += 1
                     continue
                 sub = svc.get_user_subscription(user.id)

@@ -342,6 +342,8 @@ def db_session():
                 status VARCHAR(20) NOT NULL DEFAULT 'inactive',
                 expires_at DATETIME,
                 auto_renew BOOLEAN NOT NULL DEFAULT 0,
+                pending_level INTEGER,
+                pending_level_at DATETIME,
                 payment_subscription_id INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

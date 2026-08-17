@@ -171,3 +171,100 @@ def test_expired_flex_has_no_features(db_session):
     db_session.commit()
     assert svc.unlocked_slugs(1) == set()
     assert svc.me_payload(1)["active"] is False
+
+
+def test_upgrade_quote_charges_remaining_days_only(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 4)
+    row.expires_at = datetime.utcnow() + timedelta(days=15)
+    db_session.commit()
+    quote = svc.quote_level_change(1, 6)
+    assert quote["kind"] == "upgrade"
+    assert quote["keep_expires"] is True
+    assert quote["amount_due"] == 10.0
+    assert quote["monthly_price"] == 89
+
+
+def test_upgrade_payment_keeps_period_end(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 4)
+    ends = datetime.utcnow() + timedelta(days=15)
+    row.expires_at = ends
+    db_session.commit()
+    svc.record_payment_subscription(
+        1,
+        level=6,
+        amount=10.0,
+        payment_provider="yookassa",
+        payment_id="pay-upgrade-1",
+        auto_renew=True,
+    )
+    db_session.commit()
+    fresh = svc.get_flex(1)
+    assert fresh.current_level == 6
+    assert fresh.expires_at == ends
+    assert "offline_saved_posts" in svc.unlocked_slugs(1)
+    user = db_session.query(User).filter(User.id == 1).first()
+    assert user.subscription_type == "flex"
+    assert user.subscription_auto_renew is True
+
+
+def test_downgrade_is_scheduled_until_renewal(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    row = svc.activate(1, 6)
+    ends = datetime.utcnow() + timedelta(days=12)
+    row.expires_at = ends
+    db_session.commit()
+    quote = svc.quote_level_change(1, 3)
+    assert quote["kind"] == "downgrade"
+    assert quote["needs_payment"] is False
+    svc.schedule_downgrade(1, 3)
+    db_session.commit()
+    assert svc.current_level(1) == 6
+    assert svc.get_flex(1).pending_level == 3
+    assert "offline_saved_posts" in svc.unlocked_slugs(1)
+    preview = svc.preview_payload(1, 3)
+    assert preview["kind"] == "downgrade"
+    assert preview["needs_payment"] is False
+
+    svc.apply_renewal_period(1, expires_at=ends + timedelta(days=30), auto_renew=True)
+    db_session.commit()
+    assert svc.current_level(1) == 3
+    assert svc.get_flex(1).pending_level is None
+    assert "offline_saved_posts" not in svc.unlocked_slugs(1)
+
+
+def test_expire_and_refund_deactivate_flex(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    sub = svc.record_payment_subscription(
+        1,
+        level=5,
+        amount=79.0,
+        payment_provider="tbank",
+        payment_id="pay-new-1",
+        auto_renew=True,
+    )
+    db_session.commit()
+    from app.services.subscription_service import SubscriptionService
+
+    billing = SubscriptionService(db_session)
+    assert billing.price_for_product("flex", user_id=1) == 79.0
+    billing.expire_subscription(sub.id)
+    assert svc.is_flex_active(1) is False
+    assert db_session.query(User).filter(User.id == 1).first().subscription_type == "free"
+
+    sub2 = svc.record_payment_subscription(
+        1,
+        level=4,
+        amount=69.0,
+        payment_provider="tbank",
+        payment_id="pay-new-2",
+    )
+    db_session.commit()
+    billing.revoke_access_after_refund(sub2)
+    db_session.commit()
+    assert svc.is_flex_active(1) is False
