@@ -38,6 +38,9 @@ CREATOR_FEATURE_SLUGS = frozenset(
 )
 PRO_FEATURE_SLUGS = frozenset({"priority_support", "pro"})
 
+# Бывшие тарифы AI / Creator / Pro → уровень гибкой подписки.
+LEGACY_TIER_LEVELS = {"ai": 6, "creator": 9, "pro": 10}
+
 DEFAULT_BLOCKS = (
     {"key": "A", "title": "Базовые функции", "min_level": 1, "max_level": 3, "sort_order": 1},
     {"key": "B", "title": "Расширенные функции", "min_level": 4, "max_level": 6, "sort_order": 2},
@@ -250,6 +253,33 @@ class FlexSubscriptionService:
         if not self.is_flex_active(user_id):
             return 0
         return int(self.get_flex(user_id).current_level or 0)
+
+    def migrate_legacy_if_needed(self, user_id: int) -> Optional[UserFlexSubscription]:
+        """Переносит активный AI/Creator/Pro на эквивалентный уровень flex."""
+        if self.is_flex_active(user_id):
+            return self.get_flex(user_id)
+        from app.models.user import User
+        from app.services.subscription_service import SubscriptionService
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+        svc = SubscriptionService(self.db)
+        tier, active = svc.effective_tier(user_id)
+        if not active:
+            return None
+        level = LEGACY_TIER_LEVELS.get(tier)
+        if not level:
+            return None
+        sub = svc.get_user_subscription(user_id)
+        expires = sub.expires_at if sub else user.subscription_expires_at
+        row = self.activate(user_id, level, months=1, auto_renew=bool(user.subscription_auto_renew))
+        if expires:
+            row.expires_at = expires
+        if sub:
+            row.payment_subscription_id = sub.id
+        self.db.flush()
+        return row
 
     def _block_map(self) -> dict[str, SubscriptionFeatureBlock]:
         return {b.key: b for b in self.list_blocks()}
@@ -510,6 +540,7 @@ class FlexSubscriptionService:
 
     def me_payload(self, user_id: int) -> dict[str, Any]:
         self.ensure_catalog()
+        self.migrate_legacy_if_needed(user_id)
         level = self.current_level(user_id)
         layout = self.resolved_layout(user_id)
         next_item = next((item for item in layout if int(item["level"]) == level + 1), None)

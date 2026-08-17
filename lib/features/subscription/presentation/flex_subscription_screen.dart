@@ -166,11 +166,6 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                           onPressed: () => context.push(FlexConstructorRoute.path),
                           child: const Text('⚙️ Настроить подписку'),
                         ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => context.push(SubscriptionRoute.path),
-                          child: const Text('Классические тарифы AI / Creator / Pro'),
-                        ),
                       ],
                     ),
                   ),

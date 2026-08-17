@@ -147,6 +147,22 @@ def test_save_custom_layout(db_session):
     assert svc.feature_level(1, features["exclusive_reactions"]) == 3
 
 
+def test_legacy_pro_migrates_to_level_10(db_session):
+    user = _user(db_session)
+    user.subscription_type = "pro"
+    user.subscription_status = "active"
+    user.subscription_expires_at = datetime.utcnow() + timedelta(days=20)
+    db_session.commit()
+    svc = FlexSubscriptionService(db_session)
+    row = svc.migrate_legacy_if_needed(1)
+    assert row is not None
+    assert row.current_level == 10
+    assert "priority_support" in svc.unlocked_slugs(1)
+    from app.services.subscription_service import SubscriptionService
+
+    assert SubscriptionService(db_session).has_creator_access(1)
+
+
 def test_expired_flex_has_no_features(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)

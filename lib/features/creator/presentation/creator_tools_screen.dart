@@ -194,7 +194,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Продвижение, отложенные посты и аналитика — с тарифом HanWe Creator или Pro.',
+              'Продвижение, отложенные посты и аналитика — откройте функции автора в подписке.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),

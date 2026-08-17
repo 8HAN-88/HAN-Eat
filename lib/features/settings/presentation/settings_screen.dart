@@ -305,12 +305,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(FlexSubscriptionRoute.path),
       ),
       _SettingsItem(
-        title: 'Классические тарифы',
-        icon: Icons.workspace_premium_outlined,
-        subtitle: 'AI, Creator и Pro — от 199 ₽/мес',
-        onTap: () => context.push(SubscriptionRoute.path),
-      ),
-      _SettingsItem(
         title: 'Звёзды и кошелёк',
         icon: Icons.stars_rounded,
         subtitle: 'Баланс, донаты, покупки контента и бусты',

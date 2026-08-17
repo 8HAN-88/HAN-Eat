@@ -20,7 +20,7 @@ typedef HanAiRequiredException = HanPlusRequiredException;
 
 class HanPlusRequiredException implements Exception {
   const HanPlusRequiredException(
-      [this.message = 'Требуется подписка HanWe AI или Pro']);
+      [this.message = 'Требуется подписка с этой функцией']);
   final String message;
   @override
   String toString() => message;
@@ -303,7 +303,7 @@ class ApiService {
             code == 'HAN_AI_REQUIRED' ||
             code == 'HAN_PRO_REQUIRED') {
           throw HanPlusRequiredException(
-            msg.isNotEmpty ? msg : 'Требуется подписка HanWe AI или Pro',
+            msg.isNotEmpty ? msg : 'Требуется подписка с этой функцией',
           );
         }
         if (code == 'LOGIN_REQUIRED') {

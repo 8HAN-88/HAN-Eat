@@ -123,13 +123,13 @@ class _SubscriptionSuccessScreenState
                 const SizedBox(height: 16),
                 const Text(
                   'Спасибо за подписку! '
-                  'Теперь вам доступны возможности выбранного тарифа.',
+                  'Теперь вам доступны функции выбранного уровня.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
                 FilledButton(
                   onPressed: () {
-                    context.go(SubscriptionRoute.path);
+                    context.go(FlexSubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),
@@ -160,7 +160,7 @@ class _SubscriptionSuccessScreenState
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
-                    context.go(SubscriptionRoute.path);
+                    context.go(FlexSubscriptionRoute.path);
                   },
                   child: const Text('Вернуться к подписке'),
                 ),

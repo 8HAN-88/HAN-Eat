@@ -92,7 +92,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Подключите HanWe Creator или Pro, чтобы видеть статистику постов и канала.',
+              'Откройте аналитику автора в гибкой подписке, чтобы видеть статистику.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),

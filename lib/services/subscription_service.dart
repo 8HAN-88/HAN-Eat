@@ -194,7 +194,10 @@ class SubscriptionStatusResponse {
   bool get hasAnyPaid => isActive && subscriptionType != 'free';
 
   bool get hasPro =>
-      isActive && (subscriptionType == 'pro' || entitlements['pro'] == true);
+      isActive &&
+      (entitlements['priority_support'] == true ||
+          entitlements['pro'] == true ||
+          subscriptionType == 'pro');
 
   bool trialEligibleFor(String product) =>
       trialEligible?[product] == true;
