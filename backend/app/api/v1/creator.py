@@ -64,8 +64,10 @@ async def creator_stats(
     db: Session = Depends(get_db),
 ):
     svc = SubscriptionService(db)
-    has_creator = svc.has_creator_access(current_user.id)
-    promoted = count_promoted_posts(db, current_user.id) if has_creator else 0
+    has_tools = svc.has_feature(current_user.id, "creator_tools")
+    has_scheduled = svc.has_feature(current_user.id, "creator_scheduled_posts")
+    has_analytics = svc.has_feature(current_user.id, "creator_analytics")
+    promoted = count_promoted_posts(db, current_user.id) if has_tools else 0
     scheduled = (
         db.query(Post.id)
         .filter(
@@ -74,11 +76,14 @@ async def creator_stats(
             Post.deleted_at.is_(None),
         )
         .count()
-        if has_creator
+        if has_scheduled
         else 0
     )
     return {
-        "has_creator": has_creator,
+        "has_creator": has_tools,
+        "has_creator_tools": has_tools,
+        "has_scheduled_posts": has_scheduled,
+        "has_analytics": has_analytics,
         "promoted_count": promoted,
         "promoted_limit": MAX_PROMOTED_POSTS,
         "scheduled_count": scheduled,
@@ -139,16 +144,11 @@ async def list_promoted_posts(
     db: Session = Depends(get_db),
 ):
     """Активные продвигаемые посты автора."""
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "creator_tools",
+        "Продвижение открывается функцией «Инструменты автора»",
+    )
     posts = (
         db.query(Post)
         .filter(
@@ -181,16 +181,11 @@ async def list_scheduled_posts(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "creator_scheduled_posts",
+        "Отложенные посты открываются одноимённой функцией подписки",
+    )
     posts = (
         db.query(Post)
         .filter(
@@ -229,16 +224,11 @@ async def reschedule_post(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется тариф Creator или Pro",
-            },
-        )
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "creator_scheduled_posts",
+        "Отложенные посты открываются одноимённой функцией подписки",
+    )
 
     post = (
         db.query(Post)

@@ -455,6 +455,7 @@ class TranslateTextResponse(BaseModel):
     text: str
     translated: str
     target_lang: str
+    priority: bool = False
 
 
 class MessageEditHistoryItem(BaseModel):

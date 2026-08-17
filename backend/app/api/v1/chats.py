@@ -3322,19 +3322,23 @@ async def list_message_edits(
 async def translate_chat_text(
     body: TranslateTextRequest,
     current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
 ):
-    del current_user  # auth required; no per-user state
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_text")
     target = (body.target_lang or "ru").strip().lower()[:8] or "ru"
     from app.services.text_translation import translate_text
+    from app.services.subscription_service import SubscriptionService
 
     translated = translate_text(text, target)
     return TranslateTextResponse(
         text=text,
         translated=translated or text,
         target_lang=target,
+        priority=SubscriptionService(db).has_feature(
+            current_user.id, "ai_priority_speed"
+        ),
     )
 
 
@@ -3386,6 +3390,16 @@ async def add_message_reaction(
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "invalid_emoji":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "exclusive_reaction":
+            from app.core.entitlements import feature_required_detail
+
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail=feature_required_detail(
+                    "exclusive_reactions",
+                    "Эта реакция открывается функцией «Эксклюзивные реакции»",
+                ),
+            )
         raise
     except HTTPException:
         db.rollback()

@@ -193,10 +193,12 @@ class SubscriptionStatusResponse {
 
   bool get hasAnyPaid => isActive && subscriptionType != 'free';
 
+  bool hasFeature(String slug) => entitlements[slug] == true;
+
   bool get hasPro =>
       isActive &&
-      (entitlements['priority_support'] == true ||
-          entitlements['pro'] == true ||
+      (hasFeature('priority_support') ||
+          hasFeature('pro') ||
           subscriptionType == 'pro');
 
   bool trialEligibleFor(String product) =>

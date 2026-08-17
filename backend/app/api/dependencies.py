@@ -135,15 +135,27 @@ async def require_han_creator_subscriber(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ) -> User:
-    if not SubscriptionService(db).has_creator_access(current_user.id):
-        from app.core.entitlements import HAN_CREATOR_REQUIRED_CODE
+    if not SubscriptionService(db).has_feature(current_user.id, "creator_tools"):
+        from app.core.entitlements import HAN_FEATURE_REQUIRED_CODE
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": HAN_CREATOR_REQUIRED_CODE,
-                "message": "Требуется подписка HanWe Creator или Pro",
+                "code": HAN_FEATURE_REQUIRED_CODE,
+                "feature": "creator_tools",
+                "message": "Нужна функция «Инструменты автора»",
             },
         )
     return current_user
+
+
+def require_flex_feature(slug: str, message: str):
+    async def _dependency(
+        current_user: User = Depends(get_current_user_required),
+        db: Session = Depends(get_db),
+    ) -> User:
+        SubscriptionService(db).require_feature(current_user.id, slug, message)
+        return current_user
+
+    return _dependency
 

@@ -91,17 +91,15 @@ class FeedService:
         dismissed_ids = self._get_recent_dismissed_post_ids(user_id)
 
         from app.services.subscription_service import SubscriptionService
-        from app.core.entitlements import subscription_entitlements
 
-        tier, tier_active = SubscriptionService(self.db).effective_tier(user_id)
-        hide_promoted = tier_active and subscription_entitlements(tier).get(
-            "ad_free", False
-        )
+        sub_svc = SubscriptionService(self.db)
+        hide_promoted = sub_svc.has_feature(user_id, "ad_free")
+        use_ai_rank = sub_svc.has_feature(user_id, "ai_recommendations")
 
         # Проверяем кэш (только если нет курсора, т.к. курсор означает новую страницу)
         cache_key = (
             f"feed:v2:{user_id}:{feed_type}:include_recipes={include_recipes}:following_only={following_only}"
-            f":sort={sort_by}:hide_promo={hide_promoted}"
+            f":sort={sort_by}:hide_promo={hide_promoted}:ai_rank={use_ai_rank}"
         )
         cached_data = None
 
@@ -145,6 +143,8 @@ class FeedService:
 
         # Ранжируем / сортируем
         sort_key = (sort_by or "personalized").lower()
+        if sort_key == "personalized" and not use_ai_rank:
+            sort_key = "recent"
         if sort_key == "recent":
             ranked_posts = self._sort_posts_recent(posts)
         elif sort_key == "popular":
@@ -2045,6 +2045,11 @@ class FeedService:
                 for following_only in (True, False):
                     for hide_promo in (True, False):
                         for sort_by in sort_modes:
+                            for ai_rank in (True, False):
+                                self.redis.delete(
+                                    f"feed:v2:{user_id}:{ft}:following_only={following_only}"
+                                    f":sort={sort_by}:hide_promo={hide_promo}:ai_rank={ai_rank}"
+                                )
                             self.redis.delete(
                                 f"feed:v2:{user_id}:{ft}:following_only={following_only}"
                                 f":sort={sort_by}:hide_promo={hide_promo}"

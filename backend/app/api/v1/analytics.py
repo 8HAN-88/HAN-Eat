@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import (
     get_current_user_required,
-    require_han_creator_subscriber,
+    require_flex_feature,
 )
 from app.core.database import get_db
 from app.models.user import User
@@ -74,7 +74,12 @@ async def log_client_event(
 async def get_post_analytics(
     post_id: int,
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(
+        require_flex_feature(
+            "creator_analytics",
+            "Аналитика открывается функцией «Аналитика автора»",
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Получить аналитику поста (автор + тариф Creator/Pro)."""
@@ -105,7 +110,12 @@ async def get_post_analytics(
 @router.get("/profile")
 async def get_profile_analytics(
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(
+        require_flex_feature(
+            "creator_analytics",
+            "Аналитика открывается функцией «Аналитика автора»",
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     """Получить аналитику профиля (тариф Creator/Pro)."""
@@ -121,7 +131,12 @@ async def get_profile_analytics(
 @router.get("/chat-channel")
 async def get_chat_channel_analytics(
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(require_han_creator_subscriber),
+    current_user: User = Depends(
+        require_flex_feature(
+            "creator_analytics",
+            "Аналитика открывается функцией «Аналитика автора»",
+        )
+    ),
     db: Session = Depends(get_db),
 ):
     analytics_service = AnalyticsService(db)

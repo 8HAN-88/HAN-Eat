@@ -10,7 +10,47 @@ HAN_PLUS_REQUIRED_CODE = "HAN_PLUS_REQUIRED"
 HAN_AI_REQUIRED_CODE = "HAN_AI_REQUIRED"
 HAN_CREATOR_REQUIRED_CODE = "HAN_CREATOR_REQUIRED"
 HAN_PRO_REQUIRED_CODE = "HAN_PRO_REQUIRED"
+HAN_FEATURE_REQUIRED_CODE = "HAN_FEATURE_REQUIRED"
 LOGIN_REQUIRED_CODE = "LOGIN_REQUIRED"
+
+CATALOG_FEATURE_SLUGS = (
+    "ad_free",
+    "exclusive_reactions",
+    "profile_decoration",
+    "ai_recommendations",
+    "ai_priority_speed",
+    "offline_saved_posts",
+    "creator_tools",
+    "creator_scheduled_posts",
+    "creator_analytics",
+    "priority_support",
+)
+
+EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})
+
+
+def feature_required_detail(slug: str, message: str) -> Dict[str, str]:
+    return {
+        "code": HAN_FEATURE_REQUIRED_CODE,
+        "feature": slug,
+        "message": message,
+    }
+
+
+def catalog_entitlements(slugs: set[str]) -> Dict[str, bool]:
+    unlocked = {str(s) for s in slugs}
+    ents = {key: key in unlocked for key in CATALOG_FEATURE_SLUGS}
+    ents["premium_badge"] = ents["profile_decoration"]
+    ents["is_plus"] = ents["ai_recommendations"] or ents["ai_priority_speed"]
+    ents["pro"] = ents["priority_support"]
+    ents["offline_recipes"] = ents["offline_saved_posts"]
+    ents["creator_promotion"] = ents["creator_tools"]
+    ents["creator_pinned"] = ents["creator_tools"]
+    ents["creator_badge"] = ents["creator_tools"]
+    ents["advanced_stats"] = ents["creator_analytics"]
+    ents["larger_uploads"] = ents["ad_free"]
+    ents["priority_reels_quality"] = ents["ai_priority_speed"]
+    return ents
 
 VALID_PRODUCTS = frozenset({"ai", "creator", "pro"})
 

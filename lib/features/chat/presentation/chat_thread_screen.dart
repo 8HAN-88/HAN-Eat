@@ -40,6 +40,7 @@ import '../../../core/platform/device_location.dart';
 import '../../../core/platform/web_page_visibility.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/subscription_status_cache.dart';
 import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_media_outbox_service.dart';
@@ -605,7 +606,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   String? _pendingMediaAutoRetryReason;
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-  static const _overlayReactions = ['👍', '👌', '❤️', '🔥', '👎', '🥰', '👏'];
+  static const _baseOverlayReactions = ['👍', '👌', '❤️', '👎', '👏'];
+  static const _exclusiveOverlayReactions = ['🔥', '🥰', '🎉'];
+
+  List<String> get _overlayReactions {
+    final unlocked =
+        SubscriptionStatusCache.peek()?.hasFeature('exclusive_reactions') == true;
+    if (unlocked) {
+      return [..._baseOverlayReactions, ..._exclusiveOverlayReactions];
+    }
+    return _baseOverlayReactions;
+  }
   static const _uiAnimDuration = Duration(milliseconds: 160);
   static const _composerIconSize = 20.0;
   static const _composerButtonSide = 40.0;

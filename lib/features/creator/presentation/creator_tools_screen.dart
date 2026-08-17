@@ -32,7 +32,7 @@ class _CreatorToolsScreenState extends State<CreatorToolsScreen> {
     });
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.hasFeature('creator_tools')) {
         if (!mounted) return;
         setState(() {
           _loading = false;

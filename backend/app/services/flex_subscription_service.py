@@ -31,13 +31,9 @@ CREATOR_FEATURE_SLUGS = frozenset(
         "creator_tools",
         "creator_scheduled_posts",
         "creator_analytics",
-        "creator_promotion",
-        "creator_badge",
-        "creator_pinned",
-        "advanced_stats",
     }
 )
-PRO_FEATURE_SLUGS = frozenset({"priority_support", "pro"})
+PRO_FEATURE_SLUGS = frozenset({"priority_support"})
 
 # Бывшие тарифы AI / Creator / Pro → уровень гибкой подписки.
 LEGACY_TIER_LEVELS = {"ai": 6, "creator": 9, "pro": 10}

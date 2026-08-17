@@ -57,7 +57,16 @@ async def get_current_user_profile(
     db: Session = Depends(get_db),
 ):
     """Получить профиль текущего пользователя."""
-    return UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+    payload = UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
+    from app.services.subscription_service import SubscriptionService
+
+    return payload.model_copy(
+        update={
+            "profile_decoration": SubscriptionService(db).has_feature(
+                current_user.id, "profile_decoration"
+            )
+        }
+    )
 
 
 @router.post("/me/phone", response_model=LinkPhoneResponse)
@@ -363,8 +372,14 @@ async def get_user_profile(
     if not current_user or current_user.id != user_id:
         stats = stats.model_copy(update={"saved_count": 0})
 
+    from app.services.subscription_service import SubscriptionService
+
+    user_payload = UserResponse.model_validate(user).model_dump()
+    user_payload["profile_decoration"] = SubscriptionService(db).has_feature(
+        user.id, "profile_decoration"
+    )
     return UserProfileResponse(
-        **UserResponse.model_validate(user).model_dump(),
+        **user_payload,
         stats=stats,
         is_following=is_following,
         is_followed_by=is_followed_by
