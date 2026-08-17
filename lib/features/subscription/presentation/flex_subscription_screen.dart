@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../app/app_router.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
@@ -19,6 +17,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   String? _error;
   bool _loading = true;
   bool _busy = false;
+  int? _hoverLevel;
+  FlexFeature? _dragging;
 
   @override
   void initState() {
@@ -47,9 +47,14 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     }
   }
 
+  void _toast(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   Future<void> _changeLevel(int level) async {
     final me = _me;
-    if (me == null || _busy) return;
+    if (me == null || _busy || _dragging != null) return;
     setState(() => _busy = true);
     try {
       final preview = await FlexSubscriptionApi.preview(level);
@@ -63,25 +68,231 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
       final result = await FlexSubscriptionApi.checkout(level);
       if (!mounted) return;
       if (result.scheduled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'С следующего периода будет уровень ${result.pendingLevel ?? level}',
-            ),
-          ),
-        );
+        _toast('С следующего периода будет уровень ${result.pendingLevel ?? level}');
         await _load();
       } else if (result.unchanged) {
         await _load();
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      _toast(userVisibleError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _drop(FlexFeature feature, int level) async {
+    if (feature.assignedLevel == level) {
+      setState(() {
+        _dragging = null;
+        _hoverLevel = null;
+      });
+      return;
+    }
+    if (!feature.canPlace(level)) {
+      _toast(feature.placementHint);
+      setState(() {
+        _dragging = null;
+        _hoverLevel = null;
+      });
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final next = await FlexSubscriptionApi.move(
+        featureId: feature.id,
+        targetLevel: level,
+      );
+      if (!mounted) return;
+      setState(() => _me = next);
+    } catch (e) {
+      _toast(userVisibleError(e));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _dragging = null;
+          _hoverLevel = null;
+        });
+      }
+    }
+  }
+
+  Color _zoneColor(int level) {
+    final dragging = _dragging;
+    final scheme = Theme.of(context).colorScheme;
+    if (dragging == null || _hoverLevel != level) {
+      return scheme.surfaceContainerHighest;
+    }
+    return dragging.canPlace(level)
+        ? const Color(0xFF2E7D32).withValues(alpha: 0.22)
+        : const Color(0xFFC62828).withValues(alpha: 0.22);
+  }
+
+  List<Widget> _ladder(FlexMe me) {
+    final children = <Widget>[
+      _HeroCard(me: me),
+      const SizedBox(height: 12),
+      Text(
+        'Нажмите уровень, чтобы сменить тариф. Удерживайте функцию, чтобы переставить её внутри блока.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+      const SizedBox(height: 16),
+    ];
+
+    final covered = <int>{};
+    final blocks = me.blocks.isNotEmpty
+        ? me.blocks
+        : const [
+            FlexBlock(key: 'A', title: 'Базовые функции', minLevel: 1, maxLevel: 3),
+            FlexBlock(key: 'B', title: 'Расширенные функции', minLevel: 4, maxLevel: 6),
+            FlexBlock(key: 'C', title: 'PRO', minLevel: 7, maxLevel: 10),
+          ];
+
+    for (final block in blocks) {
+      children.add(_BlockHeader(block: block));
+      children.add(const SizedBox(height: 8));
+      for (var level = block.minLevel; level <= block.maxLevel; level++) {
+        covered.add(level);
+        children.add(_buildRung(me, level));
+      }
+      children.add(const SizedBox(height: 8));
+    }
+
+    for (var level = 1; level <= me.maxLevel; level++) {
+      if (covered.contains(level)) continue;
+      children.add(_buildRung(me, level));
+    }
+
+    if (me.nextFeature != null) {
+      children.add(const SizedBox(height: 8));
+      children.add(
+        _NextCta(
+          feature: me.nextFeature!,
+          price: me.nextPriceRub ?? me.priceForLevel(me.nextLevel ?? (me.currentLevel + 1)),
+          onOpen: _busy
+              ? null
+              : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
+        ),
+      );
+    }
+    return children;
+  }
+
+  Widget _buildRung(FlexMe me, int level) {
+    final feature = me.featureAt(level);
+    final current = me.active && me.currentLevel == level;
+    final pending = me.pendingLevel == level;
+    final dragging = _dragging;
+    final hover = _hoverLevel == level;
+    final invalidHover = dragging != null && hover && !dragging.canPlace(level);
+    return DragTarget<FlexFeature>(
+      onWillAcceptWithDetails: (details) {
+        setState(() {
+          _hoverLevel = level;
+          _dragging = details.data;
+        });
+        return true;
+      },
+      onLeave: (_) {
+        if (_hoverLevel == level) {
+          setState(() => _hoverLevel = null);
+        }
+      },
+      onAcceptWithDetails: (details) => _drop(details.data, level),
+      builder: (context, candidate, rejected) {
+        final scheme = Theme.of(context).colorScheme;
+        final borderColor = current
+            ? scheme.primary
+            : candidate.isNotEmpty
+                ? (candidate.first?.canPlace(level) == true
+                    ? const Color(0xFF2E7D32)
+                    : const Color(0xFFC62828))
+                : scheme.outlineVariant;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: _zoneColor(level),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: borderColor,
+              width: current ? 2 : 1,
+            ),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: _busy ? null : () => _changeLevel(level),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        _LevelBadge(
+                          level: level,
+                          current: current,
+                          unlocked: me.active && me.currentLevel >= level,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${me.priceForLevel(level)} ₽ / месяц',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                        if (current)
+                          Text(
+                            'Текущий',
+                            style: TextStyle(
+                              color: scheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        else if (pending)
+                          Text(
+                            'С периода',
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        else if (me.active && me.currentLevel >= level)
+                          Icon(Icons.check_circle_rounded, color: scheme.primary, size: 20)
+                        else
+                          Icon(Icons.lock_outline_rounded, color: scheme.outline, size: 20),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (feature == null)
+                      Text(
+                        'Свободный слот',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      )
+                    else
+                      _DraggableFeature(feature: feature),
+                    if (invalidHover && dragging != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        dragging.placementHint,
+                        style: const TextStyle(
+                          color: Color(0xFFC62828),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -90,99 +301,122 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Моя подписка'),
-        actions: [
-          IconButton(
-            tooltip: 'Все возможности',
-            onPressed: () => context.push(FlexShopRoute.path),
-            icon: const Icon(Icons.auto_awesome_outlined),
-          ),
-        ],
       ),
       body: AppGradientBackground(
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(child: Text(_error!))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Повторить'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 : RefreshIndicator(
                     onRefresh: _load,
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                      children: [
-                        _HeroCard(me: me!),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Доступно',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        for (final feature in me.levels)
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(
-                              feature.unlocked
-                                  ? Icons.check_circle_rounded
-                                  : Icons.lock_outline_rounded,
-                              color: feature.unlocked
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.outline,
-                            ),
-                            title: Text(feature.title),
-                            subtitle: Text(
-                              feature.unlocked
-                                  ? 'Уровень ${feature.assignedLevel}'
-                                  : 'С уровня ${feature.assignedLevel}',
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            if (me.currentLevel > 1)
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _changeLevel(me.currentLevel - 1),
-                                  child: Text(
-                                    '← Уровень ${me.currentLevel - 1}',
-                                  ),
-                                ),
-                              ),
-                            if (me.currentLevel > 1 && me.nextLevel != null)
-                              const SizedBox(width: 10),
-                            if (me.nextLevel != null)
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _changeLevel(me.nextLevel!),
-                                  child: Text(
-                                    'Уровень ${me.nextLevel} →',
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        if (me.nextFeature != null) ...[
-                          const SizedBox(height: 16),
-                          _NextCta(
-                            feature: me.nextFeature!,
-                            price: me.nextPriceRub ?? (me.priceRub + 10),
-                            onOpen: _busy
-                                ? null
-                                : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        FilledButton.tonal(
-                          onPressed: () => context.push(FlexConstructorRoute.path),
-                          child: const Text('⚙️ Настроить подписку'),
-                        ),
-                      ],
+                      children: _ladder(me!),
                     ),
                   ),
       ),
+    );
+  }
+}
+
+class _BlockHeader extends StatelessWidget {
+  const _BlockHeader({required this.block});
+  final FlexBlock block;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+    );
+  }
+}
+
+class _LevelBadge extends StatelessWidget {
+  const _LevelBadge({
+    required this.level,
+    required this.current,
+    required this.unlocked,
+  });
+
+  final int level;
+  final bool current;
+  final bool unlocked;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = current
+        ? scheme.primary
+        : unlocked
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHigh;
+    final fg = current
+        ? scheme.onPrimary
+        : unlocked
+            ? scheme.onPrimaryContainer
+            : scheme.onSurfaceVariant;
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '$level',
+        style: TextStyle(color: fg, fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+}
+
+class _DraggableFeature extends StatelessWidget {
+  const _DraggableFeature({required this.feature});
+  final FlexFeature feature;
+
+  @override
+  Widget build(BuildContext context) {
+    final locked = feature.isFixed;
+    final tile = ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(locked ? Icons.lock_rounded : Icons.drag_indicator_rounded),
+      title: Text(feature.title),
+      subtitle: Text(
+        locked
+            ? 'Закреплена на уровне ${feature.assignedLevel}'
+            : 'Можно на ${feature.minLevel}–${feature.maxLevel}',
+      ),
+    );
+    if (locked) return tile;
+    return LongPressDraggable<FlexFeature>(
+      data: feature,
+      feedback: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(width: 280, child: tile),
+      ),
+      childWhenDragging: Opacity(opacity: 0.35, child: tile),
+      child: tile,
     );
   }
 }
@@ -204,7 +438,8 @@ class _HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final level = me.currentLevel < 1 ? 1 : me.currentLevel;
-    final price = me.currentLevel < 1 ? 39 : me.priceRub;
+    final price = me.currentLevel < 1 ? me.basePriceRub : me.priceRub;
+    final currentFeature = me.featureAt(me.currentLevel);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -229,14 +464,21 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            me.active ? '$price ₽ / месяц' : 'Соберите набор от 39 ₽ / месяц',
+            me.active ? '$price ₽ / месяц' : 'Соберите набор от ${me.basePriceRub} ₽ / месяц',
             style: Theme.of(context).textTheme.titleMedium,
           ),
+          if (currentFeature != null && me.active) ...[
+            const SizedBox(height: 4),
+            Text(
+              currentFeature.title,
+              style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.85)),
+            ),
+          ],
           if (me.active && me.expiresAt != null) ...[
             const SizedBox(height: 6),
             Text(
               me.autoRenew
-                  ? 'Продлится автоматически'
+                  ? 'Продлится автоматически до ${_shortDate(me.expiresAt!)}'
                   : 'Действует до ${_shortDate(me.expiresAt!)}',
               style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
             ),

@@ -7,6 +7,8 @@ import 'package:han_eat/features/creator/presentation/promoted_posts_screen.dart
 import 'package:han_eat/features/creator/presentation/scheduled_posts_screen.dart';
 import 'package:han_eat/features/admin/presentation/admin_refund_queue_screen.dart';
 import 'package:han_eat/features/settings/presentation/subscription_screen.dart';
+import 'package:han_eat/features/subscription/presentation/flex_constructor_screen.dart';
+import 'package:han_eat/features/subscription/presentation/flex_shop_screen.dart';
 
 /// Smoke UI: экраны ТЗ монтируются без падения (сеть в тестах не мокается).
 Widget _wrap(Widget child) => ProviderScope(
@@ -18,6 +20,16 @@ void main() {
     await tester.pumpWidget(
       _wrap(const SubscriptionScreen()),
     );
+    await tester.pump();
+    expect(find.text('Моя подписка'), findsWidgets);
+  });
+
+  testWidgets('constructor and shop routes reuse the same ladder', (tester) async {
+    await tester.pumpWidget(_wrap(const FlexConstructorScreen()));
+    await tester.pump();
+    expect(find.text('Моя подписка'), findsWidgets);
+
+    await tester.pumpWidget(_wrap(const FlexShopScreen()));
     await tester.pump();
     expect(find.text('Моя подписка'), findsWidgets);
   });

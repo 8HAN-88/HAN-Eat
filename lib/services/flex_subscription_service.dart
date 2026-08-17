@@ -204,10 +204,23 @@ class FlexFeature {
   final String? blockKey;
   final String? shopState;
 
+  bool get isFixed => !movable || featureType == 'fixed';
+
   bool canPlace(int level) {
-    if (!movable || featureType == 'fixed') return false;
+    if (isFixed) return false;
     if (level < minLevel || level > maxLevel) return false;
     return true;
+  }
+
+  /// Короткая подсказка для невалидного слота: «только 4–6».
+  String get placementRule {
+    if (isFixed) return 'закреплена на $assignedLevel';
+    return 'только $minLevel–$maxLevel';
+  }
+
+  String get placementHint {
+    if (isFixed) return 'Закреплена на уровне $assignedLevel';
+    return 'Можно поставить только на $minLevel–$maxLevel';
   }
 
   factory FlexFeature.fromJson(Map<String, dynamic> json) => FlexFeature(
@@ -257,6 +270,8 @@ class FlexMe {
     required this.active,
     required this.levels,
     required this.blocks,
+    this.basePriceRub = 39,
+    this.stepPriceRub = 10,
     this.nextLevel,
     this.nextPriceRub,
     this.nextFeature,
@@ -279,12 +294,35 @@ class FlexMe {
   final String? pendingLevelAt;
   final List<FlexFeature> levels;
   final List<FlexBlock> blocks;
+  final int basePriceRub;
+  final int stepPriceRub;
+
+  int priceForLevel(int level) {
+    final n = level < 1 ? 1 : (level > maxLevel ? maxLevel : level);
+    return basePriceRub + (n - 1) * stepPriceRub;
+  }
+
+  FlexFeature? featureAt(int level) {
+    for (final item in levels) {
+      if (item.assignedLevel == level) return item;
+    }
+    return null;
+  }
+
+  FlexBlock? blockFor(int level) {
+    for (final block in blocks) {
+      if (level >= block.minLevel && level <= block.maxLevel) return block;
+    }
+    return null;
+  }
 
   factory FlexMe.fromJson(Map<String, dynamic> json) => FlexMe(
         currentLevel: json['current_level'] as int? ?? 0,
         priceRub: json['price_rub'] as int? ?? 0,
         maxLevel: json['max_level'] as int? ?? 10,
         active: json['active'] as bool? ?? false,
+        basePriceRub: json['base_price_rub'] as int? ?? 39,
+        stepPriceRub: json['step_price_rub'] as int? ?? 10,
         nextLevel: json['next_level'] as int?,
         nextPriceRub: json['next_price_rub'] as int?,
         nextFeature: json['next_feature'] is Map<String, dynamic>
