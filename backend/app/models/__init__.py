@@ -52,6 +52,12 @@ from app.models.paid_features import (
 )
 from app.models.story import Story, StoryReaction, StoryView
 from app.models.close_friend import CloseFriend
+from app.models.flex_subscription import (
+    SubscriptionFeature,
+    SubscriptionFeatureBlock,
+    UserFlexSlot,
+    UserFlexSubscription,
+)
 from app.models.miniapp import BotMiniApp, MiniAppInstall, MiniAppLaunch
 from app.models.sticker import (
     StickerPack,
@@ -82,5 +88,9 @@ __all__ = [
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
     "StickerPackInstall", "StickerFavorite", "StickerPackPin",
     "CallSession",
+    "SubscriptionFeature",
+    "SubscriptionFeatureBlock",
+    "UserFlexSubscription",
+    "UserFlexSlot",
 ]
 

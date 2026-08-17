@@ -98,6 +98,48 @@ def process_payment_succeeded(
         )
         return
 
+    if product == "flex":
+        from app.services.flex_subscription_service import (
+            FlexSubscriptionService,
+            price_for_level,
+        )
+
+        try:
+            flex_level = int(metadata.get("flex_level") or 1)
+        except (TypeError, ValueError):
+            flex_level = 1
+        amount = float(payment_info.get("amount") or 0)
+        if amount <= 0:
+            amount = float(price_for_level(flex_level))
+        FlexSubscriptionService(db).record_payment_subscription(
+            user_id,
+            level=flex_level,
+            amount=amount,
+            payment_provider=payment_provider,
+            payment_id=payment_id,
+            receipt_url=payment_info.get("receipt_url"),
+        )
+        AnalyticsService(db).log_event(
+            event_type="flex_subscription_payment_success",
+            entity_type="user",
+            entity_id=user_id,
+            user_id=user_id,
+            metadata={
+                "product": "flex",
+                "flex_level": flex_level,
+                "amount": amount,
+                "provider": payment_provider,
+            },
+        )
+        logger.info(
+            "Activated flex level %s for user %s via %s payment %s",
+            flex_level,
+            user_id,
+            payment_provider,
+            payment_id,
+        )
+        return
+
     amount = float(payment_info.get("amount") or 0)
     if amount <= 0:
         amount = float(subscription_service.price_for_product(product, plan))

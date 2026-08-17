@@ -299,9 +299,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(SupportContactRoute.path),
       ),
       _SettingsItem(
-        title: 'Подписка',
+        title: 'Моя подписка',
+        icon: Icons.tune_rounded,
+        subtitle: 'Соберите набор функций — от 39 ₽/мес',
+        onTap: () => context.push(FlexSubscriptionRoute.path),
+      ),
+      _SettingsItem(
+        title: 'Классические тарифы',
         icon: Icons.workspace_premium_outlined,
-        subtitle: 'Тарифы AI, Creator и Pro — от 199 ₽/мес',
+        subtitle: 'AI, Creator и Pro — от 199 ₽/мес',
         onTap: () => context.push(SubscriptionRoute.path),
       ),
       _SettingsItem(
@@ -344,6 +350,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           icon: Icons.currency_exchange_outlined,
           subtitle: 'Очередь запросов на возврат (ЮKassa)',
           onTap: () => context.push(AdminRefundQueueRoute.path),
+        ),
+      if (_isAdmin)
+        _SettingsItem(
+          title: 'Функции подписки',
+          icon: Icons.extension_outlined,
+          subtitle: 'Каталог уровней, блоки и типы функций',
+          onTap: () => context.push(AdminFlexFeaturesRoute.path),
         ),
       if (_isAdminOrModerator)
         _SettingsItem(
