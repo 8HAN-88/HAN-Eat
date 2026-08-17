@@ -11,8 +11,6 @@ import '../features/navigation/presentation/root_shell.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/settings/presentation/profile_auth_screen.dart';
 import '../features/subscription/presentation/flex_subscription_screen.dart';
-import '../features/subscription/presentation/flex_constructor_screen.dart';
-import '../features/subscription/presentation/flex_shop_screen.dart';
 import '../features/subscription/presentation/admin_flex_features_screen.dart';
 import '../features/settings/presentation/stars_wallet_screen.dart';
 import '../features/settings/presentation/star_gifts_inventory_screen.dart';
@@ -459,13 +457,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: FlexConstructorRoute.path,
         name: FlexConstructorRoute.name,
         pageBuilder: (context, state) =>
-            const MaterialPage(child: FlexConstructorScreen()),
+            const MaterialPage(child: FlexSubscriptionScreen()),
       ),
       GoRoute(
         path: FlexShopRoute.path,
         name: FlexShopRoute.name,
         pageBuilder: (context, state) =>
-            const MaterialPage(child: FlexShopScreen()),
+            const MaterialPage(child: FlexSubscriptionScreen()),
       ),
       GoRoute(
         path: AdminFlexFeaturesRoute.path,
