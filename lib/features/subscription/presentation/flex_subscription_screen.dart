@@ -19,6 +19,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   bool _busy = false;
   int? _hoverLevel;
   FlexFeature? _dragging;
+  String _plan = 'monthly';
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
       if (!mounted) return;
       setState(() {
         _me = me;
+        _plan = me.plan;
         _loading = false;
       });
     } catch (e) {
@@ -57,7 +59,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     if (me == null || _busy || _dragging != null) return;
     setState(() => _busy = true);
     try {
-      final preview = await FlexSubscriptionApi.preview(level);
+      final preview = await FlexSubscriptionApi.preview(level, plan: _plan);
       if (!mounted) return;
       final ok = await showFlexPreviewSheet(
         context,
@@ -65,10 +67,14 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         confirmDowngrade: preview.needsConfirm,
       );
       if (ok != true || !mounted) return;
-      final result = await FlexSubscriptionApi.checkout(level);
+      final result = await FlexSubscriptionApi.checkout(level, plan: _plan);
       if (!mounted) return;
       if (result.scheduled) {
-        _toast('С следующего периода будет уровень ${result.pendingLevel ?? level}');
+        final pendingPlan = result.pendingPlan ?? _plan;
+        final period = pendingPlan == 'yearly' ? 'год' : 'месяц';
+        _toast(
+          'С следующего периода будет уровень ${result.pendingLevel ?? level} · $period',
+        );
         await _load();
       } else if (result.unchanged) {
         await _load();
@@ -132,6 +138,18 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     final children = <Widget>[
       _HeroCard(me: me),
       const SizedBox(height: 12),
+      SegmentedButton<String>(
+        segments: const [
+          ButtonSegment(value: 'monthly', label: Text('Месяц')),
+          ButtonSegment(value: 'yearly', label: Text('Год −2 мес.')),
+        ],
+        selected: {_plan},
+        onSelectionChanged: (next) {
+          if (_busy) return;
+          setState(() => _plan = next.first);
+        },
+      ),
+      const SizedBox(height: 12),
       Text(
         'Нажмите уровень, чтобы сменить тариф. Удерживайте функцию, чтобы переставить её внутри блока.',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -170,7 +188,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
       children.add(
         _NextCta(
           feature: me.nextFeature!,
-          price: me.nextPriceRub ?? me.priceForLevel(me.nextLevel ?? (me.currentLevel + 1)),
+          price: me.priceForPlan(me.nextLevel ?? (me.currentLevel + 1), _plan),
+          yearly: _plan == 'yearly',
           onOpen: _busy
               ? null
               : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
@@ -241,7 +260,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '${me.priceForLevel(level)} ₽ / месяц',
+                            '${me.priceForPlan(level, _plan)} ₽ / ${me.periodLabel(_plan)}',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ),
@@ -438,7 +457,9 @@ class _HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final level = me.currentLevel < 1 ? 1 : me.currentLevel;
-    final price = me.currentLevel < 1 ? me.basePriceRub : me.priceRub;
+    final price = me.currentLevel < 1
+        ? me.basePriceRub
+        : (me.isYearly ? me.priceForPlan(level) : me.priceRub);
     final currentFeature = me.featureAt(me.currentLevel);
     return Container(
       padding: const EdgeInsets.all(20),
@@ -464,7 +485,11 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            me.active ? '$price ₽ / месяц' : 'Соберите набор от ${me.basePriceRub} ₽ / месяц',
+            me.active
+                ? me.isYearly
+                    ? '$price ₽ / год · 2 месяца в подарок'
+                    : '$price ₽ / месяц'
+                : 'Соберите набор от ${me.basePriceRub} ₽ / месяц',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           if (currentFeature != null && me.active) ...[
@@ -483,10 +508,11 @@ class _HeroCard extends StatelessWidget {
               style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
             ),
           ],
-          if (me.pendingLevel != null) ...[
+          if (me.pendingLevel != null || me.pendingPlan != null) ...[
             const SizedBox(height: 6),
             Text(
-              'Со следующего периода — уровень ${me.pendingLevel}',
+              'Со следующего периода — уровень ${me.pendingLevel ?? me.currentLevel}'
+              '${me.pendingPlan == 'yearly' ? ' · год' : me.pendingPlan == 'monthly' ? ' · месяц' : ''}',
               style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
             ),
           ],
@@ -501,14 +527,18 @@ class _NextCta extends StatelessWidget {
     required this.feature,
     required this.price,
     required this.onOpen,
+    this.yearly = false,
   });
 
   final FlexFeature feature;
   final int price;
   final VoidCallback? onOpen;
+  final bool yearly;
 
   @override
   Widget build(BuildContext context) {
+    final step = yearly ? 100 : 10;
+    final unit = yearly ? 'год' : 'мес';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -520,13 +550,13 @@ class _NextCta extends StatelessWidget {
             Text('🔓 ${feature.title}'),
             const SizedBox(height: 4),
             Text(
-              'Открой всего за +10 ₽/мес. Итого $price ₽.',
+              'Открой всего за +$step ₽/$unit. Итого $price ₽.',
               style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 10),
             FilledButton(
               onPressed: onOpen,
-              child: const Text('Открыть за +10 ₽'),
+              child: Text('Открыть за +$step ₽'),
             ),
           ],
         ),

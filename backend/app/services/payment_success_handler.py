@@ -101,16 +101,18 @@ def process_payment_succeeded(
     if product == "flex":
         from app.services.flex_subscription_service import (
             FlexSubscriptionService,
-            price_for_level,
+            normalize_plan,
+            price_for_plan,
         )
 
         try:
             flex_level = int(metadata.get("flex_level") or 1)
         except (TypeError, ValueError):
             flex_level = 1
+        dest_plan = normalize_plan(metadata.get("plan") or payment_info.get("plan") or plan)
         amount = float(payment_info.get("amount") or 0)
         if amount <= 0:
-            amount = float(price_for_level(flex_level))
+            amount = float(price_for_plan(flex_level, dest_plan))
 
         rebill_id = payment_info.get("rebill_id") or payment_info.get("payment_method_id")
         if rebill_id and _should_save_rebill(payment_provider):
@@ -144,6 +146,7 @@ def process_payment_succeeded(
                     metadata={
                         "product": "flex",
                         "flex_level": flex_level,
+                        "plan": dest_plan,
                         "amount": amount,
                         "provider": payment_provider,
                     },
@@ -173,6 +176,7 @@ def process_payment_succeeded(
             receipt_url=payment_info.get("receipt_url"),
             auto_renew=auto_renew,
             keep_expires=keep_expires,
+            plan=dest_plan,
         )
         AnalyticsService(db).log_event(
             event_type="flex_subscription_payment_success",
@@ -182,6 +186,7 @@ def process_payment_succeeded(
             metadata={
                 "product": "flex",
                 "flex_level": flex_level,
+                "plan": dest_plan,
                 "amount": amount,
                 "provider": payment_provider,
                 "is_upgrade": metadata.get("is_upgrade") == "1",

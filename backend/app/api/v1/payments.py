@@ -352,13 +352,17 @@ async def create_checkout_session(
             detail="Product must be 'flex'",
         )
 
-    from app.services.flex_subscription_service import FlexSubscriptionService, price_for_level
+    from app.services.flex_subscription_service import (
+        FlexSubscriptionService,
+        normalize_plan,
+    )
 
     subscription_service = SubscriptionService(db)
     flex_level = int(request.flex_level or 1)
     flex_level = max(1, min(10, flex_level))
+    dest_plan = normalize_plan(request.plan)
     flex_svc = FlexSubscriptionService(db)
-    quote = flex_svc.quote_level_change(current_user.id, flex_level)
+    quote = flex_svc.quote_level_change(current_user.id, flex_level, dest_plan)
     if quote["kind"] == "same":
         flex_svc.clear_pending(current_user.id)
         db.commit()
@@ -370,7 +374,7 @@ async def create_checkout_session(
             currency="RUB",
         )
     if quote["kind"] == "downgrade":
-        flex_svc.schedule_downgrade(current_user.id, flex_level)
+        flex_svc.schedule_change(current_user.id, flex_level, dest_plan)
         db.commit()
         return CheckoutSessionResponse(
             payment_id=None,
@@ -382,12 +386,13 @@ async def create_checkout_session(
     amount = float(quote["amount_due"])
     estimate = {
         "amount_due": amount,
-        "full_price": float(quote["monthly_price"]),
+        "full_price": float(quote["period_price"]),
         "is_upgrade": quote["kind"] == "upgrade",
         "credit_rub": quote.get("credit_rub") or 0,
         "from_tier": "flex",
         "keep_expires": quote.get("keep_expires"),
         "kind": quote["kind"],
+        "plan": dest_plan,
     }
 
     try:
@@ -399,19 +404,24 @@ async def create_checkout_session(
                     detail="Payment service (T-Bank) is not available",
                 )
 
-            description = f"Гибкая подписка · уровень {flex_level} ({int(amount)} ₽/мес)"
+            period_label = "₽/год" if dest_plan == "yearly" else "₽/мес"
+            description = (
+                f"Гибкая подписка · уровень {flex_level} "
+                f"({int(estimate.get('full_price') or amount)} {period_label})"
+            )
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
                     f"скидка {estimate.get('credit_rub', 0):.0f} ₽"
                 )
 
-            receipt_line = tbank_service.receipt_item_description(product, request.plan)
+            receipt_line = tbank_service.receipt_item_description(product, dest_plan)
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
             metadata_extra = {
                 "flex_level": str(flex_level),
+                "plan": dest_plan,
                 "billing_kind": str(estimate.get("kind") or "new"),
                 "keep_expires": "1" if estimate.get("keep_expires") else "0",
             }
@@ -478,19 +488,24 @@ async def create_checkout_session(
                     detail="Payment service (YooKassa) is not available"
                 )
             
-            description = f"Гибкая подписка · уровень {flex_level} ({int(amount)} ₽/мес)"
+            period_label = "₽/год" if dest_plan == "yearly" else "₽/мес"
+            description = (
+                f"Гибкая подписка · уровень {flex_level} "
+                f"({int(estimate.get('full_price') or amount)} {period_label})"
+            )
             if estimate.get("is_upgrade"):
                 description += (
                     f", апгрейд с {_tier_label(estimate.get('from_tier'))}, "
                     f"скидка {estimate.get('credit_rub', 0):.0f} ₽"
                 )
 
-            receipt_line = yookassa_service.receipt_item_description(product, request.plan)
+            receipt_line = yookassa_service.receipt_item_description(product, dest_plan)
             if estimate.get("is_upgrade"):
                 receipt_line += f", апгрейд −{estimate.get('credit_rub', 0):.0f} ₽"
 
             metadata_extra = {
                 "flex_level": str(flex_level),
+                "plan": dest_plan,
                 "billing_kind": str(estimate.get("kind") or "new"),
                 "keep_expires": "1" if estimate.get("keep_expires") else "0",
             }

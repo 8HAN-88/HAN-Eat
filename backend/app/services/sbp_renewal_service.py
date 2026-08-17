@@ -113,7 +113,9 @@ class SbpRenewalService:
         if (product or "").strip().lower() == "flex":
             from app.services.flex_subscription_service import FlexSubscriptionService
 
-            flex_level = FlexSubscriptionService(self.db).effective_renewal_level(user.id)
+            flex = FlexSubscriptionService(self.db)
+            flex_level = flex.effective_renewal_level(user.id)
+            plan = flex.effective_renewal_plan(user.id)
             amount = float(
                 self.sub_svc.price_for_product(
                     "flex", plan, user_id=user.id, flex_level=flex_level
@@ -121,7 +123,12 @@ class SbpRenewalService:
             )
         else:
             amount = float(self.sub_svc.price_for_product(product, plan, user_id=user.id))
-        metadata = {"renewal": "1", "subscription_id": str(sub.id), "product": product}
+        metadata = {
+            "renewal": "1",
+            "subscription_id": str(sub.id),
+            "product": product,
+            "plan": plan,
+        }
         if flex_level:
             metadata["flex_level"] = str(flex_level)
 

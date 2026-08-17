@@ -7,6 +7,9 @@ Future<bool?> showFlexPreviewSheet(
   required FlexPreview preview,
   bool confirmDowngrade = false,
 }) {
+  final yearly = preview.isYearly;
+  final period = yearly ? 'год' : 'месяц';
+  final display = preview.displayPrice;
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -26,7 +29,14 @@ Future<bool?> showFlexPreviewSheet(
                     ),
               ),
               const SizedBox(height: 6),
-              Text('Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
+              Text('Уровень ${preview.level} · $display ₽ / $period'),
+              if (yearly) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '2 месяца в подарок · ${preview.priceRub} ₽/мес при помесячной оплате',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                ),
+              ],
               if (preview.kind == 'upgrade' && preview.amountDue > 0) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -38,8 +48,10 @@ Future<bool?> showFlexPreviewSheet(
               ],
               if (preview.kind == 'downgrade') ...[
                 const SizedBox(height: 4),
-                const Text(
-                  'Текущий уровень останется до конца оплаченного периода. Новая цена начнётся со следующего цикла.',
+                Text(
+                  yearly || preview.currentPlan == 'yearly'
+                      ? 'Текущий период сохранится. Новый план начнётся со следующего цикла.'
+                      : 'Текущий уровень останется до конца оплаченного периода. Новая цена начнётся со следующего цикла.',
                 ),
               ],
               const SizedBox(height: 12),
@@ -57,7 +69,9 @@ Future<bool?> showFlexPreviewSheet(
               if (!confirmDowngrade && preview.nextFeature != null) ...[
                 const SizedBox(height: 14),
                 Text(
-                  'Следующий уровень · ${preview.nextPriceRub} ₽ / месяц',
+                  yearly
+                      ? 'Следующий уровень · ${(preview.nextPriceRub ?? 0) * 10} ₽ / год'
+                      : 'Следующий уровень · ${preview.nextPriceRub} ₽ / месяц',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
@@ -82,7 +96,7 @@ Future<bool?> showFlexPreviewSheet(
                             : preview.kind == 'upgrade' && preview.amountDue > 0
                                 ? 'Доплатить ${preview.amountDue.round()} ₽'
                                 : preview.needsPayment
-                                    ? 'Оплатить ${preview.priceRub} ₽'
+                                    ? 'Оплатить $display ₽'
                                     : 'Продолжить',
                       ),
                     ),
