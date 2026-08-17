@@ -67,6 +67,8 @@ class UserFlexSubscription(Base):
     status = Column(String(20), nullable=False, default="inactive", index=True)
     expires_at = Column(DateTime, nullable=True, index=True)
     auto_renew = Column(Boolean, nullable=False, default=False)
+    pending_level = Column(Integer, nullable=True)
+    pending_level_at = Column(DateTime, nullable=True)
     payment_subscription_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

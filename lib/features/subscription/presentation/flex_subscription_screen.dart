@@ -60,7 +60,20 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         confirmDowngrade: preview.needsConfirm,
       );
       if (ok != true || !mounted) return;
-      await FlexSubscriptionApi.checkout(level);
+      final result = await FlexSubscriptionApi.checkout(level);
+      if (!mounted) return;
+      if (result.scheduled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'С следующего периода будет уровень ${result.pendingLevel ?? level}',
+            ),
+          ),
+        );
+        await _load();
+      } else if (result.unchanged) {
+        await _load();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,6 +187,15 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   }
 }
 
+String _shortDate(String iso) {
+  final parsed = DateTime.tryParse(iso);
+  if (parsed == null) return iso;
+  final local = parsed.toLocal();
+  final dd = local.day.toString().padLeft(2, '0');
+  final mm = local.month.toString().padLeft(2, '0');
+  return '$dd.$mm.${local.year}';
+}
+
 class _HeroCard extends StatelessWidget {
   const _HeroCard({required this.me});
   final FlexMe me;
@@ -210,6 +232,22 @@ class _HeroCard extends StatelessWidget {
             me.active ? '$price ₽ / месяц' : 'Соберите набор от 39 ₽ / месяц',
             style: Theme.of(context).textTheme.titleMedium,
           ),
+          if (me.active && me.expiresAt != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              me.autoRenew
+                  ? 'Продлится автоматически'
+                  : 'Действует до ${_shortDate(me.expiresAt!)}',
+              style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
+            ),
+          ],
+          if (me.pendingLevel != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Со следующего периода — уровень ${me.pendingLevel}',
+              style: TextStyle(color: scheme.onPrimaryContainer.withValues(alpha: 0.8)),
+            ),
+          ],
         ],
       ),
     );

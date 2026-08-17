@@ -170,7 +170,31 @@ def create_flex_checkout(
             },
         )
     level = int(request.level)
-    amount = float(price_for_level(level))
+    service = _svc(db)
+    quote = service.quote_level_change(current_user.id, level)
+    if quote["kind"] == "same":
+        service.clear_pending(current_user.id)
+        db.commit()
+        return {
+            "scheduled": False,
+            "unchanged": True,
+            "level": level,
+            "kind": "same",
+            "amount": 0,
+            "url": None,
+        }
+    if quote["kind"] == "downgrade":
+        service.schedule_downgrade(current_user.id, level)
+        db.commit()
+        return {
+            "scheduled": True,
+            "pending_level": level,
+            "applies_at": quote.get("applies_at"),
+            "kind": "downgrade",
+            "amount": 0,
+            "url": None,
+        }
+    amount = float(quote["amount_due"])
     country_code = current_user.country_code or CountryService.get_country_from_request(
         http_request
     )
@@ -188,8 +212,21 @@ def create_flex_checkout(
         )
     success_url = f"{settings.FRONTEND_URL}/subscription/success"
     fail_url = f"{settings.FRONTEND_URL}/subscription/cancel"
-    description = f"Гибкая подписка · уровень {level} ({int(amount)} ₽/мес)"
-    extra = {"flex_level": str(level)}
+    monthly = int(quote["monthly_price"])
+    if quote["kind"] == "upgrade" and quote.get("keep_expires"):
+        description = (
+            f"Гибкая подписка · уровень {level}, доплата {int(amount)} ₽ "
+            f"(остаток периода, далее {monthly} ₽/мес)"
+        )
+    else:
+        description = f"Гибкая подписка · уровень {level} ({monthly} ₽/мес)"
+    extra = {
+        "flex_level": str(level),
+        "billing_kind": quote["kind"],
+        "keep_expires": "1" if quote.get("keep_expires") else "0",
+    }
+    if quote["kind"] == "upgrade":
+        extra["is_upgrade"] = "1"
     if provider == "tbank":
         tbank = get_tbank_service()
         if not tbank.enabled:

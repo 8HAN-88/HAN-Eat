@@ -44,6 +44,9 @@ class FlexMeResponse(BaseModel):
     base_price_rub: int
     step_price_rub: int
     active: bool
+    auto_renew: bool = False
+    pending_level: Optional[int] = None
+    pending_level_at: Optional[str] = None
     expires_at: Optional[str] = None
     next_feature: Optional[FlexFeatureItem] = None
     levels: List[FlexFeatureItem]
@@ -66,6 +69,13 @@ class FlexPreviewResponse(BaseModel):
     added: List[FlexFeatureItem] = []
     needs_confirm: bool = False
     delta_rub: int = 0
+    kind: str = "new"
+    amount_due: float = 0
+    credit_rub: float = 0
+    remaining_days: int = 0
+    keep_expires: bool = False
+    needs_payment: bool = True
+    applies_at: Optional[str] = None
 
 
 class FlexSlotIn(BaseModel):

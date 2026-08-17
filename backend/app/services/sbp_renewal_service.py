@@ -107,10 +107,23 @@ class SbpRenewalService:
         if not rebill_id:
             return False
 
-        product = getattr(sub, "product", None) or "pro"
+        product = getattr(sub, "product", None) or "flex"
         plan = sub.plan or "monthly"
-        amount = float(self.sub_svc.price_for_product(product, plan))
-        metadata = {"renewal": "1", "subscription_id": str(sub.id)}
+        flex_level = None
+        if (product or "").strip().lower() == "flex":
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            flex_level = FlexSubscriptionService(self.db).effective_renewal_level(user.id)
+            amount = float(
+                self.sub_svc.price_for_product(
+                    "flex", plan, user_id=user.id, flex_level=flex_level
+                )
+            )
+        else:
+            amount = float(self.sub_svc.price_for_product(product, plan, user_id=user.id))
+        metadata = {"renewal": "1", "subscription_id": str(sub.id), "product": product}
+        if flex_level:
+            metadata["flex_level"] = str(flex_level)
 
         try:
             if provider == "tbank":

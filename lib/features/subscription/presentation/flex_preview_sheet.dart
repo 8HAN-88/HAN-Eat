@@ -27,6 +27,21 @@ Future<bool?> showFlexPreviewSheet(
               ),
               const SizedBox(height: 6),
               Text('Уровень ${preview.level} · ${preview.priceRub} ₽ / месяц'),
+              if (preview.kind == 'upgrade' && preview.amountDue > 0) ...[
+                const SizedBox(height: 4),
+                Text(
+                  preview.remainingDays > 0
+                      ? 'Сейчас к оплате ${preview.amountDue.round()} ₽ за остаток ${preview.remainingDays} дн.'
+                      : 'Сейчас к оплате ${preview.amountDue.round()} ₽',
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                ),
+              ],
+              if (preview.kind == 'downgrade') ...[
+                const SizedBox(height: 4),
+                const Text(
+                  'Текущий уровень останется до конца оплаченного периода. Новая цена начнётся со следующего цикла.',
+                ),
+              ],
               const SizedBox(height: 12),
               Text(
                 confirmDowngrade ? 'Станут недоступны' : 'Ты получишь',
@@ -62,11 +77,13 @@ Future<bool?> showFlexPreviewSheet(
                     child: FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
                       child: Text(
-                        confirmDowngrade
-                            ? 'Понизить уровень'
-                            : preview.deltaRub > 0
-                                ? 'Оплатить ${preview.priceRub} ₽'
-                                : 'Продолжить',
+                        preview.kind == 'downgrade'
+                            ? 'С следующего периода'
+                            : preview.kind == 'upgrade' && preview.amountDue > 0
+                                ? 'Доплатить ${preview.amountDue.round()} ₽'
+                                : preview.needsPayment
+                                    ? 'Оплатить ${preview.priceRub} ₽'
+                                    : 'Продолжить',
                       ),
                     ),
                   ),

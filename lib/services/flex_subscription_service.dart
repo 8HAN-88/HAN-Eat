@@ -83,7 +83,7 @@ class FlexSubscriptionApi {
     _throw(response, 'Нельзя переместить функцию');
   }
 
-  static Future<void> checkout(int level) async {
+  static Future<FlexCheckoutResult> checkout(int level) async {
     final response = await http.post(
       Uri.parse('$baseUrl/checkout'),
       headers: await _headers(),
@@ -93,7 +93,11 @@ class FlexSubscriptionApi {
       _throw(response, 'Не удалось создать оплату');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final url = data['url'] as String?;
+    final result = FlexCheckoutResult.fromJson(data);
+    if (result.scheduled || result.unchanged) {
+      return result;
+    }
+    final url = result.url;
     if (url == null || url.isEmpty) {
       throw const ApiClientException(message: 'Платёжная ссылка не получена');
     }
@@ -102,6 +106,7 @@ class FlexSubscriptionApi {
     if (!ok) {
       throw const ApiClientException(message: 'Не удалось открыть оплату');
     }
+    return result;
   }
 
   static Future<FlexAdminCatalog> adminCatalog() async {
@@ -128,6 +133,36 @@ class FlexSubscriptionApi {
       _throw(response, 'Не удалось сохранить функцию');
     }
   }
+}
+
+class FlexCheckoutResult {
+  const FlexCheckoutResult({
+    this.url,
+    this.scheduled = false,
+    this.unchanged = false,
+    this.pendingLevel,
+    this.appliesAt,
+    this.kind,
+    this.amount,
+  });
+
+  final String? url;
+  final bool scheduled;
+  final bool unchanged;
+  final int? pendingLevel;
+  final String? appliesAt;
+  final String? kind;
+  final double? amount;
+
+  factory FlexCheckoutResult.fromJson(Map<String, dynamic> json) => FlexCheckoutResult(
+        url: json['url'] as String?,
+        scheduled: json['scheduled'] == true,
+        unchanged: json['unchanged'] == true,
+        pendingLevel: json['pending_level'] as int?,
+        appliesAt: json['applies_at'] as String?,
+        kind: json['kind'] as String?,
+        amount: (json['amount'] as num?)?.toDouble(),
+      );
 }
 
 class FlexSlot {
@@ -226,6 +261,9 @@ class FlexMe {
     this.nextPriceRub,
     this.nextFeature,
     this.expiresAt,
+    this.autoRenew = false,
+    this.pendingLevel,
+    this.pendingLevelAt,
   });
 
   final int currentLevel;
@@ -236,6 +274,9 @@ class FlexMe {
   final int? nextPriceRub;
   final FlexFeature? nextFeature;
   final String? expiresAt;
+  final bool autoRenew;
+  final int? pendingLevel;
+  final String? pendingLevelAt;
   final List<FlexFeature> levels;
   final List<FlexBlock> blocks;
 
@@ -250,6 +291,9 @@ class FlexMe {
             ? FlexFeature.fromJson(json['next_feature'] as Map<String, dynamic>)
             : null,
         expiresAt: json['expires_at'] as String?,
+        autoRenew: json['auto_renew'] as bool? ?? false,
+        pendingLevel: json['pending_level'] as int?,
+        pendingLevelAt: json['pending_level_at'] as String?,
         levels: [
           for (final raw in (json['levels'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
@@ -287,6 +331,11 @@ class FlexPreview {
     this.nextFeature,
     this.disabled = const [],
     this.added = const [],
+    this.kind = 'new',
+    this.amountDue = 0,
+    this.remainingDays = 0,
+    this.needsPayment = true,
+    this.appliesAt,
   });
 
   final int level;
@@ -299,6 +348,11 @@ class FlexPreview {
   final List<FlexFeature> added;
   final bool needsConfirm;
   final int deltaRub;
+  final String kind;
+  final double amountDue;
+  final int remainingDays;
+  final bool needsPayment;
+  final String? appliesAt;
 
   factory FlexPreview.fromJson(Map<String, dynamic> json) => FlexPreview(
         level: json['level'] as int? ?? 1,
@@ -321,7 +375,12 @@ class FlexPreview {
             if (raw is Map<String, dynamic>) FlexFeature.fromJson(raw),
         ],
         needsConfirm: json['needs_confirm'] as bool? ?? false,
-        deltaRub: json['delta_rub'] as int? ?? 0,
+        deltaRub: (json['delta_rub'] as num?)?.toInt() ?? 0,
+        kind: json['kind'] as String? ?? 'new',
+        amountDue: (json['amount_due'] as num?)?.toDouble() ?? 0,
+        remainingDays: json['remaining_days'] as int? ?? 0,
+        needsPayment: json['needs_payment'] as bool? ?? true,
+        appliesAt: json['applies_at'] as String?,
       );
 }
 

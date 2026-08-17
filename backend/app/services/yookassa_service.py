@@ -61,7 +61,12 @@ class YooKassaService:
 
     @staticmethod
     def receipt_item_description(product: str, plan: str = "monthly") -> str:
-        names = {"ai": "HanWe AI", "creator": "HanWe Creator", "pro": "HanWe Pro"}
+        names = {
+            "ai": "HanWe AI",
+            "creator": "HanWe Creator",
+            "pro": "HanWe Pro",
+            "flex": "HanWe",
+        }
         period = "1 мес." if plan == "monthly" else "1 год"
         return f"Подписка {names.get(product, product)} ({period})"
 

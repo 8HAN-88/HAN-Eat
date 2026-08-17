@@ -261,6 +261,8 @@ class SubscriptionService:
                     "level": me.get("current_level"),
                     "price_rub": me.get("price_rub"),
                     "expires_at": me.get("expires_at"),
+                    "auto_renew": me.get("auto_renew"),
+                    "pending_level": me.get("pending_level"),
                 }
                 expires = me.get("expires_at")
                 if expires:
@@ -383,6 +385,12 @@ class SubscriptionService:
             user.subscription_status = "canceled"
             user.yookassa_payment_method_id = None
             user.tbank_rebill_id = None
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).set_auto_renew(user_id, False)
+        except Exception:
+            pass
         self.db.commit()
         return True
 
@@ -433,9 +441,9 @@ class SubscriptionService:
             subscription.receipt_url = receipt_url
 
         user = self.db.query(User).filter(User.id == subscription.user_id).first()
+        product_raw = (getattr(subscription, "product", None) or "flex").strip().lower()
         if user:
-            product = normalize_tier(getattr(subscription, "product", "pro"))
-            user.subscription_type = product
+            user.subscription_type = "flex" if product_raw == "flex" else normalize_tier(product_raw)
             user.subscription_status = "active"
             user.subscription_expires_at = subscription.expires_at
             user.subscription_auto_renew = subscription.auto_renew
@@ -445,6 +453,18 @@ class SubscriptionService:
                     user.tbank_rebill_id = str(token)
                 elif provider == "yookassa":
                     user.yookassa_payment_method_id = str(token)
+        if product_raw == "flex" or (user and user.subscription_type == "flex"):
+            try:
+                from app.services.flex_subscription_service import FlexSubscriptionService
+
+                FlexSubscriptionService(self.db).apply_renewal_period(
+                    subscription.user_id,
+                    expires_at=subscription.expires_at,
+                    auto_renew=bool(subscription.auto_renew),
+                    payment_subscription_id=subscription.id,
+                )
+            except Exception:
+                pass
 
         self.db.commit()
         self.db.refresh(subscription)
@@ -470,6 +490,12 @@ class SubscriptionService:
             user.subscription_auto_renew = False
             user.yookassa_payment_method_id = None
             user.tbank_rebill_id = None
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).set_auto_renew(subscription.user_id, False)
+        except Exception:
+            pass
         self.db.flush()
         if notify:
             try:
@@ -530,15 +556,20 @@ class SubscriptionService:
         if not user:
             return
 
-        tier, active = self.effective_tier(subscription.user_id)
-        product = getattr(subscription, "product", "pro") or "pro"
-        if active and tier == product:
-            user.subscription_type = "free"
-            user.subscription_status = "expired"
-            user.subscription_expires_at = datetime.utcnow()
-            user.subscription_auto_renew = False
-            user.yookassa_payment_method_id = None
-            user.tbank_rebill_id = None
+        product = (getattr(subscription, "product", None) or "").strip().lower()
+        user.subscription_type = "free"
+        user.subscription_status = "expired"
+        user.subscription_expires_at = datetime.utcnow()
+        user.subscription_auto_renew = False
+        user.yookassa_payment_method_id = None
+        user.tbank_rebill_id = None
+        if product in ("flex", "ai", "creator", "pro", ""):
+            try:
+                from app.services.flex_subscription_service import FlexSubscriptionService
+
+                FlexSubscriptionService(self.db).deactivate(subscription.user_id)
+            except Exception:
+                pass
 
     def apply_tbank_refund(
         self,
@@ -704,6 +735,12 @@ class SubscriptionService:
             user.subscription_status = "expired"
             user.subscription_expires_at = None
             user.subscription_auto_renew = False
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            FlexSubscriptionService(self.db).deactivate(subscription.user_id)
+        except Exception:
+            pass
         self.db.commit()
         return True
 
@@ -786,11 +823,32 @@ class SubscriptionService:
             "from_tier": tier,
         }
 
-    @staticmethod
-    def price_for_product(product: str, plan: str = "monthly") -> float:
-        p = normalize_tier(product)
-        if p not in TIER_PRICES_RUB:
-            p = "pro"
+    def price_for_product(
+        self,
+        product: str,
+        plan: str = "monthly",
+        *,
+        user_id: Optional[int] = None,
+        flex_level: Optional[int] = None,
+    ) -> float:
+        p = (product or "").strip().lower()
+        if p == "flex":
+            from app.services.flex_subscription_service import (
+                FlexSubscriptionService,
+                price_for_level,
+            )
+
+            level = flex_level
+            if level is None and user_id:
+                flex = FlexSubscriptionService(self.db)
+                level = flex.effective_renewal_level(user_id)
+            price = float(price_for_level(int(level or 1)))
+            if plan == "yearly":
+                return price * 10
+            return price
+        tier = normalize_tier(p)
+        if tier not in TIER_PRICES_RUB:
+            tier = "pro"
         if plan == "yearly":
-            return TIER_PRICES_RUB[p]() * 10
-        return TIER_PRICES_RUB[p]()
+            return TIER_PRICES_RUB[tier]() * 10
+        return TIER_PRICES_RUB[tier]()

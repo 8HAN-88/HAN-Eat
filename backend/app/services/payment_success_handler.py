@@ -111,6 +111,59 @@ def process_payment_succeeded(
         amount = float(payment_info.get("amount") or 0)
         if amount <= 0:
             amount = float(price_for_level(flex_level))
+
+        rebill_id = payment_info.get("rebill_id") or payment_info.get("payment_method_id")
+        if rebill_id and _should_save_rebill(payment_provider):
+            p = (payment_provider or "").lower()
+            if p == "tbank":
+                subscription_service.save_tbank_rebill_id(user_id, str(rebill_id))
+            elif p == "yookassa" and (
+                payment_info.get("payment_method_saved") is not False
+            ):
+                subscription_service.save_yookassa_payment_method(user_id, str(rebill_id))
+
+        auto_renew = _should_save_rebill(payment_provider) and bool(rebill_id)
+        if is_renewal:
+            sub = _find_renewal_subscription(
+                db, user_id, metadata, payment_id, subscription_service
+            )
+            if sub:
+                subscription_service.apply_renewal_payment(
+                    sub,
+                    payment_id,
+                    amount,
+                    receipt_url=payment_info.get("receipt_url"),
+                    rebill_id=str(rebill_id) if rebill_id else None,
+                    payment_provider=payment_provider,
+                )
+                AnalyticsService(db).log_event(
+                    event_type="flex_subscription_renewal_success",
+                    entity_type="subscription",
+                    entity_id=sub.id,
+                    user_id=user_id,
+                    metadata={
+                        "product": "flex",
+                        "flex_level": flex_level,
+                        "amount": amount,
+                        "provider": payment_provider,
+                    },
+                )
+                logger.info(
+                    "Flex subscription %s renewed for user %s at level %s",
+                    sub.id,
+                    user_id,
+                    flex_level,
+                )
+                return
+            logger.warning(
+                "%s flex renewal %s: subscription not found for user %s",
+                payment_provider,
+                payment_id,
+                user_id,
+            )
+
+        keep_raw = str(metadata.get("keep_expires") or "").strip().lower()
+        keep_expires = keep_raw in ("1", "true", "yes") if keep_raw else None
         FlexSubscriptionService(db).record_payment_subscription(
             user_id,
             level=flex_level,
@@ -118,6 +171,8 @@ def process_payment_succeeded(
             payment_provider=payment_provider,
             payment_id=payment_id,
             receipt_url=payment_info.get("receipt_url"),
+            auto_renew=auto_renew,
+            keep_expires=keep_expires,
         )
         AnalyticsService(db).log_event(
             event_type="flex_subscription_payment_success",
@@ -129,6 +184,7 @@ def process_payment_succeeded(
                 "flex_level": flex_level,
                 "amount": amount,
                 "provider": payment_provider,
+                "is_upgrade": metadata.get("is_upgrade") == "1",
             },
         )
         logger.info(
@@ -142,7 +198,7 @@ def process_payment_succeeded(
 
     amount = float(payment_info.get("amount") or 0)
     if amount <= 0:
-        amount = float(subscription_service.price_for_product(product, plan))
+        amount = float(subscription_service.price_for_product(product, plan, user_id=user_id))
 
     rebill_id = payment_info.get("rebill_id") or payment_info.get("payment_method_id")
     if rebill_id and _should_save_rebill(payment_provider):
