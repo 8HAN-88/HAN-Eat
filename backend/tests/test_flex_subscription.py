@@ -19,6 +19,7 @@ from app.services.flex_subscription_service import (
     FlexSubscriptionService,
     price_for_level,
 )
+from app.services.subscription_service import SubscriptionService
 
 
 @pytest.fixture()
@@ -158,8 +159,6 @@ def test_legacy_pro_migrates_to_level_10(db_session):
     assert row is not None
     assert row.current_level == 10
     assert "priority_support" in svc.unlocked_slugs(1)
-    from app.services.subscription_service import SubscriptionService
-
     assert SubscriptionService(db_session).has_creator_access(1)
 
 
@@ -237,6 +236,35 @@ def test_downgrade_is_scheduled_until_renewal(db_session):
     assert "offline_saved_posts" not in svc.unlocked_slugs(1)
 
 
+def test_has_feature_follows_level_not_bundle(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    billing = SubscriptionService(db_session)
+    svc.activate(1, 3)
+    db_session.commit()
+    assert billing.has_feature(1, "ad_free") is True
+    assert billing.has_feature(1, "exclusive_reactions") is True
+    assert billing.has_feature(1, "profile_decoration") is True
+    assert billing.has_feature(1, "ai_recommendations") is False
+    assert billing.has_feature(1, "creator_tools") is False
+    assert billing.has_feature(1, "creator_scheduled_posts") is False
+    assert billing.has_ai_access(1) is False
+    assert billing.has_creator_access(1) is False
+
+    svc.activate(1, 7)
+    db_session.commit()
+    assert billing.has_feature(1, "ai_recommendations") is True
+    assert billing.has_feature(1, "creator_tools") is True
+    assert billing.has_feature(1, "creator_scheduled_posts") is False
+    assert billing.has_feature(1, "creator_analytics") is False
+    assert billing.has_creator_access(1) is True
+
+    ents = billing.get_status_dict(1)["entitlements"]
+    assert ents["creator_tools"] is True
+    assert ents["creator_scheduled_posts"] is False
+    assert ents["creator_analytics"] is False
+
+
 def test_expire_and_refund_deactivate_flex(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
@@ -249,8 +277,6 @@ def test_expire_and_refund_deactivate_flex(db_session):
         auto_renew=True,
     )
     db_session.commit()
-    from app.services.subscription_service import SubscriptionService
-
     billing = SubscriptionService(db_session)
     assert billing.price_for_product("flex", user_id=1) == 79.0
     billing.expire_subscription(sub.id)

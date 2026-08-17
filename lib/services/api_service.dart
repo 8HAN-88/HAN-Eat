@@ -301,7 +301,9 @@ class ApiService {
         final msg = (detail['message'] as String?) ?? '';
         if (code == 'HAN_PLUS_REQUIRED' ||
             code == 'HAN_AI_REQUIRED' ||
-            code == 'HAN_PRO_REQUIRED') {
+            code == 'HAN_PRO_REQUIRED' ||
+            code == 'HAN_CREATOR_REQUIRED' ||
+            code == 'HAN_FEATURE_REQUIRED') {
           throw HanPlusRequiredException(
             msg.isNotEmpty ? msg : 'Требуется подписка с этой функцией',
           );

@@ -557,7 +557,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   Future<void> _pinPost() async {
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.hasFeature('creator_tools')) {
         if (!mounted) return;
         context.push(SubscriptionRoute.pathWithProduct('creator'));
         return;
@@ -605,7 +605,7 @@ class _ChannelPostCardState extends State<ChannelPostCard>
   Future<void> _promotePost() async {
     try {
       final status = await SubscriptionService.getSubscriptionStatus();
-      if (!status.hasCreator) {
+      if (!status.hasFeature('creator_tools')) {
         if (!mounted) return;
         context.push(SubscriptionRoute.pathWithProduct('creator'));
         return;

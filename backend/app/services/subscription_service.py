@@ -10,8 +10,12 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from fastapi import HTTPException, status
+
 from app.core.entitlements import (
     SubscriptionTier,
+    catalog_entitlements,
+    feature_required_detail,
     normalize_tier,
     subscription_status_payload,
 )
@@ -141,17 +145,30 @@ class SubscriptionService:
         """Совместимость: Plus = доступ к AI."""
         return self.has_ai_access(user_id)
 
-    def has_ai_access(self, user_id: int) -> bool:
+    def has_feature(self, user_id: int, slug: str) -> bool:
         self._ensure_flex(user_id)
+        try:
+            from app.services.flex_subscription_service import FlexSubscriptionService
+
+            return str(slug) in FlexSubscriptionService(self.db).unlocked_slugs(user_id)
+        except Exception:
+            return False
+
+    def require_feature(self, user_id: int, slug: str, message: str) -> None:
+        if not self.has_feature(user_id, slug):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=feature_required_detail(slug, message),
+            )
+
+    def has_ai_access(self, user_id: int) -> bool:
         return self._flex_has_any(user_id, "ai")
 
     def has_creator_access(self, user_id: int) -> bool:
-        self._ensure_flex(user_id)
         return self._flex_has_any(user_id, "creator")
 
     def has_priority_support(self, user_id: int) -> bool:
-        self._ensure_flex(user_id)
-        return self._flex_has_any(user_id, "pro")
+        return self.has_feature(user_id, "priority_support")
 
     def _ensure_flex(self, user_id: int) -> None:
         try:
@@ -162,6 +179,7 @@ class SubscriptionService:
             return
 
     def _flex_has_any(self, user_id: int, kind: str) -> bool:
+        self._ensure_flex(user_id)
         try:
             from app.services.flex_subscription_service import (
                 AI_FEATURE_SLUGS,
@@ -234,25 +252,17 @@ class SubscriptionService:
             from app.services.flex_subscription_service import (
                 AI_FEATURE_SLUGS,
                 CREATOR_FEATURE_SLUGS,
-                PRO_FEATURE_SLUGS,
                 FlexSubscriptionService,
             )
 
             flex = FlexSubscriptionService(self.db)
             flex.migrate_legacy_if_needed(user_id)
+            slugs = flex.unlocked_slugs(user_id)
+            payload["entitlements"] = catalog_entitlements(slugs)
+            payload["has_ai"] = bool(slugs & AI_FEATURE_SLUGS)
+            payload["has_creator"] = bool(slugs & CREATOR_FEATURE_SLUGS)
+            payload["is_plus"] = payload["has_ai"]
             if flex.is_flex_active(user_id):
-                slugs = flex.unlocked_slugs(user_id)
-                ents = {k: False for k in (payload.get("entitlements") or {})}
-                for slug in slugs:
-                    ents[slug] = True
-                ents["ad_free"] = "ad_free" in slugs
-                ents["premium_badge"] = bool(slugs)
-                ents["is_plus"] = bool(slugs & AI_FEATURE_SLUGS)
-                ents["pro"] = bool(slugs & PRO_FEATURE_SLUGS)
-                payload["entitlements"] = ents
-                payload["has_ai"] = bool(slugs & AI_FEATURE_SLUGS)
-                payload["has_creator"] = bool(slugs & CREATOR_FEATURE_SLUGS)
-                payload["is_plus"] = payload["has_ai"]
                 payload["is_active"] = True
                 payload["subscription_type"] = "flex"
                 me = flex.me_payload(user_id)

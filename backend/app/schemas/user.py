@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     phone_linked: bool = False
     phone: Optional[str] = None
     totp_enabled: bool = False
+    profile_decoration: bool = False
 
     @model_validator(mode="wrap")
     @classmethod

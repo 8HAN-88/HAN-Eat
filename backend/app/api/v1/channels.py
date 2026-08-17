@@ -233,7 +233,7 @@ async def create_channel(
             )
         
         is_public = request.is_public if request.is_public is not None else True
-        has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+        has_creator = SubscriptionService(db).has_feature(current_user.id, "creator_tools")
         assert_can_create_private_channel(is_public, has_creator)
 
         # Создаем канал
@@ -352,7 +352,7 @@ async def update_channel(
         channel.cover_url = request.cover_url
     if request.avatar_url is not None:
         channel.avatar_url = request.avatar_url
-    has_creator = SubscriptionService(db).has_creator_access(current_user.id)
+    has_creator = SubscriptionService(db).has_feature(current_user.id, "creator_tools")
     if request.is_public is not None:
         assert_can_create_private_channel(request.is_public, has_creator)
         channel.is_public = request.is_public

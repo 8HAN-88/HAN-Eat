@@ -509,6 +509,7 @@ class UserProfile {
   final UserStats stats;
   final bool? isFollowing;
   final bool? isFollowedBy;
+  final bool profileDecoration;
   final String? uid; // Для совместимости
 
   // Геттеры для совместимости
@@ -520,6 +521,7 @@ class UserProfile {
     UserStats? stats,
     this.isFollowing,
     this.isFollowedBy,
+    this.profileDecoration = false,
     this.uid,
   })  : user = user ??
             User(
@@ -559,6 +561,7 @@ class UserProfile {
       stats: UserStats.fromJson(json['stats'] as Map<String, dynamic>),
       isFollowing: json['is_following'] as bool?,
       isFollowedBy: json['is_followed_by'] as bool?,
+      profileDecoration: json['profile_decoration'] as bool? ?? false,
     );
   }
 }

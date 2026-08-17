@@ -24,6 +24,7 @@ class AppUserAvatar extends StatelessWidget {
     this.fontSize,
     this.onTap,
     this.child,
+    this.decorated = false,
   });
 
   final String? imageUrl;
@@ -32,6 +33,7 @@ class AppUserAvatar extends StatelessWidget {
   final double? fontSize;
   final VoidCallback? onTap;
   final Widget? child;
+  final bool decorated;
 
   @override
   Widget build(BuildContext context) {
@@ -69,11 +71,24 @@ class AppUserAvatar extends StatelessWidget {
                 ),
           );
 
-    if (onTap == null) return avatar;
+    Widget out = avatar;
+    if (decorated) {
+      out = Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFD54F), Color(0xFFFF8F00)],
+          ),
+        ),
+        child: avatar,
+      );
+    }
+    if (onTap == null) return out;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: avatar,
+      child: out,
     );
   }
 }

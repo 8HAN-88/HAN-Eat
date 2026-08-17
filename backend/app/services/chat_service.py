@@ -4067,6 +4067,13 @@ class ChatService:
         clean = emoji.strip()
         if not clean or len(clean) > 16:
             raise ValueError("invalid_emoji")
+        from app.core.entitlements import EXCLUSIVE_CHAT_REACTIONS
+        from app.services.subscription_service import SubscriptionService
+
+        if clean in EXCLUSIVE_CHAT_REACTIONS and not SubscriptionService(self.db).has_feature(
+            user_id, "exclusive_reactions"
+        ):
+            raise ValueError("exclusive_reaction")
         stars = max(0, int(stars_amount or 0))
         existing = (
             self.db.query(MessageReaction)

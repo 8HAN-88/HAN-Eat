@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../core/storage/hive_bootstrap.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import 'subscription_status_cache.dart';
 import '../models/post_model.dart';
 import '../utils/api_error_parser.dart';
 import 'feed_cache_service.dart';
@@ -346,6 +347,9 @@ class SavedPostsService {
   }) async {
     await init();
     final isOnline = await _isOnline();
+    final canReadOffline = SubscriptionStatusCache.peek()
+            ?.hasFeature('offline_saved_posts') ==
+        true;
     
     // Пытаемся получить с сервера, если онлайн
     if (isOnline && !forceOnline) {
@@ -378,9 +382,10 @@ class SavedPostsService {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
           final result = SavedPostsResponse.fromJson(data);
           
-          // Сохраняем посты локально для offline доступа
-          for (final post in result.posts) {
-            await _savePostLocally(post);
+          if (canReadOffline) {
+            for (final post in result.posts) {
+              await _savePostLocally(post);
+            }
           }
           await _touchLastSync();
           lastLoadFromCache = false;
@@ -391,6 +396,10 @@ class SavedPostsService {
       }
     }
     
+    if (!canReadOffline) {
+      lastLoadFromCache = false;
+      return SavedPostsResponse(posts: [], total: 0);
+    }
     lastLoadFromCache = true;
     return _getSavedPostsFromLocalCache(limit: limit, offset: offset, postType: postType);
   }

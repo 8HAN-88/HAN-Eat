@@ -33,7 +33,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
   
   Future<void> _loadAnalytics() async {
     final status = ref.read(subscriptionStatusProvider).asData?.value;
-    if (status != null && !status.hasCreator) {
+    if (status != null && !status.hasFeature('creator_analytics')) {
       return;
     }
 
@@ -122,7 +122,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       );
     }
 
-    if (status != null && !status.hasCreator) {
+    if (status != null && !status.hasFeature('creator_analytics')) {
       return Scaffold(
         appBar: AppBar(title: const Text('Аналитика')),
         body: _creatorUpsell(),

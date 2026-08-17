@@ -98,7 +98,7 @@ class _CreateChannelPostScreenState
 
 
   bool _hasCreatorAccess() {
-    return ref.read(subscriptionStatusProvider).asData?.value?.hasCreator ??
+    return ref.read(subscriptionStatusProvider).asData?.value?.hasFeature('creator_tools') ??
         false;
   }
 
@@ -734,7 +734,7 @@ class _CreateChannelPostScreenState
 
   Widget _buildScheduleTile() {
     final status = ref.watch(subscriptionStatusProvider).asData?.value;
-    final hasCreator = status?.hasCreator ?? false;
+    final hasCreator = status?.hasFeature('creator_scheduled_posts') ?? false;
     final label = _scheduledPublishAt == null
         ? 'Опубликовать сразу'
         : 'Запланировано: ${_formatSchedule(_scheduledPublishAt!)}';
@@ -768,7 +768,7 @@ class _CreateChannelPostScreenState
                     Text(
                       hasCreator
                           ? label
-                          : 'Отложенная публикация — тариф Creator или Pro',
+                          : 'Отложенная публикация — функция подписки',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                           ),
@@ -1091,7 +1091,7 @@ class _CreateChannelPostScreenState
   Widget build(BuildContext context) {
     final status = ref.watch(subscriptionStatusProvider);
     final hasCreator = status.when(
-      data: (s) => s?.hasCreator ?? false,
+      data: (s) => s?.hasFeature('creator_tools') ?? false,
       loading: () => false,
       error: (_, __) => false,
     );

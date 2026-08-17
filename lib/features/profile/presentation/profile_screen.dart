@@ -763,6 +763,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     displayName: user.name,
                     radius: 50,
                     fontSize: 38,
+                    decorated: _profile?.profileDecoration == true,
                   ),
                 ),
               ),
