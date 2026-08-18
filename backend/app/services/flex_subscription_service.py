@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 28
+MAX_LEVEL = 32
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -51,6 +51,7 @@ DEFAULT_BLOCKS = (
     {"key": "E", "title": "Ещё", "min_level": 17, "max_level": 20, "sort_order": 5},
     {"key": "F", "title": "Медиа+", "min_level": 21, "max_level": 24, "sort_order": 6},
     {"key": "G", "title": "Чат+", "min_level": 25, "max_level": 28, "sort_order": 7},
+    {"key": "H", "title": "Telegram+", "min_level": 29, "max_level": 32, "sort_order": 8},
 )
 
 DEFAULT_PRESETS = (
@@ -61,6 +62,7 @@ DEFAULT_PRESETS = (
     {"key": "extra", "title": "Ещё", "level": 20},
     {"key": "media", "title": "Медиа+", "level": 24},
     {"key": "chat", "title": "Чат+", "level": 28},
+    {"key": "telegram", "title": "Telegram+", "level": 32},
 )
 
 DEFAULT_FEATURES = (
@@ -427,6 +429,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "G",
+    },
+    {
+        "slug": "no_forwards",
+        "title": "Запрет пересылки",
+        "description": "Защита контента группы: нельзя пересылать и сохранять сообщения.",
+        "icon": "lock",
+        "default_level": 29,
+        "min_level": 29,
+        "max_level": 32,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "H",
+    },
+    {
+        "slug": "channel_post_search",
+        "title": "Поиск по каналу",
+        "description": "Поиск постов внутри канала по тексту, тегам и рецепту.",
+        "icon": "travel_explore",
+        "default_level": 30,
+        "min_level": 29,
+        "max_level": 32,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "H",
+    },
+    {
+        "slug": "folder_filters",
+        "title": "Умные папки",
+        "description": "Автосбор папки: контакты, боты, непрочитанные, без архива.",
+        "icon": "filter_alt",
+        "default_level": 31,
+        "min_level": 29,
+        "max_level": 32,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "H",
+    },
+    {
+        "slug": "folder_icons",
+        "title": "Эмодзи папок",
+        "description": "Своя иконка-эмодзи у папки чатов, как в Telegram Premium.",
+        "icon": "emoji_emotions",
+        "default_level": 32,
+        "min_level": 29,
+        "max_level": 32,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "H",
     },
 )
 

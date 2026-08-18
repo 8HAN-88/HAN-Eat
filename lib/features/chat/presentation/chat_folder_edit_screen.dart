@@ -210,6 +210,12 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
 
   int get _selectedCount => _selectedConv.length + _selectedCh.length;
 
+  bool _allowFolderFilters({required bool enabling}) {
+    if (!enabling || hasFlexFeature('folder_filters')) return true;
+    showCreatorUpsell(context);
+    return false;
+  }
+
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
@@ -221,6 +227,14 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
     setState(() => _saving = true);
     try {
       final icon = _iconController.text.trim();
+      if (icon.isNotEmpty && !hasFlexFeature('folder_icons')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      if (_filters.needsFolderFiltersPlus && !hasFlexFeature('folder_filters')) {
+        await showCreatorUpsell(context);
+        return;
+      }
       final conv = _selectedConv.toList();
       final ch = _selectedCh.toList();
       ChatFolder result;
@@ -351,9 +365,16 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _iconController,
-                  decoration: const InputDecoration(
+                  readOnly: !hasFlexFeature('folder_icons'),
+                  onTap: hasFlexFeature('folder_icons')
+                      ? null
+                      : () => showCreatorUpsell(context),
+                  decoration: InputDecoration(
                     labelText: 'Эмодзи (необязательно)',
                     hintText: '📁',
+                    suffixIcon: hasFlexFeature('folder_icons')
+                        ? null
+                        : const Icon(Icons.lock_outline),
                   ),
                   maxLength: 2,
                 ),
@@ -390,33 +411,62 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Контакты'),
-                  subtitle: const Text('Личные чаты с людьми из контактов'),
-                  value: _filters.contacts,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(contacts: v),
+                  subtitle: Text(
+                    hasFlexFeature('folder_filters')
+                        ? 'Личные чаты с людьми из контактов'
+                        : 'Доступно с уровня 31',
                   ),
+                  value: _filters.contacts,
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(
+                      () => _filters = _filters.copyWith(contacts: v),
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Не контакты'),
-                  subtitle: const Text('Личные чаты с людьми вне контактов'),
-                  value: _filters.nonContacts,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(nonContacts: v),
+                  subtitle: Text(
+                    hasFlexFeature('folder_filters')
+                        ? 'Личные чаты с людьми вне контактов'
+                        : 'Доступно с уровня 31',
                   ),
+                  value: _filters.nonContacts,
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(
+                      () => _filters = _filters.copyWith(nonContacts: v),
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Боты'),
-                  subtitle: const Text('Личные чаты с ботами'),
+                  subtitle: Text(
+                    hasFlexFeature('folder_filters')
+                        ? 'Личные чаты с ботами'
+                        : 'Доступно с уровня 31',
+                  ),
                   value: _filters.bots,
-                  onChanged: (v) => setState(() {
-                    _filters = _filters.copyWith(
-                      bots: v,
-                      // Include and exclude bots conflict — prefer include.
-                      excludeBots: v ? false : _filters.excludeBots,
-                    );
-                  }),
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(() {
+                      _filters = _filters.copyWith(
+                        bots: v,
+                        excludeBots: v ? false : _filters.excludeBots,
+                      );
+                    });
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -429,38 +479,75 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Только непрочитанные'),
+                  subtitle: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Text('Доступно с уровня 31'),
                   value: _filters.unreadOnly,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(unreadOnly: v),
-                  ),
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(
+                      () => _filters = _filters.copyWith(unreadOnly: v),
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Без чатов без звука'),
+                  subtitle: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Text('Доступно с уровня 31'),
                   value: _filters.excludeMuted,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(excludeMuted: v),
-                  ),
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(
+                      () => _filters = _filters.copyWith(excludeMuted: v),
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Без архивных'),
+                  subtitle: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Text('Доступно с уровня 31'),
                   value: _filters.excludeArchived,
-                  onChanged: (v) => setState(
-                    () => _filters = _filters.copyWith(excludeArchived: v),
-                  ),
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(
+                      () => _filters = _filters.copyWith(excludeArchived: v),
+                    );
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Без ботов'),
-                  subtitle: const Text('Скрыть личные чаты с ботами'),
+                  subtitle: Text(
+                    hasFlexFeature('folder_filters')
+                        ? 'Скрыть личные чаты с ботами'
+                        : 'Доступно с уровня 31',
+                  ),
                   value: _filters.excludeBots,
-                  onChanged: (v) => setState(() {
-                    _filters = _filters.copyWith(
-                      excludeBots: v,
-                      bots: v ? false : _filters.bots,
-                    );
-                  }),
+                  secondary: hasFlexFeature('folder_filters')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (!_allowFolderFilters(enabling: v)) return;
+                    setState(() {
+                      _filters = _filters.copyWith(
+                        excludeBots: v,
+                        bots: v ? false : _filters.bots,
+                      );
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
                 Row(

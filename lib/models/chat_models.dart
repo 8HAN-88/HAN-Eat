@@ -1179,6 +1179,15 @@ class ChatFolderFilters {
       !excludeArchived &&
       !excludeBots;
 
+  bool get needsFolderFiltersPlus =>
+      contacts ||
+      nonContacts ||
+      bots ||
+      unreadOnly ||
+      excludeMuted ||
+      excludeArchived ||
+      excludeBots;
+
   bool get hasTypeFilter =>
       groups || channels || direct || contacts || nonContacts || bots;
 

@@ -1215,6 +1215,16 @@ async def get_channel_posts(
         query = query.filter(Post.type == post_type)
 
     if normalized_search:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Login required",
+            )
+        SubscriptionService(db).require_feature(
+            int(current_user.id),
+            "channel_post_search",
+            "Поиск по каналу доступен с уровня 30",
+        )
         tags_text = func.coalesce(func.array_to_string(Post.tags, ' '), '')
         ingredients_text = func.coalesce(cast(Post.body["ingredients"], String), '')
         steps_text = func.coalesce(cast(Post.body["steps"], String), '')

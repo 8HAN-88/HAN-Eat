@@ -147,6 +147,18 @@ def _raise_flex_gate(code: str) -> None:
             "chat_wallpaper",
             "Цвет пузырей доступен с уровня 18",
         ),
+        "no_forwards_required": (
+            "no_forwards",
+            "Запрет пересылки в группе доступен с уровня 29",
+        ),
+        "folder_filters_required": (
+            "folder_filters",
+            "Умные фильтры папок доступны с уровня 31",
+        ),
+        "folder_icon_required": (
+            "folder_icons",
+            "Эмодзи у папок доступны с уровня 32",
+        ),
     }
     item = mapping.get(code)
     if not item:
@@ -1294,6 +1306,7 @@ async def update_chat_folder(
         )
     except ValueError as e:
         db.rollback()
+        _raise_flex_gate(str(e))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Folder not found")
@@ -4480,6 +4493,7 @@ async def update_group_chat(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        _raise_flex_gate(code)
         if code == "not_found":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
         if code == "not_group":

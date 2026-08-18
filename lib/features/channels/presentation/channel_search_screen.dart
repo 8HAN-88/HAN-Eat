@@ -8,6 +8,7 @@ import '../../../models/post_model.dart';
 import '../../../app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../subscription/creator_upsell.dart';
 import 'channel_post_card.dart';
 
 class ChannelSearchScreen extends ConsumerStatefulWidget {
@@ -86,6 +87,11 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       return;
     }
 
+    if (!hasFlexFeature('channel_post_search')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -107,6 +113,10 @@ class _ChannelSearchScreenState extends ConsumerState<ChannelSearchScreen> {
       }
     } catch (e) {
       if (mounted) {
+        if (offerFlexIfRequired(context, e)) {
+          setState(() => _isLoading = false);
+          return;
+        }
         setState(() {
           _error = userVisibleError(e, fallback: 'Не удалось выполнить поиск');
           _isLoading = false;
