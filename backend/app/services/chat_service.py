@@ -1047,9 +1047,11 @@ class ChatService:
     _WALLPAPER_STYLES = frozenset(
         {"pattern", "solid", "dusk", "forest", "sand", "night"}
     )
+    _FREE_WALLPAPER_STYLES = frozenset({"pattern", "solid"})
     _BUBBLE_ACCENTS = frozenset(
         {"default", "mint", "sky", "rose", "amber", "slate", "grape"}
     )
+    _FREE_BUBBLE_ACCENTS = frozenset({"default"})
 
     def set_wallpaper_style(
         self,
@@ -1095,6 +1097,14 @@ class ChatService:
                 url_value = cleaned_url
             else:
                 url_value = None
+
+        needs_wallpaper = bool(set_url and url_value) or (
+            bool(set_style)
+            and bool(style_value)
+            and style_value not in self._FREE_WALLPAPER_STYLES
+        )
+        if needs_wallpaper and not self._has_feature(user_id, "chat_wallpaper"):
+            raise ValueError("wallpaper_premium_required")
 
         def _apply(member: ConversationMember) -> None:
             if set_url and not set_style:
@@ -1162,6 +1172,9 @@ class ChatService:
                 raise ValueError("bad_bubble_accent")
             else:
                 value = cleaned
+        if value is not None and value not in self._FREE_BUBBLE_ACCENTS:
+            if not self._has_feature(user_id, "chat_wallpaper"):
+                raise ValueError("bubble_premium_required")
         if apply_to_all:
             members = (
                 self.db.query(ConversationMember)

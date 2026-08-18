@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 16
+MAX_LEVEL = 20
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -48,6 +48,7 @@ DEFAULT_BLOCKS = (
     {"key": "B", "title": "Расширенные функции", "min_level": 4, "max_level": 6, "sort_order": 2},
     {"key": "C", "title": "PRO", "min_level": 7, "max_level": 10, "sort_order": 3},
     {"key": "D", "title": "Мессенджер+", "min_level": 11, "max_level": 16, "sort_order": 4},
+    {"key": "E", "title": "Ещё", "min_level": 17, "max_level": 20, "sort_order": 5},
 )
 
 DEFAULT_PRESETS = (
@@ -55,6 +56,7 @@ DEFAULT_PRESETS = (
     {"key": "plus", "title": "Расширенный", "level": 6},
     {"key": "pro", "title": "PRO", "level": 10},
     {"key": "messenger", "title": "Мессенджер+", "level": 16},
+    {"key": "extra", "title": "Ещё", "level": 20},
 )
 
 DEFAULT_FEATURES = (
@@ -265,6 +267,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "D",
+    },
+    {
+        "slug": "scheduled_messages",
+        "title": "Отложенные сообщения",
+        "description": "Отправка в чат по расписанию или когда собеседник будет в сети.",
+        "icon": "schedule_send",
+        "default_level": 17,
+        "min_level": 17,
+        "max_level": 20,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "E",
+    },
+    {
+        "slug": "chat_wallpaper",
+        "title": "Обои и оформление чата",
+        "description": "Свои фото-обои и пресеты Сумерки, Лес, Песок, Ночь.",
+        "icon": "wallpaper",
+        "default_level": 18,
+        "min_level": 17,
+        "max_level": 20,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "E",
+    },
+    {
+        "slug": "story_viewers",
+        "title": "Кто смотрел сторис",
+        "description": "Список просмотров ваших сторис.",
+        "icon": "visibility",
+        "default_level": 19,
+        "min_level": 17,
+        "max_level": 20,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "E",
+    },
+    {
+        "slug": "story_close_friends",
+        "title": "Сторис для близких",
+        "description": "Публикация сторис только для списка близких.",
+        "icon": "favorite",
+        "default_level": 20,
+        "min_level": 17,
+        "max_level": 20,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "E",
     },
 )
 

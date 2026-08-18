@@ -41,6 +41,7 @@ import '../../../core/platform/web_page_visibility.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/subscription_status_cache.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../services/api_reachability_service.dart';
 import '../../../services/chat_cache_service.dart';
 import '../../../services/chat_media_outbox_service.dart';
@@ -609,6 +610,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   static const _baseOverlayReactions = ['👍', '👌', '❤️', '👎', '👏'];
   static const _exclusiveOverlayReactions = ['🔥', '🥰', '🎉'];
 
+  bool _hasFlexFeature(String slug) =>
+      SubscriptionStatusCache.peek()?.hasFeature(slug) == true;
+
   List<String> get _overlayReactions {
     final unlocked =
         SubscriptionStatusCache.peek()?.hasFeature('exclusive_reactions') == true;
@@ -1159,9 +1163,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                   radius: 16,
                 ),
                 title: Text(accent.label),
-                trailing: _bubbleAccent == accent
-                    ? const Icon(Icons.check)
-                    : null,
+                trailing: accent != ChatBubbleAccent.defaultStyle &&
+                        !_hasFlexFeature('chat_wallpaper')
+                    ? const Icon(Icons.lock_outline)
+                    : _bubbleAccent == accent
+                        ? const Icon(Icons.check)
+                        : null,
                 onTap: () => Navigator.pop(ctx, accent.id),
                 onLongPress: () => Navigator.pop(ctx, 'all:${accent.id}'),
               ),
@@ -1179,6 +1186,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       ),
     );
     if (action == null || !mounted) return;
+    final pickedId = action.startsWith('all:') ? action.substring(4) : action;
+    final picked = ChatBubbleAccent.fromId(pickedId);
+    if (picked != ChatBubbleAccent.defaultStyle &&
+        !_hasFlexFeature('chat_wallpaper')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     if (action.startsWith('all:')) {
       final id = action.substring(4);
       await _applyBubbleAccent(ChatBubbleAccent.fromId(id), applyToAll: true);
@@ -1339,11 +1353,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 leading: const Icon(Icons.photo_outlined),
                 title: const Text('Своё фото'),
                 subtitle: const Text('Из галереи'),
+                trailing: _hasFlexFeature('chat_wallpaper')
+                    ? null
+                    : const Icon(Icons.lock_outline),
                 onTap: () => Navigator.pop(ctx, 'custom'),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined),
                 title: const Text('Своё фото для всех чатов'),
+                trailing: _hasFlexFeature('chat_wallpaper')
+                    ? null
+                    : const Icon(Icons.lock_outline),
                 onTap: () => Navigator.pop(ctx, 'custom_all'),
               ),
               const Divider(height: 1),
@@ -1362,10 +1382,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     ),
                   ),
                   title: Text(style.label),
-                  trailing: _wallpaperImage == null &&
-                          _wallpaperStyle == style
-                      ? const Icon(Icons.check)
-                      : null,
+                  trailing: !_hasFlexFeature('chat_wallpaper') &&
+                          style != ChatWallpaperStyle.pattern &&
+                          style != ChatWallpaperStyle.solid
+                      ? const Icon(Icons.lock_outline)
+                      : _wallpaperImage == null && _wallpaperStyle == style
+                          ? const Icon(Icons.check)
+                          : null,
                   onTap: () => Navigator.pop(ctx, 'style:${style.id}'),
                   onLongPress: () =>
                       Navigator.pop(ctx, 'style_all:${style.id}'),
@@ -1396,6 +1419,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       },
     );
     if (action == null || !mounted) return;
+    final wantsCustom = action == 'custom' || action == 'custom_all';
+    final styleId = action.startsWith('style:')
+        ? action.substring(6)
+        : action.startsWith('style_all:')
+            ? action.substring(10)
+            : null;
+    final style = styleId == null ? null : ChatWallpaperStyle.fromId(styleId);
+    final stylePremium = style != null &&
+        style != ChatWallpaperStyle.pattern &&
+        style != ChatWallpaperStyle.solid;
+    if ((wantsCustom || stylePremium) && !_hasFlexFeature('chat_wallpaper')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     if (action == 'custom') {
       await _pickCustomWallpaper();
       return;
@@ -5579,15 +5616,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           _removePinnedMessageId(msg.id);
         }
       });
-      final err = userVisibleError(e);
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            err.contains('pin_limit')
-                ? 'Можно закрепить не больше 5 сообщений'
-                : err,
-          ),
-        ),
+        SnackBar(content: Text(userVisibleError(e))),
       );
     }
   }
@@ -11947,6 +11978,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<({DateTime sendAt, bool sendWhenOnline})?> _pickScheduleDelivery() async {
+    if (!_hasFlexFeature('scheduled_messages')) {
+      await showCreatorUpsell(context);
+      return null;
+    }
     var sendWhenOnline = false;
     DateTime? sendAt;
     final canUseWhenOnline =

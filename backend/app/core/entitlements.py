@@ -30,6 +30,10 @@ CATALOG_FEATURE_SLUGS = (
     "privacy_plus",
     "extra_folders",
     "message_effects",
+    "scheduled_messages",
+    "chat_wallpaper",
+    "story_viewers",
+    "story_close_friends",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

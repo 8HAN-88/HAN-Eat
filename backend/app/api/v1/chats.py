@@ -139,6 +139,14 @@ def _raise_flex_gate(code: str) -> None:
             "extra_folders",
             "Больше десяти папок доступно с уровня 15",
         ),
+        "wallpaper_premium_required": (
+            "chat_wallpaper",
+            "Свои обои и премиум-пресеты доступны с уровня 18",
+        ),
+        "bubble_premium_required": (
+            "chat_wallpaper",
+            "Цвет пузырей доступен с уровня 18",
+        ),
     }
     item = mapping.get(code)
     if not item:
@@ -2356,6 +2364,13 @@ async def schedule_message(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "scheduled_messages",
+        "Отложенные сообщения доступны с уровня 17",
+    )
     svc = ChatService(db)
     content = body.content
     inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
@@ -4182,6 +4197,7 @@ async def set_chat_wallpaper(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        _raise_flex_gate(code)
         if code == "bad_wallpaper_style":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "bad_wallpaper_style"
@@ -4218,6 +4234,7 @@ async def set_chat_bubble_accent(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        _raise_flex_gate(code)
         if code == "bad_bubble_accent":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "bad_bubble_accent"
