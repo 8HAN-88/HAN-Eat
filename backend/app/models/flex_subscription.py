@@ -96,3 +96,23 @@ class UserFlexSlot(Base):
     assigned_level = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class UserFlexGift(Base):
+    __tablename__ = "user_flex_gifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    recipient_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    level = Column(Integer, nullable=False)
+    plan = Column(String(20), nullable=False, default="monthly")
+    amount = Column(Numeric(10, 2), nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    payment_provider = Column(String(32), nullable=True)
+    payment_id = Column(String(128), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    applied_at = Column(DateTime, nullable=True)

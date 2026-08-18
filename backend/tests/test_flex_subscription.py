@@ -9,9 +9,11 @@ from sqlalchemy.pool import StaticPool
 from app.models.flex_subscription import (
     SubscriptionFeature,
     SubscriptionFeatureBlock,
+    UserFlexGift,
     UserFlexSlot,
     UserFlexSubscription,
 )
+from app.models.notification import Notification
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.services.flex_subscription_service import (
@@ -37,6 +39,8 @@ def db_session():
         SubscriptionFeature.__table__,
         UserFlexSubscription.__table__,
         UserFlexSlot.__table__,
+        UserFlexGift.__table__,
+        Notification.__table__,
     ]
     from app.core.database import Base
 
@@ -388,3 +392,62 @@ def test_yearly_to_monthly_is_scheduled(db_session):
     db_session.commit()
     assert svc.get_flex(1).plan == "monthly"
     assert svc.current_level(1) == 6
+
+
+def test_grant_gift_sets_level_and_stacks_time(db_session):
+    _user(db_session)
+    other = _user(db_session, user_id=2)
+    svc = FlexSubscriptionService(db_session)
+    before = datetime.utcnow()
+    svc.grant_gift_access(other.id, level=6, plan="monthly")
+    db_session.commit()
+    row = svc.get_flex(other.id)
+    assert row.current_level == 6
+    assert row.auto_renew is False
+    assert (row.expires_at - before).total_seconds() / 86400.0 >= 29
+    first_end = row.expires_at
+    svc.grant_gift_access(other.id, level=4, plan="yearly")
+    db_session.commit()
+    fresh = svc.get_flex(other.id)
+    assert fresh.current_level == 6
+    assert fresh.expires_at > first_end
+
+
+def test_create_gift_rejects_self(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    with pytest.raises(HTTPException) as exc:
+        svc.create_gift(1, 1, level=3)
+    assert exc.value.status_code == 400
+
+
+def test_apply_gift_unlocks_recipient(db_session):
+    sender = _user(db_session)
+    recipient = _user(db_session, user_id=2)
+    svc = FlexSubscriptionService(db_session)
+    gift = svc.create_gift(sender.id, recipient.id, level=7, plan="yearly")
+    db_session.commit()
+    assert gift.amount == 990
+    svc.apply_gift(gift.id, payment_provider="yookassa", payment_id="gift-1")
+    db_session.commit()
+    assert svc.current_level(recipient.id) == 7
+    assert svc.get_flex(recipient.id).plan == "yearly"
+    assert "creator_tools" in svc.unlocked_slugs(recipient.id)
+    assert svc.current_level(sender.id) == 0
+    stats = svc.admin_stats()
+    assert stats["gifts_applied"] == 1
+    assert stats["by_level"]["7"] == 1
+    assert any(p["level"] == 6 for p in svc.me_payload(sender.id)["presets"])
+
+
+def test_future_launch_at_hides_feature(db_session):
+    _user(db_session)
+    svc = FlexSubscriptionService(db_session)
+    feat = next(f for f in svc.list_features() if f.slug == "priority_support")
+    feat.launch_at = datetime.utcnow() + timedelta(days=10)
+    db_session.commit()
+    slugs = {f.slug for f in svc.list_features()}
+    assert "priority_support" not in slugs
+    assert "ad_free" in slugs
+    layout_slugs = {item["feature"].slug for item in svc.resolved_layout(1)}
+    assert "priority_support" not in layout_slugs

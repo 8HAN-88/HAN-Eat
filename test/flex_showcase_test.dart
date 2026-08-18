@@ -53,6 +53,22 @@ void main() {
     expect(me.periodLabel('yearly'), 'год');
   });
 
+  test('presets parse from payload', () {
+    final parsed = FlexMe.fromJson({
+      'current_level': 3,
+      'price_rub': 59,
+      'max_level': 10,
+      'active': true,
+      'levels': const [],
+      'blocks': const [],
+      'presets': [
+        {'key': 'basic', 'title': 'Базовый', 'level': 3},
+        {'key': 'plus', 'title': 'Расширенный', 'level': 6},
+      ],
+    });
+    expect(parsed.presets.map((p) => p.level).toList(), [3, 6]);
+  });
+
   test('featureAt and blockFor resolve ladder slots', () {
     expect(me.featureAt(4)?.slug, 'ai_recommendations');
     expect(me.featureAt(5), isNull);

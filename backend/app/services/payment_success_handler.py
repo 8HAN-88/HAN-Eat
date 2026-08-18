@@ -114,6 +114,43 @@ def process_payment_succeeded(
         if amount <= 0:
             amount = float(price_for_plan(flex_level, dest_plan))
 
+        gift_raw = str(metadata.get("gift") or "").strip().lower()
+        gift_id_raw = metadata.get("gift_id")
+        if gift_raw in ("1", "true", "yes") or gift_id_raw:
+            try:
+                gift_id = int(gift_id_raw or 0)
+            except (TypeError, ValueError):
+                gift_id = 0
+            if gift_id:
+                FlexSubscriptionService(db).apply_gift(
+                    gift_id,
+                    payment_provider=payment_provider,
+                    payment_id=payment_id,
+                )
+                AnalyticsService(db).log_event(
+                    event_type="flex_gift_payment_success",
+                    entity_type="flex_gift",
+                    entity_id=gift_id,
+                    user_id=user_id,
+                    metadata={
+                        "product": "flex",
+                        "flex_level": flex_level,
+                        "plan": dest_plan,
+                        "amount": amount,
+                        "provider": payment_provider,
+                        "gift_to": metadata.get("gift_to"),
+                    },
+                )
+                logger.info(
+                    "Applied flex gift %s level %s from user %s via %s payment %s",
+                    gift_id,
+                    flex_level,
+                    user_id,
+                    payment_provider,
+                    payment_id,
+                )
+                return
+
         rebill_id = payment_info.get("rebill_id") or payment_info.get("payment_method_id")
         if rebill_id and _should_save_rebill(payment_provider):
             p = (payment_provider or "").lower()

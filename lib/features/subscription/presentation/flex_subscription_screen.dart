@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/flex_subscription_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
+import 'flex_gift_sheet.dart';
 import 'flex_preview_sheet.dart';
 
 class FlexSubscriptionScreen extends StatefulWidget {
@@ -150,6 +151,20 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
         },
       ),
       const SizedBox(height: 12),
+      if (me.presets.isNotEmpty) ...[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final preset in me.presets)
+              ActionChip(
+                label: Text('${preset.title} · ${preset.level}'),
+                onPressed: _busy ? null : () => _changeLevel(preset.level),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
       Text(
         'Нажмите уровень, чтобы сменить тариф. Удерживайте функцию, чтобы переставить её внутри блока.',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -320,6 +335,15 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Моя подписка'),
+        actions: [
+          IconButton(
+            tooltip: 'Подарить',
+            onPressed: me == null || _busy
+                ? null
+                : () => showFlexGiftSheet(context, me: me, plan: _plan),
+            icon: const Icon(Icons.card_giftcard_outlined),
+          ),
+        ],
       ),
       body: AppGradientBackground(
         child: _loading
