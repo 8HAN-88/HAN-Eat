@@ -864,6 +864,8 @@ class ChatService {
     String? pollDescription,
     List<String>? pollOptions,
     Map<String, dynamic>? pollSettings,
+    String? checklistTitle,
+    List<String>? checklistItems,
     String? effectId,
     int? topicId,
   }) {
@@ -884,6 +886,8 @@ class ChatService {
       pollDescription: pollDescription,
       pollOptions: pollOptions,
       pollSettings: pollSettings,
+      checklistTitle: checklistTitle,
+      checklistItems: checklistItems,
       effectId: effectId,
       topicId: topicId,
     );
@@ -1101,6 +1105,70 @@ class ChatService {
     );
   }
 
+  static Future<ChatMessage> sendChecklist({
+    required int conversationId,
+    required String title,
+    required List<String> items,
+    int? replyToMessageId,
+    String? clientMessageId,
+    bool silent = false,
+    int? topicId,
+  }) async {
+    final uri = Uri.parse('$_base/chats/$conversationId/messages');
+    final response = await _post(
+      uri,
+      retries: 1,
+      timeout: _sendTimeout,
+      bypassRateLimitGate: true,
+      body: jsonEncode({
+        'type': 'checklist',
+        'checklist_title': title,
+        'checklist_items': items,
+        if (replyToMessageId != null) 'reply_to_message_id': replyToMessageId,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
+        if (silent) 'silent': true,
+        if (topicId != null) 'topic_id': topicId,
+      }),
+    );
+    _ensureOk(response, 'Не удалось отправить чеклист');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> toggleChecklist({
+    required int conversationId,
+    required int messageId,
+    required int index,
+    required bool done,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/checklist/toggle',
+    );
+    final response = await _post(
+      uri,
+      body: jsonEncode({'index': index, 'done': done}),
+    );
+    _ensureOk(response, 'Не удалось отметить пункт');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<ChatMessage> transcribeMessage({
+    required int conversationId,
+    required int messageId,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/transcribe',
+    );
+    final response = await _post(uri, body: jsonEncode({}));
+    _ensureOk(response, 'Не удалось распознать голос');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   static Future<ChatMessage> votePoll({
     required int conversationId,
     required int messageId,
@@ -1244,6 +1312,8 @@ class ChatService {
     String? pollDescription,
     List<String>? pollOptions,
     Map<String, dynamic>? pollSettings,
+    String? checklistTitle,
+    List<String>? checklistItems,
     String? effectId,
     int? topicId,
   }) async {
@@ -1262,6 +1332,8 @@ class ChatService {
         if (pollDescription != null) 'poll_description': pollDescription,
         if (pollOptions != null) 'poll_options': pollOptions,
         if (pollSettings != null) 'poll_settings': pollSettings,
+        if (checklistTitle != null) 'checklist_title': checklistTitle,
+        if (checklistItems != null) 'checklist_items': checklistItems,
         'send_at': sendAt.toUtc().toIso8601String(),
         'send_when_online': sendWhenOnline,
         if (silent) 'silent': true,

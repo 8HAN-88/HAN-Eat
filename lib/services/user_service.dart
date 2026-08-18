@@ -124,6 +124,18 @@ class UserService {
     _applyCachedProfileUser(updated);
   }
 
+  Future<void> updateProfileStyle({
+    String? emojiStatus,
+    String? profileColor,
+  }) async {
+    final updated = await UserService.updateProfile(
+      emojiStatus: emojiStatus,
+      profileColor: profileColor,
+    );
+    await AuthService.persistUpdatedUser(updated);
+    _applyCachedProfileUser(updated);
+  }
+
   /// Обновить отображаемое имя
   Future<void> updateDisplayName(String name) async {
     await updateProfileFields(name: name);
@@ -434,6 +446,8 @@ class UserService {
     bool? showReadReceipts,
     int? paidMessageStars,
     String? avatarUrl,
+    String? emojiStatus,
+    String? profileColor,
     String? fcmToken,
     String? voipToken,
   }) async {
@@ -448,6 +462,8 @@ class UserService {
       if (showReadReceipts != null) 'show_read_receipts': showReadReceipts,
       if (paidMessageStars != null) 'paid_message_stars': paidMessageStars,
       if (avatarUrl != null) 'avatar_url': avatarUrl,
+      if (emojiStatus != null) 'emoji_status': emojiStatus,
+      if (profileColor != null) 'profile_color': profileColor,
       if (fcmToken != null) 'fcm_token': fcmToken,
       if (voipToken != null) 'voip_token': voipToken,
     };
@@ -554,6 +570,8 @@ class UserProfile {
       'last_seen_privacy': json['last_seen_privacy'],
       'show_read_receipts': json['show_read_receipts'],
       'created_at': json['created_at'],
+      'emoji_status': json['emoji_status'],
+      'profile_color': json['profile_color'],
     };
 
     return UserProfile(

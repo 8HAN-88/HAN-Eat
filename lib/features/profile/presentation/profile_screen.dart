@@ -46,6 +46,8 @@ user_service.UserProfile _userProfileFromAuthUser(User u) {
       createdAt: u.createdAt,
       scanCredits: u.scanCredits,
       subscriptionType: u.subscriptionType,
+      emojiStatus: u.emojiStatus,
+      profileColor: u.profileColor,
     ),
     stats: user_service.UserStats(
       postsCount: 0,
@@ -782,10 +784,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     children: [
                       Flexible(
                         child: Text(
-                          user.name,
+                          (user.emojiStatus ?? '').isNotEmpty
+                              ? '${user.name} ${user.emojiStatus}'
+                              : user.name,
                           textAlign: TextAlign.center,
                           style: textTheme.headlineSmall?.copyWith(
-                            color: scheme.onSurface,
+                            color: () {
+                              final hex = profileColorHex(user.profileColor);
+                              if (hex.isEmpty) return scheme.onSurface;
+                              return Color(
+                                int.parse(hex.replaceFirst('#', '0xFF')),
+                              );
+                            }(),
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.7,
                           ),

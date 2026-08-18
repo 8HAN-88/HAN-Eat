@@ -12,6 +12,9 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/phone/profile_phone_tile.dart';
 import '../../../widgets/account/profile_email_tile.dart';
 import '../../../widgets/account/profile_password_tile.dart';
+import '../../../models/chat_checklist.dart';
+import '../../subscription/creator_upsell.dart';
+import '../../../utils/session_snackbar.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -156,6 +159,97 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
 
   Future<void> _signOut() async {
     await confirmAndSignOut(context);
+  }
+
+  static const _statusEmojis = <String>[
+    '😎',
+    '🔥',
+    '✨',
+    '❤️',
+    '🎉',
+    '🌟',
+    '💼',
+    '🎵',
+    '🌙',
+    '☀️',
+    '⚡',
+    '💯',
+    '🚀',
+    '🍀',
+    '🎯',
+    '💬',
+  ];
+
+  Future<void> _setEmojiStatus(String? emoji) async {
+    if ((emoji ?? '').isNotEmpty && !hasFlexFeature('emoji_status')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      await UserService.instance.updateProfileStyle(emojiStatus: emoji ?? '');
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось сохранить статус');
+    }
+  }
+
+  Future<void> _setProfileColor(String? key) async {
+    if ((key ?? '').isNotEmpty && !hasFlexFeature('profile_colors')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      await UserService.instance.updateProfileStyle(profileColor: key ?? '');
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось сохранить цвет');
+    }
+  }
+
+  Future<void> _pickEmojiStatus() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Emoji-статус',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final emoji in _statusEmojis)
+                      ActionChip(
+                        label: Text(emoji, style: const TextStyle(fontSize: 20)),
+                        onPressed: () => Navigator.pop(ctx, emoji),
+                      ),
+                    ActionChip(
+                      label: const Text('Убрать'),
+                      onPressed: () => Navigator.pop(ctx, ''),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    await _setEmojiStatus(selected);
   }
 
   @override
@@ -310,6 +404,67 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                             )
                           : const Text('Сохранить'),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Оформление',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.mood_outlined),
+                    title: const Text('Emoji-статус'),
+                    subtitle: Text(
+                      (user.emojiStatus ?? '').isNotEmpty
+                          ? user.emojiStatus!
+                          : 'Эмодзи рядом с именем',
+                    ),
+                    onTap: _loading ? null : _pickEmojiStatus,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Цвет имени',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Как у всех'),
+                        selected: (user.profileColor ?? '').isEmpty,
+                        onSelected: _loading
+                            ? null
+                            : (_) => _setProfileColor(''),
+                      ),
+                      for (final key in profileColorKeys)
+                        ChoiceChip(
+                          label: Text(key),
+                          selected: user.profileColor == key,
+                          avatar: CircleAvatar(
+                            backgroundColor: Color(
+                              int.parse(
+                                profileColorHex(key).replaceFirst('#', '0xFF'),
+                              ),
+                            ),
+                          ),
+                          onSelected: _loading
+                              ? null
+                              : (_) => _setProfileColor(key),
+                        ),
+                    ],
                   ),
                 ],
               ),

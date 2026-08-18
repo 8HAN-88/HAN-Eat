@@ -32,6 +32,8 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     totp_enabled: bool = False
     profile_decoration: bool = False
+    emoji_status: Optional[str] = None
+    profile_color: Optional[str] = None
 
     @model_validator(mode="wrap")
     @classmethod
@@ -120,6 +122,8 @@ class UpdateUserRequest(BaseModel):
     show_read_receipts: Optional[bool] = None
     paid_message_stars: Optional[int] = Field(default=None, ge=0, le=100000)
     avatar_url: Optional[str] = None
+    emoji_status: Optional[str] = None
+    profile_color: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     voip_token: Optional[str] = None  # iOS PushKit VoIP token (CallKit)
     device_platform: Optional[str] = None  # android | ios | web

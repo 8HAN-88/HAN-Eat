@@ -26,6 +26,8 @@ class ChatUserBrief(BaseModel):
     send_restriction_reason: Optional[str] = None
     # Telegram-like: Stars charged to message this user (direct chats).
     paid_message_stars: int = 0
+    emoji_status: Optional[str] = None
+    profile_color: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -76,6 +78,7 @@ class MessageResponse(BaseModel):
     topic_id: Optional[int] = None
     is_anonymous: bool = False
     client_message_id: Optional[str] = None
+    transcription: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -234,7 +237,7 @@ class PinMessageRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|gift|story_reply)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|gift|story_reply|checklist)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
@@ -244,6 +247,8 @@ class SendMessageRequest(BaseModel):
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
+    checklist_title: Optional[str] = Field(default=None, max_length=200)
+    checklist_items: Optional[List[str]] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     silent: bool = False
     disable_webpage_preview: bool = False
@@ -262,7 +267,7 @@ class SendMessageRequest(BaseModel):
 class ScheduleMessageRequest(BaseModel):
     type: str = Field(
         default="text",
-        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location)$",
+        pattern="^(text|image|voice|file|video|video_note|poll|sticker|location|checklist)$",
     )
     content: str = Field(default="", max_length=4000)
     media_url: Optional[str] = Field(default=None, max_length=512)
@@ -272,6 +277,8 @@ class ScheduleMessageRequest(BaseModel):
     poll_description: Optional[str] = Field(default=None, max_length=500)
     poll_options: Optional[List[str]] = None
     poll_settings: Optional[dict] = None
+    checklist_title: Optional[str] = Field(default=None, max_length=200)
+    checklist_items: Optional[List[str]] = None
     inline_keyboard: Optional[List[List["InlineKeyboardButton"]]] = None
     send_at: Optional[datetime] = None
     send_when_online: bool = False
@@ -330,6 +337,11 @@ class CallbackQueryRequest(BaseModel):
 
 class ChatPollVoteRequest(BaseModel):
     option_index: int = Field(..., ge=0, le=11)
+
+
+class ChatChecklistToggleRequest(BaseModel):
+    index: int = Field(..., ge=0, le=19)
+    done: bool = True
 
 
 class ChatPollAddOptionRequest(BaseModel):

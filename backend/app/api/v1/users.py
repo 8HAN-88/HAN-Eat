@@ -419,6 +419,40 @@ async def update_user_profile(
         current_user.paid_message_stars = max(0, int(request.paid_message_stars))
     if request.avatar_url is not None:
         current_user.avatar_url = request.avatar_url
+    if request.emoji_status is not None:
+        from app.services.profile_style import normalize_emoji_status
+        from app.services.subscription_service import SubscriptionService
+
+        next_status = normalize_emoji_status(request.emoji_status)
+        if next_status and not SubscriptionService(db).has_feature(
+            current_user.id, "emoji_status"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "emoji_status",
+                "Emoji-статус доступен с уровня 34",
+            )
+        current_user.emoji_status = next_status
+    if request.profile_color is not None:
+        from app.services.profile_style import normalize_profile_color
+        from app.services.subscription_service import SubscriptionService
+
+        try:
+            next_color = normalize_profile_color(request.profile_color)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="bad_profile_color",
+            )
+        if next_color and not SubscriptionService(db).has_feature(
+            current_user.id, "profile_colors"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "profile_colors",
+                "Цвет профиля доступен с уровня 36",
+            )
+        current_user.profile_color = next_color
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:

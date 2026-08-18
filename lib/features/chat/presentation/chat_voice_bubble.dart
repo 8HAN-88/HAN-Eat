@@ -18,6 +18,8 @@ class ChatVoiceBubble extends StatefulWidget {
     required this.accentColor,
     this.activeColor,
     this.onCompleted,
+    this.onTranscribe,
+    this.transcribing = false,
   });
 
   final ChatMessage message;
@@ -26,6 +28,8 @@ class ChatVoiceBubble extends StatefulWidget {
   final Color? activeColor;
   /// Called when playback finishes naturally (for play-next).
   final ValueChanged<ChatMessage>? onCompleted;
+  final VoidCallback? onTranscribe;
+  final bool transcribing;
 
   @override
   State<ChatVoiceBubble> createState() => _ChatVoiceBubbleState();
@@ -395,6 +399,41 @@ class _ChatVoiceBubbleState extends State<ChatVoiceBubble> {
                         widget.foregroundColor.withValues(alpha: 0.5),
                   ),
                 ),
+              ),
+            ),
+          if ((widget.message.transcription ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, top: 6),
+              child: Text(
+                widget.message.transcription!,
+                style: TextStyle(
+                  color: widget.foregroundColor.withValues(alpha: 0.92),
+                  fontSize: 13,
+                  height: 1.25,
+                ),
+              ),
+            )
+          else if (widget.onTranscribe != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 2, top: 2),
+              child: TextButton(
+                onPressed: widget.transcribing ? null : widget.onTranscribe,
+                style: TextButton.styleFrom(
+                  foregroundColor: widget.accentColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 28),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: widget.transcribing
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: widget.accentColor,
+                        ),
+                      )
+                    : const Text('Текст'),
               ),
             ),
         ],

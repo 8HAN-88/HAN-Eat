@@ -37,6 +37,7 @@ import '../sticker_pack_preview_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
+import 'create_chat_checklist_sheet.dart';
 import 'create_chat_poll_sheet.dart';
 
 enum ChatAttachTab {
@@ -44,6 +45,7 @@ enum ChatAttachTab {
   gif,
   file,
   poll,
+  checklist,
   contact,
   location,
   videoNote,
@@ -55,6 +57,7 @@ enum ChatAttachResult {
   file,
   pickedFile,
   poll,
+  checklist,
   contact,
   location,
   videoNote,
@@ -71,6 +74,7 @@ class ChatAttachSelection {
     this.contactPhoneName,
     this.contactPhoneE164,
     this.pollDraft,
+    this.checklistDraft,
     this.resendFileName,
     this.resendFileUrl,
     this.pickedFile,
@@ -88,6 +92,7 @@ class ChatAttachSelection {
   final String? contactPhoneName;
   final String? contactPhoneE164;
   final ChatPollDraft? pollDraft;
+  final ChatChecklistDraft? checklistDraft;
   final String? resendFileName;
   final String? resendFileUrl;
   final XFile? pickedFile;
@@ -127,6 +132,12 @@ class ChatAttachSelection {
       ChatAttachSelection._(
         kind: ChatAttachResult.poll,
         pollDraft: draft,
+      );
+
+  factory ChatAttachSelection.checklistDraft(ChatChecklistDraft draft) =>
+      ChatAttachSelection._(
+        kind: ChatAttachResult.checklist,
+        checklistDraft: draft,
       );
 
   factory ChatAttachSelection.resendFile({
@@ -281,6 +292,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   ChatAttachTab _tab = ChatAttachTab.gallery;
   final _picker = ImagePicker();
   final _pollFormKey = GlobalKey<ChatPollFormPanelState>();
+  final _checklistFormKey = GlobalKey<ChatChecklistFormPanelState>();
   final _searchController = TextEditingController();
 
   final List<XFile> _gallerySelection = [];
@@ -300,6 +312,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   String _stickerView = 'packs';
   int? _selectedStickerPackId;
   bool _pollCanSend = false;
+  bool _checklistCanSend = false;
   bool _searchVisible = false;
   String _searchQuery = '';
   VoidCallback? _reconnectedListener;
@@ -541,6 +554,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Файл';
       case ChatAttachTab.poll:
         return 'Новый опрос';
+      case ChatAttachTab.checklist:
+        return 'Чеклист';
       case ChatAttachTab.contact:
         return 'Контакты';
       case ChatAttachTab.location:
@@ -564,6 +579,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         return 'Документы и недавние';
       case ChatAttachTab.poll:
         return 'Создайте новый опрос';
+      case ChatAttachTab.checklist:
+        return 'Список дел — пункты можно отмечать вместе';
       case ChatAttachTab.contact:
         return 'Контакты и телефонная книга';
       case ChatAttachTab.location:
@@ -584,6 +601,8 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       _tab == ChatAttachTab.gallery && _gallerySelection.isNotEmpty;
 
   bool get _showPollSend => _tab == ChatAttachTab.poll;
+
+  bool get _showChecklistSend => _tab == ChatAttachTab.checklist;
 
   Future<void> _addFromGallery() async {
     final files = await _picker.pickMultipleMedia(
@@ -679,6 +698,16 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     final draft = _pollFormKey.currentState?.buildDraft();
     if (draft == null) return;
     _close(ChatAttachSelection.pollDraft(draft));
+  }
+
+  void _sendChecklist() {
+    if (SubscriptionStatusCache.peek()?.hasFeature('checklist') != true) {
+      unawaited(showCreatorUpsell(context));
+      return;
+    }
+    final draft = _checklistFormKey.currentState?.buildDraft();
+    if (draft == null) return;
+    _close(ChatAttachSelection.checklistDraft(draft));
   }
 
   Future<void> _createStickerPack() async {
@@ -1085,13 +1114,19 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
                 title: _headerTitle,
                 subtitle: _searchVisible ? null : _headerSubtitle,
                 showSearch: _showSearch,
-                showSend: _showGallerySend || _showPollSend,
-                sendEnabled: _showPollSend ? _pollCanSend : true,
+                showSend: _showGallerySend || _showPollSend || _showChecklistSend,
+                sendEnabled: _showPollSend
+                    ? _pollCanSend
+                    : _showChecklistSend
+                        ? _checklistCanSend
+                        : true,
                 onClose: () => _close(),
                 onSearch: _toggleSearch,
                 onSend: () {
                   if (_showPollSend) {
                     _sendPoll();
+                  } else if (_showChecklistSend) {
+                    _sendChecklist();
                   } else {
                     _close(
                       ChatAttachSelection.gallery(
@@ -1249,6 +1284,14 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
           scrollController: scrollController,
           onValidityChanged: (v) {
             if (_pollCanSend != v) setState(() => _pollCanSend = v);
+          },
+        );
+      case ChatAttachTab.checklist:
+        return ChatChecklistFormPanel(
+          key: _checklistFormKey,
+          scrollController: scrollController,
+          onValidityChanged: (v) {
+            if (_checklistCanSend != v) setState(() => _checklistCanSend = v);
           },
         );
       case ChatAttachTab.contact:
@@ -3663,6 +3706,22 @@ class _TelegramAttachDock extends StatelessWidget {
                           label: 'Опрос',
                           selected: selected == ChatAttachTab.poll,
                           onTap: () => onSelect(ChatAttachTab.poll),
+                          compact: true,
+                          width: width,
+                        ),
+                        _DockItem(
+                          icon: Icons.checklist_rtl,
+                          label: 'Чеклист',
+                          selected: selected == ChatAttachTab.checklist,
+                          onTap: () {
+                            if (SubscriptionStatusCache.peek()
+                                    ?.hasFeature('checklist') !=
+                                true) {
+                              unawaited(showCreatorUpsell(context));
+                              return;
+                            }
+                            onSelect(ChatAttachTab.checklist);
+                          },
                           compact: true,
                           width: width,
                         ),
