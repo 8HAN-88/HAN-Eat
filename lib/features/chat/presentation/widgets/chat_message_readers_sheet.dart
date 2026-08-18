@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../utils/api_error_parser.dart';
+import '../../../subscription/creator_upsell.dart';
 import '../../../../widgets/app_avatar.dart';
 
 Future<void> showChatMessageReadersSheet(
@@ -65,6 +66,10 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
       });
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) {
+        Navigator.of(context).maybePop();
+        return;
+      }
       setState(() {
         _error = e;
         _loading = false;

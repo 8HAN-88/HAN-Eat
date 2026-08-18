@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../core/network/haneat_http_client.dart';
 import '../models/gif_models.dart';
 import '../utils/api_error_parser.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 import 'server_config.dart';
 
@@ -23,11 +24,19 @@ class GifSearchService {
   }
 
   static Never _throwError(http.Response response, String fallback) {
-    throw apiExceptionFromHttpResponse(
+    final error = apiExceptionFromHttpResponse(
       response.statusCode,
       response.body,
       fallback: fallback,
     );
+    if (error.code == 'HAN_FEATURE_REQUIRED') {
+      throw HanPlusRequiredException(
+        error.message.isNotEmpty
+            ? error.message
+            : 'Требуется подписка с этой функцией',
+      );
+    }
+    throw error;
   }
 
   static Future<GifCatalogPage> _getPage(

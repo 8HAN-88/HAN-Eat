@@ -193,6 +193,14 @@ async def add_sticker_to_pack(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    if (body.sticker_type or "").strip().lower() == "animated":
+        from app.services.subscription_service import SubscriptionService
+
+        SubscriptionService(db).require_feature(
+            current_user.id,
+            "animated_stickers",
+            "Анимированные стикеры доступны с уровня 22",
+        )
     svc = StickerService(db)
     try:
         svc.add_sticker(

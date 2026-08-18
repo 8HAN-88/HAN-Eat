@@ -95,7 +95,7 @@ class FlexPreviewResponse(BaseModel):
 
 class FlexSlotIn(BaseModel):
     feature_id: int
-    level: int = Field(ge=1, le=20)
+    level: int = Field(ge=1, le=24)
 
 
 class FlexSaveLayoutRequest(BaseModel):
@@ -104,17 +104,17 @@ class FlexSaveLayoutRequest(BaseModel):
 
 class FlexMoveRequest(BaseModel):
     feature_id: int
-    target_level: int = Field(ge=1, le=20)
+    target_level: int = Field(ge=1, le=24)
 
 
 class FlexLevelRequest(BaseModel):
-    level: int = Field(ge=1, le=20)
+    level: int = Field(ge=1, le=24)
     plan: str = "monthly"
 
 
 class FlexGiftRequest(BaseModel):
     recipient_user_id: int
-    level: int = Field(ge=1, le=20)
+    level: int = Field(ge=1, le=24)
     plan: str = "monthly"
 
 
@@ -124,9 +124,9 @@ class FlexFeatureWrite(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = None
     price_rub: Optional[float] = None
-    min_level: Optional[int] = Field(default=None, ge=1, le=20)
-    max_level: Optional[int] = Field(default=None, ge=1, le=20)
-    default_level: Optional[int] = Field(default=None, ge=1, le=20)
+    min_level: Optional[int] = Field(default=None, ge=1, le=24)
+    max_level: Optional[int] = Field(default=None, ge=1, le=24)
+    default_level: Optional[int] = Field(default=None, ge=1, le=24)
     feature_type: Optional[str] = None
     movable: Optional[bool] = None
     required: Optional[bool] = None
@@ -140,6 +140,6 @@ class FlexFeatureWrite(BaseModel):
 class FlexBlockWrite(BaseModel):
     key: Optional[str] = None
     title: Optional[str] = None
-    min_level: Optional[int] = Field(default=None, ge=1, le=20)
-    max_level: Optional[int] = Field(default=None, ge=1, le=20)
+    min_level: Optional[int] = Field(default=None, ge=1, le=24)
+    max_level: Optional[int] = Field(default=None, ge=1, le=24)
     sort_order: Optional[int] = None

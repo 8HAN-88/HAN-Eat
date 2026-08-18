@@ -34,6 +34,10 @@ CATALOG_FEATURE_SLUGS = (
     "chat_wallpaper",
     "story_viewers",
     "story_close_friends",
+    "gif_search",
+    "animated_stickers",
+    "group_readers",
+    "live_location",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

@@ -9643,6 +9643,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   Future<void> _showMessageReaders(ChatMessage msg) async {
     if (msg.id <= 0) return;
+    if (!_hasFlexFeature('group_readers')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     await showChatMessageReadersSheet(
       context,
       conversationId: widget.conversationId,

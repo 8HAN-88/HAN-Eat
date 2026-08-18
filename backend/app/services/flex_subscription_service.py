@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 20
+MAX_LEVEL = 24
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -49,6 +49,7 @@ DEFAULT_BLOCKS = (
     {"key": "C", "title": "PRO", "min_level": 7, "max_level": 10, "sort_order": 3},
     {"key": "D", "title": "Мессенджер+", "min_level": 11, "max_level": 16, "sort_order": 4},
     {"key": "E", "title": "Ещё", "min_level": 17, "max_level": 20, "sort_order": 5},
+    {"key": "F", "title": "Медиа+", "min_level": 21, "max_level": 24, "sort_order": 6},
 )
 
 DEFAULT_PRESETS = (
@@ -57,6 +58,7 @@ DEFAULT_PRESETS = (
     {"key": "pro", "title": "PRO", "level": 10},
     {"key": "messenger", "title": "Мессенджер+", "level": 16},
     {"key": "extra", "title": "Ещё", "level": 20},
+    {"key": "media", "title": "Медиа+", "level": 24},
 )
 
 DEFAULT_FEATURES = (
@@ -319,6 +321,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "E",
+    },
+    {
+        "slug": "gif_search",
+        "title": "Поиск GIF",
+        "description": "Каталог и поиск GIF в чатах.",
+        "icon": "gif",
+        "default_level": 21,
+        "min_level": 21,
+        "max_level": 24,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "F",
+    },
+    {
+        "slug": "animated_stickers",
+        "title": "Анимированные стикеры",
+        "description": "Добавление анимированных стикеров в свои паки.",
+        "icon": "animation",
+        "default_level": 22,
+        "min_level": 21,
+        "max_level": 24,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "F",
+    },
+    {
+        "slug": "group_readers",
+        "title": "Кто прочитал",
+        "description": "Список прочтений ваших сообщений в группах.",
+        "icon": "done_all",
+        "default_level": 23,
+        "min_level": 21,
+        "max_level": 24,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "F",
+    },
+    {
+        "slug": "live_location",
+        "title": "Трансляция геопозиции",
+        "description": "Делитесь живой геопозицией в чате.",
+        "icon": "my_location",
+        "default_level": 24,
+        "min_level": 21,
+        "max_level": 24,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "F",
     },
 )
 
