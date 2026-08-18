@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/subscription_status_cache.dart';
 import '../../../services/user_service.dart';
 import '../../../services/web_app_update_service.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
@@ -176,7 +177,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       lastSeenPrivacyContacts =>
                         'Только люди из ваших контактов',
                       lastSeenPrivacyNobody =>
-                        'Статус «в сети» и last seen скрыты',
+                        SubscriptionStatusCache.peek()
+                                    ?.hasFeature('privacy_plus') ==
+                                true
+                            ? 'Статус скрыт, чужой last seen всё равно виден'
+                            : 'Статус скрыт — чужой last seen тоже не виден',
                       _ => 'Все пользователи HanWe',
                     },
                   ),

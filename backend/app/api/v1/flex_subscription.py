@@ -18,6 +18,8 @@ from app.schemas.flex_subscription import (
 )
 from app.services.flex_subscription_service import (
     FlexSubscriptionService,
+    MAX_LEVEL,
+    MIN_LEVEL,
     normalize_plan,
     price_for_level,
     price_for_plan,
@@ -149,8 +151,11 @@ def admin_update_block(
 
 @router.get("/price/{level}")
 def flex_price(level: int):
-    if level < 1 or level > 10:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Level must be 1–10")
+    if level < MIN_LEVEL or level > MAX_LEVEL:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Level must be {MIN_LEVEL}–{MAX_LEVEL}",
+        )
     return {
         "level": level,
         "price_rub": price_for_level(level),

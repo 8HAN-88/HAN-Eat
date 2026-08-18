@@ -3012,9 +3012,8 @@ class ChatService:
                 return existing, False
 
         from app.services.anonymous_admin import can_send_anonymously
-        from app.services.message_effect_service import normalize_effect_id
 
-        effect = normalize_effect_id(effect_id)
+        effect = self._normalize_send_effect(effect_id, sender_id)
         resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 
         conv = self._validate_message_payload(
@@ -3554,8 +3553,6 @@ class ChatService:
         effect_id: Optional[str] = None,
         topic_id: Optional[int] = None,
     ) -> ScheduledMessage:
-        from app.services.message_effect_service import normalize_effect_id
-
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         conv = (
             self.db.query(Conversation)
@@ -3586,7 +3583,7 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
-        effect = normalize_effect_id(effect_id)
+        effect = self._normalize_send_effect(effect_id, sender_id)
         resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 
         scheduled = ScheduledMessage(
@@ -4119,6 +4116,38 @@ class ChatService:
         return True
 
     PIN_LIMIT = 5
+    PIN_LIMIT_PLUS = 20
+    FOLDER_LIMIT = 10
+    FOLDER_LIMIT_PLUS = 50
+
+    def _has_feature(self, user_id: int, slug: str) -> bool:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            return SubscriptionService(self.db).has_feature(int(user_id), slug)
+        except Exception:
+            return False
+
+    def _pin_limit_for(self, user_id: int) -> int:
+        return self.PIN_LIMIT_PLUS if self._has_feature(user_id, "extra_pins") else self.PIN_LIMIT
+
+    def _folder_limit_for(self, user_id: int) -> int:
+        return (
+            self.FOLDER_LIMIT_PLUS
+            if self._has_feature(user_id, "extra_folders")
+            else self.FOLDER_LIMIT
+        )
+
+    def _normalize_send_effect(self, effect_id: Optional[str], sender_id: int) -> Optional[str]:
+        from app.services.message_effect_service import (
+            is_premium_effect,
+            normalize_effect_id,
+        )
+
+        effect = normalize_effect_id(effect_id)
+        if effect and is_premium_effect(effect) and not self._has_feature(sender_id, "message_effects"):
+            raise ValueError("effect_premium_required")
+        return effect
 
     def _sync_legacy_pinned_slot(self, conv: Conversation) -> None:
         top = (
@@ -4204,7 +4233,7 @@ class ChatService:
                 .scalar()
                 or 0
             )
-            if int(count) >= self.PIN_LIMIT:
+            if int(count) >= self._pin_limit_for(user_id):
                 raise ValueError("pin_limit")
             self.db.add(
                 ConversationPinnedMessage(
@@ -4706,6 +4735,14 @@ class ChatService:
         name = (name or "").strip()
         if not name:
             raise ValueError("invalid_name")
+        existing = (
+            self.db.query(func.count(ChatFolder.id))
+            .filter(ChatFolder.user_id == user_id)
+            .scalar()
+            or 0
+        )
+        if int(existing) >= self._folder_limit_for(user_id):
+            raise ValueError("folder_limit")
         max_pos = (
             self.db.query(func.max(ChatFolder.position))
             .filter(ChatFolder.user_id == user_id)

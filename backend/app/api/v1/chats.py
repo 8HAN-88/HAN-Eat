@@ -126,6 +126,30 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _raise_flex_gate(code: str) -> None:
+    from app.core.entitlements import feature_required_detail
+
+    mapping = {
+        "effect_premium_required": (
+            "message_effects",
+            "Эффекты конфетти и фейерверка доступны с уровня 16",
+        ),
+        "pin_limit": ("extra_pins", "Больше пяти закрепов доступно с уровня 12"),
+        "folder_limit": (
+            "extra_folders",
+            "Больше десяти папок доступно с уровня 15",
+        ),
+    }
+    item = mapping.get(code)
+    if not item:
+        return
+    slug, message = item
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        feature_required_detail(slug, message),
+    )
+
+
 def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> None:
     if not getattr(settings, "RATE_LIMIT_ENABLED", True):
         return
@@ -1189,6 +1213,7 @@ async def create_chat_folder(
         return ChatFolderResponse(**row)
     except ValueError as e:
         db.rollback()
+        _raise_flex_gate(str(e))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
 
@@ -2088,6 +2113,7 @@ async def send_message(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        _raise_flex_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "anonymous_not_allowed":
@@ -2375,6 +2401,7 @@ async def schedule_message(
     except ValueError as e:
         db.rollback()
         code = str(e)
+        _raise_flex_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code in (
@@ -3331,14 +3358,18 @@ async def translate_chat_text(
     from app.services.text_translation import translate_text
     from app.services.subscription_service import SubscriptionService
 
+    billing = SubscriptionService(db)
+    billing.require_feature(
+        current_user.id,
+        "chat_translation",
+        "Перевод сообщений доступен с уровня 11",
+    )
     translated = translate_text(text, target)
     return TranslateTextResponse(
         text=text,
         translated=translated or text,
         target_lang=target,
-        priority=SubscriptionService(db).has_feature(
-            current_user.id, "ai_priority_speed"
-        ),
+        priority=billing.has_feature(current_user.id, "ai_priority_speed"),
     )
 
 
@@ -3515,10 +3546,7 @@ async def pin_message(
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
         if code == "pin_limit":
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "pin_limit",
-            )
+            _raise_flex_gate(code)
         raise
     pinned_msgs = []
     try:

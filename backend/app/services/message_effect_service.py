@@ -12,6 +12,11 @@ MESSAGE_EFFECT_IDS = frozenset(
         "thumbs_up",
     }
 )
+PREMIUM_MESSAGE_EFFECTS = frozenset({"confetti", "fireworks", "celebration"})
+
+
+def is_premium_effect(effect_id: Optional[str]) -> bool:
+    return bool(effect_id) and str(effect_id) in PREMIUM_MESSAGE_EFFECTS
 
 
 def normalize_effect_id(raw: Optional[str]) -> Optional[str]:

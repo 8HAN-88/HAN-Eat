@@ -24,6 +24,12 @@ CATALOG_FEATURE_SLUGS = (
     "creator_scheduled_posts",
     "creator_analytics",
     "priority_support",
+    "chat_translation",
+    "extra_pins",
+    "larger_uploads",
+    "privacy_plus",
+    "extra_folders",
+    "message_effects",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})
@@ -48,7 +54,6 @@ def catalog_entitlements(slugs: set[str]) -> Dict[str, bool]:
     ents["creator_pinned"] = ents["creator_tools"]
     ents["creator_badge"] = ents["creator_tools"]
     ents["advanced_stats"] = ents["creator_analytics"]
-    ents["larger_uploads"] = ents["ad_free"]
     ents["priority_reels_quality"] = ents["ai_priority_speed"]
     return ents
 
