@@ -17,6 +17,7 @@ import 'channel_settings_bottom_sheet.dart';
 import 'channel_search_screen.dart';
 import '../../../app/app_router.dart';
 import '../../../widgets/app_empty_state.dart';
+import '../../subscription/creator_upsell.dart';
 
 class ChannelInfoScreen extends ConsumerStatefulWidget {
   final int channelId;
@@ -201,8 +202,12 @@ class _ChannelInfoScreenState extends ConsumerState<ChannelInfoScreen>
     }
   }
 
-  void _openSearch() {
+  Future<void> _openSearch() async {
     if (_channel == null) return;
+    if (!hasFlexFeature('channel_post_search')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         fullscreenDialog: true,

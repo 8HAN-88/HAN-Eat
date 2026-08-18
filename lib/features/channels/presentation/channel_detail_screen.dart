@@ -14,6 +14,7 @@ import '../../../core/share/system_share.dart';
 import '../../../services/server_config.dart';
 import '../../../services/share_link_service.dart';
 import '../../../app/app_router.dart';
+import '../../subscription/creator_upsell.dart';
 import '../application/channels_list_refresh_provider.dart';
 import 'channel_settings_bottom_sheet.dart';
 import 'channel_detail_screen_tabs.dart';
@@ -451,8 +452,12 @@ class _ChannelDetailScreenState extends ConsumerState<ChannelDetailScreen> {
     );
   }
 
-  void _openSearchFullscreen() {
+  Future<void> _openSearchFullscreen() async {
     if (_channel == null) return;
+    if (!hasFlexFeature('channel_post_search')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         fullscreenDialog: true,

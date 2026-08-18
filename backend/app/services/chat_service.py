@@ -1549,6 +1549,8 @@ class ChatService:
         conv = self._get_group_or_error(conversation_id)
         if not self._can_manage_group_posting_permissions(conversation_id, actor_id):
             raise ValueError("forbidden")
+        if bool(enabled) and not self._has_feature(actor_id, "no_forwards"):
+            raise ValueError("no_forwards_required")
         conv.protect_content = bool(enabled)
         conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         return conv
@@ -4709,6 +4711,16 @@ class ChatService:
             "filters": filters,
         }
 
+    _PREMIUM_FOLDER_FILTER_KEYS = (
+        "contacts",
+        "non_contacts",
+        "bots",
+        "unread_only",
+        "exclude_muted",
+        "exclude_archived",
+        "exclude_bots",
+    )
+
     @staticmethod
     def _normalize_filters(filters: Optional[dict]) -> dict:
         if not filters:
@@ -4726,6 +4738,22 @@ class ChatService:
             "exclude_archived": bool(filters.get("exclude_archived")),
             "exclude_bots": bool(filters.get("exclude_bots")),
         }
+
+    @classmethod
+    def _folder_filters_need_premium(cls, filters: Optional[dict]) -> bool:
+        if not filters:
+            return False
+        return any(bool(filters.get(key)) for key in cls._PREMIUM_FOLDER_FILTER_KEYS)
+
+    def _require_folder_flex_options(
+        self, user_id: int, icon: Optional[str], filters: Optional[dict]
+    ) -> None:
+        if self._folder_filters_need_premium(filters) and not self._has_feature(
+            user_id, "folder_filters"
+        ):
+            raise ValueError("folder_filters_required")
+        if (icon or "").strip() and not self._has_feature(user_id, "folder_icons"):
+            raise ValueError("folder_icon_required")
 
     def list_folders(self, user_id: int) -> List[dict]:
         folders = (
@@ -4762,6 +4790,7 @@ class ChatService:
             .scalar()
         )
         norm_filters = self._normalize_filters(filters)
+        self._require_folder_flex_options(user_id, icon, norm_filters)
         folder = ChatFolder(
             user_id=user_id,
             name=name[:64],
@@ -4825,9 +4854,11 @@ class ChatService:
                 raise ValueError("invalid_name")
             folder.name = name[:64]
         if icon is not None:
+            self._require_folder_flex_options(user_id, icon, None)
             folder.icon = icon[:8] if icon else None
         if filters is not None:
             norm_filters = self._normalize_filters(filters)
+            self._require_folder_flex_options(user_id, None, norm_filters)
             folder.filters_json = json.dumps(norm_filters) if norm_filters else None
         if conversation_ids is not None or channel_ids is not None:
             current = self._folder_payload(folder)

@@ -15,6 +15,7 @@ import '../../../widgets/stars_pay_helper.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../utils/presence_format.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../../widgets/app_avatar.dart';
 import '../application/chat_inbox_optimistic.dart';
 import '../application/join_requests_bulk.dart';
@@ -220,6 +221,7 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
     } catch (e) {
       if (!mounted) return;
       _applyConversation(previous);
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -370,6 +372,10 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
   Future<void> _toggleProtectContent() async {
     if (!_canManagePostingPermissions) return;
     final next = !_conversation.protectContent;
+    if (next && !hasFlexFeature('no_forwards')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     await _commitConversation(
       optimistic: _conversation.copyWith(protectContent: next),
       request: () => ChatService.setGroupProtectContent(
@@ -1765,12 +1771,18 @@ class _ChatGroupInfoScreenState extends State<ChatGroupInfoScreen> {
                               : (_) => _toggleOnlyAdminsCanPost(),
                         ),
                         SwitchListTile(
-                          secondary: const Icon(Icons.lock_outline),
+                          secondary: Icon(
+                            hasFlexFeature('no_forwards')
+                                ? Icons.lock_outline
+                                : Icons.workspace_premium_outlined,
+                          ),
                           title: const Text('Запретить пересылку'),
                           subtitle: Text(
-                            _canManagePostingPermissions
-                                ? 'Участники не смогут пересылать и сохранять сообщения'
-                                : 'Нет права управлять этим параметром',
+                            !_canManagePostingPermissions
+                                ? 'Нет права управлять этим параметром'
+                                : hasFlexFeature('no_forwards')
+                                    ? 'Участники не смогут пересылать и сохранять сообщения'
+                                    : 'Доступно с уровня 29',
                           ),
                           value: _conversation.protectContent,
                           onChanged: (_busy || !_canManagePostingPermissions)
