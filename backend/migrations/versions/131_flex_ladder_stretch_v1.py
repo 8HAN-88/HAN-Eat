@@ -46,7 +46,7 @@ _FEATURES = (
     {
         "slug": "privacy_plus",
         "title": "Приватность last seen",
-        "description": "Скрывайте свой статус и всё равно видите, кто в сети.",
+        "description": "Скрывайте свой статус и всё равно видите, кто в сети. У кого уровень выше — всё равно видит вас.",
         "icon": "visibility_off",
         "default_level": 14,
     },

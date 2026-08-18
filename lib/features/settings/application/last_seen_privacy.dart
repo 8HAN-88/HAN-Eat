@@ -31,3 +31,6 @@ String lastSeenPrivacyLabel(String privacy) {
       return 'Все';
   }
 }
+
+const String lastSeenHigherLevelNote =
+    'Если у другого пользователя уровень подписки выше вашего, он всё равно видит ваш статус.';

@@ -80,6 +80,17 @@ def is_owner_contact(db: Session, owner_id: int, other_id: int) -> bool:
     return row is not None
 
 
+def _flex_level(db: Optional[Session], user_id: Optional[int]) -> int:
+    if db is None or user_id is None:
+        return 0
+    try:
+        from app.services.flex_subscription_service import FlexSubscriptionService
+
+        return int(FlexSubscriptionService(db).current_level(int(user_id)))
+    except Exception:
+        return 0
+
+
 def _viewer_has_privacy_plus(db: Optional[Session], viewer_id: Optional[int]) -> bool:
     if db is None or viewer_id is None:
         return False
@@ -108,6 +119,9 @@ def can_viewer_see_last_seen(
     else:
         allowed = is_owner_contact(db, int(owner.id), int(viewer_id))
     if not allowed:
+        if db is not None and viewer_id is not None:
+            if _flex_level(db, viewer_id) > _flex_level(db, owner.id):
+                return True
         return False
     if db is None or viewer_id is None:
         return True

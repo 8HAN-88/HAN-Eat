@@ -516,3 +516,25 @@ def test_privacy_plus_lets_hidden_viewer_see_last_seen(db_session):
     db_session.commit()
     assert can_viewer_see_last_seen(db_session, owner, viewer.id) is True
     assert SubscriptionService(db_session).has_feature(viewer.id, "privacy_plus") is True
+
+
+def test_higher_flex_level_sees_hidden_last_seen(db_session):
+    from app.services.last_seen_privacy import (
+        PRIVACY_NOBODY,
+        can_viewer_see_last_seen,
+    )
+
+    owner = _user(db_session, 1)
+    viewer = _user(db_session, 2)
+    peer = _user(db_session, 3)
+    owner.last_seen_privacy = PRIVACY_NOBODY
+    owner.show_last_seen = False
+    db_session.commit()
+    svc = FlexSubscriptionService(db_session)
+    svc.activate(owner.id, 4)
+    svc.activate(viewer.id, 6)
+    svc.activate(peer.id, 4)
+    db_session.commit()
+    assert can_viewer_see_last_seen(db_session, owner, viewer.id) is True
+    assert can_viewer_see_last_seen(db_session, owner, peer.id) is False
+    assert can_viewer_see_last_seen(db_session, owner, owner.id) is True
