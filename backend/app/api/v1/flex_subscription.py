@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.flex_subscription import (
     FlexBlockWrite,
     FlexFeatureWrite,
+    FlexGiftRequest,
     FlexLevelRequest,
     FlexMeResponse,
     FlexMoveRequest,
@@ -291,3 +292,142 @@ def create_flex_checkout(
             "amount": amount,
         }
     raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments unavailable")
+
+
+def _start_flex_payment(
+    *,
+    current_user: User,
+    http_request: Request,
+    amount: float,
+    plan: str,
+    description: str,
+    extra: dict,
+):
+    from app.core.config import settings
+    from app.services.country_service import CountryService
+    from app.services.tbank_service import get_tbank_service
+    from app.services.yookassa_service import get_yookassa_service
+
+    country_code = current_user.country_code or CountryService.get_country_from_request(
+        http_request
+    )
+    if not current_user.country_code:
+        current_user.country_code = country_code
+    provider = CountryService.get_payment_provider_for_country(country_code)
+    if provider == "none":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "PAYMENTS_UNAVAILABLE",
+                "message": "Оплата подписок временно недоступна",
+            },
+        )
+    success_url = f"{settings.FRONTEND_URL}/subscription/success"
+    fail_url = f"{settings.FRONTEND_URL}/subscription/cancel"
+    if provider == "tbank":
+        tbank = get_tbank_service()
+        if not tbank.enabled:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "T-Bank unavailable")
+        result = tbank.create_payment(
+            user_id=current_user.id,
+            amount=amount,
+            plan=plan,
+            description=description,
+            success_url=success_url,
+            fail_url=fail_url,
+            product="flex",
+            metadata_extra=extra,
+        )
+        return {
+            "payment_id": result["payment_id"],
+            "url": result["confirmation_url"],
+            "provider": "sbp",
+            "currency": "RUB",
+        }
+    if provider == "yookassa":
+        yookassa = get_yookassa_service()
+        if not yookassa.enabled:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "YooKassa unavailable")
+        result = yookassa.create_payment(
+            user_id=current_user.id,
+            user_email=current_user.email,
+            amount=amount,
+            plan=plan,
+            description=description,
+            return_url=success_url,
+            product="flex",
+            metadata_extra=extra,
+        )
+        return {
+            "payment_id": result.get("payment_id") or result.get("id"),
+            "url": result.get("confirmation_url") or result.get("url"),
+            "provider": "yookassa",
+            "currency": "RUB",
+        }
+    raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments unavailable")
+
+
+@router.post("/gift/checkout")
+def create_flex_gift_checkout(
+    request: FlexGiftRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.legal_consent_service import consent_required
+
+    if consent_required(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "LEGAL_CONSENT_REQUIRED",
+                "message": "Примите документы перед оплатой",
+            },
+        )
+    level = int(request.level)
+    plan = normalize_plan(request.plan)
+    service = _svc(db)
+    gift = service.create_gift(
+        current_user.id,
+        int(request.recipient_user_id),
+        level=level,
+        plan=plan,
+    )
+    amount = float(gift.amount)
+    period_price = price_for_plan(level, plan)
+    description = (
+        f"Подарок подписки · уровень {level} "
+        f"({period_price} ₽/{'год' if plan == 'yearly' else 'мес'})"
+    )
+    extra = {
+        "flex_level": str(level),
+        "plan": plan,
+        "gift": "1",
+        "gift_id": str(gift.id),
+        "gift_to": str(gift.recipient_id),
+    }
+    result = _start_flex_payment(
+        current_user=current_user,
+        http_request=http_request,
+        amount=amount,
+        plan=plan,
+        description=description,
+        extra=extra,
+    )
+    db.commit()
+    return {
+        **result,
+        "gift_id": gift.id,
+        "level": level,
+        "plan": plan,
+        "amount": amount,
+        "recipient_user_id": gift.recipient_id,
+    }
+
+
+@router.get("/admin/stats")
+def admin_flex_stats(
+    _: User = Depends(get_current_admin_required),
+    db: Session = Depends(get_db),
+):
+    return _svc(db).admin_stats()

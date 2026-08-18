@@ -83,6 +83,48 @@ class FlexSubscriptionApi {
     _throw(response, 'Нельзя переместить функцию');
   }
 
+  static Future<FlexCheckoutResult> giftCheckout({
+    required int recipientUserId,
+    required int level,
+    String plan = 'monthly',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/gift/checkout'),
+      headers: await _headers(),
+      body: jsonEncode({
+        'recipient_user_id': recipientUserId,
+        'level': level,
+        'plan': plan,
+      }),
+    );
+    if (response.statusCode != 200) {
+      _throw(response, 'Не удалось создать подарок');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final result = FlexCheckoutResult.fromJson(data);
+    final url = result.url;
+    if (url == null || url.isEmpty) {
+      throw const ApiClientException(message: 'Платёжная ссылка не получена');
+    }
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) {
+      throw const ApiClientException(message: 'Не удалось открыть оплату');
+    }
+    return result;
+  }
+
+  static Future<Map<String, dynamic>> adminStats() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/stats'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    _throw(response, 'Не удалось загрузить статистику');
+  }
+
   static Future<FlexCheckoutResult> checkout(int level, {String plan = 'monthly'}) async {
     final response = await http.post(
       Uri.parse('$baseUrl/checkout'),
@@ -247,6 +289,24 @@ class FlexFeature {
       );
 }
 
+class FlexPreset {
+  const FlexPreset({
+    required this.key,
+    required this.title,
+    required this.level,
+  });
+
+  final String key;
+  final String title;
+  final int level;
+
+  factory FlexPreset.fromJson(Map<String, dynamic> json) => FlexPreset(
+        key: json['key'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        level: json['level'] as int? ?? 1,
+      );
+}
+
 class FlexBlock {
   const FlexBlock({
     required this.key,
@@ -276,6 +336,7 @@ class FlexMe {
     required this.active,
     required this.levels,
     required this.blocks,
+    this.presets = const [],
     this.basePriceRub = 39,
     this.stepPriceRub = 10,
     this.nextLevel,
@@ -308,6 +369,7 @@ class FlexMe {
   final int yearlyPriceRub;
   final List<FlexFeature> levels;
   final List<FlexBlock> blocks;
+  final List<FlexPreset> presets;
   final int basePriceRub;
   final int stepPriceRub;
 
@@ -368,6 +430,10 @@ class FlexMe {
         blocks: [
           for (final raw in (json['blocks'] as List<dynamic>? ?? const []))
             if (raw is Map<String, dynamic>) FlexBlock.fromJson(raw),
+        ],
+        presets: [
+          for (final raw in (json['presets'] as List<dynamic>? ?? const []))
+            if (raw is Map<String, dynamic>) FlexPreset.fromJson(raw),
         ],
       );
 }

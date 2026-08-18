@@ -55,6 +55,7 @@ from app.models.close_friend import CloseFriend
 from app.models.flex_subscription import (
     SubscriptionFeature,
     SubscriptionFeatureBlock,
+    UserFlexGift,
     UserFlexSlot,
     UserFlexSubscription,
 )
@@ -92,5 +93,6 @@ __all__ = [
     "SubscriptionFeatureBlock",
     "UserFlexSubscription",
     "UserFlexSlot",
+    "UserFlexGift",
 ]
 

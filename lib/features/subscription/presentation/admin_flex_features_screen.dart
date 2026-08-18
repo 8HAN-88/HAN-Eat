@@ -13,6 +13,7 @@ class AdminFlexFeaturesScreen extends StatefulWidget {
 
 class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
   FlexAdminCatalog? _catalog;
+  Map<String, dynamic>? _stats;
   bool _loading = true;
   String? _error;
 
@@ -29,9 +30,16 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
     });
     try {
       final catalog = await FlexSubscriptionApi.adminCatalog();
+      Map<String, dynamic>? stats;
+      try {
+        stats = await FlexSubscriptionApi.adminStats();
+      } catch (_) {
+        stats = null;
+      }
       if (!mounted) return;
       setState(() {
         _catalog = catalog;
+        _stats = stats;
         _loading = false;
       });
     } catch (e) {
@@ -194,6 +202,13 @@ class _AdminFlexFeaturesScreenState extends State<AdminFlexFeaturesScreen> {
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                     children: [
+                      if (_stats != null) ...[
+                        Text(
+                          'Активных ${_stats!['active'] ?? 0} · подарков ${_stats!['gifts_applied'] ?? 0} · MRR ${(_stats!['mrr_rub'] as num?)?.round() ?? 0} ₽',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       for (final block in _catalog!.blocks) ...[
                         Text(
                           'Блок ${block.key} · ${block.title} (${block.minLevel}–${block.maxLevel})',

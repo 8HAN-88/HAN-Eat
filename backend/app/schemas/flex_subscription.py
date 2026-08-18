@@ -35,6 +35,12 @@ class FlexFeatureItem(BaseModel):
     shop_state: Optional[str] = None
 
 
+class FlexPresetItem(BaseModel):
+    key: str
+    title: str
+    level: int
+
+
 class FlexMeResponse(BaseModel):
     current_level: int
     price_rub: int
@@ -55,6 +61,7 @@ class FlexMeResponse(BaseModel):
     next_feature: Optional[FlexFeatureItem] = None
     levels: List[FlexFeatureItem]
     blocks: List[FlexBlockItem]
+    presets: List[FlexPresetItem] = []
 
 
 class FlexShopResponse(BaseModel):
@@ -101,6 +108,12 @@ class FlexMoveRequest(BaseModel):
 
 
 class FlexLevelRequest(BaseModel):
+    level: int = Field(ge=1, le=10)
+    plan: str = "monthly"
+
+
+class FlexGiftRequest(BaseModel):
+    recipient_user_id: int
     level: int = Field(ge=1, le=10)
     plan: str = "monthly"
 

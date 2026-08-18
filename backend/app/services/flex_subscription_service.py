@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.flex_subscription import (
@@ -12,6 +13,7 @@ from app.models.flex_subscription import (
     FEATURE_TYPES,
     SubscriptionFeature,
     SubscriptionFeatureBlock,
+    UserFlexGift,
     UserFlexSlot,
     UserFlexSubscription,
 )
@@ -45,6 +47,12 @@ DEFAULT_BLOCKS = (
     {"key": "A", "title": "Базовые функции", "min_level": 1, "max_level": 3, "sort_order": 1},
     {"key": "B", "title": "Расширенные функции", "min_level": 4, "max_level": 6, "sort_order": 2},
     {"key": "C", "title": "PRO", "min_level": 7, "max_level": 10, "sort_order": 3},
+)
+
+DEFAULT_PRESETS = (
+    {"key": "basic", "title": "Базовый", "level": 3},
+    {"key": "plus", "title": "Расширенный", "level": 6},
+    {"key": "pro", "title": "PRO", "level": 10},
 )
 
 DEFAULT_FEATURES = (
@@ -242,6 +250,10 @@ class FlexSubscriptionService:
             q = q.filter(
                 SubscriptionFeature.status == "active",
                 SubscriptionFeature.available.is_(True),
+                or_(
+                    SubscriptionFeature.launch_at.is_(None),
+                    SubscriptionFeature.launch_at <= _now(),
+                ),
             )
         return q.order_by(
             SubscriptionFeature.default_level.asc(),
@@ -841,6 +853,189 @@ class FlexSubscriptionService:
         self.sync_user(user_id, auto_renew=auto_renew)
         return sub
 
+    def grant_gift_access(
+        self,
+        user_id: int,
+        *,
+        level: int,
+        plan: str = "monthly",
+        extra_days: Optional[int] = None,
+    ) -> UserFlexSubscription:
+        dest = max(MIN_LEVEL, min(MAX_LEVEL, int(level)))
+        dest_plan = normalize_plan(plan)
+        days = int(extra_days or period_days_for(dest_plan))
+        now = _now()
+        row = self.get_flex(user_id)
+        if row is None:
+            row = UserFlexSubscription(user_id=user_id, plan=dest_plan)
+            self.db.add(row)
+            self.db.flush()
+        if not self.is_flex_active(user_id):
+            row.current_level = dest
+            row.plan = dest_plan
+            row.status = "active"
+            row.auto_renew = False
+            row.expires_at = now + timedelta(days=days)
+            row.pending_level = None
+            row.pending_level_at = None
+            row.pending_plan = None
+        else:
+            row.current_level = max(int(row.current_level or 0), dest)
+            row.status = "active"
+            base = row.expires_at if row.expires_at and row.expires_at > now else now
+            row.expires_at = base + timedelta(days=days)
+        sub = (
+            self.db.query(Subscription)
+            .filter(
+                Subscription.user_id == user_id,
+                Subscription.status.in_(("active", "trial")),
+            )
+            .order_by(Subscription.id.desc())
+            .first()
+        )
+        if sub:
+            sub.expires_at = row.expires_at
+            sub.status = "active"
+        else:
+            sub = Subscription(
+                user_id=user_id,
+                plan=row.plan or dest_plan,
+                product="flex",
+                status="active",
+                payment_provider="gift",
+                payment_provider_subscription_id=f"flex-gift:{user_id}:{int(now.timestamp())}",
+                amount=0,
+                currency="RUB",
+                expires_at=row.expires_at,
+                auto_renew=False,
+                refund_status="none",
+            )
+            self.db.add(sub)
+            self.db.flush()
+            row.payment_subscription_id = sub.id
+        self.sync_user(user_id)
+        return row
+
+    def create_gift(
+        self,
+        sender_id: int,
+        recipient_id: int,
+        *,
+        level: int,
+        plan: str = "monthly",
+    ) -> UserFlexGift:
+        if int(sender_id) == int(recipient_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Нельзя подарить подписку себе",
+            )
+        from app.models.user import User
+
+        recipient = (
+            self.db.query(User)
+            .filter(User.id == recipient_id, User.deleted_at.is_(None))
+            .first()
+        )
+        if not recipient:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Получатель не найден")
+        dest = max(MIN_LEVEL, min(MAX_LEVEL, int(level)))
+        dest_plan = normalize_plan(plan)
+        gift = UserFlexGift(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            level=dest,
+            plan=dest_plan,
+            amount=price_for_plan(dest, dest_plan),
+            status="pending",
+        )
+        self.db.add(gift)
+        self.db.flush()
+        return gift
+
+    def apply_gift(
+        self,
+        gift_id: int,
+        *,
+        payment_provider: Optional[str] = None,
+        payment_id: Optional[str] = None,
+    ) -> UserFlexGift:
+        gift = self.db.query(UserFlexGift).filter(UserFlexGift.id == gift_id).first()
+        if not gift:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Подарок не найден")
+        if gift.status == "applied":
+            return gift
+        self.grant_gift_access(gift.recipient_id, level=int(gift.level), plan=gift.plan)
+        gift.status = "applied"
+        gift.applied_at = _now()
+        if payment_provider:
+            gift.payment_provider = payment_provider
+        if payment_id:
+            gift.payment_id = payment_id
+        self.db.flush()
+        try:
+            from app.services.notification_service import NotificationService
+
+            period = "год" if normalize_plan(gift.plan) == "yearly" else "месяц"
+            nested = self.db.begin_nested()
+            try:
+                NotificationService(self.db).create_notification(
+                    user_id=gift.recipient_id,
+                    type="flex_gift_received",
+                    title="Вам подарили подписку",
+                    body=f"Уровень {gift.level} на {period}",
+                    entity_type="flex_gift",
+                    entity_id=gift.id,
+                    actor_id=gift.sender_id,
+                    data={"route": "subscription", "level": int(gift.level), "plan": gift.plan},
+                )
+                nested.commit()
+            except Exception:
+                nested.rollback()
+        except Exception:
+            pass
+        return gift
+
+    def admin_stats(self) -> dict[str, Any]:
+        now = _now()
+        rows = (
+            self.db.query(UserFlexSubscription)
+            .filter(
+                UserFlexSubscription.status == "active",
+                UserFlexSubscription.current_level >= MIN_LEVEL,
+                or_(
+                    UserFlexSubscription.expires_at.is_(None),
+                    UserFlexSubscription.expires_at > now,
+                ),
+            )
+            .all()
+        )
+        by_level = {str(i): 0 for i in range(MIN_LEVEL, MAX_LEVEL + 1)}
+        by_plan = {"monthly": 0, "yearly": 0}
+        mrr = 0.0
+        for row in rows:
+            level = int(row.current_level or 0)
+            if level < MIN_LEVEL:
+                continue
+            key = str(max(MIN_LEVEL, min(MAX_LEVEL, level)))
+            by_level[key] = by_level.get(key, 0) + 1
+            plan = normalize_plan(getattr(row, "plan", None))
+            by_plan[plan] = by_plan.get(plan, 0) + 1
+            monthly = float(price_for_level(level))
+            mrr += monthly * YEARLY_MONTHS / 12.0 if plan == "yearly" else monthly
+        gifts = (
+            self.db.query(UserFlexGift)
+            .filter(UserFlexGift.status == "applied")
+            .count()
+        )
+        return {
+            "active": sum(by_level.values()),
+            "by_level": by_level,
+            "by_plan": by_plan,
+            "mrr_rub": round(mrr, 2),
+            "gifts_applied": int(gifts),
+            "presets": [dict(p) for p in DEFAULT_PRESETS],
+        }
+
     def me_payload(self, user_id: int) -> dict[str, Any]:
         self.ensure_catalog()
         self.migrate_legacy_if_needed(user_id)
@@ -887,6 +1082,7 @@ class FlexSubscriptionService:
                 for item in layout
             ],
             "blocks": [self._block_item(b) for b in self.list_blocks()],
+            "presets": [dict(p) for p in DEFAULT_PRESETS],
         }
 
     def shop_payload(self, user_id: int) -> dict[str, Any]:

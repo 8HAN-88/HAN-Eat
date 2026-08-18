@@ -2109,20 +2109,12 @@ class PaidFeaturesService:
         user = self.db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
         if not user or months <= 0:
             return
-        now = datetime.utcnow()
-        current = getattr(user, "subscription_expires_at", None)
-        start = current if current and current > now else now
-        user.subscription_type = "flex"
-        user.subscription_status = "active"
-        user.subscription_expires_at = start + timedelta(days=30 * int(months))
-        user.subscription_auto_renew = False
         from app.services.flex_subscription_service import FlexSubscriptionService
 
-        FlexSubscriptionService(self.db).activate(
+        FlexSubscriptionService(self.db).grant_gift_access(
             user_id,
-            10,
-            months=int(months),
-            auto_renew=False,
+            level=10,
+            extra_days=30 * int(months),
         )
 
     def set_user_star_gift_displayed(
