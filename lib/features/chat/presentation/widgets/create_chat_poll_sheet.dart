@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../models/chat_poll.dart';
+import '../../../subscription/creator_upsell.dart';
 
 /// Черновик опроса для отправки в чат.
 class ChatPollDraft {
@@ -45,12 +46,7 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
     TextEditingController(),
   ];
 
-  ChatPollSettings _settings = const ChatPollSettings(
-    showVoterNames: true,
-    multipleChoice: true,
-    allowAddOptions: true,
-    allowChangeVote: true,
-  );
+  ChatPollSettings _settings = const ChatPollSettings();
 
   /// Controller index of the correct quiz answer (Telegram: single).
   int? _correctControllerIndex;
@@ -106,6 +102,12 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
     });
   }
 
+  bool _allowPollPlus({required bool enabling}) {
+    if (!enabling || hasFlexFeature('poll_quiz')) return true;
+    showCreatorUpsell(context);
+    return false;
+  }
+
   void _setQuizMode(bool enabled) {
     setState(() {
       if (enabled) {
@@ -125,8 +127,22 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
     });
   }
 
+  bool _settingsNeedPollPlus() {
+    return !_settings.showVoterNames ||
+        _settings.quizMode ||
+        _settings.multipleChoice ||
+        _settings.allowAddOptions ||
+        _settings.hideResultsUntilClosed ||
+        _settings.timeLimitEnabled ||
+        _settings.randomOrder;
+  }
+
   void _send() {
     if (!_canSend) return;
+    if (_settingsNeedPollPlus() && !hasFlexFeature('poll_quiz')) {
+      showCreatorUpsell(context);
+      return;
+    }
     final raw = _optionControllers.map((c) => c.text).toList(growable: false);
     final options = raw.map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
     final correct = _settings.quizMode
@@ -321,11 +337,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             subtitle:
                                 'Рядом с ответами отображаются имена голосовавших',
                             value: _settings.showVoterNames,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                showVoterNames: v,
-                              ),
-                            ),
+                            locked: !hasFlexFeature('poll_quiz'),
+                            onChanged: (v) {
+                              if (!_allowPollPlus(enabling: !v)) return;
+                              setState(
+                                () => _settings = _settings.copyWith(
+                                  showVoterNames: v,
+                                ),
+                              );
+                            },
                           ),
                           _settingDivider(theme),
                           _PollSettingTile(
@@ -338,7 +358,11 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                                     : 'Правильный ответ выбран')
                                 : 'Один правильный ответ; участники видят результат после голосования',
                             value: _settings.quizMode,
-                            onChanged: _setQuizMode,
+                            locked: !hasFlexFeature('poll_quiz'),
+                            onChanged: (v) {
+                              if (!_allowPollPlus(enabling: v)) return;
+                              _setQuizMode(v);
+                            },
                           ),
                           if (!_settings.quizMode) ...[
                             _settingDivider(theme),
@@ -349,11 +373,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                               subtitle:
                                   'Участники могут выбрать более одного варианта',
                               value: _settings.multipleChoice,
-                              onChanged: (v) => setState(
-                                () => _settings = _settings.copyWith(
-                                  multipleChoice: v,
-                                ),
-                              ),
+                              locked: !hasFlexFeature('poll_quiz'),
+                              onChanged: (v) {
+                                if (!_allowPollPlus(enabling: v)) return;
+                                setState(
+                                  () => _settings = _settings.copyWith(
+                                    multipleChoice: v,
+                                  ),
+                                );
+                              },
                             ),
                             _settingDivider(theme),
                             _PollSettingTile(
@@ -363,11 +391,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                               subtitle:
                                   'Участники могут предлагать новые варианты',
                               value: _settings.allowAddOptions,
-                              onChanged: (v) => setState(
-                                () => _settings = _settings.copyWith(
-                                  allowAddOptions: v,
-                                ),
-                              ),
+                              locked: !hasFlexFeature('poll_quiz'),
+                              onChanged: (v) {
+                                if (!_allowPollPlus(enabling: v)) return;
+                                setState(
+                                  () => _settings = _settings.copyWith(
+                                    allowAddOptions: v,
+                                  ),
+                                );
+                              },
                             ),
                             _settingDivider(theme),
                             _PollSettingTile(
@@ -392,11 +424,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             subtitle:
                                 'Ответы отображаются у всех участников в случайном порядке',
                             value: _settings.randomOrder,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                randomOrder: v,
-                              ),
-                            ),
+                            locked: !hasFlexFeature('poll_quiz'),
+                            onChanged: (v) {
+                              if (!_allowPollPlus(enabling: v)) return;
+                              setState(
+                                () => _settings = _settings.copyWith(
+                                  randomOrder: v,
+                                ),
+                              );
+                            },
                           ),
                           _settingDivider(theme),
                           _PollSettingTile(
@@ -406,11 +442,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             subtitle:
                                 'Опрос автоматически завершится в заданное время',
                             value: _settings.timeLimitEnabled,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                timeLimitEnabled: v,
-                              ),
-                            ),
+                            locked: !hasFlexFeature('poll_quiz'),
+                            onChanged: (v) {
+                              if (!_allowPollPlus(enabling: v)) return;
+                              setState(
+                                () => _settings = _settings.copyWith(
+                                  timeLimitEnabled: v,
+                                ),
+                              );
+                            },
                           ),
                           if (_settings.timeLimitEnabled) ...[
                             _settingDivider(theme),
@@ -461,11 +501,15 @@ class _CreateChatPollSheetState extends State<CreateChatPollSheet> {
                             subtitle:
                                 'Если включено, результаты будут скрыты до завершения опроса',
                             value: _settings.hideResultsUntilClosed,
-                            onChanged: (v) => setState(
-                              () => _settings = _settings.copyWith(
-                                hideResultsUntilClosed: v,
-                              ),
-                            ),
+                            locked: !hasFlexFeature('poll_quiz'),
+                            onChanged: (v) {
+                              if (!_allowPollPlus(enabling: v)) return;
+                              setState(
+                                () => _settings = _settings.copyWith(
+                                  hideResultsUntilClosed: v,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -635,6 +679,7 @@ class _PollSettingTile extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
+    this.locked = false,
   });
 
   final IconData icon;
@@ -643,6 +688,7 @@ class _PollSettingTile extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -655,7 +701,7 @@ class _PollSettingTile extends StatelessWidget {
           color: iconColor.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(7),
         ),
-        child: Icon(icon, size: 18, color: iconColor),
+        child: Icon(locked ? Icons.lock_outline : icon, size: 18, color: iconColor),
       ),
       title: Text(
         title,

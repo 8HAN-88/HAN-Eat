@@ -608,7 +608,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   static const _quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
   static const _baseOverlayReactions = ['👍', '👌', '❤️', '👎', '👏'];
-  static const _exclusiveOverlayReactions = ['🔥', '🥰', '🎉'];
+  static const _exclusiveOverlayReactions = ['🔥', '🥰', '🎉', '✨', '⚡️', '💯'];
 
   bool _hasFlexFeature(String slug) =>
       SubscriptionStatusCache.peek()?.hasFeature(slug) == true;
@@ -7206,6 +7206,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _runServerThreadSearch(String query) async {
+    if (!_hasFlexFeature('chat_search')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     final q = query.trim();
     final filter = _threadSearchFilter;
     final senderId = _threadSearchSenderId;
@@ -10783,6 +10787,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
 
   bool _scheduleSilent(String? mode) => mode == 'schedule_silent';
 
+  Widget _silentSendTile({
+    required BuildContext sheetContext,
+    required String mode,
+    required String title,
+    String? subtitle,
+    IconData icon = Icons.notifications_off_outlined,
+  }) {
+    final allowed = _hasFlexFeature('silent_send');
+    return ListTile(
+      leading: Icon(allowed ? icon : Icons.lock_outline),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      onTap: () async {
+        if (!allowed) {
+          await showCreatorUpsell(context);
+          return;
+        }
+        Navigator.pop(sheetContext, mode);
+      },
+    );
+  }
+
   Future<String?> _askSendOrSchedule() {
     return showModalBottomSheet<String>(
       context: context,
@@ -10796,22 +10822,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: const Text('Отправить сейчас'),
               onTap: () => Navigator.pop(ctx, 'now'),
             ),
-            ListTile(
-              leading: const Icon(Icons.notifications_off_outlined),
-              title: const Text('Без звука'),
-              subtitle: const Text('Получатель не получит уведомление'),
-              onTap: () => Navigator.pop(ctx, 'silent'),
+            _silentSendTile(
+              sheetContext: ctx,
+              mode: 'silent',
+              title: 'Без звука',
+              subtitle: 'Получатель не получит уведомление',
             ),
             ListTile(
               leading: const Icon(Icons.schedule_outlined),
               title: const Text('Отложить'),
               onTap: () => Navigator.pop(ctx, 'schedule'),
             ),
-            ListTile(
-              leading: const Icon(Icons.schedule_send_outlined),
-              title: const Text('Отложить без звука'),
-              subtitle: const Text('Отправка позже, без push-уведомления'),
-              onTap: () => Navigator.pop(ctx, 'schedule_silent'),
+            _silentSendTile(
+              sheetContext: ctx,
+              mode: 'schedule_silent',
+              title: 'Отложить без звука',
+              subtitle: 'Отправка позже, без push-уведомления',
+              icon: Icons.schedule_send_outlined,
             ),
             const SizedBox(height: 8),
           ],
@@ -11662,7 +11689,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return ok;
   }
 
+  Future<bool> _allowSilent(bool silent) async {
+    if (!silent) return true;
+    if (_hasFlexFeature('silent_send')) return true;
+    await showCreatorUpsell(context);
+    return false;
+  }
+
   Future<void> _sendText({bool silent = false, String? effectId}) async {
+    if (!await _allowSilent(silent)) return;
     final text = _controller.text.trim();
     final editingMedia = _editingMessage != null &&
         (_editingMessage!.type == 'image' ||
@@ -12116,11 +12151,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.notifications_off_outlined),
-              title: const Text('Отправить без звука'),
-              subtitle: const Text('Без push-уведомления получателю'),
-              onTap: () => Navigator.pop(ctx, 'silent'),
+            _silentSendTile(
+              sheetContext: ctx,
+              mode: 'silent',
+              title: 'Отправить без звука',
+              subtitle: 'Без push-уведомления получателю',
             ),
             ListTile(
               leading: const Icon(Icons.auto_awesome),
@@ -12133,10 +12168,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: const Text('Отложить'),
               onTap: () => Navigator.pop(ctx, 'schedule'),
             ),
-            ListTile(
-              leading: const Icon(Icons.schedule_send_outlined),
-              title: const Text('Отложить без звука'),
-              onTap: () => Navigator.pop(ctx, 'schedule_silent'),
+            _silentSendTile(
+              sheetContext: ctx,
+              mode: 'schedule_silent',
+              title: 'Отложить без звука',
+              icon: Icons.schedule_send_outlined,
             ),
             const SizedBox(height: 8),
           ],
@@ -12168,10 +12204,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 title: const Text('Отложить с эффектом'),
                 onTap: () => Navigator.pop(ctx, 'schedule'),
               ),
-              ListTile(
-                leading: const Icon(Icons.schedule_send_outlined),
-                title: const Text('Отложить без звука'),
-                onTap: () => Navigator.pop(ctx, 'schedule_silent'),
+              _silentSendTile(
+                sheetContext: ctx,
+                mode: 'schedule_silent',
+                title: 'Отложить без звука',
+                icon: Icons.schedule_send_outlined,
               ),
               const SizedBox(height: 8),
             ],
@@ -13148,6 +13185,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _recordAndSendVideoNote() async {
+    if (!_hasFlexFeature('video_notes')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     try {
       final picker = ImagePicker();
       final file = await picker.pickVideo(
@@ -16148,14 +16189,29 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                     : 'Кружок',
                                                 onPressed: !canSendNow
                                                     ? null
-                                                    : () => setState(() {
+                                                    : () async {
+                                                        if (!_videoNoteComposerMode &&
+                                                            !_hasFlexFeature(
+                                                              'video_notes',
+                                                            )) {
+                                                          await showCreatorUpsell(
+                                                            context,
+                                                          );
+                                                          return;
+                                                        }
+                                                        setState(() {
                                                           _videoNoteComposerMode =
                                                               !_videoNoteComposerMode;
-                                                        }),
+                                                        });
+                                                      },
                                                 icon: Icon(
                                                   _videoNoteComposerMode
                                                       ? Icons.mic_none_rounded
-                                                      : Icons.videocam_outlined,
+                                                      : (_hasFlexFeature(
+                                                              'video_notes')
+                                                          ? Icons
+                                                              .videocam_outlined
+                                                          : Icons.lock_outline),
                                                 ),
                                                 color: scheme.onSurfaceVariant,
                                                 iconSize: _composerIconSize,

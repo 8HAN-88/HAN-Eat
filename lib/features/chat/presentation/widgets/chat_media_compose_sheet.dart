@@ -4,6 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../services/subscription_status_cache.dart';
+import '../../../subscription/creator_upsell.dart';
+
 /// Preview selected gallery media, add a caption, then send (Telegram-style).
 Future<ChatMediaComposeResult?> showChatMediaCompose(
   BuildContext context, {
@@ -256,7 +259,10 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                 SwitchListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   secondary: Icon(
-                    Icons.notifications_off_outlined,
+                    SubscriptionStatusCache.peek()?.hasFeature('silent_send') ==
+                            true
+                        ? Icons.notifications_off_outlined
+                        : Icons.lock_outline,
                     color: scheme.secondary,
                   ),
                   title: const Text('Без звука'),
@@ -264,7 +270,16 @@ class _ChatMediaComposeSheetState extends State<_ChatMediaComposeSheet> {
                     'Сообщение доставится без push-уведомления',
                   ),
                   value: _silent,
-                  onChanged: (v) => setState(() => _silent = v),
+                  onChanged: (v) {
+                    if (v &&
+                        SubscriptionStatusCache.peek()
+                                ?.hasFeature('silent_send') !=
+                            true) {
+                      unawaited(showCreatorUpsell(context));
+                      return;
+                    }
+                    setState(() => _silent = v);
+                  },
                 ),
                 SwitchListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12),

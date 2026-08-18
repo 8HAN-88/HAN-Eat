@@ -3,12 +3,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/app_router.dart';
 import '../../services/api_service.dart';
+import '../../services/subscription_status_cache.dart';
 import '../../utils/api_error_parser.dart';
 
 /// Opens flex subscription for gated actions.
 Future<void> showCreatorUpsell(BuildContext context) async {
   await context.push(FlexSubscriptionRoute.path);
 }
+
+bool hasFlexFeature(String slug) =>
+    SubscriptionStatusCache.peek()?.hasFeature(slug) == true;
 
 bool offerFlexIfRequired(BuildContext context, Object error) {
   String? message;

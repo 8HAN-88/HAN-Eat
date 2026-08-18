@@ -106,6 +106,25 @@ def close_expired_polls(db: Session, limit: int = 40) -> List[Any]:
     return closed
 
 
+def poll_settings_need_premium(settings: Optional[Dict[str, Any]] = None) -> bool:
+    merged = _default_settings()
+    if settings:
+        merged.update({k: v for k, v in settings.items() if k in merged})
+    if not bool(merged.get("show_voter_names", True)):
+        return True
+    return any(
+        bool(merged.get(key))
+        for key in (
+            "quiz_mode",
+            "multiple_choice",
+            "allow_add_options",
+            "hide_results_until_closed",
+            "time_limit_enabled",
+            "random_order",
+        )
+    )
+
+
 def build_poll_content(
     question: str,
     option_texts: List[str],

@@ -1210,7 +1210,14 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       case ChatAttachTab.videoNote:
         return _VideoNotePickPanel(
           scrollController: scrollController,
-          onRecord: () => _close(ChatAttachSelection.videoNote()),
+          onRecord: () {
+            if (SubscriptionStatusCache.peek()?.hasFeature('video_notes') !=
+                true) {
+              unawaited(showCreatorUpsell(context));
+              return;
+            }
+            _close(ChatAttachSelection.videoNote());
+          },
           isDark: isDark,
         );
       case ChatAttachTab.file:
@@ -1960,7 +1967,11 @@ class _VideoNotePickPanel extends StatelessWidget {
         const SizedBox(height: 28),
         FilledButton.icon(
           onPressed: onRecord,
-          icon: const Icon(Icons.fiber_manual_record),
+          icon: Icon(
+            SubscriptionStatusCache.peek()?.hasFeature('video_notes') == true
+                ? Icons.fiber_manual_record
+                : Icons.lock_outline,
+          ),
           label: const Text('Записать кружок'),
         ),
       ],
