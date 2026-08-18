@@ -1260,6 +1260,8 @@ class User {
   final String? legalConsentVersion;
   final bool phoneLinked;
   final String? phone;
+  final String? emojiStatus;
+  final String? profileColor;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1286,6 +1288,8 @@ class User {
     this.legalConsentVersion,
     this.phoneLinked = false,
     this.phone,
+    this.emojiStatus,
+    this.profileColor,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1318,6 +1322,8 @@ class User {
       legalConsentVersion: json['legal_consent_version'] as String?,
       phoneLinked: json['phone_linked'] as bool? ?? false,
       phone: json['phone'] as String?,
+      emojiStatus: json['emoji_status'] as String?,
+      profileColor: json['profile_color'] as String?,
     );
   }
 
@@ -1345,6 +1351,8 @@ class User {
         'legal_consent_version': legalConsentVersion,
       'phone_linked': phoneLinked,
       if (phone != null) 'phone': phone,
+      if (emojiStatus != null) 'emoji_status': emojiStatus,
+      if (profileColor != null) 'profile_color': profileColor,
     };
   }
 
@@ -1362,6 +1370,8 @@ class User {
     bool? showReadReceipts,
     int? paidMessageStars,
     bool clearPhone = false,
+    String? emojiStatus,
+    String? profileColor,
   }) {
     return User(
       id: id,
@@ -1387,6 +1397,8 @@ class User {
           legalConsentVersion ?? this.legalConsentVersion,
       phoneLinked: phoneLinked ?? this.phoneLinked,
       phone: clearPhone ? null : (phone ?? this.phone),
+      emojiStatus: emojiStatus ?? this.emojiStatus,
+      profileColor: profileColor ?? this.profileColor,
     );
   }
 }

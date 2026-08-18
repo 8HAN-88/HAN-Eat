@@ -79,6 +79,9 @@ class User(Base):
     totp_secret = Column(String(64), nullable=True)
     totp_enabled = Column(Boolean, default=False, nullable=False)
     totp_enabled_at = Column(DateTime, nullable=True)
+    # Telegram Premium: emoji next to name + account name color.
+    emoji_status = Column(String(16), nullable=True)
+    profile_color = Column(String(16), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)

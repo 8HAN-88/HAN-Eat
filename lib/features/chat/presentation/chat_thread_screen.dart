@@ -107,8 +107,10 @@ import 'widgets/chat_mute_duration_sheet.dart';
 import 'widgets/chat_video_note_bubble.dart';
 import 'widgets/chat_inline_sticker_panel.dart';
 import 'widgets/chat_media_compose_sheet.dart';
+import 'widgets/chat_checklist_bubble.dart';
 import 'widgets/chat_poll_bubble.dart';
 import 'widgets/chat_poll_voters_sheet.dart';
+import 'widgets/create_chat_checklist_sheet.dart';
 import 'widgets/create_chat_poll_sheet.dart';
 import 'widgets/paid_media_lock_bubble.dart';
 import 'widgets/star_gift_picker_sheet.dart';
@@ -574,6 +576,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   bool _selectionMode = false;
   final _selectedMessageIds = <int>{};
   final _votingPollIds = <int>{};
+  final _togglingChecklistIds = <int>{};
+  final _transcribingIds = <int>{};
   final _closingPollIds = <int>{};
   final _callbackInFlightKeys = <String>{};
   final _composerPanelKey = GlobalKey();
@@ -3728,6 +3732,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final poll = msg.poll;
       if (poll != null) return chatPollPreviewText(poll);
       return '📊 Опрос';
+    }
+    if (msg.type == 'checklist') {
+      return msg.checklist?.preview ?? '☑ Чеклист';
     }
     if (msg.type == 'file') {
       final name = msg.content.trim();
@@ -7147,6 +7154,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       return true;
     }
     if (msg.type == 'sticker' && 'стикер'.contains(q)) return true;
+    if (msg.type == 'checklist' &&
+        ('чеклист'.contains(q) || 'список'.contains(q))) {
+      return true;
+    }
     if (msg.type == 'file') {
       final name = msg.content.trim().toLowerCase();
       if (name.contains(q) || 'файл'.contains(q)) return true;
@@ -7699,6 +7710,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (a.senderId != b.senderId || a.isMine != b.isMine) return false;
     if (!_isSameChatDay(a.createdAt, b.createdAt)) return false;
     if (a.type == 'poll' || b.type == 'poll') return false;
+    if (a.type == 'checklist' || b.type == 'checklist') return false;
     final gap = b.createdAt.difference(a.createdAt).abs();
     return gap <= const Duration(minutes: 5);
   }
@@ -8614,6 +8626,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (poll != null) return chatPollPreviewText(poll);
       return '📊 Опрос';
     }
+    if (msg.type == 'checklist') {
+      return msg.checklist?.preview ?? '☑ Чеклист';
+    }
     if (msg.type == 'file') {
       if (msg.isLockedPaidMedia) return '🔒 Платный файл';
       final name = msg.content.trim();
@@ -9523,6 +9538,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         return '🧩 Стикер';
       case 'poll':
         return text.isEmpty ? '📊 Опрос' : '📊 $text';
+      case 'checklist':
+        return ChatChecklist.tryParse(content)?.preview ?? '☑ Чеклист';
       case 'location':
         return '📍 Геопозиция';
       default:
@@ -9745,6 +9762,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     bool pollClosing = false,
     VoidCallback? onShowPollVoters,
     VoidCallback? onAddPollOption,
+    void Function(int index, bool done)? onChecklistToggle,
+    bool checklistBusy = false,
+    VoidCallback? onTranscribe,
+    bool transcribing = false,
     ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap,
     Set<String> callbackLoadingData = const <String>{},
   }) {
@@ -9824,6 +9845,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       pollClosing: pollClosing,
       onShowPollVoters: onShowPollVoters,
       onAddPollOption: onAddPollOption,
+      onChecklistToggle: onChecklistToggle,
+      checklistBusy: checklistBusy,
+      onTranscribe: onTranscribe,
+      transcribing: transcribing,
       onInlineButtonTap: onInlineButtonTap,
       callbackLoadingData: callbackLoadingData,
       onImageTap: interactive &&
@@ -12290,6 +12315,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final poll = item.type == 'poll'
           ? parseChatPollFromContent(item.content)
           : null;
+      final checklist = item.type == 'checklist'
+          ? ChatChecklist.tryParse(item.content)
+          : null;
       await ChatService.scheduleMessage(
         conversationId: widget.conversationId,
         type: item.type,
@@ -12304,6 +12332,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         pollDescription: poll?.description,
         pollOptions: poll?.options.map((o) => o.text).toList(),
         pollSettings: poll?.settings.toJson(),
+        checklistTitle: checklist?.title,
+        checklistItems: checklist?.items.map((e) => e.text).toList(),
         effectId: item.effectId,
         topicId: item.topicId ?? _activeTopicIdForSend,
       );
@@ -12469,6 +12499,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
       return;
     }
+    if (item.type == 'checklist') {
+      final list = ChatChecklist.tryParse(item.content);
+      if (list == null || list.items.isEmpty) {
+        await _restoreScheduledAfterFailedSend(item);
+        throw Exception('Не удалось восстановить чеклист');
+      }
+      _enqueueReadyOutgoing(
+        ChatReadyOutgoing(
+          tempId: _newLocalTempId(),
+          clientMessageId: const Uuid().v4(),
+          type: 'checklist',
+          content: item.content,
+          replyToMessageId: replyId,
+          topicId: topicId,
+          checklistTitle: list.title,
+          checklistItems: list.items.map((e) => e.text).toList(),
+        ),
+      );
+      return;
+    }
     _enqueueReadyOutgoing(
       ChatReadyOutgoing(
         tempId: _newLocalTempId(),
@@ -12493,6 +12543,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       final poll = parseChatPollFromContent(item.content);
       if (poll != null) return chatPollPreviewText(poll);
       return '📊 Опрос';
+    }
+    if (item.type == 'checklist') {
+      return ChatChecklist.tryParse(item.content)?.preview ?? '☑ Чеклист';
     }
     if (item.type == 'voice') return '🎤 Голосовое';
     if (item.type == 'image') return '📷 Фото';
@@ -12929,6 +12982,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           await _sendPollDraft(draft);
         } else {
           await _createAndSendPoll();
+        }
+      case ChatAttachResult.checklist:
+        final draft = selection.checklistDraft;
+        if (draft != null) {
+          await _sendChecklistDraft(draft);
+        } else {
+          await _createAndSendChecklist();
         }
       case ChatAttachResult.contact:
         final contact = selection.contact;
@@ -13498,6 +13558,68 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  Future<void> _createAndSendChecklist() async {
+    if (_recording) return;
+    final draft = await CreateChatChecklistSheet.show(context);
+    if (!mounted || draft == null) return;
+    await _sendChecklistDraft(draft);
+  }
+
+  Future<void> _sendChecklistDraft(ChatChecklistDraft draft) async {
+    if (_recording) return;
+    if (!hasFlexFeature('checklist')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final mode = await _askSendOrSchedule();
+    if (mode == null || !mounted) return;
+    if (_isScheduleMode(mode)) {
+      final delivery = await _pickScheduleDelivery();
+      if (delivery == null || !mounted) return;
+      try {
+        final item = await ChatService.scheduleMessage(
+          conversationId: widget.conversationId,
+          type: 'checklist',
+          content: draft.optimisticContent,
+          sendAt: delivery.sendAt,
+          sendWhenOnline: delivery.sendWhenOnline,
+          silent: _scheduleSilent(mode),
+          replyToMessageId: _replyTo?.id,
+          clientMessageId: const Uuid().v4(),
+          checklistTitle: draft.title,
+          checklistItems: draft.items,
+          topicId: _activeTopicIdForSend,
+        );
+        if (!mounted) return;
+        setState(() => _replyTo = null);
+        _showScheduledSnack(item);
+        unawaited(_refreshScheduledPendingCount());
+      } catch (e) {
+        if (!mounted) return;
+        if (offerFlexIfRequired(context, e)) return;
+        showErrorSnackBar(
+          context,
+          e,
+          fallback: 'Не удалось запланировать чеклист',
+        );
+      }
+      return;
+    }
+    _enqueueReadyOutgoing(
+      ChatReadyOutgoing(
+        tempId: _newLocalTempId(),
+        clientMessageId: const Uuid().v4(),
+        type: 'checklist',
+        content: draft.optimisticContent,
+        replyToMessageId: _replyTo?.id,
+        silent: mode == 'silent',
+        topicId: _activeTopicIdForSend,
+        checklistTitle: draft.title,
+        checklistItems: draft.items,
+      ),
+    );
+  }
+
   Future<void> _resendStoredFile({
     required String name,
     required String mediaUrl,
@@ -13550,6 +13672,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         anonymous: _effectiveSendAnonymous,
       ),
     );
+  }
+
+  Future<void> _toggleChecklist(ChatMessage msg, int index, bool done) async {
+    if (msg.id <= 0 || _togglingChecklistIds.contains(msg.id)) return;
+    final previous = msg;
+    final current = msg.checklist;
+    final optimistic = current == null
+        ? msg
+        : msg.copyWith(content: current.toggled(index, done).encode());
+    setState(() {
+      _togglingChecklistIds.add(msg.id);
+      final i = _messages.indexWhere((m) => m.id == msg.id);
+      if (i >= 0) _messages[i] = optimistic;
+    });
+    try {
+      final updated = await ChatService.toggleChecklist(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        index: index,
+        done: done,
+      );
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == msg.id);
+        if (i >= 0) _messages[i] = updated;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          final i = _messages.indexWhere((m) => m.id == previous.id);
+          if (i >= 0) _messages[i] = previous;
+        });
+        showErrorSnackBar(context, e, fallback: 'Не удалось отметить пункт');
+      }
+    } finally {
+      if (mounted) setState(() => _togglingChecklistIds.remove(msg.id));
+    }
+  }
+
+  Future<void> _transcribeVoice(ChatMessage msg) async {
+    if (msg.id <= 0 || _transcribingIds.contains(msg.id)) return;
+    if (!_hasFlexFeature('voice_to_text')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() => _transcribingIds.add(msg.id));
+    try {
+      final updated = await ChatService.transcribeMessage(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        final i = _messages.indexWhere((m) => m.id == msg.id);
+        if (i >= 0) _messages[i] = updated;
+      });
+      unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      showErrorSnackBar(context, e, fallback: 'Не удалось распознать голос');
+    } finally {
+      if (mounted) setState(() => _transcribingIds.remove(msg.id));
+    }
   }
 
   Future<void> _votePoll(ChatMessage msg, int optionIndex) async {
@@ -14289,6 +14476,20 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                   ?.copyWith(
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: 0.1,
+                                    color: () {
+                                      final hex = profileColorHex(
+                                        _conversation.peer?.profileColor,
+                                      );
+                                      if (hex.isEmpty ||
+                                          _conversation.isGroup) {
+                                        return null;
+                                      }
+                                      return Color(
+                                        int.parse(
+                                          hex.replaceFirst('#', '0xFF'),
+                                        ),
+                                      );
+                                    }(),
                                   ),
                             ),
                             if (subtitle.isNotEmpty)
@@ -15255,6 +15456,38 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                                                           ),
                                                                         )
                                                                     : null,
+                                                                onChecklistToggle:
+                                                                    !_selectionMode &&
+                                                                            msg.type ==
+                                                                                'checklist'
+                                                                        ? (index, done) =>
+                                                                            _toggleChecklist(
+                                                                              msg,
+                                                                              index,
+                                                                              done,
+                                                                            )
+                                                                        : null,
+                                                                checklistBusy:
+                                                                    _togglingChecklistIds
+                                                                        .contains(
+                                                                            msg.id),
+                                                                onTranscribe: (!_selectionMode &&
+                                                                        (msg.type ==
+                                                                                'voice' ||
+                                                                            msg.type ==
+                                                                                'video_note') &&
+                                                                        (msg.transcription ??
+                                                                                '')
+                                                                            .isEmpty)
+                                                                    ? () =>
+                                                                        _transcribeVoice(
+                                                                          msg,
+                                                                        )
+                                                                    : null,
+                                                                transcribing:
+                                                                    _transcribingIds
+                                                                        .contains(
+                                                                            msg.id),
                                                                 onInlineButtonTap:
                                                                     !_selectionMode
                                                                         ? (button) =>
@@ -16429,6 +16662,10 @@ class _Bubble extends StatelessWidget {
     this.pollClosing = false,
     this.onShowPollVoters,
     this.onAddPollOption,
+    this.onChecklistToggle,
+    this.checklistBusy = false,
+    this.onTranscribe,
+    this.transcribing = false,
     this.onInlineButtonTap,
     this.callbackLoadingData = const <String>{},
     this.onOpenContactUser,
@@ -16496,6 +16733,10 @@ class _Bubble extends StatelessWidget {
   final bool pollClosing;
   final VoidCallback? onShowPollVoters;
   final VoidCallback? onAddPollOption;
+  final void Function(int index, bool done)? onChecklistToggle;
+  final bool checklistBusy;
+  final VoidCallback? onTranscribe;
+  final bool transcribing;
   final ValueChanged<ChatInlineKeyboardButton>? onInlineButtonTap;
   final Set<String> callbackLoadingData;
   final ValueChanged<int>? onOpenContactUser;
@@ -17269,16 +17510,52 @@ class _Bubble extends StatelessWidget {
           accentColor: scheme.primary,
           activeColor: mine ? scheme.primary : scheme.secondary,
           onCompleted: onVoiceCompleted,
+          onTranscribe: onTranscribe,
+          transcribing: transcribing,
         ),
       );
     } else if (message.type == 'video_note' && message.mediaUrl != null) {
       mainContent = _withBottomMeta(
         fg: fg,
         mine: mine,
-        child: ChatVideoNoteBubble(
-          mediaUrl: message.mediaUrl!,
-          durationSec: message.voiceDurationSec,
-          accentColor: scheme.primary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ChatVideoNoteBubble(
+              mediaUrl: message.mediaUrl!,
+              durationSec: message.voiceDurationSec,
+              accentColor: scheme.primary,
+            ),
+            if ((message.transcription ?? '').isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  message.transcription!,
+                  style: TextStyle(color: fg, fontSize: 13),
+                ),
+              )
+            else if (onTranscribe != null)
+              TextButton(
+                onPressed: transcribing ? null : onTranscribe,
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minimumSize: const Size(0, 28),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: transcribing
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: scheme.primary,
+                        ),
+                      )
+                    : const Text('Текст'),
+              ),
+          ],
         ),
       );
     } else if (message.type == 'poll' && message.poll != null) {
@@ -17298,6 +17575,19 @@ class _Bubble extends StatelessWidget {
           closing: pollClosing,
           onShowVoters: onShowPollVoters,
           onAddOption: onAddPollOption,
+        ),
+      );
+    } else if (message.type == 'checklist' && message.checklist != null) {
+      mainContent = _withBottomMeta(
+        fg: fg,
+        mine: mine,
+        child: ChatChecklistBubble(
+          checklist: message.checklist!,
+          foregroundColor: fg,
+          accentColor: scheme.primary,
+          mutedColor: fg.withValues(alpha: 0.65),
+          onToggle: onChecklistToggle,
+          busy: checklistBusy,
         ),
       );
     } else if (message.type == 'story_reply' ||

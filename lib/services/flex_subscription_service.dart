@@ -279,7 +279,7 @@ class FlexFeature {
         icon: json['icon'] as String?,
         assignedLevel: json['assigned_level'] as int? ?? json['default_level'] as int? ?? 1,
         minLevel: json['min_level'] as int? ?? 1,
-        maxLevel: json['max_level'] as int? ?? 32,
+        maxLevel: json['max_level'] as int? ?? 36,
         featureType: json['feature_type'] as String? ?? 'movable',
         movable: json['movable'] as bool? ?? true,
         required: json['required'] as bool? ?? false,
@@ -406,7 +406,7 @@ class FlexMe {
   factory FlexMe.fromJson(Map<String, dynamic> json) => FlexMe(
         currentLevel: json['current_level'] as int? ?? 0,
         priceRub: json['price_rub'] as int? ?? 0,
-        maxLevel: json['max_level'] as int? ?? 32,
+        maxLevel: json['max_level'] as int? ?? 36,
         active: json['active'] as bool? ?? false,
         basePriceRub: json['base_price_rub'] as int? ?? 39,
         stepPriceRub: json['step_price_rub'] as int? ?? 10,

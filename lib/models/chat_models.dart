@@ -1,5 +1,7 @@
+import 'chat_checklist.dart';
 import 'chat_poll.dart';
 
+export 'chat_checklist.dart';
 export 'chat_poll.dart'
     show
         ChatPollMessage,
@@ -48,6 +50,8 @@ class ChatUserBrief {
     this.sendRestrictedUntil,
     this.sendRestrictionReason,
     this.paidMessageStars = 0,
+    this.emojiStatus,
+    this.profileColor,
   });
 
   final int id;
@@ -69,6 +73,8 @@ class ChatUserBrief {
   final DateTime? sendRestrictedUntil;
   final String? sendRestrictionReason;
   final int paidMessageStars;
+  final String? emojiStatus;
+  final String? profileColor;
 
   bool get isOnline {
     final seen = lastSeenAt;
@@ -82,6 +88,12 @@ class ChatUserBrief {
     final u = username?.trim();
     if (u != null && u.isNotEmpty) return u.startsWith('@') ? u : '@$u';
     return 'Пользователь';
+  }
+
+  String get displayTitle {
+    final emoji = emojiStatus?.trim();
+    if (emoji != null && emoji.isNotEmpty) return '$displayName $emoji';
+    return displayName;
   }
 
   factory ChatUserBrief.fromJson(Map<String, dynamic> json) {
@@ -113,6 +125,8 @@ class ChatUserBrief {
           : null,
       sendRestrictionReason: json['send_restriction_reason'] as String?,
       paidMessageStars: _parseInt(json['paid_message_stars']),
+      emojiStatus: json['emoji_status'] as String?,
+      profileColor: json['profile_color'] as String?,
     );
   }
 
@@ -123,6 +137,8 @@ class ChatUserBrief {
     DateTime? lastSeenAt,
     bool clearLastSeenAt = false,
     int? paidMessageStars,
+    String? emojiStatus,
+    String? profileColor,
   }) {
     return ChatUserBrief(
       id: id,
@@ -144,6 +160,8 @@ class ChatUserBrief {
       sendRestrictedUntil: sendRestrictedUntil,
       sendRestrictionReason: sendRestrictionReason,
       paidMessageStars: paidMessageStars ?? this.paidMessageStars,
+      emojiStatus: emojiStatus ?? this.emojiStatus,
+      profileColor: profileColor ?? this.profileColor,
     );
   }
 }
@@ -306,6 +324,7 @@ class ChatMessage {
     this.topicId,
     this.isAnonymous = false,
     this.clientMessageId,
+    this.transcription,
   });
 
   final int id;
@@ -348,6 +367,8 @@ class ChatMessage {
   final bool isAnonymous;
   /// Client idempotency key — matches optimistic bubble to the server row.
   final String? clientMessageId;
+  /// Voice / video-note transcript (Premium voice-to-text).
+  final String? transcription;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -360,6 +381,9 @@ class ChatMessage {
 
   ChatPollMessage? get poll =>
       type == 'poll' ? parseChatPollFromContent(content) : null;
+
+  ChatChecklist? get checklist =>
+      type == 'checklist' ? ChatChecklist.tryParse(content) : null;
 
   int? get voiceDurationSec {
     if (type != 'voice' && type != 'video_note') return null;
@@ -444,6 +468,9 @@ class ChatMessage {
               true
           ? null
           : (json['client_message_id'] as String?)?.trim(),
+      transcription: (json['transcription'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['transcription'] as String?)?.trim(),
     );
   }
 
@@ -467,6 +494,7 @@ class ChatMessage {
     int? topicId,
     bool? isAnonymous,
     String? clientMessageId,
+    String? transcription,
   }) {
     return ChatMessage(
       id: id,
@@ -501,6 +529,7 @@ class ChatMessage {
       topicId: topicId ?? this.topicId,
       isAnonymous: isAnonymous ?? this.isAnonymous,
       clientMessageId: clientMessageId ?? this.clientMessageId,
+      transcription: transcription ?? this.transcription,
     );
   }
 }
@@ -678,7 +707,7 @@ class ChatConversation {
       if (t != null && t.isNotEmpty) return t;
       return 'Группа';
     }
-    return peer?.displayName ?? 'Чат';
+    return peer?.displayTitle ?? 'Чат';
   }
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {

@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 32
+MAX_LEVEL = 36
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -52,6 +52,7 @@ DEFAULT_BLOCKS = (
     {"key": "F", "title": "Медиа+", "min_level": 21, "max_level": 24, "sort_order": 6},
     {"key": "G", "title": "Чат+", "min_level": 25, "max_level": 28, "sort_order": 7},
     {"key": "H", "title": "Telegram+", "min_level": 29, "max_level": 32, "sort_order": 8},
+    {"key": "I", "title": "Премиум", "min_level": 33, "max_level": 36, "sort_order": 9},
 )
 
 DEFAULT_PRESETS = (
@@ -63,6 +64,7 @@ DEFAULT_PRESETS = (
     {"key": "media", "title": "Медиа+", "level": 24},
     {"key": "chat", "title": "Чат+", "level": 28},
     {"key": "telegram", "title": "Telegram+", "level": 32},
+    {"key": "premium", "title": "Премиум", "level": 36},
 )
 
 DEFAULT_FEATURES = (
@@ -481,6 +483,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "H",
+    },
+    {
+        "slug": "voice_to_text",
+        "title": "Голос в текст",
+        "description": "Расшифровка голосовых и кружков, как в Telegram Premium.",
+        "icon": "hearing",
+        "default_level": 33,
+        "min_level": 33,
+        "max_level": 36,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "I",
+    },
+    {
+        "slug": "emoji_status",
+        "title": "Emoji-статус",
+        "description": "Эмодзи рядом с именем в чатах и профиле.",
+        "icon": "mood",
+        "default_level": 34,
+        "min_level": 33,
+        "max_level": 36,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "I",
+    },
+    {
+        "slug": "checklist",
+        "title": "Чеклисты",
+        "description": "Списки дел в чате: пункты можно отмечать вместе.",
+        "icon": "checklist",
+        "default_level": 35,
+        "min_level": 33,
+        "max_level": 36,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "I",
+    },
+    {
+        "slug": "profile_colors",
+        "title": "Цвет профиля",
+        "description": "Цвет имени в списке чатов и в профиле.",
+        "icon": "palette",
+        "default_level": 36,
+        "min_level": 33,
+        "max_level": 36,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "I",
     },
 )
 

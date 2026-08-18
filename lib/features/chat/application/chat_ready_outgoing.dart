@@ -21,6 +21,8 @@ class ChatReadyOutgoing {
     this.pollDescription,
     this.pollOptions,
     this.pollSettings,
+    this.checklistTitle,
+    this.checklistItems,
     this.fileName,
     this.durationSec,
     this.latitude,
@@ -40,6 +42,8 @@ class ChatReadyOutgoing {
   final String? pollDescription;
   final List<String>? pollOptions;
   final Map<String, dynamic>? pollSettings;
+  final String? checklistTitle;
+  final List<String>? checklistItems;
   final String? fileName;
   final int? durationSec;
   final double? latitude;
@@ -60,6 +64,8 @@ class ChatReadyOutgoing {
         if (pollDescription != null) 'poll_description': pollDescription,
         if (pollOptions != null) 'poll_options': pollOptions,
         if (pollSettings != null) 'poll_settings': pollSettings,
+        if (checklistTitle != null) 'checklist_title': checklistTitle,
+        if (checklistItems != null) 'checklist_items': checklistItems,
         if (fileName != null) 'file_name': fileName,
         if (durationSec != null) 'duration_sec': durationSec,
         if (latitude != null) 'latitude': latitude,
@@ -98,6 +104,10 @@ class ChatReadyOutgoing {
           : null,
       pollSettings: json['poll_settings'] is Map
           ? Map<String, dynamic>.from(json['poll_settings'] as Map)
+          : null,
+      checklistTitle: json['checklist_title'] as String?,
+      checklistItems: json['checklist_items'] is List
+          ? (json['checklist_items'] as List).map((e) => e.toString()).toList()
           : null,
       fileName: json['file_name'] as String?,
       durationSec: asInt(json['duration_sec']),
@@ -239,6 +249,16 @@ Future<ChatMessage> sendChatReadyOutgoing({
         description: pending.pollDescription ?? '',
         options: pending.pollOptions ?? const [],
         settings: pending.pollSettings,
+        replyToMessageId: pending.replyToMessageId,
+        clientMessageId: pending.clientMessageId,
+        silent: pending.silent,
+        topicId: pending.topicId,
+      );
+    case 'checklist':
+      return ChatService.sendChecklist(
+        conversationId: conversationId,
+        title: pending.checklistTitle ?? pending.content,
+        items: pending.checklistItems ?? const [],
         replyToMessageId: pending.replyToMessageId,
         clientMessageId: pending.clientMessageId,
         silent: pending.silent,

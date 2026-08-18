@@ -101,6 +101,7 @@ from app.schemas.chat import (
     SendMessageRequest,
     ChatPollAddOptionRequest,
     ChatPollVoteRequest,
+    ChatChecklistToggleRequest,
     LiveLocationStartRequest,
     LiveLocationUpdateRequest,
     CallbackQueryRequest,
@@ -205,6 +206,12 @@ def _require_send_flex_options(db, user, body) -> None:
                 "poll_quiz",
                 "Викторины и расширенные опросы доступны с уровня 27",
             )
+    if getattr(body, "type", None) == "checklist":
+        billing.require_feature(
+            user.id,
+            "checklist",
+            "Чеклисты доступны с уровня 35",
+        )
 
 
 def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> None:
@@ -283,6 +290,7 @@ def _message_payload(
         "effect_id": getattr(msg, "effect_id", None),
         "topic_id": getattr(msg, "topic_id", None),
         "client_message_id": getattr(msg, "client_message_id", None),
+        "transcription": getattr(msg, "transcription", None),
     }
     kb_update = getattr(msg, "_reply_keyboard_update", None)
     if isinstance(kb_update, dict):
@@ -534,6 +542,8 @@ def _brief(
         send_restricted_until=send_restricted_until,
         send_restriction_reason=send_restriction_reason,
         paid_message_stars=max(0, int(getattr(user, "paid_message_stars", 0) or 0)),
+        emoji_status=getattr(user, "emoji_status", None),
+        profile_color=getattr(user, "profile_color", None),
     )
 
 
@@ -884,6 +894,7 @@ def _message_response(
         topic_id=getattr(msg, "topic_id", None),
         is_anonymous=anon_flag,
         client_message_id=getattr(msg, "client_message_id", None),
+        transcription=getattr(msg, "transcription", None),
     )
 
 
@@ -2117,6 +2128,20 @@ async def send_message(
             )
         except ValueError as e:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    if body.type == "checklist":
+        from app.services.chat_checklist_service import build_checklist_content
+
+        if not body.checklist_title or not body.checklist_items:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "checklist_fields_required"
+            )
+        try:
+            content = build_checklist_content(
+                body.checklist_title,
+                body.checklist_items,
+            )
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     is_paid = bool(body.is_paid)
     price_stars = max(0, int(body.price_stars or 0))
     if is_paid:
@@ -2441,6 +2466,20 @@ async def schedule_message(
                 body.poll_options,
                 description=body.poll_description or "",
                 settings=body.poll_settings,
+            )
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    if body.type == "checklist":
+        from app.services.chat_checklist_service import build_checklist_content
+
+        if not body.checklist_title or not body.checklist_items:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "checklist_fields_required"
+            )
+        try:
+            content = build_checklist_content(
+                body.checklist_title,
+                body.checklist_items,
             )
         except ValueError as e:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
@@ -2963,6 +3002,129 @@ async def stop_live_location(
         msg=msg,
         current_user=current_user,
     )
+    _emit(
+        conversation_id,
+        {"type": "message.edited", "message": response.model_dump(mode="json")},
+    )
+    return response
+
+
+def _message_response_for_viewer(db, svc, conversation_id, msg, current_user):
+    conv = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .first()
+    )
+    peer_read = _peer_last_read_id(db, svc, conv, current_user.id) if conv else None
+    member = (
+        db.query(ConversationMember)
+        .filter(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    sender = db.query(User).filter(User.id == msg.sender_id).first()
+    reactions = _reaction_summaries(svc, [msg.id], current_user.id).get(msg.id, [])
+    return _message_response(
+        msg,
+        current_user.id,
+        member.last_read_message_id if member else None,
+        peer_read,
+        conv,
+        svc,
+        sender,
+        reactions=reactions,
+        db=db,
+    )
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/transcribe",
+    response_model=MessageResponse,
+)
+async def transcribe_chat_message(
+    conversation_id: int,
+    message_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.subscription_service import SubscriptionService
+    from app.services.voice_transcription_service import (
+        TranscriptionUnavailable,
+        load_media_bytes,
+        transcribe_audio_bytes,
+    )
+    from app.models.conversation import Message
+
+    SubscriptionService(db).require_feature(
+        int(current_user.id),
+        "voice_to_text",
+        "Расшифровка голоса доступна с уровня 33",
+    )
+    svc = ChatService(db)
+    if not svc._is_member(conversation_id, current_user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    msg = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.conversation_id == conversation_id)
+        .first()
+    )
+    if not msg or msg.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    if msg.type not in ("voice", "video_note"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "not_voice_message")
+    existing = (getattr(msg, "transcription", None) or "").strip()
+    if existing:
+        return _message_response_for_viewer(db, svc, conversation_id, msg, current_user)
+    if not msg.media_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "voice_media_missing")
+    try:
+        data = load_media_bytes(msg.media_url)
+        msg.transcription = transcribe_audio_bytes(data)
+        db.commit()
+        db.refresh(msg)
+    except TranscriptionUnavailable:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "transcription_unavailable",
+        )
+    return _message_response_for_viewer(db, svc, conversation_id, msg, current_user)
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/checklist/toggle",
+    response_model=MessageResponse,
+)
+async def toggle_chat_checklist(
+    conversation_id: int,
+    message_id: int,
+    body: ChatChecklistToggleRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.chat_checklist_service import toggle_checklist_item
+    from app.models.conversation import Message
+
+    svc = ChatService(db)
+    if not svc._is_member(conversation_id, current_user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    msg = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.conversation_id == conversation_id)
+        .first()
+    )
+    if not msg or msg.type != "checklist":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+    try:
+        msg.content = toggle_checklist_item(msg.content, body.index, body.done)
+        db.commit()
+        db.refresh(msg)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    response = _message_response_for_viewer(db, svc, conversation_id, msg, current_user)
     _emit(
         conversation_id,
         {"type": "message.edited", "message": response.model_dump(mode="json")},

@@ -73,6 +73,8 @@ class ChatHubTile extends StatelessWidget {
         return Icons.insert_drive_file_outlined;
       case 'poll':
         return Icons.poll_outlined;
+      case 'checklist':
+        return Icons.checklist_rtl;
       default:
         if (ChatLocationPayload.tryParse(msg.content) != null) {
           return Icons.location_on_rounded;
@@ -161,6 +163,17 @@ class ChatHubTile extends StatelessWidget {
                                   hasUnread ? FontWeight.w700 : FontWeight.w600,
                               fontSize: 16,
                               letterSpacing: -0.2,
+                              color: () {
+                                final hex = profileColorHex(
+                                  chat.peer?.profileColor,
+                                );
+                                if (hex.isEmpty || chat.isGroup || chat.isSaved) {
+                                  return null;
+                                }
+                                return Color(
+                                  int.parse(hex.replaceFirst('#', '0xFF')),
+                                );
+                              }(),
                             ),
                           ),
                         ),
@@ -563,6 +576,9 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
     final poll = msg.poll;
     if (poll != null) return chatPollPreviewText(poll);
     return 'Опрос';
+  }
+  if (msg.type == 'checklist') {
+    return msg.checklist?.preview ?? 'Чеклист';
   }
   if (msg.type == 'image') {
     return msg.isPaid && !msg.purchased && !msg.isMine

@@ -46,6 +46,10 @@ CATALOG_FEATURE_SLUGS = (
     "channel_post_search",
     "folder_filters",
     "folder_icons",
+    "voice_to_text",
+    "emoji_status",
+    "checklist",
+    "profile_colors",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

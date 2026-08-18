@@ -253,6 +253,8 @@ class Message(Base):
     )
     # Group admin posts as the group (Telegram anonymous admin).
     is_anonymous = Column(Boolean, default=False, nullable=False)
+    # Telegram Premium voice-to-text.
+    transcription = Column(Text, nullable=True)
 
 
 class ScheduledMessage(Base):
