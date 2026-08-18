@@ -24,6 +24,8 @@ import '../../../../services/media_upload_service.dart';
 import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
+import '../../../../services/subscription_status_cache.dart';
+import '../../../subscription/creator_upsell.dart';
 import '../../application/chat_recent_files_store.dart';
 import '../../application/chat_recent_gifs_store.dart';
 import '../../application/chat_sticker_pinned_packs_store.dart';
@@ -806,6 +808,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   Future<void> _addAnimatedStickerToPack(int packId) async {
+    if (SubscriptionStatusCache.peek()?.hasFeature('animated_stickers') !=
+        true) {
+      await showCreatorUpsell(context);
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowMultiple: false,
@@ -1307,6 +1314,7 @@ class _GifPickPanelState extends State<_GifPickPanel> {
   bool _recentLoading = true;
   bool _catalogLoading = false;
   bool _catalogLoadingMore = false;
+  bool _catalogLocked = false;
   bool _catalogConfigured = true;
   String? _catalogError;
   String _activeQuery = '';
@@ -1371,6 +1379,18 @@ class _GifPickPanelState extends State<_GifPickPanel> {
   }
 
   Future<void> _loadCatalog({String? query, bool more = false}) async {
+    if (SubscriptionStatusCache.peek()?.hasFeature('gif_search') != true) {
+      if (!mounted) return;
+      setState(() {
+        _catalogLocked = true;
+        _catalogLoading = false;
+        _catalogLoadingMore = false;
+        _catalogError = null;
+        _catalogItems = const [];
+        _catalogNext = null;
+      });
+      return;
+    }
     final q = (query ?? _activeQuery).trim();
     if (more) {
       final next = _catalogNext;
@@ -1403,8 +1423,18 @@ class _GifPickPanelState extends State<_GifPickPanel> {
         _catalogLoading = false;
         _catalogLoadingMore = false;
         _catalogError = null;
+        _catalogLocked = false;
       });
-    } catch (_) {
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) {
+        setState(() {
+          _catalogLocked = true;
+          _catalogLoading = false;
+          _catalogLoadingMore = false;
+        });
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _catalogLoading = false;
@@ -1529,7 +1559,26 @@ class _GifPickPanelState extends State<_GifPickPanel> {
           searching ? 'Результаты' : 'Популярные',
         ),
         const SizedBox(height: 8),
-        if (_catalogLoading)
+        if (_catalogLocked)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              children: [
+                Text(
+                  'Поиск GIF доступен с уровня 21',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                ),
+                TextButton(
+                  onPressed: () => unawaited(showCreatorUpsell(context)),
+                  child: const Text('Открыть подписку'),
+                ),
+              ],
+            ),
+          )
+        else if (_catalogLoading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 28),
             child: Center(child: CircularProgressIndicator()),
@@ -1823,12 +1872,23 @@ class _LocationPickPanelState extends State<_LocationPickPanel> {
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: () => widget.onSend(
-              pos!.latitude,
-              pos.longitude,
-              livePeriodSeconds: _livePeriodSeconds,
+            onPressed: () {
+              if (SubscriptionStatusCache.peek()?.hasFeature('live_location') !=
+                  true) {
+                unawaited(showCreatorUpsell(context));
+                return;
+              }
+              widget.onSend(
+                pos!.latitude,
+                pos.longitude,
+                livePeriodSeconds: _livePeriodSeconds,
+              );
+            },
+            icon: Icon(
+              SubscriptionStatusCache.peek()?.hasFeature('live_location') == true
+                  ? Icons.my_location_outlined
+                  : Icons.lock_outline,
             ),
-            icon: const Icon(Icons.my_location_outlined),
             label: const Text('Начать трансляцию'),
           ),
         ] else ...[

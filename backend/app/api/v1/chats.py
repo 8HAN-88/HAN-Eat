@@ -2717,7 +2717,13 @@ async def start_live_location(
     db: Session = Depends(get_db),
 ):
     from app.services.chat_location_service import build_live_location_content
+    from app.services.subscription_service import SubscriptionService
 
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "live_location",
+        "Трансляция геопозиции доступна с уровня 24",
+    )
     try:
         content = build_live_location_content(
             latitude=body.latitude,
@@ -3803,6 +3809,13 @@ async def list_message_readers(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "group_readers",
+        "Кто прочитал в группах доступно с уровня 23",
+    )
     svc = ChatService(db)
     try:
         users, other_count = svc.message_readers(

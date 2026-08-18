@@ -9,6 +9,8 @@ import '../../../services/media_upload_service.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/creator_upsell.dart';
 
 class StickerPackManageScreen extends StatefulWidget {
   const StickerPackManageScreen({
@@ -187,6 +189,11 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
   }
 
   Future<void> _addAnimatedSticker() async {
+    if (SubscriptionStatusCache.peek()?.hasFeature('animated_stickers') !=
+        true) {
+      await showCreatorUpsell(context);
+      return;
+    }
     final pack = _pack;
     if (pack == null || _saving) return;
     final result = await FilePicker.platform.pickFiles(
