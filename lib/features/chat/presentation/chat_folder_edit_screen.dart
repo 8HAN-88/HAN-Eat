@@ -7,6 +7,7 @@ import '../../../services/channel_service.dart';
 import '../../../services/chat_folder_store.dart';
 import '../../../services/chat_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 
 enum _FolderPickTab { all, chats, channels }
 
@@ -246,6 +247,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       Navigator.pop(context, result);
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

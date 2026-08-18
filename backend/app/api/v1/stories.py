@@ -273,6 +273,14 @@ async def create_story(
     visibility = (payload.visibility or "public").strip().lower()
     if visibility not in _VALID_VISIBILITY:
         raise HTTPException(status_code=400, detail="Invalid visibility")
+    if visibility == "close_friends":
+        from app.services.subscription_service import SubscriptionService
+
+        SubscriptionService(db).require_feature(
+            current_user.id,
+            "story_close_friends",
+            "Сторис для близких доступны с уровня 20",
+        )
     story = Story(
         user_id=current_user.id,
         media_url=payload.media_url,
@@ -344,6 +352,13 @@ async def list_story_viewers(
         raise HTTPException(status_code=404, detail="Story not found")
     if story.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the author can see viewers")
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "story_viewers",
+        "Список просмотров сторис доступен с уровня 19",
+    )
 
     limit = min(max(limit, 1), 200)
     views = (

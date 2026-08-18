@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/creator_upsell.dart';
 import '../data/story_service.dart';
 
 /// Экран камеры для создания сторис (фото + видео).
@@ -179,7 +181,16 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
                         selected: _visibility == option.$1,
                         onSelected: _isPublishing
                             ? null
-                            : (_) => setState(() => _visibility = option.$1),
+                            : (_) {
+                                if (option.$1 == 'close_friends' &&
+                                    SubscriptionStatusCache.peek()
+                                            ?.hasFeature('story_close_friends') !=
+                                        true) {
+                                  showCreatorUpsell(context);
+                                  return;
+                                }
+                                setState(() => _visibility = option.$1);
+                              },
                         selectedColor: Colors.white,
                         labelStyle: TextStyle(
                           color: _visibility == option.$1

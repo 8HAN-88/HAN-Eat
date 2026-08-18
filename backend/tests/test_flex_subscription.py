@@ -75,23 +75,27 @@ def test_price_formula():
     assert price_for_level(5) == 79
     assert price_for_level(10) == 129
     assert price_for_level(16) == 189
+    assert price_for_level(20) == 229
     assert price_for_plan(1, "yearly") == 390
     assert price_for_plan(6, "yearly") == 890
     assert price_for_plan(10, "yearly") == 1290
     assert price_for_plan(16, "yearly") == 1890
+    assert price_for_plan(20, "yearly") == 2290
 
 
 def test_catalog_seed_and_default_layout(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
     layout = svc.resolved_layout(1)
-    assert len(layout) == 16
+    assert len(layout) == 20
     assert layout[0]["feature"].slug == "ad_free"
     assert layout[0]["level"] == 1
     assert layout[9]["feature"].slug == "priority_support"
     assert layout[9]["level"] == 10
-    assert layout[-1]["feature"].slug == "message_effects"
-    assert layout[-1]["level"] == 16
+    assert layout[15]["feature"].slug == "message_effects"
+    assert layout[15]["level"] == 16
+    assert layout[-1]["feature"].slug == "story_close_friends"
+    assert layout[-1]["level"] == 20
 
 
 def test_cannot_move_fixed_feature(db_session):
@@ -292,6 +296,15 @@ def test_has_feature_follows_level_not_bundle(db_session):
     ents = billing.get_status_dict(1)["entitlements"]
     assert ents["larger_uploads"] is True
     assert ents["message_effects"] is True
+    assert ents["scheduled_messages"] is False
+    assert ents["story_close_friends"] is False
+
+    svc.activate(1, 20)
+    db_session.commit()
+    assert billing.has_feature(1, "scheduled_messages") is True
+    assert billing.has_feature(1, "chat_wallpaper") is True
+    assert billing.has_feature(1, "story_viewers") is True
+    assert billing.has_feature(1, "story_close_friends") is True
 
 
 def test_expire_and_refund_deactivate_flex(db_session):
@@ -483,7 +496,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         SubscriptionFeature.default_level >= 11
     ).delete(synchronize_session=False)
     db_session.query(SubscriptionFeatureBlock).filter(
-        SubscriptionFeatureBlock.key == "D"
+        SubscriptionFeatureBlock.key.in_(("D", "E"))
     ).delete(synchronize_session=False)
     db_session.commit()
     assert db_session.query(SubscriptionFeature).count() == 10
@@ -492,10 +505,13 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     slugs = {f.slug for f in svc.list_features()}
     assert "chat_translation" in slugs
     assert "message_effects" in slugs
-    assert {b.key for b in svc.list_blocks()} == {"A", "B", "C", "D"}
+    assert "scheduled_messages" in slugs
+    assert "story_close_friends" in slugs
+    assert {b.key for b in svc.list_blocks()} == {"A", "B", "C", "D", "E"}
     me = svc.me_payload(1)
-    assert me["max_level"] == 16
+    assert me["max_level"] == 20
     assert any(p["level"] == 16 for p in me["presets"])
+    assert any(p["level"] == 20 for p in me["presets"])
 
 
 def test_privacy_plus_lets_hidden_viewer_see_last_seen(db_session):

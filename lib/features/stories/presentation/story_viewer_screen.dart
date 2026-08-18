@@ -12,6 +12,8 @@ import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/server_config.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/creator_upsell.dart';
 import '../../chat/application/chat_open_direct.dart';
 import '../../chat/application/chat_ready_outgoing.dart';
 import '../../chat/presentation/widgets/chat_story_reply_bubble.dart';
@@ -251,6 +253,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   Future<void> _openViewers() async {
     if (!_currentStory.isOwn) return;
+    if (SubscriptionStatusCache.peek()?.hasFeature('story_viewers') != true) {
+      await showCreatorUpsell(context);
+      return;
+    }
     final storyId = int.tryParse(_currentStory.id);
     if (storyId == null) return;
     _pause();
