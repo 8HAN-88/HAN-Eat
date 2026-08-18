@@ -20,6 +20,8 @@ import 'package:han_eat/widgets/highlighted_text.dart';
 import 'package:han_eat/widgets/app_gradient_background.dart';
 import 'package:han_eat/app/app_router.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../services/subscription_status_cache.dart';
+import '../../subscription/creator_upsell.dart';
 import '../application/search_scope.dart';
 
 enum _MainSearchTab { all, posts, people, channels, messages }
@@ -316,6 +318,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
       List<ChatMessageSearchItem>? messageResult;
       if (_searchMessages && reset) {
+        if (SubscriptionStatusCache.peek()?.hasFeature('chat_search') !=
+            true) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            await showCreatorUpsell(context);
+          }
+          return;
+        }
         try {
           messageResult = await ChatService.searchMessages(
             query: query,
@@ -323,6 +335,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             type: _selectedMessageType,
           );
         } catch (e) {
+          if (mounted && offerFlexIfRequired(context, e)) {
+            setState(() => _isLoading = false);
+            return;
+          }
           rethrow;
         }
       }
@@ -530,7 +546,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           ],
                           selected: {_mainTab},
                           onSelectionChanged: (selection) {
-                            setState(() => _mainTab = selection.first);
+                            final next = selection.first;
+                            if (next == _MainSearchTab.messages &&
+                                SubscriptionStatusCache.peek()
+                                        ?.hasFeature('chat_search') !=
+                                    true) {
+                              unawaited(showCreatorUpsell(context));
+                              return;
+                            }
+                            setState(() => _mainTab = next);
                             _performSearch();
                           },
                         ),

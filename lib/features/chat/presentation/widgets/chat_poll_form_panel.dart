@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/color_schemes.dart';
 import '../../../../models/chat_poll.dart';
+import '../../../subscription/creator_upsell.dart';
 import 'create_chat_poll_sheet.dart';
 
 class ChatPollFormPanel extends StatefulWidget {
@@ -29,12 +30,7 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
     TextEditingController(),
   ];
 
-  ChatPollSettings _settings = const ChatPollSettings(
-    showVoterNames: true,
-    multipleChoice: true,
-    allowAddOptions: true,
-    allowChangeVote: true,
-  );
+  ChatPollSettings _settings = const ChatPollSettings();
 
   bool get canSend {
     final q = _questionController.text.trim();
@@ -63,6 +59,12 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
     widget.onValidityChanged?.call(canSend);
   }
 
+  bool _allowPollPlus({required bool enabling}) {
+    if (!enabling || hasFlexFeature('poll_quiz')) return true;
+    showCreatorUpsell(context);
+    return false;
+  }
+
   void _addOption() {
     if (_optionControllers.length >= ChatPollFormPanel.maxOptions) return;
     setState(() => _optionControllers.add(TextEditingController()));
@@ -79,6 +81,13 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
 
   ChatPollDraft? buildDraft() {
     if (!canSend) return null;
+    final needsPlus = !_settings.showVoterNames ||
+        _settings.multipleChoice ||
+        _settings.allowAddOptions;
+    if (needsPlus && !hasFlexFeature('poll_quiz')) {
+      showCreatorUpsell(context);
+      return null;
+    }
     return ChatPollDraft(
       question: _questionController.text.trim(),
       description: _descriptionController.text.trim(),
@@ -210,9 +219,13 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
               title: 'Имена участников',
               subtitle: 'Рядом с ответами отображаются имена голосовавших',
               value: _settings.showVoterNames,
-              onChanged: (v) => setState(
-                () => _settings = _settings.copyWith(showVoterNames: v),
-              ),
+              locked: !hasFlexFeature('poll_quiz'),
+              onChanged: (v) {
+                if (!_allowPollPlus(enabling: !v)) return;
+                setState(
+                  () => _settings = _settings.copyWith(showVoterNames: v),
+                );
+              },
             ),
             _settingDivider(theme),
             _PollSettingTile(
@@ -221,9 +234,13 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
               title: 'Несколько ответов',
               subtitle: 'Участники могут выбрать более одного варианта',
               value: _settings.multipleChoice,
-              onChanged: (v) => setState(
-                () => _settings = _settings.copyWith(multipleChoice: v),
-              ),
+              locked: !hasFlexFeature('poll_quiz'),
+              onChanged: (v) {
+                if (!_allowPollPlus(enabling: v)) return;
+                setState(
+                  () => _settings = _settings.copyWith(multipleChoice: v),
+                );
+              },
             ),
             _settingDivider(theme),
             _PollSettingTile(
@@ -232,9 +249,13 @@ class ChatPollFormPanelState extends State<ChatPollFormPanel> {
               title: 'Добавление вариантов',
               subtitle: 'Участники могут предлагать новые варианты',
               value: _settings.allowAddOptions,
-              onChanged: (v) => setState(
-                () => _settings = _settings.copyWith(allowAddOptions: v),
-              ),
+              locked: !hasFlexFeature('poll_quiz'),
+              onChanged: (v) {
+                if (!_allowPollPlus(enabling: v)) return;
+                setState(
+                  () => _settings = _settings.copyWith(allowAddOptions: v),
+                );
+              },
             ),
             _settingDivider(theme),
             _PollSettingTile(
@@ -355,6 +376,7 @@ class _PollSettingTile extends StatelessWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
+    this.locked = false,
   });
 
   final IconData icon;
@@ -363,6 +385,7 @@ class _PollSettingTile extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -375,7 +398,7 @@ class _PollSettingTile extends StatelessWidget {
           color: iconColor.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(7),
         ),
-        child: Icon(icon, size: 18, color: iconColor),
+        child: Icon(locked ? Icons.lock_outline : icon, size: 18, color: iconColor),
       ),
       title: Text(
         title,

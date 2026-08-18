@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 24
+MAX_LEVEL = 28
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -50,6 +50,7 @@ DEFAULT_BLOCKS = (
     {"key": "D", "title": "Мессенджер+", "min_level": 11, "max_level": 16, "sort_order": 4},
     {"key": "E", "title": "Ещё", "min_level": 17, "max_level": 20, "sort_order": 5},
     {"key": "F", "title": "Медиа+", "min_level": 21, "max_level": 24, "sort_order": 6},
+    {"key": "G", "title": "Чат+", "min_level": 25, "max_level": 28, "sort_order": 7},
 )
 
 DEFAULT_PRESETS = (
@@ -59,6 +60,7 @@ DEFAULT_PRESETS = (
     {"key": "messenger", "title": "Мессенджер+", "level": 16},
     {"key": "extra", "title": "Ещё", "level": 20},
     {"key": "media", "title": "Медиа+", "level": 24},
+    {"key": "chat", "title": "Чат+", "level": 28},
 )
 
 DEFAULT_FEATURES = (
@@ -373,6 +375,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "F",
+    },
+    {
+        "slug": "silent_send",
+        "title": "Отправка без звука",
+        "description": "Сообщение доставляется без push-уведомления.",
+        "icon": "notifications_off",
+        "default_level": 25,
+        "min_level": 25,
+        "max_level": 28,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "G",
+    },
+    {
+        "slug": "chat_search",
+        "title": "Поиск по сообщениям",
+        "description": "Поиск по тексту, дате и типу сообщений во всех чатах.",
+        "icon": "search",
+        "default_level": 26,
+        "min_level": 25,
+        "max_level": 28,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "G",
+    },
+    {
+        "slug": "poll_quiz",
+        "title": "Викторины и опросы+",
+        "description": "Викторина, несколько ответов, таймер и скрытые результаты.",
+        "icon": "quiz",
+        "default_level": 27,
+        "min_level": 25,
+        "max_level": 28,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "G",
+    },
+    {
+        "slug": "video_notes",
+        "title": "Видеосообщения",
+        "description": "Кружочки — короткие круглые видео в чате.",
+        "icon": "videocam",
+        "default_level": 28,
+        "min_level": 25,
+        "max_level": 28,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "G",
     },
 )
 

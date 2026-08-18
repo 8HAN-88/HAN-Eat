@@ -158,6 +158,43 @@ def _raise_flex_gate(code: str) -> None:
     )
 
 
+def _require_chat_search(db, user) -> None:
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        int(user.id),
+        "chat_search",
+        "Поиск по сообщениям доступен с уровня 26",
+    )
+
+
+def _require_send_flex_options(db, user, body) -> None:
+    from app.services.subscription_service import SubscriptionService
+
+    billing = SubscriptionService(db)
+    if bool(getattr(body, "silent", False)):
+        billing.require_feature(
+            user.id,
+            "silent_send",
+            "Отправка без звука доступна с уровня 25",
+        )
+    if getattr(body, "type", None) == "video_note":
+        billing.require_feature(
+            user.id,
+            "video_notes",
+            "Видеосообщения-кружочки доступны с уровня 28",
+        )
+    if getattr(body, "type", None) == "poll":
+        from app.services.chat_poll_service import poll_settings_need_premium
+
+        if poll_settings_need_premium(getattr(body, "poll_settings", None)):
+            billing.require_feature(
+                user.id,
+                "poll_quiz",
+                "Викторины и расширенные опросы доступны с уровня 27",
+            )
+
+
 def _enforce_chat_action_rate_limit(user_id: int, action: str, limit: int) -> None:
     if not getattr(settings, "RATE_LIMIT_ENABLED", True):
         return
@@ -1973,6 +2010,7 @@ async def search_messages_global(
             status.HTTP_400_BAD_REQUEST,
             detail="q must be at least 2 characters",
         )
+    _require_chat_search(db, current_user)
     svc = ChatService(db)
     try:
         hits = svc.search_messages(
@@ -2020,6 +2058,7 @@ async def search_messages_in_chat(
             status.HTTP_400_BAD_REQUEST,
             detail="q must be at least 2 characters",
         )
+    _require_chat_search(db, current_user)
     svc = ChatService(db)
     try:
         hits = svc.search_messages(
@@ -2045,6 +2084,7 @@ async def send_message(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
+    _require_send_flex_options(db, current_user, body)
     svc = ChatService(db)
     content = body.content
     inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
@@ -2371,6 +2411,7 @@ async def schedule_message(
         "scheduled_messages",
         "Отложенные сообщения доступны с уровня 17",
     )
+    _require_send_flex_options(db, current_user, body)
     svc = ChatService(db)
     content = body.content
     inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)

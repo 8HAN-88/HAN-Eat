@@ -11,6 +11,7 @@ from app.services.chat_poll_service import (
     close_message_poll,
     parse_poll_content,
     poll_preview_text,
+    poll_settings_need_premium,
     rebase_poll_closes_at,
     vote_on_message_poll,
 )
@@ -52,6 +53,22 @@ class _Db:
 
     def flush(self):
         pass
+
+
+def test_poll_settings_need_premium_simple_is_free():
+    assert poll_settings_need_premium(None) is False
+    assert poll_settings_need_premium({}) is False
+    assert poll_settings_need_premium({"allow_change_vote": True}) is False
+
+
+def test_poll_settings_need_premium_advanced():
+    assert poll_settings_need_premium({"quiz_mode": True}) is True
+    assert poll_settings_need_premium({"multiple_choice": True}) is True
+    assert poll_settings_need_premium({"allow_add_options": True}) is True
+    assert poll_settings_need_premium({"hide_results_until_closed": True}) is True
+    assert poll_settings_need_premium({"time_limit_enabled": True}) is True
+    assert poll_settings_need_premium({"random_order": True}) is True
+    assert poll_settings_need_premium({"show_voter_names": False}) is True
 
 
 def test_build_poll_content_minimal():
