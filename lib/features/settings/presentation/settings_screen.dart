@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/app_router.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/subscription_status_cache.dart';
 import '../../../services/user_service.dart';
 import '../../../services/web_app_update_service.dart';
 import '../../../services/chat_thread_ui_prefs.dart';
@@ -174,9 +175,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   subtitle: Text(
                     switch (value) {
                       lastSeenPrivacyContacts =>
-                        'Только люди из ваших контактов',
+                        'Только люди из ваших контактов. У кого уровень выше — всё равно видят вас',
                       lastSeenPrivacyNobody =>
-                        'Статус «в сети» и last seen скрыты',
+                        SubscriptionStatusCache.peek()
+                                    ?.hasFeature('privacy_plus') ==
+                                true
+                            ? 'Статус скрыт, чужой last seen вам виден. У кого уровень выше — всё равно видят вас'
+                            : 'Статус скрыт — чужой last seen тоже не виден. У кого уровень выше — всё равно видят вас',
                       _ => 'Все пользователи HanWe',
                     },
                   ),
@@ -185,7 +190,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       : null,
                   onTap: () => Navigator.pop(ctx, value),
                 ),
-              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Text(
+                  lastSeenHigherLevelNote,
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
             ],
           ),
         );
@@ -436,7 +449,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.visibility_outlined),
                     title: const Text('Время в сети'),
-                    subtitle: Text(lastSeenPrivacyLabel(_lastSeenPrivacy)),
+                    subtitle: Text(
+                      '${lastSeenPrivacyLabel(_lastSeenPrivacy)}\n'
+                      '$lastSeenHigherLevelNote',
+                    ),
+                    isThreeLine: true,
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: _privacyBusy ? null : _pickLastSeenPrivacy,
                   ),

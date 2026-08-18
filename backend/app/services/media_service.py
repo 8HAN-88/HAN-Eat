@@ -98,6 +98,7 @@ class MediaService:
         file_size: int,
         user_id: int,
         prefer_api: bool = False,
+        larger: bool = False,
     ) -> Dict[str, str]:
         """
         Генерация presigned URL для загрузки файла
@@ -120,7 +121,8 @@ class MediaService:
         if file_type == "image":
             if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_IMAGE_TYPES):
                 raise ValueError(f"Unsupported image type: {content_type}")
-            max_size = settings.MAX_IMAGE_SIZE_MB * 1024 * 1024
+            mb = 50 if larger else settings.MAX_IMAGE_SIZE_MB
+            max_size = mb * 1024 * 1024
         elif file_type == "video":
             if not _is_allowed_video_content_type(content_type):
                 raise ValueError(f"Unsupported video type: {content_type}")
@@ -129,13 +131,15 @@ class MediaService:
         elif file_type == "audio":
             if not any(content_type.lower().endswith(f"/{ext}") for ext in settings.ALLOWED_AUDIO_TYPES):
                 raise ValueError(f"Unsupported audio type: {content_type}")
-            max_size = settings.MAX_AUDIO_SIZE_MB * 1024 * 1024
+            mb = 20 if larger else settings.MAX_AUDIO_SIZE_MB
+            max_size = mb * 1024 * 1024
         elif file_type == "document":
             ct = content_type.lower()
             allowed = settings.ALLOWED_DOCUMENT_TYPES
             if not any(ext in ct for ext in allowed):
                 raise ValueError(f"Unsupported document type: {content_type}")
-            max_size = settings.MAX_DOCUMENT_SIZE_MB * 1024 * 1024
+            mb = 100 if larger else settings.MAX_DOCUMENT_SIZE_MB
+            max_size = mb * 1024 * 1024
         else:
             raise ValueError(
                 f"Invalid file_type: {file_type}. Must be 'image', 'video', 'audio' or 'document'"

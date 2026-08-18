@@ -87,6 +87,13 @@ def test_nobody_hides_from_others_not_self(db_session):
     assert can_viewer_see_last_seen(db_session, owner, 1) is True
 
 
+def test_hiding_viewer_cannot_see_others(db_session):
+    owner = _user(db_session, 1, PRIVACY_EVERYBODY)
+    viewer = _user(db_session, 2, PRIVACY_NOBODY)
+    assert can_viewer_see_last_seen(db_session, owner, viewer.id) is False
+    assert can_viewer_see_last_seen(db_session, owner, owner.id) is True
+
+
 def test_apply_explicit_privacy_syncs_bool(db_session):
     u = _user(db_session, 1)
     apply_last_seen_privacy_update(u, last_seen_privacy=PRIVACY_CONTACTS)

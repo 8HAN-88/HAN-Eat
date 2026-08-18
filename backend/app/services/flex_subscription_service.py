@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.flex_subscription import (
@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 10
+MAX_LEVEL = 16
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -47,12 +47,14 @@ DEFAULT_BLOCKS = (
     {"key": "A", "title": "Базовые функции", "min_level": 1, "max_level": 3, "sort_order": 1},
     {"key": "B", "title": "Расширенные функции", "min_level": 4, "max_level": 6, "sort_order": 2},
     {"key": "C", "title": "PRO", "min_level": 7, "max_level": 10, "sort_order": 3},
+    {"key": "D", "title": "Мессенджер+", "min_level": 11, "max_level": 16, "sort_order": 4},
 )
 
 DEFAULT_PRESETS = (
     {"key": "basic", "title": "Базовый", "level": 3},
     {"key": "plus", "title": "Расширенный", "level": 6},
     {"key": "pro", "title": "PRO", "level": 10},
+    {"key": "messenger", "title": "Мессенджер+", "level": 16},
 )
 
 DEFAULT_FEATURES = (
@@ -186,6 +188,84 @@ DEFAULT_FEATURES = (
         "required": True,
         "block_key": "C",
     },
+    {
+        "slug": "chat_translation",
+        "title": "Перевод сообщений",
+        "description": "Перевод текста в чатах на нужный язык.",
+        "icon": "translate",
+        "default_level": 11,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
+    {
+        "slug": "extra_pins",
+        "title": "Больше закрепов",
+        "description": "До 20 закреплённых сообщений в чате вместо пяти.",
+        "icon": "push_pin",
+        "default_level": 12,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
+    {
+        "slug": "larger_uploads",
+        "title": "Большие файлы",
+        "description": "Фото до 50 МБ, документы до 100 МБ, аудио до 20 МБ.",
+        "icon": "upload_file",
+        "default_level": 13,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
+    {
+        "slug": "privacy_plus",
+        "title": "Приватность last seen",
+        "description": "Скрывайте свой статус и всё равно видите, кто в сети. У кого уровень выше — всё равно видит вас.",
+        "icon": "visibility_off",
+        "default_level": 14,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
+    {
+        "slug": "extra_folders",
+        "title": "Больше папок",
+        "description": "До 50 папок чатов вместо десяти.",
+        "icon": "folder",
+        "default_level": 15,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
+    {
+        "slug": "message_effects",
+        "title": "Эффекты сообщений",
+        "description": "Конфетти, фейерверк и праздник при отправке.",
+        "icon": "celebration",
+        "default_level": 16,
+        "min_level": 11,
+        "max_level": 16,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "D",
+    },
 )
 
 
@@ -226,13 +306,29 @@ class FlexSubscriptionService:
         self.db = db
 
     def ensure_catalog(self) -> None:
-        if self.db.query(SubscriptionFeatureBlock).count() == 0:
-            for row in DEFAULT_BLOCKS:
-                self.db.add(SubscriptionFeatureBlock(**row))
-            self.db.flush()
-        if self.db.query(SubscriptionFeature).count() == 0:
-            for index, row in enumerate(DEFAULT_FEATURES, start=1):
-                self.db.add(SubscriptionFeature(sort_order=index, **row))
+        existing_blocks = {
+            str(row.key): row
+            for row in self.db.query(SubscriptionFeatureBlock).all()
+        }
+        for spec in DEFAULT_BLOCKS:
+            if spec["key"] in existing_blocks:
+                continue
+            self.db.add(SubscriptionFeatureBlock(**spec))
+        existing_slugs = {
+            str(row.slug)
+            for row in self.db.query(SubscriptionFeature.slug).all()
+        }
+        next_order = (
+            self.db.query(func.max(SubscriptionFeature.sort_order)).scalar() or 0
+        )
+        added = False
+        for index, spec in enumerate(DEFAULT_FEATURES, start=1):
+            if spec["slug"] in existing_slugs:
+                continue
+            next_order += 1
+            self.db.add(SubscriptionFeature(sort_order=next_order or index, **spec))
+            added = True
+        if added or len(existing_blocks) < len(DEFAULT_BLOCKS):
             self.db.flush()
 
     def list_blocks(self) -> list[SubscriptionFeatureBlock]:
@@ -366,7 +462,7 @@ class FlexSubscriptionService:
     ) -> tuple[bool, str]:
         level = int(target_level)
         if level < MIN_LEVEL or level > MAX_LEVEL:
-            return False, "Уровень вне диапазона 1–10"
+            return False, f"Уровень вне диапазона {MIN_LEVEL}–{MAX_LEVEL}"
         if moving and (feature.feature_type == "fixed" or not feature.movable or feature.required and feature.feature_type == "fixed"):
             if feature.feature_type == "fixed" or not bool(feature.movable):
                 return False, "Эту функцию нельзя перемещать"

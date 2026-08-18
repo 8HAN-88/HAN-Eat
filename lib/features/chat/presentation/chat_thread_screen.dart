@@ -651,6 +651,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   int? _activeEffectToken;
   final Set<int> _playedEffectMessageIds = {};
 
+  static const _premiumMessageEffects = {'confetti', 'fireworks', 'celebration'};
   static const _messageEffects = <(String, String, IconData)>[
     ('confetti', 'Конфетти', Icons.celebration_outlined),
     ('fireworks', 'Фейерверк', Icons.auto_awesome),
@@ -658,6 +659,16 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     ('celebration', 'Праздник', Icons.party_mode_outlined),
     ('thumbs_up', 'Класс', Icons.thumb_up_alt_outlined),
   ];
+
+  List<(String, String, IconData)> get _availableMessageEffects {
+    final unlocked =
+        SubscriptionStatusCache.peek()?.hasFeature('message_effects') == true;
+    if (unlocked) return _messageEffects;
+    return [
+      for (final effect in _messageEffects)
+        if (!_premiumMessageEffects.contains(effect.$1)) effect,
+    ];
+  }
 
   void _playMessageEffect(String? effectId, {int? messageId}) {
     final id = (effectId ?? '').trim();
@@ -10704,7 +10715,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       canReplyPrivately: canReplyPrivately,
       canCopyLink: msg.id > 0,
       canForward: !protectContent,
-      canTranslate: copyable,
+      canTranslate: copyable &&
+          SubscriptionStatusCache.peek()?.hasFeature('chat_translation') ==
+              true,
       canReport: !msg.isMine && msg.id > 0,
       canRefundPaidMedia: msg.isMine &&
           msg.id > 0 &&
@@ -12008,7 +12021,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: Text('Эффект сообщения'),
               subtitle: Text('Анимация при отправке и у получателя'),
             ),
-            for (final effect in _messageEffects)
+            for (final effect in _availableMessageEffects)
               ListTile(
                 leading: Icon(effect.$3),
                 title: Text(effect.$2),
@@ -12039,7 +12052,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               title: const Text('Без эффекта'),
               onTap: () => Navigator.pop(ctx, ''),
             ),
-            for (final effect in _messageEffects)
+            for (final effect in _availableMessageEffects)
               ListTile(
                 leading: Icon(effect.$3),
                 title: Text(effect.$2),
