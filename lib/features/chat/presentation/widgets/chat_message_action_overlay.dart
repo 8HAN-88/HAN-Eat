@@ -135,6 +135,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     this.canTranslate = false,
     this.canReport = false,
     this.canRefundPaidMedia = false,
+    this.canTagSaved = false,
     this.bottomComposerReserve = 88,
   });
 
@@ -155,6 +156,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
   final bool canTranslate;
   final bool canReport;
   final bool canRefundPaidMedia;
+  final bool canTagSaved;
   final ValueChanged<String> onReaction;
   final ValueChanged<String> onAction;
   final VoidCallback onExpandReactions;
@@ -182,6 +184,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
     bool canTranslate = false,
     bool canReport = false,
     bool canRefundPaidMedia = false,
+    bool canTagSaved = false,
     double bottomComposerReserve = 88,
   }) {
     AppHaptics.medium();
@@ -214,6 +217,7 @@ class ChatMessageActionOverlay extends StatefulWidget {
         canTranslate: canTranslate,
         canReport: canReport,
         canRefundPaidMedia: canRefundPaidMedia,
+        canTagSaved: canTagSaved,
         bottomComposerReserve: bottomComposerReserve,
         onReaction: (emoji) {
           Navigator.pop(ctx);
@@ -327,6 +331,12 @@ class _ChatMessageActionOverlayState extends State<ChatMessageActionOverlay>
           action: 'save',
           icon: Icons.bookmark_border_rounded,
           label: 'В избранное',
+        ),
+      if (widget.canTagSaved)
+        _MenuItem(
+          action: 'tag',
+          icon: Icons.sell_outlined,
+          label: 'Тег',
         ),
       if (widget.canCopyLink)
         _MenuItem(

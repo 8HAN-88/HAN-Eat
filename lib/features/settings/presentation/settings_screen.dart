@@ -16,7 +16,9 @@ import '../../../core/layout/floating_bottom_padding.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
+import '../../subscription/creator_upsell.dart';
 import '../application/last_seen_privacy.dart';
+import '../application/voice_privacy.dart';
 import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
 
@@ -34,6 +36,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _slowModeCountdownHapticsEnabled = true;
   bool _autoRetryOnLimitsEnabled = true;
   String _lastSeenPrivacy = lastSeenPrivacyEverybody;
+  String _voicePrivacy = voicePrivacyEverybody;
+  bool _archiveNonContacts = false;
   bool _showReadReceipts = true;
   int _paidMessageStars = 0;
   bool _privacyBusy = false;
@@ -116,6 +120,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           user.lastSeenPrivacy,
           showLastSeen: user.showLastSeen,
         );
+        _voicePrivacy = normalizeVoicePrivacy(user.voicePrivacy);
+        _archiveNonContacts = user.archiveNonContacts;
         _showReadReceipts = user.showReadReceipts;
         _paidMessageStars = user.paidMessageStars;
       });
@@ -228,6 +234,118 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _lastSeenPrivacy = previous;
         _privacyBusy = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _pickVoicePrivacy() async {
+    if (_privacyBusy) return;
+    if (_voicePrivacy == voicePrivacyEverybody &&
+        !hasFlexFeature('voice_privacy')) {
+      await showCreatorUpsell(context);
+    }
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Кто может присылать голос и кружки',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final value in voicePrivacyValues)
+                ListTile(
+                  title: Text(voicePrivacyLabel(value)),
+                  subtitle: Text(
+                    switch (value) {
+                      voicePrivacyContacts =>
+                        'Только люди из ваших контактов',
+                      voicePrivacyNobody =>
+                        'Никто не сможет прислать голосовое или кружок',
+                      _ => 'Все пользователи HanWe',
+                    },
+                  ),
+                  trailing: _voicePrivacy == value
+                      ? const Icon(Icons.check)
+                      : (value != voicePrivacyEverybody &&
+                              !hasFlexFeature('voice_privacy')
+                          ? const Icon(Icons.lock_outline)
+                          : null),
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _voicePrivacy) return;
+    if (selected != voicePrivacyEverybody &&
+        !hasFlexFeature('voice_privacy')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final previous = _voicePrivacy;
+    setState(() {
+      _voicePrivacy = selected;
+      _privacyBusy = true;
+    });
+    try {
+      final updated =
+          await UserService.updateProfile(voicePrivacy: selected);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _voicePrivacy = normalizeVoicePrivacy(updated.voicePrivacy);
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _voicePrivacy = previous;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _toggleArchiveNonContacts(bool enabled) async {
+    if (_privacyBusy) return;
+    if (enabled && !hasFlexFeature('archive_non_contacts')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() {
+      _archiveNonContacts = enabled;
+      _privacyBusy = true;
+    });
+    try {
+      final updated =
+          await UserService.updateProfile(archiveNonContacts: enabled);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _archiveNonContacts = updated.archiveNonContacts;
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _archiveNonContacts = !enabled;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -456,6 +574,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     isThreeLine: true,
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: _privacyBusy ? null : _pickLastSeenPrivacy,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.mic_off_outlined),
+                    title: const Text('Голосовые сообщения'),
+                    subtitle: Text(
+                      '${voicePrivacyLabel(_voicePrivacy)}\n'
+                      'Кто может присылать голос и кружки',
+                    ),
+                    isThreeLine: true,
+                    trailing: hasFlexFeature('voice_privacy')
+                        ? const Icon(Icons.chevron_right_rounded)
+                        : const Icon(Icons.lock_outline),
+                    onTap: _privacyBusy ? null : _pickVoicePrivacy,
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: hasFlexFeature('archive_non_contacts')
+                        ? const Icon(Icons.inventory_2_outlined)
+                        : const Icon(Icons.lock_outline),
+                    title: const Text('Архив незнакомцев'),
+                    subtitle: const Text(
+                      'Новые чаты не из контактов сразу в архив и без звука',
+                    ),
+                    value: _archiveNonContacts,
+                    onChanged:
+                        _privacyBusy ? null : _toggleArchiveNonContacts,
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

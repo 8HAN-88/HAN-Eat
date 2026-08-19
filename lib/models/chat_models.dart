@@ -325,6 +325,7 @@ class ChatMessage {
     this.isAnonymous = false,
     this.clientMessageId,
     this.transcription,
+    this.savedTagIds = const [],
   });
 
   final int id;
@@ -369,6 +370,8 @@ class ChatMessage {
   final String? clientMessageId;
   /// Voice / video-note transcript (Premium voice-to-text).
   final String? transcription;
+  /// Saved Messages tag ids (Telegram Premium).
+  final List<int> savedTagIds;
 
   bool get isLockedPaidMedia =>
       isPaid && !purchased && !isMine && priceStars > 0;
@@ -471,6 +474,10 @@ class ChatMessage {
       transcription: (json['transcription'] as String?)?.trim().isEmpty == true
           ? null
           : (json['transcription'] as String?)?.trim(),
+      savedTagIds: (json['saved_tag_ids'] as List<dynamic>? ?? const [])
+          .map((id) => _parseInt(id))
+          .where((id) => id > 0)
+          .toList(),
     );
   }
 
@@ -495,6 +502,7 @@ class ChatMessage {
     bool? isAnonymous,
     String? clientMessageId,
     String? transcription,
+    List<int>? savedTagIds,
   }) {
     return ChatMessage(
       id: id,
@@ -530,6 +538,37 @@ class ChatMessage {
       isAnonymous: isAnonymous ?? this.isAnonymous,
       clientMessageId: clientMessageId ?? this.clientMessageId,
       transcription: transcription ?? this.transcription,
+      savedTagIds: savedTagIds ?? this.savedTagIds,
+    );
+  }
+}
+
+class ChatSavedTag {
+  const ChatSavedTag({
+    required this.id,
+    required this.title,
+    this.emoji,
+    this.sortOrder = 0,
+  });
+
+  final int id;
+  final String title;
+  final String? emoji;
+  final int sortOrder;
+
+  String get label {
+    final mark = (emoji ?? '').trim();
+    return mark.isEmpty ? title : '$mark $title';
+  }
+
+  factory ChatSavedTag.fromJson(Map<String, dynamic> json) {
+    return ChatSavedTag(
+      id: _parseInt(json['id']),
+      title: (json['title'] as String? ?? '').trim(),
+      emoji: (json['emoji'] as String?)?.trim().isEmpty == true
+          ? null
+          : (json['emoji'] as String?)?.trim(),
+      sortOrder: _parseInt(json['sort_order']),
     );
   }
 }

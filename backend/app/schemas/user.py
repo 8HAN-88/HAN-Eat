@@ -34,6 +34,9 @@ class UserResponse(BaseModel):
     profile_decoration: bool = False
     emoji_status: Optional[str] = None
     profile_color: Optional[str] = None
+    voice_privacy: str = "everybody"
+    archive_non_contacts: bool = False
+    default_folder_id: Optional[int] = None
 
     @model_validator(mode="wrap")
     @classmethod
@@ -124,6 +127,9 @@ class UpdateUserRequest(BaseModel):
     avatar_url: Optional[str] = None
     emoji_status: Optional[str] = None
     profile_color: Optional[str] = None
+    voice_privacy: Optional[str] = None
+    archive_non_contacts: Optional[bool] = None
+    default_folder_id: Optional[int] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     voip_token: Optional[str] = None  # iOS PushKit VoIP token (CallKit)
     device_platform: Optional[str] = None  # android | ios | web

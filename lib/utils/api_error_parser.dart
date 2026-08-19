@@ -188,6 +188,9 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (raw.isEmpty) return fallback;
   if (raw == 'Not authenticated') return 'Войдите в аккаунт';
   final lower = raw.toLowerCase();
+  if (lower.contains('voice_privacy_denied')) {
+    return 'Собеседник не принимает голосовые и кружки';
+  }
   if (lower.contains('too many requests') ||
       lower.contains('rate_limit') ||
       lower.contains('429')) {

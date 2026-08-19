@@ -31,6 +31,7 @@ from app.models.conversation import (
     MessageEditHistory,
     ScheduledMessage,
 )
+from app.models.saved_tag import SavedMessageTag, SavedTag
 from app.models.forum_topic import ForumTopic
 from app.models.user_block import UserBlock
 from app.models.call import CallSession, CallParticipant

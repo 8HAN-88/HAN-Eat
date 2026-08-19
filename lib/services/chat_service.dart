@@ -322,12 +322,14 @@ class ChatService {
     int? cursor,
     int limit = 50,
     int? topicId,
+    int? tagId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages').replace(
       queryParameters: {
         if (cursor != null) 'cursor': '$cursor',
         'limit': '$limit',
         if (topicId != null) 'topic_id': '$topicId',
+        if (tagId != null && tagId > 0) 'tag_id': '$tagId',
       },
     );
     final response = await _get(uri);
@@ -428,12 +430,14 @@ class ChatService {
     required int afterId,
     int limit = 50,
     int? topicId,
+    int? tagId,
   }) async {
     final uri = Uri.parse('$_base/chats/$conversationId/messages').replace(
       queryParameters: {
         'after_id': '$afterId',
         'limit': '$limit',
         if (topicId != null) 'topic_id': '$topicId',
+        if (tagId != null && tagId > 0) 'tag_id': '$tagId',
       },
     );
     final response = await _get(uri);
@@ -618,6 +622,59 @@ class ChatService {
     _ensureOk(response, 'Не удалось убрать реакцию');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return _parseReactions(data['reactions']);
+  }
+
+  static Future<List<ChatSavedTag>> listSavedTags() async {
+    final uri = Uri.parse('$_base/chats/saved/tags');
+    final response = await _get(uri);
+    _ensureOk(response, 'Не удалось загрузить теги');
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['items'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(ChatSavedTag.fromJson)
+        .toList();
+  }
+
+  static Future<ChatSavedTag> createSavedTag({
+    required String title,
+    String? emoji,
+  }) async {
+    final uri = Uri.parse('$_base/chats/saved/tags');
+    final response = await _post(
+      uri,
+      body: jsonEncode({
+        'title': title,
+        if (emoji != null && emoji.trim().isNotEmpty) 'emoji': emoji.trim(),
+      }),
+    );
+    _ensureOk(response, 'Не удалось создать тег');
+    return ChatSavedTag.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<void> deleteSavedTag(int tagId) async {
+    final uri = Uri.parse('$_base/chats/saved/tags/$tagId');
+    final response = await _delete(uri);
+    _ensureOk(response, 'Не удалось удалить тег');
+  }
+
+  static Future<ChatMessage> setSavedMessageTags({
+    required int conversationId,
+    required int messageId,
+    required List<int> tagIds,
+  }) async {
+    final uri = Uri.parse(
+      '$_base/chats/$conversationId/messages/$messageId/saved-tags',
+    );
+    final response = await _post(
+      uri,
+      body: jsonEncode({'tag_ids': tagIds}),
+    );
+    _ensureOk(response, 'Не удалось сохранить теги');
+    return ChatMessage.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   static Future<void> pinMessage({

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/chat_models.dart';
+import '../../../services/auth_service.dart';
 import '../../../services/channel_service.dart';
 import '../../../services/chat_folder_store.dart';
 import '../../../services/chat_service.dart';
+import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../subscription/creator_upsell.dart';
 
@@ -63,6 +65,7 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
   Object? _channelsLoadError;
   _FolderPickTab _tab = _FolderPickTab.all;
   String _searchQuery = '';
+  bool _openOnLaunch = false;
 
   bool get _isEdit => widget.folder != null;
 
@@ -76,6 +79,8 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
       _selectedConv.addAll(folder.conversationIds);
       _selectedCh.addAll(folder.channelIds);
       _filters = folder.filters;
+      _openOnLaunch =
+          AuthService.instance.currentUser?.defaultFolderId == folder.id;
     } else {
       _selectedConv.addAll(widget.initialConversationIds);
       _selectedCh.addAll(widget.initialChannelIds);
@@ -257,6 +262,16 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
           filters: _filters,
         );
       }
+      if (_openOnLaunch) {
+        final updated = await UserService.updateProfile(
+          defaultFolderId: result.id,
+        );
+        await AuthService.persistUpdatedUser(updated);
+      } else if (_isEdit &&
+          AuthService.instance.currentUser?.defaultFolderId == result.id) {
+        final updated = await UserService.updateProfile(defaultFolderId: 0);
+        await AuthService.persistUpdatedUser(updated);
+      }
       if (!mounted) return;
       Navigator.pop(context, result);
     } catch (e) {
@@ -377,6 +392,26 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                         : const Icon(Icons.lock_outline),
                   ),
                   maxLength: 2,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Открывать при запуске'),
+                  subtitle: Text(
+                    hasFlexFeature('any_emoji_reactions')
+                        ? 'Эта папка откроется вместо последней выбранной'
+                        : 'Доступно с уровня 37',
+                  ),
+                  value: _openOnLaunch,
+                  secondary: hasFlexFeature('any_emoji_reactions')
+                      ? null
+                      : const Icon(Icons.lock_outline),
+                  onChanged: (v) {
+                    if (v && !hasFlexFeature('any_emoji_reactions')) {
+                      showCreatorUpsell(context);
+                      return;
+                    }
+                    setState(() => _openOnLaunch = v);
+                  },
                 ),
                 const SizedBox(height: 16),
                 Text(

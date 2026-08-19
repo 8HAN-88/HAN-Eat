@@ -102,6 +102,10 @@ from app.schemas.chat import (
     ChatPollAddOptionRequest,
     ChatPollVoteRequest,
     ChatChecklistToggleRequest,
+    SavedTagCreateRequest,
+    SavedTagItem,
+    SavedTagListResponse,
+    SavedMessageTagsRequest,
     LiveLocationStartRequest,
     LiveLocationUpdateRequest,
     CallbackQueryRequest,
@@ -291,6 +295,7 @@ def _message_payload(
         "topic_id": getattr(msg, "topic_id", None),
         "client_message_id": getattr(msg, "client_message_id", None),
         "transcription": getattr(msg, "transcription", None),
+        "saved_tag_ids": list(getattr(msg, "_saved_tag_ids", None) or []),
     }
     kb_update = getattr(msg, "_reply_keyboard_update", None)
     if isinstance(kb_update, dict):
@@ -895,6 +900,7 @@ def _message_response(
         is_anonymous=anon_flag,
         client_message_id=getattr(msg, "client_message_id", None),
         transcription=getattr(msg, "transcription", None),
+        saved_tag_ids=list(getattr(msg, "_saved_tag_ids", None) or []),
     )
 
 
@@ -1700,6 +1706,7 @@ async def list_messages(
     cursor: Optional[int] = Query(None),
     after_id: Optional[int] = Query(None),
     topic_id: Optional[int] = Query(None),
+    tag_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=100),
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
@@ -1718,6 +1725,7 @@ async def list_messages(
             after_id,
             limit,
             topic_id=topic_id,
+            tag_id=tag_id,
         )
     except ValueError as e:
         code = str(e)
@@ -1751,6 +1759,7 @@ async def list_messages(
             after_id,
             limit,
             topic_id=topic_id,
+            tag_id=tag_id,
         )
 
     member = (
@@ -1771,6 +1780,11 @@ async def list_messages(
     peer_delivered = (
         _peer_last_delivered_id(db, svc, conv, current_user.id) if conv else None
     )
+    from app.services.saved_tag_service import tags_by_message_ids
+
+    tag_map = tags_by_message_ids(db, current_user.id, [m.id for m in messages])
+    for row in messages:
+        row._saved_tag_ids = tag_map.get(row.id, [])
     sender_ids = {m.sender_id for m in messages}
     senders = {
         u.id: u
@@ -2110,6 +2124,25 @@ async def send_message(
 ):
     _require_send_flex_options(db, current_user, body)
     svc = ChatService(db)
+    if body.type in ("voice", "video_note"):
+        conv = (
+            db.query(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .first()
+        )
+        if conv is not None and conv.type == "direct":
+            from app.services.voice_privacy import can_send_voice_to
+
+            peer = db.query(User).filter(
+                User.id == svc.peer_user_id(conv, current_user.id)
+            ).first()
+            if peer is not None and not can_send_voice_to(
+                db, current_user.id, peer
+            ):
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    "voice_privacy_denied",
+                )
     content = body.content
     inline_keyboard_payload = _normalize_inline_keyboard(body.inline_keyboard)
     if body.type == "poll":
@@ -3132,6 +3165,121 @@ async def toggle_chat_checklist(
     return response
 
 
+@router.get("/chats/saved/tags", response_model=SavedTagListResponse)
+async def list_saved_tags(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.saved_tag_service import list_tags
+
+    items = list_tags(db, current_user.id)
+    return SavedTagListResponse(
+        items=[
+            SavedTagItem(
+                id=row.id,
+                title=row.title,
+                emoji=row.emoji,
+                sort_order=int(row.sort_order or 0),
+            )
+            for row in items
+        ]
+    )
+
+
+@router.post("/chats/saved/tags", response_model=SavedTagItem)
+async def create_saved_tag(
+    body: SavedTagCreateRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.saved_tag_service import SavedTagError, create_tag
+    from app.services.subscription_service import SubscriptionService
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "saved_tags",
+        "Теги в Избранном доступны с уровня 39",
+    )
+    try:
+        tag = create_tag(db, current_user.id, body.title, body.emoji)
+        db.commit()
+        db.refresh(tag)
+    except SavedTagError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    return SavedTagItem(
+        id=tag.id,
+        title=tag.title,
+        emoji=tag.emoji,
+        sort_order=int(tag.sort_order or 0),
+    )
+
+
+@router.delete("/chats/saved/tags/{tag_id}")
+async def delete_saved_tag(
+    tag_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.saved_tag_service import SavedTagError, delete_tag
+
+    try:
+        delete_tag(db, current_user.id, tag_id)
+        db.commit()
+    except SavedTagError as e:
+        db.rollback()
+        code = str(e)
+        if code == "tag_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+    return {"ok": True}
+
+
+@router.post(
+    "/chats/{conversation_id}/messages/{message_id}/saved-tags",
+    response_model=MessageResponse,
+)
+async def set_saved_message_tags(
+    conversation_id: int,
+    message_id: int,
+    body: SavedMessageTagsRequest,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.saved_tag_service import SavedTagError, set_message_tags
+    from app.services.subscription_service import SubscriptionService
+    from app.models.conversation import Message
+
+    SubscriptionService(db).require_feature(
+        current_user.id,
+        "saved_tags",
+        "Теги в Избранном доступны с уровня 39",
+    )
+    svc = ChatService(db)
+    if not svc._is_member(conversation_id, current_user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+    try:
+        ids = set_message_tags(db, current_user.id, message_id, body.tag_ids)
+        db.commit()
+    except SavedTagError as e:
+        db.rollback()
+        code = str(e)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if code in {"tag_not_found", "message_not_found", "saved_not_found"}
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code, code)
+    msg = (
+        db.query(Message)
+        .filter(Message.id == message_id, Message.conversation_id == conversation_id)
+        .first()
+    )
+    if msg is not None:
+        msg._saved_tag_ids = ids
+    return _message_response_for_viewer(db, svc, conversation_id, msg, current_user)
+
+
 @router.post(
     "/chats/{conversation_id}/messages/{message_id}/poll/vote",
     response_model=MessageResponse,
@@ -3666,6 +3814,16 @@ async def add_message_reaction(
                 detail=feature_required_detail(
                     "exclusive_reactions",
                     "Эта реакция открывается функцией «Эксклюзивные реакции»",
+                ),
+            )
+        if code == "any_emoji_reaction":
+            from app.core.entitlements import feature_required_detail
+
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail=feature_required_detail(
+                    "any_emoji_reactions",
+                    "Любые реакции доступны с уровня 37",
                 ),
             )
         raise
