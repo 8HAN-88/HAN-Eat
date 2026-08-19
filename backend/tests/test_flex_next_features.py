@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime, timedelta
 
@@ -140,8 +141,7 @@ def test_level_40_does_not_unlock_block_k(db_session):
     assert billing.has_feature(1, "call_privacy") is True
 
 
-@pytest.mark.asyncio
-async def test_story_stealth_skips_view_row(db_session):
+def test_story_stealth_skips_view_row(db_session):
     owner = _user(db_session, 1)
     viewer = _user(db_session, 2, story_stealth=True)
     flex = FlexSubscriptionService(db_session)
@@ -150,17 +150,18 @@ async def test_story_stealth_skips_view_row(db_session):
     db_session.commit()
     story = _story(db_session, owner)
 
-    result = await stories_api.mark_story_viewed(
-        story_id=story.id,
-        current_user=viewer,
-        db=db_session,
+    result = asyncio.run(
+        stories_api.mark_story_viewed(
+            story_id=story.id,
+            current_user=viewer,
+            db=db_session,
+        )
     )
     assert result.views_count == 0
     assert db_session.query(StoryView).count() == 0
 
 
-@pytest.mark.asyncio
-async def test_story_stealth_without_feature_still_counts(db_session):
+def test_story_stealth_without_feature_still_counts(db_session):
     owner = _user(db_session, 1)
     viewer = _user(db_session, 2, story_stealth=True)
     flex = FlexSubscriptionService(db_session)
@@ -169,17 +170,18 @@ async def test_story_stealth_without_feature_still_counts(db_session):
     db_session.commit()
     story = _story(db_session, owner)
 
-    result = await stories_api.mark_story_viewed(
-        story_id=story.id,
-        current_user=viewer,
-        db=db_session,
+    result = asyncio.run(
+        stories_api.mark_story_viewed(
+            story_id=story.id,
+            current_user=viewer,
+            db=db_session,
+        )
     )
     assert result.views_count == 1
     assert db_session.query(StoryView).count() == 1
 
 
-@pytest.mark.asyncio
-async def test_longer_stories_sets_48h_expiry(db_session):
+def test_longer_stories_sets_48h_expiry(db_session):
     user = _user(db_session, 1)
     flex = FlexSubscriptionService(db_session)
     flex.ensure_catalog()
@@ -190,8 +192,8 @@ async def test_longer_stories_sets_48h_expiry(db_session):
         media_type="image",
     )
     before = datetime.utcnow()
-    free = await stories_api.create_story(
-        payload, current_user=user, db=db_session
+    free = asyncio.run(
+        stories_api.create_story(payload, current_user=user, db=db_session)
     )
     free_delta = datetime.fromisoformat(free.expires_at) - before
     assert timedelta(hours=23, minutes=50) <= free_delta <= timedelta(hours=24, minutes=10)
@@ -199,8 +201,8 @@ async def test_longer_stories_sets_48h_expiry(db_session):
     flex.activate(1, 42)
     db_session.commit()
     before = datetime.utcnow()
-    long = await stories_api.create_story(
-        payload, current_user=user, db=db_session
+    long = asyncio.run(
+        stories_api.create_story(payload, current_user=user, db=db_session)
     )
     long_delta = datetime.fromisoformat(long.expires_at) - before
     assert timedelta(hours=47, minutes=50) <= long_delta <= timedelta(hours=48, minutes=10)
