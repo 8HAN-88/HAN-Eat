@@ -59,6 +59,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     if (pack == null) return;
     final titleCtrl = TextEditingController(text: pack.title);
     var isPublic = pack.isPublic;
+    var isPremium = pack.isPremium;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -76,6 +77,20 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                 value: isPublic,
                 onChanged: (v) => setStateDialog(() => isPublic = v),
                 title: const Text('Публичный'),
+                contentPadding: EdgeInsets.zero,
+              ),
+              SwitchListTile(
+                value: isPremium,
+                onChanged: (v) {
+                  if (v && !hasFlexFeature('premium_stickers')) {
+                    Navigator.pop(ctx, false);
+                    showCreatorUpsell(context);
+                    return;
+                  }
+                  setStateDialog(() => isPremium = v);
+                },
+                title: const Text('Премиум-пак'),
+                subtitle: const Text('Установка и отправка с уровня 43'),
                 contentPadding: EdgeInsets.zero,
               ),
             ],
@@ -100,6 +115,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
         packId: pack.id,
         title: titleCtrl.text.trim(),
         isPublic: isPublic,
+        isPremium: isPremium,
       );
       if (!mounted) return;
       setState(() {
@@ -109,6 +125,7 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );

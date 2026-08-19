@@ -354,6 +354,13 @@ class CallService:
             )
         if self._has_block(caller_id, callee_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
+        from app.services.call_privacy import can_call_user
+
+        if not can_call_user(self.db, caller_id, callee):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="call_privacy_denied",
+            )
         if self._user_busy(caller_id) or self._user_busy(callee_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

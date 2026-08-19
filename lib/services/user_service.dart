@@ -451,6 +451,8 @@ class UserService {
     String? voicePrivacy,
     bool? archiveNonContacts,
     int? defaultFolderId,
+    bool? storyStealth,
+    String? callPrivacy,
     String? fcmToken,
     String? voipToken,
   }) async {
@@ -471,6 +473,8 @@ class UserService {
       if (archiveNonContacts != null)
         'archive_non_contacts': archiveNonContacts,
       if (defaultFolderId != null) 'default_folder_id': defaultFolderId,
+      if (storyStealth != null) 'story_stealth': storyStealth,
+      if (callPrivacy != null) 'call_privacy': callPrivacy,
       if (fcmToken != null) 'fcm_token': fcmToken,
       if (voipToken != null) 'voip_token': voipToken,
     };

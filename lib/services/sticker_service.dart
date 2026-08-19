@@ -54,6 +54,7 @@ class StickerService {
   static Future<StickerPack> createPack({
     required String title,
     bool isPublic = true,
+    bool isPremium = false,
   }) async {
     final uri = Uri.parse('$_base/stickers/packs');
     final headers = await _headers();
@@ -64,6 +65,7 @@ class StickerService {
         body: jsonEncode({
           'title': title,
           'is_public': isPublic,
+          'is_premium': isPremium,
         }),
       ),
     );
@@ -154,6 +156,7 @@ class StickerService {
     required int packId,
     String? title,
     bool? isPublic,
+    bool? isPremium,
   }) async {
     final uri = Uri.parse('$_base/stickers/packs/$packId');
     final headers = await _headers();
@@ -164,6 +167,7 @@ class StickerService {
         body: jsonEncode({
           if (title != null) 'title': title,
           if (isPublic != null) 'is_public': isPublic,
+          if (isPremium != null) 'is_premium': isPremium,
         }),
       ),
     );

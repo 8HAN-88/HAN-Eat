@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/app_router.dart';
 import '../../../services/server_config.dart';
+import '../../subscription/creator_upsell.dart';
 import '../data/story_models.dart';
 import '../data/story_service.dart';
 import 'story_camera_screen.dart';
@@ -81,7 +82,7 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
         myReaction: story.myReaction,
         reactions: story.reactions,
         duration: story.isVideo
-            ? const Duration(seconds: 30)
+            ? const Duration(seconds: 60)
             : const Duration(seconds: 5),
       );
 
@@ -166,7 +167,9 @@ class _StoriesHubScreenState extends State<StoriesHubScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Опубликуйте фото или видео до 30 секунд. Сторис исчезнет через 24 часа.',
+            hasFlexFeature('longer_stories')
+                ? 'Опубликуйте фото или видео до 60 секунд. Сторис исчезнет через 48 часов.'
+                : 'Опубликуйте фото или видео до 30 секунд. Сторис исчезнет через 24 часа.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.outline,

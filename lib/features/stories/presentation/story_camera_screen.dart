@@ -47,7 +47,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
   Future<void> _recordVideo() async {
     final XFile? video = await _picker.pickVideo(
       source: ImageSource.camera,
-      maxDuration: const Duration(seconds: 30),
+      maxDuration: Duration(
+        seconds: hasFlexFeature('longer_stories') ? 60 : 30,
+      ),
     );
     if (video == null) return;
 
@@ -264,7 +266,11 @@ class _StoryCameraScreenState extends State<StoryCameraScreen> {
             FilledButton.icon(
               onPressed: _recordVideo,
               icon: const Icon(Icons.videocam),
-              label: const Text('Записать видео (до 30 сек)'),
+              label: Text(
+                hasFlexFeature('longer_stories')
+                    ? 'Записать видео (до 60 сек)'
+                    : 'Записать видео (до 30 сек)',
+              ),
             ),
           ],
         ),

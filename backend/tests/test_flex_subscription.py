@@ -81,6 +81,7 @@ def test_price_formula():
     assert price_for_level(32) == 349
     assert price_for_level(36) == 389
     assert price_for_level(40) == 429
+    assert price_for_level(44) == 469
     assert price_for_plan(1, "yearly") == 390
     assert price_for_plan(6, "yearly") == 890
     assert price_for_plan(10, "yearly") == 1290
@@ -91,13 +92,14 @@ def test_price_formula():
     assert price_for_plan(32, "yearly") == 3490
     assert price_for_plan(36, "yearly") == 3890
     assert price_for_plan(40, "yearly") == 4290
+    assert price_for_plan(44, "yearly") == 4690
 
 
 def test_catalog_seed_and_default_layout(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
     layout = svc.resolved_layout(1)
-    assert len(layout) == 40
+    assert len(layout) == 44
     assert layout[0]["feature"].slug == "ad_free"
     assert layout[0]["level"] == 1
     assert layout[9]["feature"].slug == "priority_support"
@@ -114,8 +116,10 @@ def test_catalog_seed_and_default_layout(db_session):
     assert layout[31]["level"] == 32
     assert layout[35]["feature"].slug == "profile_colors"
     assert layout[35]["level"] == 36
-    assert layout[-1]["feature"].slug == "archive_non_contacts"
-    assert layout[-1]["level"] == 40
+    assert layout[39]["feature"].slug == "archive_non_contacts"
+    assert layout[39]["level"] == 40
+    assert layout[-1]["feature"].slug == "call_privacy"
+    assert layout[-1]["level"] == 44
 
 
 def test_cannot_move_fixed_feature(db_session):
@@ -370,6 +374,15 @@ def test_has_feature_follows_level_not_bundle(db_session):
     assert billing.has_feature(1, "voice_privacy") is True
     assert billing.has_feature(1, "saved_tags") is True
     assert billing.has_feature(1, "archive_non_contacts") is True
+    assert billing.has_feature(1, "story_stealth") is False
+    assert billing.has_feature(1, "call_privacy") is False
+
+    svc.activate(1, 44)
+    db_session.commit()
+    assert billing.has_feature(1, "story_stealth") is True
+    assert billing.has_feature(1, "longer_stories") is True
+    assert billing.has_feature(1, "premium_stickers") is True
+    assert billing.has_feature(1, "call_privacy") is True
 
 
 def test_expire_and_refund_deactivate_flex(db_session):
@@ -561,7 +574,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         SubscriptionFeature.default_level >= 11
     ).delete(synchronize_session=False)
     db_session.query(SubscriptionFeatureBlock).filter(
-        SubscriptionFeatureBlock.key.in_(("D", "E", "F", "G", "H", "I", "J"))
+        SubscriptionFeatureBlock.key.in_(("D", "E", "F", "G", "H", "I", "J", "K"))
     ).delete(synchronize_session=False)
     db_session.commit()
     assert db_session.query(SubscriptionFeature).count() == 10
@@ -582,6 +595,8 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert "profile_colors" in slugs
     assert "any_emoji_reactions" in slugs
     assert "archive_non_contacts" in slugs
+    assert "story_stealth" in slugs
+    assert "call_privacy" in slugs
     assert {b.key for b in svc.list_blocks()} == {
         "A",
         "B",
@@ -593,9 +608,10 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         "H",
         "I",
         "J",
+        "K",
     }
     me = svc.me_payload(1)
-    assert me["max_level"] == 40
+    assert me["max_level"] == 44
     assert any(p["level"] == 16 for p in me["presets"])
     assert any(p["level"] == 20 for p in me["presets"])
     assert any(p["level"] == 24 for p in me["presets"])
@@ -603,6 +619,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert any(p["level"] == 32 for p in me["presets"])
     assert any(p["level"] == 36 for p in me["presets"])
     assert any(p["level"] == 40 for p in me["presets"])
+    assert any(p["level"] == 44 for p in me["presets"])
 
 
 def test_privacy_plus_lets_hidden_viewer_see_last_seen(db_session):

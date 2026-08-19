@@ -11,6 +11,7 @@ import '../../../app/app_router.dart';
 import '../../../models/chat_models.dart';
 import '../../../services/auth_service.dart';
 import '../../../services/server_config.dart';
+import '../../../services/user_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../services/subscription_status_cache.dart';
 import '../../subscription/creator_upsell.dart';
@@ -113,6 +114,35 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       _initVideo();
     } else {
       _startPhotoTimer();
+    }
+  }
+
+  Future<void> _toggleStoryStealth() async {
+    final enabled = !(AuthService.instance.currentUser?.storyStealth ?? false);
+    if (enabled && !hasFlexFeature('story_stealth')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    try {
+      final updated = await UserService.updateProfile(storyStealth: enabled);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            updated.storyStealth
+                ? 'Скрытый просмотр включён'
+                : 'Скрытый просмотр выключен',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -572,9 +602,29 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
             Positioned(
               top: MediaQuery.of(context).padding.top + 12,
               right: 12,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!story.isOwn)
+                    IconButton(
+                      tooltip: (AuthService.instance.currentUser?.storyStealth ??
+                              false)
+                          ? 'Скрытый просмотр включён'
+                          : 'Скрытый просмотр',
+                      icon: Icon(
+                        (AuthService.instance.currentUser?.storyStealth ??
+                                false)
+                            ? Icons.visibility_off
+                            : Icons.visibility_outlined,
+                        color: Colors.white,
+                      ),
+                      onPressed: () => unawaited(_toggleStoryStealth()),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ),
             Positioned.fill(

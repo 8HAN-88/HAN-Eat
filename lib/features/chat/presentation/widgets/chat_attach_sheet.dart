@@ -762,6 +762,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
               slug: p.slug,
               ownerUserId: p.ownerUserId,
               isPublic: p.isPublic,
+              isPremium: p.isPremium,
               isInstalled: installed,
               stickers: p.stickers,
               stickersCount: p.stickersCount,
@@ -783,12 +784,26 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
         await StickerService.uninstallPack(packId);
         _setPackInstalledLocal(packId, false);
       } else {
+        StickerPack? pack;
+        for (final item in _stickerPacks) {
+          if (item.id == packId) {
+            pack = item;
+            break;
+          }
+        }
+        if (pack != null &&
+            pack.isPremium &&
+            !hasFlexFeature('premium_stickers')) {
+          await showCreatorUpsell(context);
+          return;
+        }
         await StickerService.installPack(packId);
         _setPackInstalledLocal(packId, true);
       }
       AppHaptics.selection();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2863,6 +2878,14 @@ class _StickerPacksContent extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
             child: Row(
               children: [
+                if (pack.isPremium) ...[
+                  Icon(
+                    Icons.lock_outline,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Expanded(
                   child: Text(
                     pack.title,
@@ -3098,7 +3121,21 @@ class _StickerPackQuickPreviewSheetState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(pack.title, style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    pack.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (pack.isPremium)
+                  Icon(
+                    Icons.lock_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text(
               '${pack.stickersCount} стикеров',
@@ -3273,22 +3310,40 @@ class _StickerPackAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final first = pack.stickers.isEmpty ? null : pack.stickers.first.mediaUrl;
+    final Widget child;
     if (first == null || first.trim().isEmpty) {
-      return const Icon(Icons.emoji_emotions_outlined, size: 20);
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(9),
-      child: Image.network(
-        ServerConfig.resolveMediaUrl(first),
-        width: 28,
-        height: 28,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Icon(
-          Icons.image_not_supported_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
-          size: 18,
+      child = const Icon(Icons.emoji_emotions_outlined, size: 20);
+    } else {
+      child = ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: Image.network(
+          ServerConfig.resolveMediaUrl(first),
+          width: 28,
+          height: 28,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.image_not_supported_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+            size: 18,
+          ),
         ),
-      ),
+      );
+    }
+    if (!pack.isPremium) return child;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: -2,
+          top: -2,
+          child: Icon(
+            Icons.lock,
+            size: 10,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
     );
   }
 }

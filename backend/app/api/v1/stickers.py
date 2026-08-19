@@ -25,6 +25,18 @@ from app.services.sticker_service import StickerService
 router = APIRouter()
 
 
+def _raise_premium_sticker() -> None:
+    from app.core.entitlements import feature_required_detail
+
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        feature_required_detail(
+            "premium_stickers",
+            "Премиум-стикеры доступны с уровня 43",
+        ),
+    )
+
+
 def _pack_share_link(slug: str) -> str:
     return f"https://haneat.app/stickers/{slug}"
 
@@ -43,6 +55,7 @@ def _pack_response(
         slug=pack.slug,
         owner_user_id=pack.owner_user_id,
         is_public=pack.is_public,
+        is_premium=bool(getattr(pack, "is_premium", False)),
         is_installed=pack.id in installed_pack_ids,
         stickers=[
             StickerItemResponse(
@@ -166,6 +179,7 @@ async def create_sticker_pack(
             user_id=current_user.id,
             title=body.title,
             is_public=body.is_public,
+            is_premium=body.is_premium,
         )
         db.commit()
         db.refresh(pack)
@@ -174,6 +188,8 @@ async def create_sticker_pack(
         code = str(e)
         if code == "invalid_title":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "premium_sticker":
+            _raise_premium_sticker()
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -242,7 +258,7 @@ async def update_sticker_pack(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    if body.title is None and body.is_public is None:
+    if body.title is None and body.is_public is None and body.is_premium is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty_patch")
     svc = StickerService(db)
     try:
@@ -251,6 +267,7 @@ async def update_sticker_pack(
             pack_id=pack_id,
             title=body.title,
             is_public=body.is_public,
+            is_premium=body.is_premium,
         )
         db.commit()
         db.refresh(pack)
@@ -263,6 +280,8 @@ async def update_sticker_pack(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "invalid_title":
             raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+        if code == "premium_sticker":
+            _raise_premium_sticker()
         raise
     installed = svc.installed_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids([pack.id])
@@ -344,6 +363,8 @@ async def install_sticker_pack(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        if code == "premium_sticker":
+            _raise_premium_sticker()
         raise
     return {"ok": True}
 
@@ -358,8 +379,14 @@ async def import_sticker_pack_by_slug(
     pack = svc.get_public_pack_by_slug(slug)
     if not pack:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
-    svc.install_pack(current_user.id, pack.id)
-    db.commit()
+    try:
+        svc.install_pack(current_user.id, pack.id)
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        if str(e) == "premium_sticker":
+            _raise_premium_sticker()
+        raise
     return {"ok": True, "pack_id": pack.id}
 
 

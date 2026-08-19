@@ -37,6 +37,8 @@ class UserResponse(BaseModel):
     voice_privacy: str = "everybody"
     archive_non_contacts: bool = False
     default_folder_id: Optional[int] = None
+    story_stealth: bool = False
+    call_privacy: str = "everybody"
 
     @model_validator(mode="wrap")
     @classmethod
@@ -130,6 +132,8 @@ class UpdateUserRequest(BaseModel):
     voice_privacy: Optional[str] = None
     archive_non_contacts: Optional[bool] = None
     default_folder_id: Optional[int] = None
+    story_stealth: Optional[bool] = None
+    call_privacy: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     voip_token: Optional[str] = None  # iOS PushKit VoIP token (CallKit)
     device_platform: Optional[str] = None  # android | ios | web

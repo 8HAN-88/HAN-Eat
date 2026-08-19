@@ -31,6 +31,7 @@ class StickerPack {
     required this.slug,
     required this.ownerUserId,
     required this.isPublic,
+    this.isPremium = false,
     required this.isInstalled,
     required this.stickers,
     required this.stickersCount,
@@ -42,6 +43,7 @@ class StickerPack {
   final String slug;
   final int ownerUserId;
   final bool isPublic;
+  final bool isPremium;
   final bool isInstalled;
   final List<StickerItem> stickers;
   final int stickersCount;
@@ -55,6 +57,7 @@ class StickerPack {
       slug: json['slug'] as String? ?? '',
       ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
       isPublic: json['is_public'] as bool? ?? false,
+      isPremium: json['is_premium'] as bool? ?? false,
       isInstalled: json['is_installed'] as bool? ?? false,
       stickers: rawStickers
           .whereType<Map<String, dynamic>>()

@@ -164,6 +164,10 @@ def _raise_flex_gate(code: str) -> None:
             "folder_icons",
             "Эмодзи у папок доступны с уровня 32",
         ),
+        "premium_sticker": (
+            "premium_stickers",
+            "Премиум-стикеры доступны с уровня 43",
+        ),
     }
     item = mapping.get(code)
     if not item:
