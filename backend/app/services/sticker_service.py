@@ -37,15 +37,49 @@ class StickerService:
             idx += 1
         return slug
 
-    def create_pack(self, user_id: int, title: str, is_public: bool) -> StickerPack:
+    def _require_premium_stickers(self, user_id: int) -> None:
+        from app.services.subscription_service import SubscriptionService
+
+        if not SubscriptionService(self.db).has_feature(user_id, "premium_stickers"):
+            raise ValueError("premium_sticker")
+
+    def require_sticker_send(self, user_id: int, media_url: Optional[str]) -> None:
+        url = (media_url or "").strip()
+        if not url:
+            return
+        sticker = (
+            self.db.query(Sticker)
+            .filter(Sticker.media_url == url[:512])
+            .first()
+        )
+        if not sticker:
+            return
+        pack = (
+            self.db.query(StickerPack)
+            .filter(StickerPack.id == sticker.pack_id)
+            .first()
+        )
+        if not pack or not bool(getattr(pack, "is_premium", False)):
+            return
+        if int(pack.owner_user_id) == int(user_id):
+            return
+        self._require_premium_stickers(user_id)
+
+    def create_pack(
+        self, user_id: int, title: str, is_public: bool, is_premium: bool = False
+    ) -> StickerPack:
         clean_title = (title or "").strip()
         if len(clean_title) < 2:
             raise ValueError("invalid_title")
+        premium = bool(is_premium)
+        if premium:
+            self._require_premium_stickers(user_id)
         pack = StickerPack(
             title=clean_title[:120],
             slug=self._make_unique_slug(clean_title, user_id),
             owner_user_id=user_id,
             is_public=bool(is_public),
+            is_premium=premium,
         )
         self.db.add(pack)
         self.db.flush()
@@ -97,6 +131,7 @@ class StickerService:
         pack_id: int,
         title: Optional[str] = None,
         is_public: Optional[bool] = None,
+        is_premium: Optional[bool] = None,
     ) -> StickerPack:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
@@ -110,6 +145,11 @@ class StickerService:
             pack.title = clean_title[:120]
         if is_public is not None:
             pack.is_public = bool(is_public)
+        if is_premium is not None:
+            premium = bool(is_premium)
+            if premium:
+                self._require_premium_stickers(user_id)
+            pack.is_premium = premium
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.flush()
         return pack
@@ -182,6 +222,8 @@ class StickerService:
             raise ValueError("pack_not_found")
         if not pack.is_public and pack.owner_user_id != user_id:
             raise ValueError("forbidden")
+        if bool(getattr(pack, "is_premium", False)) and pack.owner_user_id != user_id:
+            self._require_premium_stickers(user_id)
         exists = (
             self.db.query(StickerPackInstall.id)
             .filter(

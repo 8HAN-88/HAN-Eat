@@ -269,18 +269,20 @@ async def create_story(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    """Создать сторис. Срок жизни — 24 часа."""
+    """Создать сторис. Срок жизни — 24 часа, с longer_stories — 48."""
     visibility = (payload.visibility or "public").strip().lower()
     if visibility not in _VALID_VISIBILITY:
         raise HTTPException(status_code=400, detail="Invalid visibility")
-    if visibility == "close_friends":
-        from app.services.subscription_service import SubscriptionService
+    from app.services.subscription_service import SubscriptionService
 
-        SubscriptionService(db).require_feature(
+    billing = SubscriptionService(db)
+    if visibility == "close_friends":
+        billing.require_feature(
             current_user.id,
             "story_close_friends",
             "Сторис для близких доступны с уровня 20",
         )
+    hours = 48 if billing.has_feature(current_user.id, "longer_stories") else 24
     story = Story(
         user_id=current_user.id,
         media_url=payload.media_url,
@@ -288,7 +290,7 @@ async def create_story(
         media_type=payload.media_type,
         caption=payload.caption,
         visibility=visibility,
-        expires_at=datetime.utcnow() + timedelta(hours=24),
+        expires_at=datetime.utcnow() + timedelta(hours=hours),
     )
     db.add(story)
     db.commit()
@@ -308,6 +310,13 @@ async def mark_story_viewed(
         raise HTTPException(status_code=404, detail="Story not found")
     _ensure_can_view(story, current_user, db)
     if story.user_id != current_user.id:
+        from app.services.subscription_service import SubscriptionService
+
+        stealth = bool(getattr(current_user, "story_stealth", False)) and (
+            SubscriptionService(db).has_feature(current_user.id, "story_stealth")
+        )
+        if stealth:
+            return _to_response(story, db, viewer_id=current_user.id)
         existing = (
             db.query(StoryView)
             .filter(

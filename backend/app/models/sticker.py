@@ -25,6 +25,7 @@ class StickerPack(Base):
         index=True,
     )
     is_public = Column(Boolean, nullable=False, default=True, index=True)
+    is_premium = Column(Boolean, nullable=False, default=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

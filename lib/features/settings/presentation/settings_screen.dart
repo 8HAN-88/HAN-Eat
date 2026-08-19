@@ -18,6 +18,7 @@ import '../../../widgets/stars_pay_helper.dart';
 import '../../../widgets/telegram_ui.dart';
 import '../../subscription/creator_upsell.dart';
 import '../application/last_seen_privacy.dart';
+import '../application/call_privacy.dart';
 import '../application/voice_privacy.dart';
 import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
@@ -38,6 +39,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _lastSeenPrivacy = lastSeenPrivacyEverybody;
   String _voicePrivacy = voicePrivacyEverybody;
   bool _archiveNonContacts = false;
+  bool _storyStealth = false;
+  String _callPrivacy = callPrivacyEverybody;
   bool _showReadReceipts = true;
   int _paidMessageStars = 0;
   bool _privacyBusy = false;
@@ -122,6 +125,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
         _voicePrivacy = normalizeVoicePrivacy(user.voicePrivacy);
         _archiveNonContacts = user.archiveNonContacts;
+        _storyStealth = user.storyStealth;
+        _callPrivacy = normalizeCallPrivacy(user.callPrivacy);
         _showReadReceipts = user.showReadReceipts;
         _paidMessageStars = user.paidMessageStars;
       });
@@ -343,6 +348,109 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _archiveNonContacts = !enabled;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _toggleStoryStealth(bool enabled) async {
+    if (_privacyBusy) return;
+    if (enabled && !hasFlexFeature('story_stealth')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() {
+      _storyStealth = enabled;
+      _privacyBusy = true;
+    });
+    try {
+      final updated = await UserService.updateProfile(storyStealth: enabled);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _storyStealth = updated.storyStealth;
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _storyStealth = !enabled;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _pickCallPrivacy() async {
+    if (_privacyBusy) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Кто может звонить',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final value in callPrivacyValues)
+                ListTile(
+                  title: Text(callPrivacyLabel(value)),
+                  subtitle: Text(
+                    switch (value) {
+                      callPrivacyContacts =>
+                        'Только люди из ваших контактов',
+                      callPrivacyNobody => 'Никто не сможет вам позвонить',
+                      _ => 'Все пользователи HanWe',
+                    },
+                  ),
+                  trailing: _callPrivacy == value
+                      ? const Icon(Icons.check)
+                      : (value != callPrivacyEverybody &&
+                              !hasFlexFeature('call_privacy')
+                          ? const Icon(Icons.lock_outline)
+                          : null),
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _callPrivacy) return;
+    if (selected != callPrivacyEverybody && !hasFlexFeature('call_privacy')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final previous = _callPrivacy;
+    setState(() {
+      _callPrivacy = selected;
+      _privacyBusy = true;
+    });
+    try {
+      final updated = await UserService.updateProfile(callPrivacy: selected);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _callPrivacy = normalizeCallPrivacy(updated.callPrivacy);
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _callPrivacy = previous;
         _privacyBusy = false;
       });
       if (offerFlexIfRequired(context, e)) return;
@@ -601,6 +709,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     value: _archiveNonContacts,
                     onChanged:
                         _privacyBusy ? null : _toggleArchiveNonContacts,
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: hasFlexFeature('story_stealth')
+                        ? const Icon(Icons.visibility_off_outlined)
+                        : const Icon(Icons.lock_outline),
+                    title: const Text('Скрытый просмотр сторис'),
+                    subtitle: const Text(
+                      'Смотреть сторис, не попадая в список просмотров',
+                    ),
+                    value: _storyStealth,
+                    onChanged: _privacyBusy ? null : _toggleStoryStealth,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.phone_disabled_outlined),
+                    title: const Text('Кто может звонить'),
+                    subtitle: Text(callPrivacyLabel(_callPrivacy)),
+                    trailing: hasFlexFeature('call_privacy')
+                        ? const Icon(Icons.chevron_right_rounded)
+                        : const Icon(Icons.lock_outline),
+                    onTap: _privacyBusy ? null : _pickCallPrivacy,
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

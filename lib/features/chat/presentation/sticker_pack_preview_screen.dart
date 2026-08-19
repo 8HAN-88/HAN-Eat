@@ -4,6 +4,7 @@ import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../subscription/creator_upsell.dart';
 
 class StickerPackPreviewScreen extends StatefulWidget {
   const StickerPackPreviewScreen({
@@ -50,6 +51,10 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
   Future<void> _install() async {
     final pack = _pack;
     if (pack == null) return;
+    if (pack.isPremium && !hasFlexFeature('premium_stickers')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     setState(() => _busy = true);
     try {
       await StickerService.installPack(pack.id);
@@ -58,6 +63,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -81,6 +87,16 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Row(
                         children: [
+                          if (pack.isPremium)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Icon(
+                                pack.isInstalled
+                                    ? Icons.workspace_premium_outlined
+                                    : Icons.lock_outline,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                           Expanded(
                             child: Text(
                               pack.title,

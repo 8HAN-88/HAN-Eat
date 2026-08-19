@@ -2586,6 +2586,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(_persistReadySends());
           if (!mounted) return;
           setState(() {});
+          if (offerFlexIfRequired(context, e)) return;
           showErrorSnackBar(context, e);
           return;
         }

@@ -88,6 +88,10 @@ class User(Base):
     archive_non_contacts = Column(Boolean, default=False, nullable=False)
     # Chat folder opened on app launch.
     default_folder_id = Column(Integer, nullable=True)
+    # Telegram Premium: view stories without appearing in viewers.
+    story_stealth = Column(Boolean, default=False, nullable=False)
+    # Telegram Premium: who may call this user.
+    call_privacy = Column(String(20), default="everybody", nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)

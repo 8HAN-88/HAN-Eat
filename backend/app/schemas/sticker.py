@@ -19,6 +19,7 @@ class StickerPackResponse(BaseModel):
     slug: str
     owner_user_id: int
     is_public: bool
+    is_premium: bool = False
     is_installed: bool = False
     stickers: List[StickerItemResponse] = []
     stickers_count: int = 0
@@ -34,6 +35,7 @@ class StickerPackListResponse(BaseModel):
 class CreateStickerPackRequest(BaseModel):
     title: str = Field(..., min_length=2, max_length=120)
     is_public: bool = True
+    is_premium: bool = False
 
 
 class AddStickerRequest(BaseModel):
@@ -45,6 +47,7 @@ class AddStickerRequest(BaseModel):
 class UpdateStickerPackRequest(BaseModel):
     title: Optional[str] = Field(default=None, min_length=2, max_length=120)
     is_public: Optional[bool] = None
+    is_premium: Optional[bool] = None
 
 
 class ReorderStickersRequest(BaseModel):

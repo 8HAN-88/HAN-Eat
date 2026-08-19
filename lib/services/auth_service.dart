@@ -1265,6 +1265,8 @@ class User {
   final String voicePrivacy;
   final bool archiveNonContacts;
   final int? defaultFolderId;
+  final bool storyStealth;
+  final String callPrivacy;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1296,6 +1298,8 @@ class User {
     this.voicePrivacy = 'everybody',
     this.archiveNonContacts = false,
     this.defaultFolderId,
+    this.storyStealth = false,
+    this.callPrivacy = 'everybody',
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1333,6 +1337,8 @@ class User {
       voicePrivacy: json['voice_privacy'] as String? ?? 'everybody',
       archiveNonContacts: json['archive_non_contacts'] as bool? ?? false,
       defaultFolderId: (json['default_folder_id'] as num?)?.toInt(),
+      storyStealth: json['story_stealth'] as bool? ?? false,
+      callPrivacy: json['call_privacy'] as String? ?? 'everybody',
     );
   }
 
@@ -1365,6 +1371,8 @@ class User {
       'voice_privacy': voicePrivacy,
       'archive_non_contacts': archiveNonContacts,
       if (defaultFolderId != null) 'default_folder_id': defaultFolderId,
+      'story_stealth': storyStealth,
+      'call_privacy': callPrivacy,
     };
   }
 
@@ -1388,6 +1396,8 @@ class User {
     bool? archiveNonContacts,
     int? defaultFolderId,
     bool clearDefaultFolder = false,
+    bool? storyStealth,
+    String? callPrivacy,
   }) {
     return User(
       id: id,
@@ -1420,6 +1430,8 @@ class User {
       defaultFolderId: clearDefaultFolder
           ? null
           : (defaultFolderId ?? this.defaultFolderId),
+      storyStealth: storyStealth ?? this.storyStealth,
+      callPrivacy: callPrivacy ?? this.callPrivacy,
     );
   }
 }

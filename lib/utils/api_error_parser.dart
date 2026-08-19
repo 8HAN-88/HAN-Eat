@@ -191,6 +191,9 @@ String userVisibleError(Object e, {String fallback = 'Произошла оши�
   if (lower.contains('voice_privacy_denied')) {
     return 'Собеседник не принимает голосовые и кружки';
   }
+  if (lower.contains('call_privacy_denied')) {
+    return 'Собеседник не принимает звонки';
+  }
   if (lower.contains('too many requests') ||
       lower.contains('rate_limit') ||
       lower.contains('429')) {

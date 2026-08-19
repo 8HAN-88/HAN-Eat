@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 40
+MAX_LEVEL = 44
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -54,6 +54,7 @@ DEFAULT_BLOCKS = (
     {"key": "H", "title": "Telegram+", "min_level": 29, "max_level": 32, "sort_order": 8},
     {"key": "I", "title": "Премиум", "min_level": 33, "max_level": 36, "sort_order": 9},
     {"key": "J", "title": "Ещё+", "min_level": 37, "max_level": 40, "sort_order": 10},
+    {"key": "K", "title": "Сторис+", "min_level": 41, "max_level": 44, "sort_order": 11},
 )
 
 DEFAULT_PRESETS = (
@@ -67,6 +68,7 @@ DEFAULT_PRESETS = (
     {"key": "telegram", "title": "Telegram+", "level": 32},
     {"key": "premium", "title": "Премиум", "level": 36},
     {"key": "moreplus", "title": "Ещё+", "level": 40},
+    {"key": "storiesplus", "title": "Сторис+", "level": 44},
 )
 
 DEFAULT_FEATURES = (
@@ -589,6 +591,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "J",
+    },
+    {
+        "slug": "story_stealth",
+        "title": "Скрытый просмотр",
+        "description": "Смотреть сторис, не попадая в список просмотров.",
+        "icon": "visibility_off",
+        "default_level": 41,
+        "min_level": 41,
+        "max_level": 44,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "K",
+    },
+    {
+        "slug": "longer_stories",
+        "title": "Длинные сторис",
+        "description": "Видео до 60 секунд и сторис на 48 часов, как в Telegram Premium.",
+        "icon": "timelapse",
+        "default_level": 42,
+        "min_level": 41,
+        "max_level": 44,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "K",
+    },
+    {
+        "slug": "premium_stickers",
+        "title": "Премиум-стикеры",
+        "description": "Ставить и отправлять эксклюзивные стикерпаки.",
+        "icon": "auto_awesome",
+        "default_level": 43,
+        "min_level": 41,
+        "max_level": 44,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "K",
+    },
+    {
+        "slug": "call_privacy",
+        "title": "Кто звонит",
+        "description": "Ограничить входящие звонки: все, контакты или никто.",
+        "icon": "phone_disabled",
+        "default_level": 44,
+        "min_level": 41,
+        "max_level": 44,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "K",
     },
 )
 

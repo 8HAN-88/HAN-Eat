@@ -518,6 +518,42 @@ async def update_user_profile(
                     detail="folder_not_found",
                 )
             current_user.default_folder_id = folder.id
+    if request.story_stealth is not None:
+        from app.services.subscription_service import SubscriptionService
+
+        enabled = bool(request.story_stealth)
+        if enabled and not SubscriptionService(db).has_feature(
+            current_user.id, "story_stealth"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "story_stealth",
+                "Скрытый просмотр сторис доступен с уровня 41",
+            )
+        current_user.story_stealth = enabled
+    if request.call_privacy is not None:
+        from app.services.call_privacy import (
+            PRIVACY_EVERYBODY,
+            normalize_call_privacy,
+        )
+        from app.services.subscription_service import SubscriptionService
+
+        try:
+            next_privacy = normalize_call_privacy(request.call_privacy)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="call_privacy must be one of: everybody, contacts, nobody",
+            )
+        if next_privacy != PRIVACY_EVERYBODY and not SubscriptionService(db).has_feature(
+            current_user.id, "call_privacy"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "call_privacy",
+                "Ограничение звонков доступно с уровня 44",
+            )
+        current_user.call_privacy = next_privacy or PRIVACY_EVERYBODY
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:

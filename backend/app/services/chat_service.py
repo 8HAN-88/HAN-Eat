@@ -2929,6 +2929,10 @@ class ChatService:
             raise ValueError("missing_media")
         if msg_type == "sticker" and not media_url:
             raise ValueError("missing_media")
+        if msg_type == "sticker" and media_url:
+            from app.services.sticker_service import StickerService
+
+            StickerService(self.db).require_sticker_send(sender_id, media_url)
         if msg_type == "poll" and not content.strip():
             raise ValueError("empty_poll")
         if msg_type == "location" and not content.strip():
