@@ -1262,6 +1262,9 @@ class User {
   final String? phone;
   final String? emojiStatus;
   final String? profileColor;
+  final String voicePrivacy;
+  final bool archiveNonContacts;
+  final int? defaultFolderId;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1290,6 +1293,9 @@ class User {
     this.phone,
     this.emojiStatus,
     this.profileColor,
+    this.voicePrivacy = 'everybody',
+    this.archiveNonContacts = false,
+    this.defaultFolderId,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1324,6 +1330,9 @@ class User {
       phone: json['phone'] as String?,
       emojiStatus: json['emoji_status'] as String?,
       profileColor: json['profile_color'] as String?,
+      voicePrivacy: json['voice_privacy'] as String? ?? 'everybody',
+      archiveNonContacts: json['archive_non_contacts'] as bool? ?? false,
+      defaultFolderId: (json['default_folder_id'] as num?)?.toInt(),
     );
   }
 
@@ -1353,6 +1362,9 @@ class User {
       if (phone != null) 'phone': phone,
       if (emojiStatus != null) 'emoji_status': emojiStatus,
       if (profileColor != null) 'profile_color': profileColor,
+      'voice_privacy': voicePrivacy,
+      'archive_non_contacts': archiveNonContacts,
+      if (defaultFolderId != null) 'default_folder_id': defaultFolderId,
     };
   }
 
@@ -1372,6 +1384,10 @@ class User {
     bool clearPhone = false,
     String? emojiStatus,
     String? profileColor,
+    String? voicePrivacy,
+    bool? archiveNonContacts,
+    int? defaultFolderId,
+    bool clearDefaultFolder = false,
   }) {
     return User(
       id: id,
@@ -1399,6 +1415,11 @@ class User {
       phone: clearPhone ? null : (phone ?? this.phone),
       emojiStatus: emojiStatus ?? this.emojiStatus,
       profileColor: profileColor ?? this.profileColor,
+      voicePrivacy: voicePrivacy ?? this.voicePrivacy,
+      archiveNonContacts: archiveNonContacts ?? this.archiveNonContacts,
+      defaultFolderId: clearDefaultFolder
+          ? null
+          : (defaultFolderId ?? this.defaultFolderId),
     );
   }
 }

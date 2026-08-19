@@ -50,9 +50,16 @@ CATALOG_FEATURE_SLUGS = (
     "emoji_status",
     "checklist",
     "profile_colors",
+    "any_emoji_reactions",
+    "voice_privacy",
+    "saved_tags",
+    "archive_non_contacts",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})
+FREE_CHAT_REACTIONS = frozenset(
+    {"👍", "👌", "❤️", "👎", "👏", "😂", "😮", "😢", "🙏"}
+)
 
 
 def feature_required_detail(slug: str, message: str) -> Dict[str, str]:

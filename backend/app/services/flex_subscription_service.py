@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 36
+MAX_LEVEL = 40
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -53,6 +53,7 @@ DEFAULT_BLOCKS = (
     {"key": "G", "title": "Чат+", "min_level": 25, "max_level": 28, "sort_order": 7},
     {"key": "H", "title": "Telegram+", "min_level": 29, "max_level": 32, "sort_order": 8},
     {"key": "I", "title": "Премиум", "min_level": 33, "max_level": 36, "sort_order": 9},
+    {"key": "J", "title": "Ещё+", "min_level": 37, "max_level": 40, "sort_order": 10},
 )
 
 DEFAULT_PRESETS = (
@@ -65,6 +66,7 @@ DEFAULT_PRESETS = (
     {"key": "chat", "title": "Чат+", "level": 28},
     {"key": "telegram", "title": "Telegram+", "level": 32},
     {"key": "premium", "title": "Премиум", "level": 36},
+    {"key": "moreplus", "title": "Ещё+", "level": 40},
 )
 
 DEFAULT_FEATURES = (
@@ -535,6 +537,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "I",
+    },
+    {
+        "slug": "any_emoji_reactions",
+        "title": "Любые реакции",
+        "description": "Реакция любым эмодзи, не только из короткой панели.",
+        "icon": "emoji_emotions",
+        "default_level": 37,
+        "min_level": 37,
+        "max_level": 40,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "J",
+    },
+    {
+        "slug": "voice_privacy",
+        "title": "Кто шлёт голос",
+        "description": "Ограничить голосовые и кружки: все, контакты или никто.",
+        "icon": "mic_off",
+        "default_level": 38,
+        "min_level": 37,
+        "max_level": 40,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "J",
+    },
+    {
+        "slug": "saved_tags",
+        "title": "Теги в Избранном",
+        "description": "Метки для сообщений в Избранном, как в Telegram Premium.",
+        "icon": "sell",
+        "default_level": 39,
+        "min_level": 37,
+        "max_level": 40,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "J",
+    },
+    {
+        "slug": "archive_non_contacts",
+        "title": "Архив незнакомцев",
+        "description": "Новые чаты не из контактов сразу в архив и без звука.",
+        "icon": "inventory_2",
+        "default_level": 40,
+        "min_level": 37,
+        "max_level": 40,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "J",
     },
 )
 

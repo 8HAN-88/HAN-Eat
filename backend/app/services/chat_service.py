@@ -190,6 +190,7 @@ class ChatService:
                 ConversationMember(conversation_id=conv.id, user_id=uid)
             )
         self.db.flush()
+        self._archive_new_non_contact_chat(conv, initiator_id=current_user_id)
         return conv
 
     def get_or_create_saved(self, user_id: int) -> Conversation:
@@ -222,6 +223,31 @@ class ChatService:
         )
         self.db.flush()
         return conv
+
+    def _archive_new_non_contact_chat(
+        self, conv: Conversation, initiator_id: int
+    ) -> None:
+        if conv.type != "direct":
+            return
+        recipient_id = (
+            conv.direct_user_high_id
+            if conv.direct_user_low_id == initiator_id
+            else conv.direct_user_low_id
+        )
+        recipient = self.db.query(User).filter(User.id == recipient_id).first()
+        if not recipient or not bool(getattr(recipient, "archive_non_contacts", False)):
+            return
+        from app.services.last_seen_privacy import is_owner_contact
+        from app.services.subscription_service import SubscriptionService
+
+        if not SubscriptionService(self.db).has_feature(
+            recipient_id, "archive_non_contacts"
+        ):
+            return
+        if is_owner_contact(self.db, recipient_id, initiator_id):
+            return
+        self.set_archived(conv.id, recipient_id, True)
+        self.set_muted(conv.id, recipient_id, True)
 
     def peer_user_id(self, conv: Conversation, current_user_id: int) -> int:
         if conv.type != "direct":
@@ -2548,6 +2574,7 @@ class ChatService:
         after_id: Optional[int] = None,
         limit: int = 50,
         topic_id: Optional[int] = None,
+        tag_id: Optional[int] = None,
     ) -> Tuple[List[Message], bool]:
         if not self._is_member(conversation_id, user_id):
             raise ValueError("forbidden")
@@ -2600,6 +2627,13 @@ class ChatService:
             )
             if topic_filter is not None:
                 q = q.filter(topic_filter)
+            if tag_id is not None:
+                from app.models.saved_tag import SavedMessageTag
+
+                q = q.join(
+                    SavedMessageTag,
+                    SavedMessageTag.message_id == Message.id,
+                ).filter(SavedMessageTag.tag_id == int(tag_id))
             rows = q.order_by(Message.id.asc()).limit(limit + 1).all()
             has_more = len(rows) > limit
             if has_more:
@@ -2618,6 +2652,13 @@ class ChatService:
         )
         if topic_filter is not None:
             q = q.filter(topic_filter)
+        if tag_id is not None:
+            from app.models.saved_tag import SavedMessageTag
+
+            q = q.join(
+                SavedMessageTag,
+                SavedMessageTag.message_id == Message.id,
+            ).filter(SavedMessageTag.tag_id == int(tag_id))
         if cursor:
             q = q.filter(Message.id < cursor)
 
@@ -4079,13 +4120,23 @@ class ChatService:
         clean = emoji.strip()
         if not clean or len(clean) > 16:
             raise ValueError("invalid_emoji")
-        from app.core.entitlements import EXCLUSIVE_CHAT_REACTIONS
+        from app.core.entitlements import (
+            EXCLUSIVE_CHAT_REACTIONS,
+            FREE_CHAT_REACTIONS,
+        )
         from app.services.subscription_service import SubscriptionService
 
-        if clean in EXCLUSIVE_CHAT_REACTIONS and not SubscriptionService(self.db).has_feature(
-            user_id, "exclusive_reactions"
+        billing = SubscriptionService(self.db)
+        if clean in EXCLUSIVE_CHAT_REACTIONS:
+            if not (
+                billing.has_feature(user_id, "exclusive_reactions")
+                or billing.has_feature(user_id, "any_emoji_reactions")
+            ):
+                raise ValueError("exclusive_reaction")
+        elif clean not in FREE_CHAT_REACTIONS and not billing.has_feature(
+            user_id, "any_emoji_reactions"
         ):
-            raise ValueError("exclusive_reaction")
+            raise ValueError("any_emoji_reaction")
         stars = max(0, int(stars_amount or 0))
         existing = (
             self.db.query(MessageReaction)

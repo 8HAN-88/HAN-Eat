@@ -79,6 +79,7 @@ class MessageResponse(BaseModel):
     is_anonymous: bool = False
     client_message_id: Optional[str] = None
     transcription: Optional[str] = None
+    saved_tag_ids: List[int] = []
 
     class Config:
         from_attributes = True
@@ -342,6 +343,26 @@ class ChatPollVoteRequest(BaseModel):
 class ChatChecklistToggleRequest(BaseModel):
     index: int = Field(..., ge=0, le=19)
     done: bool = True
+
+
+class SavedTagItem(BaseModel):
+    id: int
+    title: str
+    emoji: Optional[str] = None
+    sort_order: int = 0
+
+
+class SavedTagCreateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=40)
+    emoji: Optional[str] = Field(default=None, max_length=8)
+
+
+class SavedTagListResponse(BaseModel):
+    items: List[SavedTagItem] = []
+
+
+class SavedMessageTagsRequest(BaseModel):
+    tag_ids: List[int] = []
 
 
 class ChatPollAddOptionRequest(BaseModel):

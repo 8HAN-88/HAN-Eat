@@ -82,6 +82,12 @@ class User(Base):
     # Telegram Premium: emoji next to name + account name color.
     emoji_status = Column(String(16), nullable=True)
     profile_color = Column(String(16), nullable=True)
+    # Telegram Premium: who may send voice / video notes to this user.
+    voice_privacy = Column(String(20), default="everybody", nullable=False)
+    # Auto-archive + mute new DMs from non-contacts.
+    archive_non_contacts = Column(Boolean, default=False, nullable=False)
+    # Chat folder opened on app launch.
+    default_folder_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)

@@ -359,6 +359,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   final Set<String> _cancelledPendingMediaClientIds = {};
   final Set<int> _unlockingMessageIds = {};
   bool _voiceSending = false;
+  List<ChatSavedTag> _savedTags = const [];
+  int? _activeSavedTagId;
   bool _hasMore = false;
   int? _nextCursor;
   Timer? _pollTimer;
@@ -740,6 +742,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     unawaited(_syncMuteSchedule());
     if (_conversation.isForum) {
       unawaited(_loadForumTopics(selectGeneralIfNeeded: true));
+    }
+    if (_conversation.isSaved) {
+      unawaited(_loadSavedTags());
     }
     if (widget.conversationId > 0) {
       _load(refresh: true);
@@ -3594,6 +3599,51 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     }
   }
 
+  Widget _buildSavedTagsBar(ColorScheme scheme) {
+    final locked = !_hasFlexFeature('saved_tags');
+    return Material(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF18222D)
+          : scheme.surface,
+      child: SizedBox(
+        height: 48,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: const Text('Все'),
+                selected: _activeSavedTagId == null,
+                onSelected: (_) => unawaited(_selectSavedTagFilter(null)),
+              ),
+            ),
+            for (final tag in _savedTags)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(tag.label),
+                  selected: _activeSavedTagId == tag.id,
+                  onSelected: locked
+                      ? (_) => unawaited(showCreatorUpsell(context))
+                      : (_) => unawaited(_selectSavedTagFilter(tag.id)),
+                ),
+              ),
+            ActionChip(
+              avatar: Icon(
+                locked ? Icons.lock_outline : Icons.add,
+                size: 16,
+              ),
+              label: const Text('Тег'),
+              onPressed: () => unawaited(_createSavedTagFromBar()),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildForumTopicsStrip(ColorScheme scheme) {
     if (!_conversation.isForum) return const SizedBox.shrink();
     final canManage = _canManageForumTopics;
@@ -5520,6 +5570,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     } catch (e) {
       if (!mounted) return;
       _applyReactions(msg.id, previous);
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -5724,45 +5775,199 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  static const _freeChatReactions = [
+    '👍',
+    '👌',
+    '❤️',
+    '👎',
+    '👏',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+  ];
+  static const _extraReactionGrid = [
+    '😊',
+    '😍',
+    '🤣',
+    '😎',
+    '🤔',
+    '😴',
+    '😇',
+    '🤗',
+    '🫡',
+    '😭',
+    '😡',
+    '🤮',
+    '💀',
+    '👀',
+    '🙈',
+    '💪',
+    '🤝',
+    '✌️',
+    '👋',
+    '💋',
+    '💔',
+    '🌹',
+    '🎂',
+    '🎁',
+    '🏆',
+    '⚽️',
+    '🎵',
+    '📱',
+    '✅',
+    '❌',
+    '⭐',
+    '🌟',
+    '🌈',
+    '☀️',
+    '🌙',
+    '🍀',
+    '🐶',
+    '🐱',
+    '🍕',
+    '☕',
+  ];
+
+  List<String> get _reactionPickerEmojis {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final emoji in [
+      ..._quickReactions,
+      ..._freeChatReactions,
+      ..._exclusiveOverlayReactions,
+      ..._extraReactionGrid,
+    ]) {
+      if (seen.add(emoji)) out.add(emoji);
+    }
+    return out;
+  }
+
+  bool _canUseReactionEmoji(String emoji) {
+    if (_freeChatReactions.contains(emoji)) return true;
+    if (_exclusiveOverlayReactions.contains(emoji)) {
+      return _hasFlexFeature('exclusive_reactions') ||
+          _hasFlexFeature('any_emoji_reactions');
+    }
+    return _hasFlexFeature('any_emoji_reactions');
+  }
+
+  Future<void> _pickReactionEmoji(ChatMessage msg, String emoji) async {
+    if (!_canUseReactionEmoji(emoji)) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    await _toggleReaction(msg, emoji);
+  }
+
   void _showReactionPicker(ChatMessage msg) {
+    final controller = TextEditingController();
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
-            children: _quickReactions
-                .map(
-                  (emoji) => Material(
-                    color: msg.reactions.any(
-                      (r) => r.reactedByMe && r.emoji == emoji,
-                    )
-                        ? Theme.of(ctx).colorScheme.primaryContainer
-                        : Theme.of(ctx).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _toggleReaction(msg, emoji);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child:
-                            Text(emoji, style: const TextStyle(fontSize: 28)),
-                      ),
-                    ),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            24 + MediaQuery.viewInsetsOf(ctx).bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Реакция',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _reactionPickerEmojis.map((emoji) {
+                      final locked = !_canUseReactionEmoji(emoji);
+                      return Material(
+                        color: msg.reactions.any(
+                          (r) => r.reactedByMe && r.emoji == emoji,
+                        )
+                            ? Theme.of(ctx).colorScheme.primaryContainer
+                            : Theme.of(ctx)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            unawaited(_pickReactionEmoji(msg, emoji));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Text(
+                                  emoji,
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    color: locked
+                                        ? Theme.of(ctx)
+                                            .colorScheme
+                                            .onSurface
+                                            .withValues(alpha: 0.45)
+                                        : null,
+                                  ),
+                                ),
+                                if (locked)
+                                  const Positioned(
+                                    right: -2,
+                                    bottom: -2,
+                                    child: Icon(Icons.lock, size: 12),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                )
-                .toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: _hasFlexFeature('any_emoji_reactions')
+                      ? 'Вставьте любой эмодзи'
+                      : 'Любой эмодзи — с уровня 37',
+                  suffixIcon: IconButton(
+                    tooltip: 'Поставить',
+                    icon: const Icon(Icons.send_rounded),
+                    onPressed: () {
+                      final emoji = controller.text.trim();
+                      if (emoji.isEmpty) return;
+                      Navigator.pop(ctx);
+                      unawaited(_pickReactionEmoji(msg, emoji));
+                    },
+                  ),
+                ),
+                onSubmitted: (value) {
+                  final emoji = value.trim();
+                  if (emoji.isEmpty) return;
+                  Navigator.pop(ctx);
+                  unawaited(_pickReactionEmoji(msg, emoji));
+                },
+              ),
+            ],
           ),
         ),
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   void _showThreadActionsSheet() {
@@ -9445,6 +9650,186 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       case 'refund_media':
         unawaited(_refundPaidMedia(msg));
         break;
+      case 'tag':
+        unawaited(_editSavedMessageTags(msg));
+        break;
+    }
+  }
+
+  Future<void> _loadSavedTags() async {
+    if (!_conversation.isSaved) return;
+    try {
+      final tags = await ChatService.listSavedTags();
+      if (!mounted) return;
+      setState(() => _savedTags = tags);
+    } catch (_) {}
+  }
+
+  Future<void> _selectSavedTagFilter(int? tagId) async {
+    if (_activeSavedTagId == tagId) return;
+    setState(() => _activeSavedTagId = tagId);
+    await _load(refresh: true);
+  }
+
+  Future<void> _createSavedTagFromBar() async {
+    if (!_hasFlexFeature('saved_tags')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final created = await _promptNewSavedTag();
+    if (created == null || !mounted) return;
+    setState(() => _savedTags = [..._savedTags, created]);
+  }
+
+  Future<ChatSavedTag?> _promptNewSavedTag() async {
+    final titleCtrl = TextEditingController();
+    final emojiCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Новый тег'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Название'),
+              textCapitalization: TextCapitalization.sentences,
+            ),
+            TextField(
+              controller: emojiCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Эмодзи (необязательно)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return null;
+    final title = titleCtrl.text.trim();
+    if (title.isEmpty) return null;
+    try {
+      return await ChatService.createSavedTag(
+        title: title,
+        emoji: emojiCtrl.text.trim(),
+      );
+    } catch (e) {
+      if (!mounted) return null;
+      if (offerFlexIfRequired(context, e)) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+      return null;
+    }
+  }
+
+  Future<void> _editSavedMessageTags(ChatMessage msg) async {
+    if (msg.id <= 0 || !_conversation.isSaved) return;
+    if (!_hasFlexFeature('saved_tags')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    if (_savedTags.isEmpty) await _loadSavedTags();
+    if (!mounted) return;
+    var selected = msg.savedTagIds.toSet();
+    final applied = await showModalBottomSheet<Set<int>>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: const Text('Теги сообщения'),
+                      trailing: TextButton(
+                        onPressed: () async {
+                          final created = await _promptNewSavedTag();
+                          if (created == null) return;
+                          setState(
+                            () => _savedTags = [..._savedTags, created],
+                          );
+                          setLocal(() => selected.add(created.id));
+                        },
+                        child: const Text('Новый'),
+                      ),
+                    ),
+                    if (_savedTags.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('Пока нет тегов'),
+                      )
+                    else
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final tag in _savedTags)
+                              CheckboxListTile(
+                                value: selected.contains(tag.id),
+                                title: Text(tag.label),
+                                onChanged: (v) {
+                                  setLocal(() {
+                                    if (v == true) {
+                                      selected.add(tag.id);
+                                    } else {
+                                      selected.remove(tag.id);
+                                    }
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, selected),
+                      child: const Text('Готово'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (applied == null || !mounted) return;
+    try {
+      final updated = await ChatService.setSavedMessageTags(
+        conversationId: widget.conversationId,
+        messageId: msg.id,
+        tagIds: applied.toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == msg.id);
+        if (idx >= 0) {
+          _messages[idx] =
+              _messages[idx].copyWith(savedTagIds: updated.savedTagIds);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
     }
   }
 
@@ -10685,6 +11070,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         (canShowReaders ? 1 : 0) +
         (canReplyPrivately ? 1 : 0) +
         (canSaveToFavorites ? 1 : 0) +
+        (_conversation.isSaved && msg.id > 0 ? 1 : 0) +
         (msg.id > 0 ? 1 : 0) + // copy link
         1; // reply, pin, forward, select + optional
     final preLayout = ChatMessageOverlayLayout.compute(
@@ -10788,6 +11174,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           msg.isPaid &&
           msg.priceStars > 0 &&
           _withinStarsRefundWindow(msg.createdAt),
+      canTagSaved: _conversation.isSaved && msg.id > 0,
       onReaction: (emoji) => _toggleReaction(msg, emoji),
       onExpandReactions: () => _showReactionPicker(msg),
       onAction: (action) => _handleMessageAction(msg, action),
@@ -11258,6 +11645,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       }) result;
       final reusePrefetch = refresh &&
           _activeTopicIdForSend == null &&
+          _activeSavedTagId == null &&
           !_consumedPrefetchPage;
       if (reusePrefetch) {
         final page = await ChatThreadPrefetch.page(widget.conversationId);
@@ -11273,6 +11661,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           result = await ChatService.listMessages(
             conversationId: widget.conversationId,
             topicId: _activeTopicIdForSend,
+            tagId: _activeSavedTagId,
           );
         }
         _consumedPrefetchPage = true;
@@ -11281,6 +11670,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           conversationId: widget.conversationId,
           cursor: refresh ? null : _nextCursor,
           topicId: _activeTopicIdForSend,
+          tagId: _activeSavedTagId,
         );
       }
       if (!mounted || seq != _messageLoadSeq) return;
@@ -11377,6 +11767,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         conversationId: widget.conversationId,
         afterId: lastId,
         topicId: _activeTopicIdForSend,
+        tagId: _activeSavedTagId,
       );
       _pollFailureCount = 0;
       if (!mounted || fresh.isEmpty) return;
@@ -14891,6 +15282,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                 ),
               ),
               if (_conversation.isForum) _buildForumTopicsStrip(scheme),
+              if (_conversation.isSaved) _buildSavedTagsBar(scheme),
               _animatedVisibility(
                 visible: _showOnlyFailedMessages,
                 keyName: 'thread-failed-filter',

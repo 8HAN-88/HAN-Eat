@@ -16,8 +16,10 @@ import '../../../../services/chat_cache_service.dart';
 import '../../../../services/chat_folder_store.dart';
 import '../../../../services/chat_hub_ui_prefs.dart';
 import '../../../../services/chat_service.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../services/chat_thread_ui_prefs.dart';
 import '../../../../services/user_realtime_service.dart';
+import '../../../subscription/creator_upsell.dart';
 import '../../../../utils/api_error_parser.dart';
 import '../../../../widgets/app_empty_state.dart';
 import '../../../../widgets/chat_inbox_skeleton.dart';
@@ -119,8 +121,12 @@ class _ChatsHubAllInboxTabState extends ConsumerState<ChatsHubAllInboxTab>
       ChatHubUiPrefs.isGesturesHintDismissed(),
     ]);
     if (!mounted) return;
+    final lastSelected = results[0] as int?;
+    final defaultId = AuthService.instance.currentUser?.defaultFolderId;
+    final useDefault =
+        defaultId != null && hasFlexFeature('any_emoji_reactions');
     setState(() {
-      _selectedFolderId = results[0] as int?;
+      _selectedFolderId = useDefault ? defaultId : lastSelected;
       _showGesturesHint = !(results[1] as bool);
     });
   }

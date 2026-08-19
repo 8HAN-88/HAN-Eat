@@ -453,6 +453,71 @@ async def update_user_profile(
                 "Цвет профиля доступен с уровня 36",
             )
         current_user.profile_color = next_color
+    if request.voice_privacy is not None:
+        from app.services.voice_privacy import (
+            PRIVACY_EVERYBODY,
+            normalize_voice_privacy,
+        )
+        from app.services.subscription_service import SubscriptionService
+
+        try:
+            next_privacy = normalize_voice_privacy(request.voice_privacy)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="voice_privacy must be one of: everybody, contacts, nobody",
+            )
+        if next_privacy != PRIVACY_EVERYBODY and not SubscriptionService(db).has_feature(
+            current_user.id, "voice_privacy"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "voice_privacy",
+                "Ограничение голосовых доступно с уровня 38",
+            )
+        current_user.voice_privacy = next_privacy or PRIVACY_EVERYBODY
+    if request.archive_non_contacts is not None:
+        from app.services.subscription_service import SubscriptionService
+
+        enabled = bool(request.archive_non_contacts)
+        if enabled and not SubscriptionService(db).has_feature(
+            current_user.id, "archive_non_contacts"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "archive_non_contacts",
+                "Архив незнакомцев доступен с уровня 40",
+            )
+        current_user.archive_non_contacts = enabled
+    if request.default_folder_id is not None:
+        from app.models.chat_folder import ChatFolder
+        from app.services.flex_subscription_service import FlexSubscriptionService
+        from app.services.subscription_service import SubscriptionService
+
+        folder_id = int(request.default_folder_id)
+        if folder_id <= 0:
+            current_user.default_folder_id = None
+        else:
+            if FlexSubscriptionService(db).current_level(current_user.id) < 37:
+                SubscriptionService(db).require_feature(
+                    current_user.id,
+                    "any_emoji_reactions",
+                    "Папка при запуске доступна с уровня 37",
+                )
+            folder = (
+                db.query(ChatFolder)
+                .filter(
+                    ChatFolder.id == folder_id,
+                    ChatFolder.user_id == current_user.id,
+                )
+                .first()
+            )
+            if not folder:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="folder_not_found",
+                )
+            current_user.default_folder_id = folder.id
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:
