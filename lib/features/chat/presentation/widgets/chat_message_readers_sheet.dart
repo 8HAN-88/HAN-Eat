@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../models/chat_models.dart';
 import '../../../../services/chat_service.dart';
 import '../../../../utils/api_error_parser.dart';
+import '../../../../utils/chat_time_format.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../../../widgets/app_avatar.dart';
 
@@ -39,7 +40,7 @@ class _ChatMessageReadersSheet extends StatefulWidget {
 class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
   bool _loading = true;
   Object? _error;
-  List<ChatUserBrief> _readers = const [];
+  List<ChatMessageReader> _readers = const [];
   int _otherCount = 0;
 
   @override
@@ -159,7 +160,18 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
                                 controller: scrollController,
                                 itemCount: _readers.length,
                                 itemBuilder: (context, index) {
-                                  final user = _readers[index];
+                                  final item = _readers[index];
+                                  final user = item.user;
+                                  final readAt = item.readAt;
+                                  final handle = user.username != null &&
+                                          user.username!.trim().isNotEmpty
+                                      ? (user.username!.startsWith('@')
+                                          ? user.username!
+                                          : '@${user.username}')
+                                      : null;
+                                  final timeLabel = readAt == null
+                                      ? null
+                                      : 'Прочитано ${formatChatMessageTime(readAt)}';
                                   return ListTile(
                                     leading: AppUserAvatar(
                                       imageUrl: user.avatarUrl,
@@ -167,12 +179,12 @@ class _ChatMessageReadersSheetState extends State<_ChatMessageReadersSheet> {
                                       radius: 22,
                                     ),
                                     title: Text(user.displayName),
-                                    subtitle: user.username != null &&
-                                            user.username!.trim().isNotEmpty
+                                    subtitle: timeLabel != null || handle != null
                                         ? Text(
-                                            user.username!.startsWith('@')
-                                                ? user.username!
-                                                : '@${user.username}',
+                                            [
+                                              if (timeLabel != null) timeLabel,
+                                              if (handle != null) handle,
+                                            ].join(' · '),
                                           )
                                         : null,
                                   );

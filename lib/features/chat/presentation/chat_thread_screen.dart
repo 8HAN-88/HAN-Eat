@@ -7038,6 +7038,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             unawaited(ChatThreadPrefetch.warm(chat.id));
           } catch (e) {
             if (!mounted) return;
+            if (offerFlexIfRequired(context, e)) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(userVisibleError(e))),
             );
@@ -9586,6 +9587,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
               unawaited(ChatThreadPrefetch.warm(chat.id));
             } catch (e) {
               if (!mounted) return;
+              if (offerFlexIfRequired(context, e)) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(userVisibleError(e))),
               );
@@ -10010,8 +10012,26 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     return parts.isEmpty ? '—' : parts.join(' · ');
   }
 
+  Future<void> _showReadTime(ChatMessage msg) async {
+    if (!msg.isMine || !msg.isRead) return;
+    if (!_hasFlexFeature('read_timestamps')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final at = _conversation.peerReadAt;
+    final text = at == null
+        ? 'Прочитано'
+        : 'Прочитано ${formatChatMessageTime(at)}';
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   Future<void> _showMessageEditHistory(ChatMessage msg) async {
     if (msg.id <= 0 || !msg.isEdited) return;
+    if (!_hasFlexFeature('edit_history')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     try {
       final history = await ChatService.listMessageEdits(
         conversationId: widget.conversationId,
@@ -10102,6 +10122,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       );
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -10370,6 +10391,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       onVoiceCompleted: interactive ? _playNextVoiceAfter : null,
       onEditedTap: interactive && msg.isEdited && msg.id > 0
           ? () => unawaited(_showMessageEditHistory(msg))
+          : null,
+      onReadTimeTap: interactive &&
+              !isGroup &&
+              msg.isMine &&
+              msg.isRead &&
+              msg.id > 0
+          ? () => unawaited(_showReadTime(msg))
           : null,
       onReadersTap: interactive &&
               isGroup &&
@@ -17132,6 +17160,7 @@ class _Bubble extends StatelessWidget {
     this.onForwardFromTap,
     this.onVoiceCompleted,
     this.onEditedTap,
+    this.onReadTimeTap,
     this.onReadersTap,
     this.onCallTap,
     this.outgoingBubbleColor,
@@ -17205,6 +17234,7 @@ class _Bubble extends StatelessWidget {
   final VoidCallback? onForwardFromTap;
   final ValueChanged<ChatMessage>? onVoiceCompleted;
   final VoidCallback? onEditedTap;
+  final VoidCallback? onReadTimeTap;
   final VoidCallback? onReadersTap;
   final VoidCallback? onCallTap;
 
@@ -17324,10 +17354,14 @@ class _Bubble extends StatelessWidget {
         ],
         if (mine) ...[
           const SizedBox(width: 3),
-          Icon(
-            statusIcon,
-            size: 12.5,
-            color: statusColor,
+          GestureDetector(
+            onTap: onReadTimeTap,
+            behavior: HitTestBehavior.opaque,
+            child: Icon(
+              statusIcon,
+              size: 12.5,
+              color: statusColor,
+            ),
           ),
         ],
         if (mine && message.readCount > 0) ...[

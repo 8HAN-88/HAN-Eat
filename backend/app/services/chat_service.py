@@ -536,7 +536,7 @@ class ChatService:
 
     def message_readers(
         self, conversation_id: int, message_id: int, viewer_id: int
-    ) -> tuple[list[User], int]:
+    ) -> tuple[list[User], int, dict]:
         """Users (excluding sender) who have read up to this message."""
         if not self._is_member(conversation_id, viewer_id):
             raise ValueError("forbidden")
@@ -561,14 +561,18 @@ class ChatService:
             .all()
         )
         other_count = len(others)
-        reader_ids = [
-            m.user_id
+        reader_rows = [
+            m
             for m in others
             if m.last_read_message_id is not None
             and m.last_read_message_id >= message_id
         ]
+        reader_ids = [m.user_id for m in reader_rows]
+        read_at_by_user = {
+            int(m.user_id): getattr(m, "last_read_at", None) for m in reader_rows
+        }
         if not reader_ids:
-            return [], other_count
+            return [], other_count, {}
         users = (
             self.db.query(User)
             .filter(
@@ -579,7 +583,7 @@ class ChatService:
         )
         by_id = {u.id: u for u in users}
         ordered = [by_id[uid] for uid in reader_ids if uid in by_id]
-        return ordered, other_count
+        return ordered, other_count, read_at_by_user
 
     def other_member_read_cursors(
         self, conversation_id: int, exclude_user_id: int
@@ -3323,6 +3327,8 @@ class ChatService:
             notify=False,
         )
         if as_copy:
+            if not self._has_feature(sender_id, "hide_forward"):
+                raise ValueError("hide_forward_required")
             msg.forward_from_user_id = None
             msg.forward_from_name = None
             msg.forwarded_from_message_id = None
@@ -4525,6 +4531,7 @@ class ChatService:
             return
         if member.last_read_message_id is None or message_id > member.last_read_message_id:
             member.last_read_message_id = message_id
+            member.last_read_at = datetime.now(timezone.utc).replace(tzinfo=None)
         # Read implies delivered (Telegram).
         if (
             member.last_delivered_message_id is None

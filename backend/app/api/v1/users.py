@@ -491,19 +491,17 @@ async def update_user_profile(
         current_user.archive_non_contacts = enabled
     if request.default_folder_id is not None:
         from app.models.chat_folder import ChatFolder
-        from app.services.flex_subscription_service import FlexSubscriptionService
         from app.services.subscription_service import SubscriptionService
 
         folder_id = int(request.default_folder_id)
         if folder_id <= 0:
             current_user.default_folder_id = None
         else:
-            if FlexSubscriptionService(db).current_level(current_user.id) < 37:
-                SubscriptionService(db).require_feature(
-                    current_user.id,
-                    "any_emoji_reactions",
-                    "Папка при запуске доступна с уровня 37",
-                )
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "default_folder",
+                "Папка при запуске доступна с уровня 49",
+            )
             folder = (
                 db.query(ChatFolder)
                 .filter(

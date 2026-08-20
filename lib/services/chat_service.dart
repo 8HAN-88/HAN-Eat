@@ -485,12 +485,19 @@ class ChatService {
     _ensureOk(response, 'Не удалось загрузить, кто прочитал');
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final items = data['items'] as List<dynamic>? ?? const [];
-    final readers = <ChatUserBrief>[];
+    final readers = <ChatMessageReader>[];
     for (final raw in items) {
       if (raw is! Map<String, dynamic>) continue;
       final userRaw = raw['user'];
       if (userRaw is Map<String, dynamic>) {
-        readers.add(ChatUserBrief.fromJson(userRaw));
+        readers.add(
+          ChatMessageReader(
+            user: ChatUserBrief.fromJson(userRaw),
+            readAt: raw['read_at'] is String
+                ? DateTime.tryParse(raw['read_at'] as String)
+                : null,
+          ),
+        );
       }
     }
     return ChatMessageReadersResult(

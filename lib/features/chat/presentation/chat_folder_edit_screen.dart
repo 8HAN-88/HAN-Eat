@@ -397,16 +397,16 @@ class _ChatFolderEditScreenState extends State<ChatFolderEditScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Открывать при запуске'),
                   subtitle: Text(
-                    hasFlexFeature('any_emoji_reactions')
+                    hasFlexFeature('default_folder')
                         ? 'Эта папка откроется вместо последней выбранной'
-                        : 'Доступно с уровня 37',
+                        : 'Доступно с уровня 49',
                   ),
                   value: _openOnLaunch,
-                  secondary: hasFlexFeature('any_emoji_reactions')
+                  secondary: hasFlexFeature('default_folder')
                       ? null
                       : const Icon(Icons.lock_outline),
                   onChanged: (v) {
-                    if (v && !hasFlexFeature('any_emoji_reactions')) {
+                    if (v && !hasFlexFeature('default_folder')) {
                       showCreatorUpsell(context);
                       return;
                     }
