@@ -41,13 +41,13 @@ class ChatOpenDirect {
     int userId, {
     ChatUserBrief? peer,
   }) async {
-    final instant = peekOrStub(userId, peer: peer);
-    if (instant != null) {
-      if (instant.id > 0) {
-        unawaited(ChatThreadPrefetch.warm(instant.id));
+    final cached = peek(userId);
+    if (cached != null) {
+      if (cached.id > 0) {
+        unawaited(ChatThreadPrefetch.warm(cached.id));
       }
       unawaited(_refresh(userId));
-      return instant;
+      return cached;
     }
     return resolveAndWarm(userId);
   }

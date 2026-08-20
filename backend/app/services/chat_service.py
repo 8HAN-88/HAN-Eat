@@ -147,7 +147,7 @@ class ChatService:
     def get_or_create_direct(self, current_user_id: int, peer_user_id: int) -> Conversation:
         if current_user_id == peer_user_id:
             raise ValueError("self_chat")
-        self._get_user_or_404(peer_user_id)
+        peer = self._get_user_or_404(peer_user_id)
         if self.has_block_between(current_user_id, peer_user_id):
             raise ValueError("user_blocked")
         low, high = self._pair_ids(current_user_id, peer_user_id)
@@ -161,6 +161,11 @@ class ChatService:
             )
             .first()
         )
+        if conv is None:
+            from app.services.business_profile_service import can_start_dm
+
+            if not can_start_dm(self.db, current_user_id, peer):
+                raise ValueError("dm_privacy_denied")
         if conv:
             for uid in (low, high):
                 existing = (
@@ -3188,6 +3193,11 @@ class ChatService:
         )
         # Push/FCM is optional: live HTTP send emits WS first, then notifies
         # in a background session so the first tap is not blocked by FCM.
+        self._last_auto_replies = []
+        if conv and conv.type == "direct":
+            from app.services.business_profile_service import maybe_auto_reply
+
+            self._last_auto_replies = maybe_auto_reply(self.db, conv, sender_id)
         if notify:
             self._notify_new_message(
                 msg,
@@ -3197,6 +3207,11 @@ class ChatService:
                 silent=bool(silent),
             )
         return msg, True
+
+    def take_auto_replies(self) -> list[Message]:
+        rows = list(getattr(self, "_last_auto_replies", []) or [])
+        self._last_auto_replies = []
+        return rows
 
     def _charge_direct_paid_message_fee(
         self,

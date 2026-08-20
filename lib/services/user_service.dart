@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../features/subscription/creator_upsell.dart';
+import '../utils/api_error_parser.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 import 'media_upload_service.dart';
@@ -495,6 +496,7 @@ class UserService {
     bool? storyStealth,
     String? callPrivacy,
     String? groupAddPrivacy,
+    String? dmPrivacy,
     String? fcmToken,
     String? voipToken,
   }) async {
@@ -518,6 +520,7 @@ class UserService {
       if (storyStealth != null) 'story_stealth': storyStealth,
       if (callPrivacy != null) 'call_privacy': callPrivacy,
       if (groupAddPrivacy != null) 'group_add_privacy': groupAddPrivacy,
+      if (dmPrivacy != null) 'dm_privacy': dmPrivacy,
       if (fcmToken != null) 'fcm_token': fcmToken,
       if (voipToken != null) 'voip_token': voipToken,
     };
@@ -553,8 +556,10 @@ class UserService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return User.fromJson(data);
       }
-      throw Exception(
-        _apiErrorMessage(response, 'Не удалось обновить профиль'),
+      throw apiExceptionFromHttpResponse(
+        response.statusCode,
+        response.body,
+        fallback: 'Не удалось обновить профиль',
       );
     } catch (e) {
       if (kDebugMode) {
@@ -571,6 +576,152 @@ class UserService {
       rethrow;
     }
   }
+
+  static Future<Map<String, dynamic>> getBusinessSettings() async {
+    final uri = Uri.parse('$baseUrl/users/me/business');
+    final response = await http.get(uri, headers: await _authHeaders());
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw apiExceptionFromHttpResponse(
+      response.statusCode,
+      response.body,
+      fallback: 'Не удалось загрузить бизнес-настройки',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateBusinessSettings(
+    Map<String, dynamic> body,
+  ) async {
+    final uri = Uri.parse('$baseUrl/users/me/business');
+    var headers = await _authHeaders();
+    var response = await http.patch(
+      uri,
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    if (response.statusCode == 401) {
+      final refreshed = await AuthService.refreshToken();
+      headers = {
+        'Authorization': 'Bearer $refreshed',
+        'Content-Type': 'application/json',
+      };
+      response = await http.patch(
+        uri,
+        headers: headers,
+        body: jsonEncode(body),
+      );
+    }
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw apiExceptionFromHttpResponse(
+      response.statusCode,
+      response.body,
+      fallback: 'Не удалось сохранить бизнес-настройки',
+    );
+  }
+}
+
+class BusinessPublic {
+  const BusinessPublic({
+    this.websiteUrl,
+    this.isOpen,
+    this.hours,
+    this.location,
+    this.intro,
+    this.supportBot,
+  });
+
+  final String? websiteUrl;
+  final bool? isOpen;
+  final Map<String, dynamic>? hours;
+  final BusinessLocation? location;
+  final BusinessIntro? intro;
+  final BusinessSupportBot? supportBot;
+
+  bool get hasContent =>
+      (websiteUrl != null && websiteUrl!.isNotEmpty) ||
+      hours != null ||
+      location != null ||
+      intro != null ||
+      supportBot != null;
+
+  factory BusinessPublic.fromJson(Map<String, dynamic>? json) {
+    if (json == null || json.isEmpty) return const BusinessPublic();
+    final loc = json['location'];
+    final intro = json['intro'];
+    final bot = json['support_bot'];
+    final hours = json['hours'];
+    return BusinessPublic(
+      websiteUrl: json['website_url'] as String?,
+      isOpen: json['is_open'] as bool?,
+      hours: hours is Map<String, dynamic> ? hours : null,
+      location: loc is Map<String, dynamic> ? BusinessLocation.fromJson(loc) : null,
+      intro: intro is Map<String, dynamic> ? BusinessIntro.fromJson(intro) : null,
+      supportBot:
+          bot is Map<String, dynamic> ? BusinessSupportBot.fromJson(bot) : null,
+    );
+  }
+}
+
+class BusinessLocation {
+  const BusinessLocation({
+    required this.lat,
+    required this.lng,
+    this.address = '',
+  });
+
+  final double lat;
+  final double lng;
+  final String address;
+
+  factory BusinessLocation.fromJson(Map<String, dynamic> json) =>
+      BusinessLocation(
+        lat: (json['lat'] as num).toDouble(),
+        lng: (json['lng'] as num).toDouble(),
+        address: json['address'] as String? ?? '',
+      );
+}
+
+class BusinessIntro {
+  const BusinessIntro({
+    this.title = '',
+    this.text = '',
+    this.stickerUrl = '',
+  });
+
+  final String title;
+  final String text;
+  final String stickerUrl;
+
+  factory BusinessIntro.fromJson(Map<String, dynamic> json) => BusinessIntro(
+        title: json['title'] as String? ?? '',
+        text: json['text'] as String? ?? '',
+        stickerUrl: json['sticker_url'] as String? ?? '',
+      );
+}
+
+class BusinessSupportBot {
+  const BusinessSupportBot({
+    required this.id,
+    this.name,
+    this.username,
+    this.avatarUrl,
+  });
+
+  final int id;
+  final String? name;
+  final String? username;
+  final String? avatarUrl;
+
+  factory BusinessSupportBot.fromJson(Map<String, dynamic> json) =>
+      BusinessSupportBot(
+        id: (json['id'] as num).toInt(),
+        name: json['name'] as String?,
+        username: json['username'] as String?,
+        avatarUrl: json['avatar_url'] as String?,
+      );
 }
 
 // Временные модели (позже вынести)
@@ -580,6 +731,7 @@ class UserProfile {
   final bool? isFollowing;
   final bool? isFollowedBy;
   final bool profileDecoration;
+  final BusinessPublic? business;
   final String? uid; // Для совместимости
 
   // Геттеры для совместимости
@@ -592,6 +744,7 @@ class UserProfile {
     this.isFollowing,
     this.isFollowedBy,
     this.profileDecoration = false,
+    this.business,
     this.uid,
   })  : user = user ??
             User(
@@ -634,6 +787,11 @@ class UserProfile {
       isFollowing: json['is_following'] as bool?,
       isFollowedBy: json['is_followed_by'] as bool?,
       profileDecoration: json['profile_decoration'] as bool? ?? false,
+      business: BusinessPublic.fromJson(
+        json['business'] is Map<String, dynamic>
+            ? json['business'] as Map<String, dynamic>
+            : null,
+      ),
     );
   }
 }

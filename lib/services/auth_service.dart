@@ -1268,6 +1268,7 @@ class User {
   final bool storyStealth;
   final String callPrivacy;
   final String groupAddPrivacy;
+  final String dmPrivacy;
 
   // Геттер для совместимости с Firebase Auth
   String get uid => id.toString();
@@ -1302,6 +1303,7 @@ class User {
     this.storyStealth = false,
     this.callPrivacy = 'everybody',
     this.groupAddPrivacy = 'everybody',
+    this.dmPrivacy = 'everybody',
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -1342,6 +1344,7 @@ class User {
       storyStealth: json['story_stealth'] as bool? ?? false,
       callPrivacy: json['call_privacy'] as String? ?? 'everybody',
       groupAddPrivacy: json['group_add_privacy'] as String? ?? 'everybody',
+      dmPrivacy: json['dm_privacy'] as String? ?? 'everybody',
     );
   }
 
@@ -1377,6 +1380,7 @@ class User {
       'story_stealth': storyStealth,
       'call_privacy': callPrivacy,
       'group_add_privacy': groupAddPrivacy,
+      'dm_privacy': dmPrivacy,
     };
   }
 
@@ -1403,6 +1407,7 @@ class User {
     bool? storyStealth,
     String? callPrivacy,
     String? groupAddPrivacy,
+    String? dmPrivacy,
   }) {
     return User(
       id: id,
@@ -1438,6 +1443,7 @@ class User {
       storyStealth: storyStealth ?? this.storyStealth,
       callPrivacy: callPrivacy ?? this.callPrivacy,
       groupAddPrivacy: groupAddPrivacy ?? this.groupAddPrivacy,
+      dmPrivacy: dmPrivacy ?? this.dmPrivacy,
     );
   }
 }

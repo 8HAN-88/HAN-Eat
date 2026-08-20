@@ -60,13 +60,52 @@ async def get_current_user_profile(
     payload = UserResponse.model_validate(current_user, context=_USER_ME_CONTEXT)
     from app.services.subscription_service import SubscriptionService
 
+    from app.services.business_profile_service import public_payload
+
     return payload.model_copy(
         update={
             "profile_decoration": SubscriptionService(db).has_feature(
                 current_user.id, "profile_decoration"
-            )
+            ),
+            "business": public_payload(db, current_user),
         }
     )
+
+
+@router.get("/me/business")
+def get_my_business_settings(
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.business_profile_service import owner_settings_payload
+
+    return owner_settings_payload(db, current_user)
+
+
+@router.patch("/me/business")
+def update_my_business_settings(
+    payload: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.business_profile_service import (
+        BusinessError,
+        update_settings,
+    )
+
+    try:
+        data = update_settings(db, current_user, payload or {})
+        db.commit()
+        return data
+    except HTTPException:
+        db.rollback()
+        raise
+    except BusinessError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc) or "invalid_business_settings",
+        ) from exc
 
 
 @router.post("/me/phone", response_model=LinkPhoneResponse)
@@ -378,6 +417,9 @@ async def get_user_profile(
     user_payload["profile_decoration"] = SubscriptionService(db).has_feature(
         user.id, "profile_decoration"
     )
+    from app.services.business_profile_service import public_payload
+
+    user_payload["business"] = public_payload(db, user)
     return UserProfileResponse(
         **user_payload,
         stats=stats,
@@ -586,6 +628,29 @@ async def update_user_profile(
                 "Ограничение добавления в группы доступно с уровня 56",
             )
         current_user.group_add_privacy = next_privacy or GROUP_ADD_EVERYBODY
+    if request.dm_privacy is not None:
+        from app.services.business_profile_service import (
+            DM_EVERYBODY,
+            normalize_dm_privacy,
+        )
+        from app.services.subscription_service import SubscriptionService
+
+        try:
+            next_dm = normalize_dm_privacy(request.dm_privacy)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="dm_privacy must be one of: everybody, contacts, nobody",
+            )
+        if next_dm != DM_EVERYBODY and not SubscriptionService(db).has_feature(
+            current_user.id, "dm_privacy"
+        ):
+            SubscriptionService(db).require_feature(
+                current_user.id,
+                "dm_privacy",
+                "Ограничение новых чатов доступно с уровня 67",
+            )
+        current_user.dm_privacy = next_dm or DM_EVERYBODY
     if request.fcm_token is not None:
         current_user.fcm_token = request.fcm_token
     if request.voip_token is not None:

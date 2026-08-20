@@ -86,6 +86,8 @@ def test_price_formula():
     assert price_for_level(52) == 549
     assert price_for_level(56) == 589
     assert price_for_level(60) == 629
+    assert price_for_level(64) == 669
+    assert price_for_level(68) == 709
     assert price_for_plan(1, "yearly") == 390
     assert price_for_plan(6, "yearly") == 890
     assert price_for_plan(10, "yearly") == 1290
@@ -101,13 +103,15 @@ def test_price_formula():
     assert price_for_plan(52, "yearly") == 5490
     assert price_for_plan(56, "yearly") == 5890
     assert price_for_plan(60, "yearly") == 6290
+    assert price_for_plan(64, "yearly") == 6690
+    assert price_for_plan(68, "yearly") == 7090
 
 
 def test_catalog_seed_and_default_layout(db_session):
     _user(db_session)
     svc = FlexSubscriptionService(db_session)
     layout = svc.resolved_layout(1)
-    assert len(layout) == 60
+    assert len(layout) == 68
     assert layout[0]["feature"].slug == "ad_free"
     assert layout[0]["level"] == 1
     assert layout[9]["feature"].slug == "priority_support"
@@ -130,8 +134,10 @@ def test_catalog_seed_and_default_layout(db_session):
     assert layout[43]["level"] == 44
     assert layout[51]["feature"].slug == "edit_history"
     assert layout[51]["level"] == 52
-    assert layout[-1]["feature"].slug == "quick_replies"
-    assert layout[-1]["level"] == 60
+    assert layout[59]["feature"].slug == "quick_replies"
+    assert layout[59]["level"] == 60
+    assert layout[-1]["feature"].slug == "profile_website"
+    assert layout[-1]["level"] == 68
 
 
 def test_cannot_move_fixed_feature(db_session):
@@ -427,6 +433,19 @@ def test_has_feature_follows_level_not_bundle(db_session):
     assert billing.has_feature(1, "story_caption_plus") is True
     assert billing.has_feature(1, "animated_avatar") is True
     assert billing.has_feature(1, "quick_replies") is True
+    assert billing.has_feature(1, "business_greeting") is False
+    assert billing.has_feature(1, "profile_website") is False
+
+    svc.activate(1, 68)
+    db_session.commit()
+    assert billing.has_feature(1, "business_greeting") is True
+    assert billing.has_feature(1, "business_away") is True
+    assert billing.has_feature(1, "business_hours") is True
+    assert billing.has_feature(1, "business_location") is True
+    assert billing.has_feature(1, "business_intro") is True
+    assert billing.has_feature(1, "business_bot") is True
+    assert billing.has_feature(1, "dm_privacy") is True
+    assert billing.has_feature(1, "profile_website") is True
 
 
 def test_expire_and_refund_deactivate_flex(db_session):
@@ -619,7 +638,7 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     ).delete(synchronize_session=False)
     db_session.query(SubscriptionFeatureBlock).filter(
         SubscriptionFeatureBlock.key.in_(
-            ("D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O")
+            ("D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q")
         )
     ).delete(synchronize_session=False)
     db_session.commit()
@@ -649,6 +668,8 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert "edit_history" in slugs
     assert "gif_favorites" in slugs
     assert "quick_replies" in slugs
+    assert "business_greeting" in slugs
+    assert "profile_website" in slugs
     assert {b.key for b in svc.list_blocks()} == {
         "A",
         "B",
@@ -665,9 +686,11 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
         "M",
         "N",
         "O",
+        "P",
+        "Q",
     }
     me = svc.me_payload(1)
-    assert me["max_level"] == 60
+    assert me["max_level"] == 68
     assert any(p["level"] == 16 for p in me["presets"])
     assert any(p["level"] == 20 for p in me["presets"])
     assert any(p["level"] == 24 for p in me["presets"])
@@ -680,6 +703,8 @@ def test_ensure_catalog_appends_missing_block_d(db_session):
     assert any(p["level"] == 52 for p in me["presets"])
     assert any(p["level"] == 56 for p in me["presets"])
     assert any(p["level"] == 60 for p in me["presets"])
+    assert any(p["level"] == 64 for p in me["presets"])
+    assert any(p["level"] == 68 for p in me["presets"])
 
 
 def test_privacy_plus_lets_hidden_viewer_see_last_seen(db_session):

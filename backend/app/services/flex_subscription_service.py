@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 60
+MAX_LEVEL = 68
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -59,6 +59,8 @@ DEFAULT_BLOCKS = (
     {"key": "M", "title": "Контроль", "min_level": 49, "max_level": 52, "sort_order": 13},
     {"key": "N", "title": "Premium+", "min_level": 53, "max_level": 56, "sort_order": 14},
     {"key": "O", "title": "Ещё Premium", "min_level": 57, "max_level": 60, "sort_order": 15},
+    {"key": "P", "title": "Бизнес", "min_level": 61, "max_level": 64, "sort_order": 16},
+    {"key": "Q", "title": "Ещё бизнес", "min_level": 65, "max_level": 68, "sort_order": 17},
 )
 
 DEFAULT_PRESETS = (
@@ -77,6 +79,8 @@ DEFAULT_PRESETS = (
     {"key": "control", "title": "Контроль", "level": 52},
     {"key": "premiumplus", "title": "Premium+", "level": 56},
     {"key": "premiummore", "title": "Ещё Premium", "level": 60},
+    {"key": "business", "title": "Бизнес", "level": 64},
+    {"key": "businessplus", "title": "Ещё бизнес", "level": 68},
 )
 
 DEFAULT_FEATURES = (
@@ -859,6 +863,110 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "O",
+    },
+    {
+        "slug": "business_greeting",
+        "title": "Приветствие",
+        "description": "Автоответ тем, кто пишет вам впервые или после паузы.",
+        "icon": "waving_hand",
+        "default_level": 61,
+        "min_level": 61,
+        "max_level": 64,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "P",
+    },
+    {
+        "slug": "business_away",
+        "title": "Меня нет",
+        "description": "Автоответ, пока выключили приём или вне часов работы.",
+        "icon": "beach_access",
+        "default_level": 62,
+        "min_level": 61,
+        "max_level": 64,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "P",
+    },
+    {
+        "slug": "business_hours",
+        "title": "Часы работы",
+        "description": "Расписание на профиле: открыто или закрыто прямо сейчас.",
+        "icon": "schedule",
+        "default_level": 63,
+        "min_level": 61,
+        "max_level": 64,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "P",
+    },
+    {
+        "slug": "business_location",
+        "title": "Адрес на карте",
+        "description": "Точка и адрес в профиле — открывается в картах.",
+        "icon": "place",
+        "default_level": 64,
+        "min_level": 61,
+        "max_level": 64,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "P",
+    },
+    {
+        "slug": "business_intro",
+        "title": "Стартовая страница",
+        "description": "Заголовок и текст интро в профиле, как у Telegram Business.",
+        "icon": "web_stories",
+        "default_level": 65,
+        "min_level": 65,
+        "max_level": 68,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "Q",
+    },
+    {
+        "slug": "business_bot",
+        "title": "Бот поддержки",
+        "description": "Привязать своего бота к профилю — клиент пишет ему в один тап.",
+        "icon": "smart_toy",
+        "default_level": 66,
+        "min_level": 65,
+        "max_level": 68,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "Q",
+    },
+    {
+        "slug": "dm_privacy",
+        "title": "Кто пишет первым",
+        "description": "Кто может начать с вами новый личный чат: все, контакты или никто.",
+        "icon": "mail_lock",
+        "default_level": 67,
+        "min_level": 65,
+        "max_level": 68,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "Q",
+    },
+    {
+        "slug": "profile_website",
+        "title": "Сайт в профиле",
+        "description": "Ссылка на сайт или соцсеть под описанием профиля.",
+        "icon": "link",
+        "default_level": 68,
+        "min_level": 65,
+        "max_level": 68,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "Q",
     },
 )
 

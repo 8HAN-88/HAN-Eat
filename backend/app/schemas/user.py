@@ -40,6 +40,8 @@ class UserResponse(BaseModel):
     story_stealth: bool = False
     call_privacy: str = "everybody"
     group_add_privacy: str = "everybody"
+    dm_privacy: str = "everybody"
+    business: Optional[dict[str, Any]] = None
 
     @model_validator(mode="wrap")
     @classmethod
@@ -136,6 +138,7 @@ class UpdateUserRequest(BaseModel):
     story_stealth: Optional[bool] = None
     call_privacy: Optional[str] = None
     group_add_privacy: Optional[str] = None
+    dm_privacy: Optional[str] = None
     fcm_token: Optional[str] = None  # Firebase Cloud Messaging token
     voip_token: Optional[str] = None  # iOS PushKit VoIP token (CallKit)
     device_platform: Optional[str] = None  # android | ios | web
