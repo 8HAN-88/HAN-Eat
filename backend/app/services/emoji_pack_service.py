@@ -244,6 +244,18 @@ class EmojiPackService:
             return False
         return PackMarketplaceService(self.db).has_emoji_access(user_id, pack)
 
+    def can_view_emoji(self, user_id: int, emoji: CustomEmoji) -> bool:
+        """Recipients may render public-pack emoji without buying.
+
+        Private packs stay off the public resolve scrape: only owner / access.
+        """
+        pack = self.db.query(EmojiPack).filter(EmojiPack.id == emoji.pack_id).first()
+        if not pack:
+            return False
+        if pack.is_public:
+            return True
+        return PackMarketplaceService(self.db).has_emoji_access(user_id, pack)
+
     def require_send_tokens(self, user_id: int, content: Optional[str]) -> None:
         ids = parse_custom_emoji_ids(content)
         if not ids:

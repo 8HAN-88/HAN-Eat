@@ -190,7 +190,7 @@ def resolve_custom_emojis(
     current_user: User = Depends(get_current_user_required),
     db: Session = Depends(get_db),
 ):
-    del current_user
+    svc = EmojiPackService(db)
     raw = [part.strip() for part in (ids or "").split(",") if part.strip()]
     parsed: list[int] = []
     for part in raw[:80]:
@@ -198,11 +198,12 @@ def resolve_custom_emojis(
             parsed.append(int(part))
         except ValueError:
             continue
-    rows = EmojiPackService(db).resolve_emojis(parsed)
+    rows = svc.resolve_emojis(parsed)
     return {
         "items": [
             {"id": row.id, "media_url": row.media_url, "shortcode": row.shortcode}
             for row in rows
+            if svc.can_view_emoji(current_user.id, row)
         ]
     }
 

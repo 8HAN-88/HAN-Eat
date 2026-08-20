@@ -204,7 +204,9 @@ class _BusinessSettingsScreenState extends State<BusinessSettingsScreen> {
     if (_has(slug)) return child;
     return Column(
       children: [
-        child,
+        IgnorePointer(
+          child: Opacity(opacity: 0.55, child: child),
+        ),
         ListTile(
           leading: const Icon(Icons.lock_outline),
           title: const Text('Нужна подписка'),

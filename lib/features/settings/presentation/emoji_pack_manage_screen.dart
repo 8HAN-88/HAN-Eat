@@ -38,10 +38,14 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
       setState(() {
         _pack = pack;
         _loading = false;
+        _saving = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _saving = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -189,9 +193,10 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -202,14 +207,42 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
     try {
       await EmojiPackService.installPack(pack.id);
       await _load();
+      if (!mounted) return;
+      if (!hasFlexFeature('custom_emoji')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Пак установлен. Чтобы вставлять эмодзи в сообщения, нужен уровень 69',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       if (offerFlexIfRequired(context, e)) return;
       if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _uninstall() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || !pack.isInstalled) return;
+    setState(() => _saving = true);
+    try {
+      await EmojiPackService.uninstallPack(pack.id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -279,6 +312,17 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
                           child: FilledButton(
                             onPressed: _saving ? null : _installFree,
                             child: const Text('Установить'),
+                          ),
+                        ),
+                      )
+                    else if (!pack.isOwned && pack.isInstalled)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: _saving ? null : _uninstall,
+                            child: const Text('Удалить из своих'),
                           ),
                         ),
                       ),

@@ -13,7 +13,6 @@ import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../chat/presentation/sticker_pack_manage_screen.dart';
-import '../../chat/presentation/sticker_pack_preview_screen.dart';
 import '../../subscription/creator_upsell.dart';
 import 'emoji_pack_manage_screen.dart';
 
@@ -79,6 +78,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         _emojis = emojis;
         _myStickers = myStickers;
         _myEmojis = myEmojis;
+        _busy.clear();
         _loading = false;
       });
     } catch (e) {
@@ -104,10 +104,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         await _load();
       } catch (e) {
         if (!mounted) return;
-        setState(() => _busy.remove(_key('s', pack.id)));
         if (offerFlexIfRequired(context, e)) return;
         if (offerPackStoreIfRequired(context, e)) return;
         await showStarsRequiredSnack(context, e);
+      } finally {
+        if (mounted) setState(() => _busy.remove(_key('s', pack.id)));
       }
       return;
     }
@@ -132,9 +133,10 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy.remove(_key('s', pack.id)));
       if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _busy.remove(_key('s', pack.id)));
     }
   }
 
@@ -148,12 +150,31 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         await EmojiPackService.installPack(pack.id);
         if (!mounted) return;
         await _load();
+        if (!mounted) return;
+        if (!hasFlexFeature('custom_emoji')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Пак установлен. Чтобы вставлять эмодзи в сообщения, нужен уровень 69',
+              ),
+              action: SnackBarAction(
+                label: 'Подписка',
+                onPressed: () {
+                  if (context.mounted) {
+                    context.push(FlexSubscriptionRoute.path);
+                  }
+                },
+              ),
+            ),
+          );
+        }
       } catch (e) {
         if (!mounted) return;
-        setState(() => _busy.remove(_key('e', pack.id)));
         if (offerFlexIfRequired(context, e)) return;
         if (offerPackStoreIfRequired(context, e)) return;
         await showStarsRequiredSnack(context, e);
+      } finally {
+        if (mounted) setState(() => _busy.remove(_key('e', pack.id)));
       }
       return;
     }
@@ -177,9 +198,10 @@ class _PackStoreScreenState extends State<PackStoreScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _busy.remove(_key('e', pack.id)));
       if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
+    } finally {
+      if (mounted) setState(() => _busy.remove(_key('e', pack.id)));
     }
   }
 
@@ -385,12 +407,9 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           thumbs: pack.stickers.map((s) => s.mediaUrl).toList(),
           owned: mine || pack.isPurchased || pack.isInstalled,
           busy: _busy.contains(_key('s', pack.id)),
-          onOpen: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) => StickerPackPreviewScreen(slug: pack.slug),
-              ),
-            );
+          onOpen: () async {
+            await context.push(StickerPackPreviewRoute.pathFor(pack.slug));
+            if (mounted) await _load();
           },
           onBuy: mine ? null : () => _buySticker(pack),
         );
@@ -427,12 +446,9 @@ class _PackStoreScreenState extends State<PackStoreScreen>
           thumbs: pack.items.map((s) => s.mediaUrl).toList(),
           owned: mine || pack.isPurchased || pack.isInstalled,
           busy: _busy.contains(_key('e', pack.id)),
-          onOpen: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) => EmojiPackManageScreen(packId: pack.id),
-              ),
-            );
+          onOpen: () async {
+            await context.push(EmojiPackPreviewRoute.pathFor(pack.slug));
+            if (mounted) await _load();
           },
           onBuy: mine ? null : () => _buyEmoji(pack),
         );

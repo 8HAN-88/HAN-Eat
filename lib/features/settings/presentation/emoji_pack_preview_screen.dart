@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
-import '../../../models/sticker_models.dart';
+import '../../../models/emoji_pack_models.dart';
+import '../../../services/emoji_pack_service.dart';
 import '../../../services/server_config.dart';
-import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
-class StickerPackPreviewScreen extends StatefulWidget {
-  const StickerPackPreviewScreen({
+class EmojiPackPreviewScreen extends StatefulWidget {
+  const EmojiPackPreviewScreen({
     super.key,
     required this.slug,
   });
@@ -16,12 +17,11 @@ class StickerPackPreviewScreen extends StatefulWidget {
   final String slug;
 
   @override
-  State<StickerPackPreviewScreen> createState() =>
-      _StickerPackPreviewScreenState();
+  State<EmojiPackPreviewScreen> createState() => _EmojiPackPreviewScreenState();
 }
 
-class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
-  StickerPack? _pack;
+class _EmojiPackPreviewScreenState extends State<EmojiPackPreviewScreen> {
+  EmojiPack? _pack;
   bool _loading = true;
   bool _busy = false;
 
@@ -34,7 +34,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final pack = await StickerService.getPackBySlug(widget.slug);
+      final pack = await EmojiPackService.getPackBySlug(widget.slug);
       if (!mounted) return;
       setState(() {
         _pack = pack;
@@ -52,10 +52,6 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
   Future<void> _install() async {
     final pack = _pack;
     if (pack == null) return;
-    if (pack.isPremium && !hasFlexFeature('premium_stickers')) {
-      await showCreatorUpsell(context);
-      return;
-    }
     final needsBuy =
         pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased;
     if (needsBuy) {
@@ -64,7 +60,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
         title: 'Купить «${pack.title}»',
         body: pack.ownerName.trim().isEmpty
             ? '${pack.priceStars} ★'
-            : 'Автор ${pack.ownerName} · комиссия ${pack.feeStars} ★',
+            : 'Автор ${pack.authorLabel} · комиссия ${pack.feeStars} ★',
         amountStars: pack.priceStars,
         confirmLabel: 'Купить',
       );
@@ -73,11 +69,20 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     setState(() => _busy = true);
     try {
       if (needsBuy) {
-        await StickerService.buyPack(pack.id);
+        await EmojiPackService.buyPack(pack.id);
       } else {
-        await StickerService.installPack(pack.id);
+        await EmojiPackService.installPack(pack.id);
       }
       if (!mounted) return;
+      if (!needsBuy && !hasFlexFeature('custom_emoji')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Пак установлен. Чтобы вставлять эмодзи в сообщения, нужен уровень 69',
+            ),
+          ),
+        );
+      }
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -89,12 +94,38 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
     }
   }
 
+  Future<void> _uninstall() async {
+    final pack = _pack;
+    if (pack == null || pack.isOwned || !pack.isInstalled) return;
+    setState(() => _busy = true);
+    try {
+      await EmojiPackService.uninstallPack(pack.id);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pack = _pack;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Предпросмотр пака'),
+        title: const Text('Эмодзи-пак'),
+        actions: [
+          if (pack?.shareLink != null)
+            IconButton(
+              onPressed: () => Share.share(pack!.shareLink!),
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Поделиться паком',
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -106,16 +137,6 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Row(
                         children: [
-                          if (pack.isPremium)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Icon(
-                                pack.isInstalled
-                                    ? Icons.workspace_premium_outlined
-                                    : Icons.lock_outline,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
                           Expanded(
                             child: Text(
                               pack.title,
@@ -124,8 +145,8 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                           ),
                           Text(
                             pack.ownerName.trim().isEmpty
-                                ? '${pack.stickers.length} стик.'
-                                : '${pack.stickers.length} стик. · ${pack.ownerName}',
+                                ? '${pack.items.length} эмодзи'
+                                : '${pack.items.length} эмодзи · ${pack.authorLabel}',
                           ),
                         ],
                       ),
@@ -135,18 +156,18 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
+                          crossAxisCount: 5,
                           mainAxisSpacing: 8,
                           crossAxisSpacing: 8,
                         ),
-                        itemCount: pack.stickers.length,
+                        itemCount: pack.items.length,
                         itemBuilder: (_, i) {
-                          final s = pack.stickers[i];
+                          final item = pack.items[i];
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.network(
-                              ServerConfig.resolveMediaUrl(s.mediaUrl),
-                              fit: BoxFit.cover,
+                              ServerConfig.resolveMediaUrl(item.mediaUrl),
+                              fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) =>
                                   const Icon(Icons.broken_image_outlined),
                             ),
@@ -161,18 +182,27 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                         child: SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed:
-                                _busy || pack.isInstalled ? null : _install,
-                            icon:
-                                const Icon(Icons.download_for_offline_outlined),
+                            onPressed: _busy
+                                ? null
+                                : (pack.isOwned
+                                    ? null
+                                    : pack.isInstalled
+                                        ? _uninstall
+                                        : _install),
+                            icon: Icon(
+                              pack.isInstalled && !pack.isOwned
+                                  ? Icons.remove_circle_outline
+                                  : Icons.download_for_offline_outlined,
+                            ),
                             label: Text(
-                              pack.isInstalled
-                                  ? 'Уже установлен'
-                                  : (pack.priceStars > 0 &&
-                                          !pack.isOwned &&
-                                          !pack.isPurchased)
-                                      ? 'Купить ${pack.priceStars} ★'
-                                      : 'Добавить стикерпак',
+                              pack.isOwned
+                                  ? 'Ваш пак'
+                                  : pack.isInstalled
+                                      ? 'Удалить из своих'
+                                      : (pack.priceStars > 0 &&
+                                              !pack.isPurchased)
+                                          ? 'Купить ${pack.priceStars} ★'
+                                          : 'Добавить эмодзи-пак',
                             ),
                           ),
                         ),

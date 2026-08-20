@@ -262,3 +262,29 @@ def test_emoji_catalog_includes_free_public(db_session):
     catalog = emoji.list_catalog()
     assert [p.id for p in catalog] == [pack.id]
     assert emoji.get_public_pack_by_slug(pack.slug) is not None
+
+
+def test_resolve_hides_private_emoji(db_session):
+    owner = _user(db_session, 1)
+    stranger = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    public = emoji.create_pack(owner.id, "Публичный", True)
+    private = emoji.create_pack(owner.id, "Личный", False)
+    pub_item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=public.id,
+        media_url="https://cdn.test/pub.webp",
+    )
+    priv_item = emoji.add_emoji(
+        user_id=owner.id,
+        pack_id=private.id,
+        media_url="https://cdn.test/priv.webp",
+    )
+    db_session.commit()
+    rows = emoji.resolve_emojis([pub_item.id, priv_item.id])
+    visible = {row.id for row in rows if emoji.can_view_emoji(stranger.id, row)}
+    assert pub_item.id in visible
+    assert priv_item.id not in visible
+    assert emoji.can_view_emoji(owner.id, priv_item) is True
+    assert emoji.can_use_emoji(stranger.id, pub_item) is False

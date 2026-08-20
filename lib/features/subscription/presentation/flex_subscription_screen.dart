@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/flex_subscription_service.dart';
+import '../../../services/subscription_status_cache.dart';
 import '../../../utils/api_error_parser.dart';
 import '../../../widgets/app_gradient_background.dart';
 import 'flex_gift_sheet.dart';
@@ -35,6 +36,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     });
     try {
       final me = await FlexSubscriptionApi.me();
+      await SubscriptionStatusCache.refreshFromServer();
       if (!mounted) return;
       setState(() {
         _me = me;

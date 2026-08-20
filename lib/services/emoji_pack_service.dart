@@ -90,6 +90,18 @@ class EmojiPackService {
     return _parsePack(response, 'Не удалось открыть эмодзи-пак');
   }
 
+  static Future<void> importBySlug(String slug) async {
+    final clean = slug.trim();
+    final uri = Uri.parse('$_base/emoji/import/$clean');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось установить эмодзи-пак');
+    }
+  }
+
   static Future<List<EmojiPack>> listMarketplace({
     String query = '',
     int limit = 60,

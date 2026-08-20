@@ -201,6 +201,7 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e, fallback: 'Не удалось сохранить статус');
     }
   }
@@ -224,7 +225,10 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
     List<CustomEmojiItem> custom = const [];
     try {
       final packs = await EmojiPackService.listMyPacks();
-      custom = [for (final pack in packs) ...pack.items];
+      custom = [
+        for (final pack in packs)
+          if (pack.canUse) ...pack.items,
+      ];
     } catch (_) {}
     if (!mounted) return;
     final selected = await showModalBottomSheet<String>(

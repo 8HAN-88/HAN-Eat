@@ -6067,7 +6067,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     try {
       final packs = await EmojiPackService.listMyPacks();
       _customReactionEmojis = [
-        for (final pack in packs) ...pack.items,
+        for (final pack in packs)
+          if (pack.canUse) ...pack.items,
       ];
     } catch (_) {}
   }
@@ -12948,6 +12949,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       unawaited(_refreshScheduledPendingCount());
     } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       showErrorSnackBar(context, e,
           fallback: 'Не удалось запланировать сообщение');
     }

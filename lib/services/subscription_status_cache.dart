@@ -44,4 +44,14 @@ class SubscriptionStatusCache {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);
   }
+
+  static Future<SubscriptionStatusResponse?> refreshFromServer() async {
+    try {
+      final status = await SubscriptionService.getSubscriptionStatus();
+      await save(status);
+      return status;
+    } catch (_) {
+      return peek();
+    }
+  }
 }

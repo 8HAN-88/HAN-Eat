@@ -65,9 +65,7 @@ class _ChatInlineStickerPanelState extends State<ChatInlineStickerPanel> {
       setState(() {
         _packs =
             packs.where((p) => p.isInstalled || p.stickers.isNotEmpty).toList();
-        _emojiPacks = emojiPacks
-            .where((p) => p.isInstalled || p.items.isNotEmpty)
-            .toList();
+        _emojiPacks = emojiPacks.where((p) => p.canUse).toList();
         _recent = recent;
         _favorites = favorites;
         _loading = false;

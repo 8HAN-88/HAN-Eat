@@ -60,6 +60,8 @@ class EmojiPack {
     return 'id$ownerUserId';
   }
 
+  bool get canUse => isOwned || isPurchased || isInstalled;
+
   factory EmojiPack.fromJson(Map<String, dynamic> json) {
     final raw = json['items'] as List<dynamic>? ?? const [];
     return EmojiPack(

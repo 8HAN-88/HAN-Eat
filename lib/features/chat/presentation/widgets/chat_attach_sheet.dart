@@ -25,6 +25,7 @@ import '../../../../services/phone_contacts_service.dart';
 import '../../../../services/server_config.dart';
 import '../../../../services/sticker_service.dart';
 import '../../../../services/subscription_status_cache.dart';
+import '../../../../utils/api_error_parser.dart';
 import '../../../subscription/creator_upsell.dart';
 import '../../application/chat_recent_files_store.dart';
 import '../../application/chat_recent_gifs_store.dart';
@@ -742,10 +743,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     try {
       await StickerService.createPack(title: title.trim());
       await _loadStickerPacks();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось создать стикерпак')),
+        SnackBar(content: Text(userVisibleError(e))),
       );
     } finally {
       if (mounted) setState(() => _stickerBusy = false);
@@ -794,12 +796,13 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
     } catch (e) {
       if (!mounted) return;
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             isInstalled
                 ? 'Не удалось удалить стикерпак'
-                : 'Не удалось установить стикерпак',
+                : userVisibleError(e),
           ),
         ),
       );

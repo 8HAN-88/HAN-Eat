@@ -2778,6 +2778,14 @@ async def schedule_message(
         _raise_flex_gate(code)
         if code == "forbidden":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Access denied")
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                {
+                    "code": "custom_emoji_denied",
+                    "message": "Этот эмодзи недоступен — купите пак",
+                },
+            )
         if code in (
             "empty_message",
             "missing_media",
