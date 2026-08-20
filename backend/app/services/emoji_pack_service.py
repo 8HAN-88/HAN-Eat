@@ -1,0 +1,274 @@
+"""Custom emoji packs: create, install, send/reaction access."""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+from typing import Iterable, List, Optional
+
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.models.emoji_pack import CustomEmoji, EmojiPack, EmojiPackInstall, EmojiPackPurchase
+from app.services.pack_marketplace_service import PackMarketplaceService
+from app.services.subscription_service import SubscriptionService
+
+CE_TOKEN_RE = re.compile(r"\[\[e:(\d+)\]\]")
+CE_REACTION_RE = re.compile(r"^ce:(\d+)$")
+
+
+def parse_custom_emoji_ids(text: Optional[str]) -> list[int]:
+    ids: list[int] = []
+    for match in CE_TOKEN_RE.finditer(text or ""):
+        try:
+            ids.append(int(match.group(1)))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+def parse_custom_reaction_id(emoji: Optional[str]) -> Optional[int]:
+    match = CE_REACTION_RE.match((emoji or "").strip())
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+class EmojiPackService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    @staticmethod
+    def _slugify(value: str) -> str:
+        base = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+        return base or "emoji-pack"
+
+    def _make_unique_slug(self, title: str, owner_user_id: int) -> str:
+        seed = f"{self._slugify(title)}-{owner_user_id}"
+        slug = seed
+        idx = 2
+        while self.db.query(EmojiPack.id).filter(EmojiPack.slug == slug).first():
+            slug = f"{seed}-{idx}"
+            idx += 1
+        return slug
+
+    def create_pack(self, user_id: int, title: str, is_public: bool = True) -> EmojiPack:
+        SubscriptionService(self.db).require_feature(
+            user_id,
+            "emoji_pack_publish",
+            "Публикация эмодзи-паков доступна с уровня 70",
+        )
+        clean = (title or "").strip()
+        if len(clean) < 2:
+            raise ValueError("invalid_title")
+        pack = EmojiPack(
+            title=clean[:120],
+            slug=self._make_unique_slug(clean, user_id),
+            owner_user_id=user_id,
+            is_public=bool(is_public),
+        )
+        self.db.add(pack)
+        self.db.flush()
+        self.install_pack(user_id, pack.id, skip_purchase_check=True)
+        return pack
+
+    def add_emoji(
+        self,
+        *,
+        user_id: int,
+        pack_id: int,
+        media_url: str,
+        shortcode: Optional[str] = None,
+    ) -> CustomEmoji:
+        pack = self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
+        if not pack:
+            raise ValueError("pack_not_found")
+        if int(pack.owner_user_id) != int(user_id):
+            raise ValueError("forbidden")
+        url = (media_url or "").strip()
+        if not url:
+            raise ValueError("missing_media")
+        max_order = (
+            self.db.query(func.max(CustomEmoji.order_index))
+            .filter(CustomEmoji.pack_id == pack_id)
+            .scalar()
+        )
+        item = CustomEmoji(
+            pack_id=pack_id,
+            media_url=url[:512],
+            shortcode=(shortcode or "").strip()[:32] or None,
+            order_index=int(max_order or 0) + 1,
+        )
+        self.db.add(item)
+        pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.flush()
+        return item
+
+    def delete_emoji(self, user_id: int, pack_id: int, emoji_id: int) -> None:
+        pack = self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
+        if not pack:
+            raise ValueError("pack_not_found")
+        if int(pack.owner_user_id) != int(user_id):
+            raise ValueError("forbidden")
+        row = (
+            self.db.query(CustomEmoji)
+            .filter(CustomEmoji.id == emoji_id, CustomEmoji.pack_id == pack_id)
+            .first()
+        )
+        if not row:
+            raise ValueError("emoji_not_found")
+        self.db.delete(row)
+        pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.db.flush()
+
+    def install_pack(
+        self, user_id: int, pack_id: int, *, skip_purchase_check: bool = False
+    ) -> None:
+        pack = self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
+        if not pack:
+            raise ValueError("pack_not_found")
+        if not pack.is_public and int(pack.owner_user_id) != int(user_id):
+            raise ValueError("forbidden")
+        if not skip_purchase_check and not PackMarketplaceService(self.db).has_emoji_access(
+            user_id, pack
+        ):
+            raise ValueError("pack_purchase_required")
+        exists = (
+            self.db.query(EmojiPackInstall.id)
+            .filter(
+                EmojiPackInstall.user_id == user_id,
+                EmojiPackInstall.pack_id == pack_id,
+            )
+            .first()
+        )
+        if exists:
+            return
+        self.db.add(EmojiPackInstall(user_id=user_id, pack_id=pack_id))
+        self.db.flush()
+
+    def uninstall_pack(self, user_id: int, pack_id: int) -> None:
+        row = (
+            self.db.query(EmojiPackInstall)
+            .filter(
+                EmojiPackInstall.user_id == user_id,
+                EmojiPackInstall.pack_id == pack_id,
+            )
+            .first()
+        )
+        if row:
+            self.db.delete(row)
+            self.db.flush()
+
+    def list_my_packs(self, user_id: int) -> List[EmojiPack]:
+        installed = (
+            self.db.query(EmojiPackInstall.pack_id)
+            .filter(EmojiPackInstall.user_id == user_id)
+            .subquery()
+        )
+        return (
+            self.db.query(EmojiPack)
+            .filter((EmojiPack.owner_user_id == user_id) | EmojiPack.id.in_(installed))
+            .order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc())
+            .all()
+        )
+
+    def list_marketplace(self, *, query: Optional[str] = None, limit: int = 50) -> List[EmojiPack]:
+        q = self.db.query(EmojiPack).filter(
+            EmojiPack.is_public.is_(True),
+            EmojiPack.price_stars > 0,
+        )
+        term = (query or "").strip()
+        if term:
+            q = q.filter(EmojiPack.title.ilike(f"%{term}%"))
+        return q.order_by(EmojiPack.listed_at.desc(), EmojiPack.id.desc()).limit(limit).all()
+
+    def installed_pack_ids(self, user_id: int) -> set[int]:
+        rows = (
+            self.db.query(EmojiPackInstall.pack_id)
+            .filter(EmojiPackInstall.user_id == user_id)
+            .all()
+        )
+        return {pid for (pid,) in rows}
+
+    def purchased_pack_ids(self, user_id: int) -> set[int]:
+        rows = (
+            self.db.query(EmojiPackPurchase.pack_id)
+            .filter(EmojiPackPurchase.user_id == user_id)
+            .all()
+        )
+        return {pid for (pid,) in rows}
+
+    def emojis_by_pack_ids(self, pack_ids: List[int]) -> dict[int, list[CustomEmoji]]:
+        if not pack_ids:
+            return {}
+        rows = (
+            self.db.query(CustomEmoji)
+            .filter(CustomEmoji.pack_id.in_(pack_ids))
+            .order_by(CustomEmoji.order_index.asc(), CustomEmoji.id.asc())
+            .all()
+        )
+        out: dict[int, list[CustomEmoji]] = {}
+        for row in rows:
+            out.setdefault(row.pack_id, []).append(row)
+        return out
+
+    def resolve_emojis(self, ids: Iterable[int]) -> list[CustomEmoji]:
+        clean = [int(i) for i in ids if int(i) > 0]
+        if not clean:
+            return []
+        return self.db.query(CustomEmoji).filter(CustomEmoji.id.in_(clean)).all()
+
+    def can_use_emoji(self, user_id: int, emoji: CustomEmoji) -> bool:
+        pack = self.db.query(EmojiPack).filter(EmojiPack.id == emoji.pack_id).first()
+        if not pack:
+            return False
+        return PackMarketplaceService(self.db).has_emoji_access(user_id, pack)
+
+    def require_send_tokens(self, user_id: int, content: Optional[str]) -> None:
+        ids = parse_custom_emoji_ids(content)
+        if not ids:
+            return
+        billing = SubscriptionService(self.db)
+        if not billing.has_feature(user_id, "custom_emoji"):
+            raise ValueError("custom_emoji_required")
+        items = {row.id: row for row in self.resolve_emojis(ids)}
+        for eid in ids:
+            row = items.get(eid)
+            if row is None or not self.can_use_emoji(user_id, row):
+                raise ValueError("custom_emoji_denied")
+
+    def require_reaction(self, user_id: int, emoji: str) -> Optional[str]:
+        eid = parse_custom_reaction_id(emoji)
+        if eid is None:
+            return None
+        billing = SubscriptionService(self.db)
+        if not billing.has_feature(user_id, "custom_emoji_reactions"):
+            raise ValueError("custom_emoji_reaction_required")
+        row = self.db.query(CustomEmoji).filter(CustomEmoji.id == eid).first()
+        if row is None or not self.can_use_emoji(user_id, row):
+            raise ValueError("custom_emoji_denied")
+        return f"ce:{eid}"
+
+    def require_status(self, user_id: int, raw: Optional[str]) -> Optional[str]:
+        """Normalize a profile emoji-status. Custom tokens need pack access."""
+        from app.services.profile_style import normalize_emoji_status
+
+        token = normalize_emoji_status(raw)
+        if not token:
+            return None
+        eid = parse_custom_reaction_id(token)
+        if eid is None:
+            return token
+        billing = SubscriptionService(self.db)
+        if not billing.has_feature(user_id, "custom_emoji"):
+            raise ValueError("custom_emoji_required")
+        row = self.db.query(CustomEmoji).filter(CustomEmoji.id == eid).first()
+        if row is None or not self.can_use_emoji(user_id, row):
+            raise ValueError("custom_emoji_denied")
+        return f"ce:{eid}"
+
+    def get_pack(self, pack_id: int) -> Optional[EmojiPack]:
+        return self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()

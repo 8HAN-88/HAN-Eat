@@ -1,0 +1,534 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../app/app_router.dart';
+import '../../../core/layout/floating_bottom_padding.dart';
+import '../../../models/emoji_pack_models.dart';
+import '../../../models/sticker_models.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/emoji_pack_service.dart';
+import '../../../services/server_config.dart';
+import '../../../services/sticker_service.dart';
+import '../../../utils/api_error_parser.dart';
+import '../../../widgets/app_gradient_background.dart';
+import '../../../widgets/stars_pay_helper.dart';
+import '../../chat/presentation/sticker_pack_manage_screen.dart';
+import '../../chat/presentation/sticker_pack_preview_screen.dart';
+import '../../subscription/creator_upsell.dart';
+import 'emoji_pack_manage_screen.dart';
+
+class PackStoreScreen extends StatefulWidget {
+  const PackStoreScreen({super.key});
+
+  @override
+  State<PackStoreScreen> createState() => _PackStoreScreenState();
+}
+
+class _PackStoreScreenState extends State<PackStoreScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  final _search = TextEditingController();
+  bool _loading = true;
+  String? _error;
+  List<StickerPack> _stickers = const [];
+  List<EmojiPack> _emojis = const [];
+  List<StickerPack> _myStickers = const [];
+  List<EmojiPack> _myEmojis = const [];
+  final Set<String> _busy = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 3, vsync: this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final q = _search.text.trim();
+      final stickers = await StickerService.listMarketplace(query: q);
+      final emojis = await EmojiPackService.listMarketplace(query: q);
+      final myStickers = await StickerService.listMyPacks();
+      final myEmojis = await EmojiPackService.listMyPacks();
+      if (!mounted) return;
+      setState(() {
+        _stickers = stickers;
+        _emojis = emojis;
+        _myStickers = myStickers;
+        _myEmojis = myEmojis;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = userVisibleError(e);
+      });
+    }
+  }
+
+  String _key(String kind, int id) => '$kind:$id';
+
+  Future<void> _buySticker(StickerPack pack) async {
+    final me = AuthService.instance.currentUser?.id;
+    if (me != null && me == pack.ownerUserId) return;
+    if (pack.priceStars <= 0 || _busy.contains(_key('s', pack.id))) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Купить «${pack.title}»',
+      body: pack.ownerName.trim().isEmpty
+          ? '${pack.priceStars} ★ · комиссия площадки ${pack.feeStars} ★'
+          : 'Автор ${pack.ownerName} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
+      amountStars: pack.priceStars,
+      confirmLabel: 'Купить',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy.add(_key('s', pack.id)));
+    try {
+      await StickerService.buyPack(pack.id);
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('«${pack.title}» установлен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(_key('s', pack.id)));
+      await showStarsRequiredSnack(context, e);
+    }
+  }
+
+  Future<void> _buyEmoji(EmojiPack pack) async {
+    final me = AuthService.instance.currentUser?.id;
+    if (me != null && me == pack.ownerUserId) return;
+    if (pack.priceStars <= 0 || _busy.contains(_key('e', pack.id))) return;
+    final ok = await confirmStarsSpend(
+      context,
+      title: 'Купить «${pack.title}»',
+      body:
+          'Автор ${pack.authorLabel} · ${pack.priceStars} ★, комиссия ${pack.feeStars} ★',
+      amountStars: pack.priceStars,
+      confirmLabel: 'Купить',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy.add(_key('e', pack.id)));
+    try {
+      await EmojiPackService.buyPack(pack.id);
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('«${pack.title}» установлен')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy.remove(_key('e', pack.id)));
+      await showStarsRequiredSnack(context, e);
+    }
+  }
+
+  Future<void> _createEmojiPack() async {
+    if (!hasFlexFeature('emoji_pack_publish')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final titleCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Новый эмодзи-пак'),
+        content: TextField(
+          controller: titleCtrl,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(labelText: 'Название'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final title = titleCtrl.text.trim();
+    if (title.length < 2) return;
+    try {
+      final pack = await EmojiPackService.createPack(title: title);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => EmojiPackManageScreen(packId: pack.id),
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Магазин паков'),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: const [
+            Tab(text: 'Стикеры'),
+            Tab(text: 'Эмодзи'),
+            Tab(text: 'Мои'),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _createEmojiPack,
+        icon: const Icon(Icons.add),
+        label: const Text('Эмодзи-пак'),
+      ),
+      body: AppGradientBackground(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Поиск по названию',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    onPressed: _load,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ),
+                onSubmitted: (_) => _load(),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Покупка открыта всем за Stars. Публикация пака — платная функция flex. Комиссия площадки 5%, до 20 ★ бесплатно.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabs,
+                children: [
+                  _refreshable(_stickerList()),
+                  _refreshable(_emojiList()),
+                  _refreshable(_mineList()),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _refreshable(Widget child) {
+    return RefreshIndicator(onRefresh: _load, child: child);
+  }
+
+  Widget _stickerList() {
+    if (_loading) return _loadingList();
+    if (_error != null) return _errorList();
+    if (_stickers.isEmpty) {
+      return _empty('Пока никто не выставил стикерпак за Stars.');
+    }
+    final me = AuthService.instance.currentUser?.id;
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        4,
+        12,
+        88 + floatingBottomPadding(context),
+      ),
+      itemCount: _stickers.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final pack = _stickers[index];
+        final mine = me != null && me == pack.ownerUserId;
+        return _PackCard(
+          title: pack.title,
+          author: pack.ownerName,
+          countLabel: '${pack.stickersCount} стик.',
+          priceStars: pack.priceStars,
+          feeStars: pack.feeStars,
+          thumbs: pack.stickers.map((s) => s.mediaUrl).toList(),
+          owned: mine || pack.isPurchased || pack.isInstalled,
+          busy: _busy.contains(_key('s', pack.id)),
+          onOpen: () {
+            Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => StickerPackPreviewScreen(slug: pack.slug),
+              ),
+            );
+          },
+          onBuy: mine ? null : () => _buySticker(pack),
+        );
+      },
+    );
+  }
+
+  Widget _emojiList() {
+    if (_loading) return _loadingList();
+    if (_error != null) return _errorList();
+    if (_emojis.isEmpty) {
+      return _empty('Пока нет платных эмодзи-паков. Создайте свой.');
+    }
+    final me = AuthService.instance.currentUser?.id;
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        4,
+        12,
+        88 + floatingBottomPadding(context),
+      ),
+      itemCount: _emojis.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final pack = _emojis[index];
+        final mine = me != null && me == pack.ownerUserId;
+        return _PackCard(
+          title: pack.title,
+          author: pack.authorLabel,
+          countLabel: '${pack.itemsCount} эмодзи',
+          priceStars: pack.priceStars,
+          feeStars: pack.feeStars,
+          thumbs: pack.items.map((s) => s.mediaUrl).toList(),
+          owned: mine || pack.isPurchased || pack.isInstalled,
+          busy: _busy.contains(_key('e', pack.id)),
+          onOpen: () {
+            Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => EmojiPackManageScreen(packId: pack.id),
+              ),
+            );
+          },
+          onBuy: mine ? null : () => _buyEmoji(pack),
+        );
+      },
+    );
+  }
+
+  Widget _mineList() {
+    if (_loading) return _loadingList();
+    if (_error != null) return _errorList();
+    final ownedStickers =
+        _myStickers.where((p) => p.isOwned || p.ownerUserId == (AuthService.instance.currentUser?.id ?? -1)).toList();
+    final items = <Widget>[
+      const ListTile(
+        title: Text('Мои стикерпаки'),
+        subtitle: Text('Выставить на витрину можно с уровня 71'),
+      ),
+      if (ownedStickers.isEmpty)
+        const ListTile(title: Text('Пока нет своих стикерпаков')),
+      for (final pack in ownedStickers)
+        ListTile(
+          leading: const Icon(Icons.sticky_note_2_outlined),
+          title: Text(pack.title),
+          subtitle: Text(
+            pack.priceStars > 0
+                ? 'В магазине · ${pack.priceStars} ★'
+                : 'Не продаётся',
+          ),
+          onTap: () async {
+            await Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => StickerPackManageScreen(packId: pack.id),
+              ),
+            );
+            await _load();
+          },
+        ),
+      const Divider(),
+      const ListTile(
+        title: Text('Мои эмодзи-паки'),
+        subtitle: Text('Публикация с уровня 70'),
+      ),
+      if (_myEmojis.where((p) => p.isOwned).isEmpty)
+        const ListTile(title: Text('Пока нет своих эмодзи-паков')),
+      for (final pack in _myEmojis.where((p) => p.isOwned))
+        ListTile(
+          leading: const Icon(Icons.emoji_emotions_outlined),
+          title: Text(pack.title),
+          subtitle: Text(
+            pack.priceStars > 0
+                ? 'В магазине · ${pack.priceStars} ★'
+                : 'Не продаётся',
+          ),
+          onTap: () async {
+            await context.push(EmojiPackManageRoute.pathFor(pack.id));
+            await _load();
+          },
+        ),
+    ];
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.only(bottom: 88 + floatingBottomPadding(context)),
+      children: items,
+    );
+  }
+
+  Widget _loadingList() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: const [
+        SizedBox(height: 80),
+        Center(child: CircularProgressIndicator()),
+      ],
+    );
+  }
+
+  Widget _errorList() {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      children: [
+        Text(_error!, textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        Center(
+          child: FilledButton(onPressed: _load, child: const Text('Повторить')),
+        ),
+      ],
+    );
+  }
+
+  Widget _empty(String text) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
+      children: [
+        const Icon(Icons.storefront_outlined, size: 48),
+        const SizedBox(height: 12),
+        Text(text, textAlign: TextAlign.center),
+      ],
+    );
+  }
+}
+
+class _PackCard extends StatelessWidget {
+  const _PackCard({
+    required this.title,
+    required this.author,
+    required this.countLabel,
+    required this.priceStars,
+    required this.feeStars,
+    required this.thumbs,
+    required this.owned,
+    required this.busy,
+    required this.onOpen,
+    this.onBuy,
+  });
+
+  final String title;
+  final String author;
+  final String countLabel;
+  final int priceStars;
+  final int feeStars;
+  final List<String> thumbs;
+  final bool owned;
+  final bool busy;
+  final VoidCallback onOpen;
+  final VoidCallback? onBuy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  Text('$priceStars ★'),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                [
+                  if (author.trim().isNotEmpty) 'Автор $author',
+                  countLabel,
+                  if (feeStars > 0) 'комиссия $feeStars ★',
+                ].join(' · '),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ),
+              if (thumbs.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 52,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: thumbs.take(8).length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    itemBuilder: (_, i) => ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        ServerConfig.resolveMediaUrl(thumbs[i]),
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                          width: 52,
+                          height: 52,
+                          child: Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: owned || busy || onBuy == null ? null : onBuy,
+                  child: Text(owned ? 'Куплено' : 'Купить $priceStars ★'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

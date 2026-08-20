@@ -473,10 +473,27 @@ async def update_user_profile(
             )
         current_user.avatar_url = request.avatar_url
     if request.emoji_status is not None:
-        from app.services.profile_style import normalize_emoji_status
+        from app.services.emoji_pack_service import EmojiPackService
         from app.services.subscription_service import SubscriptionService
 
-        next_status = normalize_emoji_status(request.emoji_status)
+        try:
+            next_status = EmojiPackService(db).require_status(
+                current_user.id, request.emoji_status
+            )
+        except ValueError as exc:
+            code = str(exc)
+            if code == "custom_emoji_required":
+                SubscriptionService(db).require_feature(
+                    current_user.id,
+                    "custom_emoji",
+                    "Кастомный эмодзи-статус доступен с уровня 69",
+                )
+            if code == "custom_emoji_denied":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"code": "custom_emoji_denied", "message": "Нет доступа к этому эмодзи"},
+                ) from exc
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
         if next_status and not SubscriptionService(db).has_feature(
             current_user.id, "emoji_status"
         ):

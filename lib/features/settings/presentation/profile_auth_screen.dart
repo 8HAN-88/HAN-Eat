@@ -15,6 +15,10 @@ import '../../../widgets/account/profile_password_tile.dart';
 import '../../../models/chat_checklist.dart';
 import '../../subscription/creator_upsell.dart';
 import '../../../utils/session_snackbar.dart';
+import '../../../models/emoji_pack_models.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../services/emoji_pack_service.dart';
+import '../../../widgets/custom_emoji_view.dart';
 
 class ProfileAuthScreen extends ConsumerStatefulWidget {
   const ProfileAuthScreen({super.key});
@@ -186,6 +190,11 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
       await showCreatorUpsell(context);
       return;
     }
+    if (parseCustomEmojiTokenId(emoji) != null &&
+        !hasFlexFeature('custom_emoji')) {
+      await showCreatorUpsell(context);
+      return;
+    }
     try {
       await UserService.instance.updateProfileStyle(emojiStatus: emoji ?? '');
       if (mounted) setState(() {});
@@ -212,9 +221,16 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
   }
 
   Future<void> _pickEmojiStatus() async {
+    List<CustomEmojiItem> custom = const [];
+    try {
+      final packs = await EmojiPackService.listMyPacks();
+      custom = [for (final pack in packs) ...pack.items];
+    } catch (_) {}
+    if (!mounted) return;
     final selected = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
@@ -236,6 +252,17 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                       ActionChip(
                         label: Text(emoji, style: const TextStyle(fontSize: 20)),
                         onPressed: () => Navigator.pop(ctx, emoji),
+                      ),
+                    for (final item in custom)
+                      ActionChip(
+                        avatar: CustomEmojiView(id: item.id, size: 20),
+                        label: Text(
+                          item.shortcode?.isNotEmpty == true
+                              ? item.shortcode!
+                              : '#${item.id}',
+                        ),
+                        onPressed: () =>
+                            Navigator.pop(ctx, customEmojiReaction(item.id)),
                       ),
                     ActionChip(
                       label: const Text('Убрать'),
@@ -426,11 +453,18 @@ class _ProfileAuthScreenState extends ConsumerState<ProfileAuthScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.mood_outlined),
                     title: const Text('Emoji-статус'),
-                    subtitle: Text(
-                      (user.emojiStatus ?? '').isNotEmpty
-                          ? user.emojiStatus!
-                          : 'Эмодзи рядом с именем',
-                    ),
+                    subtitle: (user.emojiStatus ?? '').trim().isEmpty
+                        ? const Text('Эмодзи рядом с именем')
+                        : Row(
+                            children: [
+                              StatusEmojiView(
+                                status: user.emojiStatus,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('рядом с именем'),
+                            ],
+                          ),
                     onTap: _loading ? null : _pickEmojiStatus,
                   ),
                   const SizedBox(height: 8),

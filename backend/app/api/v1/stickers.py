@@ -20,6 +20,8 @@ from app.schemas.sticker import (
     ToggleStickerFavoriteRequest,
     UpdateStickerPackRequest,
 )
+from app.services.pack_marketplace_service import owner_labels
+from app.services.paid_features_service import PaidFeaturesService
 from app.services.sticker_service import StickerService
 
 router = APIRouter()
@@ -47,16 +49,35 @@ def _pack_response(
     installed_pack_ids: set[int],
     stickers_by_pack_id: dict[int, list],
     sticker_counts: dict[int, int],
+    purchased_pack_ids: set[int] | None = None,
+    viewer_user_id: int | None = None,
+    authors: dict[int, str] | None = None,
 ) -> StickerPackResponse:
+    purchased_pack_ids = purchased_pack_ids or set()
     stickers = stickers_by_pack_id.get(pack.id, [])
+    owner_id = int(pack.owner_user_id)
+    owner_name = (authors or {}).get(owner_id, "")
+    if not owner_name:
+        from sqlalchemy.orm import object_session
+
+        sess = object_session(pack)
+        if sess is not None:
+            owner_name = owner_labels(sess, [owner_id]).get(owner_id, "")
     return StickerPackResponse(
         id=pack.id,
         title=pack.title,
         slug=pack.slug,
-        owner_user_id=pack.owner_user_id,
+        owner_user_id=owner_id,
+        owner_name=owner_name,
         is_public=pack.is_public,
         is_premium=bool(getattr(pack, "is_premium", False)),
         is_installed=pack.id in installed_pack_ids,
+        is_owned=bool(viewer_user_id and int(pack.owner_user_id) == int(viewer_user_id)),
+        is_purchased=pack.id in purchased_pack_ids,
+        price_stars=int(getattr(pack, "price_stars", 0) or 0),
+        fee_stars=PaidFeaturesService.resale_fee_stars(
+            int(getattr(pack, "price_stars", 0) or 0)
+        ),
         stickers=[
             StickerItemResponse(
                 id=item.id,
@@ -84,8 +105,10 @@ async def list_my_sticker_packs(
     packs = svc.list_my_packs(current_user.id)
     pack_ids = [p.id for p in packs]
     installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
     sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
     return StickerPackListResponse(
         items=[
             _pack_response(
@@ -93,10 +116,100 @@ async def list_my_sticker_packs(
                 installed_pack_ids=installed,
                 stickers_by_pack_id=stickers_by_pack_id,
                 sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
             )
             for p in packs
         ]
     )
+
+
+@router.get("/stickers/marketplace", response_model=StickerPackListResponse)
+async def list_sticker_marketplace(
+    q: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=120),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = StickerService(db)
+    packs = svc.list_marketplace_packs(query=q, limit=limit)
+    pack_ids = [p.id for p in packs]
+    installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
+    stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
+    sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
+    return StickerPackListResponse(
+        items=[
+            _pack_response(
+                p,
+                installed_pack_ids=installed,
+                stickers_by_pack_id=stickers_by_pack_id,
+                sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
+            )
+            for p in packs
+        ]
+    )
+
+
+@router.post("/stickers/packs/{pack_id}/list")
+async def list_sticker_pack_for_sale(
+    pack_id: int,
+    body: dict,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    try:
+        pack = PackMarketplaceService(db).list_sticker_pack(
+            current_user.id,
+            pack_id,
+            int((body or {}).get("price_stars") or 0),
+        )
+        db.commit()
+        db.refresh(pack)
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_not_found":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, code)
+        if code == "forbidden":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, code)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+    svc = StickerService(db)
+    return _pack_response(
+        pack,
+        installed_pack_ids=svc.installed_pack_ids(current_user.id),
+        stickers_by_pack_id=svc.stickers_by_pack_ids([pack.id]),
+        sticker_counts=svc.stickers_count_by_pack_ids([pack.id]),
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
+    )
+
+
+@router.post("/stickers/packs/{pack_id}/buy")
+async def buy_sticker_pack(
+    pack_id: int,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    from app.services.pack_marketplace_service import PackMarketplaceService
+
+    try:
+        result = PackMarketplaceService(db).buy_sticker_pack(current_user.id, pack_id)
+        db.commit()
+        return result
+    except HTTPException:
+        db.rollback()
+        raise
 
 
 @router.get("/stickers/catalog", response_model=StickerPackListResponse)
@@ -110,8 +223,10 @@ async def list_sticker_catalog(
     packs = svc.list_catalog_packs(user_id=current_user.id, query=q, limit=limit)
     pack_ids = [p.id for p in packs]
     installed = svc.installed_pack_ids(current_user.id)
+    purchased = svc.purchased_pack_ids(current_user.id)
     stickers_by_pack_id = svc.stickers_by_pack_ids(pack_ids)
     sticker_counts = svc.stickers_count_by_pack_ids(pack_ids)
+    authors = owner_labels(db, [p.owner_user_id for p in packs])
     return StickerPackListResponse(
         items=[
             _pack_response(
@@ -119,6 +234,9 @@ async def list_sticker_catalog(
                 installed_pack_ids=installed,
                 stickers_by_pack_id=stickers_by_pack_id,
                 sticker_counts=sticker_counts,
+                purchased_pack_ids=purchased,
+                viewer_user_id=current_user.id,
+                authors=authors,
             )
             for p in packs
         ]
@@ -143,6 +261,8 @@ async def get_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -164,6 +284,8 @@ async def get_sticker_pack_by_slug(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -199,6 +321,8 @@ async def create_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -248,6 +372,8 @@ async def add_sticker_to_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -291,6 +417,8 @@ async def update_sticker_pack(
         installed_pack_ids=installed,
         stickers_by_pack_id=stickers_by_pack_id,
         sticker_counts=sticker_counts,
+        purchased_pack_ids=svc.purchased_pack_ids(current_user.id),
+        viewer_user_id=current_user.id,
     )
 
 
@@ -365,6 +493,11 @@ async def install_sticker_pack(
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "premium_sticker":
             _raise_premium_sticker()
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {"ok": True}
 
@@ -386,6 +519,11 @@ async def import_sticker_pack_by_slug(
         db.rollback()
         if str(e) == "premium_sticker":
             _raise_premium_sticker()
+        if str(e) == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
         raise
     return {"ok": True, "pack_id": pack.id}
 

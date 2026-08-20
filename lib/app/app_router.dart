@@ -36,6 +36,8 @@ import '../features/settings/presentation/account_security_screen.dart';
 import '../features/settings/presentation/two_factor_setup_screen.dart';
 import '../features/settings/presentation/close_friends_screen.dart';
 import '../features/settings/presentation/business_settings_screen.dart';
+import '../features/settings/presentation/pack_store_screen.dart';
+import '../features/settings/presentation/emoji_pack_manage_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -750,6 +752,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: BusinessSettingsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: BusinessSettingsScreen()),
+      ),
+      GoRoute(
+        path: PackStoreRoute.path,
+        name: PackStoreRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: PackStoreScreen()),
+      ),
+      GoRoute(
+        path: EmojiPackManageRoute.path,
+        name: EmojiPackManageRoute.name,
+        pageBuilder: (context, state) {
+          final id = int.tryParse(state.pathParameters['packId'] ?? '') ?? 0;
+          return MaterialPage(child: EmojiPackManageScreen(packId: id));
+        },
       ),
       // Profile
       GoRoute(
@@ -1666,6 +1682,18 @@ class CloseFriendsRoute {
 class BusinessSettingsRoute {
   static const path = '/settings/business';
   static const name = 'business_settings';
+}
+
+class PackStoreRoute {
+  static const path = '/settings/pack-store';
+  static const name = 'pack_store';
+}
+
+class EmojiPackManageRoute {
+  static const path = '/settings/emoji-packs/:packId';
+  static const name = 'emoji_pack_manage';
+
+  static String pathFor(int packId) => '/settings/emoji-packs/$packId';
 }
 
 class ProfileRoute {

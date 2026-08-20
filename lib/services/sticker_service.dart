@@ -124,6 +124,54 @@ class StickerService {
     }
   }
 
+  static Future<List<StickerPack>> listMarketplace({
+    String query = '',
+    int limit = 60,
+  }) async {
+    final q = query.trim();
+    final uri = Uri.parse(
+      '$_base/stickers/marketplace?q=${Uri.encodeQueryComponent(q)}&limit=$limit',
+    );
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    return _parsePacks(response);
+  }
+
+  static Future<StickerPack> listPackForSale({
+    required int packId,
+    required int priceStars,
+  }) async {
+    final uri = Uri.parse('$_base/stickers/packs/$packId/list');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(
+        uri,
+        headers: headers,
+        body: jsonEncode({'price_stars': priceStars}),
+      ),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось выставить стикерпак');
+    }
+    return StickerPack.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  static Future<Map<String, dynamic>> buyPack(int packId) async {
+    final uri = Uri.parse('$_base/stickers/packs/$packId/buy');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.post(uri, headers: headers),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _throwError(response, 'Не удалось купить стикерпак');
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   static Future<List<StickerPack>> listCatalog({
     String query = '',
     int limit = 60,

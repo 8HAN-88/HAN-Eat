@@ -22,6 +22,7 @@ import '../../../models/chat_models.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
+import 'package:han_eat/widgets/custom_emoji_view.dart';
 import 'package:uuid/uuid.dart';
 import '../../navigation/application/shell_tab_visibility.dart';
 import 'package:han_eat/core/layout/floating_bottom_padding.dart';
@@ -946,9 +947,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                     children: [
                       Flexible(
                         child: Text(
-                          (user.emojiStatus ?? '').isNotEmpty
-                              ? '${user.name} ${user.emojiStatus}'
-                              : user.name,
+                          user.name,
                           textAlign: TextAlign.center,
                           style: textTheme.headlineSmall?.copyWith(
                             color: () {
@@ -963,6 +962,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                           ),
                         ),
                       ),
+                      if ((user.emojiStatus ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        StatusEmojiView(status: user.emojiStatus, size: 28),
+                      ],
                       if (worn != null) ...[
                         const SizedBox(width: 8),
                         Tooltip(

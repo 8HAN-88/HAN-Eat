@@ -173,6 +173,14 @@ def _raise_flex_gate(code: str) -> None:
             "premium_stickers",
             "Премиум-стикеры доступны с уровня 43",
         ),
+        "custom_emoji_required": (
+            "custom_emoji",
+            "Кастомные эмодзи в тексте доступны с уровня 69",
+        ),
+        "custom_emoji_reaction_required": (
+            "custom_emoji_reactions",
+            "Реакции своими эмодзи доступны с уровня 72",
+        ),
         "pinned_chat_limit": (
             "extra_pinned_chats",
             "Больше пяти закреплённых чатов доступно с уровня 45",
@@ -2469,6 +2477,11 @@ async def send_message(
             raise HTTPException(status.HTTP_404_NOT_FOUND, code)
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Этот эмодзи недоступен — купите пак",
+            )
         if code == "group_write_restricted":
             raise HTTPException(status.HTTP_403_FORBIDDEN, code)
         if code == "group_user_restricted":
@@ -4051,6 +4064,12 @@ async def add_message_reaction(
                     "Любые реакции доступны с уровня 37",
                 ),
             )
+        if code == "custom_emoji_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Этот эмодзи недоступен — купите пак",
+            )
+        _raise_flex_gate(code)
         raise
     except HTTPException:
         db.rollback()

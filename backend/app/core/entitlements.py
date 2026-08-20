@@ -82,6 +82,10 @@ CATALOG_FEATURE_SLUGS = (
     "business_bot",
     "dm_privacy",
     "profile_website",
+    "custom_emoji",
+    "emoji_pack_publish",
+    "sticker_pack_sell",
+    "custom_emoji_reactions",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

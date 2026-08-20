@@ -271,6 +271,63 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     }
   }
 
+  Future<void> _setSalePrice() async {
+    final pack = _pack;
+    if (pack == null) return;
+    final ctrl = TextEditingController(
+      text: pack.priceStars > 0 ? '${pack.priceStars}' : '',
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Цена в магазине'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Stars (0 — снять с витрины)',
+            helperText: 'Комиссия 5%, до 20 ★ бесплатно. Снять пак можно без flex.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final price = int.tryParse(ctrl.text.trim()) ?? 0;
+    if (price > 0 && !hasFlexFeature('sticker_pack_sell')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final updated = await StickerService.listPackForSale(
+        packId: pack.id,
+        priceStars: price < 0 ? 0 : price,
+      );
+      if (!mounted) return;
+      setState(() {
+        _pack = updated;
+        _saving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _showAddStickerMenu() async {
     if (_pack == null || _saving) return;
     final choice = await showModalBottomSheet<String>(
@@ -353,6 +410,11 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
             tooltip: 'Поделиться паком',
           ),
           IconButton(
+            onPressed: (_saving || pack == null) ? null : _setSalePrice,
+            icon: const Icon(Icons.sell_outlined),
+            tooltip: 'Цена в магазине',
+          ),
+          IconButton(
             onPressed: (_saving || pack == null) ? null : _editPack,
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Редактировать',
@@ -384,7 +446,9 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
                             ),
                           ),
                           Text(
-                            pack.isPublic ? 'Публичный' : 'Приватный',
+                            pack.priceStars > 0
+                                ? '${pack.priceStars} ★'
+                                : (pack.isPublic ? 'Публичный' : 'Приватный'),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],

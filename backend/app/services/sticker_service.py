@@ -11,6 +11,7 @@ from app.models.sticker import (
     StickerPack,
     StickerPackInstall,
     StickerPackPin,
+    StickerPackPurchase,
 )
 
 
@@ -224,6 +225,14 @@ class StickerService:
             raise ValueError("forbidden")
         if bool(getattr(pack, "is_premium", False)) and pack.owner_user_id != user_id:
             self._require_premium_stickers(user_id)
+        if (
+            int(getattr(pack, "price_stars", 0) or 0) > 0
+            and int(pack.owner_user_id) != int(user_id)
+        ):
+            from app.services.pack_marketplace_service import PackMarketplaceService
+
+            if not PackMarketplaceService(self.db).has_sticker_access(user_id, pack):
+                raise ValueError("pack_purchase_required")
         exists = (
             self.db.query(StickerPackInstall.id)
             .filter(
@@ -323,6 +332,33 @@ class StickerService:
                 0 if p.owner_user_id == user_id else 1,
                 -(p.updated_at.timestamp() if p.updated_at else 0),
             ),
+        )
+
+    def purchased_pack_ids(self, user_id: int) -> set[int]:
+        rows = (
+            self.db.query(StickerPackPurchase.pack_id)
+            .filter(StickerPackPurchase.user_id == user_id)
+            .all()
+        )
+        return {pid for (pid,) in rows}
+
+    def list_marketplace_packs(
+        self,
+        *,
+        query: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[StickerPack]:
+        q = self.db.query(StickerPack).filter(
+            StickerPack.is_public.is_(True),
+            StickerPack.price_stars > 0,
+        )
+        term = (query or "").strip()
+        if term:
+            q = q.filter(StickerPack.title.ilike(f"%{term}%"))
+        return (
+            q.order_by(StickerPack.listed_at.desc(), StickerPack.id.desc())
+            .limit(limit)
+            .all()
         )
 
     def list_catalog_packs(

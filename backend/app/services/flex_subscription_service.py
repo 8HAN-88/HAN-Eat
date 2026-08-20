@@ -21,7 +21,7 @@ from app.models.subscription import Subscription
 
 BASE_PRICE_RUB = 39
 LEVEL_STEP_RUB = 10
-MAX_LEVEL = 68
+MAX_LEVEL = 72
 MIN_LEVEL = 1
 PERIOD_DAYS = 30
 YEARLY_DAYS = 365
@@ -61,6 +61,7 @@ DEFAULT_BLOCKS = (
     {"key": "O", "title": "Ещё Premium", "min_level": 57, "max_level": 60, "sort_order": 15},
     {"key": "P", "title": "Бизнес", "min_level": 61, "max_level": 64, "sort_order": 16},
     {"key": "Q", "title": "Ещё бизнес", "min_level": 65, "max_level": 68, "sort_order": 17},
+    {"key": "R", "title": "Магазин", "min_level": 69, "max_level": 72, "sort_order": 18},
 )
 
 DEFAULT_PRESETS = (
@@ -81,6 +82,7 @@ DEFAULT_PRESETS = (
     {"key": "premiummore", "title": "Ещё Premium", "level": 60},
     {"key": "business", "title": "Бизнес", "level": 64},
     {"key": "businessplus", "title": "Ещё бизнес", "level": 68},
+    {"key": "packstore", "title": "Магазин", "level": 72},
 )
 
 DEFAULT_FEATURES = (
@@ -967,6 +969,58 @@ DEFAULT_FEATURES = (
         "movable": True,
         "required": False,
         "block_key": "Q",
+    },
+    {
+        "slug": "custom_emoji",
+        "title": "Свои эмодзи",
+        "description": "Вставлять купленные кастомные эмодзи прямо в текст сообщений.",
+        "icon": "emoji_emotions",
+        "default_level": 69,
+        "min_level": 69,
+        "max_level": 72,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "R",
+    },
+    {
+        "slug": "emoji_pack_publish",
+        "title": "Продажа эмодзи",
+        "description": "Выложить свой пак кастомных эмодзи в магазин и получать Stars за покупки.",
+        "icon": "storefront",
+        "default_level": 70,
+        "min_level": 69,
+        "max_level": 72,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "R",
+    },
+    {
+        "slug": "sticker_pack_sell",
+        "title": "Продажа стикеров",
+        "description": "Выставить стикерпак на витрину за Stars — площадка берёт комиссию 5%.",
+        "icon": "sell",
+        "default_level": 71,
+        "min_level": 69,
+        "max_level": 72,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "R",
+    },
+    {
+        "slug": "custom_emoji_reactions",
+        "title": "Реакции своими эмодзи",
+        "description": "Ставить реакции кастомными эмодзи из купленных паков.",
+        "icon": "add_reaction",
+        "default_level": 72,
+        "min_level": 69,
+        "max_level": 72,
+        "feature_type": "blocked",
+        "movable": True,
+        "required": False,
+        "block_key": "R",
     },
 )
 

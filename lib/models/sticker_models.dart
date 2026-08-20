@@ -30,9 +30,14 @@ class StickerPack {
     required this.title,
     required this.slug,
     required this.ownerUserId,
+    this.ownerName = '',
     required this.isPublic,
     this.isPremium = false,
     required this.isInstalled,
+    this.isOwned = false,
+    this.isPurchased = false,
+    this.priceStars = 0,
+    this.feeStars = 0,
     required this.stickers,
     required this.stickersCount,
     this.shareLink,
@@ -42,9 +47,14 @@ class StickerPack {
   final String title;
   final String slug;
   final int ownerUserId;
+  final String ownerName;
   final bool isPublic;
   final bool isPremium;
   final bool isInstalled;
+  final bool isOwned;
+  final bool isPurchased;
+  final int priceStars;
+  final int feeStars;
   final List<StickerItem> stickers;
   final int stickersCount;
   final String? shareLink;
@@ -56,9 +66,14 @@ class StickerPack {
       title: json['title'] as String? ?? '',
       slug: json['slug'] as String? ?? '',
       ownerUserId: (json['owner_user_id'] as num?)?.toInt() ?? 0,
+      ownerName: json['owner_name'] as String? ?? '',
       isPublic: json['is_public'] as bool? ?? false,
       isPremium: json['is_premium'] as bool? ?? false,
       isInstalled: json['is_installed'] as bool? ?? false,
+      isOwned: json['is_owned'] as bool? ?? false,
+      isPurchased: json['is_purchased'] as bool? ?? false,
+      priceStars: (json['price_stars'] as num?)?.toInt() ?? 0,
+      feeStars: (json['fee_stars'] as num?)?.toInt() ?? 0,
       stickers: rawStickers
           .whereType<Map<String, dynamic>>()
           .map(StickerItem.fromJson)

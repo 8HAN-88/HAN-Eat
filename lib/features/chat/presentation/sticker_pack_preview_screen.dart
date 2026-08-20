@@ -4,6 +4,7 @@ import '../../../models/sticker_models.dart';
 import '../../../services/server_config.dart';
 import '../../../services/sticker_service.dart';
 import '../../../utils/api_error_parser.dart';
+import '../../../widgets/stars_pay_helper.dart';
 import '../../subscription/creator_upsell.dart';
 
 class StickerPackPreviewScreen extends StatefulWidget {
@@ -55,18 +56,34 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       await showCreatorUpsell(context);
       return;
     }
+    final needsBuy =
+        pack.priceStars > 0 && !pack.isOwned && !pack.isPurchased;
+    if (needsBuy) {
+      final ok = await confirmStarsSpend(
+        context,
+        title: 'Купить «${pack.title}»',
+        body: pack.ownerName.trim().isEmpty
+            ? '${pack.priceStars} ★'
+            : 'Автор ${pack.ownerName} · комиссия ${pack.feeStars} ★',
+        amountStars: pack.priceStars,
+        confirmLabel: 'Купить',
+      );
+      if (!ok || !mounted) return;
+    }
     setState(() => _busy = true);
     try {
-      await StickerService.installPack(pack.id);
+      if (needsBuy) {
+        await StickerService.buyPack(pack.id);
+      } else {
+        await StickerService.installPack(pack.id);
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
       if (offerFlexIfRequired(context, e)) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userVisibleError(e))),
-      );
+      await showStarsRequiredSnack(context, e);
     }
   }
 
@@ -103,7 +120,11 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
-                          Text('${pack.stickers.length} стик.'),
+                          Text(
+                            pack.ownerName.trim().isEmpty
+                                ? '${pack.stickers.length} стик.'
+                                : '${pack.stickers.length} стик. · ${pack.ownerName}',
+                          ),
                         ],
                       ),
                     ),
@@ -145,7 +166,11 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
                             label: Text(
                               pack.isInstalled
                                   ? 'Уже установлен'
-                                  : 'Добавить стикерпак',
+                                  : (pack.priceStars > 0 &&
+                                          !pack.isOwned &&
+                                          !pack.isPurchased)
+                                      ? 'Купить ${pack.priceStars} ★'
+                                      : 'Добавить стикерпак',
                             ),
                           ),
                         ),

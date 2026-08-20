@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'custom_emoji_view.dart';
+
 /// Текст с подсветкой поиска, @mentions и лёгкой разметкой
 /// (`||spoiler||`, `*bold*`, `_italic_`, `` `code` ``).
 class HighlightedText extends StatefulWidget {
@@ -43,6 +45,7 @@ class HighlightedText extends StatefulWidget {
 class _HighlightedTextState extends State<HighlightedText> {
   final Set<int> _revealedSpoilers = {};
 
+  static final _customEmojiRe = RegExp(r'\[\[e:(\d+)\]\]');
   static final _mentionRe = RegExp(r'@id\d+|@[a-zA-Z0-9_]{2,}');
   static final _markupRe = RegExp(
     r'\|\|(.+?)\|\|'
@@ -95,6 +98,38 @@ class _HighlightedTextState extends State<HighlightedText> {
     }
     if (start < source.length) {
       spans.add(TextSpan(text: source.substring(start)));
+    }
+    return spans;
+  }
+
+  List<InlineSpan> _withCustomEmoji(
+    BuildContext context,
+    String source,
+    List<InlineSpan> Function(String chunk) then,
+  ) {
+    final spans = <InlineSpan>[];
+    var start = 0;
+    final emojiSize = (widget.style.fontSize ?? 16) + 4;
+    for (final m in _customEmojiRe.allMatches(source)) {
+      if (m.start > start) {
+        spans.addAll(then(source.substring(start, m.start)));
+      }
+      final id = int.tryParse(m.group(1) ?? '') ?? 0;
+      if (id > 0) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: CustomEmojiView(id: id, size: emojiSize),
+            ),
+          ),
+        );
+      }
+      start = m.end;
+    }
+    if (start < source.length) {
+      spans.addAll(then(source.substring(start)));
     }
     return spans;
   }
@@ -179,9 +214,23 @@ class _HighlightedTextState extends State<HighlightedText> {
     return spans;
   }
 
+  List<InlineSpan> _queryChunk(BuildContext context, String text) {
+    final raw = widget.query?.trim().toLowerCase();
+    if (raw == null || raw.isEmpty) {
+      return widget.parseMarkup
+          ? _markupSpans(context, text)
+          : _plainOrMentions(context, text);
+    }
+    return _querySpansOn(context, text, raw);
+  }
+
   List<InlineSpan> _querySpans(BuildContext context) {
     final q = widget.query!.trim().toLowerCase();
     final text = widget.text;
+    return _querySpansOn(context, text, q);
+  }
+
+  List<InlineSpan> _querySpansOn(BuildContext context, String text, String q) {
     final lower = text.toLowerCase();
     final spans = <InlineSpan>[];
     var start = 0;
@@ -226,10 +275,12 @@ class _HighlightedTextState extends State<HighlightedText> {
     final reserve = _trailingReserve;
     final q = widget.query?.trim().toLowerCase();
     final hasQuery = q != null && q.isNotEmpty;
+    final hasCustomEmoji = _customEmojiRe.hasMatch(widget.text);
     final needsRich = hasQuery ||
         widget.highlightMentions ||
         widget.parseMarkup ||
-        reserve != null;
+        reserve != null ||
+        hasCustomEmoji;
 
     if (!needsRich) {
       return Text(
@@ -242,13 +293,33 @@ class _HighlightedTextState extends State<HighlightedText> {
 
     final spans = <InlineSpan>[];
     if (hasQuery) {
-      spans.addAll(_querySpans(context));
+      spans.addAll(
+        _withCustomEmoji(context, widget.text, (chunk) => _queryChunk(context, chunk)),
+      );
     } else if (widget.parseMarkup) {
-      spans.addAll(_markupSpans(context, widget.text));
+      spans.addAll(
+        _withCustomEmoji(
+          context,
+          widget.text,
+          (chunk) => _markupSpans(context, chunk),
+        ),
+      );
     } else if (widget.highlightMentions) {
-      spans.addAll(_mentionSpans(context, widget.text));
+      spans.addAll(
+        _withCustomEmoji(
+          context,
+          widget.text,
+          (chunk) => _mentionSpans(context, chunk),
+        ),
+      );
     } else {
-      spans.add(TextSpan(text: widget.text));
+      spans.addAll(
+        _withCustomEmoji(
+          context,
+          widget.text,
+          (chunk) => [TextSpan(text: chunk)],
+        ),
+      );
     }
     if (reserve != null) spans.add(reserve);
 

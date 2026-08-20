@@ -61,7 +61,11 @@ import '../../../widgets/app_avatar.dart';
 import '../../../widgets/app_empty_state.dart';
 import '../../../widgets/chat_link_preview.dart';
 import '../../../widgets/fullscreen_image_viewer.dart';
+import '../../../widgets/custom_emoji_view.dart';
 import '../../../widgets/highlighted_text.dart';
+import '../../../services/custom_emoji_registry.dart';
+import '../../../services/emoji_pack_service.dart';
+import '../../../models/emoji_pack_models.dart';
 import '../../../widgets/chat_bubble_accent.dart';
 import '../../../widgets/chat_wallpaper.dart';
 import '../../../widgets/telegram_ui.dart';
@@ -3088,6 +3092,22 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     );
   }
 
+  void _insertComposerToken(String token) {
+    final text = _controller.text;
+    final sel = _controller.selection;
+    final start = sel.isValid ? sel.start.clamp(0, text.length) : text.length;
+    final end = sel.isValid ? sel.end.clamp(0, text.length) : text.length;
+    final insertion = start > 0 && text[start - 1] != ' ' && text[start - 1] != '\n'
+        ? ' $token '
+        : '$token ';
+    final newText = text.replaceRange(start, end, insertion);
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + insertion.length),
+    );
+    _inputFocusNode.requestFocus();
+  }
+
   void _wrapComposerMarkup(String left, String right) {
     final text = _controller.text;
     final sel = _controller.selection;
@@ -6002,6 +6022,9 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _canUseReactionEmoji(String emoji) {
+    if (parseCustomEmojiTokenId(emoji) != null) {
+      return _hasFlexFeature('custom_emoji_reactions');
+    }
     if (_freeChatReactions.contains(emoji)) return true;
     if (_exclusiveOverlayReactions.contains(emoji)) {
       return _hasFlexFeature('exclusive_reactions') ||
@@ -6018,7 +6041,21 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     await _toggleReaction(msg, emoji);
   }
 
-  void _showReactionPicker(ChatMessage msg) {
+  List<CustomEmojiItem> _customReactionEmojis = const [];
+
+  Future<void> _ensureCustomReactionEmojis() async {
+    if (_customReactionEmojis.isNotEmpty) return;
+    try {
+      final packs = await EmojiPackService.listMyPacks();
+      _customReactionEmojis = [
+        for (final pack in packs) ...pack.items,
+      ];
+    } catch (_) {}
+  }
+
+  Future<void> _showReactionPicker(ChatMessage msg) async {
+    await _ensureCustomReactionEmojis();
+    if (!mounted) return;
     final controller = TextEditingController();
     showModalBottomSheet<void>(
       context: context,
@@ -6047,7 +6084,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                     alignment: WrapAlignment.center,
                     spacing: 8,
                     runSpacing: 8,
-                    children: _reactionPickerEmojis.map((emoji) {
+                    children: [
+                      ..._reactionPickerEmojis,
+                      for (final item in _customReactionEmojis)
+                        customEmojiReaction(item.id),
+                    ].map((emoji) {
                       final locked = !_canUseReactionEmoji(emoji);
                       return Material(
                         color: msg.reactions.any(
@@ -6069,16 +6110,11 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                Text(
-                                  emoji,
-                                  style: TextStyle(
-                                    fontSize: 26,
-                                    color: locked
-                                        ? Theme.of(ctx)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.45)
-                                        : null,
+                                Opacity(
+                                  opacity: locked ? 0.45 : 1,
+                                  child: ReactionEmojiView(
+                                    token: emoji,
+                                    size: 26,
                                   ),
                                 ),
                                 if (locked)
@@ -15055,8 +15091,14 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _conversation.displayTitle,
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _conversation.isGroup
+                                        ? _conversation.displayTitle
+                                        : (_conversation.peer?.displayName ??
+                                            _conversation.displayTitle),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
@@ -15080,6 +15122,19 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                                       );
                                     }(),
                                   ),
+                                  ),
+                                ),
+                                if (!_conversation.isGroup &&
+                                    (_conversation.peer?.emojiStatus ?? '')
+                                        .trim()
+                                        .isNotEmpty) ...[
+                                  const SizedBox(width: 4),
+                                  StatusEmojiView(
+                                    status: _conversation.peer!.emojiStatus,
+                                    size: 20,
+                                  ),
+                                ],
+                              ],
                             ),
                             if (subtitle.isNotEmpty)
                               _peerTyping
@@ -16524,6 +16579,13 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           ChatInlineStickerPanel(
                             onOpenFull: () =>
                                 unawaited(_showFullStickerSheet()),
+                            onInsertCustomEmoji: (id) {
+                              if (!_hasFlexFeature('custom_emoji')) {
+                                unawaited(showCreatorUpsell(context));
+                                return;
+                              }
+                              _insertComposerToken(customEmojiToken(id));
+                            },
                             onPick: (url, {emoji}) {
                               setState(() => _stickerPanelOpen = false);
                               unawaited(
@@ -17657,15 +17719,29 @@ class _Bubble extends StatelessWidget {
                   : () => onReactionLongPress!(r.emoji),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                child: Text(
-                  r.starsTotal > 0
-                      ? '${r.emoji} ${r.starsTotal}★'
-                      : (r.count > 1 ? '${r.emoji} ${r.count}' : r.emoji),
-                  style: TextStyle(
-                    color: fg.withValues(alpha: 0.92),
-                    fontSize: 13,
-                    height: 1.1,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ReactionEmojiView(token: r.emoji, size: 16),
+                    if (r.starsTotal > 0)
+                      Text(
+                        ' ${r.starsTotal}★',
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.92),
+                          fontSize: 13,
+                          height: 1.1,
+                        ),
+                      )
+                    else if (r.count > 1)
+                      Text(
+                        ' ${r.count}',
+                        style: TextStyle(
+                          color: fg.withValues(alpha: 0.92),
+                          fontSize: 13,
+                          height: 1.1,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

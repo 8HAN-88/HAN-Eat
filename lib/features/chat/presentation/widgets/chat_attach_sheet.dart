@@ -34,6 +34,7 @@ import '../../../../widgets/chat_sticker_tile.dart';
 import '../../../../services/auth_service.dart';
 import '../sticker_pack_manage_screen.dart';
 import '../sticker_pack_preview_screen.dart';
+import '../../../settings/presentation/pack_store_screen.dart';
 import 'chat_location_bubble.dart';
 import 'chat_poll_form_panel.dart';
 import 'chats_hub_tiles.dart';
@@ -3094,9 +3095,18 @@ class _StickerQuickActions extends StatelessWidget {
                     onOpenPackManager(editablePackId!);
                   }
                   break;
+                case _StickerQuickAction.openStore:
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(builder: (_) => const PackStoreScreen()),
+                  );
+                  break;
               }
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: _StickerQuickAction.openStore,
+                child: Text('Магазин паков'),
+              ),
               const PopupMenuItem(
                 value: _StickerQuickAction.createPack,
                 child: Text('Создать стикерпак'),
@@ -3132,7 +3142,7 @@ class _StickerQuickActions extends StatelessWidget {
   }
 }
 
-enum _StickerQuickAction { createPack, addAnimated, managePack }
+enum _StickerQuickAction { createPack, addAnimated, managePack, openStore }
 
 class _StickerPackQuickPreviewSheet extends StatefulWidget {
   const _StickerPackQuickPreviewSheet({

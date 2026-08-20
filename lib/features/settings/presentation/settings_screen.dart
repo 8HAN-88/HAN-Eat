@@ -708,6 +708,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         onTap: () => context.push(BusinessSettingsRoute.path),
       ),
       _SettingsItem(
+        title: 'Магазин паков',
+        icon: Icons.emoji_emotions_outlined,
+        subtitle: 'Стикеры и кастомные эмодзи за Stars',
+        onTap: () => context.push(PackStoreRoute.path),
+      ),
+      _SettingsItem(
         title: 'Звёзды и кошелёк',
         icon: Icons.stars_rounded,
         subtitle: 'Баланс, донаты, покупки контента и бусты',

@@ -72,6 +72,13 @@ from app.models.sticker import (
     StickerPackInstall,
     StickerFavorite,
     StickerPackPin,
+    StickerPackPurchase,
+)
+from app.models.emoji_pack import (
+    CustomEmoji,
+    EmojiPack,
+    EmojiPackInstall,
+    EmojiPackPurchase,
 )
 
 # Для обратной совместимости
@@ -95,7 +102,8 @@ __all__ = [
     "GifFavorite", "ChatFolderShare", "QuickReply",
     "UserBusinessSettings", "BusinessAutoReply",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
-    "StickerPackInstall", "StickerFavorite", "StickerPackPin",
+    "StickerPackInstall", "StickerFavorite", "StickerPackPin", "StickerPackPurchase",
+    "EmojiPack", "CustomEmoji", "EmojiPackInstall", "EmojiPackPurchase",
     "CallSession",
     "SubscriptionFeature",
     "SubscriptionFeatureBlock",

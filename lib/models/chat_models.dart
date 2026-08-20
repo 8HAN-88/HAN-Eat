@@ -92,8 +92,9 @@ class ChatUserBrief {
 
   String get displayTitle {
     final emoji = emojiStatus?.trim();
-    if (emoji != null && emoji.isNotEmpty) return '$displayName $emoji';
-    return displayName;
+    if (emoji == null || emoji.isEmpty) return displayName;
+    if (emoji.startsWith('ce:') || emoji.contains('[[e:')) return displayName;
+    return '$displayName $emoji';
   }
 
   factory ChatUserBrief.fromJson(Map<String, dynamic> json) {

@@ -26,6 +26,8 @@ class StickerPack(Base):
     )
     is_public = Column(Boolean, nullable=False, default=True, index=True)
     is_premium = Column(Boolean, nullable=False, default=False, index=True)
+    price_stars = Column(Integer, nullable=False, default=0, index=True)
+    listed_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -116,4 +118,29 @@ class StickerPackPin(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "pack_id", name="uq_sticker_pack_pin_user_pack"),
+    )
+
+
+class StickerPackPurchase(Base):
+    __tablename__ = "sticker_pack_purchases"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    pack_id = Column(
+        Integer,
+        ForeignKey("sticker_packs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    seller_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    amount_stars = Column(Integer, nullable=False, default=0)
+    fee_stars = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "pack_id", name="uq_sticker_pack_purchase"),
     )

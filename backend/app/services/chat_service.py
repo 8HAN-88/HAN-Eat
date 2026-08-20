@@ -3141,6 +3141,9 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(sender_id, content)
         anonymous = bool(is_anonymous)
         if anonymous:
             is_group = bool(conv and conv.type == "group")
@@ -4191,16 +4194,22 @@ class ChatService:
     ) -> Optional[str]:
         self._get_active_message(conversation_id, message_id, user_id)
         clean = emoji.strip()
-        if not clean or len(clean) > 16:
+        if not clean or len(clean) > 24:
             raise ValueError("invalid_emoji")
         from app.core.entitlements import (
             EXCLUSIVE_CHAT_REACTIONS,
             FREE_CHAT_REACTIONS,
         )
+        from app.services.emoji_pack_service import EmojiPackService
         from app.services.subscription_service import SubscriptionService
 
+        custom = EmojiPackService(self.db).require_reaction(user_id, clean)
+        if custom:
+            clean = custom
         billing = SubscriptionService(self.db)
-        if clean in EXCLUSIVE_CHAT_REACTIONS:
+        if custom:
+            pass
+        elif clean in EXCLUSIVE_CHAT_REACTIONS:
             if not (
                 billing.has_feature(user_id, "exclusive_reactions")
                 or billing.has_feature(user_id, "any_emoji_reactions")

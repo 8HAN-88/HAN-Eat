@@ -19,6 +19,14 @@ def normalize_emoji_status(raw: Optional[str]) -> Optional[str]:
     text = (raw or "").strip()
     if not text:
         return None
+    from app.services.emoji_pack_service import parse_custom_emoji_ids, parse_custom_reaction_id
+
+    reaction_id = parse_custom_reaction_id(text)
+    if reaction_id:
+        return f"ce:{reaction_id}"
+    token_ids = parse_custom_emoji_ids(text)
+    if token_ids:
+        return f"ce:{token_ids[0]}"
     return text[:8]
 
 
