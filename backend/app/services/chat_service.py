@@ -3715,6 +3715,9 @@ class ChatService:
             media_url=media_url,
             reply_to_message_id=reply_to_message_id,
         )
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(sender_id, content)
         effect = self._normalize_send_effect(effect_id, sender_id)
         resolved_topic_id = self._resolve_topic_for_send(conversation_id, topic_id)
 
@@ -4055,6 +4058,9 @@ class ChatService:
         clean = (content or "").strip()
         if msg.type == "text" and not clean:
             raise ValueError("empty_message")
+        from app.services.emoji_pack_service import EmojiPackService
+
+        EmojiPackService(self.db).require_send_tokens(user_id, clean)
         previous = (msg.content or "")[:4000]
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         if previous != clean[:4000]:
@@ -4194,7 +4200,7 @@ class ChatService:
     ) -> Optional[str]:
         self._get_active_message(conversation_id, message_id, user_id)
         clean = emoji.strip()
-        if not clean or len(clean) > 24:
+        if not clean or len(clean) > 32:
             raise ValueError("invalid_emoji")
         from app.core.entitlements import (
             EXCLUSIVE_CHAT_REACTIONS,

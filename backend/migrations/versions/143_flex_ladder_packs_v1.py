@@ -89,6 +89,14 @@ def upgrade() -> None:
             type_=sa.String(length=32),
             existing_nullable=True,
         )
+    if _table_exists("message_reactions"):
+        op.alter_column(
+            "message_reactions",
+            "emoji",
+            existing_type=sa.String(length=16),
+            type_=sa.String(length=32),
+            existing_nullable=False,
+        )
     if _table_exists("sticker_packs"):
         cols = _columns("sticker_packs")
         if "price_stars" not in cols:

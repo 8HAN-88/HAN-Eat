@@ -488,12 +488,16 @@ async def update_user_profile(
                     "custom_emoji",
                     "Кастомный эмодзи-статус доступен с уровня 69",
                 )
-            if code == "custom_emoji_denied":
+            elif code == "custom_emoji_denied":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail={"code": "custom_emoji_denied", "message": "Нет доступа к этому эмодзи"},
+                    detail={
+                        "code": "custom_emoji_denied",
+                        "message": "Нет доступа к этому эмодзи",
+                    },
                 ) from exc
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
+            else:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, code) from exc
         if next_status and not SubscriptionService(db).has_feature(
             current_user.id, "emoji_status"
         ):

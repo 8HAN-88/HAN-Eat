@@ -838,6 +838,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     if (warm != null && warm.isNotEmpty) {
       _messages.addAll(warm);
       _loading = false;
+      _prefetchCustomEmojis(warm);
     }
     unawaited(_loadCachedMessages().then((_) async {
       await _restoreFailedTextSends();
@@ -3944,7 +3945,23 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     _messages
       ..clear()
       ..addAll(result.messages);
+    _prefetchCustomEmojis([msg]);
     return result.added;
+  }
+
+  void _prefetchCustomEmojis([Iterable<ChatMessage>? msgs]) {
+    final ids = <int>{};
+    for (final m in msgs ?? _messages) {
+      ids.addAll(parseCustomEmojiIds(m.content));
+      for (final r in m.reactions) {
+        final id = parseCustomEmojiTokenId(r.emoji);
+        if (id != null) ids.add(id);
+      }
+    }
+    final statusId = parseCustomEmojiTokenId(_conversation.peer?.emojiStatus);
+    if (statusId != null) ids.add(statusId);
+    if (ids.isEmpty) return;
+    unawaited(CustomEmojiRegistry.instance.resolveMissing(ids));
   }
 
   String _pinnedPreview(ChatMessage msg) {
@@ -3981,7 +3998,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
     final contact = ChatContactPayload.tryParse(msg.content);
     if (contact != null) return '👤 ${contact.displayName}';
     final text = msg.content.trim();
-    return text.isEmpty ? 'Сообщение' : text;
+    if (text.isEmpty) return 'Сообщение';
+    return previewTextWithCustomEmoji(text);
   }
 
   void _scrollToMessage(int messageId) {
@@ -5749,6 +5767,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
       if (!mounted) return;
       _applyReactions(msg.id, previous);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -11956,6 +11975,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
         _loadError = null;
       });
       unawaited(ChatCacheService.saveThread(widget.conversationId, _messages));
+      _prefetchCustomEmojis();
       unawaited(_runAutoTranslate());
       _tryRestorePendingDraftReply();
       if (refresh) {
@@ -12285,6 +12305,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
           unawaited(_persistFailedTextSends());
           if (!mounted) return;
           setState(() {});
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           if (isStarsRequiredError(e)) {
             await showStarsRequiredSnack(context, e);
           } else {
@@ -12502,6 +12524,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
             _editingMessage = previous;
           });
           _controller.text = text;
+          if (offerFlexIfRequired(context, e)) return;
+          if (offerPackStoreIfRequired(context, e)) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(userVisibleError(e))),
           );

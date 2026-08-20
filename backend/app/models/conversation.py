@@ -305,7 +305,7 @@ class MessageReaction(Base):
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    emoji = Column(String(16), nullable=False)
+    emoji = Column(String(32), nullable=False)
     # Telegram paid reactions: Stars spent on this reaction (0 = free).
     stars_amount = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, server_default=func.now())

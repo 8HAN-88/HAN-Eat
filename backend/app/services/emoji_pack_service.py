@@ -185,6 +185,23 @@ class EmojiPackService:
             q = q.filter(EmojiPack.title.ilike(f"%{term}%"))
         return q.order_by(EmojiPack.listed_at.desc(), EmojiPack.id.desc()).limit(limit).all()
 
+    def list_catalog(self, *, query: Optional[str] = None, limit: int = 50) -> List[EmojiPack]:
+        q = self.db.query(EmojiPack).filter(EmojiPack.is_public.is_(True))
+        term = (query or "").strip()
+        if term:
+            q = q.filter(EmojiPack.title.ilike(f"%{term}%"))
+        return q.order_by(EmojiPack.updated_at.desc(), EmojiPack.id.desc()).limit(limit).all()
+
+    def get_public_pack_by_slug(self, slug: str) -> Optional[EmojiPack]:
+        clean = (slug or "").strip()
+        if not clean:
+            return None
+        return (
+            self.db.query(EmojiPack)
+            .filter(EmojiPack.slug == clean, EmojiPack.is_public.is_(True))
+            .first()
+        )
+
     def installed_pack_ids(self, user_id: int) -> set[int]:
         rows = (
             self.db.query(EmojiPackInstall.pack_id)

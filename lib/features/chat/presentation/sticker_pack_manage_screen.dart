@@ -370,15 +370,9 @@ class _StickerPackManageScreenState extends State<StickerPackManageScreen> {
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
     setState(() {
-      _pack = StickerPack(
-        id: pack.id,
-        title: pack.title,
-        slug: pack.slug,
-        ownerUserId: pack.ownerUserId,
-        isPublic: pack.isPublic,
-        isInstalled: pack.isInstalled,
+      _pack = pack.copyWith(
         stickers: items,
-        stickersCount: pack.stickersCount,
+        stickersCount: items.length,
       );
     });
     try {

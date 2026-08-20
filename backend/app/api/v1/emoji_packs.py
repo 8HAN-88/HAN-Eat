@@ -38,6 +38,7 @@ class EmojiPackOut(BaseModel):
     fee_stars: int = 0
     items: list[EmojiItemOut] = []
     items_count: int = 0
+    share_link: str | None = None
 
 
 class EmojiPackListOut(BaseModel):
@@ -92,6 +93,7 @@ def _pack_out(
             for row in items
         ],
         items_count=len(items),
+        share_link=f"https://haneat.app/emoji/{pack.slug}",
     )
 
 
@@ -131,6 +133,55 @@ def list_emoji_marketplace(
 ):
     svc = EmojiPackService(db)
     return _bundle(svc, current_user.id, svc.list_marketplace(query=q, limit=limit))
+
+
+@router.get("/emoji/catalog", response_model=EmojiPackListOut)
+def list_emoji_catalog(
+    q: str = Query("", max_length=120),
+    limit: int = Query(60, ge=1, le=120),
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    return _bundle(svc, current_user.id, svc.list_catalog(query=q, limit=limit))
+
+
+@router.get("/emoji/by-slug/{slug}", response_model=EmojiPackOut)
+def get_emoji_pack_by_slug(
+    slug: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    pack = svc.get_public_pack_by_slug(slug)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    return _bundle(svc, current_user.id, [pack]).items[0]
+
+
+@router.post("/emoji/import/{slug}")
+def import_emoji_pack_by_slug(
+    slug: str,
+    current_user: User = Depends(get_current_user_required),
+    db: Session = Depends(get_db),
+):
+    svc = EmojiPackService(db)
+    pack = svc.get_public_pack_by_slug(slug)
+    if not pack:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
+    try:
+        svc.install_pack(current_user.id, pack.id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        code = str(exc)
+        if code == "pack_purchase_required":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                {"code": "pack_purchase_required", "message": "Сначала купите пак"},
+            )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, code) from exc
+    return {"ok": True, "pack_id": pack.id}
 
 
 @router.get("/emoji/resolve")

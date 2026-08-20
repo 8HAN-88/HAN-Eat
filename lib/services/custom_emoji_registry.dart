@@ -96,3 +96,14 @@ List<int> parseCustomEmojiIds(String? text) {
 String customEmojiToken(int id) => '[[e:$id]]';
 
 String customEmojiReaction(int id) => 'ce:$id';
+
+String previewTextWithCustomEmoji(String text) {
+  final replaced = text.replaceAllMapped(_tokenRe, (match) {
+    final id = int.tryParse(match.group(1) ?? '') ?? 0;
+    final short = CustomEmojiRegistry.instance.shortcodeFor(id);
+    if (short != null && short.isNotEmpty) return ':$short:';
+    return '✦';
+  });
+  final clean = replaced.trim();
+  return clean.isEmpty ? 'Сообщение' : clean;
+}

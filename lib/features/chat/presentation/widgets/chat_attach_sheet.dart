@@ -757,18 +757,7 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
       _stickerPacks = [
         for (final p in _stickerPacks)
           if (p.id == packId)
-            StickerPack(
-              id: p.id,
-              title: p.title,
-              slug: p.slug,
-              ownerUserId: p.ownerUserId,
-              isPublic: p.isPublic,
-              isPremium: p.isPremium,
-              isInstalled: installed,
-              stickers: p.stickers,
-              stickersCount: p.stickersCount,
-              shareLink: p.shareLink,
-            )
+            p.copyWith(isInstalled: installed)
           else
             p,
       ];

@@ -65,6 +65,31 @@ class EmojiPackService {
     return _parsePacks(response);
   }
 
+  static Future<List<EmojiPack>> listCatalog({
+    String query = '',
+    int limit = 60,
+  }) async {
+    final q = query.trim();
+    final uri = Uri.parse(
+      '$_base/emoji/catalog?q=${Uri.encodeQueryComponent(q)}&limit=$limit',
+    );
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    return _parsePacks(response);
+  }
+
+  static Future<EmojiPack> getPackBySlug(String slug) async {
+    final clean = slug.trim();
+    final uri = Uri.parse('$_base/emoji/by-slug/$clean');
+    final headers = await _headers();
+    final response = await HanEatHttpClient.withShared(
+      (client) => client.get(uri, headers: headers),
+    );
+    return _parsePack(response, 'Не удалось открыть эмодзи-пак');
+  }
+
   static Future<List<EmojiPack>> listMarketplace({
     String query = '',
     int limit = 60,

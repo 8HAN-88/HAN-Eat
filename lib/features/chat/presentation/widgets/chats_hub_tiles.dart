@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../models/chat_models.dart';
 import '../../../../services/channel_service.dart';
+import '../../../../services/custom_emoji_registry.dart';
 import '../../../../widgets/app_avatar.dart';
 import '../../../../widgets/telegram_ui.dart';
 import '../../../calls/call_message_labels.dart';
@@ -639,7 +640,8 @@ String chatHubBodyPreview(ChatMessage? msg, {bool isSaved = false}) {
   final contact = ChatContactPayload.tryParse(msg.content);
   if (contact != null) return contact.displayName;
   final content = msg.content.trim();
-  return content.isEmpty ? 'Сообщение' : content;
+  if (content.isEmpty) return 'Сообщение';
+  return previewTextWithCustomEmoji(content);
 }
 
 String chatHubFormatInboxTime(DateTime dt) {

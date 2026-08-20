@@ -52,6 +52,12 @@ String parseApiErrorMessage(
     if (code == 'STARS_REQUIRED') {
       return 'Недостаточно звёзд';
     }
+    if (code == 'pack_purchase_required') {
+      return 'Сначала купите пак';
+    }
+    if (code == 'custom_emoji_denied') {
+      return 'Этот эмодзи недоступен — купите пак';
+    }
     if (code == 'group_paid_required') {
       final price = detail['monthly_price_stars'];
       if (price is num && price > 0) {

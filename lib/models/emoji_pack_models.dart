@@ -36,6 +36,7 @@ class EmojiPack {
     this.feeStars = 0,
     required this.items,
     required this.itemsCount,
+    this.shareLink,
   });
 
   final int id;
@@ -51,6 +52,7 @@ class EmojiPack {
   final int feeStars;
   final List<CustomEmojiItem> items;
   final int itemsCount;
+  final String? shareLink;
 
   String get authorLabel {
     final name = ownerName.trim();
@@ -77,6 +79,7 @@ class EmojiPack {
           .map(CustomEmojiItem.fromJson)
           .toList(),
       itemsCount: (json['items_count'] as num?)?.toInt() ?? 0,
+      shareLink: json['share_link'] as String?,
     );
   }
 }

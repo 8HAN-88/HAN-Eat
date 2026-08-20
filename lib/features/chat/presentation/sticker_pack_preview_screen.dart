@@ -83,6 +83,7 @@ class _StickerPackPreviewScreenState extends State<StickerPackPreviewScreen> {
       if (!mounted) return;
       setState(() => _busy = false);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }

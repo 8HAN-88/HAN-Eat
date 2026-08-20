@@ -57,10 +57,22 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     });
     try {
       final q = _search.text.trim();
-      final stickers = await StickerService.listMarketplace(query: q);
-      final emojis = await EmojiPackService.listMarketplace(query: q);
+      final stickersMarket = await StickerService.listMarketplace(query: q);
+      final stickersCatalog = await StickerService.listCatalog(query: q);
+      final emojisMarket = await EmojiPackService.listMarketplace(query: q);
+      final emojisCatalog = await EmojiPackService.listCatalog(query: q);
       final myStickers = await StickerService.listMyPacks();
       final myEmojis = await EmojiPackService.listMyPacks();
+      final stickerSeen = <int>{};
+      final stickers = <StickerPack>[
+        for (final p in [...stickersMarket, ...stickersCatalog])
+          if (stickerSeen.add(p.id)) p,
+      ];
+      final emojiSeen = <int>{};
+      final emojis = <EmojiPack>[
+        for (final p in [...emojisMarket, ...emojisCatalog])
+          if (emojiSeen.add(p.id)) p,
+      ];
       if (!mounted) return;
       setState(() {
         _stickers = stickers;
@@ -83,7 +95,22 @@ class _PackStoreScreenState extends State<PackStoreScreen>
   Future<void> _buySticker(StickerPack pack) async {
     final me = AuthService.instance.currentUser?.id;
     if (me != null && me == pack.ownerUserId) return;
-    if (pack.priceStars <= 0 || _busy.contains(_key('s', pack.id))) return;
+    if (_busy.contains(_key('s', pack.id))) return;
+    if (pack.priceStars <= 0) {
+      setState(() => _busy.add(_key('s', pack.id)));
+      try {
+        await StickerService.installPack(pack.id);
+        if (!mounted) return;
+        await _load();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _busy.remove(_key('s', pack.id)));
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
+        await showStarsRequiredSnack(context, e);
+      }
+      return;
+    }
     final ok = await confirmStarsSpend(
       context,
       title: 'Купить «${pack.title}»',
@@ -106,6 +133,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy.remove(_key('s', pack.id)));
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }
@@ -113,7 +141,22 @@ class _PackStoreScreenState extends State<PackStoreScreen>
   Future<void> _buyEmoji(EmojiPack pack) async {
     final me = AuthService.instance.currentUser?.id;
     if (me != null && me == pack.ownerUserId) return;
-    if (pack.priceStars <= 0 || _busy.contains(_key('e', pack.id))) return;
+    if (_busy.contains(_key('e', pack.id))) return;
+    if (pack.priceStars <= 0) {
+      setState(() => _busy.add(_key('e', pack.id)));
+      try {
+        await EmojiPackService.installPack(pack.id);
+        if (!mounted) return;
+        await _load();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _busy.remove(_key('e', pack.id)));
+        if (offerFlexIfRequired(context, e)) return;
+        if (offerPackStoreIfRequired(context, e)) return;
+        await showStarsRequiredSnack(context, e);
+      }
+      return;
+    }
     final ok = await confirmStarsSpend(
       context,
       title: 'Купить «${pack.title}»',
@@ -135,20 +178,17 @@ class _PackStoreScreenState extends State<PackStoreScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy.remove(_key('e', pack.id)));
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }
 
-  Future<void> _createEmojiPack() async {
-    if (!hasFlexFeature('emoji_pack_publish')) {
-      await showCreatorUpsell(context);
-      return;
-    }
+  Future<String?> _askPackTitle(String title) async {
     final titleCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Новый эмодзи-пак'),
+        title: Text(title),
         content: TextField(
           controller: titleCtrl,
           autofocus: true,
@@ -167,9 +207,72 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         ],
       ),
     );
-    if (ok != true) return;
-    final title = titleCtrl.text.trim();
-    if (title.length < 2) return;
+    if (ok != true) return null;
+    final text = titleCtrl.text.trim();
+    return text.length < 2 ? null : text;
+  }
+
+  Future<void> _showCreateMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.sticky_note_2_outlined),
+              title: const Text('Стикерпак'),
+              subtitle: const Text('Выставить на продажу можно с уровня 71'),
+              onTap: () => Navigator.pop(ctx, 'sticker'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.emoji_emotions_outlined),
+              title: const Text('Эмодзи-пак'),
+              subtitle: const Text('Публикация с уровня 70'),
+              onTap: () => Navigator.pop(ctx, 'emoji'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'sticker') {
+      await _createStickerPack();
+    } else if (choice == 'emoji') {
+      await _createEmojiPack();
+    }
+  }
+
+  Future<void> _createStickerPack() async {
+    final title = await _askPackTitle('Новый стикерпак');
+    if (title == null) return;
+    try {
+      final pack = await StickerService.createPack(title: title);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => StickerPackManageScreen(packId: pack.id),
+        ),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
+  Future<void> _createEmojiPack() async {
+    if (!hasFlexFeature('emoji_pack_publish')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final title = await _askPackTitle('Новый эмодзи-пак');
+    if (title == null) return;
     try {
       final pack = await EmojiPackService.createPack(title: title);
       if (!mounted) return;
@@ -203,9 +306,9 @@ class _PackStoreScreenState extends State<PackStoreScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createEmojiPack,
+        onPressed: _showCreateMenu,
         icon: const Icon(Icons.add),
-        label: const Text('Эмодзи-пак'),
+        label: const Text('Создать пак'),
       ),
       body: AppGradientBackground(
         child: Column(
@@ -522,7 +625,13 @@ class _PackCard extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: FilledButton(
                   onPressed: owned || busy || onBuy == null ? null : onBuy,
-                  child: Text(owned ? 'Куплено' : 'Купить $priceStars ★'),
+                  child: Text(
+                    owned
+                        ? 'Установлен'
+                        : (priceStars > 0
+                            ? 'Купить $priceStars ★'
+                            : 'Установить'),
+                  ),
                 ),
               ),
             ],

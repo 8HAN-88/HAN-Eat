@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../models/emoji_pack_models.dart';
 import '../../../services/emoji_pack_service.dart';
@@ -189,6 +190,7 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
+      if (offerPackStoreIfRequired(context, e)) return;
       await showStarsRequiredSnack(context, e);
     }
   }
@@ -204,6 +206,7 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
       if (!mounted) return;
       setState(() => _saving = false);
       if (offerFlexIfRequired(context, e)) return;
+      if (offerPackStoreIfRequired(context, e)) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(userVisibleError(e))),
       );
@@ -217,6 +220,12 @@ class _EmojiPackManageScreenState extends State<EmojiPackManageScreen> {
       appBar: AppBar(
         title: const Text('Эмодзи-пак'),
         actions: [
+          if (pack?.shareLink != null)
+            IconButton(
+              onPressed: () => Share.share(pack!.shareLink!),
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Поделиться паком',
+            ),
           if (pack?.isOwned == true)
             IconButton(
               onPressed: _saving ? null : _setPrice,

@@ -86,14 +86,17 @@ Future<bool> confirmStarsSpend(
 
 bool isStarsRequiredError(Object error) {
   if (error is ApiClientException) {
+    if (error.code == 'pack_purchase_required' ||
+        error.code == 'custom_emoji_denied') {
+      return false;
+    }
     if (error.code == 'STARS_REQUIRED') return true;
-    if (error.statusCode == 402) return true;
+    if (error.statusCode == 402 && error.code == null) return true;
   }
   final raw = error.toString().toLowerCase();
   return raw.contains('stars_required') ||
       raw.contains('недостаточно звёзд') ||
-      raw.contains('недостаточно звезд') ||
-      raw.contains('402');
+      raw.contains('недостаточно звезд');
 }
 
 Future<void> showStarsRequiredSnack(

@@ -18,6 +18,13 @@ from app.models.flex_subscription import (
     UserFlexSubscription,
 )
 from app.models.paid_features import CreatorBalance, StarTransaction
+from app.models.conversation import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageEditHistory,
+    ScheduledMessage,
+)
 from app.models.sticker import Sticker, StickerPack, StickerPackInstall, StickerPackPurchase
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -56,6 +63,11 @@ def db_session():
             CustomEmoji.__table__,
             EmojiPackInstall.__table__,
             EmojiPackPurchase.__table__,
+            Conversation.__table__,
+            ConversationMember.__table__,
+            Message.__table__,
+            MessageEditHistory.__table__,
+            ScheduledMessage.__table__,
         ],
     )
     Session = sessionmaker(bind=engine)
@@ -176,3 +188,77 @@ def test_custom_emoji_status_needs_access(db_session):
     with pytest.raises(ValueError, match="custom_emoji_denied"):
         emoji.require_status(stranger.id, f"ce:{item.id}")
     assert emoji.require_status(seller.id, f"ce:{item.id}") == f"ce:{item.id}"
+
+
+def test_marketplace_fee_waived_under_20():
+    assert marketplace_fee_stars(19) == 0
+    assert marketplace_fee_stars(20) >= 1
+    assert marketplace_fee_stars(100) == 5
+
+
+def test_edit_and_schedule_require_custom_emoji(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.chat_service import ChatService
+
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Правка")
+    item = emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/edit.webp",
+    )
+    db_session.commit()
+    conv = Conversation(type="group", title="Чат")
+    db_session.add(conv)
+    db_session.flush()
+    db_session.add_all(
+        [
+            ConversationMember(conversation_id=conv.id, user_id=seller.id),
+            ConversationMember(conversation_id=conv.id, user_id=buyer.id),
+        ]
+    )
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=buyer.id,
+        type="text",
+        content="привет",
+    )
+    db_session.add(msg)
+    db_session.commit()
+    chat = ChatService(db_session)
+    token = f"[[e:{item.id}]]"
+    with pytest.raises(ValueError, match="custom_emoji_required"):
+        chat.edit_message(conv.id, msg.id, buyer.id, token)
+    _activate(db_session, 2, 69)
+    with pytest.raises(ValueError, match="custom_emoji_denied"):
+        chat.edit_message(conv.id, msg.id, buyer.id, token)
+    when = datetime.now(timezone.utc) + timedelta(hours=1)
+    with pytest.raises(ValueError, match="custom_emoji_denied"):
+        chat.schedule_message(
+            conversation_id=conv.id,
+            sender_id=buyer.id,
+            msg_type="text",
+            content=token,
+            send_at=when,
+        )
+
+
+def test_emoji_catalog_includes_free_public(db_session):
+    seller = _user(db_session, 1)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "Бесплатный")
+    emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/free.webp",
+    )
+    db_session.commit()
+    assert emoji.list_marketplace() == []
+    catalog = emoji.list_catalog()
+    assert [p.id for p in catalog] == [pack.id]
+    assert emoji.get_public_pack_by_slug(pack.slug) is not None

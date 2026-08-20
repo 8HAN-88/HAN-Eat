@@ -82,6 +82,38 @@ class StickerPack {
       shareLink: json['share_link'] as String?,
     );
   }
+
+  StickerPack copyWith({
+    bool? isInstalled,
+    List<StickerItem>? stickers,
+    int? stickersCount,
+    int? priceStars,
+    int? feeStars,
+    bool? isOwned,
+    bool? isPurchased,
+    bool? isPublic,
+    bool? isPremium,
+    String? ownerName,
+    String? shareLink,
+  }) {
+    return StickerPack(
+      id: id,
+      title: title,
+      slug: slug,
+      ownerUserId: ownerUserId,
+      ownerName: ownerName ?? this.ownerName,
+      isPublic: isPublic ?? this.isPublic,
+      isPremium: isPremium ?? this.isPremium,
+      isInstalled: isInstalled ?? this.isInstalled,
+      isOwned: isOwned ?? this.isOwned,
+      isPurchased: isPurchased ?? this.isPurchased,
+      priceStars: priceStars ?? this.priceStars,
+      feeStars: feeStars ?? this.feeStars,
+      stickers: stickers ?? this.stickers,
+      stickersCount: stickersCount ?? this.stickersCount,
+      shareLink: shareLink ?? this.shareLink,
+    );
+  }
 }
 
 class StickerFavoriteItem {
