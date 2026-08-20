@@ -411,3 +411,63 @@ def test_emoji_pack_rename_and_reorder(db_session):
     db_session.commit()
     items = emoji.emojis_by_pack_ids([pack.id])[pack.id]
     assert [row.id for row in items] == [b.id, a.id]
+
+
+def test_purchased_emoji_reinstall_after_private(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    stranger = _user(db_session, 3)
+    _activate(db_session, 1, 70)
+    emoji = EmojiPackService(db_session)
+    pack = emoji.create_pack(seller.id, "После продажи")
+    emoji.add_emoji(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/sold.webp",
+    )
+    PackMarketplaceService(db_session).list_emoji_pack(seller.id, pack.id, 40)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 40, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_emoji_pack(buyer.id, pack.id)
+    db_session.commit()
+    emoji.uninstall_pack(buyer.id, pack.id)
+    emoji.update_pack(user_id=seller.id, pack_id=pack.id, is_public=False)
+    db_session.commit()
+    assert emoji.get_pack_for_user(buyer.id, pack.id) is not None
+    assert emoji.get_pack_for_user(stranger.id, pack.id) is None
+    with pytest.raises(ValueError, match="forbidden"):
+        emoji.install_pack(stranger.id, pack.id)
+    emoji.install_pack(buyer.id, pack.id)
+    db_session.commit()
+    assert emoji._is_installed(buyer.id, pack.id) is True
+
+
+def test_purchased_sticker_reinstall_after_private(db_session):
+    seller = _user(db_session, 1)
+    buyer = _user(db_session, 2)
+    stranger = _user(db_session, 3)
+    _activate(db_session, 1, 71)
+    stickers = StickerService(db_session)
+    pack = stickers.create_pack(seller.id, "После продажи", True)
+    stickers.add_sticker(
+        user_id=seller.id,
+        pack_id=pack.id,
+        media_url="https://cdn.test/sold-sticker.webp",
+    )
+    PackMarketplaceService(db_session).list_sticker_pack(seller.id, pack.id, 50)
+    db_session.commit()
+    PaidFeaturesService(db_session).add_stars(buyer.id, 50, tx_type="admin_adjust")
+    db_session.commit()
+    PackMarketplaceService(db_session).buy_sticker_pack(buyer.id, pack.id)
+    db_session.commit()
+    stickers.uninstall_pack(buyer.id, pack.id)
+    stickers.update_pack(user_id=seller.id, pack_id=pack.id, is_public=False)
+    db_session.commit()
+    assert stickers.get_pack_for_user(buyer.id, pack.id) is not None
+    assert stickers.get_pack_for_user(stranger.id, pack.id) is None
+    with pytest.raises(ValueError, match="forbidden"):
+        stickers.install_pack(stranger.id, pack.id)
+    stickers.install_pack(buyer.id, pack.id)
+    db_session.commit()
+    assert stickers._is_installed(buyer.id, pack.id) is True

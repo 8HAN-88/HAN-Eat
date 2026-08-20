@@ -260,31 +260,56 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
     );
     final next = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Выставить на витрину'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Цена в ★',
-            hintText: 'Например: 250',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final price = int.tryParse(controller.text.trim()) ?? 0;
-              Navigator.pop(ctx, price);
-            },
-            child: const Text('Выставить'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final price = int.tryParse(controller.text.trim()) ?? 0;
+            final fee = PaidFeaturesService.resaleFeeStars(price);
+            final net = price > fee ? price - fee : 0;
+            return AlertDialog(
+              title: const Text('Выставить на витрину'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Цена в ★',
+                      hintText: 'Например: 250',
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    price < 1
+                        ? 'Комиссия 5%, до 20 ★ — бесплатно'
+                        : fee == 0
+                            ? 'Комиссия 0 ★ (до 20 ★)'
+                            : 'Комиссия $fee ★ · вам $net ★',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final parsed = int.tryParse(controller.text.trim()) ?? 0;
+                    Navigator.pop(ctx, parsed);
+                  },
+                  child: const Text('Выставить'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     controller.dispose();
     if (next == null || !mounted) return;
@@ -307,8 +332,15 @@ class _StarGiftsInventoryScreenState extends State<StarGiftsInventoryScreen> {
             .toList(growable: false);
         _busy.remove(gift.id);
       });
+      final fee = PaidFeaturesService.resaleFeeStars(next);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('На витрине за $next ★')),
+        SnackBar(
+          content: Text(
+            fee > 0
+                ? 'На витрине за $next ★ · комиссия $fee ★'
+                : 'На витрине за $next ★',
+          ),
+        ),
       );
     } catch (e) {
       if (!mounted) return;

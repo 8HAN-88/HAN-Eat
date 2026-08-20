@@ -71,9 +71,16 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  bool _requireOnline() {
+    if (!_fromCache) return true;
+    _toast('Нужна сеть для оплаты подписки');
+    return false;
+  }
+
   Future<void> _changeLevel(int level) async {
     final me = _me;
     if (me == null || _busy || _dragging != null) return;
+    if (!_requireOnline()) return;
     setState(() => _busy = true);
     try {
       final preview = await FlexSubscriptionApi.preview(level, plan: _plan);
@@ -104,6 +111,13 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
   }
 
   Future<void> _drop(FlexFeature feature, int level) async {
+    if (!_requireOnline()) {
+      setState(() {
+        _dragging = null;
+        _hoverLevel = null;
+      });
+      return;
+    }
     if (feature.assignedLevel == level) {
       setState(() {
         _dragging = null;
@@ -187,7 +201,9 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
             for (final preset in me.presets)
               ActionChip(
                 label: Text('${preset.title} · ${preset.level}'),
-                onPressed: _busy ? null : () => _changeLevel(preset.level),
+                onPressed: _busy || _fromCache
+                    ? null
+                    : () => _changeLevel(preset.level),
               ),
           ],
         ),
@@ -248,7 +264,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
           feature: me.nextFeature!,
           price: me.priceForPlan(me.nextLevel ?? (me.currentLevel + 1), _plan),
           yearly: _plan == 'yearly',
-          onOpen: _busy
+          onOpen: _busy || _fromCache
               ? null
               : () => _changeLevel(me.nextLevel ?? (me.currentLevel + 1)),
         ),
@@ -266,6 +282,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
     final invalidHover = dragging != null && hover && !dragging.canPlace(level);
     return DragTarget<FlexFeature>(
       onWillAcceptWithDetails: (details) {
+        if (_fromCache) return false;
         setState(() {
           _hoverLevel = level;
           _dragging = details.data;
@@ -302,7 +319,7 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
             type: MaterialType.transparency,
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: _busy ? null : () => _changeLevel(level),
+              onTap: _busy || _fromCache ? null : () => _changeLevel(level),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
                 child: Column(
@@ -351,7 +368,10 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       )
                     else
-                      _DraggableFeature(feature: feature),
+                      _DraggableFeature(
+                        feature: feature,
+                        enabled: !_fromCache,
+                      ),
                     if (invalidHover && dragging != null) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -476,8 +496,9 @@ class _LevelBadge extends StatelessWidget {
 }
 
 class _DraggableFeature extends StatelessWidget {
-  const _DraggableFeature({required this.feature});
+  const _DraggableFeature({required this.feature, this.enabled = true});
   final FlexFeature feature;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +514,7 @@ class _DraggableFeature extends StatelessWidget {
             : 'Можно на ${feature.minLevel}–${feature.maxLevel}',
       ),
     );
-    if (locked) return tile;
+    if (locked || !enabled) return tile;
     return LongPressDraggable<FlexFeature>(
       data: feature,
       feedback: Material(

@@ -224,10 +224,8 @@ def get_emoji_pack(
     db: Session = Depends(get_db),
 ):
     svc = EmojiPackService(db)
-    pack = svc.get_pack(pack_id)
+    pack = svc.get_pack_for_user(current_user.id, pack_id)
     if not pack:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
-    if not pack.is_public and int(pack.owner_user_id) != int(current_user.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "pack_not_found")
     return _bundle(svc, current_user.id, [pack]).items[0]
 

@@ -61,12 +61,16 @@ class _StarGiftsMarketplaceScreenState extends State<StarGiftsMarketplaceScreen>
     }
     final price = gift.listedStars ?? 0;
     if (price <= 0 || _busy.contains(gift.id)) return;
+    final fee = PaidFeaturesService.resaleFeeStars(price);
     final ok = await confirmStarsSpend(
       context,
       title: 'Купить ${gift.title}',
-      body: gift.serialLabel.isNotEmpty
-          ? '${gift.emoji} ${gift.serialLabel} · продавец ${gift.sellerLabel}'
-          : '${gift.emoji} · продавец ${gift.sellerLabel}',
+      body: [
+        gift.serialLabel.isNotEmpty
+            ? '${gift.emoji} ${gift.serialLabel} · продавец ${gift.sellerLabel}'
+            : '${gift.emoji} · продавец ${gift.sellerLabel}',
+        if (fee > 0) 'Комиссия площадки $fee ★ (уже в цене)',
+      ].join('\n'),
       amountStars: price,
       confirmLabel: 'Купить',
     );

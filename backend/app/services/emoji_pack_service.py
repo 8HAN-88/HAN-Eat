@@ -184,6 +184,28 @@ class EmojiPackService:
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.flush()
 
+    def _is_installed(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(EmojiPackInstall.id)
+            .filter(
+                EmojiPackInstall.user_id == user_id,
+                EmojiPackInstall.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
+    def _is_purchased(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(EmojiPackPurchase.id)
+            .filter(
+                EmojiPackPurchase.user_id == user_id,
+                EmojiPackPurchase.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
     def install_pack(
         self, user_id: int, pack_id: int, *, skip_purchase_check: bool = False
     ) -> None:
@@ -191,7 +213,10 @@ class EmojiPackService:
         if not pack:
             raise ValueError("pack_not_found")
         if not pack.is_public and int(pack.owner_user_id) != int(user_id):
-            raise ValueError("forbidden")
+            if not self._is_purchased(user_id, pack.id) and not self._is_installed(
+                user_id, pack.id
+            ):
+                raise ValueError("forbidden")
         if not skip_purchase_check and not PackMarketplaceService(self.db).has_emoji_access(
             user_id, pack
         ):
@@ -370,3 +395,13 @@ class EmojiPackService:
 
     def get_pack(self, pack_id: int) -> Optional[EmojiPack]:
         return self.db.query(EmojiPack).filter(EmojiPack.id == pack_id).first()
+
+    def get_pack_for_user(self, user_id: int, pack_id: int) -> Optional[EmojiPack]:
+        pack = self.get_pack(pack_id)
+        if not pack:
+            return None
+        if pack.is_public or int(pack.owner_user_id) == int(user_id):
+            return pack
+        if self._is_purchased(user_id, pack.id) or self._is_installed(user_id, pack.id):
+            return pack
+        return None

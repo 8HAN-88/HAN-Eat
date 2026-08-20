@@ -223,12 +223,37 @@ class StickerService:
         pack.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.flush()
 
+    def _is_installed(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(StickerPackInstall.id)
+            .filter(
+                StickerPackInstall.user_id == user_id,
+                StickerPackInstall.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
+    def _is_purchased(self, user_id: int, pack_id: int) -> bool:
+        return (
+            self.db.query(StickerPackPurchase.id)
+            .filter(
+                StickerPackPurchase.user_id == user_id,
+                StickerPackPurchase.pack_id == pack_id,
+            )
+            .first()
+            is not None
+        )
+
     def install_pack(self, user_id: int, pack_id: int) -> None:
         pack = self.db.query(StickerPack).filter(StickerPack.id == pack_id).first()
         if not pack:
             raise ValueError("pack_not_found")
         if not pack.is_public and pack.owner_user_id != user_id:
-            raise ValueError("forbidden")
+            if not self._is_purchased(user_id, pack.id) and not self._is_installed(
+                user_id, pack.id
+            ):
+                raise ValueError("forbidden")
         if bool(getattr(pack, "is_premium", False)) and pack.owner_user_id != user_id:
             self._require_premium_stickers(user_id)
         if (
@@ -282,15 +307,9 @@ class StickerService:
             return None
         if pack.is_public or pack.owner_user_id == user_id:
             return pack
-        installed = (
-            self.db.query(StickerPackInstall.id)
-            .filter(
-                StickerPackInstall.user_id == user_id,
-                StickerPackInstall.pack_id == pack_id,
-            )
-            .first()
-        )
-        return pack if installed else None
+        if self._is_installed(user_id, pack.id) or self._is_purchased(user_id, pack.id):
+            return pack
+        return None
 
     def get_public_pack_by_slug(self, slug: str) -> Optional[StickerPack]:
         clean = (slug or "").strip().lower()

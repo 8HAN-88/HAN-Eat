@@ -6041,8 +6041,10 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   bool _canUseReactionEmoji(String emoji) {
-    if (parseCustomEmojiTokenId(emoji) != null) {
-      return _hasFlexFeature('custom_emoji_reactions');
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null) {
+      if (!_hasFlexFeature('custom_emoji_reactions')) return false;
+      return _customReactionEmojis.any((e) => e.id == customId);
     }
     if (_freeChatReactions.contains(emoji)) return true;
     if (_exclusiveOverlayReactions.contains(emoji)) {
@@ -6053,7 +6055,18 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
   }
 
   Future<void> _pickReactionEmoji(ChatMessage msg, String emoji) async {
-    if (!_canUseReactionEmoji(emoji)) {
+    final customId = parseCustomEmojiTokenId(emoji);
+    if (customId != null) {
+      if (!_hasFlexFeature('custom_emoji_reactions')) {
+        await showCreatorUpsell(context);
+        return;
+      }
+      await _ensureCustomReactionEmojis();
+      if (!_customReactionEmojis.any((e) => e.id == customId)) {
+        offerPackStoreIfRequired(context, 'pack_purchase_required');
+        return;
+      }
+    } else if (!_canUseReactionEmoji(emoji)) {
       await showCreatorUpsell(context);
       return;
     }
@@ -13277,9 +13290,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen>
                           itemBuilder: (_, index) {
                             final item = pending[index];
                             final preview = _scheduledPreview(item);
-                            final caption = item.type != 'text'
+                            final rawCaption = item.type != 'text'
                                 ? item.content.trim()
                                 : '';
+                            final caption = rawCaption.isEmpty
+                                ? ''
+                                : previewTextWithCustomEmoji(rawCaption);
                             return ListTile(
                               leading: _scheduledLeading(item),
                               title: Text(

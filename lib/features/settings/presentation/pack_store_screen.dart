@@ -542,7 +542,11 @@ class _PackStoreScreenState extends State<PackStoreScreen>
                     child: const Text('Установить'),
                   ),
             onTap: () async {
-              await context.push(StickerPackPreviewRoute.pathFor(pack.slug));
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => StickerPackManageScreen(packId: pack.id),
+                ),
+              );
               if (mounted) await _load();
             },
           ),
@@ -558,7 +562,7 @@ class _PackStoreScreenState extends State<PackStoreScreen>
                     child: const Text('Установить'),
                   ),
             onTap: () async {
-              await context.push(EmojiPackPreviewRoute.pathFor(pack.slug));
+              await context.push(EmojiPackManageRoute.pathFor(pack.id));
               if (mounted) await _load();
             },
           ),

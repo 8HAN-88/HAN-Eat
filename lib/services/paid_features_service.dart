@@ -10,6 +10,14 @@ import 'payment_service.dart';
 class PaidFeaturesService {
   static String get baseUrl => '${ApiService.baseUrl}/api/v1';
 
+  /// Telegram-like marketplace commission: 5%, waived under 20 ★.
+  static int resaleFeeStars(int priceStars) {
+    final price = priceStars < 0 ? 0 : priceStars;
+    if (price < 20) return 0;
+    final fee = (price * 5) ~/ 100;
+    return fee < 1 ? 1 : fee;
+  }
+
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getAccessTokenForApi();
     if (token == null) throw Exception('Not authenticated');

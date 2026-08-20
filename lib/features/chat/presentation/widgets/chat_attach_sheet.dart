@@ -1114,8 +1114,11 @@ class _ChatAttachSheetState extends State<_ChatAttachSheet> {
   }
 
   List<StickerPack> get _filteredStickerPacks {
-    if (_searchQuery.isEmpty) return _stickerPacks;
-    return _stickerPacks
+    final usable = _stickerPacks.where(
+      (p) => p.stickers.isNotEmpty || p.isOwned || p.isPurchased,
+    );
+    if (_searchQuery.isEmpty) return usable.toList();
+    return usable
         .where((p) => p.title.toLowerCase().contains(_searchQuery))
         .toList();
   }
@@ -2996,17 +2999,21 @@ class _StickerPacksContent extends StatelessWidget {
                     tooltip: 'Управление паком',
                     icon: const Icon(Icons.tune),
                   ),
-                IconButton(
-                  onPressed: busy ? null : () => onTogglePinnedPack(pack.id),
-                  tooltip: pinnedPackIds.contains(pack.id)
-                      ? 'Открепить'
-                      : 'Закрепить',
-                  icon: Icon(
-                    pinnedPackIds.contains(pack.id)
-                        ? Icons.push_pin
-                        : Icons.push_pin_outlined,
+                if (pack.isInstalled ||
+                    pack.isOwned ||
+                    pack.isPurchased ||
+                    pinnedPackIds.contains(pack.id))
+                  IconButton(
+                    onPressed: busy ? null : () => onTogglePinnedPack(pack.id),
+                    tooltip: pinnedPackIds.contains(pack.id)
+                        ? 'Открепить'
+                        : 'Закрепить',
+                    icon: Icon(
+                      pinnedPackIds.contains(pack.id)
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
