@@ -193,6 +193,8 @@ class _FlexSubscriptionScreenState extends State<FlexSubscriptionScreen> {
             FlexBlock(key: 'M', title: 'Контроль', minLevel: 49, maxLevel: 52),
             FlexBlock(key: 'N', title: 'Premium+', minLevel: 53, maxLevel: 56),
             FlexBlock(key: 'O', title: 'Ещё Premium', minLevel: 57, maxLevel: 60),
+            FlexBlock(key: 'P', title: 'Бизнес', minLevel: 61, maxLevel: 64),
+            FlexBlock(key: 'Q', title: 'Ещё бизнес', minLevel: 65, maxLevel: 68),
           ];
 
     for (final block in blocks) {

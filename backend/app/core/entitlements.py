@@ -74,6 +74,14 @@ CATALOG_FEATURE_SLUGS = (
     "story_caption_plus",
     "animated_avatar",
     "quick_replies",
+    "business_greeting",
+    "business_away",
+    "business_hours",
+    "business_location",
+    "business_intro",
+    "business_bot",
+    "dm_privacy",
+    "profile_website",
 )
 
 EXCLUSIVE_CHAT_REACTIONS = frozenset({"🔥", "🥰", "🎉", "✨", "⚡️", "💯"})

@@ -17,7 +17,9 @@ import 'package:go_router/go_router.dart';
 import 'package:han_eat/app/app_router.dart';
 import 'package:han_eat/core/theme/app_tokens.dart';
 import '../../chat/application/chat_open_direct.dart';
+import '../../chat/presentation/widgets/chat_location_bubble.dart';
 import '../../../models/chat_models.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:han_eat/widgets/app_avatar.dart';
 import 'package:han_eat/widgets/stars_pay_helper.dart';
 import 'package:uuid/uuid.dart';
@@ -328,6 +330,166 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
         username: user.username,
         avatarUrl: user.avatarUrl,
       );
+
+  static const _dowLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  String _hoursSummary(Map<String, dynamic> hours) {
+    final raw = hours['intervals'];
+    if (raw is! List || raw.isEmpty) return '';
+    final parts = <String>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final dow = (item['dow'] as num?)?.toInt();
+      final start = item['start']?.toString();
+      final end = item['end']?.toString();
+      if (dow == null || dow < 0 || dow > 6 || start == null || end == null) {
+        continue;
+      }
+      parts.add('${_dowLabels[dow]} $start–$end');
+    }
+    return parts.join(' · ');
+  }
+
+  List<Widget> _businessProfileWidgets(
+    ColorScheme scheme,
+    TextTheme textTheme,
+  ) {
+    final business = _profile?.business;
+    if (business == null || !business.hasContent) return const [];
+    final widgets = <Widget>[const SizedBox(height: AppSpacing.md)];
+    if (business.websiteUrl != null && business.websiteUrl!.isNotEmpty) {
+      widgets.add(
+        ActionChip(
+          avatar: const Icon(Icons.link, size: 18),
+          label: Text(business.websiteUrl!),
+          onPressed: () async {
+            var raw = business.websiteUrl!;
+            if (!raw.contains('://')) raw = 'https://$raw';
+            final uri = Uri.tryParse(raw);
+            if (uri == null) return;
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          },
+        ),
+      );
+    }
+    if (business.hours != null) {
+      final open = business.isOpen;
+      widgets.add(const SizedBox(height: 8));
+      widgets.add(
+        Text(
+          open == false ? 'Сейчас закрыто' : 'Открыто сейчас',
+          textAlign: TextAlign.center,
+          style: textTheme.labelLarge?.copyWith(
+            color: open == false ? scheme.error : scheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      final summary = _hoursSummary(business.hours!);
+      if (summary.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              summary,
+              textAlign: TextAlign.center,
+              style: textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    final intro = business.intro;
+    if (intro != null && (intro.title.isNotEmpty || intro.text.isNotEmpty)) {
+      widgets.add(const SizedBox(height: 10));
+      widgets.add(
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              if (intro.title.isNotEmpty)
+                Text(
+                  intro.title,
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              if (intro.text.isNotEmpty) ...[
+                if (intro.title.isNotEmpty) const SizedBox(height: 4),
+                Text(
+                  intro.text,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium,
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+    if (business.location != null) {
+      widgets.add(const SizedBox(height: 10));
+      widgets.add(
+        ChatLocationBubble(
+          payload: ChatLocationPayload(
+            latitude: business.location!.lat,
+            longitude: business.location!.lng,
+            label: business.location!.address,
+          ),
+          foregroundColor: scheme.onSurface,
+          accentColor: scheme.primary,
+          backgroundColor: scheme.surfaceContainerHighest,
+        ),
+      );
+    }
+    final bot = business.supportBot;
+    if (bot != null) {
+      widgets.add(const SizedBox(height: 10));
+      widgets.add(
+        FilledButton.tonalIcon(
+          onPressed: () async {
+            try {
+              final conv = await ChatOpenDirect.openNow(
+                bot.id,
+                peer: ChatUserBrief(
+                  id: bot.id,
+                  name: bot.name ?? bot.username ?? 'Бот',
+                  username: bot.username,
+                  avatarUrl: bot.avatarUrl,
+                ),
+              );
+              if (!mounted) return;
+              context.push(ChatThreadRoute.pathFor(conv), extra: conv);
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    userVisibleError(e, fallback: 'Не удалось открыть чат с ботом'),
+                  ),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.smart_toy_outlined),
+          label: Text(
+            bot.username != null && bot.username!.isNotEmpty
+                ? 'Чат с @${bot.username}'
+                : 'Чат с ботом',
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
 
   Future<void> _openChat(User user) async {
     if (_isOpeningChat) return;
@@ -851,6 +1013,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   ),
                 ),
               ],
+              ..._businessProfileWidgets(scheme, textTheme),
               if (_profileGifts.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.md),
                 Container(

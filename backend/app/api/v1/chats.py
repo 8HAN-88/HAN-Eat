@@ -406,6 +406,29 @@ def _notify_chat_inbox(
         )
 
 
+def _emit_business_auto_replies(
+    db: Session,
+    svc: ChatService,
+    conversation_id: int,
+    background_tasks: BackgroundTasks,
+) -> None:
+    for auto in svc.take_auto_replies():
+        _emit(
+            conversation_id,
+            {"type": "message.new", "message": _message_payload(auto)},
+        )
+        _notify_chat_inbox(db, conversation_id, auto.sender_id)
+        background_tasks.add_task(
+            _run_after_live_message_sent,
+            conversation_id=conversation_id,
+            sender_id=auto.sender_id,
+            message_id=auto.id,
+            content=auto.content or "",
+            msg_type=auto.type or "text",
+            silent=False,
+        )
+
+
 def _after_live_message_sent(
     *,
     conversation_id: int,
@@ -1611,6 +1634,11 @@ async def open_direct_chat(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot chat with yourself")
         if code == "user_blocked":
             raise HTTPException(status.HTTP_403_FORBIDDEN, "User blocked")
+        if code == "dm_privacy_denied":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Этот пользователь принимает новые чаты только от выбранных людей",
+            )
         raise
 
     peer_id = svc.peer_user_id(conv, current_user.id)
@@ -2497,6 +2525,7 @@ async def send_message(
             msg_type=body.type,
             silent=bool(body.silent),
         )
+        _emit_business_auto_replies(db, svc, conversation_id, background_tasks)
     conv = (
         db.query(Conversation)
         .filter(Conversation.id == conversation_id)
@@ -3088,6 +3117,7 @@ async def start_live_location(
             msg_type="location",
             silent=bool(body.silent),
         )
+        _emit_business_auto_replies(db, svc, conversation_id, background_tasks)
     return response
 
 

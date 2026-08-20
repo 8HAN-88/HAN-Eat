@@ -35,6 +35,7 @@ import '../features/auth/presentation/confirm_email_change_screen.dart';
 import '../features/settings/presentation/account_security_screen.dart';
 import '../features/settings/presentation/two_factor_setup_screen.dart';
 import '../features/settings/presentation/close_friends_screen.dart';
+import '../features/settings/presentation/business_settings_screen.dart';
 import '../features/posts/presentation/create_post_screen.dart';
 import '../features/community/presentation/community_upload_screen.dart';
 import '../features/posts/presentation/edit_profile_post_screen.dart';
@@ -743,6 +744,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: CloseFriendsRoute.name,
         pageBuilder: (context, state) =>
             const MaterialPage(child: CloseFriendsScreen()),
+      ),
+      GoRoute(
+        path: BusinessSettingsRoute.path,
+        name: BusinessSettingsRoute.name,
+        pageBuilder: (context, state) =>
+            const MaterialPage(child: BusinessSettingsScreen()),
       ),
       // Profile
       GoRoute(
@@ -1654,6 +1661,11 @@ class TwoFactorSetupRoute {
 class CloseFriendsRoute {
   static const path = '/close-friends';
   static const name = 'close_friends';
+}
+
+class BusinessSettingsRoute {
+  static const path = '/settings/business';
+  static const name = 'business_settings';
 }
 
 class ProfileRoute {

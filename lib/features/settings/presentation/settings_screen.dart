@@ -20,6 +20,7 @@ import '../../subscription/creator_upsell.dart';
 import '../application/last_seen_privacy.dart';
 import '../application/call_privacy.dart';
 import '../application/group_add_privacy.dart';
+import '../application/dm_privacy.dart';
 import '../application/voice_privacy.dart';
 import 'blocked_users_screen.dart';
 import 'paid_message_exceptions_screen.dart';
@@ -43,6 +44,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _storyStealth = false;
   String _callPrivacy = callPrivacyEverybody;
   String _groupAddPrivacy = groupAddPrivacyEverybody;
+  String _dmPrivacy = dmPrivacyEverybody;
   bool _showReadReceipts = true;
   int _paidMessageStars = 0;
   bool _privacyBusy = false;
@@ -130,6 +132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _storyStealth = user.storyStealth;
         _callPrivacy = normalizeCallPrivacy(user.callPrivacy);
         _groupAddPrivacy = normalizeGroupAddPrivacy(user.groupAddPrivacy);
+        _dmPrivacy = normalizeDmPrivacy(user.dmPrivacy);
         _showReadReceipts = user.showReadReceipts;
         _paidMessageStars = user.paidMessageStars;
       });
@@ -540,6 +543,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _pickDmPrivacy() async {
+    if (_privacyBusy) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Text(
+                  'Кто может написать вам первым',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+              ),
+              for (final value in dmPrivacyValues)
+                ListTile(
+                  title: Text(dmPrivacyLabel(value)),
+                  subtitle: Text(
+                    switch (value) {
+                      dmPrivacyContacts =>
+                        'Только люди из ваших контактов',
+                      dmPrivacyNobody =>
+                        'Новые личные чаты закрыты',
+                      _ => 'Все пользователи HanWe',
+                    },
+                  ),
+                  trailing: _dmPrivacy == value
+                      ? const Icon(Icons.check)
+                      : (value != dmPrivacyEverybody &&
+                              !hasFlexFeature('dm_privacy')
+                          ? const Icon(Icons.lock_outline)
+                          : null),
+                  onTap: () => Navigator.pop(ctx, value),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted || selected == _dmPrivacy) {
+      return;
+    }
+    if (selected != dmPrivacyEverybody && !hasFlexFeature('dm_privacy')) {
+      await showCreatorUpsell(context);
+      return;
+    }
+    final previous = _dmPrivacy;
+    setState(() {
+      _dmPrivacy = selected;
+      _privacyBusy = true;
+    });
+    try {
+      final updated = await UserService.updateProfile(dmPrivacy: selected);
+      await AuthService.persistUpdatedUser(updated);
+      if (!mounted) return;
+      setState(() {
+        _dmPrivacy = normalizeDmPrivacy(updated.dmPrivacy);
+        _privacyBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dmPrivacy = previous;
+        _privacyBusy = false;
+      });
+      if (offerFlexIfRequired(context, e)) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userVisibleError(e))),
+      );
+    }
+  }
+
   Future<void> _toggleShowReadReceipts(bool enabled) async {
     if (_privacyBusy) return;
     setState(() {
@@ -622,6 +700,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         icon: Icons.tune_rounded,
         subtitle: 'Соберите набор функций — от 39 ₽/мес',
         onTap: () => context.push(FlexSubscriptionRoute.path),
+      ),
+      _SettingsItem(
+        title: 'Бизнес-профиль',
+        icon: Icons.storefront_outlined,
+        subtitle: 'Приветствие, часы, адрес, бот и сайт',
+        onTap: () => context.push(BusinessSettingsRoute.path),
       ),
       _SettingsItem(
         title: 'Звёзды и кошелёк',
@@ -821,6 +905,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ? const Icon(Icons.chevron_right_rounded)
                         : const Icon(Icons.lock_outline),
                     onTap: _privacyBusy ? null : _pickGroupAddPrivacy,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.mail_lock_outlined),
+                    title: const Text('Кто пишет первым'),
+                    subtitle: Text(dmPrivacyLabel(_dmPrivacy)),
+                    trailing: hasFlexFeature('dm_privacy')
+                        ? const Icon(Icons.chevron_right_rounded)
+                        : const Icon(Icons.lock_outline),
+                    onTap: _privacyBusy ? null : _pickDmPrivacy,
                   ),
                   const Divider(height: 1),
                   SwitchListTile(

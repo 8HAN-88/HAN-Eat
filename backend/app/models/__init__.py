@@ -36,6 +36,7 @@ from app.models.chat_tag import ChatTag, ConversationChatTag
 from app.models.gif_favorite import GifFavorite
 from app.models.chat_folder_share import ChatFolderShare
 from app.models.quick_reply import QuickReply
+from app.models.user_business import BusinessAutoReply, UserBusinessSettings
 from app.models.forum_topic import ForumTopic
 from app.models.user_block import UserBlock
 from app.models.call import CallSession, CallParticipant
@@ -92,6 +93,7 @@ __all__ = [
     "ScheduledMessage", "GroupMemberBan", "GroupJoinRequest", "GroupInviteLink",
     "MessageEditHistory", "ForumTopic", "ChatTag", "ConversationChatTag",
     "GifFavorite", "ChatFolderShare", "QuickReply",
+    "UserBusinessSettings", "BusinessAutoReply",
     "BotMiniApp", "MiniAppInstall", "MiniAppLaunch", "StickerPack", "Sticker",
     "StickerPackInstall", "StickerFavorite", "StickerPackPin",
     "CallSession",
